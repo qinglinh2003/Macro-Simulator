@@ -8,10 +8,10 @@ recorded systematically. The v1 success bar is only "alive and conserving"
 
 from __future__ import annotations
 
-from config import Config
-from diagnostics import plot_cross_run, plot_dashboard, seed_invariance
-from economy import Economy
-from runlog import RunLogger, load_index, run_and_log, run_sweep
+from macro_sim.config import Config
+from macro_sim.reporting.diagnostics import plot_cross_run, plot_dashboard, seed_invariance
+from macro_sim.economy import Economy
+from macro_sim.experiments.runlog import RunLogger, load_index, run_and_log, run_sweep
 
 
 def _fmt(v, w=9, p=3):

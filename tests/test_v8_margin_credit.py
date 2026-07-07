@@ -21,8 +21,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np                       # noqa: E402
-from config import Config                # noqa: E402
-from economy import Economy              # noqa: E402
+from macro_sim.config import Config                # noqa: E402
+from macro_sim.economy import Economy              # noqa: E402
 
 TOL = 1e-6
 NC, NK, NH = 60, 30, 600

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from config import Config
+from macro_sim.config import Config
 
 
 @dataclass

@@ -258,7 +258,6 @@ class PreferentialMatch(MatchingProtocol):
         live = [o for o in offers if o.stock > EPS and o.price > 0]
         rng.shuffle(live)      # fallback; execute_market fast-paths the weighted selection
         return live
-        self.name = "random"
 
 
 class PriceSortedMatch(MatchingProtocol):

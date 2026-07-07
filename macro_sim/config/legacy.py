@@ -468,6 +468,214 @@ class Config:
         """v2 is active when a capital-goods sector exists."""
         return self.n_firms_k > 0
 
+    @property
+    def banking(self):
+        """Passive grouped view of banking parameters for future system extraction."""
+        from macro_sim.config.schema import BankingConfig
+
+        return BankingConfig(
+            bank_enabled=self.bank_enabled,
+            n_banks=self.n_banks,
+            seed=self.seed,
+            bank_leverage_mean=self.bank_leverage_mean,
+            bank_leverage_disp=self.bank_leverage_disp,
+            bank_assignment=self.bank_assignment,
+            bank_capital_constraint=self.bank_capital_constraint,
+            bank_migrate_on_failure=self.bank_migrate_on_failure,
+            bank_target_capital_ratio=self.bank_target_capital_ratio,
+            bank_exposure_limit=self.bank_exposure_limit,
+            bank_rate_competition=self.bank_rate_competition,
+            bank_spread_disp=self.bank_spread_disp,
+            bank_search_m=self.bank_search_m,
+            interbank=self.interbank,
+            interbank_rate_base=self.interbank_rate_base,
+            interbank_tightness=self.interbank_tightness,
+            reserve_floor_frac=self.reserve_floor_frac,
+            deposit_rate_disp=self.deposit_rate_disp,
+            deposit_search_m=self.deposit_search_m,
+            bank_equity=self.bank_equity,
+            bank_equity_lambda=self.bank_equity_lambda,
+            bank_equity_trading=self.bank_equity_trading,
+            bank_theta_equity=self.bank_theta_equity,
+            bank_dynamics=self.bank_dynamics,
+            bank_min_capital=self.bank_min_capital,
+            bank_entry_beta=self.bank_entry_beta,
+            bank_entry_max=self.bank_entry_max,
+            bank_runs=self.bank_runs,
+            run_sensitivity=self.run_sensitivity,
+            run_health_ref=self.run_health_ref,
+            run_market_weight=self.run_market_weight,
+            run_fear_persistence=self.run_fear_persistence,
+            lolr=self.lolr,
+            bonds=self.bonds,
+            rho=self.rho,
+            genesis_founder_pool=self.genesis_founder_pool,
+            w_fundamental=self.w_fundamental,
+            w_chartist=self.w_chartist,
+            portfolio_adjust=self.portfolio_adjust,
+            lambda_p=self.lambda_p,
+            trend_lambda=self.trend_lambda,
+        )
+
+    @property
+    def central_banking(self):
+        """Passive grouped view of central-bank policy and reserve-quantity parameters."""
+        from macro_sim.config.schema import CentralBankConfig
+
+        return CentralBankConfig(
+            central_bank=self.central_bank,
+            r_interest=self.r_interest,
+            infl_ema_lambda=self.infl_ema_lambda,
+            u_natural=self.u_natural,
+            r_neutral=self.r_neutral,
+            r_max=self.r_max,
+            omo=self.omo,
+            bonds=self.bonds,
+            interbank=self.interbank,
+            omo_reserve_target=self.omo_reserve_target,
+            omo_drain_frac=self.omo_drain_frac,
+        )
+
+    @property
+    def capital_goods(self):
+        """Passive grouped view of capital-goods market parameters."""
+        from macro_sim.config.schema import CapitalGoodsConfig
+
+        return CapitalGoodsConfig(
+            capital_enabled=self.capital_enabled,
+            government=self.government,
+            gov_investment_share=self.gov_investment_share,
+        )
+
+    @property
+    def goods(self):
+        """Passive grouped view of consumption-goods market parameters."""
+        from macro_sim.config.schema import GoodsConfig
+
+        return GoodsConfig(
+            government=self.government,
+            a=self.a,
+        )
+
+    @property
+    def settlement(self):
+        """Passive grouped view of settlement and household fiscal-flow parameters."""
+        from macro_sim.config.schema import SettlementConfig
+
+        return SettlementConfig(
+            government=self.government,
+            pro_rata_dividends=self.pro_rata_dividends,
+            per_firm_equity=self.per_firm_equity,
+            gov_investment_share=self.gov_investment_share,
+            public_capital_depreciation=self.public_capital_depreciation,
+            jg_productivity=self.jg_productivity,
+        )
+
+    @property
+    def planning(self):
+        """Passive grouped view of phase-1 planning parameters."""
+        from macro_sim.config.schema import PlanningConfig
+
+        return PlanningConfig(
+            theta_wage=self.theta_wage,
+            theta_price=self.theta_price,
+            lambda_q=self.lambda_q,
+            q_invest_floor=self.q_invest_floor,
+            q_invest_cap=self.q_invest_cap,
+            k_replacement_floor=self.k_replacement_floor,
+            wealth_effect=self.wealth_effect,
+            mpc_wealth_curvature=self.mpc_wealth_curvature,
+            d_household0=self.d_household0,
+        )
+
+    @property
+    def securities(self):
+        """Passive grouped view of government securities parameters."""
+        from macro_sim.config.schema import SecuritiesConfig
+
+        return SecuritiesConfig(
+            bonds=self.bonds,
+            government=self.government,
+            bond_maturity=self.bond_maturity,
+            bond_coupon=self.bond_coupon,
+            bond_finance_frac=self.bond_finance_frac,
+            p_firm0=self.p_firm0,
+            d_household0=self.d_household0,
+            bond_theta=self.bond_theta,
+            bank_bond_appetite=self.bank_bond_appetite,
+            interbank=self.interbank,
+            reserve_floor_frac=self.reserve_floor_frac,
+            bank_bond_duration_limit=self.bank_bond_duration_limit,
+        )
+
+    @property
+    def firm_demographics(self):
+        """Passive grouped view of consumption-firm entry, exit, and growth parameters."""
+        from macro_sim.config.schema import FirmDemographicsConfig
+
+        return FirmDemographicsConfig(
+            firm_dynamics=self.firm_dynamics,
+            bankrupt_persist=self.bankrupt_persist,
+            entry_beta=self.entry_beta,
+            entry_max=self.entry_max,
+            index_startup=self.index_startup,
+            startup_deposits=self.startup_deposits,
+            p_firm0=self.p_firm0,
+            startup_capital=self.startup_capital,
+            gibrat_growth=self.gibrat_growth,
+            gibrat_sigma=self.gibrat_sigma,
+            gibrat_entry_a0=self.gibrat_entry_a0,
+            per_firm_equity=self.per_firm_equity,
+            shares_per_firm=self.shares_per_firm,
+        )
+
+    @property
+    def credit(self):
+        """Passive grouped view of credit creation and debt-service parameters."""
+        from macro_sim.config.schema import CreditConfig
+
+        return CreditConfig(
+            bank_enabled=self.bank_enabled,
+            household_credit=self.household_credit,
+            hh_subsistence=self.hh_subsistence,
+            amort=self.amort,
+            margin_credit=self.margin_credit,
+            hh_amort=self.hh_amort,
+            bank_target_capital_ratio=self.bank_target_capital_ratio,
+            interbank=self.interbank,
+            deposit_rate_disp=self.deposit_rate_disp,
+            bank_equity=self.bank_equity,
+            interest_by_deposits=self.interest_by_deposits,
+        )
+
+    @property
+    def equity_market(self):
+        """Passive grouped view of aggregate and per-firm equity-market parameters."""
+        from macro_sim.config.schema import EquityConfig
+
+        return EquityConfig(
+            seed=self.seed,
+            per_firm_equity=self.per_firm_equity,
+            shares_per_firm=self.shares_per_firm,
+            watchlist_size=self.watchlist_size,
+            founder_owned_genesis=self.founder_owned_genesis,
+            genesis_founder_pool=self.genesis_founder_pool,
+            lambda_d=self.lambda_d,
+            lambda_p=self.lambda_p,
+            trend_lambda=self.trend_lambda,
+            equity_ema_lambda=self.equity_ema_lambda,
+            resid_income_lambda=self.resid_income_lambda,
+            q_invest_smooth=self.q_invest_smooth,
+            w_fundamental=self.w_fundamental,
+            w_chartist=self.w_chartist,
+            margin_credit=self.margin_credit,
+            theta_equity=self.theta_equity,
+            portfolio_adjust=self.portfolio_adjust,
+            equity_finance=self.equity_finance,
+            lambda_issue=self.lambda_issue,
+            household_bankruptcy=self.household_bankruptcy,
+        )
+
     @classmethod
     def v2(cls, **overrides) -> "Config":
         """Construct a v2 (investment + capital) config. Enables the capital sector

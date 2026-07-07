@@ -24,9 +24,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from config import Config  # noqa: E402
-from economy import Economy  # noqa: E402
-from metrics import classify_series  # noqa: E402  (shared with runlog)
+from macro_sim.config import Config  # noqa: E402
+from macro_sim.economy import Economy  # noqa: E402
+from macro_sim.reporting.metrics import classify_series  # noqa: E402  (shared with runlog)
 
 _GRID = dict(alpha=0.25, lw=0.6)
 

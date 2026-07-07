@@ -26,8 +26,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np                       # noqa: E402
-from config import Config                # noqa: E402
-from economy import Economy              # noqa: E402
+from macro_sim.config import Config                # noqa: E402
+from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.systems.banking import refresh_loan_books, reserve_position  # noqa: E402
 
 NC, NK, NH = 100, 50, 1000
 
@@ -65,9 +66,9 @@ def test_reserves_conserve_and_settle_exactly():
     max_ident = 0.0
     for _ in range(500):
         econ.step()
-        econ._refresh_loan_books()
+        refresh_loan_books(econ)
         for bk in econ.banks:
-            max_ident = max(max_ident, abs(econ._reserve_position(bk.id) - econ.ledger.reserves(bk.id)))
+            max_ident = max(max_ident, abs(reserve_position(econ, bk.id) - econ.ledger.reserves(bk.id)))
     assert abs(econ.ledger.total_reserves - econ.ledger._reserve_M) < 1e-6 * abs(econ.ledger._reserve_M)
     assert max_ident < 1e-4, f"RTGS-settled reserves should match the identity R_k=cap+dep−loans: {max_ident:.2e}"
 

@@ -18,8 +18,21 @@ from __future__ import annotations
 
 import random
 
-from agents import Firm, Household
-from interfaces import EPS
+from macro_sim.domain.agents import Firm, Household
+from macro_sim.markets.matching import EPS
+
+
+def diversify_mpc(cfg, households) -> None:
+    """Draw household MPC parameters from a mean-preserving lognormal distribution."""
+    rng = random.Random(cfg.seed + 90210)
+    dispersion = cfg.mpc_dispersion
+    mu = -0.5 * dispersion * dispersion
+    for household in households:
+        household.alpha1 = min(0.99, max(0.01, cfg.alpha1 * rng.lognormvariate(mu, dispersion)))
+        household.alpha2 = min(
+            household.alpha1 - 1e-6,
+            max(0.001, cfg.alpha2 * rng.lognormvariate(mu, dispersion)),
+        )
 
 
 def _sign(x: float) -> float:

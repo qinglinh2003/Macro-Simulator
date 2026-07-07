@@ -1,40 +1,43 @@
 # macro-simulator
 
-Agent-based macroeconomic simulation. This repo implements **roadmap step 1** of
-the [design document](docs/design/README.md): the *closed monetary kernel* — households + firms,
-one good, money (deposits) as the only financial instrument, no banks, no
-government, no external sector.
+Agent-based macroeconomic simulation. The project has grown from the original
+closed monetary kernel into a layered closed-economy simulator with firms,
+households, banks, fiscal policy, monetary policy, reserves, and securities.
+Start with the [current developer brief](docs/design/current/developer-brief.md)
+for the active frontier and the [design map](docs/design/README.md) for the full
+documentation structure.
 
 The design philosophy (see §0 of the design doc): macro regularities should
 **emerge** from a minimal set of micro axioms, never be hard-coded. Accounting
 identities are hard invariants; behavioral rules are deliberately simple.
 
-## v1 goal — "alive and conserving", not interesting economics
+## Start Here
 
-The v1 bar (design doc §7.5) is intentionally low:
+For development work, read in this order:
 
-> Run the kernel with the money-conservation assertion **never tripping**, and
-> price/output series that are *neither frozen nor exploding*.
-
-Reproducing §4 laws (Phillips curve, Okun's law, …) is **not** a v1 goal — those
-are the held-out test set and must not be engineered in.
+1. [`docs/design/current/developer-brief.md`](docs/design/current/developer-brief.md) — current frontier and active gaps.
+2. [`docs/design/current/development-rules.md`](docs/design/current/development-rules.md) — accounting, modeling, and documentation rules.
+3. [`docs/design/README.md`](docs/design/README.md) — map to durable core docs and historical arcs.
 
 ## Layout
 
-| File | Role |
+| Path | Role |
 |---|---|
-| `docs/design/` | Split design document: axioms, validation targets, findings, banking/securities arc, and changelog. |
+| `macro_sim/economy.py` | Main `Economy` facade and tick scheduler. It wires systems together but delegates phase work to `macro_sim/systems/`. |
+| `macro_sim/config/` | Versioned `Config`, typed grouped config views, and validation. `legacy.py` is still the large compatibility-era parameter surface. |
+| `macro_sim/core/` | Accounting and run-state kernel: ledger, policy levers, and `SimulationState`. |
+| `macro_sim/domain/` | Agent state: households, firms, banks, and equity-market state. Money balances remain in the ledger. |
+| `macro_sim/behavior/` | Pure planning and decision equations: consumption, expectations, pricing, wages, investment, credit demand, portfolio demand. |
+| `macro_sim/markets/` | Market matching protocols and trade execution primitives. |
+| `macro_sim/systems/` | Phase-level economic mechanisms: planning, credit, labor, goods, settlement, firm demographics, equity, banking, securities, and central bank. |
+| `macro_sim/reporting/` | Metrics, diagnostics, and metric collector boundaries. Observation only. |
+| `macro_sim/experiments/` | Experiment registry, run logging, and sweep helpers. |
+| `docs/design/` | Development-first design docs: current brief, durable core rules, and archived research history. |
 | `docs/plans/` | Version-specific implementation plans (`PLAN_v*.md`). |
-| `ledger.py` | `transfer(from, to, amount)` — the **only** money mutator; agents have no write access to balances, so conservation (A1/M0) holds by construction. Conservation is a redundant per-tick gate. |
-| `config.py` | The full §7.4 parameter budget, each row tagged forced / anchored / scale / transient / FREE. Only five dials are genuinely free: `phi, eta, mu_min, mu_max, omega`. |
-| `agents.py` | `Household` / `Firm` state (money lives in the ledger, not here); per-agent parameter fields; cross-tick derived state persisted per §8.1. |
-| `interfaces.py` | The two swappable interfaces: `MatchingProtocol` (default `RandomMatch`) and `Goods` (default single good). |
-| `behavior.py` | The §7.2 closed-form behavioral equations (B1–B4, B2 expectations) as pure planning functions. |
-| `economy.py` | The six-phase tick loop (§6.3): synchronous planning → sequential labor market → sequential goods market → settlement/dividends → accounting gate. |
-| `metrics.py` | Rich per-tick metrics (~46 series): flows, distributions (Gini/top-share), price dispersion, inflation, labor gaps. Pure observation. |
-| `diagnostics.py` | Diagnostic plot + seed-invariance check (M3(a)). |
-| `runlog.py` | Experiment registry: persists every run's config + full series + summary, and a flat cross-run `index.jsonl`. Parameter sweeps. |
-| `run.py` | Entrypoint. Configure via constants; no CLI. |
+| `archive/scripts/` | Archived pre-refactor scripts. Preserved for reference; not an active command surface. |
+| `artifacts/` | Generated/reference images and small experiment data files. |
+| `runs/` | Structured experiment registry with config, full series, and summaries. |
+| `run.py` | Thin package-path entrypoint. Configure via constants; no CLI. |
 
 ## Experiment registry (`runs/`)
 
@@ -66,28 +69,15 @@ pure **observation**, not encoding, so it does not violate §0-ii / §8.2.
 ```bash
 uv run python run.py                     # run kernel, write diagnostic.png, seed check
 uv run python tests/test_conservation.py # ledger foundation tests (zero-dependency)
+uv run pytest -n auto -q                 # full parallel regression suite
 ```
 
-## Notes on the first run
+The old plotting, validation, sweep, and scratch scripts are archived under
+[`archive/scripts/`](archive/scripts/README.md). Their protocol layer will be
+rebuilt during the code refactor.
 
-The kernel is **alive and conserving**: total money is flat (drift ~1e-9), all
-series are bounded and moving, and results are seed-robust. The default
-parameters produce a boom → depressed-trap transient (employment collapses into a
-low-activity attractor). Per design-doc §7.5 that is a **calibration** question
-(tuning the five free dials), not a plumbing bug — the conservation gate never
-trips, which is the signal that the accounting is sound.
+## Design Notes
 
-## Design decisions made during implementation
-
-Flagged explicitly rather than silently (per §8.1):
-
-- **Phase-1 order is wage → price** (design doc §6.3/§7.2 corrected in v0.7): cost-plus
-  reads the current-tick wage.
-- **Continuous labor** (not integer): `floor(D/w)` in §7.2 is treated as a cash cap, not
-  a mandate to discretize employment (§8.1).
-- **Labor market is not routed through `MatchingProtocol`**: the kernel has no wage to
-  shop (inelastic supply, short-side rationing), so price-comparison is meaningless there;
-  it uses a dedicated random-order routine on the same seeded RNG. `MatchingProtocol`
-  governs the goods market, where price-comparison is the real deferred fork (§5, §7.3).
-- **tick-0 cold start** is centralized (`Firm.create`, `Household.create`): no first-tick
-  wage raise, neutral first B2 update, `Y^e(0)=0`.
+The detailed design history, including the original v1 kernel decisions and
+later reversals, lives under [`docs/design/history/`](docs/design/history/README.md).
+The durable rules live under [`docs/design/core/`](docs/design/core/README.md).

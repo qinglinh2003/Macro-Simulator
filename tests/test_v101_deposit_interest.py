@@ -23,8 +23,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np                       # noqa: E402
-from config import Config                # noqa: E402
-from economy import Economy              # noqa: E402
+from macro_sim.config import Config                # noqa: E402
+from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.systems.credit import run_debt_service_phase  # noqa: E402
 
 NC, NK, NH = 100, 50, 1000
 EPS = 1e-9
@@ -59,7 +60,7 @@ def test_interest_goes_to_depositors():
         econ.step()
     depo = {h.id: econ.ledger.balance(h.id) for h in econ.households}
     before = {h.id: h.income_realized for h in econ.households}
-    econ._phase4_5_debt_service()                # only the bank redistribution adds to income_realized here
+    run_debt_service_phase(econ)                 # only the bank redistribution adds to income_realized here
     recv = {h.id: h.income_realized - before[h.id] for h in econ.households}
     total_recv = sum(recv.values())
     assert total_recv > EPS, "no interest was distributed (burn-in produced no debt?)"

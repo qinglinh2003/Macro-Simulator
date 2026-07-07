@@ -16,7 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ledger import ConservationError, Ledger, OverdraftError  # noqa: E402
+from macro_sim.core.ledger import ConservationError, Ledger, OverdraftError  # noqa: E402
 
 
 def _fresh():

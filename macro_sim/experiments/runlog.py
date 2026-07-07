@@ -30,9 +30,9 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-import metrics
-from config import Config
-from economy import Economy
+from macro_sim.reporting import metrics
+from macro_sim.config import Config
+from macro_sim.economy import Economy
 
 # Series summarized in summary.json and surfaced (as m_<key>) in the flat index.
 SUMMARY_KEYS: Sequence[str] = (

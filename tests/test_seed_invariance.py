@@ -18,8 +18,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config              # noqa: E402
-from diagnostics import seed_invariance  # noqa: E402
+from macro_sim.config import Config              # noqa: E402
+from macro_sim.reporting.diagnostics import seed_invariance  # noqa: E402
 
 # Series that should be seed-invariant, and the CV ceiling across seeds. These are
 # aggregate stationary means; with the larger N a few-percent spread is expected

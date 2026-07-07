@@ -13,9 +13,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from behavior import labor_demand_notional, plan_investment, produce, unit_cost  # noqa: E402
-from config import Config  # noqa: E402
-from agents import Firm  # noqa: E402
+from macro_sim.behavior.planning import labor_demand_notional, plan_investment, produce, unit_cost  # noqa: E402
+from macro_sim.config import Config  # noqa: E402
+from macro_sim.domain.agents import Firm  # noqa: E402
 
 TOL = 1e-9
 

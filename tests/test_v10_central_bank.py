@@ -23,8 +23,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np                       # noqa: E402
-from config import Config                # noqa: E402
-from economy import Economy              # noqa: E402
+from macro_sim.config import Config                # noqa: E402
+from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.systems.central_bank import set_policy_rate  # noqa: E402
 
 NC, NK, NH = 100, 50, 1000
 
@@ -70,7 +71,7 @@ def test_taylor_rule_responds_to_inflation():
         econ._prev_inflation = infl               # so the EMA step keeps it put
         econ._prev_u = cfg.u_natural              # zero the labour-gap term
         econ._rate = cfg.r_neutral                # same starting point each time
-        econ._cb_set_rate()
+        set_policy_rate(econ)
         return econ._rate
 
     r_hi = rate_given(cfg.inflation_target + 0.02)

@@ -23,6 +23,10 @@ from typing import Dict, List, Sequence
 
 import numpy as np
 
+from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
+from macro_sim.systems.banking import bank_economic_capital, bank_equity_value, bank_for
+from macro_sim.systems.securities import bond_market_value
+
 
 # ---------------------------------------------------------------------------
 # Distribution helpers (used for §4 wealth / Zipf diagnostics later)
@@ -77,6 +81,10 @@ def _std(x: Sequence[float]) -> float:
 # Per-tick snapshot
 # ---------------------------------------------------------------------------
 def compute_tick_metrics(econ) -> Dict[str, float]:
+    return collect_metric_groups(econ, [EconomyMetricCollector(_compute_tick_metrics)])
+
+
+def _compute_tick_metrics(econ) -> Dict[str, float]:
     """Build one tick's metric record from live economy state. Read-only.
 
     Sector-aware: consumption-side quantities (price index, real output, inventory)
@@ -389,7 +397,7 @@ def compute_tick_metrics(econ) -> Dict[str, float]:
                           for h in households])
         debt_arr = np.asarray([led.debt(h.id) for h in households])
         margin = np.asarray([h.margin_debt for h in households])
-        bankeq = np.asarray([econ._bank_equity_value(h.id) for h in households]) \
+        bankeq = np.asarray([bank_equity_value(econ, h.id) for h in households]) \
             if getattr(econ.cfg, "bank_equity", False) else 0.0        # v11.5: bank-equity wealth
         nw_full = np.asarray(hh_dep) + eqv + bankeq - debt_arr  # TRUE net worth: cash + equity (firm+bank) − debt
         rec.update({
@@ -526,7 +534,7 @@ def compute_tick_metrics(econ) -> Dict[str, float]:
         caps = [econ.ledger.balance(b.id) for b in econ.banks]
         lb = {b.id: 0.0 for b in econ.banks}
         for a in list(econ.firms) + list(econ.households):
-            lb[econ._bank_for(a.id).id] += econ.ledger.debt(a.id)
+            lb[bank_for(econ, a.id).id] += econ.ledger.debt(a.id)
         tot_cap = sum(c for c in caps if c > 0.0)
         # v11.3: loan-book concentration (HHI of loan-book shares; 1/n_banks = even, 1 = monopoly) and the
         # realized cross-borrower loan-rate dispersion (loan-book-weighted SD of bank spreads; 0 without competition).
@@ -552,7 +560,7 @@ def compute_tick_metrics(econ) -> Dict[str, float]:
         if getattr(econ.cfg, "interbank", False):
             dep = {b.id: 0.0 for b in econ.banks}                 # per-bank DEPOSIT base (partitioned)
             for h in econ.households:
-                dep[econ._bank_for(h.id).id] += max(0.0, econ.ledger.balance(h.id))
+                dep[bank_for(econ, h.id).id] += max(0.0, econ.ledger.balance(h.id))
             tot_dep = sum(dep.values())
             dep_hhi = float(sum((v / tot_dep) ** 2 for v in dep.values())) if tot_dep > 1e-9 else 0.0
             peak_od = -min([econ.ledger.reserve_min(b.id) for b in econ.banks] + [0.0])
@@ -568,7 +576,7 @@ def compute_tick_metrics(econ) -> Dict[str, float]:
             })
         # v11.5: bank demographics & ownership (entry/exit, bank-equity concentration, runs)
         if getattr(econ.cfg, "bank_equity", False):
-            bankeq_h = [econ._bank_equity_value(h.id) for h in econ.households]
+            bankeq_h = [bank_equity_value(econ, h.id) for h in econ.households]
             alive_bk = [b for b in econ.banks if b.alive]
             pp = [b.share_price / b.share_peak for b in alive_bk if b.share_peak > 1e-9]
             rec.update({
@@ -588,11 +596,11 @@ def compute_tick_metrics(econ) -> Dict[str, float]:
         bank_ids = getattr(econ, "_bank_ids", set())
         lots = getattr(econ, "_bonds", []) or []
         # v12.3 THREE VALUES: face (bond identity) / book (cost, bank-money invariant) / market (MTM, wealth).
-        market_total = float(sum(econ._bond_market_value(l) for l in lots)) if lots else 0.0
+        market_total = float(sum(bond_market_value(econ, l) for l in lots)) if lots else 0.0
         book_total = float(sum(l["cost"] for l in lots)) if lots else 0.0
         bank_bond_face = float(sum(l["face"] for l in lots if l["holder"] in bank_ids)) if lots else 0.0
         alive_banks = [b for b in econ.banks if b.alive]
-        econ_caps = [econ._bank_economic_capital(b) for b in alive_banks]
+        econ_caps = [bank_economic_capital(econ, b) for b in alive_banks]
         rec.update({
             "bonds_outstanding": float(getattr(econ, "_bonds_outstanding", 0.0)),   # = Σ face
             "bond_book_total": book_total,

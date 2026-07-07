@@ -23,8 +23,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config          # noqa: E402
-from economy import Economy        # noqa: E402
+from macro_sim.config import Config          # noqa: E402
+from macro_sim.economy import Economy        # noqa: E402
 
 TOL = 1e-6  # absolute float tolerance for identities over ~1e4 money
 

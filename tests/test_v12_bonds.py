@@ -19,8 +19,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config                # noqa: E402
-from economy import Economy              # noqa: E402
+from macro_sim.config import Config                # noqa: E402
+from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.systems.banking import bank_economic_capital  # noqa: E402
+from macro_sim.systems.securities import assert_securities_identities, reindex_bonds, run_bill_maturity_phase  # noqa: E402
 
 NC, NK, NH = 60, 30, 400
 
@@ -114,20 +116,20 @@ def test_svb_duration_channel_and_bank_securities_conserve():
     econ.ledger.bank_buy_bond_with_reserves(bank.id, econ._fiscal, face)   # money creation: reserves→CB, TSY funded
     econ._bonds.append({"holder": bank.id, "face": face, "cost": face, "matures_at": econ.t + 8})
     econ._bonds_outstanding += face
-    econ._reindex_bonds()
-    econ.ledger.assert_conserved(); econ.ledger.assert_reserves_conserved(); econ._assert_securities_identities()
+    reindex_bonds(econ)
+    econ.ledger.assert_conserved(); econ.ledger.assert_reserves_conserved(); assert_securities_identities(econ)
     bal = econ.ledger.balance(bank.id)
-    cap_par = econ._bank_economic_capital(bank)
+    cap_par = bank_economic_capital(econ, bank)
     assert abs(cap_par - bal) < 1e-6, "at coupon=rate the bond is at par ⇒ no unrealised P&L"
     econ._rate = 0.08                                   # RATE HIKE ⇒ market ≪ face ⇒ MTM loss
-    cap_hi = econ._bank_economic_capital(bank)
+    cap_hi = bank_economic_capital(econ, bank)
     assert cap_hi < cap_par - 1.0, f"rate hike must thin economic capital (SVB): {cap_par:.1f} → {cap_hi:.1f}"
     for l in econ._bonds:                               # force maturity, redeem (unwind the money creation)
         if l["holder"] == bank.id:
             l["matures_at"] = econ.t
     econ._rate = 0.01
-    econ._phase_bill_maturity()
-    econ.ledger.assert_conserved(); econ.ledger.assert_reserves_conserved(); econ._assert_securities_identities()
+    run_bill_maturity_phase(econ)
+    econ.ledger.assert_conserved(); econ.ledger.assert_reserves_conserved(); assert_securities_identities(econ)
 
 
 def test_v124_off_bit_identical():
