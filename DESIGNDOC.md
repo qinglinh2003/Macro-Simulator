@@ -1,6 +1,8 @@
 # Design Document
 
-The design document has been split into smaller topic files under
+The design document has been reorganized into development-first topic files under
 [`docs/design/`](docs/design/README.md).
 
-Start there for the table of contents and section map.
+Start with [`docs/design/current/developer-brief.md`](docs/design/current/developer-brief.md)
+for the current frontier and read [`docs/design/README.md`](docs/design/README.md)
+for the full map.

@@ -1,20 +1,44 @@
-# Axioms of the Agent-Based Macroeconomy
+# Design Documentation
 
-Version `2.23` · Status: **draft, round 34 — v12 the SECURITIES arc closed**
+Version `2.23` · Status: **v12 securities arc closed; v13 labor search is the next major gap**
 
-This design document was split from the original monolithic `DESIGNDOC.md` into
-topic-sized files. The content is unchanged except for this index.
+This directory is organized for development, not chronology. Start with the
+short current-state documents, then drill into durable rules or historical arcs
+only when the change needs them.
 
-## Sections
+## Read First
 
-1. [`00-purpose-notation.md`](00-purpose-notation.md) — purpose, epistemic stance, notation.
-2. [`01-accounting-axioms.md`](01-accounting-axioms.md) — Layer I accounting axioms.
-3. [`02-behavioral-axioms.md`](02-behavioral-axioms.md) — Layer II behavioral axioms.
-4. [`03-market-institutional-axioms.md`](03-market-institutional-axioms.md) — Layer III market and institutional axioms.
-5. [`04-validation-roadmap-kernel.md`](04-validation-roadmap-kernel.md) — validation targets, roadmap, kernel spec, handoff notes.
-6. [`05-kernel-findings-v2-v3.md`](05-kernel-findings-v2-v3.md) — early findings, v2 investment/capital, v3 banks/credit.
-7. [`06-firms-competition-equity.md`](06-firms-competition-equity.md) — firm demographics, diseconomies, validation, equity market, household credit.
-8. [`07-households-portfolios-equity.md`](07-households-portfolios-equity.md) — margin credit, portfolio experiments, dividends, founder ownership.
-9. [`08-government-labor-monetary.md`](08-government-labor-monetary.md) — government, welfare, labor, central bank, wealth tax.
-10. [`09-banking-securities.md`](09-banking-securities.md) — multi-bank system, reserves, bank demographics, securities arc.
-11. [`10-change-log.md`](10-change-log.md) — project change log.
+1. [`current/developer-brief.md`](current/developer-brief.md) — the 10-minute brief: current frontier, invariants, active gaps.
+2. [`current/development-rules.md`](current/development-rules.md) — rules to follow before changing model behavior.
+3. [`current/module-map.md`](current/module-map.md) — where each economic subsystem lives conceptually and which history file explains it.
+4. [`current/refactor-review.md`](current/refactor-review.md) — current code-architecture risks after the package refactor.
+5. [`core/`](core/README.md) — durable design law: accounting, behavior, markets, validation discipline.
+6. [`history/`](history/README.md) — research arcs, falsified hypotheses, diagnostics, and full changelog.
+
+## Directory Map
+
+| Directory | Use it for | Stability |
+|---|---|---|
+| [`current/`](current/README.md) | The first-stop development guide and active architecture map. | Updated whenever the frontier changes. |
+| [`core/`](core/README.md) | Rules that should survive versions: axioms, scheduling, validation, kernel discipline. | High; change only after deliberate design review. |
+| [`history/`](history/README.md) | Version arcs, experiment findings, reversals, old plans, and changelog. | Archival; preserve evidence even when conclusions change. |
+
+## Task-Based Reading
+
+| If you are changing... | Read first | Then read |
+|---|---|---|
+| Ledger, money, loans, bonds, reserves | [`core/01-accounting-axioms.md`](core/01-accounting-axioms.md), [`current/development-rules.md`](current/development-rules.md) | [`history/arcs/09-banking-securities.md`](history/arcs/09-banking-securities.md) |
+| Agent behavior or parameters | [`core/02-behavioral-axioms.md`](core/02-behavioral-axioms.md) | The relevant arc under [`history/arcs/`](history/arcs/README.md) |
+| Market clearing, scheduling, matching | [`core/03-market-institutional-axioms.md`](core/03-market-institutional-axioms.md) | [`history/arcs/06-firms-competition-equity.md`](history/arcs/06-firms-competition-equity.md) |
+| Kernel or validation harness | [`core/04-validation-roadmap-kernel.md`](core/04-validation-roadmap-kernel.md) | [`history/arcs/05-kernel-findings-v2-v3.md`](history/arcs/05-kernel-findings-v2-v3.md) |
+| Firms, competition, entry/exit | [`current/module-map.md`](current/module-map.md) | [`history/arcs/06-firms-competition-equity.md`](history/arcs/06-firms-competition-equity.md) |
+| Households, portfolios, wealth | [`current/module-map.md`](current/module-map.md) | [`history/arcs/07-households-portfolios-equity.md`](history/arcs/07-households-portfolios-equity.md) |
+| Fiscal, welfare, labor, central bank | [`current/developer-brief.md`](current/developer-brief.md) | [`history/arcs/08-government-labor-monetary.md`](history/arcs/08-government-labor-monetary.md) |
+| Banks, reserves, securities, OMO/QE/LoLR | [`current/developer-brief.md`](current/developer-brief.md) | [`history/arcs/09-banking-securities.md`](history/arcs/09-banking-securities.md) |
+
+## Status Tags
+
+- **Canon:** durable rule or discipline; do not casually override.
+- **Active Spec:** current architecture or intended behavior.
+- **Finding:** empirical/diagnostic result from a run or sweep.
+- **Archive:** preserved context, including falsified priors and superseded plans.

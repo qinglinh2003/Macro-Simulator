@@ -1,0 +1,21 @@
+# Module Map
+
+This map is conceptual. It tells a developer which design layer they are
+touching and where the detailed history lives.
+
+| Subsystem | Current code path | Current role | First read | Historical evidence |
+|---|---|---|---|---|
+| Accounting / ledger | `macro_sim/core/ledger.py` | Hard financial invariants, transfers, loans, write-offs, reserves, securities. | [`../core/01-accounting-axioms.md`](../core/01-accounting-axioms.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
+| Behavior rules | `macro_sim/behavior/planning.py` | Consumption, expectations, pricing, wages, investment, credit demand/supply. | [`../core/02-behavioral-axioms.md`](../core/02-behavioral-axioms.md) | [`../history/arcs/05-kernel-findings-v2-v3.md`](../history/arcs/05-kernel-findings-v2-v3.md) |
+| Market protocol | `macro_sim/markets/matching.py` | Decentralized matching, rationing, scheduling, information timing. | [`../core/03-market-institutional-axioms.md`](../core/03-market-institutional-axioms.md) | [`../history/arcs/06-firms-competition-equity.md`](../history/arcs/06-firms-competition-equity.md) |
+| Economy scheduler | `macro_sim/economy.py` | Construction, phase order, state carrier, hard accounting gate, per-tick record append. | [`developer-brief.md`](developer-brief.md) | [`../history/change-log.md`](../history/change-log.md) |
+| Config surface | `macro_sim/config/legacy.py`, `macro_sim/config/schema.py` | Version presets, validation, and typed grouped config views. | [`development-rules.md`](development-rules.md) | [`../history/change-log.md`](../history/change-log.md) |
+| Firms and competition | `macro_sim/systems/firm_demographics.py`, `macro_sim/domain/agents.py` | Entry/exit, bankruptcy, diseconomies, Gibrat growth, concentration. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/06-firms-competition-equity.md`](../history/arcs/06-firms-competition-equity.md) |
+| Households and portfolios | `macro_sim/systems/equity.py`, `macro_sim/behavior/planning.py` | MPC heterogeneity, equity, margin credit, wealth concentration. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/07-households-portfolios-equity.md`](../history/arcs/07-households-portfolios-equity.md) |
+| Goods and capital markets | `macro_sim/systems/goods.py`, `macro_sim/systems/capital_goods.py` | Consumption market clearing, government goods demand, capital-goods purchases. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/05-kernel-findings-v2-v3.md`](../history/arcs/05-kernel-findings-v2-v3.md) |
+| Fiscal and welfare | `macro_sim/systems/settlement.py`, `macro_sim/reporting/metrics.py` | Taxes, transfers, deficit, public investment, welfare metrics, job guarantee. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/08-government-labor-monetary.md`](../history/arcs/08-government-labor-monetary.md) |
+| Central bank | `macro_sim/systems/central_bank.py`, `macro_sim/core/policy.py` | Policy rate, deposit-interest routing, OMO/QE, LoLR, reserve supply. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/08-government-labor-monetary.md`](../history/arcs/08-government-labor-monetary.md), [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
+| Banks | `macro_sim/systems/banking.py`, `macro_sim/systems/credit.py` | Multi-bank loan books, capital, competition, runs, bank equity, entry. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
+| Bonds and securities | `macro_sim/systems/securities.py` | Treasury/CB split, bond lots, bank securities, duration, SVB, OMO. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
+| Reporting and experiments | `macro_sim/reporting/`, `macro_sim/experiments/` | Per-tick metrics, diagnostic plots, run logs, and sweep registry. | [`developer-brief.md`](developer-brief.md) | [`../history/change-log.md`](../history/change-log.md) |
+| Validation | `tests/`, `macro_sim/reporting/diagnostics.py` | Held-out macro regularities and diagnostic discipline. | [`../core/04-validation-roadmap-kernel.md`](../core/04-validation-roadmap-kernel.md) | [`../history/change-log.md`](../history/change-log.md) |
