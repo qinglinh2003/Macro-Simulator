@@ -1,7 +1,7 @@
 # macro-simulator
 
 Agent-based macroeconomic simulation. This repo implements **roadmap step 1** of
-[`DESIGNDOC.md`](DESIGNDOC.md): the *closed monetary kernel* — households + firms,
+the [design document](docs/design/README.md): the *closed monetary kernel* — households + firms,
 one good, money (deposits) as the only financial instrument, no banks, no
 government, no external sector.
 
@@ -23,6 +23,8 @@ are the held-out test set and must not be engineered in.
 
 | File | Role |
 |---|---|
+| `docs/design/` | Split design document: axioms, validation targets, findings, banking/securities arc, and changelog. |
+| `docs/plans/` | Version-specific implementation plans (`PLAN_v*.md`). |
 | `ledger.py` | `transfer(from, to, amount)` — the **only** money mutator; agents have no write access to balances, so conservation (A1/M0) holds by construction. Conservation is a redundant per-tick gate. |
 | `config.py` | The full §7.4 parameter budget, each row tagged forced / anchored / scale / transient / FREE. Only five dials are genuinely free: `phi, eta, mu_min, mu_max, omega`. |
 | `agents.py` | `Household` / `Firm` state (money lives in the ledger, not here); per-agent parameter fields; cross-tick derived state persisted per §8.1. |
