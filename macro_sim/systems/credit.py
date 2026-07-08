@@ -46,6 +46,7 @@ def run_credit_phase(econ: Any) -> None:
 
     econ._hh_credit_new = 0.0
     if cfg.household_credit:
+        bridge = getattr(econ, "demographic_bridge", None)
         for h in econ.households:
             deposits = econ.ledger.balance(h.id)
             target, requested = B.household_credit_request(h, deposits, cfg.hh_subsistence)
@@ -55,6 +56,8 @@ def run_credit_phase(econ: Any) -> None:
                 granted = min(requested, max(0.0, headroom))
                 if granted > EPS:
                     granted = grant_loan(econ, h.id, granted)
+                    if bridge is not None and granted > EPS:
+                        bridge.post_household_debt_creation(h.id, granted)
                     econ._hh_credit_new += granted
 
 
@@ -82,6 +85,7 @@ def run_debt_service_phase(econ: Any) -> None:
 
     econ._hh_interest = econ._hh_principal = 0.0
     if cfg.household_credit or cfg.margin_credit:
+        bridge = getattr(econ, "demographic_bridge", None)
         for h in econ.households:
             debt = econ.ledger.debt(h.id)
             if debt <= EPS:
@@ -92,10 +96,14 @@ def run_debt_service_phase(econ: Any) -> None:
             interest = min(loan_rate_for(econ, h.id) * debt, deposits - principal)
             if principal > EPS:
                 econ.ledger.repay(h.id, principal)
+                if bridge is not None:
+                    bridge.post_household_debt_repayment(h.id, principal)
                 econ._hh_principal += principal
             if interest > EPS:
                 bk = bank_for(econ, h.id)
                 econ.ledger.transfer(h.id, bk.id, interest)
+                if bridge is not None:
+                    bridge.post_household_cash_delta(h.id, -interest, reason="interest_payment")
                 econ._hh_interest += interest
                 bk.interest_income += interest
 
@@ -116,6 +124,7 @@ def run_debt_service_phase(econ: Any) -> None:
         if cfg.bank_equity:
             pay_bank_dividends(econ, bk, payable)
         elif comp:
+            bridge = getattr(econ, "demographic_bridge", None)
             own = [
                 (h, max(0.0, econ.ledger.balance(h.id)))
                 for h in econ.households
@@ -127,8 +136,11 @@ def run_debt_service_phase(econ: Any) -> None:
                     amt = min(payable * d / total_dep, econ.ledger.balance(bk.id))
                     if amt > EPS:
                         econ.ledger.transfer(bk.id, h.id, amt)
+                        if bridge is not None:
+                            bridge.post_capital_income(h.id, amt)
                         h.income_realized += amt
         elif cfg.interest_by_deposits:
+            bridge = getattr(econ, "demographic_bridge", None)
             dep = {h.id: max(0.0, econ.ledger.balance(h.id)) for h in econ.households}
             total_dep = sum(dep.values())
             if total_dep > EPS:
@@ -136,11 +148,16 @@ def run_debt_service_phase(econ: Any) -> None:
                     amt = min(payable * dep[h.id] / total_dep, econ.ledger.balance(bk.id))
                     if amt > EPS:
                         econ.ledger.transfer(bk.id, h.id, amt)
+                        if bridge is not None:
+                            bridge.post_capital_income(h.id, amt)
                         h.income_realized += amt
         else:
+            bridge = getattr(econ, "demographic_bridge", None)
             share = payable / len(econ.households)
             for h in econ.households:
                 econ.ledger.transfer(bk.id, h.id, share)
+                if bridge is not None:
+                    bridge.post_capital_income(h.id, share)
                 h.income_realized += share
 
     update_bank_valuation(econ)

@@ -53,8 +53,16 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
     if residual > EPS:
         led.transfer(firm.id, bank_for(econ, firm.id).id, residual)
     if cfg.per_firm_equity:
+        bridge = getattr(econ, "demographic_bridge", None)
         for h in econ.households:
-            h.holdings.pop(firm.id, None)
+            shares = h.holdings.pop(firm.id, None)
+            if bridge is not None and shares:
+                bridge.post_household_equity_trade(
+                    h.id,
+                    firm.id,
+                    cash_delta=0.0,
+                    share_delta=-shares,
+                )
             if firm.id in h.watchlist:
                 h.watchlist.remove(firm.id)
     econ.c_firms.remove(firm)
@@ -117,6 +125,7 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
     if len(econ.banks) > 1:
         econ._bank_of[firm.id] = bank_for(econ, funder.id)
     econ.ledger.transfer(funder.id, firm.id, startup_deposits)
+    bridge = getattr(econ, "demographic_bridge", None)
     econ.c_firms.append(firm)
     econ.firms.append(firm)
     econ.investing_firms.append(firm)
@@ -126,6 +135,13 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
         firm.share_price = firm.share_last_price = max(EPS, book / cfg.shares_per_firm)
         firm.equity_fundamental = firm.share_price
         funder.holdings[firm.id] = funder.holdings.get(firm.id, 0.0) + cfg.shares_per_firm
+        if bridge is not None:
+            bridge.post_household_equity_trade(
+                funder.id,
+                firm.id,
+                cash_delta=-startup_deposits,
+                share_delta=cfg.shares_per_firm,
+            )
         if firm.id not in funder.watchlist:
             funder.watchlist.append(firm.id)
     econ._births += 1

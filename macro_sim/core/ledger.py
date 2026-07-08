@@ -323,6 +323,30 @@ class Ledger:
         self._bal[borrower] -= amount
         self._loans[borrower] -= amount
 
+    def transfer_debt(self, src_borrower: Hashable, dst_borrower: Hashable, amount: float) -> None:
+        """Move an existing loan obligation from one account to another.
+
+        Demographic household splitting/merging moves people between household
+        accounts.  Their person-level debt claim must move with them, while the
+        system-wide loan stock stays unchanged.  This is a pure reassignment of
+        the borrower account: ΣL is invariant, deposits are untouched, and A5 is
+        therefore unchanged.
+        """
+        if amount < 0:
+            raise ValueError(f"debt transfer amount must be >= 0, got {amount}")
+        if src_borrower not in self._loans:
+            raise KeyError(f"unknown source borrower {src_borrower!r}")
+        if dst_borrower not in self._loans:
+            raise KeyError(f"unknown destination borrower {dst_borrower!r}")
+        if amount == 0.0:
+            return
+        if amount > self._loans[src_borrower] + self._abs_tol:
+            raise ValueError(
+                f"{src_borrower!r} cannot transfer {amount}; debt is {self._loans[src_borrower]}"
+            )
+        self._loans[src_borrower] -= amount
+        self._loans[dst_borrower] += amount
+
     # -- bad-debt writeoff & agent lifecycle (v4, firm entry/exit) ----------
 
     def write_off(self, borrower: Hashable, bank: Hashable, amount: float) -> None:

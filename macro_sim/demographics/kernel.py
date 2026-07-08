@@ -31,6 +31,8 @@ from macro_sim.demographics.social import (
 
 BirthHook = Callable[[BirthEvent, Person], None]
 DeathHook = Callable[[DeathEvent, Person], None]
+MarriageHook = Callable[[MarriageEvent], None]
+DivorceHook = Callable[[DivorceEvent], None]
 FertilityMode = Literal["all_women", "married_only"]
 DEFAULT_START_DATE = date(2000, 1, 1)
 
@@ -161,6 +163,8 @@ class MicroDemographicKernel:
         rng_seed: int,
         on_birth: BirthHook | None = None,
         on_death: DeathHook | None = None,
+        on_marriage: MarriageHook | None = None,
+        on_divorce: DivorceHook | None = None,
         social_config: SocialDynamicsConfig | None = None,
         fertility_mode: FertilityMode = "married_only",
         marital_fertility_curve: np.ndarray | None = None,
@@ -169,6 +173,8 @@ class MicroDemographicKernel:
         self.rng = np.random.default_rng(rng_seed)
         self.on_birth = on_birth or (lambda event, person: None)
         self.on_death = on_death or (lambda event, person: None)
+        self.on_marriage = on_marriage or (lambda event: None)
+        self.on_divorce = on_divorce or (lambda event: None)
         self.social_config = social_config or SocialDynamicsConfig()
         if fertility_mode not in ("all_women", "married_only"):
             raise ValueError("fertility_mode must be 'all_women' or 'married_only'")
@@ -179,7 +185,8 @@ class MicroDemographicKernel:
             else marital_fertility_curve
         )
 
-    def tick(self, state: GenesisState) -> TickResult:
+    def tick(self, state: GenesisState, economic_state: object | None = None) -> TickResult:
+        _ = economic_state
         state.tick_index += 1
         tick = state.tick_index
         state.current_date = state.current_date + timedelta(days=1)
@@ -206,10 +213,10 @@ class MicroDemographicKernel:
                 person.alive = False
                 person.death_tick = tick
                 deaths += 1
-                handle_partner_death(state, person, people_by_id)
                 event = DeathEvent(tick=tick, date=state.current_date, person_id=person.id, age=person.age)
                 state.death_events.append(event)
                 self.on_death(event, person)
+                handle_partner_death(state, person, people_by_id)
 
         if self.social_config.guardianship_enabled and deaths > 0:
             repair_minor_guardianship(state, reason="parent_death")
@@ -217,7 +224,12 @@ class MicroDemographicKernel:
         apply_divorce_dynamics(state, config=self.social_config, rng=self.rng, dt_years=dt_years)
         if self.social_config.guardianship_enabled and len(state.divorce_events) > divorce_count_before:
             repair_minor_guardianship(state, reason="divorce_custody")
+        for event in state.divorce_events[divorce_count_before:]:
+            self.on_divorce(event)
+        marriage_count_before = len(state.marriage_events)
         apply_marriage_market(state, config=self.social_config, rng=self.rng)
+        for event in state.marriage_events[marriage_count_before:]:
+            self.on_marriage(event)
 
         people_by_id = {person.id: person for person in state.people}
         births: list[Person] = []

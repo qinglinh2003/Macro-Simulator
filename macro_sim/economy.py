@@ -21,6 +21,11 @@ from macro_sim.config import Config
 from macro_sim.core.ledger import Ledger
 from macro_sim.core.policy import Policy
 from macro_sim.core.state import SimulationState
+from macro_sim.demographics import Phase0VitalRates, create_genesis_population
+from macro_sim.demographics.economic_bridge import initialize_person_claims_from_households
+from macro_sim.demographics.kernel import MicroDemographicKernel
+from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig, apply_leaving_home_dynamics
+from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
     EPS,
@@ -72,7 +77,29 @@ class Economy:
         self._gibrat_rng = random.Random(cfg.seed + 777)   # dedicated -> main stream unperturbed
         self.goods = goods or Goods()
 
-        self.households: List[Household] = [Household.create(i, cfg) for i in range(cfg.n_households)]
+        self.demographic_rates = None
+        self.demographic_state = None
+        self.demographic_bridge = None
+        self.demographic_kernel = None
+        self._demographic_household_rng = random.Random(cfg.seed + 13_002)
+        household_count = cfg.n_households
+        if cfg.demographics_enabled:
+            self.demographic_rates = Phase0VitalRates()
+            population = cfg.demographics_population or cfg.n_households
+            self.demographic_state = create_genesis_population(
+                self.demographic_rates,
+                n=population,
+                seed=cfg.seed + 13_000,
+            )
+            household_count = len(
+                {
+                    int(person.household_id)
+                    for person in self.demographic_state.people
+                    if person.alive and person.household_id is not None
+                }
+            )
+
+        self.households: List[Household] = [Household.create(i, cfg) for i in range(household_count)]
         if cfg.mpc_dispersion > 0.0:
             diversify_mpc(cfg, self.households)     # heterogeneous savers (T8 precursor); off => bit-identical
 
@@ -135,6 +162,18 @@ class Economy:
             self.ledger.allow_negative(bk.id)                # equity may go negative (insolvency)
         if cfg.government:
             self.ledger.allow_negative(self._fiscal)         # government debt (its negative balance)
+
+        if cfg.demographics_enabled:
+            self.demographic_bridge = initialize_person_claims_from_households(self, self.demographic_state)
+            self.demographic_kernel = MicroDemographicKernel(
+                self.demographic_rates,
+                rng_seed=cfg.seed + 13_001,
+                on_birth=self.demographic_bridge.on_birth,
+                on_death=self.demographic_bridge.on_death,
+                on_marriage=self.demographic_bridge.on_marriage,
+                on_divorce=self.demographic_bridge.on_divorce,
+                social_config=self._demographic_social_config(),
+            )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -203,6 +242,8 @@ class Economy:
         elif cfg.capital_market and cfg.per_firm_equity:
             setup_per_firm_equity(self)                           # v6.1
         self._equity_turnover = 0.0                          # scratch (metrics)
+        if self.demographic_bridge is not None:
+            self.demographic_bridge.reconcile_financial_claims_from_economy(self)
 
         # v4 firm-demographics state: unique-id counter (never reuse indices) + scratch.
         self._next_c_id = cfg.n_firms_c
@@ -250,6 +291,9 @@ class Economy:
         self._pubcap_factor = ((1.0 + self.public_capital / self.K_ref) ** self.cfg.public_capital_gamma
                                if self.cfg.public_capital_gamma > 0.0 else 1.0)
         run_bill_maturity_phase(self)     # v12.1 only; one-period bills mature to deposits BEFORE planning (no-op off)
+        if self.demographic_kernel is not None:
+            self.demographic_kernel.tick(self.demographic_state, economic_state=self.demographic_bridge)
+            self._run_demographic_household_transitions()
         run_planning_phase(self)
         apply_gibrat_shock(self)          # v8.1 only; multiplicative market-share drift (no-op off)
         run_credit_phase(self)            # v3 only; no-op when banks disabled
@@ -270,6 +314,37 @@ class Economy:
         self.t += 1
         return rec
 
+    def _demographic_social_config(self) -> SocialDynamicsConfig:
+        cfg = self.cfg
+        return SocialDynamicsConfig(
+            marriage_enabled=cfg.demographic_marriage_enabled,
+            divorce_enabled=cfg.demographic_divorce_enabled,
+            marriage_market_interval_days=cfg.demographic_marriage_market_interval_days,
+            annual_marriage_rate_peak=cfg.demographic_annual_marriage_rate_peak,
+            annual_divorce_rate_base=cfg.demographic_annual_divorce_rate_base,
+        )
+
+    def _run_demographic_household_transitions(self) -> None:
+        if not self.cfg.demographic_adult_leaving_home_enabled:
+            return
+        events = apply_leaving_home_dynamics(
+            self.demographic_state,
+            LifecycleHouseholdConfig(
+                leave_home_min_age=self.cfg.demographic_leave_home_min_age,
+                leave_home_peak_end_age=self.cfg.demographic_leave_home_peak_end_age,
+                annual_leave_rate_peak=self.cfg.demographic_annual_leave_rate_peak,
+                annual_leave_rate_late=self.cfg.demographic_annual_leave_rate_late,
+            ),
+            self._demographic_household_rng,
+        )
+        if not events:
+            return
+        if not hasattr(self.demographic_state, "leaving_home_events"):
+            self.demographic_state.leaving_home_events = []
+        self.demographic_state.leaving_home_events.extend(events)
+        for event in events:
+            self.demographic_bridge.create_household_for_person(event.person_id)
+
     def run(self, n_ticks: int = None) -> List[dict]:
         for _ in range(n_ticks if n_ticks is not None else self.cfg.n_ticks):
             self.step()
@@ -284,6 +359,8 @@ class Economy:
         self.ledger.assert_non_negative()
         self.ledger.assert_reserves_conserved()   # v11.4: the reserve overlay conserves too (no-op if off)
         assert_securities_identities(self)        # v12: bond / CB-balance-sheet / master-NFA gates (no-op if off)
+        if self.demographic_bridge is not None:
+            self.demographic_bridge.assert_all_claim_identities(self)
 
         # Rich per-tick snapshot (metrics.py) -- pure observation.
         rec = metrics.compute_tick_metrics(self)

@@ -18,7 +18,11 @@ def run_labor_phase(econ: Any) -> None:
     # favored. A firm hires up to what its LIVE deposits can pay (A4).
     workers = list(econ.households)
     econ.rng.shuffle(workers)
-    remaining = [1.0] * len(workers)     # parallel array: worker i's residual supply
+    bridge = getattr(econ, "demographic_bridge", None)
+    remaining = [
+        bridge.household_labor_supply(worker.id) if bridge is not None else 1.0
+        for worker in workers
+    ]     # parallel array: worker i's residual supply
     n = len(workers)
     p = 0                                # global pointer into the shuffled worker list
 
@@ -40,6 +44,8 @@ def run_labor_phase(econ: Any) -> None:
                 break
             pay = hire * wage
             econ.ledger.transfer(f.id, workers[p].id, pay)   # wages firm -> household
+            if bridge is not None:
+                bridge.post_labor_income(workers[p].id, pay)
             f.hired += hire
             f.wagebill += pay
             workers[p].income_realized += pay

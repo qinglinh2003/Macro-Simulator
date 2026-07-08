@@ -6,6 +6,7 @@ import random
 from typing import Any
 
 from macro_sim.behavior import planning as B
+from macro_sim.demographics.economic_bridge import AGGREGATE_EQUITY_CLAIM_ID
 from macro_sim.markets.matching import EPS
 from macro_sim.systems.banking import bank_for
 
@@ -55,6 +56,7 @@ def run_equity_phase(econ: Any) -> None:
     if econ.equity is None:
         return
     mkt, led = econ.equity, econ.ledger
+    bridge = getattr(econ, "demographic_bridge", None)
 
     mkt.book_value = sum(led.balance(f.id) - led.debt(f.id) + f.capital for f in econ.c_firms)
     mkt.dividend_ema += cfg.lambda_d * (econ._dividends_paid - mkt.dividend_ema)
@@ -74,17 +76,38 @@ def run_equity_phase(econ: Any) -> None:
                 q = d * buy_scale
                 led.transfer(h.id, "CLEARING", q * p)
                 h.shares += q
+                if bridge is not None:
+                    bridge.post_household_equity_trade(
+                        h.id,
+                        AGGREGATE_EQUITY_CLAIM_ID,
+                        cash_delta=-(q * p),
+                        share_delta=q,
+                    )
             elif d < 0.0:
                 sellers.append((h, -d * sell_scale))
         for h, q in sellers[:-1]:
             led.transfer("CLEARING", h.id, q * p)
             h.shares -= q
+            if bridge is not None:
+                bridge.post_household_equity_trade(
+                    h.id,
+                    AGGREGATE_EQUITY_CLAIM_ID,
+                    cash_delta=q * p,
+                    share_delta=-q,
+                )
         if sellers:
             h, q = sellers[-1]
             rem = led.balance("CLEARING")
             if rem > EPS:
                 led.transfer("CLEARING", h.id, rem)
             h.shares -= q
+            if bridge is not None:
+                bridge.post_household_equity_trade(
+                    h.id,
+                    AGGREGATE_EQUITY_CLAIM_ID,
+                    cash_delta=rem,
+                    share_delta=-q,
+                )
     mkt.executed_volume = executed
     econ._equity_turnover = executed / mkt.float_shares
 
@@ -102,6 +125,7 @@ def run_per_firm_equity_phase(econ: Any) -> None:
     cfg, led = econ.cfg.equity_market, econ.ledger
     r = econ._rate
     cfirms = econ.c_firms
+    bridge = getattr(econ, "demographic_bridge", None)
 
     book_of = {}
     for f in cfirms:
@@ -155,6 +179,8 @@ def run_per_firm_equity_phase(econ: Any) -> None:
             margin_used = max(0.0, min(buy_cash, budget) - deposits)
             if margin_used > EPS:
                 led.create_loan(h.id, margin_used)
+                if bridge is not None:
+                    bridge.post_household_debt_creation(h.id, margin_used)
                 h.margin_debt += margin_used
                 econ._hh_margin_new += margin_used
                 deposits = led.balance(h.id)
@@ -184,10 +210,24 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                     q = d * bs
                     led.transfer(h.id, "CLEARING", q * p)
                     h.holdings[f.id] = h.holdings.get(f.id, 0.0) + q
+                    if bridge is not None:
+                        bridge.post_household_equity_trade(
+                            h.id,
+                            f.id,
+                            cash_delta=-(q * p),
+                            share_delta=q,
+                        )
             hsellers = [(h, -d * ss) for h, d in od if d < 0.0]
             for h, q in hsellers:
                 h.holdings[f.id] = h.holdings.get(f.id, 0.0) - q
                 led.transfer("CLEARING", h.id, q * p)
+                if bridge is not None:
+                    bridge.post_household_equity_trade(
+                        h.id,
+                        f.id,
+                        cash_delta=q * p,
+                        share_delta=-q,
+                    )
             issued = issue * ss
             if issued > EPS:
                 f.shares_outstanding += issued
@@ -199,6 +239,8 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                 rem = led.balance("CLEARING")
                 if rem > EPS:
                     led.transfer("CLEARING", hsellers[-1][0].id, rem)
+                    if bridge is not None:
+                        bridge.post_household_cash_delta(hsellers[-1][0].id, rem, reason="asset_trade")
             executed_total += executed
         excess = (buy - sell_total) / f.shares_outstanding if f.shares_outstanding > EPS else 0.0
         new_p = max(EPS, p * (1.0 + cfg.lambda_p * max(-0.5, min(0.5, excess))))
@@ -217,6 +259,8 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                 pay = min(excess, led.balance(h.id))
                 if pay > EPS:
                     led.repay(h.id, pay)
+                    if bridge is not None:
+                        bridge.post_household_debt_repayment(h.id, pay)
                     h.margin_debt -= pay
                     econ._hh_margin_repaid += pay
 
@@ -230,8 +274,13 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                 pay = min(led.balance(h.id), h.margin_debt)
                 if pay > EPS:
                     led.repay(h.id, pay)
+                    if bridge is not None:
+                        bridge.post_household_debt_repayment(h.id, pay)
                     h.margin_debt -= pay
                 if h.margin_debt > EPS:
+                    bad = h.margin_debt
                     led.write_off(h.id, bank_for(econ, h.id).id, h.margin_debt)
+                    if bridge is not None:
+                        bridge.post_household_debt_writeoff(h.id, bad)
                     h.margin_debt = 0.0
                 econ._hh_bankruptcies += 1

@@ -48,9 +48,16 @@ def household_bond_value(econ: Any, household_id) -> float:
 
 def redeem_household_bonds(econ: Any, household_id, amount: float) -> None:
     kept, raised = [], 0.0
+    bridge = getattr(econ, "demographic_bridge", None)
     for lot in econ._bonds:
         if lot["holder"] == household_id and raised < amount - EPS:
             econ.ledger.transfer(econ._fiscal, household_id, lot["face"])
+            if bridge is not None and household_id in getattr(bridge, "account_to_household", {}):
+                bridge.post_household_bond_trade(
+                    household_id,
+                    cash_delta=lot["face"],
+                    face_delta=-lot["face"],
+                )
             econ._bonds_outstanding -= lot["face"]
             raised += lot["face"]
         else:
@@ -83,11 +90,14 @@ def run_bill_maturity_phase(econ: Any) -> None:
     econ._gov_interest_bill = 0.0
     if not (cfg.bonds and cfg.government) or not econ._bonds:
         return
+    bridge = getattr(econ, "demographic_bridge", None)
     if cfg.bond_coupon > 0.0:
         for lot in econ._bonds:
             c = cfg.bond_coupon * lot["face"]
             if c > EPS:
                 econ.ledger.transfer(econ._fiscal, lot["holder"], c)
+                if bridge is not None and lot["holder"] in getattr(bridge, "account_to_household", {}):
+                    bridge.post_household_cash_delta(lot["holder"], c, reason="capital_income")
                 econ._gov_interest_bill += c
     matured = [lot for lot in econ._bonds if lot["matures_at"] <= econ.t]
     if matured:
@@ -98,6 +108,8 @@ def run_bill_maturity_phase(econ: Any) -> None:
                     econ.ledger.bank_redeem_bond(lot["holder"], econ._fiscal, f)
                 else:
                     econ.ledger.transfer(econ._fiscal, lot["holder"], f)
+                    if bridge is not None and lot["holder"] in getattr(bridge, "account_to_household", {}):
+                        bridge.post_household_bond_trade(lot["holder"], cash_delta=f, face_delta=-f)
                 econ._bonds_outstanding -= f
         econ._bonds = [lot for lot in econ._bonds if lot["matures_at"] > econ.t]
         reindex_bonds(econ)
@@ -131,11 +143,14 @@ def run_bill_issuance_phase(econ: Any) -> None:
     remaining = gap
     total = sum(idle.values())
     issued = False
+    bridge = getattr(econ, "demographic_bridge", None)
     if total > EPS:
         for h in hh:
             buy = min(remaining * idle[h.id] / total, idle[h.id])
             if buy > EPS:
                 econ.ledger.transfer(h.id, econ._fiscal, buy)
+                if bridge is not None:
+                    bridge.post_household_bond_trade(h.id, cash_delta=-buy, face_delta=buy)
                 econ._bonds.append({
                     "holder": h.id,
                     "face": buy,

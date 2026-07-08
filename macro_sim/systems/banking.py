@@ -195,6 +195,7 @@ def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> None:
     total = sum(owners.values())
     if total <= 0.0:
         return
+    bridge = getattr(econ, "demographic_bridge", None)
     for household_id, shares in owners.items():
         household = econ._hh_by_id.get(household_id)
         if household is None:
@@ -202,6 +203,8 @@ def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> None:
         amount = min(payable * shares / total, econ.ledger.balance(bank.id))
         if amount > EPS:
             econ.ledger.transfer(bank.id, household.id, amount)
+            if bridge is not None:
+                bridge.post_capital_income(household.id, amount)
             household.income_realized += amount
 
 
@@ -231,6 +234,7 @@ def update_bank_valuation(econ: Any) -> None:
 
 def bank_stock_market(econ: Any, rate: float) -> None:
     cfg, ledger = econ.cfg.banking, econ.ledger
+    bridge = getattr(econ, "demographic_bridge", None)
     banks = [bank for bank in econ.banks if bank.alive and bank.shares_outstanding > EPS]
     for bank in econ.banks:
         if not bank.alive:
@@ -281,13 +285,29 @@ def bank_stock_market(econ: Any, rate: float) -> None:
                     quantity = delta * buy_scale
                     ledger.transfer(household.id, "CLEARING", quantity * price)
                     bank.owners[household.id] = bank.owners.get(household.id, 0.0) + quantity
+                    if bridge is not None:
+                        bridge.post_household_bank_equity_trade(
+                            household.id,
+                            bank.id,
+                            cash_delta=-(quantity * price),
+                            share_delta=quantity,
+                        )
             sellers = [(household, -delta * sell_scale) for household, delta in order_book if delta < 0.0]
             for household, quantity in sellers:
                 bank.owners[household.id] = bank.owners.get(household.id, 0.0) - quantity
                 ledger.transfer("CLEARING", household.id, quantity * price)
+                if bridge is not None:
+                    bridge.post_household_bank_equity_trade(
+                        household.id,
+                        bank.id,
+                        cash_delta=quantity * price,
+                        share_delta=-quantity,
+                    )
             remainder = ledger.balance("CLEARING")
             if remainder > EPS and sellers:
                 ledger.transfer("CLEARING", sellers[-1][0].id, remainder)
+                if bridge is not None:
+                    bridge.post_household_cash_delta(sellers[-1][0].id, remainder, reason="bank_equity_trade")
             turnover += executed
         excess = (buy - sell) / bank.shares_outstanding if bank.shares_outstanding > EPS else 0.0
         new_price = max(EPS, price * (1.0 + cfg.lambda_p * max(-0.5, min(0.5, excess))))
@@ -327,11 +347,19 @@ def found_bank(econ: Any, founder, capital: float) -> None:
     if econ.ledger.balance(founder.id) < capital:
         redeem_household_bonds(econ, founder.id, capital - econ.ledger.balance(founder.id))
     econ.ledger.transfer(founder.id, bank_id, capital)
+    bridge = getattr(econ, "demographic_bridge", None)
     econ._bank_spread[bank_id] = -abs(econ._bank_entry_rng.gauss(0.0, cfg.bank_spread_disp))
     econ._deposit_spread[bank_id] = 0.0
     shares = 100.0
     bank.shares_outstanding = shares
     bank.owners = {founder.id: shares}
+    if bridge is not None:
+        bridge.post_household_bank_equity_trade(
+            founder.id,
+            bank_id,
+            cash_delta=-capital,
+            share_delta=shares,
+        )
     price = max(0.0, econ.ledger.balance(bank_id)) / shares
     bank.share_price = bank.share_last_price = bank.share_peak = price
     econ._bank_births += 1

@@ -6,6 +6,8 @@ document records durable model structure and findings.
 
 ## Plans
 
+- [`TEMP-visualization-refactor-plan.md`](TEMP-visualization-refactor-plan.md)
+- [`TEMP-codebase-refactor-plan.md`](TEMP-codebase-refactor-plan.md)
 - [`PLAN_v2.md`](PLAN_v2.md)
 - [`PLAN_v3.md`](PLAN_v3.md)
 - [`PLAN_v4.md`](PLAN_v4.md)
@@ -24,3 +26,4 @@ document records durable model structure and findings.
 - [`PLAN_v12.md`](PLAN_v12.md)
 - [`PLAN_v12.3.md`](PLAN_v12.3.md)
 - [`PLAN_v12.4.md`](PLAN_v12.4.md)
+- [`PLAN_v13.md`](PLAN_v13.md)

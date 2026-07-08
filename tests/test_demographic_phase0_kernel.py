@@ -18,7 +18,9 @@ from macro_sim.demographics import (
     spectral_diagnostics,
     stable_age_distribution,
 )
+from macro_sim.demographics.agents import Person
 from macro_sim.demographics.kernel import MicroDemographicKernel, count_alive_by_age
+from macro_sim.demographics.social import SocialDynamicsConfig
 
 
 def test_vital_rates_generate_survival_and_fertility_curves():
@@ -105,6 +107,75 @@ def test_birth_events_record_mother_and_household():
     assert all(person.household_id is not None for person in newborns)
     assert all(event.mother_id is not None for event in state.birth_events)
     assert all(hasattr(event, "father_id") for event in state.birth_events)
+
+
+def test_noop_economic_state_does_not_change_phase0_tick():
+    rates = Phase0VitalRates(tfr=0.0)
+    left = create_genesis_population(rates, n=1_000, seed=41, start_date=date(2001, 1, 1))
+    right = create_genesis_population(rates, n=1_000, seed=41, start_date=date(2001, 1, 1))
+    kernel_left = MicroDemographicKernel(rates, rng_seed=42)
+    kernel_right = MicroDemographicKernel(rates, rng_seed=42)
+
+    result_left = kernel_left.tick(left)
+    result_right = kernel_right.tick(right, economic_state={})
+
+    assert result_left == result_right
+    assert [(person.id, person.alive, person.age, person.death_tick) for person in left.people] == [
+        (person.id, person.alive, person.age, person.death_tick) for person in right.people
+    ]
+
+
+def test_micro_kernel_calls_marriage_and_divorce_hooks_for_new_events():
+    rates = Phase0VitalRates(tfr=0.0, makeham_a=0.0, gompertz_b=0.0, infant_extra=0.0)
+    state = create_genesis_population(rates, n=2, seed=51, build_relationships=False)
+    state.people = [
+        Person(id=1, age=30, sex="F", birth_date=date(1970, 1, 1), household_id=0),
+        Person(id=2, age=30, sex="M", birth_date=date(1970, 1, 1), household_id=1),
+    ]
+    state.next_household_id = 2
+    marriages = []
+    kernel = MicroDemographicKernel(
+        rates,
+        rng_seed=52,
+        on_marriage=marriages.append,
+        social_config=SocialDynamicsConfig(
+            union_target_profile=None,
+            marriage_enabled=True,
+            marriage_market_interval_days=1,
+            marriage_peak_age=30.0,
+            marriage_age_width=100.0,
+            annual_marriage_rate_peak=365.0,
+            marriage_acceptance_base=1.0,
+            marriage_age_gap_penalty=0.0,
+            divorce_enabled=False,
+            guardianship_enabled=False,
+        ),
+    )
+
+    kernel.tick(state)
+
+    assert len(marriages) == 1
+    assert marriages[0] == state.marriage_events[-1]
+
+    divorces = []
+    divorce_kernel = MicroDemographicKernel(
+        rates,
+        rng_seed=53,
+        on_divorce=divorces.append,
+        social_config=SocialDynamicsConfig(
+            marriage_enabled=False,
+            divorce_enabled=True,
+            annual_divorce_rate_base=365.0,
+            divorce_peak_multiplier=1.0,
+            divorce_min_marriage_duration_days=0,
+            guardianship_enabled=False,
+        ),
+    )
+
+    divorce_kernel.tick(state)
+
+    assert len(divorces) == 1
+    assert divorces[0] == state.divorce_events[-1]
 
 
 def test_leslie_oracle_relaxes_perturbed_distribution_toward_stable_shape():

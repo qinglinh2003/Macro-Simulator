@@ -24,6 +24,7 @@ from typing import Dict, List, Sequence
 import numpy as np
 
 from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
+from macro_sim.demographics.economic_state import build_household_economic_profiles
 from macro_sim.systems.banking import bank_economic_capital, bank_equity_value, bank_for
 from macro_sim.systems.securities import bond_market_value
 
@@ -75,6 +76,42 @@ def _mean(x: Sequence[float]) -> float:
 def _std(x: Sequence[float]) -> float:
     a = np.asarray(x, dtype=float)
     return float(a.std()) if a.size else 0.0
+
+
+def _quantile(x: Sequence[float], q: float) -> float:
+    a = np.asarray(x, dtype=float)
+    return float(np.quantile(a, q)) if a.size else 0.0
+
+
+def _safe_ratio(num: float, den: float) -> float:
+    return float(num / den) if abs(den) > 1e-12 else 0.0
+
+
+def _hhi(values: Sequence[float]) -> float:
+    a = np.asarray([max(0.0, float(v)) for v in values], dtype=float)
+    total = float(a.sum())
+    if total <= 1e-12:
+        return 0.0
+    shares = a / total
+    return float(np.sum(shares * shares))
+
+
+def _skew(values: Sequence[float]) -> float:
+    a = np.asarray(values, dtype=float)
+    if a.size == 0:
+        return 0.0
+    m = float(a.mean())
+    s = float(a.std())
+    return float(np.mean(((a - m) / s) ** 3)) if s > 1e-12 else 0.0
+
+
+def _excess_kurtosis(values: Sequence[float]) -> float:
+    a = np.asarray(values, dtype=float)
+    if a.size == 0:
+        return 0.0
+    m = float(a.mean())
+    s = float(a.std())
+    return float(np.mean(((a - m) / s) ** 4) - 3.0) if s > 1e-12 else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +166,15 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     total_profit = float(np.sum(profit))
     total_hired = float(np.sum(hired))
     total_labor_demand = float(np.sum(labor_demand))
-    labor_supply = float(n_h)
+    bridge = getattr(econ, "demographic_bridge", None)
+    demographic_profiles = {}
+    if bridge is not None and getattr(econ, "demographic_state", None) is not None:
+        demographic_profiles = build_household_economic_profiles(econ.demographic_state, bridge.claims)
+    labor_supply = (
+        float(sum(profile.labor_supply for profile in demographic_profiles.values()))
+        if demographic_profiles
+        else float(n_h)
+    )
 
     desired_cons = float(np.sum([h.consumption_budget for h in households]))
     effective_cons = float(np.sum([h.spent for h in households]))
@@ -189,6 +234,15 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "unemployment_rate": max(0.0, 1.0 - total_hired / labor_supply),
         "vacancies_unfilled": max(0.0, total_labor_demand - total_hired),
         "labor_fill_rate": (total_hired / total_labor_demand) if total_labor_demand > 1e-12 else 1.0,
+        "demographic_alive": float(getattr(getattr(econ, "demographic_state", None), "alive_count", 0)),
+        "demographic_households": float(len(demographic_profiles)),
+        "demographic_children": float(sum(profile.child_count for profile in demographic_profiles.values())),
+        "demographic_adults": float(sum(profile.adult_count for profile in demographic_profiles.values())),
+        "demographic_elders": float(sum(profile.elder_count for profile in demographic_profiles.values())),
+        "dependency_ratio": _safe_ratio(
+            sum(profile.child_count + profile.elder_count for profile in demographic_profiles.values()),
+            sum(profile.adult_count for profile in demographic_profiles.values()),
+        ),
 
         # -- demand residuals ------------------------------------------------
         "desired_consumption": desired_cons,
@@ -210,6 +264,176 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "n_firms_producing": float(np.sum(np.asarray(produced_all) > 1e-9)),
         "n_firms_selling": float(np.sum(np.asarray(sales_all) > 1e-9)),
     }
+
+    if bridge is not None:
+        state = getattr(econ, "demographic_state", None)
+        alive_people = [person for person in getattr(state, "people", []) if getattr(person, "alive", True)]
+        claim_sheets = [
+            bridge.claims.balance_sheet(int(person.id))
+            for person in alive_people
+            if bridge.claims.has_person(int(person.id))
+        ]
+        person_income = [
+            sheet.labor_income_tick + sheet.capital_income_tick + sheet.transfer_income_tick
+            for sheet in claim_sheets
+        ]
+        person_consumption = [sheet.consumption_allocated_tick for sheet in claim_sheets]
+        person_wealth = [sheet.net_worth for sheet in claim_sheets]
+        adult_consumption = [
+            bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick
+            for person in alive_people
+            if int(person.age) >= 18 and int(person.age) < 65 and bridge.claims.has_person(int(person.id))
+        ]
+        child_consumption = [
+            bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick
+            for person in alive_people
+            if int(person.age) < 18 and bridge.claims.has_person(int(person.id))
+        ]
+        elder_consumption = [
+            bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick
+            for person in alive_people
+            if int(person.age) >= 65 and bridge.claims.has_person(int(person.id))
+        ]
+        adults = sum(profile.adult_count for profile in demographic_profiles.values())
+        children = sum(profile.child_count for profile in demographic_profiles.values())
+        elders = sum(profile.elder_count for profile in demographic_profiles.values())
+        public_guardian_children = sum(
+            1
+            for person in alive_people
+            if int(person.age) < 18 and person.household_id == getattr(state, "public_guardian_household_id", None)
+        )
+        rec.update(
+            {
+                "demographics_enabled": 1.0,
+                "person_population_alive": float(len(alive_people)),
+                "person_labor_supply": labor_supply,
+                "person_employment_rate": _safe_ratio(total_hired, labor_supply),
+                "person_unemployment_rate": max(0.0, 1.0 - _safe_ratio(total_hired, labor_supply)),
+                "child_dependency_ratio": _safe_ratio(children, adults),
+                "elder_dependency_ratio": _safe_ratio(elders, adults),
+                "person_income_gini": gini(person_income),
+                "person_consumption_gini": gini(person_consumption),
+                "person_wealth_gini": gini(person_wealth),
+                "adult_median_consumption": _quantile(adult_consumption, 0.5),
+                "child_median_consumption": _quantile(child_consumption, 0.5),
+                "elder_median_consumption": _quantile(elder_consumption, 0.5),
+                "estate_suspense_total": bridge.estates.total_net_worth(),
+                "inheritance_flow": float(getattr(econ, "_inheritance_flow", 0.0)),
+                "public_guardian_children": float(public_guardian_children),
+                "orphan_support_spending": float(
+                    getattr(bridge, "orphan_support_spending", getattr(econ, "_orphan_support_spending", 0.0))
+                ),
+            }
+        )
+    else:
+        rec["demographics_enabled"] = 0.0
+
+    # -- observable-but-not-yet-mechanistic metrics -----------------------
+    # These are read-only aggregates over fields the model already maintains.
+    # They support the visualization refactor without adding any behavioral
+    # channel.
+    production_target_c = float(np.sum([f.production_target for f in cfirms]))
+    target_inventory_c = float(np.sum([f.target_inventory for f in cfirms]))
+    demand_expected_c = float(np.sum([f.demand_expected for f in cfirms]))
+    inventory_gap = float(np.sum([f.inventory - f.target_inventory for f in cfirms]))
+    active_producers = float(np.sum(np.asarray(produced_all) > 1e-9))
+    active_sellers = float(np.sum(np.asarray(sales_all) > 1e-9))
+    labor_notional = float(np.sum([f.labor_demand_notional for f in firms]))
+    labor_gap = max(0.0, labor_notional - total_labor_demand)
+    labor_rationed = [f for f in firms if f.labor_demand_eff - f.hired > 1e-9]
+    cash_constrained = [f for f in firms if f.labor_demand_notional - f.labor_demand_eff > 1e-9]
+    c_hired = float(np.sum([f.hired for f in cfirms]))
+    k_hired = float(np.sum([f.hired for f in kfirms]))
+    c_labor_demand = float(np.sum([f.labor_demand_eff for f in cfirms]))
+    k_labor_demand = float(np.sum([f.labor_demand_eff for f in kfirms]))
+    c_capital_stock = float(np.sum([f.capital for f in cfirms]))
+    investing = list(getattr(econ, "investing_firms", []))
+    investment_target = float(np.sum([f.investment_target for f in investing]))
+    private_depreciation = float(np.sum([f.delta_K * f.capital for f in investing]))
+    unit_labor_costs = [f.wagebill / f.produced for f in firms if f.produced > 1e-9]
+    min_wage = float(getattr(econ.policy, "min_wage", 0.0))
+    jg_wage_ratio = float(getattr(econ.policy, "jg_wage_ratio", 0.0))
+    real_c_active = float(np.sum([f.produced for f in cfirms if f.produced > 1e-9]))
+    sales_c_active = float(np.sum([f.sales for f in cfirms if f.sales > 1e-9]))
+    active_c_producers = float(np.sum([1 for f in cfirms if f.produced > 1e-9]))
+    active_c_sellers = float(np.sum([1 for f in cfirms if f.sales > 1e-9]))
+
+    rec.update({
+        "genesis_money": float(led.genesis_money),
+        "total_reserves": float(getattr(led, "total_reserves", 0.0)),
+        "reserve_conservation_drift": abs(float(getattr(led, "total_reserves", 0.0))
+                                          - float(getattr(led, "_reserve_M", 0.0))),
+        "price_p10": _quantile(prices, 0.10),
+        "price_p50": _quantile(prices, 0.50),
+        "price_p90": _quantile(prices, 0.90),
+        "price_p90_p10_ratio": _safe_ratio(_quantile(prices, 0.90), _quantile(prices, 0.10)),
+        "markup_cv": cv(markups),
+        "markup_p10": _quantile(markups, 0.10),
+        "markup_p50": _quantile(markups, 0.50),
+        "markup_p90": _quantile(markups, 0.90),
+        "wage_cv": cv(wages),
+        "wage_p10": _quantile(wages, 0.10),
+        "wage_p50": _quantile(wages, 0.50),
+        "wage_p90": _quantile(wages, 0.90),
+        "wage_p90_p10_ratio": _safe_ratio(_quantile(wages, 0.90), _quantile(wages, 0.10)),
+        "sector_avg_wage_C": _mean([f.wage for f in cfirms]),
+        "sector_avg_wage_K": _mean([f.wage for f in kfirms]),
+        "sector_wage_gap_C_vs_K": _mean([f.wage for f in cfirms]) - _mean([f.wage for f in kfirms]),
+        "unit_labor_cost_mean": _mean(unit_labor_costs),
+        "unit_labor_cost_cv": cv(unit_labor_costs),
+        "production_target_total": production_target_c,
+        "production_realization_rate": _safe_ratio(total_produced, production_target_c),
+        "demand_expected_total": demand_expected_c,
+        "target_inventory_total": target_inventory_c,
+        "inventory_gap_total": inventory_gap,
+        "inventory_gap_ratio": _safe_ratio(inventory_gap, target_inventory_c),
+        "inventory_to_sales": _safe_ratio(float(np.sum(inventory_c)), total_sales_u),
+        "capital_productivity": _safe_ratio(total_produced, c_capital_stock),
+        "active_producer_share": _safe_ratio(active_producers, float(len(firms))),
+        "active_seller_share": _safe_ratio(active_sellers, float(len(firms))),
+        "real_output_per_active_firm": _safe_ratio(real_c_active, active_c_producers),
+        "real_sales_per_active_firm": _safe_ratio(sales_c_active, active_c_sellers),
+        "capital_deepening": _safe_ratio(c_capital_stock, total_hired),
+        "firm_revenue_gini": gini(revenue_c),
+        "firm_profit_gini": gini([max(0.0, f.profit) for f in cfirms]),
+        "market_share_hhi_sales": _hhi(revenue_c),
+        "market_share_hhi_output": _hhi(produced_c),
+        "top_firm_sales_share": top_share(revenue_c, 1.0 / max(1, len(cfirms))),
+        "top_firm_output_share": top_share(produced_c, 1.0 / max(1, len(cfirms))),
+        "sector_count_C": float(len(cfirms)),
+        "sector_count_K": float(len(kfirms)),
+        "profit_rate_mean": _mean([
+            f.profit / max(1e-9, led.balance(f.id) + led.debt(f.id) + f.capital)
+            for f in cfirms
+        ]),
+        "profit_rate_dispersion": _std([
+            f.profit / max(1e-9, led.balance(f.id) + led.debt(f.id) + f.capital)
+            for f in cfirms
+        ]),
+        "investment_target_units": investment_target,
+        "investment_realization_rate": _safe_ratio(float(np.sum([f.investment for f in investing])), investment_target),
+        "private_capital_depreciation": private_depreciation,
+        "net_private_capital_formation": float(np.sum([f.investment for f in investing])) - private_depreciation,
+        "labor_demand_notional": labor_notional,
+        "cash_labor_demand_gap": labor_gap,
+        "cash_labor_constraint_rate": _safe_ratio(labor_gap, labor_notional),
+        "cash_constrained_firm_share": _safe_ratio(float(len(cash_constrained)), float(len(firms))),
+        "labor_rationed_firm_share": _safe_ratio(float(len(labor_rationed)), float(len(firms))),
+        "labor_sold_gini": gini([h.labor_sold for h in households]),
+        "full_unemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) <= 1e-9 for h in households]))
+        if households else 0.0,
+        "underemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) < 1.0 - 1e-9 for h in households]))
+        if households else 0.0,
+        "employment_C": c_hired,
+        "employment_K": k_hired,
+        "labor_demand_C": c_labor_demand,
+        "labor_demand_K": k_labor_demand,
+        "min_wage": min_wage,
+        "job_guarantee_wage": jg_wage_ratio * _mean(wages),
+        "min_wage_binding_firm_share": (
+            float(np.mean([f.wage <= min_wage + 1e-9 for f in firms])) if min_wage > 0.0 and firms else 0.0
+        ),
+    })
 
     # ----------------------------------------------------------------------
     # v2 block (DESIGNDOC §10). Appended only when a capital sector exists, so
@@ -276,6 +500,15 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         firm_debt = [led.debt(f.id) for f in firms]
         firm_nw = [max(0.0, led.balance(f.id) - led.debt(f.id)) for f in firms]
         total_firm_nw = float(np.sum(firm_nw))
+        household_debt = [led.debt(h.id) for h in households]
+        total_household_debt = float(np.sum(household_debt))
+        new_firm_loans = float(getattr(econ, "_new_loans", 0.0))
+        new_household_loans = float(getattr(econ, "_hh_credit_new", 0.0)) + float(getattr(econ, "_hh_margin_new", 0.0))
+        total_interest = float(getattr(econ, "_interest_paid", 0.0)) + float(getattr(econ, "_hh_interest", 0.0))
+        total_principal = (
+            float(getattr(econ, "_principal_repaid", 0.0))
+            + float(getattr(econ, "_hh_margin_repaid", 0.0))
+        )
         rec.update({
             "broad_money": total_money,                 # ΣD -- the headline: must be ALIVE
             "total_credit": total_credit,               # ΣL
@@ -284,11 +517,22 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "credit_to_M": total_credit / led.genesis_money,
             "aggregate_leverage": (total_credit / total_firm_nw) if total_firm_nw > 1e-9 else 0.0,
             "n_firms_borrowing": float(np.sum(np.asarray(firm_debt) > 1e-9)),
-            "new_loans": float(getattr(econ, "_new_loans", 0.0)),
+            "new_loans": new_firm_loans,
+            "new_loans_total": new_firm_loans + new_household_loans,
             "credit_wage": float(getattr(econ, "_credit_wage", 0.0)),
             "credit_investment": float(getattr(econ, "_credit_investment", 0.0)),
             "interest_paid": float(getattr(econ, "_interest_paid", 0.0)),
             "principal_repaid": float(getattr(econ, "_principal_repaid", 0.0)),
+            "firm_debt_total": float(np.sum(firm_debt)),
+            "firm_debt_gini": gini(firm_debt),
+            "firm_debt_top10_share": top_share(firm_debt, 0.10),
+            "household_debt_total_observed": total_household_debt,
+            "firm_credit_share": _safe_ratio(float(np.sum(firm_debt)), total_credit),
+            "household_credit_share": _safe_ratio(total_household_debt, total_credit),
+            "credit_wage_share": _safe_ratio(float(getattr(econ, "_credit_wage", 0.0)), new_firm_loans),
+            "credit_investment_share": _safe_ratio(float(getattr(econ, "_credit_investment", 0.0)), new_firm_loans),
+            "total_interest_paid": total_interest,
+            "total_principal_repaid": total_principal,
         })
 
     # ----------------------------------------------------------------------
@@ -447,6 +691,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "credit_to_gdp": (rec.get("total_credit", 0.0) / nominal_output) if nominal_output > 1e-9 else 0.0,
         "debt_service_ratio": ((rec.get("interest_paid", 0.0) + rec.get("principal_repaid", 0.0))
                                / nominal_output) if nominal_output > 1e-9 else 0.0,
+        "total_debt_service_ratio": ((rec.get("total_interest_paid", rec.get("interest_paid", 0.0))
+                                      + rec.get("total_principal_repaid", rec.get("principal_repaid", 0.0)))
+                                     / nominal_output) if nominal_output > 1e-9 else 0.0,
         "income_gini": gini([h.income_realized for h in households]),          # income inequality
         "consumption_gini": gini([h.spent for h in households]),               # consumption inequality
     })
@@ -471,6 +718,63 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "income_poverty_rate": float((inc < 0.5 * med_i).mean()) if med_i > 1e-12 else 0.0, # income-based robustness
         "consumption_floor_share": float((cons <= subsist).mean()) if subsist > 0.0 else 0.0,  # policy reach
     })
+    bottom25_n = max(1, int(np.ceil(0.25 * len(real_c)))) if len(real_c) else 1
+    subsistence_gap = np.maximum(0.0, subsist - cons) if subsist > 0.0 else np.zeros_like(cons)
+
+    # Household balance-sheet observables. These reuse live deposits, ledger debt,
+    # equity holdings, bank-equity ownership, and bond lots; no portfolio behavior
+    # is changed by reporting them.
+    hh_debt = np.asarray([led.debt(h.id) for h in households], dtype=float)
+    firm_equity_values = np.zeros(n_h, dtype=float)
+    if getattr(econ, "equity", None) is not None:
+        firm_equity_values = np.asarray([h.shares * econ.equity.price for h in households], dtype=float)
+    elif getattr(econ.cfg, "per_firm_equity", False):
+        share_price_of = {f.id: f.share_price for f in cfirms}
+        firm_equity_values = np.asarray([
+            float(sum(sh * share_price_of.get(fid, 0.0) for fid, sh in h.holdings.items()))
+            for h in households
+        ], dtype=float)
+    bank_equity_values = np.asarray([
+        bank_equity_value(econ, h.id) for h in households
+    ], dtype=float) if getattr(econ.cfg, "bank_equity", False) else np.zeros(n_h, dtype=float)
+    bond_market_values = np.asarray([
+        float(sum(
+            bond_market_value(econ, lot) for lot in (getattr(econ, "_bonds", []) or [])
+            if lot.get("holder") == h.id
+        ))
+        for h in households
+    ], dtype=float)
+    full_networth = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values - hh_debt
+    full_networth_shifted = full_networth - float(full_networth.min()) if full_networth.size else full_networth
+    gross_assets = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values
+    rec.update({
+        "mean_real_consumption_per_household": float(real_c.mean()) if real_c.size else 0.0,
+        "median_real_consumption": float(np.median(real_c)) if real_c.size else 0.0,
+        "bottom25_consumption": float(np.sort(real_c)[:bottom25_n].mean()) if real_c.size else 0.0,
+        "subsistence_gap_ratio": _safe_ratio(float(subsistence_gap.sum()), subsist * n_h),
+        "median_real_household_income": float(np.median(inc / defl)) if inc.size else 0.0,
+        "consumption_realization_rate": _safe_ratio(effective_cons, desired_cons),
+        "real_household_consumption": float(real_c.sum()),
+        "hh_deposit_p10": _quantile(hh_dep, 0.10),
+        "hh_deposit_median": _quantile(hh_dep, 0.50),
+        "hh_deposit_p90": _quantile(hh_dep, 0.90),
+        "household_debt_gini": gini(hh_debt),
+        "household_debt_top10_share": top_share(hh_debt, 0.10),
+        "equity_wealth_top10_share": top_share(firm_equity_values, 0.10),
+        "bank_equity_top10_share": top_share(bank_equity_values, 0.10),
+        "bond_wealth_gini": gini(bond_market_values),
+        "bond_wealth_top10_share": top_share(bond_market_values, 0.10),
+        "bond_wealth_share": _safe_ratio(float(bond_market_values.sum()), float(gross_assets.sum())),
+        "hh_full_networth_total": float(full_networth.sum()) if full_networth.size else 0.0,
+        "hh_full_networth_skew": _skew(full_networth),
+        "hh_full_networth_excess_kurtosis": _excess_kurtosis(full_networth),
+        "gross_household_assets_total": float(gross_assets.sum()) if gross_assets.size else 0.0,
+        "household_underwater_share": float(np.mean(full_networth < 0.0)) if full_networth.size else 0.0,
+        "full_networth_p10": _quantile(full_networth, 0.10),
+        "full_networth_p50": _quantile(full_networth, 0.50),
+        "full_networth_p90": _quantile(full_networth, 0.90),
+        "hh_full_networth_gini_observed": gini(full_networth_shifted),
+    })
     # v9 government (§28): fiscal flows + NORMALISED balances (raw stocks are unreadable). deficit>0 =
     # net injection (spend>tax); expressed as a share of revenue AND of GDP. gov_debt = −GOV balance.
     if getattr(econ.cfg, "government", False):
@@ -482,8 +786,12 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         benefit_paid = float(getattr(econ, "_benefit_paid", 0.0))
         gov_consumption = float(getattr(econ, "_gov_consumption", 0.0))
         jg_spending = float(getattr(econ, "_jg_spending", 0.0))    # v9.3 job-guarantee wage bill
+        public_investment = float(getattr(econ, "_public_investment", 0.0))
+        gov_interest_bill = float(getattr(econ, "_gov_interest_bill", 0.0))
         spend_total = benefit_paid + gov_consumption + jg_spending
+        augmented_spending = spend_total + public_investment + gov_interest_bill
         deficit = spend_total - tax_total                          # >0 = deficit (net outside-money injection)
+        cash_deficit = augmented_spending - tax_total
         # v12: gov_debt = the government's total net liability. With bonds OFF this is exactly −TSY deposit balance
         # (bit-identical). With bonds ON: |TSY deposit-debt| + bonds outstanding + CB claim on TSY − TGA (the TSY's
         # cash; ⚠ D_TSY and TGA are the same cash from two sides, so TGA is SUBTRACTED, never double-added).
@@ -501,11 +809,20 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "jg_spending": jg_spending, "jg_employment": jg_emp, "jg_employment_rate": jg_emp_rate,
             "effective_unemployment": max(0.0, rec["unemployment_rate"] - jg_emp_rate),
             "gov_spending": spend_total, "gov_deficit": deficit, "gov_debt": gov_debt,
+            "augmented_gov_spending": augmented_spending,
+            "cash_deficit": cash_deficit,
             "gov_deficit_to_revenue": (deficit / tax_total) if tax_total > 1e-9 else 0.0,
             "gov_deficit_to_gdp": (deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
+            "cash_deficit_to_gdp": (cash_deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
             "gov_debt_to_gdp": (gov_debt / nominal_output) if nominal_output > 1e-9 else 0.0,
             "gov_spending_share_of_gdp": (spend_total / nominal_output) if nominal_output > 1e-9 else 0.0,
+            "augmented_gov_spending_share_of_gdp": (
+                augmented_spending / nominal_output
+            ) if nominal_output > 1e-9 else 0.0,
             "hh_bankruptcies": float(getattr(econ, "_hh_bankruptcies", 0.0)),
+            "benefit_recipient_share": float(np.mean([
+                (h.labor_sold + h.jg_labor) <= 1e-9 for h in households
+            ])) if households and benefit_paid > 0.0 else 0.0,
         })
         econ._prev_tax_total = tax_total          # fed to next tick's deficit-targeting rule
         econ._prev_benefit = benefit_paid
@@ -524,11 +841,40 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     if getattr(econ.cfg, "central_bank", False):
         rate = float(getattr(econ, "_rate", econ.cfg.r_interest))
         infl_ema = float(getattr(econ, "_infl_ema", 0.0))
+        cb_cfg = econ.cfg.central_banking
+        pol = econ.policy
+        inflation_gap = infl_ema - pol.inflation_target
+        unemployment_gap = rec.get("unemployment_rate", 0.0) - cb_cfg.u_natural
+        taylor_target = (
+            cb_cfg.r_neutral
+            + pol.taylor_phi_pi * inflation_gap
+            - pol.taylor_phi_u * unemployment_gap
+        )
+        omo_target = (
+            cb_cfg.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))
+            if cb_cfg.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
+        )
+        bank_reserves_total = rec.get("bank_reserves_total", 0.0)
+        cb_bond_market = float(sum(
+            bond_market_value(econ, lot) for lot in (getattr(econ, "_bonds", []) or [])
+            if lot.get("holder") == "CB"
+        ))
         rec.update({
             "policy_rate": rate,
             "inflation_ema": infl_ema,
             "real_rate": rate - infl_ema,        # ex-ante real policy rate (Taylor principle => rises with π)
+            "inflation_target": float(pol.inflation_target),
+            "inflation_gap_to_target": inflation_gap,
+            "u_natural": float(cb_cfg.u_natural),
+            "unemployment_gap": unemployment_gap,
+            "taylor_rate_target": taylor_target,
+            "policy_rate_gap": rate - taylor_target,
+            "omo_reserve_target_value": omo_target,
+            "reserve_gap": bank_reserves_total - omo_target,
+            "cb_balance_sheet_assets": float(getattr(econ, "_cb_claim_on_tsy", 0.0)) + cb_bond_market,
+            "cb_balance_sheet_liabilities": rec.get("cb_reserves", 0.0) + float(getattr(econ, "_tga", 0.0)),
         })
+        rec["cb_net_position"] = rec["cb_balance_sheet_assets"] - rec["cb_balance_sheet_liabilities"]
     # v11 multi-bank: capital, leverage, failures, bank-size concentration (only with >1 bank)
     if getattr(econ, "banks", None) and len(econ.banks) > 1:
         caps = [econ.ledger.balance(b.id) for b in econ.banks]
@@ -550,11 +896,30 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "n_bank_failures": float(getattr(econ, "_bank_failures_total", 0)),
             "banks_alive": float(sum(1 for b in econ.banks if b.alive)),
             "bank_capital": float(sum(caps)),
+            "bank_capital_min": float(min(caps)) if caps else 0.0,
+            "bank_capital_median": float(np.median(caps)) if caps else 0.0,
+            "bank_money_total": float(sum(caps)),
             "bank_leverage": float(sum(lb.values()) / tot_cap) if tot_cap > 1e-9 else 0.0,
             "bank_size_gini": float(gini([max(0.0, v) for v in lb.values()])),
             "bank_loanbook_hhi": hhi,
             "bank_rate_spread_sd": float(wvar ** 0.5),
         })
+        econ_caps = [bank_economic_capital(econ, b) for b in econ.banks if b.alive]
+        rec.update({
+            "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
+            "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
+            "negative_capital_bank_count": float(sum(1 for c in caps if c < -1e-9)),
+            "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.cfg.bank_min_capital)),
+        })
+        if getattr(econ.cfg, "bank_exposure_limit", 0.0) > 0.0:
+            usage = []
+            for a in list(econ.firms) + list(econ.households):
+                bid = bank_for(econ, a.id).id
+                cap = max(1e-9, led.balance(bid))
+                usage.append(led.debt(a.id) / (econ.cfg.bank_exposure_limit * cap))
+            rec["large_exposure_usage_max"] = float(max(usage)) if usage else 0.0
+        else:
+            rec["large_exposure_usage_max"] = 0.0
         # v11.4: the reserve tier + interbank market + deposit-side competition. Reserves conserve as a second
         # layer; the interbank market is LATENT under ample reserves (peak overdraft ≈ 0) but reported honestly.
         if getattr(econ.cfg, "interbank", False):
@@ -564,8 +929,19 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             tot_dep = sum(dep.values())
             dep_hhi = float(sum((v / tot_dep) ** 2 for v in dep.values())) if tot_dep > 1e-9 else 0.0
             peak_od = -min([econ.ledger.reserve_min(b.id) for b in econ.banks] + [0.0])
+            bank_reserves = [econ.ledger.reserves(b.id) for b in econ.banks]
+            reserve_floor = {
+                b.id: econ.cfg.reserve_floor_frac * dep.get(b.id, 0.0)
+                for b in econ.banks
+            }
+            reserve_breaches = [
+                econ.ledger.reserves(b.id) < reserve_floor.get(b.id, 0.0) - 1e-9
+                for b in econ.banks
+            ]
             rec.update({
                 "bank_reserves_total": float(sum(econ.ledger.reserves(b.id) for b in econ.banks)),  # BANK-side only
+                "bank_reserve_min": float(min(bank_reserves)) if bank_reserves else 0.0,
+                "bank_reserve_median": float(np.median(bank_reserves)) if bank_reserves else 0.0,
                 "cb_reserves": float(econ.ledger.reserves("CB")),      # govt-debt-driven reserve injection
                 "interbank_rate": float(getattr(econ, "_interbank_rate", 0.0)),
                 "interbank_volume": float(getattr(econ, "_interbank_volume", 0.0)),
@@ -573,6 +949,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "peak_intraday_overdraft": float(max(0.0, peak_od)),   # ≈0 (latent gridlock) under ample reserves
                 "payments_gridlocked": float(getattr(econ, "_payments_blocked", 0.0)),
                 "bank_deposit_hhi": dep_hhi,                           # deposit-market concentration (competition)
+                "bank_deposit_total": float(tot_dep),
+                "bank_deposit_p90_p10": _quantile(list(dep.values()), 0.90) - _quantile(list(dep.values()), 0.10),
+                "reserve_floor_breach_share": float(np.mean(reserve_breaches)) if reserve_breaches else 0.0,
             })
         # v11.5: bank demographics & ownership (entry/exit, bank-equity concentration, runs)
         if getattr(econ.cfg, "bank_equity", False):
@@ -599,6 +978,20 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         market_total = float(sum(bond_market_value(econ, l) for l in lots)) if lots else 0.0
         book_total = float(sum(l["cost"] for l in lots)) if lots else 0.0
         bank_bond_face = float(sum(l["face"] for l in lots if l["holder"] in bank_ids)) if lots else 0.0
+        hh_bond_face = float(sum(l["face"] for l in lots if l["holder"] in hh_ids)) if lots else 0.0
+        cb_bond_face = float(sum(l["face"] for l in lots if l["holder"] == "CB")) if lots else 0.0
+        hh_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] in hh_ids)) if lots else 0.0
+        bank_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] in bank_ids)) if lots else 0.0
+        cb_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] == "CB")) if lots else 0.0
+        bond_face_total = float(sum(l["face"] for l in lots)) if lots else 0.0
+        maturity_weighted = _safe_ratio(
+            float(sum(l["face"] * max(0.0, l["matures_at"] - econ.t) for l in lots)),
+            bond_face_total,
+        )
+        duration_weighted = maturity_weighted if getattr(econ.cfg, "bond_coupon", 0.0) <= 0.0 else _safe_ratio(
+            float(sum(bond_market_value(econ, l) * max(0.0, l["matures_at"] - econ.t) for l in lots)),
+            market_total,
+        )
         alive_banks = [b for b in econ.banks if b.alive]
         econ_caps = [bank_economic_capital(econ, b) for b in alive_banks]
         rec.update({
@@ -607,7 +1000,21 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "bond_market_total": market_total,
             "bond_mtm_pnl": market_total - book_total,          # <0 on a rate hike above coupon (duration/SVB)
             "hh_bond_wealth": float(sum(v for k, v in held.items() if k in hh_ids)),
+            "hh_bond_face": hh_bond_face,
+            "hh_bond_market_value": hh_bond_market,
             "bank_bond_face": bank_bond_face,
+            "bank_bond_market_value": bank_bond_market,
+            "cb_bond_face": cb_bond_face,
+            "cb_bond_market_value": cb_bond_market,
+            "bond_owner_share_households": _safe_ratio(hh_bond_market, market_total),
+            "bond_owner_share_banks": _safe_ratio(bank_bond_market, market_total),
+            "bond_owner_share_cb": _safe_ratio(cb_bond_market, market_total),
+            "bond_duration_weighted": duration_weighted,
+            "bond_maturity_weighted": maturity_weighted,
+            "bond_market_to_face": _safe_ratio(market_total, bond_face_total),
+            "bond_discount": 1.0 - _safe_ratio(market_total, bond_face_total),
+            "bond_share_of_gov_debt": _safe_ratio(float(getattr(econ, "_bonds_outstanding", 0.0)),
+                                                  rec.get("gov_debt", 0.0)),
             "bank_economic_capital_min": float(min(econ_caps)) if econ_caps else 0.0,
             "gov_interest_bill": float(getattr(econ, "_gov_interest_bill", 0.0)),
             "cb_claim_on_tsy": float(getattr(econ, "_cb_claim_on_tsy", 0.0)),

@@ -8,6 +8,11 @@ from macro_sim.markets.matching import EPS
 from macro_sim.systems.banking import bank_equity_value
 
 
+def _household_labor_supply(econ: Any, household: Any) -> float:
+    bridge = getattr(econ, "demographic_bridge", None)
+    return bridge.household_labor_supply(household.id) if bridge is not None else 1.0
+
+
 def run_settlement_phase(econ: Any) -> None:
     cfg = econ.cfg.settlement
     n_h = len(econ.households)
@@ -41,6 +46,7 @@ def run_settlement_phase(econ: Any) -> None:
     # (ii) distribute the CLEARING pool to households. The last recipient absorbs float remainder.
     econ._dividends_paid = total_div
     if total_div > EPS:
+        bridge = getattr(econ, "demographic_bridge", None)
         if cfg.pro_rata_dividends and cfg.per_firm_equity:
             so = {f.id: f.shares_outstanding for f in econ.c_firms}
             for h in econ.households:
@@ -51,27 +57,37 @@ def run_settlement_phase(econ: Any) -> None:
                         amt += pay * (sh / tot)
                 if amt > EPS:
                     econ.ledger.transfer("CLEARING", h.id, amt)
+                    if bridge is not None:
+                        bridge.post_capital_income(h.id, amt)
                     h.income_realized += amt
             residual = econ.ledger.balance("CLEARING")
             if residual > EPS:
                 share = residual / n_h
                 for h in econ.households[:-1]:
                     econ.ledger.transfer("CLEARING", h.id, share)
+                    if bridge is not None:
+                        bridge.post_capital_income(h.id, share)
                     h.income_realized += share
                 last = econ.households[-1]
                 rem = econ.ledger.balance("CLEARING")
                 if rem > EPS:
                     econ.ledger.transfer("CLEARING", last.id, rem)
+                    if bridge is not None:
+                        bridge.post_capital_income(last.id, rem)
                     last.income_realized += rem
         else:
             share = total_div / n_h
             for h in econ.households[:-1]:
                 econ.ledger.transfer("CLEARING", h.id, share)
+                if bridge is not None:
+                    bridge.post_capital_income(h.id, share)
                 h.income_realized += share
             last = econ.households[-1]
             remainder = econ.ledger.balance("CLEARING")
             if remainder > EPS:
                 econ.ledger.transfer("CLEARING", last.id, remainder)
+                if bridge is not None:
+                    bridge.post_capital_income(last.id, remainder)
                 last.income_realized += remainder
 
     # v9 household fiscal: progressive income tax, unemployment benefit, wealth tax.
@@ -94,6 +110,7 @@ def run_household_fiscal_phase(econ: Any) -> None:
     cfg = econ.cfg.settlement
     pol, led, hh = econ.policy, econ.ledger, econ.households
     n_h = len(hh)
+    bridge = getattr(econ, "demographic_bridge", None)
 
     if pol.tax_income_rate > 0.0:
         mean_inc = sum(h.income_realized for h in hh) / max(1, n_h)
@@ -103,6 +120,8 @@ def run_household_fiscal_phase(econ: Any) -> None:
             tax = min(pol.tax_income_rate * base, led.balance(h.id))
             if tax > EPS:
                 led.transfer(h.id, econ._fiscal, tax)
+                if bridge is not None:
+                    bridge.post_household_tax_payment(h.id, tax)
                 h.income_realized -= tax
                 econ._tax_income += tax
 
@@ -110,10 +129,12 @@ def run_household_fiscal_phase(econ: Any) -> None:
         wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
         jg_wage = max(pol.jg_wage_ratio * wage_ref, pol.min_wage)
         for h in hh:
-            resid = max(0.0, 1.0 - h.labor_sold)
+            resid = max(0.0, _household_labor_supply(econ, h) - h.labor_sold)
             pay = jg_wage * resid
             if pay > EPS:
                 led.transfer(econ._fiscal, h.id, pay)
+                if bridge is not None:
+                    bridge.post_transfer_income(h.id, pay, reason="job_guarantee")
                 h.income_realized += pay
                 h.jg_labor = resid
                 econ._jg_spending += pay
@@ -123,9 +144,14 @@ def run_household_fiscal_phase(econ: Any) -> None:
     if pol.benefit_replacement > 0.0:
         wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
         for h in hh:
-            ben = pol.benefit_replacement * wage_ref * max(0.0, 1.0 - h.labor_sold - h.jg_labor)
+            ben = pol.benefit_replacement * wage_ref * max(
+                0.0,
+                _household_labor_supply(econ, h) - h.labor_sold - h.jg_labor,
+            )
             if ben > EPS:
                 led.transfer(econ._fiscal, h.id, ben)
+                if bridge is not None:
+                    bridge.post_transfer_income(h.id, ben, reason="unemployment_benefit")
                 h.income_realized += ben
                 econ._benefit_paid += ben
 
@@ -141,4 +167,6 @@ def run_household_fiscal_phase(econ: Any) -> None:
             wtax = min(pol.tax_wealth_rate * base, led.balance(h.id))
             if wtax > EPS:
                 led.transfer(h.id, econ._fiscal, wtax)
+                if bridge is not None:
+                    bridge.post_household_tax_payment(h.id, wtax)
                 econ._tax_wealth += wtax

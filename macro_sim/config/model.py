@@ -56,6 +56,21 @@ class Config:
     # -- consumption (B1), choice (甲): V_h = D_h --------------------------
     alpha1: float = 0.8             # MPC out of expected income -- anchored; 0<alpha2<alpha1<1
     alpha2: float = 0.05            # propensity out of wealth (deposits) -- anchored
+    demographics_enabled: bool = False  # v13 Phase 1: attach the demographic kernel to the economy
+    demographics_population: int = 0    # 0 => seed one person per economic household account
+    demographic_lifecycle_consumption: bool = False  # use finite-life household consumption budget
+    lifecycle_alpha_income: float = 0.8
+    lifecycle_alpha_wealth_draw: float = 1.0
+    demographic_marriage_enabled: bool = True
+    demographic_divorce_enabled: bool = True
+    demographic_marriage_market_interval_days: int = 30
+    demographic_annual_marriage_rate_peak: float = 0.30
+    demographic_annual_divorce_rate_base: float = 0.012
+    demographic_adult_leaving_home_enabled: bool = True
+    demographic_leave_home_min_age: int = 22
+    demographic_leave_home_peak_end_age: int = 30
+    demographic_annual_leave_rate_peak: float = 0.25
+    demographic_annual_leave_rate_late: float = 0.05
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -589,6 +604,32 @@ class Config:
             wealth_effect=self.wealth_effect,
             mpc_wealth_curvature=self.mpc_wealth_curvature,
             d_household0=self.d_household0,
+            demographic_lifecycle_consumption=self.demographic_lifecycle_consumption,
+            lifecycle_alpha_income=self.lifecycle_alpha_income,
+            lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
+        )
+
+    @property
+    def demographics(self):
+        """Passive grouped view of demographic-economy integration parameters."""
+        from macro_sim.config.schema import DemographicsConfig
+
+        return DemographicsConfig(
+            demographics_enabled=self.demographics_enabled,
+            demographics_population=self.demographics_population,
+            demographic_lifecycle_consumption=self.demographic_lifecycle_consumption,
+            lifecycle_alpha_income=self.lifecycle_alpha_income,
+            lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
+            demographic_marriage_enabled=self.demographic_marriage_enabled,
+            demographic_divorce_enabled=self.demographic_divorce_enabled,
+            demographic_marriage_market_interval_days=self.demographic_marriage_market_interval_days,
+            demographic_annual_marriage_rate_peak=self.demographic_annual_marriage_rate_peak,
+            demographic_annual_divorce_rate_base=self.demographic_annual_divorce_rate_base,
+            demographic_adult_leaving_home_enabled=self.demographic_adult_leaving_home_enabled,
+            demographic_leave_home_min_age=self.demographic_leave_home_min_age,
+            demographic_leave_home_peak_end_age=self.demographic_leave_home_peak_end_age,
+            demographic_annual_leave_rate_peak=self.demographic_annual_leave_rate_peak,
+            demographic_annual_leave_rate_late=self.demographic_annual_leave_rate_late,
         )
 
     @property
@@ -1047,6 +1088,14 @@ class Config:
         assert self.a > 0, "productivity a must be > 0 (spec §8.1 degenerate guard)"
         assert self.w_firm0 > 0, "initial wage must be > 0 before w/a and floor(D/w)"
         assert 0 < self.alpha2 < self.alpha1 < 1, "B1 requires 0 < alpha2 < alpha1 < 1"
+        assert self.demographics_population >= 0, "demographics_population must be >= 0"
+        assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
+        assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
+        assert self.demographic_annual_marriage_rate_peak >= 0.0, "demographic marriage rate must be >= 0"
+        assert self.demographic_annual_divorce_rate_base >= 0.0, "demographic divorce rate must be >= 0"
+        assert self.demographic_leave_home_min_age >= 0, "leave-home min age must be >= 0"
+        assert self.demographic_leave_home_peak_end_age >= self.demographic_leave_home_min_age, "leave-home peak end must be >= min age"
+        assert self.demographic_annual_leave_rate_peak >= 0.0 and self.demographic_annual_leave_rate_late >= 0.0, "leave-home rates must be >= 0"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

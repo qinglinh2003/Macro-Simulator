@@ -100,6 +100,28 @@ class PlanningConfig:
     wealth_effect: float
     mpc_wealth_curvature: float
     d_household0: float
+    demographic_lifecycle_consumption: bool
+    lifecycle_alpha_income: float
+    lifecycle_alpha_wealth_draw: float
+
+
+@dataclass(frozen=True)
+class DemographicsConfig:
+    demographics_enabled: bool
+    demographics_population: int
+    demographic_lifecycle_consumption: bool
+    lifecycle_alpha_income: float
+    lifecycle_alpha_wealth_draw: float
+    demographic_marriage_enabled: bool
+    demographic_divorce_enabled: bool
+    demographic_marriage_market_interval_days: int
+    demographic_annual_marriage_rate_peak: float
+    demographic_annual_divorce_rate_base: float
+    demographic_adult_leaving_home_enabled: bool
+    demographic_leave_home_min_age: int
+    demographic_leave_home_peak_end_age: int
+    demographic_annual_leave_rate_peak: float
+    demographic_annual_leave_rate_late: float
 
 
 @dataclass(frozen=True)

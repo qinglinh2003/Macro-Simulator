@@ -1,0 +1,325 @@
+from __future__ import annotations
+
+import math
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from macro_sim.demographics import Phase0VitalRates
+from macro_sim.core.ledger import Ledger
+from macro_sim.demographics.agents import Person
+from macro_sim.demographics.economic_bridge import initialize_person_claims_from_households
+from macro_sim.demographics.lifecycle import (
+    age_income_capacity,
+    expected_remaining_life_years,
+    household_lifecycle_consumption_budget,
+    person_permanent_income,
+    person_wealth_draw,
+)
+from macro_sim.systems.planning import run_planning_phase
+
+
+@dataclass
+class _StubPerson:
+    id: int
+    age: int
+
+
+@dataclass
+class _ProfileWithMembers:
+    members: list[_StubPerson]
+
+
+@dataclass
+class _ProfileWithMemberIds:
+    member_ids: list[int]
+    member_ages: dict[int, int]
+
+
+class _ClaimsStub:
+    def __init__(
+        self,
+        *,
+        net_worth: dict[int, float],
+        income_ema: dict[int, float],
+        member_ages: dict[int, int] | None = None,
+    ) -> None:
+        self._net_worth = dict(net_worth)
+        self._income_ema = dict(income_ema)
+        self._member_ages = dict(member_ages or {})
+
+    def net_worth(self, person_id: int) -> float:
+        return float(self._net_worth[person_id])
+
+    def income_ema(self, person_id: int) -> float:
+        return float(self._income_ema[person_id])
+
+    def age(self, person_id: int) -> int:
+        if person_id not in self._member_ages:
+            raise KeyError(person_id)
+        return int(self._member_ages[person_id])
+
+
+def test_remaining_life_declines_with_age():
+    rates = Phase0VitalRates()
+
+    assert expected_remaining_life_years(25, rates) > expected_remaining_life_years(70, rates)
+    assert expected_remaining_life_years(0, rates) > expected_remaining_life_years(100, rates)
+
+
+def test_person_wealth_draw_rises_as_remaining_life_shortens():
+    wealth = 100.0
+
+    young_daily = person_wealth_draw(wealth, remaining_life_years=50.0)
+    old_daily = person_wealth_draw(wealth, remaining_life_years=10.0)
+
+    assert old_daily > young_daily
+
+
+def test_person_wealth_draw_ignores_negative_net_worth():
+    assert person_wealth_draw(-100.0, remaining_life_years=30.0) == 0.0
+
+
+def test_person_wealth_draw_prevents_division_by_zero():
+    assert person_wealth_draw(123.0, remaining_life_years=0.0) == 123.0
+
+
+def test_person_permanent_income_uses_income_capacity_not_saving_rate():
+    income_ema = 10.0
+
+    child_income = person_permanent_income(income_ema, age=12)
+    prime_income = person_permanent_income(income_ema, age=40)
+    retired_income = person_permanent_income(income_ema, age=70)
+
+    assert child_income == 0.0
+    assert prime_income == income_ema
+    assert retired_income == 0.0
+
+
+def test_age_income_capacity_piecewise_profile():
+    assert age_income_capacity(12) == 0.0
+    assert age_income_capacity(18) == pytest.approx(0.5)
+    assert age_income_capacity(21) == pytest.approx(0.75)
+    assert age_income_capacity(25) == pytest.approx(1.0)
+    assert age_income_capacity(26) == pytest.approx(1.0)
+    assert age_income_capacity(50) == pytest.approx(1.0)
+    assert age_income_capacity(51) == pytest.approx(1.0)
+    assert age_income_capacity(64) == pytest.approx(0.7)
+    assert age_income_capacity(65) == 0.0
+
+
+def test_same_wealth_older_household_draws_more_annuitized_wealth_than_young_household():
+    young_budget = household_lifecycle_consumption_budget(
+        profile=_ProfileWithMembers(members=[_StubPerson(1, 30), _StubPerson(2, 31)]),
+        claims=_ClaimsStub(net_worth={1: 50.0, 2: 50.0}, income_ema={1: 0.0, 2: 0.0}),
+        rates=Phase0VitalRates(),
+        alpha_income=0.6,
+        alpha_wealth_draw=1.0,
+    )
+    old_budget = household_lifecycle_consumption_budget(
+        profile=_ProfileWithMembers(members=[_StubPerson(1, 72), _StubPerson(2, 73)]),
+        claims=_ClaimsStub(net_worth={1: 50.0, 2: 50.0}, income_ema={1: 0.0, 2: 0.0}),
+        rates=Phase0VitalRates(),
+        alpha_income=0.6,
+        alpha_wealth_draw=1.0,
+    )
+
+    assert old_budget > young_budget
+
+
+def test_household_lifecycle_budget_sums_person_wealth_draws_not_average_life():
+    mixed_age_budget = household_lifecycle_consumption_budget(
+        profile=_ProfileWithMembers(members=[_StubPerson(1, 30), _StubPerson(2, 80)]),
+        claims=_ClaimsStub(
+            net_worth={1: 50.0, 2: 50.0},
+            income_ema={1: 0.0, 2: 0.0},
+        ),
+        rates=Phase0VitalRates(),
+        alpha_income=0.6,
+        alpha_wealth_draw=1.0,
+    )
+    young_budget = household_lifecycle_consumption_budget(
+        profile=_ProfileWithMembers(members=[_StubPerson(1, 30), _StubPerson(2, 30)]),
+        claims=_ClaimsStub(
+            net_worth={1: 50.0, 2: 50.0},
+            income_ema={1: 0.0, 2: 0.0},
+        ),
+        rates=Phase0VitalRates(),
+        alpha_income=0.6,
+        alpha_wealth_draw=1.0,
+    )
+
+    assert mixed_age_budget > young_budget
+
+
+def test_household_budget_works_with_member_id_profiles():
+    profile = _ProfileWithMemberIds(member_ids=[1, 2], member_ages={1: 30, 2: 40})
+    claims = _ClaimsStub(
+        net_worth={1: 10.0, 2: 30.0},
+        income_ema={1: 3.0, 2: 4.0},
+    )
+    budget = household_lifecycle_consumption_budget(
+        profile=profile,
+        claims=claims,
+        rates=Phase0VitalRates(),
+        alpha_income=0.6,
+        alpha_wealth_draw=0.5,
+    )
+
+    assert budget > 0.0 and math.isfinite(budget)
+
+
+@dataclass
+class _HouseholdStub:
+    id: str
+    alpha1: float = 0.6
+    alpha2: float = 0.02
+    lambda_y: float = 0.5
+    y_expected: float = 0.0
+    income_realized: float = 0.0
+    consumption_budget: float = 0.0
+    spent: float = 0.0
+    labor_sold: float = 0.0
+    jg_labor: float = 0.0
+    equity_value_ema: float = 0.0
+
+
+@dataclass
+class _DemographicState:
+    people: list[Person]
+
+
+class _NoOpRng:
+    def random(self) -> float:
+        return 1.0
+
+
+def _demo_person(person_id: int, age: int, household_id: int) -> Person:
+    return Person(
+        id=person_id,
+        age=age,
+        sex="F",
+        birth_date=__import__("datetime").date(2000 - age, 1, 1),
+        household_id=household_id,
+    )
+
+
+def test_planning_phase_uses_lifecycle_budget_when_demographic_bridge_enabled():
+    households = [_HouseholdStub("H0"), _HouseholdStub("H1")]
+    econ = type("Econ", (), {})()
+    econ.households = households
+    econ.firms = []
+    econ.ledger = Ledger({"H0": 100.0, "H1": 100.0, "BANK_0": 0.0})
+    econ.rng = _NoOpRng()
+    econ._pubcap_factor = 1.0
+    econ.policy = type("Policy", (), {"min_wage": 0.0})()
+    econ.cfg = type(
+        "Cfg",
+        (),
+        {
+            "planning": type(
+                "Planning",
+                (),
+                {
+                    "theta_wage": 0.0,
+                    "theta_price": 0.0,
+                    "lambda_q": 0.0,
+                    "q_invest_floor": 0.0,
+                    "q_invest_cap": 0.0,
+                    "k_replacement_floor": False,
+                    "wealth_effect": 0.0,
+                    "mpc_wealth_curvature": 1.0,
+                    "d_household0": 1.0,
+                    "demographic_lifecycle_consumption": True,
+                    "lifecycle_alpha_income": 0.6,
+                    "lifecycle_alpha_wealth_draw": 1.0,
+                },
+            )()
+        },
+    )()
+    state = _DemographicState(
+        people=[
+            _demo_person(1, 30, household_id=0),
+            _demo_person(2, 72, household_id=1),
+        ]
+    )
+    econ.demographic_state = state
+    econ.demographic_bridge = initialize_person_claims_from_households(econ, state)
+    econ.demographic_rates = Phase0VitalRates()
+
+    run_planning_phase(econ)
+
+    assert households[1].consumption_budget > households[0].consumption_budget
+
+
+def test_consumption_posting_preserves_household_cash_claim_sum():
+    households = [_HouseholdStub("H0")]
+    econ = type("Econ", (), {})()
+    econ.households = households
+    econ.ledger = Ledger({"H0": 200.0, "BANK_0": 0.0})
+    state = _DemographicState(
+        people=[
+            _demo_person(1, 40, household_id=0),
+            _demo_person(2, 41, household_id=0),
+            _demo_person(3, 8, household_id=0),
+        ]
+    )
+    bridge = initialize_person_claims_from_households(econ, state)
+
+    bridge.post_household_consumption("H0", spent=60.0, fixed_share=0.30)
+
+    assert bridge.claim_cash_sum("H0") == pytest.approx(140.0)
+    assert bridge.consumption_allocated_sum("H0") == pytest.approx(60.0)
+
+
+def test_child_costs_split_between_living_parents():
+    households = [_HouseholdStub("H0")]
+    econ = type("Econ", (), {})()
+    econ.households = households
+    econ.ledger = Ledger({"H0": 200.0, "BANK_0": 0.0})
+    state = _DemographicState(
+        people=[
+            _demo_person(1, 40, household_id=0),
+            _demo_person(2, 41, household_id=0),
+            _demo_person(3, 8, household_id=0),
+        ]
+    )
+    state.people[2].mother_id = 1
+    state.people[2].father_id = 2
+    bridge = initialize_person_claims_from_households(econ, state)
+
+    allocation = bridge.allocate_child_cost(child_id=3, amount=30.0)
+
+    assert allocation.parent_charges == {1: 15.0, 2: 15.0}
+    assert allocation.public_charge == 0.0
+
+
+def test_orphan_child_costs_go_to_public_support():
+    households = [_HouseholdStub("H0")]
+    econ = type("Econ", (), {})()
+    econ.households = households
+    econ.ledger = Ledger({"H0": 0.0, "BANK_0": 0.0})
+    state = _DemographicState(
+        people=[
+            _demo_person(1, 40, household_id=0),
+            _demo_person(2, 41, household_id=0),
+            _demo_person(3, 8, household_id=0),
+        ]
+    )
+    state.people[0].alive = False
+    state.people[1].alive = False
+    state.people[2].mother_id = 1
+    state.people[2].father_id = 2
+    bridge = initialize_person_claims_from_households(econ, state)
+
+    allocation = bridge.allocate_child_cost(child_id=3, amount=30.0)
+
+    assert allocation.parent_charges == {}
+    assert allocation.public_charge == 30.0
+    assert bridge.orphan_support_spending == pytest.approx(30.0)

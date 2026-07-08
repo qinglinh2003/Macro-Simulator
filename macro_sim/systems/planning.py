@@ -56,6 +56,20 @@ def run_planning_phase(econ: Any) -> None:
     #     property made explicit: bond wealth supports consumption instead of being a frozen stone.
     we = cfg.wealth_effect
     for h in econ.households:
+        bridge = getattr(econ, "demographic_bridge", None)
+        if bridge is not None and getattr(cfg, "demographic_lifecycle_consumption", False):
+            rates = getattr(econ, "demographic_rates", None)
+            if rates is None:
+                rates = getattr(getattr(econ, "demographic_state", None), "rates", None)
+            if rates is None:
+                raise RuntimeError("demographic lifecycle consumption requires demographic rates")
+            h.consumption_budget = bridge.household_lifecycle_consumption_budget(
+                h.id,
+                rates,
+                alpha_income=getattr(cfg, "lifecycle_alpha_income", h.alpha1),
+                alpha_wealth_draw=getattr(cfg, "lifecycle_alpha_wealth_draw", 1.0),
+            )
+            continue
         B.plan_consumption(
             h,
             deposits_prev=econ.ledger.balance(h.id),

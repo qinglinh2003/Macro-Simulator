@@ -55,6 +55,11 @@ def run_goods_phase(econ: Any) -> None:
         spent_by[tr.buyer] = spent_by.get(tr.buyer, 0.0) + tr.value
     for h in econ.households:
         h.spent = spent_by.get(h.id, 0.0)
+    bridge = getattr(econ, "demographic_bridge", None)
+    if bridge is not None:
+        for h in econ.households:
+            if h.spent > EPS:
+                bridge.post_household_consumption(h.id, h.spent)
     econ._gov_consumption = spent_by.get(econ._fiscal, 0.0)      # government's realised real purchases
     for off in offers:
         f: Firm = off.ref
@@ -68,6 +73,8 @@ def run_goods_phase(econ: Any) -> None:
             vat = min(h.spent * tc, econ.ledger.balance(h.id))
             if vat > EPS:
                 econ.ledger.transfer(h.id, econ._fiscal, vat)
+                if bridge is not None:
+                    bridge.post_household_tax_payment(h.id, vat)
                 econ._tax_consumption += vat
 
     # v9 competitive procurement: government buys from the cheapest c-firms first (a tender,
