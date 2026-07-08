@@ -1,4 +1,4 @@
-"""Parameter budget for the closed monetary kernel (spec §7.4).
+"""Canonical configuration model for the closed monetary kernel (spec §7.4).
 
 Every free quantity lives here in ONE place so description length is visible and
 the parsimony question (spec §0-iv) is forced on each row. Status legend:
@@ -206,6 +206,8 @@ class Config:
     omo_drain_frac: float = 0.1           # per-tick fraction of the gap to the target drained/injected (smoothing)
     lolr: bool = False                    # lender of last resort: CB funds a run-hit bank ⇒ no suspension cascade
     bank_bond_duration_limit: float = 0.0 # cap a bank's bond book at k·economic_capital (0 ⇒ no cap; the SVB floor)
+    bank_resolution_fund: bool = False    # deposit-insurance/resolution: the STATE absorbs a failed bank's residual
+    #                                       loss instead of socialising it onto survivors (breaks insolvency contagion)
 
     # ======================================================================
     # v4 -- firm entry/exit + bankruptcy (DESIGNDOC §13). C-sector only in v1.
@@ -507,6 +509,7 @@ class Config:
             run_market_weight=self.run_market_weight,
             run_fear_persistence=self.run_fear_persistence,
             lolr=self.lolr,
+            bank_resolution_fund=self.bank_resolution_fund,
             bonds=self.bonds,
             rho=self.rho,
             genesis_founder_pool=self.genesis_founder_pool,
@@ -1026,7 +1029,8 @@ class Config:
         interbank-activation STRESS test (drain reserves hard ⇒ overdrafts + a heavy long bank book ⇒ SVB), use
         `Config.v124_stress()`. Every new lever off ⇒ v123; bonds off ⇒ v11.5."""
         return cls.v123(**{**dict(omo=True, lolr=True, omo_reserve_target=1.0, omo_drain_frac=0.03,
-                                  bank_bond_appetite=0.03, bank_bond_duration_limit=0.5, bond_maturity=4),
+                                  bank_bond_appetite=0.03, bank_bond_duration_limit=0.5, bond_maturity=4,
+                                  bank_resolution_fund=True),
                            **overrides})
 
     @classmethod

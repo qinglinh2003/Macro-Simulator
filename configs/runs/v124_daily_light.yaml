@@ -1,0 +1,14 @@
+extends:
+  - ../versions/v124.yaml
+  - ../calibrations/daily_tick.yaml
+
+metadata:
+  name: v124_daily_light
+  description: Lightweight smoke-run profile for the v12.4 daily-tick calibration.
+
+params:
+  n_households: 200
+  n_firms_c: 20
+  n_firms_k: 10
+  n_ticks: 180
+  seed: 0

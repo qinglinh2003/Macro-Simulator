@@ -24,7 +24,7 @@ For development work, read in this order:
 | Path | Role |
 |---|---|
 | `macro_sim/economy.py` | Main `Economy` facade and tick scheduler. It wires systems together but delegates phase work to `macro_sim/systems/`. |
-| `macro_sim/config/` | Versioned `Config`, typed grouped config views, and validation. `legacy.py` is still the large compatibility-era parameter surface. |
+| `macro_sim/config/` | Canonical `Config` model, YAML profile loader, typed grouped config views, and validation. |
 | `macro_sim/core/` | Accounting and run-state kernel: ledger, policy levers, and `SimulationState`. |
 | `macro_sim/domain/` | Agent state: households, firms, banks, and equity-market state. Money balances remain in the ledger. |
 | `macro_sim/behavior/` | Pure planning and decision equations: consumption, expectations, pricing, wages, investment, credit demand, portfolio demand. |

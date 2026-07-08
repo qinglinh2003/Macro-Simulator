@@ -44,8 +44,9 @@ macro_sim/
   economy.py
   config/
     __init__.py
-    legacy.py
-    presets.py
+    model.py
+    loader.py
+    schema.py
   core/
     __init__.py
     ledger.py
@@ -229,7 +230,7 @@ from macro_sim.core.ledger import *
 - [ ] After moving `agents.py`, update package imports inside the moved module.
 
 ```python
-from macro_sim.config.legacy import Config
+from macro_sim.config.model import Config
 ```
 
 Use this package import only after `config.py` has been moved or wrappered. Until then, keep the wrapper-compatible root import to minimize blast radius.
@@ -263,24 +264,24 @@ git add -A
 git commit -m "refactor: move accounting and domain modules into package"
 ```
 
-## Phase 3: Move Config As A Legacy Compatibility Unit
+## Phase 3: Move Config Into The Package
 
 **Files:**
-- Move: `config.py` -> `macro_sim/config/legacy.py`
+- Move: `config.py` -> `macro_sim/config/model.py`
 - Create: `macro_sim/config/__init__.py`
 - Modify root wrapper: `config.py`
 - Test: full suite.
 
 **Interfaces:**
 - Consumes: `Config` dataclass and all current version factories.
-- Produces: `macro_sim.config.Config` and root `Config` compatibility.
+- Produces: `macro_sim.config.Config`.
 
-- [ ] Move the current monolithic config unchanged to `macro_sim/config/legacy.py`.
+- [ ] Move the current monolithic config unchanged to `macro_sim/config/model.py`.
 
 - [ ] Export it from `macro_sim/config/__init__.py`.
 
 ```python
-from macro_sim.config.legacy import Config
+from macro_sim.config.model import Config
 
 __all__ = ["Config"]
 ```
@@ -288,7 +289,7 @@ __all__ = ["Config"]
 - [ ] Replace root `config.py` with:
 
 ```python
-from macro_sim.config.legacy import *
+from macro_sim.config.model import *
 ```
 
 - [ ] Update moved package modules to import `Config` from `macro_sim.config`.
@@ -654,7 +655,7 @@ metrics refactors.
 **Files:**
 - Create: `macro_sim/config/schema.py`
 - Create: `macro_sim/config/presets.py`
-- Modify: `macro_sim/config/legacy.py`
+- Modify: `macro_sim/config/model.py`
 - Test: lightweight structural checks and parallel focused checks per config group; one full parallel regression after Phase 8 is complete.
 
 **Interfaces:**

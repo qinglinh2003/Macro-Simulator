@@ -8,16 +8,18 @@ next, not to retell the refactor history.
 
 ### Important: `Config` is still the largest remaining god object
 
-Code: `macro_sim/config/legacy.py`, `macro_sim/config/schema.py`
+Code: `macro_sim/config/model.py`, `macro_sim/config/loader.py`, `macro_sim/config/schema.py`, `configs/`
 
-`legacy.py` still owns defaults, validation, version presets, derived flags, and
-grouped-view projection. The grouped dataclasses in `schema.py` are a useful
-read boundary for systems, but they are not yet the source of truth. This means
-new model layers can still expand one giant parameter table unless the next
+`model.py` still owns defaults, validation, Python version factories, derived
+flags, and grouped-view projection. The YAML loader and `configs/` profiles are
+now the preferred path for run configuration, and the grouped dataclasses in
+`schema.py` remain useful read boundaries for systems. The remaining risk is
+that new model layers can still expand one giant parameter table unless the next
 round moves presets and validation into smaller modules.
 
-Recommended next step: split `legacy.py` into `schema.py`, `presets.py`, and
-`validation.py`, while keeping `Config.v*()` factories stable.
+Recommended next step: split `model.py` into smaller files such as
+`validation.py` and YAML-backed presets, then retire the Python `Config.v*()`
+factories as tests and scripts move to `load_config_file(...)`.
 
 ### Important: `BankingConfig` is too broad
 
@@ -81,7 +83,7 @@ explicit scalar parameters where the helper only needs a few knobs.
 
 ## Suggested Next Slice
 
-1. Split config presets and validation out of `legacy.py`.
+1. Split config presets and validation out of `model.py`.
 2. Split `BankingConfig` into cohesive subviews.
 3. Extract subsystem metric collectors from `metrics.py`.
 4. Extract genesis/build setup from `Economy.__init__`.

@@ -1,4 +1,5 @@
-from macro_sim.config.legacy import Config
+from macro_sim.config.model import Config
+from macro_sim.config.loader import config_to_dict, load_config_file, resolve_config_params
 from macro_sim.config.schema import (
     BankingConfig,
     CapitalGoodsConfig,
@@ -21,6 +22,9 @@ __all__ = [
     "EquityConfig",
     "FirmDemographicsConfig",
     "GoodsConfig",
+    "config_to_dict",
+    "load_config_file",
+    "resolve_config_params",
     "PlanningConfig",
     "SecuritiesConfig",
     "SettlementConfig",

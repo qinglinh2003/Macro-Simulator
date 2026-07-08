@@ -8,7 +8,12 @@ recorded systematically. The v1 success bar is only "alive and conserving"
 
 from __future__ import annotations
 
+import argparse
+from dataclasses import replace
+from pathlib import Path
+
 from macro_sim.config import Config
+from macro_sim.config.loader import load_config_file
 from macro_sim.reporting.diagnostics import plot_cross_run, plot_dashboard, seed_invariance
 from macro_sim.economy import Economy
 from macro_sim.experiments.runlog import RunLogger, load_index, run_and_log, run_sweep
@@ -24,11 +29,64 @@ def print_index_table(rows, cols):
         print("  " + "".join(f"{_fmt(r.get(c,''), 13, 3)}" for c in cols))
 
 
-def main() -> None:
-    logger = RunLogger("runs")
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the macro simulator.")
+    parser.add_argument("--config", help="YAML config file to load.")
+    parser.add_argument("--ticks", type=int, help="Override n_ticks after loading config.")
+    parser.add_argument("--seed", type=int, help="Override seed after loading config.")
+    parser.add_argument("--output-dir", default="runs", help="Directory for run artifacts.")
+    parser.add_argument("--no-plots", action="store_true", help="Skip diagnostic PNG generation.")
+    parser.add_argument("--no-sweep", action="store_true", help="Skip the default rho sweep.")
+    return parser.parse_args(argv)
+
+
+def _runtime_overrides(args: argparse.Namespace) -> dict:
+    overrides = {}
+    if args.ticks is not None:
+        overrides["n_ticks"] = args.ticks
+    if args.seed is not None:
+        overrides["seed"] = args.seed
+    return overrides
+
+
+def _run_config_file(args: argparse.Namespace) -> None:
+    cfg = load_config_file(args.config, overrides=_runtime_overrides(args))
+    logger = RunLogger(args.output_dir)
+    label = Path(args.config).stem
+
+    print(
+        f"Run: config={args.config} N_H={cfg.n_households} "
+        f"N_C={cfg.n_firms_c} N_K={cfg.n_firms_k} ticks={cfg.n_ticks} seed={cfg.seed}"
+    )
+    econ = Economy(cfg)
+    records = econ.run()
+    summary = logger.log(cfg, records, label=label, tags=["config-file"], protocol=econ.protocol.name)
+
+    print(f"  records={len(records)}")
+    print(f"  conserved={summary['conservation']['ok']} "
+          f"max_drift={summary['conservation']['max_drift']:.2e}  "
+          f"alive={summary['health']['alive']}  "
+          f"depressed_trap={summary['health']['depressed_trap']}")
+    print(f"  logged -> {summary['meta']['run_dir']}")
+
+    if not args.no_plots:
+        figure_path = Path(summary["meta"]["run_dir"]) / "dashboard.png"
+        plot_dashboard(records, path=str(figure_path), title=f"{label} dashboard", rho=cfg.rho)
+        print(f"  dashboard -> {figure_path}")
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+    if args.config:
+        _run_config_file(args)
+        return
+
+    logger = RunLogger(args.output_dir)
 
     # -- baseline run, fully logged --------------------------------------------
     cfg = Config()
+    if _runtime_overrides(args):
+        cfg = replace(cfg, **_runtime_overrides(args))
     print(f"Baseline: N_H={cfg.n_households} N_F={cfg.n_firms} ticks={cfg.n_ticks} seed={cfg.seed}")
     econ = Economy(cfg)
     records = econ.run()
@@ -41,12 +99,16 @@ def main() -> None:
           f"depressed_trap={summary['health']['depressed_trap']}")
     print(f"  logged -> {summary['meta']['run_dir']}")
 
-    plot_dashboard(records, path="diagnostic.png", title="Kernel baseline (rho=0.5)", rho=cfg.rho)
-    plot_dashboard(records, path=f"{summary['meta']['run_dir']}/dashboard.png",
-                   title="Kernel baseline (rho=0.5)", rho=cfg.rho)
-    print("  18-panel dashboard -> diagnostic.png (+ run dir)")
+    if not args.no_plots:
+        plot_dashboard(records, path="diagnostic.png", title="Kernel baseline (rho=0.5)", rho=cfg.rho)
+        plot_dashboard(records, path=f"{summary['meta']['run_dir']}/dashboard.png",
+                       title="Kernel baseline (rho=0.5)", rho=cfg.rho)
+        print("  18-panel dashboard -> diagnostic.png (+ run dir)")
 
     # -- parameter sweep: the dividend-payout leak (rho) -----------------------
+    if args.no_sweep:
+        return
+
     print("\nSweep over rho (dividend payout ratio):")
     run_sweep(cfg, {"rho": [0.3, 0.5, 0.7, 0.9, 1.0]}, logger, tags=["rho-sweep"])
 

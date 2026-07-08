@@ -1,0 +1,72 @@
+extends:
+  - ../base.yaml
+
+metadata:
+  name: v123
+  description: v12.3 securities stack, expressed as cumulative overrides from Config().
+
+params:
+  bank_capital_constraint: true
+  bank_capital_frac: 0.05
+  bank_dynamics: true
+  bank_enabled: true
+  bank_entry_beta: 0.02
+  bank_equity: true
+  bank_equity_trading: true
+  bank_exposure_limit: 0.15
+  bank_leverage_disp: 0.6
+  bank_min_capital: 400.0
+  bank_rate_competition: true
+  bank_runs: true
+  bank_spread_disp: 0.003
+  bank_target_capital_ratio: 0.18
+  benefit_replacement: 0.4
+  bond_coupon: 0.01
+  bond_finance_frac: 0.9
+  bond_maturity: 8
+  bond_theta: 0.15
+  bonds: true
+  capital_market: true
+  central_bank: true
+  deficit_u_ref: 0.05
+  equity_finance: true
+  firm_dynamics: true
+  founder_owned_genesis: true
+  gibrat_growth: true
+  gov_deficit_target: 0.03
+  gov_investment_share: 0.1
+  government: true
+  hh_subsistence: 0.5
+  household_bankruptcy: true
+  household_credit: true
+  income_allowance: 0.5
+  index_startup: true
+  inflation_target: 0.012
+  interbank: true
+  interbank_tightness: 0.5
+  interest_by_deposits: true
+  jg_productivity: 0.5
+  jg_wage_ratio: 0.5
+  job_guarantee: true
+  lambda_issue: 0.2
+  lambda_q: 0.1
+  margin_credit: true
+  mpc_dispersion: 0.4
+  n_banks: 8
+  n_firms_c: 500
+  n_firms_k: 250
+  n_households: 5000
+  per_firm_equity: true
+  pro_rata_dividends: true
+  public_capital_gamma: 0.3
+  q_invest_smooth: 0.1
+  reserve_floor_frac: 0.25
+  run_sensitivity: 8.0
+  tax_consumption_rate: 0.15
+  tax_income_rate: 0.2
+  tax_profit_rate: 0.25
+  tax_wealth_rate: 0.002
+  taylor_phi_pi: 1.2
+  taylor_phi_u: 1.0
+  w_chartist: 0.2
+  wealth_allowance: 1.0

@@ -1,0 +1,16 @@
+extends:
+  - v123.yaml
+
+metadata:
+  name: v124
+  description: v12.4 central-bank quantity tools and bank bond controls.
+
+params:
+  bank_bond_appetite: 0.03
+  bank_bond_duration_limit: 0.5
+  bank_resolution_fund: true
+  bond_maturity: 4
+  lolr: true
+  omo: true
+  omo_drain_frac: 0.03
+  omo_reserve_target: 1.0

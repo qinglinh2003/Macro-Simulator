@@ -1,4 +1,5 @@
 import sys
+import importlib.util
 from pathlib import Path
 
 
@@ -50,6 +51,14 @@ def test_config_imports_from_package_path():
 
     assert Config is not None
     assert Config.v124 is not None
+
+
+def test_config_model_is_canonical_and_legacy_module_is_removed():
+    from macro_sim.config import Config
+    from macro_sim.config.model import Config as ModelConfig
+
+    assert Config is ModelConfig
+    assert importlib.util.find_spec("macro_sim.config.legacy") is None
 
 
 def test_reporting_and_experiment_imports_from_package_paths():

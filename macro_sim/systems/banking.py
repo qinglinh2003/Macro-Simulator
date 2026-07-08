@@ -383,7 +383,17 @@ def fail_bank(econ: Any, bank: Bank) -> None:
                     econ.ledger.balance(account_id) - econ.ledger.debt(account_id),
                 )
             econ._bank_of[account_id] = new_bank
-    if cfg.interbank and alive:
+    if cfg.bank_resolution_fund:
+        # v12.4-fix: a DEPOSIT-INSURANCE / RESOLUTION backstop. The STATE absorbs the failed bank's residual
+        # negative capital (transfer fiscal→bank, A5-safe, financed into the deficit) instead of SOCIALISING the
+        # loss onto surviving banks' capital. The legacy pro-rata socialisation (the `elif` below) dumped one deep
+        # insolvency onto every bank's balance, which `resolve_bank_failures` then failed in turn -- a runaway
+        # INSOLVENCY-CONTAGION cascade that wiped the whole sector in one tick and was irreversible (seen at
+        # NH5000). Depositors are made whole; the fiscal cost is the realistic price of the backstop.
+        loss = -econ.ledger.balance(bank.id)
+        if loss > EPS:
+            econ.ledger.transfer(econ._fiscal, bank.id, loss)
+    elif cfg.interbank and alive:
         loss = -econ.ledger.balance(bank.id)
         lenders = {
             candidate.id: econ.ledger.reserves(candidate.id)
@@ -560,12 +570,21 @@ def run_bank_entry_phase(econ: Any) -> None:
     alive = [b for b in econ.banks if b.alive]
     total_capital = sum(max(0.0, econ.ledger.balance(b.id)) for b in alive)
     total_income = sum(b.interest_income for b in alive)
-    if total_capital <= EPS:
+    if total_capital > EPS:
+        roe = total_income / total_capital
+        rate = max(econ._rate, 1e-4)
+        probability = max(0.0, min(1.0, cfg.bank_entry_beta * (roe / rate - 1.0)))
+        probability *= max(0.0, 1.0 - len(alive) / (2.0 * max(1, cfg.n_banks)))
+    elif not alive and cfg.bank_resolution_fund:
+        # v12.4-fix: BOOTSTRAP a fully WIPED-OUT sector (no alive banks at all). Banking is maximally profitable
+        # then (all credit demand is unmet), so a founder should be able to charter one -- else a total wipeout is
+        # IRREVERSIBLE (the ROE gate returned early, so births froze forever). Enter at a modest fixed rate
+        # (congestion term = 1). Gated on `not alive` -- NOT `total_capital<=EPS`, which can transiently hit 0 when
+        # alive banks have negative balances -- and on the resolution-fund flag, so legacy configs keep the old
+        # "return, no entry" behaviour in BOTH cases ⇒ bit-identical.
+        probability = min(1.0, cfg.bank_entry_beta * 5.0)
+    else:
         return
-    roe = total_income / total_capital
-    rate = max(econ._rate, 1e-4)
-    probability = max(0.0, min(1.0, cfg.bank_entry_beta * (roe / rate - 1.0)))
-    probability *= max(0.0, 1.0 - len(alive) / (2.0 * max(1, cfg.n_banks)))
     for _ in range(cfg.bank_entry_max):
         if econ._bank_entry_rng.random() >= probability:
             continue

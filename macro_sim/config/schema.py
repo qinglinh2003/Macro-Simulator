@@ -40,6 +40,7 @@ class BankingConfig:
     run_market_weight: float
     run_fear_persistence: float
     lolr: bool
+    bank_resolution_fund: bool
     bonds: bool
     rho: float
     genesis_founder_pool: float

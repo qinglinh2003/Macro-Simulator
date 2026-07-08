@@ -1,0 +1,57 @@
+metadata:
+  name: daily_tick
+  description: First-pass calibration for a one-calendar-day economic tick.
+
+params:
+  # Planning, expectations, price, wage, consumption.
+  lambda_d: 0.0076
+  lambda_y: 0.0076
+  theta_price: 0.0037
+  theta_wage: 0.0027
+  phi: 60.0
+  alpha2: 5.5e-5
+
+  # Production, investment, and capital.
+  lambda_I: 0.0019
+  delta_K: 2.28e-4
+  lambda_q: 0.0076
+  q_invest_smooth: 1.0
+  public_capital_depreciation: 2.28e-4
+
+  # Credit, interest, and debt service.
+  r_interest: 1.34e-4
+  r_neutral: 1.34e-4
+  r_max: 5.0e-4
+  amort: 0.0011
+  hh_amort: 5.5e-4
+  bank_spread_disp: 4.466666666666667e-5
+  interbank_rate_base: 0.0
+  interbank_tightness: 0.0013698630136986301
+  deposit_rate_disp: 0.0
+
+  # Central bank and inflation rule.
+  inflation_target: 5.4e-5
+  infl_ema_lambda: 0.0019
+  rate_inertia: 0.9924
+  taylor_phi_u: 0.0014
+  omo_drain_frac: 0.094
+
+  # Securities.
+  bond_coupon: 1.08e-4
+  bond_maturity: 365
+
+  # Firm entry/exit and growth.
+  bankrupt_persist: 548
+  gibrat_sigma: 0.0052
+
+  # Equity, portfolios, margin, bank equity.
+  lambda_p: 0.13
+  trend_lambda: 0.023
+  equity_ema_lambda: 0.0076
+  resid_income_lambda: 0.0019
+  portfolio_adjust: 0.048
+  bank_equity_lambda: 0.0019
+  run_fear_persistence: 0.952
+
+  # Fiscal stock tax. Flow tax rates remain ratios on current flows.
+  tax_wealth_rate: 5.479452054794521e-6

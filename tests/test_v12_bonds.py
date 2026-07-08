@@ -133,11 +133,13 @@ def test_svb_duration_channel_and_bank_securities_conserve():
 
 
 def test_v124_off_bit_identical():
-    """v12.4: with OMO/LoLR off and the bank levers 0, the v12.4 code (reserve create/destroy, LoLR branch, the
-    duration cap) is inert ⇒ reproduces v12.3 exactly."""
+    """v12.4: with OMO/LoLR off, the bank levers 0, and the resolution fund off, the v12.4 code (reserve create/
+    destroy, LoLR branch, the duration cap, the deposit-insurance backstop + entry bootstrap) is inert ⇒ reproduces
+    v12.3 exactly."""
     a = Economy(Config.v123(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=400, seed=0)).run()
     b = Economy(Config.v124(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=400, seed=0,
-                            omo=False, lolr=False, bank_bond_appetite=0.0, bank_bond_duration_limit=0.0)).run()
+                            omo=False, lolr=False, bank_bond_appetite=0.0, bank_bond_duration_limit=0.0,
+                            bank_resolution_fund=False)).run()
     for x, y in zip(a, b):
         assert x["broad_money"] == y["broad_money"] and x["conservation_drift"] == y["conservation_drift"]
 
