@@ -455,12 +455,24 @@ class DemographicEconomicBridge:
         account_id = self.account_for_household_id(sheet.household_id)
         debt = max(0.0, float(sheet.debt_claim))
         cash = max(0.0, float(sheet.cash_claim))
-        pay = min(cash, debt, self.econ.ledger.balance(account_id))
+        ledger_cash = max(0.0, float(self.econ.ledger.balance(account_id)))
+        protected_cash = self._other_positive_cash_claims(person_id, sheet.household_id)
+        available_cash = max(0.0, ledger_cash - protected_cash)
+        pay = min(cash, debt, available_cash)
         if pay > 0.0:
             self.econ.ledger.repay(account_id, pay)
             sheet.cash_claim -= pay
             sheet.debt_claim = max(0.0, sheet.debt_claim - pay)
         return max(0.0, float(sheet.debt_claim))
+
+    def _other_positive_cash_claims(self, person_id: int, household_id: int) -> float:
+        total = 0.0
+        for other_id in self.claims.members_of_household(int(household_id)):
+            if int(other_id) == int(person_id):
+                continue
+            total += max(0.0, float(self.claims.balance_sheet(other_id).cash_claim))
+        total += max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
+        return total
 
     def _people_by_household(self, household_id: int) -> list[Any] | None:
         state = getattr(self, "demographic_state", None)

@@ -331,6 +331,36 @@ def test_insolvent_death_infers_creditor_bank_from_household_bank_mapping():
     bridge.assert_all_claim_identities(bridge.econ)
 
 
+def test_insolvent_death_repayment_does_not_consume_other_person_cash_claims():
+    ledger = Ledger({"H0": 50.0, "BANK_0": 100.0})
+    ledger.allow_negative("BANK_0")
+    ledger.create_loan("H0", 60.0)
+    ledger.transfer("H0", "BANK_0", 60.0)
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[Bank(id="BANK_0")]),
+    )
+    retained = _person(50, age=80)
+    retained.alive = False
+    dead = _person(51, age=70)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[retained, dead])
+    bridge.claims.add_person(retained.id, household_id=0, cash_claim=40.0)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=50.0, debt_claim=60.0)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=9, date=date(2000, 1, 10), person_id=dead.id, age=70)
+
+    bridge.on_death(event, dead)
+
+    assert ledger.balance("H0") == pytest.approx(40.0)
+    assert ledger.debt("H0") == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(retained.id).cash_claim == pytest.approx(40.0)
+    assert bridge.death_writeoff_flow == pytest.approx(50.0)
+    bridge.assert_all_claim_identities(bridge.econ)
+
+
 def test_insolvent_death_without_known_creditor_bank_halts():
     bridge = _bridge()
     dead = _person(13, age=70)
