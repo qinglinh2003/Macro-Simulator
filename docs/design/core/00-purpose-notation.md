@@ -65,6 +65,11 @@ Parsimony is the tie-breaker and the discipline behind every "should we add this
 |---|---|
 | $t \in \{0,1,2,\dots\}$ | discrete time (one *period* / *tick*) |
 | $\mathcal{A}$ | set of all agents; partitioned into households $\mathcal{H}$, firms $\mathcal{F}$, banks $\mathcal{B}$, government $g$, central bank $cb$ (added as institutions are introduced) |
+| $\mathcal{P}_t$ | set of living persons at end of tick $t$; persons are demographic subjects, not necessarily ledger agents |
+| $N_t$ | living person headcount, $N_t = |\mathcal{P}_t|$ |
+| $\text{Births}_t,\ \text{Deaths}_t,\ \text{Mig}_t$ | recorded demographic flows during tick $t$; migration is zero in the closed-economy kernel unless explicitly enabled |
+| $a_{p,t}$ | age of person $p$ at tick $t$ |
+| $s_p$ | sex of person $p$ where required by demographic hazards |
 | $\mathcal{F}_C,\ \mathcal{F}_K$ | (v2) consumption-goods firms; capital-goods firms. $\mathcal{F}=\mathcal{F}_C\cup\mathcal{F}_K$ |
 | $\mathcal{K}$ | set of financial instrument types (deposits, loans, cash, bonds, equity, …) |
 | $h_{i,k,t}$ | holdings of instrument $k$ by agent $i$ at end of $t$, signed: **asset $> 0$, liability $< 0$** |
@@ -94,4 +99,3 @@ Sign convention: for any agent, assets are positive and liabilities negative, so
 $NW_{i,t} = \sum_{k} h_{i,k,t}$ summed over both financial and real holdings.
 
 ---
-

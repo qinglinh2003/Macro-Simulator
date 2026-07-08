@@ -184,5 +184,51 @@ cycle at its simplest. Counting the real capital stock as collateral (valuing $K
 procyclicality; deferred to **v3.1**. Multiple competing banks, risk-priced rates, and a
 bank-capital constraint are later. The bank does **not** estimate default (v3 has none).
 
----
+### P3 — Mortality hazard 🟡
 
+*(Active once the population layer exists.)*
+
+**Natural language.** Each living person faces an individual death hazard. In the frozen
+demographic kernel this hazard depends only on demographic state, chiefly age and sex. Any
+economic dependence is added later as a specific micro mechanism, not smuggled in as an
+aggregate fact.
+
+**Formal.**
+$$\Pr(p \text{ dies during } t) = \mu(a_{p,t}, s_p;\ \theta_\mu,\ E_t),$$
+where $E_t$ is the economic state read by the hazard function. In Phase 0,
+$E_t=\varnothing$ or `FrozenEconomicState`, so the hazard reduces to
+$$\mu(a_{p,t}, s_p;\ \theta_\mu).$$
+
+**Discipline.** "The rich live longer" is not an axiom. A later heterogeneous mortality
+channel may let $\mu$ respond to a person's own consumption, wealth, health capital, or
+access to care; the aggregate wealth-longevity gradient must then emerge and be validated
+in §4.
+
+**Why 🟡.** Age-specific mortality is the minimal micro primitive required for non-immortal
+agents. The baseline functional form is tentative; the discipline that it is an individual
+hazard, not an encoded macro regularity, is locked by §0-ii.
+
+### P4 — Fertility hazard 🟡
+
+*(Active once birth dynamics exist.)*
+
+**Natural language.** Births arise from individual fertility hazards, not from an imposed
+macro population path. In the frozen demographic kernel the hazard depends only on age,
+sex, and eligibility. Economic coupling is added later through individual or household
+mechanisms.
+
+**Formal.**
+$$\Pr(p \text{ gives birth during } t) = m(a_{p,t}, s_p,\text{eligibility}_{p,t};\ \theta_m,\ E_t).$$
+In Phase 0, $E_t=\varnothing$ or `FrozenEconomicState`, so the hazard reduces to a baseline
+age-specific fertility schedule.
+
+**Discipline.** The demographic transition is not an axiom. A later macro or heterogeneous
+fertility channel may let $m$ respond to income, job stability, child cost, housing cost,
+public transfers, or household composition; declining fertility with development must be a
+held-out target in §4, not a primitive hard-coded here.
+
+**Why 🟡.** Birth hazards are the minimal source of new persons. The baseline age schedule
+is empirical and revisable; the "micro hazard first, macro regularity as validation"
+discipline is not.
+
+---

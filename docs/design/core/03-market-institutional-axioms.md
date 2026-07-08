@@ -144,5 +144,34 @@ parsimony principle (§0-iv) it stays out of the model unless a specific questio
 by physics respectively, and (b) is just the explicit face of already-locked stickiness.
 Little here is actually discretionary anymore.
 
----
+### P5 — Vital-events scheduling ⚪
 
+*(Open protocol question for the population layer.)*
+
+**Natural language.** Births, deaths, aging, household splits, and estate settlements live
+on a slower biological/social clock than many market transactions. The model must choose
+when vital events read economic state, when they write person/household state, and how
+often they resolve relative to the economic tick.
+
+**What is locked.**
+
+- Vital-rate functions must have the coupling seam from day one:
+  $$\text{rate}(\text{person},\ \text{demographic state},\ \text{economic state},\ \text{policy state}).$$
+- In the frozen demographic kernel, the economic argument is `FrozenEconomicState`, so the
+  same functions reduce to baseline constant or age-specific rates.
+- The frozen-economy mode is permanent, not a temporary mock. It is the invariant test
+  bench used to attribute every later deviation to an added coupling channel.
+
+**What remains open.**
+
+- Single fine clock: evaluate low per-tick hazards every economic tick.
+- Coarse demographic sub-clock: resolve vital events every month/year while markets tick
+  more frequently.
+- Hybrid: age continuously or per tick, but batch births/deaths/estate settlements.
+
+**Why ⚪.** Unlike M3(c)'s planning/market timing, there is no unique conservation-forced
+answer. The choice interacts with runtime cost, stochastic variance, inheritance timing,
+and feedback lags, so it should be selected explicitly when the population kernel is
+implemented.
+
+---

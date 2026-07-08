@@ -19,6 +19,22 @@ are how we judge the axioms above. Encoding any of them as an axiom is forbidden
 - **Wealth-distribution shape** — a right-skewed, heavy-tailed wealth distribution from
   B1 + heterogeneous returns. *(A depression-linked inequality spike already emerged in v1 —
   see §9.1.)*
+- **Frozen-demography oracle** — under `FrozenEconomicState`, the stochastic person-level
+  simulation should match its Leslie/matrix-population oracle within sampling error and
+  converge to the same stable age distribution. This is a test bench, not a research claim.
+- **Demographic transition** — fertility should fall, with lags and possible nonlinearities,
+  from micro fertility hazards responding to economic mechanisms. It must not be imposed as
+  a macro rule.
+- **Wealth-longevity gradient** — richer or better-resourced persons may live longer only if
+  individual mortality hazards are coupled to resources; the aggregate gradient is a target.
+- **Age-wealth profile** — lifecycle income, consumption, saving, and asset demand should
+  generate an age-wealth hump rather than assume it.
+- **Inheritance and wealth concentration** — the contribution of bequests, estate taxation,
+  and differential vital rates to the upper tail should be measurable by switching channels
+  on/off.
+- **Household-size and dependency distributions** — household composition, dependency ratios,
+  and multigenerational structures should emerge from the demographic/household rules rather
+  than be permanently fixed.
 
 A run is "successful" to the extent it reproduces these from the micro axioms alone.
 
@@ -121,6 +137,35 @@ an interest rate, and mature profit dynamics beneath it first.)
 5. **Government** (taxes, transfers, fiscal policy) — the first countercyclical stabilizer.
 6. **Central bank** (policy rate, transmission through M2/B3).
 7. **External sector** (trade, cross-border flows).
+
+**Population layer spine (v13 candidate).**
+
+The population layer follows a separate but compatible staged path. The invariant
+discipline is: vital-rate functions expose the economic/policy coupling seam from Phase 0,
+but Phase 0 feeds them `FrozenEconomicState`; the frozen mode remains a permanent oracle
+and attribution baseline.
+
+1. **Phase 0 — self-consistent population kernel under frozen economy.** Build persons,
+   aging, births/deaths, event logs, P1 headcount assertions, and a Leslie/matrix oracle.
+   Acceptance: stochastic micro simulation matches the oracle within sampling error and
+   converges to the same stable age distribution.
+2. **Phase 1 — population as source and sink for the economy, no feedback.** Let births,
+   deaths, age, labor supply, lifecycle consumption/saving, and inheritance feed the
+   economy while vital rates still ignore economic state. Acceptance: the demographic path
+   is pointwise identical to Phase 0, so economic changes are attributable to population
+   structure alone.
+3. **Phase 2 — macro feedback into vital rates.** Let aggregate income, unemployment,
+   child cost, public health/welfare, or housing-cost proxies enter fertility and mortality
+   hazards one channel at a time. Acceptance: deviations from the frozen path are
+   attributable to the newly closed macro feedback loop.
+4. **Phase 3 — heterogeneous agent-level feedback.** Let a person's or household's own
+   wealth, income, consumption, employment stability, and household composition affect
+   fertility, mortality, inheritance, and household formation. Acceptance: wealth
+   concentration can be decomposed into lifecycle accumulation, bequests, and differential
+   vital rates by toggling channels.
+5. **Phase 4 — calibration and research outputs.** Calibrate baseline hazards and coupling
+   elasticities to real demographic/economic data; study demographic transition, generation
+   waves, inheritance taxation, and concentration under sensitivity sweeps.
 
 *(Cross-cutting deepenings — MPC/return heterogeneity, firm entry/exit, richer
 labor-market matching — are woven into whichever layer they most naturally attach to,
@@ -463,4 +508,3 @@ that the previously monotone firm-deposit accumulation reverses or stabilizes an
 money stops falling — the falsifiable prediction from §9.4.
 
 ---
-

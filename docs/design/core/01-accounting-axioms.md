@@ -121,3 +121,52 @@ series going from a flat line to a live one *is* the mark of entering a credit e
 
 ---
 
+### P1 — Person stock–flow consistency 🔒
+
+**Natural language.** Once the population layer exists, living persons are a stock just
+like deposits, loans, inventories, and capital are stocks. A person can enter or leave the
+living population only through a recorded demographic event. No person may wink in or out
+as a side effect of some unrelated economic routine.
+
+**Formal.**
+$$N_t = N_{t-1} + \text{Births}_t - \text{Deaths}_t + \text{Mig}_t,$$
+where $N_t = |\mathcal{P}_t|$. In the closed-economy demographic kernel,
+$\text{Mig}_t=0$ unless a migration/external-sector layer is explicitly enabled.
+
+**Runtime gate.** Assert every tick that the live-person table, birth/death/migration event
+logs, and reported headcount satisfy the identity exactly:
+$$|\mathcal{P}_t| - |\mathcal{P}_{t-1}| =
+\text{Births}_t - \text{Deaths}_t + \text{Mig}_t.$$
+
+**Why.** This is A2 applied to a second conserved stock: headcount. It is definitional,
+school-agnostic, and free. It is the one genuinely new Layer-I invariant introduced by
+demographics.
+
+### P2 — Vital events are ledger-compatible events 🔒
+
+**Natural language.** Persons and economic accounts are distinct. A birth does not
+necessarily create a ledger account; a death does not necessarily close one. But whenever a
+vital event creates, closes, or reallocates an economic balance sheet, it must pass through
+the existing accounting machinery. Demographic events must never puncture A1 or A5.
+
+**Formal discipline.**
+
+- A newborn entering a household with no personal account changes headcount only. Any
+  non-zero birth endowment is a `transfer` from an existing source such as a parent or
+  government.
+- An adult split that creates a new household/account must transfer initial deposits,
+  debts, and assets from existing accounts; it cannot conjure net financial worth.
+- A death of a household member with no account changes membership and headcount only.
+- A death that triggers estate settlement, household closure, debt repayment, inheritance,
+  taxation, or escheat must route every financial claim and liability through explicit
+  transfers, repayments, write-offs, bank losses, or fiscal flows.
+
+**Invariant.** Across every vital-event boundary, A1 and A5 remain true:
+$$\Delta\left(\sum_i D_i-\sum_i L_i\right)=0$$
+except through ledger primitives that already preserve or explicitly account for that
+invariant. A deceased person's deposits cannot simply disappear; a deceased person's debts
+cannot simply be deleted without a corresponding loss or fiscal assumption.
+
+**Why.** Demographics adds a headcount identity (P1), not a new financial-conservation law.
+P2 is the compatibility clause: births, deaths, inheritances, and household closures reuse
+the existing stock-flow and ledger assertions rather than bypassing them.
