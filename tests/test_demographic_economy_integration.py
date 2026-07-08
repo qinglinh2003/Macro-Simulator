@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from macro_sim.config import Config
 from macro_sim.demographics.agents import Person
 from macro_sim.economy import Economy
@@ -58,6 +60,50 @@ def test_demographic_metrics_are_emitted_when_enabled():
     assert 0.0 <= rec["person_wealth_gini"] <= 1.0
     assert "estate_suspense_total" in rec
     assert "orphan_support_spending" in rec
+
+
+def test_demographic_metrics_include_population_denominators_and_per_capita_values():
+    econ = Economy(
+        Config.v123(
+            n_households=80,
+            n_firms_c=5,
+            n_firms_k=2,
+            n_banks=2,
+            n_ticks=1,
+            seed=9,
+            demographics_enabled=True,
+            demographics_population=80,
+            demographic_lifecycle_consumption=True,
+        )
+    )
+
+    rec = econ.step()
+
+    assert rec["population_alive"] == rec["person_population_alive"]
+    assert rec["adult_population"] == rec["demographic_adults"]
+    assert rec["child_population"] == rec["demographic_children"]
+    assert rec["elder_population"] == rec["demographic_elders"]
+    assert rec["working_age_population"] >= 0.0
+    assert rec["child_share"] + rec["adult_share"] + rec["elder_share"] == pytest.approx(1.0)
+    assert rec["avg_household_size"] == pytest.approx(
+        rec["population_alive"] / max(1.0, rec["demographic_households"])
+    )
+    assert rec["real_output_per_capita"] == pytest.approx(rec["real_output"] / rec["population_alive"])
+    assert rec["real_consumption_per_capita"] == pytest.approx(rec["real_consumption"] / rec["population_alive"])
+    assert rec["nominal_output_per_capita"] == pytest.approx(rec["nominal_output"] / rec["population_alive"])
+    assert rec["household_income_per_capita"] == pytest.approx(rec["hh_income"] / rec["population_alive"])
+    assert rec["household_saving_per_capita"] == pytest.approx(rec["hh_saving"] / rec["population_alive"])
+    assert rec["money_per_capita"] == pytest.approx(rec["total_money"] / rec["population_alive"])
+    assert rec["gross_household_assets_per_capita"] == pytest.approx(
+        rec["gross_household_assets_total"] / rec["population_alive"]
+    )
+    assert rec["births_tick"] >= 0.0
+    assert rec["deaths_tick"] >= 0.0
+    assert rec["marriages_tick"] >= 0.0
+    assert rec["divorces_tick"] >= 0.0
+    assert rec["leaving_home_tick"] >= 0.0
+    assert rec["birth_rate_per_1000_annualized"] >= 0.0
+    assert rec["death_rate_per_1000_annualized"] >= 0.0
 
 
 def test_demographic_economy_smoke_run_preserves_claim_identities():

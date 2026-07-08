@@ -4,6 +4,7 @@ import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -23,6 +24,8 @@ from macro_sim.demographics.lifecycle import (
     person_wealth_draw,
 )
 from macro_sim.systems.planning import run_planning_phase
+from macro_sim.systems.credit import run_credit_phase
+from macro_sim.systems.settlement import run_settlement_phase
 
 
 @dataclass
@@ -188,6 +191,7 @@ class _HouseholdStub:
     labor_sold: float = 0.0
     jg_labor: float = 0.0
     equity_value_ema: float = 0.0
+    margin_debt: float = 0.0
 
 
 @dataclass
@@ -256,6 +260,177 @@ def test_planning_phase_uses_lifecycle_budget_when_demographic_bridge_enabled():
     run_planning_phase(econ)
 
     assert households[1].consumption_budget > households[0].consumption_budget
+
+
+def test_lifecycle_budget_returns_zero_for_empty_demographic_household_account():
+    households = [_HouseholdStub("H0"), _HouseholdStub("H1")]
+    econ = type("Econ", (), {})()
+    econ.households = households
+    econ.ledger = Ledger({"H0": 100.0, "H1": 0.0, "BANK_0": 0.0})
+    state = _DemographicState(people=[_demo_person(1, 40, household_id=0)])
+    econ.demographic_state = state
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.demographic_state = state
+    bridge.econ = econ
+    bridge.household_to_account[1] = "H1"
+    bridge.account_to_household["H1"] = 1
+
+    budget = bridge.household_lifecycle_consumption_budget(
+        "H1",
+        Phase0VitalRates(),
+        alpha_income=1.0,
+        alpha_wealth_draw=1.0,
+    )
+
+    assert budget == 0.0
+
+
+def test_equal_dividends_skip_empty_demographic_household_accounts():
+    households = [_HouseholdStub("H0"), _HouseholdStub("H1")]
+    firm = SimpleNamespace(id="F0", revenue=10.0, wagebill=0.0, rho=1.0, profit=0.0, dividend_shortfall=0.0)
+    econ = SimpleNamespace(
+        households=households,
+        firms=[firm],
+        c_firms=[firm],
+        investing_firms=[],
+        ledger=Ledger({"H0": 0.0, "H1": 0.0, "F0": 10.0, "CLEARING": 0.0, "BANK_0": 0.0}),
+        cfg=SimpleNamespace(
+            settlement=SimpleNamespace(
+                government=False,
+                pro_rata_dividends=False,
+                per_firm_equity=False,
+                gov_investment_share=0.0,
+                public_capital_depreciation=0.0,
+                job_guarantee=False,
+            )
+        ),
+        policy=SimpleNamespace(
+            tax_profit_rate=0.0,
+            job_guarantee=False,
+        ),
+        public_capital=0.0,
+    )
+    state = _DemographicState(people=[_demo_person(1, 40, household_id=0)])
+    econ.demographic_state = state
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.demographic_state = state
+    bridge.econ = econ
+    bridge.household_to_account[1] = "H1"
+    bridge.account_to_household["H1"] = 1
+    econ.demographic_bridge = bridge
+
+    run_settlement_phase(econ)
+
+    assert econ.ledger.balance("H0") == pytest.approx(10.0)
+    assert econ.ledger.balance("H1") == pytest.approx(0.0)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_household_credit_skips_empty_demographic_household_accounts():
+    households = [_HouseholdStub("H0"), _HouseholdStub("H1")]
+    households[0].y_expected = 1.0
+    households[1].y_expected = 1.0
+    econ = SimpleNamespace(
+        households=households,
+        firms=[],
+        k_firms=[],
+        banks=[SimpleNamespace(id="BANK_0", alive=True)],
+        _bank_of={"H0": SimpleNamespace(id="BANK_0", alive=True), "H1": SimpleNamespace(id="BANK_0", alive=True)},
+        _loan_book={"BANK_0": 0.0},
+        ledger=Ledger({"H0": 0.0, "H1": 0.0, "BANK_0": 0.0}),
+        policy=SimpleNamespace(kappa=10.0, hh_credit_limit=10.0),
+        cfg=SimpleNamespace(
+            credit=SimpleNamespace(
+                bank_enabled=True,
+                household_credit=True,
+                margin_credit=False,
+                hh_subsistence=2.0,
+                hh_credit_limit=10.0,
+                hh_amort=0.0,
+                bank_target_capital_ratio=0.0,
+                interbank=False,
+                deposit_rate_disp=0.0,
+                interest_by_deposits=False,
+                amort=0.0,
+            ),
+            banking=SimpleNamespace(
+                bank_capital_constraint=False,
+                bank_equity=False,
+            ),
+        ),
+    )
+    state = _DemographicState(people=[_demo_person(1, 40, household_id=0)])
+    econ.demographic_state = state
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.demographic_state = state
+    bridge.econ = econ
+    bridge.household_to_account[1] = "H1"
+    bridge.account_to_household["H1"] = 1
+    econ.demographic_bridge = bridge
+
+    run_credit_phase(econ)
+
+    assert econ.ledger.debt("H0") > 0.0
+    assert econ.ledger.debt("H1") == 0.0
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_person_household_move_transfers_margin_debt_shadow_state():
+    households = [_HouseholdStub("H0")]
+    econ = SimpleNamespace(
+        households=households,
+        ledger=Ledger({"H0": 100.0, "BANK_0": 0.0}),
+        cfg=SimpleNamespace(),
+    )
+    person = _demo_person(1, 24, household_id=0)
+    state = _DemographicState(people=[person])
+    econ.demographic_state = state
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.demographic_state = state
+    bridge.econ = econ
+    econ.demographic_bridge = bridge
+    econ.ledger.create_loan("H0", 40.0)
+    bridge.post_household_debt_creation("H0", 40.0)
+    households[0].margin_debt = 40.0
+
+    person.household_id = 1
+    new_account = bridge.create_household_for_person(person.id)
+
+    assert new_account == "H1"
+    assert econ.ledger.debt("H0") == pytest.approx(0.0)
+    assert econ.ledger.debt("H1") == pytest.approx(40.0)
+    assert households[0].margin_debt == pytest.approx(0.0)
+    assert econ.households[1].margin_debt == pytest.approx(40.0)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_person_household_move_normalizes_internal_negative_cash_before_transfer():
+    households = [_HouseholdStub("H0")]
+    econ = SimpleNamespace(
+        households=households,
+        ledger=Ledger({"H0": 0.0, "BANK_0": 0.0}),
+        cfg=SimpleNamespace(),
+    )
+    mover = _demo_person(1, 24, household_id=0)
+    stayer = _demo_person(2, 50, household_id=0)
+    state = _DemographicState(people=[mover, stayer])
+    econ.demographic_state = state
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.demographic_state = state
+    bridge.econ = econ
+    econ.demographic_bridge = bridge
+    bridge.claims.balance_sheet(mover.id).cash_claim = 4.5
+    bridge.claims.balance_sheet(stayer.id).cash_claim = -4.5
+
+    mover.household_id = 1
+    new_account = bridge.create_household_for_person(mover.id)
+
+    assert new_account == "H1"
+    assert econ.ledger.balance("H0") == pytest.approx(0.0)
+    assert econ.ledger.balance("H1") == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(mover.id).cash_claim == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(stayer.id).cash_claim == pytest.approx(0.0)
+    bridge.assert_all_claim_identities(econ)
 
 
 def test_consumption_posting_preserves_household_cash_claim_sum():

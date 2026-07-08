@@ -12,7 +12,9 @@ dependencies = [
 
 [project.scripts]
 macro-demographics-phase0 = "macro_sim.demographics.phase0:main"
+macro-demographics-phase1-acceptance = "macro_sim.demographics.phase1_acceptance:main"
 macro-viz-compare = "macro_sim.visualization.compare_versions:main"
+macro-viz-run = "macro_sim.visualization.compare_versions:main_single"
 
 [dependency-groups]
 dev = [

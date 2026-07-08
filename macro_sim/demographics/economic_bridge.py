@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from macro_sim.demographics.economic_state import (
+    HouseholdEconomicProfile,
     PersonClaimLedger,
     build_household_economic_profiles,
     labor_supply_for_person,
@@ -93,6 +94,11 @@ class DemographicEconomicBridge:
         if people is None:
             return 0.0
         return sum(labor_supply_for_person(person) for person in people)
+
+    def household_has_living_members(self, account_id: str) -> bool:
+        household_id = self.household_id_for_account(account_id)
+        people = self._people_by_household(household_id)
+        return bool(people)
 
     def working_age_person_ids(self, account_id: str) -> list[int]:
         household_id = self.household_id_for_account(account_id)
@@ -199,7 +205,20 @@ class DemographicEconomicBridge:
             state = getattr(self.econ, "demographic_state", None)
         if state is None:
             raise RuntimeError("demographic state is required for household profiles")
-        return build_household_economic_profiles(state, self.claims)[household_id]
+        profiles = build_household_economic_profiles(state, self.claims)
+        if household_id in profiles:
+            return profiles[household_id]
+        return HouseholdEconomicProfile(
+            household_id=household_id,
+            member_ids=[],
+            ages={},
+            labor_supply=0.0,
+            child_count=0,
+            adult_count=0,
+            elder_count=0,
+            need_units=0.0,
+            dependency_ratio=0.0,
+        )
 
     def household_lifecycle_consumption_budget(
         self,
@@ -378,6 +397,16 @@ class DemographicEconomicBridge:
                 tick=tick,
             ):
                 return
+            package = self._claim_package(person_id)
+            if self._retained_estate_required(package):
+                estate_net_worth = self._package_net_worth(package)
+                self.estates.create_suspense_estate(
+                    person_id,
+                    estate_net_worth,
+                    tick,
+                    household_id=sheet.household_id,
+                )
+                return
             estate_value = assets - debt
             household_id = sheet.household_id
             self.claims.clear_person_claims(person_id)
@@ -386,13 +415,38 @@ class DemographicEconomicBridge:
             return
 
         unpaid = debt - assets
-        bank_id = self.person_creditor_bank.get(person_id)
+        bank_id = self._creditor_bank_for_person(person_id, sheet.household_id)
         if bank_id is None:
             raise RuntimeError(f"missing creditor bank for insolvent death of person {person_id}")
         unpaid = self._repay_deceased_debt_with_cash(person_id, max_unpaid=unpaid)
         self.write_off_deceased_debt(person_id, unpaid, bank_id)
         self.claims.clear_person_claims(person_id)
         self.estates.create_suspense_estate(person_id, 0.0, tick, household_id=sheet.household_id)
+
+    def _creditor_bank_for_person(self, person_id: int, household_id: int) -> str | None:
+        bank_id = self.person_creditor_bank.get(int(person_id))
+        if bank_id is not None:
+            return bank_id
+        if self.econ is None:
+            return None
+        account_id = self.household_to_account.get(int(household_id))
+        if account_id is None:
+            return None
+        bank = None
+        bank_of = getattr(self.econ, "_bank_of", None)
+        if isinstance(bank_of, dict):
+            bank = bank_of.get(account_id)
+        if bank is None and getattr(self.econ, "banks", None):
+            try:
+                from macro_sim.systems.banking import bank_for
+
+                bank = bank_for(self.econ, account_id)
+            except (AttributeError, KeyError):
+                bank = None
+        bank_id = getattr(bank, "id", None)
+        if bank_id is not None:
+            self.person_creditor_bank[int(person_id)] = bank_id
+        return bank_id
 
     def _repay_deceased_debt_with_cash(self, person_id: int, *, max_unpaid: float) -> float:
         sheet = self.claims.balance_sheet(person_id)
@@ -601,8 +655,35 @@ class DemographicEconomicBridge:
         old_account = self.household_to_account.get(old_household_id)
         new_account = self._ensure_household_account(household_id)
         if old_account is not None and self.econ is not None:
+            self._normalize_household_cash_claims_to_deposits(old_household_id, old_account)
             self._move_person_aggregate_claims(person_id, old_account, new_account)
         self.claims.set_household(person_id, household_id)
+
+    def _normalize_household_cash_claims_to_deposits(self, household_id: int, account_id: str) -> None:
+        if self.econ is None or getattr(self.econ, "ledger", None) is None:
+            return
+        member_ids = self.claims.members_of_household(household_id)
+        if not member_ids:
+            return
+        deposits = max(0.0, float(self.econ.ledger.balance(account_id)))
+        positives = {
+            person_id: max(0.0, float(self.claims.balance_sheet(person_id).cash_claim))
+            for person_id in member_ids
+        }
+        positive_total = sum(positives.values())
+        allocated = 0.0
+        if positive_total > 0.0:
+            for person_id in member_ids[:-1]:
+                share = deposits * positives[person_id] / positive_total
+                self.claims.balance_sheet(person_id).cash_claim = share
+                allocated += share
+            self.claims.balance_sheet(member_ids[-1]).cash_claim = deposits - allocated
+            return
+        share = deposits / len(member_ids)
+        for person_id in member_ids[:-1]:
+            self.claims.balance_sheet(person_id).cash_claim = share
+            allocated += share
+        self.claims.balance_sheet(member_ids[-1]).cash_claim = deposits - allocated
 
     def _move_person_aggregate_claims(self, person_id: int, old_account: str, new_account: str) -> None:
         if old_account == new_account or self.econ is None:
@@ -616,7 +697,10 @@ class DemographicEconomicBridge:
 
         debt = float(sheet.debt_claim)
         if debt > 0.0 and hasattr(self.econ.ledger, "transfer_debt"):
+            old_debt_total = max(0.0, float(self.econ.ledger.debt(old_account)))
             self.econ.ledger.transfer_debt(old_account, new_account, debt)
+            if old_debt_total > 0.0:
+                self._move_margin_debt_shadow(old_account, new_account, debt / old_debt_total)
 
         for asset_id, amount in list(sheet.equity_claims.items()):
             if amount == 0.0:
@@ -645,6 +729,21 @@ class DemographicEconomicBridge:
         household.holdings[asset_id] = household.holdings.get(asset_id, 0.0) + float(delta)
         if abs(household.holdings[asset_id]) <= 1e-9:
             household.holdings.pop(asset_id, None)
+
+    def _move_margin_debt_shadow(self, old_account: str, new_account: str, fraction: float) -> None:
+        fraction = max(0.0, min(1.0, float(fraction)))
+        if fraction <= 0.0:
+            return
+        old_household = self._household_agent(old_account)
+        new_household = self._household_agent(new_account)
+        if old_household is None or new_household is None:
+            return
+        old_margin_debt = max(0.0, float(getattr(old_household, "margin_debt", 0.0)))
+        if old_margin_debt <= 0.0:
+            return
+        moved = old_margin_debt * fraction
+        old_household.margin_debt = max(0.0, old_margin_debt - moved)
+        new_household.margin_debt = max(0.0, float(getattr(new_household, "margin_debt", 0.0))) + moved
 
     def _move_bond_lots(self, old_account: str, new_account: str, face_amount: float) -> None:
         if self.econ is None or face_amount <= 0.0:
@@ -766,6 +865,23 @@ class DemographicEconomicBridge:
             "bond_face": float(sheet.bond_face_claim),
             "bank_equity": dict(sheet.bank_equity_claims),
         }
+
+    def _retained_estate_required(self, package: dict[str, Any]) -> bool:
+        return (
+            float(package["bond_face"]) != 0.0
+            or any(float(amount) != 0.0 for amount in package["equity"].values())
+            or any(float(amount) != 0.0 for amount in package["bank_equity"].values())
+        )
+
+    def _package_net_worth(self, package: dict[str, Any]) -> float:
+        return max(
+            0.0,
+            float(package["cash"])
+            + float(package["bond_face"])
+            + sum(float(amount) for amount in package["equity"].values())
+            + sum(float(amount) for amount in package["bank_equity"].values())
+            - float(package["debt"]),
+        )
 
     def _transfer_claim_package(
         self,

@@ -283,15 +283,17 @@ class PersonClaimLedger:
             )
         actual_holdings: dict[str, float] = {}
         for sheet in members:
-            if abs(sheet.bond_face_claim) > CLAIM_TOL:
-                actual_holdings["__bond_face__"] = actual_holdings.get("__bond_face__", 0.0) + sheet.bond_face_claim
+            actual_holdings["__bond_face__"] = actual_holdings.get("__bond_face__", 0.0) + sheet.bond_face_claim
             for asset_id, amount in sheet.equity_claims.items():
-                if abs(amount) > CLAIM_TOL:
-                    actual_holdings[asset_id] = actual_holdings.get(asset_id, 0.0) + amount
+                actual_holdings[asset_id] = actual_holdings.get(asset_id, 0.0) + amount
             for bank_id, amount in sheet.bank_equity_claims.items():
-                if abs(amount) > CLAIM_TOL:
-                    asset_id = f"__bank_equity__:{bank_id}"
-                    actual_holdings[asset_id] = actual_holdings.get(asset_id, 0.0) + amount
+                asset_id = f"__bank_equity__:{bank_id}"
+                actual_holdings[asset_id] = actual_holdings.get(asset_id, 0.0) + amount
+        actual_holdings = {
+            asset_id: amount
+            for asset_id, amount in actual_holdings.items()
+            if abs(amount) > CLAIM_TOL
+        }
 
         for asset_id in set(holdings) | set(actual_holdings):
             expected = holdings.get(asset_id, 0.0)

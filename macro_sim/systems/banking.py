@@ -200,6 +200,8 @@ def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> None:
         household = econ._hh_by_id.get(household_id)
         if household is None:
             continue
+        if bridge is not None and not bridge.household_has_living_members(household.id):
+            continue
         amount = min(payable * shares / total, econ.ledger.balance(bank.id))
         if amount > EPS:
             econ.ledger.transfer(bank.id, household.id, amount)

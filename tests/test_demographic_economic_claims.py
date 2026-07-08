@@ -53,6 +53,20 @@ def test_claim_identity_rejects_unbacked_cash():
         )
 
 
+def test_claim_identity_sums_tiny_person_holdings_before_tolerance_filtering():
+    claims = PersonClaimLedger()
+    for person_id in range(8):
+        claims.add_person(person_id, household_id=10)
+        claims.balance_sheet(person_id).bank_equity_claims["BANK_2"] = 2.5e-8
+
+    claims.assert_household_claim_identity(
+        household_id=10,
+        deposits=0.0,
+        debt=0.0,
+        holdings={"__bank_equity__:BANK_2": 2.0e-7},
+    )
+
+
 def test_claim_ledger_posts_household_flows_to_people_without_changing_total_net_worth():
     claims = PersonClaimLedger()
     claims.add_person(1, household_id=10, cash_claim=30.0)

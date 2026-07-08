@@ -13,9 +13,17 @@ def _household_labor_supply(econ: Any, household: Any) -> float:
     return bridge.household_labor_supply(household.id) if bridge is not None else 1.0
 
 
+def _flow_households(econ: Any) -> list[Any]:
+    bridge = getattr(econ, "demographic_bridge", None)
+    if bridge is None:
+        return list(econ.households)
+    return [household for household in econ.households if bridge.household_has_living_members(household.id)]
+
+
 def run_settlement_phase(econ: Any) -> None:
     cfg = econ.cfg.settlement
-    n_h = len(econ.households)
+    flow_households = _flow_households(econ)
+    n_h = len(flow_households)
     pol, gov = econ.policy, cfg.government
     econ._tax_profit = econ._tax_income = econ._tax_wealth = econ._benefit_paid = 0.0
     econ._jg_spending = econ._jg_capital_units = econ._jg_employment = 0.0   # v9.3 job guarantee
@@ -45,11 +53,11 @@ def run_settlement_phase(econ: Any) -> None:
 
     # (ii) distribute the CLEARING pool to households. The last recipient absorbs float remainder.
     econ._dividends_paid = total_div
-    if total_div > EPS:
+    if total_div > EPS and n_h > 0:
         bridge = getattr(econ, "demographic_bridge", None)
         if cfg.pro_rata_dividends and cfg.per_firm_equity:
             so = {f.id: f.shares_outstanding for f in econ.c_firms}
-            for h in econ.households:
+            for h in flow_households:
                 amt = 0.0
                 for fid, sh in h.holdings.items():
                     pay, tot = div_by_firm.get(fid, 0.0), so.get(fid, 0.0)
@@ -63,12 +71,12 @@ def run_settlement_phase(econ: Any) -> None:
             residual = econ.ledger.balance("CLEARING")
             if residual > EPS:
                 share = residual / n_h
-                for h in econ.households[:-1]:
+                for h in flow_households[:-1]:
                     econ.ledger.transfer("CLEARING", h.id, share)
                     if bridge is not None:
                         bridge.post_capital_income(h.id, share)
                     h.income_realized += share
-                last = econ.households[-1]
+                last = flow_households[-1]
                 rem = econ.ledger.balance("CLEARING")
                 if rem > EPS:
                     econ.ledger.transfer("CLEARING", last.id, rem)
@@ -77,12 +85,12 @@ def run_settlement_phase(econ: Any) -> None:
                     last.income_realized += rem
         else:
             share = total_div / n_h
-            for h in econ.households[:-1]:
+            for h in flow_households[:-1]:
                 econ.ledger.transfer("CLEARING", h.id, share)
                 if bridge is not None:
                     bridge.post_capital_income(h.id, share)
                 h.income_realized += share
-            last = econ.households[-1]
+            last = flow_households[-1]
             remainder = econ.ledger.balance("CLEARING")
             if remainder > EPS:
                 econ.ledger.transfer("CLEARING", last.id, remainder)
@@ -108,7 +116,7 @@ def run_settlement_phase(econ: Any) -> None:
 
 def run_household_fiscal_phase(econ: Any) -> None:
     cfg = econ.cfg.settlement
-    pol, led, hh = econ.policy, econ.ledger, econ.households
+    pol, led, hh = econ.policy, econ.ledger, _flow_households(econ)
     n_h = len(hh)
     bridge = getattr(econ, "demographic_bridge", None)
 

@@ -17,6 +17,13 @@ from macro_sim.systems.banking import (
 )
 
 
+def _flow_households(econ: Any) -> list[Any]:
+    bridge = getattr(econ, "demographic_bridge", None)
+    if bridge is None:
+        return list(econ.households)
+    return [household for household in econ.households if bridge.household_has_living_members(household.id)]
+
+
 def run_credit_phase(econ: Any) -> None:
     """Firms and households borrow before markets clear."""
     cfg = econ.cfg.credit
@@ -47,7 +54,7 @@ def run_credit_phase(econ: Any) -> None:
     econ._hh_credit_new = 0.0
     if cfg.household_credit:
         bridge = getattr(econ, "demographic_bridge", None)
-        for h in econ.households:
+        for h in _flow_households(econ):
             deposits = econ.ledger.balance(h.id)
             target, requested = B.household_credit_request(h, deposits, cfg.hh_subsistence)
             h.consumption_budget = target
@@ -86,7 +93,7 @@ def run_debt_service_phase(econ: Any) -> None:
     econ._hh_interest = econ._hh_principal = 0.0
     if cfg.household_credit or cfg.margin_credit:
         bridge = getattr(econ, "demographic_bridge", None)
-        for h in econ.households:
+        for h in _flow_households(econ):
             debt = econ.ledger.debt(h.id)
             if debt <= EPS:
                 continue
@@ -127,7 +134,7 @@ def run_debt_service_phase(econ: Any) -> None:
             bridge = getattr(econ, "demographic_bridge", None)
             own = [
                 (h, max(0.0, econ.ledger.balance(h.id)))
-                for h in econ.households
+                for h in _flow_households(econ)
                 if bank_for(econ, h.id).id == bk.id
             ]
             total_dep = sum(d for _, d in own)
@@ -141,10 +148,11 @@ def run_debt_service_phase(econ: Any) -> None:
                         h.income_realized += amt
         elif cfg.interest_by_deposits:
             bridge = getattr(econ, "demographic_bridge", None)
-            dep = {h.id: max(0.0, econ.ledger.balance(h.id)) for h in econ.households}
+            households = _flow_households(econ)
+            dep = {h.id: max(0.0, econ.ledger.balance(h.id)) for h in households}
             total_dep = sum(dep.values())
             if total_dep > EPS:
-                for h in econ.households:
+                for h in households:
                     amt = min(payable * dep[h.id] / total_dep, econ.ledger.balance(bk.id))
                     if amt > EPS:
                         econ.ledger.transfer(bk.id, h.id, amt)
@@ -153,11 +161,13 @@ def run_debt_service_phase(econ: Any) -> None:
                         h.income_realized += amt
         else:
             bridge = getattr(econ, "demographic_bridge", None)
-            share = payable / len(econ.households)
-            for h in econ.households:
-                econ.ledger.transfer(bk.id, h.id, share)
-                if bridge is not None:
-                    bridge.post_capital_income(h.id, share)
-                h.income_realized += share
+            households = _flow_households(econ)
+            if households:
+                share = payable / len(households)
+                for h in households:
+                    econ.ledger.transfer(bk.id, h.id, share)
+                    if bridge is not None:
+                        bridge.post_capital_income(h.id, share)
+                    h.income_realized += share
 
     update_bank_valuation(econ)

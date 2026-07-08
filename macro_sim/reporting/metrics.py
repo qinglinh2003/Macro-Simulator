@@ -1025,6 +1025,101 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "lolr_advances": float(getattr(econ, "_lolr_advances", 0.0)),  # cumulative emergency reserves lent
             "reserve_M": float(getattr(econ.ledger, "_reserve_M", 0.0)),   # base money (now VARIABLE under OMO/QE)
         })
+
+    # ------------------------------------------------------------------
+    # v13 demographic denominators and per-capita observables.
+    # Observation only: these normalize already-recorded stocks/flows by
+    # population, adults, or working-age people. They do not feed behavior.
+    # ------------------------------------------------------------------
+    state = getattr(econ, "demographic_state", None)
+    if state is not None:
+        alive_people = [person for person in getattr(state, "people", []) if getattr(person, "alive", True)]
+        population_alive = float(len(alive_people))
+        child_population = float(sum(1 for person in alive_people if int(person.age) < 18))
+        working_age_population = float(sum(1 for person in alive_people if 18 <= int(person.age) < 65))
+        elder_population = float(sum(1 for person in alive_people if int(person.age) >= 65))
+        adult_population = working_age_population
+        current_demo_tick = int(getattr(state, "tick_index", econ.t))
+        births_tick = float(sum(1 for event in getattr(state, "birth_events", []) if event.tick == current_demo_tick))
+        deaths_tick = float(sum(1 for event in getattr(state, "death_events", []) if event.tick == current_demo_tick))
+        marriages_tick = float(sum(1 for event in getattr(state, "marriage_events", []) if event.tick == current_demo_tick))
+        divorces_tick = float(sum(1 for event in getattr(state, "divorce_events", []) if event.tick == current_demo_tick))
+        leaving_home_tick = float(sum(
+            1 for event in getattr(state, "leaving_home_events", []) if event.tick == current_demo_tick
+        ))
+        married_share = _safe_ratio(
+            float(sum(1 for person in alive_people if getattr(person, "partner_id", None) is not None)),
+            population_alive,
+        )
+        orphan_count = float(sum(
+            1
+            for person in alive_people
+            if int(person.age) < 18
+            and person.household_id == getattr(state, "public_guardian_household_id", None)
+        ))
+        minor_household_missing = float(sum(
+            1
+            for person in alive_people
+            if int(person.age) < 18 and getattr(person, "household_id", None) is None
+        ))
+    else:
+        population_alive = float(n_h)
+        child_population = 0.0
+        working_age_population = float(n_h)
+        elder_population = 0.0
+        adult_population = float(n_h)
+        births_tick = deaths_tick = marriages_tick = divorces_tick = leaving_home_tick = 0.0
+        married_share = orphan_count = minor_household_missing = 0.0
+
+    household_count = rec.get("demographic_households", float(n_h))
+    total_dependency = _safe_ratio(child_population + elder_population, adult_population)
+    rec.update({
+        "population_alive": population_alive,
+        "child_population": child_population,
+        "adult_population": adult_population,
+        "working_age_population": working_age_population,
+        "elder_population": elder_population,
+        "child_share": _safe_ratio(child_population, population_alive),
+        "adult_share": _safe_ratio(adult_population, population_alive),
+        "working_age_share": _safe_ratio(working_age_population, population_alive),
+        "elder_share": _safe_ratio(elder_population, population_alive),
+        "dependency_ratio": total_dependency,
+        "youth_dependency_ratio": _safe_ratio(child_population, adult_population),
+        "old_age_dependency_ratio": _safe_ratio(elder_population, adult_population),
+        "avg_household_size": _safe_ratio(population_alive, household_count),
+        "married_share": married_share,
+        "orphan_count": orphan_count,
+        "minor_household_missing": minor_household_missing,
+        "births_tick": births_tick,
+        "deaths_tick": deaths_tick,
+        "marriages_tick": marriages_tick,
+        "divorces_tick": divorces_tick,
+        "leaving_home_tick": leaving_home_tick,
+        "birth_rate_per_1000_annualized": _safe_ratio(births_tick * 365_000.0, population_alive),
+        "death_rate_per_1000_annualized": _safe_ratio(deaths_tick * 365_000.0, population_alive),
+        "net_population_growth_rate_annualized": _safe_ratio((births_tick - deaths_tick) * 365.0, population_alive),
+        "real_output_per_capita": _safe_ratio(rec.get("real_output", 0.0), population_alive),
+        "real_consumption_per_capita": _safe_ratio(rec.get("real_consumption", 0.0), population_alive),
+        "nominal_output_per_capita": _safe_ratio(rec.get("nominal_output", 0.0), population_alive),
+        "household_income_per_capita": _safe_ratio(rec.get("hh_income", 0.0), population_alive),
+        "household_saving_per_capita": _safe_ratio(rec.get("hh_saving", 0.0), population_alive),
+        "money_per_capita": _safe_ratio(rec.get("total_money", 0.0), population_alive),
+        "private_nfa_per_capita": _safe_ratio(rec.get("net_worth", float(getattr(led, "net_worth", 0.0))), population_alive),
+        "household_net_worth_per_capita": _safe_ratio(rec.get("hh_full_networth_total", 0.0), population_alive),
+        "gross_household_assets_per_capita": _safe_ratio(rec.get("gross_household_assets_total", 0.0), population_alive),
+        "household_debt_per_capita": _safe_ratio(
+            rec.get("household_debt_total", rec.get("household_debt_total_observed", 0.0)),
+            population_alive,
+        ),
+        "real_output_per_adult": _safe_ratio(rec.get("real_output", 0.0), adult_population),
+        "real_consumption_per_adult": _safe_ratio(rec.get("real_consumption", 0.0), adult_population),
+        "employment_per_adult": _safe_ratio(rec.get("employment", 0.0), adult_population),
+        "labor_supply_per_adult": _safe_ratio(rec.get("labor_supply", 0.0), adult_population),
+        "gov_spending_per_capita": _safe_ratio(rec.get("augmented_gov_spending", rec.get("gov_spending", 0.0)), population_alive),
+        "taxes_per_capita": _safe_ratio(rec.get("tax_total", 0.0), population_alive),
+        "mean_real_consumption_per_person": _safe_ratio(rec.get("real_household_consumption", 0.0), population_alive),
+        "orphan_support_per_child": _safe_ratio(rec.get("orphan_support_spending", 0.0), child_population),
+    })
     econ._prev_inflation = inflation          # v10: last tick's realised inflation feeds the Taylor EMA
     econ._prev_real_output = total_produced
     econ._prev_avg_wage = avg_wage
