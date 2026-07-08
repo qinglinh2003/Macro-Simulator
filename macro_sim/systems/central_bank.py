@@ -9,10 +9,14 @@ from macro_sim.markets.matching import EPS
 
 def set_policy_rate(econ: Any) -> None:
     cfg = econ.cfg.central_banking
+    pol = econ.policy
+    if pol.policy_rate_override is not None:
+        # the player hand-sets the rate (a manual hike/cut), bypassing the Taylor rule and the frozen fallback.
+        econ._rate = min(cfg.r_max, max(0.0, pol.policy_rate_override))
+        return
     if not cfg.central_bank:
         econ._rate = cfg.r_interest
         return
-    pol = econ.policy
     econ._infl_ema += cfg.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
     u_prev = getattr(econ, "_prev_u", cfg.u_natural)
     r_target = (
@@ -26,15 +30,17 @@ def set_policy_rate(econ: Any) -> None:
 
 def run_omo_phase(econ: Any) -> None:
     cfg = econ.cfg.central_banking
+    pol = econ.policy                    # v12.4: the OMO/QE stance is a LIVE, player-adjustable policy dial;
+    #                                      `bonds`/`interbank` (whether the machinery EXISTS) stay structural (Config).
     econ._omo_flow = 0.0
-    if not (cfg.omo and cfg.bonds and cfg.interbank):
+    if not (pol.omo and cfg.bonds and cfg.interbank):
         return
     banks = [b for b in econ.banks if b.alive]
     if not banks:
         return
-    target = cfg.omo_reserve_target * econ._reserve_M0
+    target = pol.omo_reserve_target * econ._reserve_M0
     current = sum(econ.ledger.reserves(b.id) for b in banks)
-    move = cfg.omo_drain_frac * (current - target)
+    move = pol.omo_drain_frac * (current - target)
     if move > EPS:
         pos = {b.id: econ.ledger.reserves(b.id) for b in banks if econ.ledger.reserves(b.id) > EPS}
         tot = sum(pos.values())

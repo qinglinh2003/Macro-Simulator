@@ -41,6 +41,14 @@ class Policy:
     taylor_phi_pi: float = 1.5           # φ_π: inflation response (>1 = Taylor principle)
     taylor_phi_u: float = 0.5            # φ_u: unemployment-gap response (0 = pure inflation targeter)
     rate_inertia: float = 0.8            # ρ: rate smoothing / gradualism
+    policy_rate_override: "float | None" = None  # if set, the CB uses THIS rate directly (a hand-set hike/cut by
+    #                                              the player), bypassing the Taylor rule; None ⇒ the rule decides
+
+    # -- monetary: quantity tools (v12.4 CB; the OMO/QE + LoLR live control surface) --
+    omo: bool = False                    # open-market operations on/off (the CB steers reserves)
+    omo_reserve_target: float = 0.0      # QE/QT stance: target Σ bank reserves as a FRACTION of genesis reserves
+    omo_drain_frac: float = 0.1          # per-tick fraction of the gap to the target moved (drain/inject speed)
+    lolr: bool = False                   # lender of last resort on/off (fund an illiquid-but-solvent bank in a run)
 
     # -- macroprudential (reclassified from Config; defaults preserve v8.5) --
     margin_ltv: float = 0.5              # household margin loan-to-value cap
@@ -70,6 +78,11 @@ class Policy:
             taylor_phi_pi=cfg.taylor_phi_pi,
             taylor_phi_u=cfg.taylor_phi_u,
             rate_inertia=cfg.rate_inertia,
+            # policy_rate_override stays None at t=0 (no hand-set rate until the player sets one)
+            omo=cfg.omo,
+            omo_reserve_target=cfg.omo_reserve_target,
+            omo_drain_frac=cfg.omo_drain_frac,
+            lolr=cfg.lolr,
             margin_ltv=cfg.margin_ltv,
             margin_max=cfg.margin_max,
             kappa=cfg.kappa,

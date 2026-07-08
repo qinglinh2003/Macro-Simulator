@@ -528,7 +528,7 @@ def run_bank_runs_phase(econ: Any) -> None:
             withdrawal = econ.ledger.balance(h.id)
             if withdrawal <= EPS:
                 continue
-            if liquid < withdrawal - EPS and cfg.lolr and bank_economic_capital(econ, bank) > EPS:
+            if liquid < withdrawal - EPS and econ.policy.lolr and bank_economic_capital(econ, bank) > EPS:
                 need = withdrawal - liquid
                 econ.ledger.issue_reserves(bank.id, need)
                 econ._lolr_advances += need
