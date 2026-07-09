@@ -196,6 +196,9 @@ class Economy:
         # v11: assign each borrower (firms + households) to a bank. n=1 ⇒ trivial (all → banks[0]); the
         # assignment runs ONLY when n>1 so it consumes no main-stream RNG at n=1 (bit-identical).
         self._bank_of: Dict = {}
+        # account -> settlement-node memo for the RTGS resolver (perf). Entries are dropped at every
+        # `_bank_of` write site, so a hit always equals what `settlement_node` would recompute.
+        self._node_of: Dict = {}
         self._bank_failures_total = 0            # v11: cumulative bank insolvencies
         # v11.3: per-bank loan-rate spread (mean-preserving) + a dedicated shopping RNG (no main-stream
         # perturbation). Off (or n=1) ⇒ all spreads 0 ⇒ every loan rate = the policy rate ⇒ bit-identical.

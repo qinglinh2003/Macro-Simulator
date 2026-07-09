@@ -153,6 +153,7 @@ def shop_bank(econ: Any, borrower_id, amount: float) -> None:
                 econ.ledger.balance(borrower_id) - econ.ledger.debt(borrower_id),
             )
         econ._bank_of[borrower_id] = best
+        econ._node_of.pop(borrower_id, None)
 
 
 def grant_loan(econ: Any, borrower_id, amount: float) -> float:
@@ -392,7 +393,17 @@ def enable_reserves(econ: Any) -> None:
         reserves[bank_for(econ, account.id).id] += econ.ledger.balance(account.id)
     reserves["CLEARING"] = 0.0
     reserves["CB"] = 0.0
-    econ.ledger.enable_reserves(lambda account_id: settlement_node(econ, account_id), reserves)
+    node_of = econ._node_of              # memo: resolution is stable between `_bank_of` writes, and
+    #                                      every write site drops its key, so a hit == a fresh resolve.
+
+    def resolver(account_id):
+        node = node_of.get(account_id)
+        if node is None:
+            node = settlement_node(econ, account_id)
+            node_of[account_id] = node
+        return node
+
+    econ.ledger.enable_reserves(resolver, reserves)
     econ._reserve_M0 = econ.ledger.total_reserves
 
 
@@ -413,6 +424,7 @@ def fail_bank(econ: Any, bank: Bank) -> None:
                     econ.ledger.balance(account_id) - econ.ledger.debt(account_id),
                 )
             econ._bank_of[account_id] = new_bank
+            econ._node_of.pop(account_id, None)
     if cfg.bank_resolution_fund:
         # v12.4-fix: a DEPOSIT-INSURANCE / RESOLUTION backstop. The STATE absorbs the failed bank's residual
         # negative capital (transfer fiscal→bank, A5-safe, financed into the deficit) instead of SOCIALISING the
@@ -477,6 +489,7 @@ def run_deposit_competition(econ: Any) -> None:
                 econ.ledger.balance(h.id) - econ.ledger.debt(h.id),
             )
             econ._bank_of[h.id] = best
+            econ._node_of.pop(h.id, None)
 
 
 def run_interbank_phase(econ: Any) -> None:
@@ -566,6 +579,7 @@ def run_bank_runs_phase(econ: Any) -> None:
             if liquid >= withdrawal - EPS:
                 econ.ledger.move_reserves(bank.id, safe.id, withdrawal)
                 econ._bank_of[h.id] = safe
+                econ._node_of.pop(h.id, None)
                 liquid -= withdrawal
                 econ._run_flight_volume += withdrawal
             else:

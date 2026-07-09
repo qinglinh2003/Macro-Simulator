@@ -124,6 +124,7 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
     econ.ledger.add_account(firm.id)
     if len(econ.banks) > 1:
         econ._bank_of[firm.id] = bank_for(econ, funder.id)
+        econ._node_of.pop(firm.id, None)
     econ.ledger.transfer(funder.id, firm.id, startup_deposits)
     bridge = getattr(econ, "demographic_bridge", None)
     econ.c_firms.append(firm)
