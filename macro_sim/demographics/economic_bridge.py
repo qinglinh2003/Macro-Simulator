@@ -48,6 +48,50 @@ class DemographicEconomicBridge:
 
     def __post_init__(self) -> None:
         self.account_to_household = {account: household for household, account in self.household_to_account.items()}
+        # Per-tick read caches over the demographic state. The demographic kernel owns all person
+        # mutations (deaths, marriages, guardianship moves), so the economy invalidates before the
+        # kernel runs and refreshes once after it; every economic phase then reads O(1) indexes
+        # instead of scanning `state.people` per household (the former O(N_households x N_people)
+        # per tick). While invalid (None), all lookups fall back to the original live scans.
+        self._people_by_household_index: dict[int, list[Any]] | None = None
+        self._person_by_id_index: dict[int, Any] | None = None
+        self._household_profiles_cache: dict[int, Any] | None = None
+        self._household_agent_by_account: dict[str, Any] = {}
+
+    def invalidate_people_index(self) -> None:
+        self._people_by_household_index = None
+        self._person_by_id_index = None
+        self._household_profiles_cache = None
+
+    def refresh_people_index(self) -> None:
+        """Rebuild person indexes from the live demographic state.
+
+        Call only when the demographic state is frozen for the rest of the tick
+        (after the kernel tick + household transitions). Order inside each
+        household list is `state.people` order, matching the live-scan filter.
+        """
+        state = self._demographic_state_ref()
+        self._household_profiles_cache = None
+        if state is None:
+            self._people_by_household_index = None
+            self._person_by_id_index = None
+            return
+        by_household: dict[int, list[Any]] = {}
+        by_id: dict[int, Any] = {}
+        for person in getattr(state, "people", []):
+            by_id[int(person.id)] = person
+            if getattr(person, "alive", True):
+                household_id = getattr(person, "household_id", None)
+                if household_id is not None:
+                    by_household.setdefault(int(household_id), []).append(person)
+        self._people_by_household_index = by_household
+        self._person_by_id_index = by_id
+
+    def _demographic_state_ref(self) -> Any | None:
+        state = getattr(self, "demographic_state", None)
+        if state is None and self.econ is not None:
+            state = getattr(self.econ, "demographic_state", None)
+        return state
 
     def account_for_household_id(self, household_id: int) -> str:
         return self.household_to_account[int(household_id)]
@@ -59,12 +103,13 @@ class DemographicEconomicBridge:
         econ = econ or self.econ
         if econ is None:
             raise RuntimeError("economic ledger is required for claim identity checks")
+        bond_face_by_holder = self._bond_face_by_holder(econ)
         for household_id, account_id in self.household_to_account.items():
             self.claims.assert_household_claim_identity(
                 household_id,
                 deposits=econ.ledger.balance(account_id),
                 debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id),
+                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
             )
 
     def reconcile_financial_claims_from_economy(self, econ: Any | None = None) -> None:
@@ -78,6 +123,7 @@ class DemographicEconomicBridge:
         econ = econ or self.econ
         if econ is None:
             raise RuntimeError("economic ledger is required for claim reconciliation")
+        bond_face_by_holder = self._bond_face_by_holder(econ)
         for household_id, account_id in self.household_to_account.items():
             estate_suspense = self.claims.estate_suspense_by_household.get(household_id, 0.0)
             self.claims.reset_household_financial_claims(
@@ -85,7 +131,7 @@ class DemographicEconomicBridge:
                 owner_ids=self._claim_owner_ids(household_id),
                 cash=econ.ledger.balance(account_id) - estate_suspense,
                 debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id),
+                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
             )
 
     def household_labor_supply(self, account_id: str) -> float:
@@ -200,12 +246,16 @@ class DemographicEconomicBridge:
 
     def household_profile(self, account_id: str):
         household_id = self.household_id_for_account(account_id)
-        state = getattr(self, "demographic_state", None)
-        if state is None and self.econ is not None:
-            state = getattr(self.econ, "demographic_state", None)
-        if state is None:
-            raise RuntimeError("demographic state is required for household profiles")
-        profiles = build_household_economic_profiles(state, self.claims)
+        profiles = self._household_profiles_cache
+        if profiles is None:
+            state = self._demographic_state_ref()
+            if state is None:
+                raise RuntimeError("demographic state is required for household profiles")
+            profiles = build_household_economic_profiles(state, self.claims)
+            # Only memoize while the per-tick people index is valid (state frozen); during the
+            # demographic-kernel window every call rebuilds from the live state, as before.
+            if self._people_by_household_index is not None:
+                self._household_profiles_cache = profiles
         if household_id in profiles:
             return profiles[household_id]
         return HouseholdEconomicProfile(
@@ -341,17 +391,20 @@ class DemographicEconomicBridge:
         return ChildCostAllocation(child_id=int(child_id), parent_charges={}, public_charge=total)
 
     def on_birth(self, event: Any, newborn: Any) -> None:
+        self.invalidate_people_index()
         household_id = int(newborn.household_id)
         if not self.claims.has_person(int(newborn.id)):
             self.claims.add_person(int(newborn.id), household_id=household_id)
 
     def on_marriage(self, event: Any) -> None:
+        self.invalidate_people_index()
         self._sync_demographic_household(int(event.household_id))
         key = self._marriage_key(int(event.spouse_a_id), int(event.spouse_b_id))
         if key not in self.marriage_contracts:
             self.marriage_contracts[key] = record_marriage_contract(event, self.claims)
 
     def on_divorce(self, event: Any) -> None:
+        self.invalidate_people_index()
         key = self._marriage_key(int(event.spouse_a_id), int(event.spouse_b_id))
         contract = self.marriage_contracts.pop(key, None)
         if contract is not None:
@@ -381,6 +434,7 @@ class DemographicEconomicBridge:
         self.death_writeoff_flow += amount
 
     def on_death(self, event: Any, dead_person: Any) -> None:
+        self.invalidate_people_index()   # alive-status changed; re-scan live until the next refresh
         person_id = int(dead_person.id)
         if not self.claims.has_person(person_id):
             self.claims.add_person(person_id, household_id=int(dead_person.household_id or 0))
@@ -409,7 +463,7 @@ class DemographicEconomicBridge:
                 return
             estate_value = assets - debt
             household_id = sheet.household_id
-            self.claims.clear_person_claims(person_id)
+            self._clear_deceased_claims(person_id, household_id)
             estate = self.estates.create_suspense_estate(person_id, estate_value, tick, household_id=household_id)
             self.claims.register_estate_suspense(estate.net_worth, household_id=household_id)
             return
@@ -420,7 +474,7 @@ class DemographicEconomicBridge:
             raise RuntimeError(f"missing creditor bank for insolvent death of person {person_id}")
         unpaid = self._repay_deceased_debt_with_cash(person_id, max_unpaid=unpaid)
         self.write_off_deceased_debt(person_id, unpaid, bank_id)
-        self.claims.clear_person_claims(person_id)
+        self._clear_deceased_claims(person_id, sheet.household_id)
         self.estates.create_suspense_estate(person_id, 0.0, tick, household_id=sheet.household_id)
 
     def _creditor_bank_for_person(self, person_id: int, household_id: int) -> str | None:
@@ -474,10 +528,65 @@ class DemographicEconomicBridge:
         total += max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
         return total
 
+    def _clear_deceased_claims(self, person_id: int, household_id: int) -> None:
+        self._absorb_negative_cash_claim(person_id, household_id)
+        self._transfer_residual_asset_claims_to_household_claimants(person_id, household_id)
+        self.claims.clear_person_claims(person_id)
+
+    def _absorb_negative_cash_claim(self, person_id: int, household_id: int) -> None:
+        sheet = self.claims.balance_sheet(person_id)
+        burden = max(0.0, -float(sheet.cash_claim))
+        if burden <= 0.0:
+            return
+        positive_claimants: list[tuple[int, float]] = []
+        for other_id in self.claims.members_of_household(int(household_id)):
+            if int(other_id) == int(person_id):
+                continue
+            cash = max(0.0, float(self.claims.balance_sheet(other_id).cash_claim))
+            if cash > 0.0:
+                positive_claimants.append((int(other_id), cash))
+        total_positive = sum(cash for _, cash in positive_claimants)
+        if total_positive <= 0.0:
+            return
+        absorbed = min(burden, total_positive)
+        for other_id, cash in positive_claimants:
+            self.claims.balance_sheet(other_id).cash_claim -= absorbed * cash / total_positive
+        sheet.cash_claim += absorbed
+
+    def _transfer_residual_asset_claims_to_household_claimants(self, person_id: int, household_id: int) -> None:
+        recipients = [
+            int(other_id)
+            for other_id in self.claims.members_of_household(int(household_id))
+            if int(other_id) != int(person_id)
+        ]
+        if not recipients:
+            return
+        sheet = self.claims.balance_sheet(person_id)
+        share = 1.0 / len(recipients)
+        for asset_id, amount in list(sheet.equity_claims.items()):
+            if amount == 0.0:
+                continue
+            moved = float(amount) * share
+            for recipient_id in recipients:
+                target = self.claims.balance_sheet(recipient_id)
+                target.equity_claims[asset_id] = target.equity_claims.get(asset_id, 0.0) + moved
+        if sheet.bond_face_claim:
+            moved = float(sheet.bond_face_claim) * share
+            for recipient_id in recipients:
+                self.claims.balance_sheet(recipient_id).bond_face_claim += moved
+        for bank_id, amount in list(sheet.bank_equity_claims.items()):
+            if amount == 0.0:
+                continue
+            moved = float(amount) * share
+            for recipient_id in recipients:
+                target = self.claims.balance_sheet(recipient_id)
+                target.bank_equity_claims[bank_id] = target.bank_equity_claims.get(bank_id, 0.0) + moved
+
     def _people_by_household(self, household_id: int) -> list[Any] | None:
-        state = getattr(self, "demographic_state", None)
-        if state is None:
-            state = getattr(self.econ, "demographic_state", None) if self.econ is not None else None
+        index = self._people_by_household_index
+        if index is not None:
+            return index.get(int(household_id), [])
+        state = self._demographic_state_ref()
         if state is None:
             return None
         return [
@@ -487,9 +596,10 @@ class DemographicEconomicBridge:
         ]
 
     def _person_by_id(self, person_id: int) -> Any | None:
-        state = getattr(self, "demographic_state", None)
-        if state is None:
-            state = getattr(self.econ, "demographic_state", None) if self.econ is not None else None
+        index = self._person_by_id_index
+        if index is not None:
+            return index.get(int(person_id))
+        state = self._demographic_state_ref()
         if state is None:
             return None
         for person in getattr(state, "people", []):
@@ -498,9 +608,10 @@ class DemographicEconomicBridge:
         return None
 
     def _people_by_id(self) -> dict[int, Any]:
-        state = getattr(self, "demographic_state", None)
-        if state is None:
-            state = getattr(self.econ, "demographic_state", None) if self.econ is not None else None
+        index = self._person_by_id_index
+        if index is not None:
+            return index
+        state = self._demographic_state_ref()
         if state is None:
             return {}
         return {int(person.id): person for person in getattr(state, "people", [])}
@@ -592,12 +703,21 @@ class DemographicEconomicBridge:
     def _household_agent(self, account_id: str) -> Any | None:
         if self.econ is None:
             return None
+        agent = self._household_agent_by_account.get(account_id)
+        if agent is not None:
+            return agent
         for household in getattr(self.econ, "households", []):
             if getattr(household, "id", None) == account_id:
+                self._household_agent_by_account[account_id] = household
                 return household
         return None
 
-    def _household_asset_claim_targets(self, econ: Any, account_id: str) -> dict[str, float]:
+    def _household_asset_claim_targets(
+        self,
+        econ: Any,
+        account_id: str,
+        bond_face_by_holder: dict[Any, float] | None = None,
+    ) -> dict[str, float]:
         targets: dict[str, float] = {}
         household = self._household_agent(account_id)
         if household is not None:
@@ -606,11 +726,14 @@ class DemographicEconomicBridge:
             for asset_id, shares in (getattr(household, "holdings", {}) or {}).items():
                 if abs(float(shares)) > 0.0:
                     targets[str(asset_id)] = float(shares)
-        bond_face = sum(
-            float(lot.get("face", 0.0))
-            for lot in (getattr(econ, "_bonds", []) or [])
-            if lot.get("holder") == account_id
-        )
+        if bond_face_by_holder is not None:
+            bond_face = bond_face_by_holder.get(account_id, 0.0)
+        else:
+            bond_face = sum(
+                float(lot.get("face", 0.0))
+                for lot in (getattr(econ, "_bonds", []) or [])
+                if lot.get("holder") == account_id
+            )
         if abs(bond_face) > 0.0:
             targets[BOND_FACE_CLAIM_ID] = bond_face
         for bank in getattr(econ, "banks", []) or []:
@@ -618,6 +741,16 @@ class DemographicEconomicBridge:
             if abs(shares) > 0.0:
                 targets[f"{BANK_EQUITY_CLAIM_PREFIX}{bank.id}"] = shares
         return targets
+
+    @staticmethod
+    def _bond_face_by_holder(econ: Any) -> dict[Any, float]:
+        """One pass over the bond lots, grouped by holder. Per-holder accumulation follows lot
+        order, so each holder's sum is bit-identical to the per-account scan it replaces."""
+        faces: dict[Any, float] = {}
+        for lot in getattr(econ, "_bonds", []) or []:
+            holder = lot.get("holder")
+            faces[holder] = faces.get(holder, 0.0) + float(lot.get("face", 0.0))
+        return faces
 
     def _ensure_household_account(self, household_id: int) -> str:
         household_id = int(household_id)
@@ -631,7 +764,9 @@ class DemographicEconomicBridge:
             idx += 1
             account_id = f"H{idx}"
         self.econ.ledger.add_account(account_id)
-        self.econ.households.append(self._new_household_agent(account_id, idx))
+        agent = self._new_household_agent(account_id, idx)
+        self.econ.households.append(agent)
+        self._household_agent_by_account[account_id] = agent
         self.household_to_account[household_id] = account_id
         self.account_to_household[account_id] = household_id
         return account_id
@@ -657,6 +792,7 @@ class DemographicEconomicBridge:
                 self._sync_person_to_household(int(person.id), household_id)
 
     def _sync_person_to_household(self, person_id: int, household_id: int) -> None:
+        self.invalidate_people_index()   # person membership is changing; re-scan live until refresh
         if not self.claims.has_person(person_id):
             self.claims.add_person(person_id, household_id=household_id)
             return
@@ -1078,6 +1214,7 @@ def initialize_person_claims_from_households(
             holdings=bridge._household_asset_claim_targets(econ, account_id),
         )
 
+    bridge.refresh_people_index()        # genesis state is final here; spouse lookups below are O(1)
     registered: set[frozenset[int]] = set()
     for person in getattr(demographic_state, "people"):
         if not getattr(person, "alive", True) or getattr(person, "partner_id", None) is None:

@@ -292,8 +292,13 @@ class Economy:
                                if self.cfg.public_capital_gamma > 0.0 else 1.0)
         run_bill_maturity_phase(self)     # v12.1 only; one-period bills mature to deposits BEFORE planning (no-op off)
         if self.demographic_kernel is not None:
+            # The kernel window mutates people (deaths/marriages/guardianship moves), so the bridge
+            # falls back to live scans inside it; afterwards the state is frozen for the rest of the
+            # tick and every economic phase reads the rebuilt O(1) person indexes.
+            self.demographic_bridge.invalidate_people_index()
             self.demographic_kernel.tick(self.demographic_state, economic_state=self.demographic_bridge)
             self._run_demographic_household_transitions()
+            self.demographic_bridge.refresh_people_index()
         run_planning_phase(self)
         apply_gibrat_shock(self)          # v8.1 only; multiplicative market-share drift (no-op off)
         run_credit_phase(self)            # v3 only; no-op when banks disabled
