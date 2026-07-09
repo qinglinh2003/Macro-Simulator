@@ -226,6 +226,121 @@ def test_bond_redemption_reduces_existing_bond_claim_holders_without_negative_cl
     bridge.assert_all_claim_identities(econ)
 
 
+def test_equity_sale_reduces_existing_share_claim_holders_without_negative_claims():
+    ledger = Ledger({"H0": 100.0, "CLEARING": 10.0, "BANK_0": 50.0})
+    household = _HouseholdStub("H0", holdings={"F1": 10.0})
+    econ = _EconStub(households=[household], ledger=ledger, equity=object())
+    p1 = _person(1, 40, household_id=0)
+    p2 = _person(2, 38, household_id=0)
+    state = _DemographicStateStub(people=[p1, p2])
+    bridge = initialize_person_claims_from_households(econ, state)
+    p1.alive = False
+    bridge.refresh_people_index()
+
+    ledger.transfer("CLEARING", "H0", 10.0)
+    household.holdings["F1"] = 0.0
+    bridge.post_household_equity_trade("H0", "F1", cash_delta=10.0, share_delta=-10.0)
+
+    assert bridge.claims.balance_sheet(1).equity_claims.get("F1", 0.0) == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).equity_claims.get("F1", 0.0) == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).equity_claims.get("F1", 0.0) >= 0.0
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bank_equity_sale_reduces_existing_share_claim_holders_without_negative_claims():
+    ledger = Ledger({"H0": 100.0, "CLEARING": 10.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.owners = {"H0": 10.0}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    p1 = _person(1, 40, household_id=0)
+    p2 = _person(2, 38, household_id=0)
+    state = _DemographicStateStub(people=[p1, p2])
+    bridge = initialize_person_claims_from_households(econ, state)
+    p1.alive = False
+    bridge.refresh_people_index()
+
+    ledger.transfer("CLEARING", "H0", 10.0)
+    bank.owners["H0"] = 0.0
+    bridge.post_household_bank_equity_trade("H0", "BANK_0", cash_delta=10.0, share_delta=-10.0)
+
+    assert bridge.claims.balance_sheet(1).bank_equity_claims.get("BANK_0", 0.0) == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).bank_equity_claims.get("BANK_0", 0.0) == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).bank_equity_claims.get("BANK_0", 0.0) >= 0.0
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bridge_identity_ignores_sub_micro_bank_equity_owner_dust():
+    ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {"H0": 5e-5}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    state = _DemographicStateStub(people=[_person(1, 40, household_id=0)])
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.claims.balance_sheet(1).bank_equity_claims.clear()
+
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bridge_identity_ignores_sub_micro_bank_equity_claim_dust():
+    ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    state = _DemographicStateStub(people=[_person(1, 40, household_id=0)])
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.claims.balance_sheet(1).bank_equity_claims["BANK_0"] = 5e-5
+
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bridge_identity_allows_sub_micro_bank_equity_share_difference():
+    ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {"H0": 0.016829798529778835}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    state = _DemographicStateStub(people=[_person(1, 40, household_id=0)])
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.claims.balance_sheet(1).bank_equity_claims["BANK_0"] = 0.016818033961691223
+
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bank_equity_trade_reconciles_claim_sum_to_bank_owner_target():
+    ledger = Ledger({"H0": 100.0, "CLEARING": 1.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {"H0": 10.0}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    state = _DemographicStateStub(people=[_person(1, 40, household_id=0)])
+    bridge = initialize_person_claims_from_households(econ, state)
+
+    ledger.transfer("H0", "CLEARING", 1.0)
+    bank.owners["H0"] = 10.1002
+    bridge.post_household_bank_equity_trade("H0", "BANK_0", cash_delta=-1.0, share_delta=0.1)
+
+    assert bridge.claims.balance_sheet(1).bank_equity_claims["BANK_0"] == pytest.approx(10.1002)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_bridge_identity_reconciles_small_bank_equity_drift_before_assert():
+    ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {"H0": 0.016986556891302233}
+    econ = _EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank])
+    state = _DemographicStateStub(people=[_person(1, 40, household_id=0)])
+    bridge = initialize_person_claims_from_households(econ, state)
+    bridge.claims.balance_sheet(1).bank_equity_claims["BANK_0"] = 0.016886200030906375
+
+    bridge.assert_all_claim_identities(econ)
+    assert bridge.claims.balance_sheet(1).bank_equity_claims["BANK_0"] == pytest.approx(
+        0.016986556891302233
+    )
+
+
 def test_bridge_identity_rejects_stale_complex_asset_claims():
     ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
     econ = _EconStub(

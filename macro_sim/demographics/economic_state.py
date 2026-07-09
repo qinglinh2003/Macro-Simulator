@@ -280,6 +280,7 @@ class PersonClaimLedger:
         deposits: float,
         debt: float,
         holdings: dict[str, float],
+        holding_tolerances: dict[str, float] | None = None,
     ) -> None:
         members = [self._sheets[pid] for pid in self.members_of_household(household_id)]
         cash = sum(sheet.cash_claim for sheet in members) + self.estate_suspense_by_household.get(household_id, 0.0)
@@ -314,7 +315,8 @@ class PersonClaimLedger:
                 actual = actual_holdings.get(asset_id, 0.0)
             else:
                 actual = actual_holdings.get(asset_id, 0.0)
-            if abs(actual - expected) > CLAIM_TOL:
+            tolerance = (holding_tolerances or {}).get(asset_id, CLAIM_TOL)
+            if abs(actual - expected) > tolerance:
                 raise AssertionError(
                     f"holding claim mismatch for household {household_id}/{asset_id}: "
                     f"claims={actual} ledger={expected}"

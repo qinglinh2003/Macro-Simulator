@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from macro_sim.demographics.economic_state import (
+    CLAIM_TOL,
     HouseholdEconomicProfile,
     PersonClaimLedger,
     build_household_economic_profiles,
@@ -25,6 +26,9 @@ from macro_sim.demographics.marriage_economics import MarriageContract, dissolve
 AGGREGATE_EQUITY_CLAIM_ID = "__aggregate_equity__"
 BOND_FACE_CLAIM_ID = "__bond_face__"
 BANK_EQUITY_CLAIM_PREFIX = "__bank_equity__:"
+BANK_EQUITY_CLAIM_TOL = 1e-4
+BANK_EQUITY_DUST_SHARE = 1e-6
+BANK_EQUITY_RECONCILE_SHARE = 1e-4
 
 
 @dataclass
@@ -104,12 +108,17 @@ class DemographicEconomicBridge:
         if econ is None:
             raise RuntimeError("economic ledger is required for claim identity checks")
         bond_face_by_holder = self._bond_face_by_holder(econ)
+        for household_id in self.household_to_account:
+            self._prune_household_bank_equity_claim_dust(household_id, econ)
+        for household_id in self.household_to_account:
+            self._normalize_household_bank_equity_claims_to_targets(household_id, econ)
         for household_id, account_id in self.household_to_account.items():
             self.claims.assert_household_claim_identity(
                 household_id,
                 deposits=econ.ledger.balance(account_id),
                 debt=econ.ledger.debt(account_id),
                 holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
+                holding_tolerances=self._household_asset_claim_tolerances(econ),
             )
 
     def reconcile_financial_claims_from_economy(self, econ: Any | None = None) -> None:
@@ -232,6 +241,7 @@ class DemographicEconomicBridge:
             f"{BANK_EQUITY_CLAIM_PREFIX}{bank_id}",
             share_delta,
         )
+        self._normalize_household_bank_equity_claim_to_target(household_id, bank_id)
 
     def claim_cash_sum(self, account_id: str) -> float:
         household_id = self.household_id_for_account(account_id)
@@ -427,6 +437,7 @@ class DemographicEconomicBridge:
         if self.econ is not None and getattr(self.econ, "ledger", None) is not None:
             account_id = self.account_for_household_id(self.claims.balance_sheet(person_id).household_id)
             self.econ.ledger.write_off(account_id, creditor_bank_id, amount)
+            self._clamp_margin_debt_shadow(account_id)
         else:
             self._bank_capital_adjustment[creditor_bank_id] = (
                 self._bank_capital_adjustment.get(creditor_bank_id, 0.0) - amount
@@ -517,7 +528,24 @@ class DemographicEconomicBridge:
             self.econ.ledger.repay(account_id, pay)
             sheet.cash_claim -= pay
             sheet.debt_claim = max(0.0, sheet.debt_claim - pay)
+            self._clamp_margin_debt_shadow(account_id)
         return max(0.0, float(sheet.debt_claim))
+
+    def _clamp_margin_debt_shadow(self, account_id: str) -> None:
+        """Deceased-debt repayment/write-off reduces LEDGER debt; the household agent's
+        margin_debt shadow must never exceed it (margin debt is part of ledger debt), or the
+        equity phase later over-repays and the ledger raises. Clamp only when provably stale."""
+        if self.econ is None or getattr(self.econ, "ledger", None) is None:
+            return
+        agent = self._household_agent(account_id)
+        if agent is None:
+            return
+        margin = float(getattr(agent, "margin_debt", 0.0) or 0.0)
+        if margin <= 0.0:
+            return
+        ledger_debt = max(0.0, float(self.econ.ledger.debt(account_id)))
+        if margin > ledger_debt:
+            agent.margin_debt = ledger_debt
 
     def _other_positive_cash_claims(self, person_id: int, household_id: int) -> float:
         total = 0.0
@@ -699,8 +727,14 @@ class DemographicEconomicBridge:
                 sheet.bond_face_claim += share
             elif asset_id.startswith(BANK_EQUITY_CLAIM_PREFIX):
                 bank_id = asset_id.split(":", 1)[1]
+                if amount < 0.0:
+                    self._reduce_household_bank_equity_claim(household_id, bank_id, -amount)
+                    return
                 sheet.bank_equity_claims[bank_id] = sheet.bank_equity_claims.get(bank_id, 0.0) + share
             else:
+                if amount < 0.0:
+                    self._reduce_household_equity_claim(household_id, asset_id, -amount)
+                    return
                 sheet.equity_claims[asset_id] = sheet.equity_claims.get(asset_id, 0.0) + share
 
     def _reduce_household_bond_face_claim(self, household_id: int, amount: float) -> None:
@@ -725,6 +759,153 @@ class DemographicEconomicBridge:
         last_id, _ = holders[-1]
         last_sheet = self.claims.balance_sheet(last_id)
         last_sheet.bond_face_claim = max(0.0, last_sheet.bond_face_claim - (target - applied))
+
+    def _reduce_household_equity_claim(self, household_id: int, asset_id: str, amount: float) -> None:
+        remaining = max(0.0, float(amount))
+        if remaining <= 0.0:
+            return
+        holders = [
+            (
+                person_id,
+                max(0.0, float(self.claims.balance_sheet(person_id).equity_claims.get(asset_id, 0.0))),
+            )
+            for person_id in self.claims.members_of_household(int(household_id))
+        ]
+        self._reduce_weighted_claims(
+            holders,
+            remaining,
+            lambda person_id, cut: self._cut_person_equity_claim(person_id, asset_id, cut),
+        )
+
+    def _reduce_household_bank_equity_claim(self, household_id: int, bank_id: str, amount: float) -> None:
+        remaining = max(0.0, float(amount))
+        if remaining <= 0.0:
+            return
+        holders = [
+            (
+                person_id,
+                max(0.0, float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))),
+            )
+            for person_id in self.claims.members_of_household(int(household_id))
+        ]
+        self._reduce_weighted_claims(
+            holders,
+            remaining,
+            lambda person_id, cut: self._cut_person_bank_equity_claim(person_id, bank_id, cut),
+        )
+
+    def _normalize_household_bank_equity_claim_to_target(self, household_id: int, bank_id: str) -> None:
+        if self.econ is None:
+            return
+        account_id = self.account_for_household_id(int(household_id))
+        target = 0.0
+        for bank in getattr(self.econ, "banks", []) or []:
+            if getattr(bank, "id", None) != bank_id:
+                continue
+            target = float((getattr(bank, "owners", None) or {}).get(account_id, 0.0))
+            break
+        current = sum(
+            float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))
+            for person_id in self.claims.members_of_household(int(household_id))
+        )
+        diff = target - current
+        tolerance = self._bank_equity_dust_tolerance(self.econ, bank_id)
+        if abs(diff) <= tolerance:
+            if abs(target) <= tolerance:
+                self._reduce_household_bank_equity_claim(household_id, bank_id, current)
+            return
+        if diff > 0.0:
+            person_ids = self._claim_posting_ids(household_id)
+            if not person_ids:
+                return
+            share = diff / len(person_ids)
+            for person_id in person_ids:
+                sheet = self.claims.balance_sheet(person_id)
+                sheet.bank_equity_claims[bank_id] = sheet.bank_equity_claims.get(bank_id, 0.0) + share
+            return
+        self._reduce_household_bank_equity_claim(household_id, bank_id, -diff)
+
+    def _normalize_household_bank_equity_claims_to_targets(self, household_id: int, econ: Any) -> None:
+        for bank in getattr(econ, "banks", []) or []:
+            bank_id = str(getattr(bank, "id", ""))
+            if not bank_id:
+                continue
+            account_id = self.account_for_household_id(int(household_id))
+            target = float((getattr(bank, "owners", None) or {}).get(account_id, 0.0))
+            current = sum(
+                float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))
+                for person_id in self.claims.members_of_household(int(household_id))
+            )
+            diff = target - current
+            if abs(diff) <= self._bank_equity_dust_tolerance(econ, bank_id):
+                continue
+            if abs(diff) > self._bank_equity_reconcile_tolerance(econ, bank_id):
+                continue
+            if diff > 0.0:
+                self._add_household_bank_equity_claim(household_id, bank_id, diff)
+            else:
+                self._reduce_household_bank_equity_claim(household_id, bank_id, -diff)
+
+    def _add_household_bank_equity_claim(self, household_id: int, bank_id: str, amount: float) -> None:
+        amount = float(amount)
+        if amount <= 0.0:
+            return
+        members = self.claims.members_of_household(int(household_id))
+        holders = [
+            (
+                person_id,
+                max(0.0, float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))),
+            )
+            for person_id in members
+        ]
+        holders = [(person_id, value) for person_id, value in holders if value > 0.0]
+        if holders:
+            total = sum(value for _, value in holders)
+            allocated = 0.0
+            for person_id, value in holders[:-1]:
+                share = amount * value / total
+                self.claims.balance_sheet(person_id).bank_equity_claims[bank_id] = (
+                    self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0) + share
+                )
+                allocated += share
+            last_id, _ = holders[-1]
+            self.claims.balance_sheet(last_id).bank_equity_claims[bank_id] = (
+                self.claims.balance_sheet(last_id).bank_equity_claims.get(bank_id, 0.0) + (amount - allocated)
+            )
+            return
+        person_ids = self._claim_posting_ids(household_id)
+        if not person_ids:
+            return
+        share = amount / len(person_ids)
+        for person_id in person_ids:
+            sheet = self.claims.balance_sheet(person_id)
+            sheet.bank_equity_claims[bank_id] = sheet.bank_equity_claims.get(bank_id, 0.0) + share
+
+    def _reduce_weighted_claims(self, holders: list[tuple[int, float]], amount: float, cut_fn: Any) -> None:
+        holders = [(person_id, value) for person_id, value in holders if value > 0.0]
+        total_value = sum(value for _, value in holders)
+        if total_value <= 0.0:
+            return
+        target = min(float(amount), total_value)
+        applied = 0.0
+        for person_id, value in holders[:-1]:
+            cut = min(value, target * value / total_value)
+            cut_fn(person_id, cut)
+            applied += cut
+        last_id, _ = holders[-1]
+        cut_fn(last_id, target - applied)
+
+    def _cut_person_equity_claim(self, person_id: int, asset_id: str, amount: float) -> None:
+        sheet = self.claims.balance_sheet(person_id)
+        sheet.equity_claims[asset_id] = max(0.0, sheet.equity_claims.get(asset_id, 0.0) - float(amount))
+        if sheet.equity_claims[asset_id] <= 1e-12:
+            sheet.equity_claims.pop(asset_id, None)
+
+    def _cut_person_bank_equity_claim(self, person_id: int, bank_id: str, amount: float) -> None:
+        sheet = self.claims.balance_sheet(person_id)
+        sheet.bank_equity_claims[bank_id] = max(0.0, sheet.bank_equity_claims.get(bank_id, 0.0) - float(amount))
+        if sheet.bank_equity_claims[bank_id] <= 1e-12:
+            sheet.bank_equity_claims.pop(bank_id, None)
 
     def _household_agent(self, account_id: str) -> Any | None:
         if self.econ is None:
@@ -764,9 +945,40 @@ class DemographicEconomicBridge:
             targets[BOND_FACE_CLAIM_ID] = bond_face
         for bank in getattr(econ, "banks", []) or []:
             shares = float(((getattr(bank, "owners", None) or {}).get(account_id, 0.0)))
-            if abs(shares) > 0.0:
+            outstanding = max(1.0, float(getattr(bank, "shares_outstanding", 0.0) or 0.0))
+            dust_tolerance = max(BANK_EQUITY_CLAIM_TOL, CLAIM_TOL, outstanding * BANK_EQUITY_DUST_SHARE)
+            if abs(shares) > dust_tolerance:
                 targets[f"{BANK_EQUITY_CLAIM_PREFIX}{bank.id}"] = shares
         return targets
+
+    def _household_asset_claim_tolerances(self, econ: Any) -> dict[str, float]:
+        tolerances: dict[str, float] = {}
+        for bank in getattr(econ, "banks", []) or []:
+            tolerances[f"{BANK_EQUITY_CLAIM_PREFIX}{bank.id}"] = self._bank_equity_dust_tolerance(econ, str(bank.id))
+        return tolerances
+
+    def _prune_household_bank_equity_claim_dust(self, household_id: int, econ: Any) -> None:
+        for person_id in self.claims.members_of_household(int(household_id)):
+            sheet = self.claims.balance_sheet(person_id)
+            for bank_id, amount in list(sheet.bank_equity_claims.items()):
+                if abs(float(amount)) <= self._bank_equity_dust_tolerance(econ, bank_id):
+                    sheet.bank_equity_claims.pop(bank_id, None)
+
+    def _bank_equity_dust_tolerance(self, econ: Any, bank_id: str) -> float:
+        for bank in getattr(econ, "banks", []) or []:
+            if getattr(bank, "id", None) != bank_id:
+                continue
+            outstanding = max(1.0, float(getattr(bank, "shares_outstanding", 0.0) or 0.0))
+            return max(BANK_EQUITY_CLAIM_TOL, CLAIM_TOL, outstanding * BANK_EQUITY_DUST_SHARE)
+        return max(BANK_EQUITY_CLAIM_TOL, CLAIM_TOL)
+
+    def _bank_equity_reconcile_tolerance(self, econ: Any, bank_id: str) -> float:
+        for bank in getattr(econ, "banks", []) or []:
+            if getattr(bank, "id", None) != bank_id:
+                continue
+            outstanding = max(1.0, float(getattr(bank, "shares_outstanding", 0.0) or 0.0))
+            return max(self._bank_equity_dust_tolerance(econ, bank_id), outstanding * BANK_EQUITY_RECONCILE_SHARE)
+        return self._bank_equity_dust_tolerance(econ, bank_id)
 
     @staticmethod
     def _bond_face_by_holder(econ: Any) -> dict[Any, float]:
@@ -837,6 +1049,71 @@ class DemographicEconomicBridge:
             self._normalize_household_cash_claims_to_deposits(old_household_id, old_account)
             self._move_person_aggregate_claims(person_id, old_account, new_account)
         self.claims.set_household(person_id, household_id)
+        if (
+            old_account is not None
+            and self.econ is not None
+            and not self.claims.members_of_household(old_household_id)
+        ):
+            # The LAST member just left: by construction they own everything still attached to
+            # the old account -- pro-rata rounding residue in agent holdings/bank ownership and
+            # the deposits it keeps earning. Without this sweep the orphaned account collects
+            # dividends no person claim can absorb (silent posting drops -> identity drift).
+            self._sweep_orphaned_account(old_household_id, old_account, person_id, new_account)
+
+    def _sweep_orphaned_account(
+        self,
+        old_household_id: int,
+        old_account: str,
+        heir_person_id: int,
+        heir_account: str,
+    ) -> None:
+        econ = self.econ
+        heir_sheet = self.claims.balance_sheet(heir_person_id)
+        # deposits: estate suspense stays parked on the old household (the identity check counts
+        # it on the claims side); everything above it belongs to the leaver.
+        suspense = self.claims.estate_suspense_by_household.get(int(old_household_id), 0.0)
+        movable = econ.ledger.balance(old_account) - suspense
+        if movable > 0.0:
+            econ.ledger.transfer(old_account, heir_account, movable)
+            heir_sheet.cash_claim += movable
+        debt = float(econ.ledger.debt(old_account))
+        if debt > 0.0 and hasattr(econ.ledger, "transfer_debt"):
+            econ.ledger.transfer_debt(old_account, heir_account, debt)
+            heir_sheet.debt_claim += debt
+            self._move_margin_debt_shadow(old_account, heir_account, 1.0)
+        agent = self._household_agent(old_account)
+        if agent is not None:
+            shares = float(getattr(agent, "shares", 0.0) or 0.0)
+            if shares != 0.0:
+                self._adjust_household_equity(old_account, AGGREGATE_EQUITY_CLAIM_ID, -shares)
+                self._adjust_household_equity(heir_account, AGGREGATE_EQUITY_CLAIM_ID, shares)
+                heir_sheet.equity_claims[AGGREGATE_EQUITY_CLAIM_ID] = (
+                    heir_sheet.equity_claims.get(AGGREGATE_EQUITY_CLAIM_ID, 0.0) + shares
+                )
+            for asset_id, amount in list((getattr(agent, "holdings", {}) or {}).items()):
+                if amount == 0.0:
+                    continue
+                self._adjust_household_equity(old_account, asset_id, -amount)
+                self._adjust_household_equity(heir_account, asset_id, amount)
+                heir_sheet.equity_claims[asset_id] = heir_sheet.equity_claims.get(asset_id, 0.0) + amount
+        for bank in getattr(econ, "banks", []) or []:
+            shares = float(((getattr(bank, "owners", None) or {}).get(old_account, 0.0)))
+            if shares != 0.0:
+                self._adjust_bank_equity_owner(bank.id, old_account, -shares)
+                self._adjust_bank_equity_owner(bank.id, heir_account, shares)
+                heir_sheet.bank_equity_claims[bank.id] = (
+                    heir_sheet.bank_equity_claims.get(bank.id, 0.0) + shares
+                )
+        residual_faces = [
+            float(lot.get("face", 0.0))
+            for lot in getattr(econ, "_bonds", []) or []
+            if lot.get("holder") == old_account
+        ]
+        if residual_faces:
+            total_face = float(sum(residual_faces))
+            if total_face > 0.0:
+                self._move_bond_lots(old_account, heir_account, total_face)
+                heir_sheet.bond_face_claim += total_face
 
     def _normalize_household_cash_claims_to_deposits(self, household_id: int, account_id: str) -> None:
         if self.econ is None or getattr(self.econ, "ledger", None) is None:
@@ -954,6 +1231,9 @@ class DemographicEconomicBridge:
             remaining -= moved
         if moved_lots:
             self.econ._bonds.extend(moved_lots)
+        from macro_sim.systems.securities import bump_bonds_version
+
+        bump_bonds_version(self.econ)   # holder/face/cost were rewritten in place above
         self._reindex_bonds_if_present()
 
     def _reindex_bonds_if_present(self) -> None:
