@@ -632,6 +632,12 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "consumption_credit_share": float(getattr(econ, "_hh_credit_new", 0.0)) / max(1e-9, cons),
         })
 
+    # Shared per-household bank-equity values (read-only state; identical for every block below).
+    bankeq_list = (
+        [bank_equity_value(econ, h.id) for h in households]
+        if getattr(econ.cfg, "bank_equity", False) else None
+    )
+
     # ----------------------------------------------------------------------
     # v8 block (DESIGNDOC §21). Household margin credit. Appended when margin_credit on.
     # ----------------------------------------------------------------------
@@ -641,8 +647,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                           for h in households])
         debt_arr = np.asarray([led.debt(h.id) for h in households])
         margin = np.asarray([h.margin_debt for h in households])
-        bankeq = np.asarray([bank_equity_value(econ, h.id) for h in households]) \
-            if getattr(econ.cfg, "bank_equity", False) else 0.0        # v11.5: bank-equity wealth
+        bankeq = np.asarray(bankeq_list) if bankeq_list is not None else 0.0   # v11.5: bank-equity wealth
         nw_full = np.asarray(hh_dep) + eqv + bankeq - debt_arr  # TRUE net worth: cash + equity (firm+bank) − debt
         rec.update({
             "household_margin_debt": float(np.sum(margin)),
@@ -734,16 +739,19 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             float(sum(sh * share_price_of.get(fid, 0.0) for fid, sh in h.holdings.items()))
             for h in households
         ], dtype=float)
-    bank_equity_values = np.asarray([
-        bank_equity_value(econ, h.id) for h in households
-    ], dtype=float) if getattr(econ.cfg, "bank_equity", False) else np.zeros(n_h, dtype=float)
-    bond_market_values = np.asarray([
-        float(sum(
-            bond_market_value(econ, lot) for lot in (getattr(econ, "_bonds", []) or [])
-            if lot.get("holder") == h.id
-        ))
-        for h in households
-    ], dtype=float)
+    bank_equity_values = (
+        np.asarray(bankeq_list, dtype=float) if bankeq_list is not None else np.zeros(n_h, dtype=float)
+    )
+    # One pass over the lots, grouped by holder, then sum() per holder over its own values in lot
+    # order -- the SAME builtin over the SAME sequence as the per-account scan it replaces
+    # (formerly O(N_h x N_lots)). Do NOT fold into a running scalar: float sum() is compensated
+    # (Neumaier) since Python 3.12, so naive accumulation differs in the last bit.
+    bond_mv_by_holder: Dict = {}
+    for lot in getattr(econ, "_bonds", []) or []:
+        bond_mv_by_holder.setdefault(lot.get("holder"), []).append(bond_market_value(econ, lot))
+    bond_market_values = np.asarray(
+        [float(sum(bond_mv_by_holder.get(h.id, ()))) for h in households], dtype=float
+    )
     full_networth = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values - hh_debt
     full_networth_shifted = full_networth - float(full_networth.min()) if full_networth.size else full_networth
     gross_assets = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values
@@ -855,10 +863,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             if cb_cfg.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
         )
         bank_reserves_total = rec.get("bank_reserves_total", 0.0)
-        cb_bond_market = float(sum(
-            bond_market_value(econ, lot) for lot in (getattr(econ, "_bonds", []) or [])
-            if lot.get("holder") == "CB"
-        ))
+        cb_bond_market = float(sum(bond_mv_by_holder.get("CB", ())))
         rec.update({
             "policy_rate": rate,
             "inflation_ema": infl_ema,
@@ -955,7 +960,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             })
         # v11.5: bank demographics & ownership (entry/exit, bank-equity concentration, runs)
         if getattr(econ.cfg, "bank_equity", False):
-            bankeq_h = [bank_equity_value(econ, h.id) for h in econ.households]
+            bankeq_h = bankeq_list if bankeq_list is not None \
+                else [bank_equity_value(econ, h.id) for h in econ.households]
             alive_bk = [b for b in econ.banks if b.alive]
             pp = [b.share_price / b.share_peak for b in alive_bk if b.share_peak > 1e-9]
             rec.update({

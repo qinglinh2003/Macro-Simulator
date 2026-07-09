@@ -693,12 +693,38 @@ class DemographicEconomicBridge:
         for person_id in person_ids:
             sheet = self.claims.balance_sheet(person_id)
             if asset_id == BOND_FACE_CLAIM_ID:
+                if amount < 0.0:
+                    self._reduce_household_bond_face_claim(household_id, -amount)
+                    return
                 sheet.bond_face_claim += share
             elif asset_id.startswith(BANK_EQUITY_CLAIM_PREFIX):
                 bank_id = asset_id.split(":", 1)[1]
                 sheet.bank_equity_claims[bank_id] = sheet.bank_equity_claims.get(bank_id, 0.0) + share
             else:
                 sheet.equity_claims[asset_id] = sheet.equity_claims.get(asset_id, 0.0) + share
+
+    def _reduce_household_bond_face_claim(self, household_id: int, amount: float) -> None:
+        remaining = max(0.0, float(amount))
+        if remaining <= 0.0:
+            return
+        holders = [
+            (person_id, max(0.0, float(self.claims.balance_sheet(person_id).bond_face_claim)))
+            for person_id in self.claims.members_of_household(int(household_id))
+        ]
+        holders = [(person_id, face) for person_id, face in holders if face > 0.0]
+        total_face = sum(face for _, face in holders)
+        if total_face <= 0.0:
+            return
+        target = min(remaining, total_face)
+        applied = 0.0
+        for person_id, face in holders[:-1]:
+            cut = min(face, target * face / total_face)
+            sheet = self.claims.balance_sheet(person_id)
+            sheet.bond_face_claim = max(0.0, sheet.bond_face_claim - cut)
+            applied += cut
+        last_id, _ = holders[-1]
+        last_sheet = self.claims.balance_sheet(last_id)
+        last_sheet.bond_face_claim = max(0.0, last_sheet.bond_face_claim - (target - applied))
 
     def _household_agent(self, account_id: str) -> Any | None:
         if self.econ is None:
@@ -744,13 +770,13 @@ class DemographicEconomicBridge:
 
     @staticmethod
     def _bond_face_by_holder(econ: Any) -> dict[Any, float]:
-        """One pass over the bond lots, grouped by holder. Per-holder accumulation follows lot
-        order, so each holder's sum is bit-identical to the per-account scan it replaces."""
-        faces: dict[Any, float] = {}
+        """One pass over the bond lots, grouped by holder, then sum() per holder over its values in
+        lot order -- the same builtin over the same sequence as the per-account scan it replaces.
+        (float sum() is compensated since Python 3.12; naive accumulation differs in the last bit.)"""
+        values: dict[Any, list[float]] = {}
         for lot in getattr(econ, "_bonds", []) or []:
-            holder = lot.get("holder")
-            faces[holder] = faces.get(holder, 0.0) + float(lot.get("face", 0.0))
-        return faces
+            values.setdefault(lot.get("holder"), []).append(float(lot.get("face", 0.0)))
+        return {holder: float(sum(vals)) for holder, vals in values.items()}
 
     def _ensure_household_account(self, household_id: int) -> str:
         household_id = int(household_id)

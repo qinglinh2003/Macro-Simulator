@@ -202,6 +202,30 @@ def test_bridge_posts_complex_asset_trades_incrementally():
     ) == pytest.approx(2.0)
 
 
+def test_bond_redemption_reduces_existing_bond_claim_holders_without_negative_claims():
+    ledger = Ledger({"H0": 100.0, "TSY": 10.0, "BANK_0": 50.0})
+    econ = _EconStub(
+        households=[_HouseholdStub("H0")],
+        ledger=ledger,
+        _bonds=[{"holder": "H0", "face": 10.0, "cost": 10.0, "matures_at": 5}],
+    )
+    p1 = _person(1, 40, household_id=0)
+    p2 = _person(2, 38, household_id=0)
+    state = _DemographicStateStub(people=[p1, p2])
+    bridge = initialize_person_claims_from_households(econ, state)
+    p1.alive = False
+    bridge.refresh_people_index()
+
+    ledger.transfer("TSY", "H0", 10.0)
+    econ._bonds = []
+    bridge.post_household_bond_trade("H0", cash_delta=10.0, face_delta=-10.0)
+
+    assert bridge.claims.balance_sheet(1).bond_face_claim == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).bond_face_claim == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(2).bond_face_claim >= 0.0
+    bridge.assert_all_claim_identities(econ)
+
+
 def test_bridge_identity_rejects_stale_complex_asset_claims():
     ledger = Ledger({"H0": 100.0, "BANK_0": 50.0})
     econ = _EconStub(

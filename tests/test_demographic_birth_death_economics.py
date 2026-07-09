@@ -361,6 +361,66 @@ def test_insolvent_death_repayment_does_not_consume_other_person_cash_claims():
     bridge.assert_all_claim_identities(bridge.econ)
 
 
+def test_insolvent_death_negative_cash_claim_is_absorbed_before_clearing():
+    ledger = Ledger({"H0": 0.16, "BANK_0": 100.0})
+    ledger.allow_negative("BANK_0")
+    ledger.create_loan("H0", 0.00025)
+    ledger.transfer("H0", "BANK_0", 0.00025)
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[Bank(id="BANK_0")]),
+    )
+    retained = _person(52, age=80)
+    retained.alive = False
+    dead = _person(53, age=70)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[retained, dead])
+    bridge.claims.add_person(retained.id, household_id=0, cash_claim=46.58645729804844)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=-46.42645729804844, debt_claim=0.00025)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=10, date=date(2000, 1, 11), person_id=dead.id, age=70)
+
+    bridge.on_death(event, dead)
+
+    assert ledger.balance("H0") == pytest.approx(0.16)
+    assert ledger.debt("H0") == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(retained.id).cash_claim == pytest.approx(0.16)
+    bridge.assert_all_claim_identities(bridge.econ)
+
+
+def test_insolvent_death_residual_asset_claims_move_to_household_claimants_before_clearing():
+    household = _HouseholdStub("H0", holdings={"F1": 2.0})
+    ledger = Ledger({"H0": 0.0, "BANK_0": 100.0})
+    ledger.allow_negative("BANK_0")
+    ledger.create_loan("H0", 2.0)
+    ledger.transfer("H0", "BANK_0", 2.0)
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[household], ledger=ledger, banks=[Bank(id="BANK_0")], equity=object()),
+    )
+    retained = _person(54, age=80)
+    retained.alive = False
+    dead = _person(55, age=70)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[retained, dead])
+    bridge.claims.add_person(retained.id, household_id=0)
+    bridge.claims.balance_sheet(retained.id).equity_claims["F1"] = 1.0
+    bridge.claims.add_person(dead.id, household_id=0, debt_claim=2.0)
+    bridge.claims.balance_sheet(dead.id).equity_claims["F1"] = 1.0
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=11, date=date(2000, 1, 12), person_id=dead.id, age=70)
+
+    bridge.on_death(event, dead)
+
+    assert bridge.claims.balance_sheet(retained.id).equity_claims["F1"] == pytest.approx(2.0)
+    assert bridge.claims.balance_sheet(dead.id).equity_claims == {}
+    bridge.assert_all_claim_identities(bridge.econ)
+
+
 def test_insolvent_death_without_known_creditor_bank_halts():
     bridge = _bridge()
     dead = _person(13, age=70)

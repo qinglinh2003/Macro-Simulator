@@ -369,7 +369,9 @@ def found_bank(econ: Any, founder, capital: float) -> None:
 
 
 def bank_equity_value(econ: Any, household_id) -> float:
-    if not econ.cfg.banking.bank_equity:
+    # NOTE: read the flat Config field -- `econ.cfg.banking` BUILDS the frozen view dataclass per
+    # access, and this helper runs per household per tick in settlement + metrics (hot path).
+    if not econ.cfg.bank_equity:
         return 0.0
     value = 0.0
     for bank in econ.banks:
