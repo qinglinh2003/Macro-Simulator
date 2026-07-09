@@ -418,7 +418,8 @@ class DemographicEconomicBridge:
         key = self._marriage_key(int(event.spouse_a_id), int(event.spouse_b_id))
         contract = self.marriage_contracts.pop(key, None)
         if contract is not None:
-            dissolve_marriage(contract, self.claims, reason="divorce")
+            result = dissolve_marriage(contract, self.claims, reason="divorce")
+            self._apply_dissolution_transfers(result)
         self._sync_demographic_household(int(event.household_a_id))
         self._sync_demographic_household(int(event.household_b_id))
 
@@ -669,6 +670,34 @@ class DemographicEconomicBridge:
                 bank.shares_outstanding = max(0.0, bank.shares_outstanding - shares)
         for member_id in self.claims.members_of_household(int(household_id)):
             self.claims.balance_sheet(member_id).bank_equity_claims.clear()
+
+    def _apply_dissolution_transfers(self, result: Any) -> None:
+        """Marital-property equalization is a REAL transfer: when the spouses' sheets sit on
+        DIFFERENT accounts (stale contracts across households), the ledger money must move
+        with the claim, capped by what the source account can actually pay (A4, net of parked
+        estate suspense); any unbacked excess claim is clawed back so claims keep following
+        money. Same-account equalizations stay a pure intra-account re-attribution."""
+        if self.econ is None or getattr(self.econ, "ledger", None) is None:
+            return
+        for src_pid, dst_pid, amount in getattr(result, "transfers", []) or []:
+            amount = float(amount)
+            if amount <= 0.0:
+                continue
+            src_hh = self.claims.balance_sheet(int(src_pid)).household_id
+            dst_hh = self.claims.balance_sheet(int(dst_pid)).household_id
+            src_account = self.household_to_account.get(int(src_hh))
+            dst_account = self.household_to_account.get(int(dst_hh))
+            if src_account is None or dst_account is None or src_account == dst_account:
+                continue
+            suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(src_hh), 0.0)))
+            movable = max(0.0, float(self.econ.ledger.balance(src_account)) - suspense)
+            move = min(amount, movable)
+            if move > 0.0:
+                self.econ.ledger.transfer(src_account, dst_account, move)
+            shortfall = amount - move
+            if shortfall > 1e-12:
+                # the source account cannot back this much: reverse the unbacked claim part
+                self.claims.transfer_cash_claim(int(dst_pid), int(src_pid), shortfall)
 
     def _settle_deceased_debt_in_full(self, person_id: int, household_id: int) -> None:
         """Estate debts settle before distribution: repay the deceased's debt from their cash
@@ -1573,7 +1602,8 @@ class DemographicEconomicBridge:
         if contract is not None:
             spouse_ids = [pid for pid in contract.spouse_ids if pid != person_id]
             spouse_id = spouse_ids[0] if spouse_ids else None
-            dissolve_marriage(contract, self.claims, reason="death")
+            result = dissolve_marriage(contract, self.claims, reason="death")
+            self._apply_dissolution_transfers(result)
             if contract_key is not None:
                 self.marriage_contracts.pop(contract_key, None)
         else:

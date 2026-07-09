@@ -614,3 +614,31 @@ def test_cohabitant_death_settles_the_deceaseds_debt_before_suspense():
     assert ledger.balance("H0") == pytest.approx(12.0)
     assert bridge.claims.estate_suspense_by_household.get(0, 0.0) == pytest.approx(12.0)
     bridge.assert_all_claim_identities(bridge.econ)
+
+
+def test_cross_household_marital_equalization_moves_ledger_money_with_the_claim():
+    """Stale cross-household marriage contracts: the equalization is a REAL transfer, capped
+    by what the source account can pay; the unbacked excess claim is clawed back (H5988)."""
+    from types import SimpleNamespace
+
+    ledger = Ledger({"H0": 6.0, "H1": 0.0, "BANK_0": 100.0})
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0", 1: "H1"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0"), _HouseholdStub("H1")], ledger=ledger),
+    )
+    bridge.claims.add_person(50, household_id=0, cash_claim=6.0)
+    bridge.claims.add_person(51, household_id=1, cash_claim=0.0)
+    # the dissolution already moved a 10.0 cash CLAIM 50 -> 51 (claims-only); apply the money side
+    bridge.claims.transfer_cash_claim(50, 51, 10.0)
+    result = SimpleNamespace(transfers=[(50, 51, 10.0)])
+
+    bridge._apply_dissolution_transfers(result)
+
+    # only 6 was backed by H0's balance: 6 moved as money, the unbacked 4 clawed back
+    assert ledger.balance("H0") == pytest.approx(0.0)
+    assert ledger.balance("H1") == pytest.approx(6.0)
+    assert bridge.claims.balance_sheet(50).cash_claim == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(51).cash_claim == pytest.approx(6.0)
+    bridge.assert_all_claim_identities(bridge.econ)
