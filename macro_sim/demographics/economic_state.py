@@ -8,6 +8,7 @@ personal ownership claims.
 
 from __future__ import annotations
 
+from bisect import insort
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -64,6 +65,9 @@ class PersonClaimLedger:
 
     def __init__(self) -> None:
         self._sheets: dict[int, PersonBalanceSheet] = {}
+        # household_id -> ascending person ids; the maintained inverse of sheet.household_id.
+        # `sheet.household_id` may only change through `set_household`, which keeps this exact.
+        self._household_members: dict[int, list[int]] = {}
         self.estate_suspense_net_worth: float = 0.0
         self.estate_suspense_by_household: dict[int, float] = {}
 
@@ -82,6 +86,7 @@ class PersonClaimLedger:
             cash_claim=float(cash_claim),
             debt_claim=float(debt_claim),
         )
+        insort(self._household_members.setdefault(household_id, []), person_id)
 
     def has_person(self, person_id: int) -> bool:
         return person_id in self._sheets
@@ -90,14 +95,20 @@ class PersonClaimLedger:
         return self._sheets[person_id]
 
     def members_of_household(self, household_id: int) -> list[int]:
-        return [
-            person_id
-            for person_id, sheet in sorted(self._sheets.items())
-            if sheet.household_id == household_id
-        ]
+        return list(self._household_members.get(household_id, ()))
 
     def set_household(self, person_id: int, household_id: int) -> None:
-        self._sheets[person_id].household_id = household_id
+        sheet = self._sheets[person_id]
+        old_household_id = sheet.household_id
+        if old_household_id != household_id:
+            members = self._household_members.get(old_household_id)
+            if members is not None:
+                try:
+                    members.remove(person_id)
+                except ValueError:
+                    pass
+            insort(self._household_members.setdefault(household_id, []), person_id)
+        sheet.household_id = household_id
 
     def net_worth(self, person_id: int) -> float:
         return self._sheets[person_id].net_worth
