@@ -436,6 +436,11 @@ class DemographicEconomicBridge:
             return
         if self.econ is not None and getattr(self.econ, "ledger", None) is not None:
             account_id = self.account_for_household_id(self.claims.balance_sheet(person_id).household_id)
+            # only ledger-backed debt can be written off there; an unbacked residual claim
+            # simply dies with the deceased
+            amount = min(amount, max(0.0, float(self.econ.ledger.debt(account_id))))
+            if amount <= 0.0:
+                return
             self.econ.ledger.write_off(account_id, creditor_bank_id, amount)
             self._clamp_margin_debt_shadow(account_id)
         else:
@@ -464,6 +469,29 @@ class DemographicEconomicBridge:
                 return
             package = self._claim_package(person_id)
             if self._retained_estate_required(package):
+                fiscal = getattr(self.econ, "_fiscal", None) if self.econ is not None else None
+                state_can_receive = (
+                    fiscal is not None
+                    and getattr(self.econ, "ledger", None) is not None
+                    and self.econ.ledger.has_account(fiscal)
+                )
+                if state_can_receive and not self._has_other_household_claimants(person_id, sheet.household_id):
+                    # HEIRLESS estate with securities: no default heirs anywhere and nobody left
+                    # in the household. Retaining it forever makes a zombie investor; dropping
+                    # the claims orphans the account's positions (identity drift). Real probate:
+                    # LIQUIDATE, settle the estate's DEBTS first, then the residue passes to
+                    # the state (bona vacantia).
+                    household_id = sheet.household_id
+                    self._liquidate_deceased_securities(person_id, household_id)
+                    self._settle_deceased_debt_in_full(person_id, household_id)
+                    escheated = self._escheat_deceased_cash(person_id, household_id)
+                    self._clear_deceased_claims(person_id, household_id)
+                    estate = self.estates.create_suspense_estate(
+                        person_id, escheated, tick, household_id=household_id,
+                    )
+                    estate.net_worth = 0.0
+                    estate.cleared = True
+                    return
                 estate_net_worth = self._package_net_worth(package)
                 self.estates.create_suspense_estate(
                     person_id,
@@ -474,6 +502,13 @@ class DemographicEconomicBridge:
                 return
             estate_value = assets - debt
             household_id = sheet.household_id
+            if debt > 0.0:
+                # estate debts settle before distribution (real probate order): repay the
+                # deceased's attributed share from their cash (cohabitants' cash is protected
+                # by the repay cap), write off what the estate cannot cover -- otherwise the
+                # cleared sheet strands ledger debt no person claim backs, and the suspense
+                # arithmetic (assets - debt) only balances against a debt-free account
+                self._settle_deceased_debt_in_full(person_id, household_id)
             self._clear_deceased_claims(person_id, household_id)
             estate = self.estates.create_suspense_estate(person_id, estate_value, tick, household_id=household_id)
             self.claims.register_estate_suspense(estate.net_worth, household_id=household_id)
@@ -483,9 +518,32 @@ class DemographicEconomicBridge:
         bank_id = self._creditor_bank_for_person(person_id, sheet.household_id)
         if bank_id is None:
             raise RuntimeError(f"missing creditor bank for insolvent death of person {person_id}")
+        sole_claimant = not self._has_other_household_claimants(person_id, sheet.household_id)
+        if sole_claimant:
+            # INSOLVENT and nobody left in the household: administer the estate -- liquidate the
+            # securities so the creditor recovers from them BEFORE the write-off (previously the
+            # claims were dropped and the account's positions were orphaned while the bank ate
+            # the full shortfall).
+            self._liquidate_deceased_securities(person_id, sheet.household_id)
         unpaid = self._repay_deceased_debt_with_cash(person_id, max_unpaid=unpaid)
         self.write_off_deceased_debt(person_id, unpaid, bank_id)
         self._clear_deceased_claims(person_id, sheet.household_id)
+        if sole_claimant:
+            # the probate waterfall on the emptied estate account (net of parked suspense):
+            # the creditor recovers up to the loss it just booked, any残余 escheats to the
+            # state (or stays put in degraded environments without a fiscal account)
+            suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(sheet.household_id), 0.0)))
+            account_id = self.household_to_account.get(int(sheet.household_id))
+            if account_id is not None:
+                available = max(0.0, float(self.econ.ledger.balance(account_id)) - suspense)
+                recovery = min(available, max(0.0, float(unpaid)))
+                if recovery > 0.0:
+                    self.econ.ledger.transfer(account_id, bank_id, recovery)
+                    available -= recovery
+                fiscal = getattr(self.econ, "_fiscal", None)
+                if available > 0.0 and fiscal is not None and self.econ.ledger.has_account(fiscal):
+                    self.econ.ledger.transfer(account_id, fiscal, available)
+                    self.econ._escheat_flow = getattr(self.econ, "_escheat_flow", 0.0) + available
         self.estates.create_suspense_estate(person_id, 0.0, tick, household_id=sheet.household_id)
 
     def _creditor_bank_for_person(self, person_id: int, household_id: int) -> str | None:
@@ -521,9 +579,12 @@ class DemographicEconomicBridge:
         debt = max(0.0, float(sheet.debt_claim))
         cash = max(0.0, float(sheet.cash_claim))
         ledger_cash = max(0.0, float(self.econ.ledger.balance(account_id)))
+        ledger_debt = max(0.0, float(self.econ.ledger.debt(account_id)))
         protected_cash = self._other_positive_cash_claims(person_id, sheet.household_id)
         available_cash = max(0.0, ledger_cash - protected_cash)
-        pay = min(cash, debt, available_cash)
+        # a debt CLAIM only repays up to the ledger loan actually backing it (claims-only debt
+        # in stub environments, or historical drift, must not trip the ledger's repay guard)
+        pay = min(cash, debt, available_cash, ledger_debt)
         if pay > 0.0:
             self.econ.ledger.repay(account_id, pay)
             sheet.cash_claim -= pay
@@ -555,6 +616,96 @@ class DemographicEconomicBridge:
             total += max(0.0, float(self.claims.balance_sheet(other_id).cash_claim))
         total += max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
         return total
+
+    def _has_other_household_claimants(self, person_id: int, household_id: int) -> bool:
+        return any(
+            int(other_id) != int(person_id)
+            for other_id in self.claims.members_of_household(int(household_id))
+        )
+
+    def _liquidate_deceased_securities(self, person_id: int, household_id: int) -> None:
+        """Estate liquidation for a deceased with no household co-claimants.
+
+        Bonds are redeemed at face against the Treasury (bills are near-money; the redemption
+        posts its own claim updates through the normal bridge plumbing). Firm and bank equity
+        positions are CANCELLED share-for-share -- there is no fire-sale market at this
+        abstraction, and cancellation is the precedented write-up (firm bankruptcy and bank
+        failure already extinguish equity); Σholdings == shares_outstanding is preserved on
+        both sides, and the micro write-up accrues to surviving shareholders. Only the
+        per-firm-equity market is wired (v6.1+; every v12/v13 config); the aggregate-index
+        market has no per-account cancellation channel and is left untouched.
+        """
+        econ = self.econ
+        account_id = self.household_to_account.get(int(household_id))
+        if econ is None or getattr(econ, "ledger", None) is None or account_id is None:
+            return
+        sheet = self.claims.balance_sheet(person_id)
+        held_face = float((getattr(econ, "_bond_holdings", {}) or {}).get(account_id, 0.0))
+        fiscal = getattr(econ, "_fiscal", None)
+        if (held_face > 0.0 or float(sheet.bond_face_claim) > 0.0) and fiscal is not None \
+                and econ.ledger.has_account(fiscal):
+            from macro_sim.systems.securities import redeem_household_bonds
+
+            # redeem EVERY lot on the account (the estate owns the whole account; claims may
+            # carry historical drift, so the lots are the ground truth)
+            redeem_household_bonds(econ, account_id, float("inf"))
+        agent = self._household_agent(account_id)
+        if agent is not None and getattr(getattr(econ, "cfg", None), "per_firm_equity", False):
+            holdings = getattr(agent, "holdings", None) or {}
+            if holdings:
+                firm_by_id = {firm.id: firm for firm in getattr(econ, "c_firms", [])}
+                for asset_id, amount in list(holdings.items()):
+                    firm = firm_by_id.get(asset_id)
+                    if firm is not None:
+                        firm.shares_outstanding = max(0.0, firm.shares_outstanding - float(amount))
+                    holdings.pop(asset_id, None)
+                for member_id in self.claims.members_of_household(int(household_id)):
+                    self.claims.balance_sheet(member_id).equity_claims.clear()
+        for bank in getattr(econ, "banks", []) or []:
+            owners = getattr(bank, "owners", None) or {}
+            shares = float(owners.get(account_id, 0.0))
+            if shares != 0.0:
+                owners.pop(account_id, None)
+                bank.shares_outstanding = max(0.0, bank.shares_outstanding - shares)
+        for member_id in self.claims.members_of_household(int(household_id)):
+            self.claims.balance_sheet(member_id).bank_equity_claims.clear()
+
+    def _settle_deceased_debt_in_full(self, person_id: int, household_id: int) -> None:
+        """Estate debts settle before distribution: repay the deceased's debt from their cash
+        (post-liquidation), write off whatever the estate cannot cover against the creditor."""
+        residual = self._repay_deceased_debt_with_cash(
+            person_id,
+            max_unpaid=float(self.claims.balance_sheet(person_id).debt_claim),
+        )
+        if residual > 0.0:
+            bank_id = self._creditor_bank_for_person(person_id, int(household_id))
+            if bank_id is not None:
+                self.write_off_deceased_debt(person_id, residual, bank_id)
+
+    def _escheat_deceased_cash(self, person_id: int, household_id: int) -> float:
+        """Bona vacantia: a solvent estate with no heirs anywhere passes to the state.
+
+        Moves the deceased's attributable cash (their cash claim, capped by the account
+        balance net of estate suspense) to the fiscal account. Returns the amount escheated.
+        """
+        econ = self.econ
+        account_id = self.household_to_account.get(int(household_id))
+        if econ is None or getattr(econ, "ledger", None) is None or account_id is None:
+            return 0.0
+        fiscal = getattr(econ, "_fiscal", None)
+        if fiscal is None or not econ.ledger.has_account(fiscal):
+            return 0.0
+        sheet = self.claims.balance_sheet(person_id)
+        suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
+        # the estate owns the whole account: everything above parked suspense passes to the
+        # state, which also heals any historical claims-vs-ledger drift on this account
+        amount = max(0.0, float(econ.ledger.balance(account_id)) - suspense)
+        if amount <= 0.0:
+            return 0.0
+        econ.ledger.transfer(account_id, fiscal, amount)
+        sheet.cash_claim -= amount
+        econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
+        return amount
 
     def _clear_deceased_claims(self, person_id: int, household_id: int) -> None:
         self._absorb_negative_cash_claim(person_id, household_id)

@@ -273,7 +273,12 @@ def test_insolvent_death_writes_unpaid_debt_to_lending_bank():
     assert bridge.estates.estate_for(dead.id).net_worth == pytest.approx(0.0)
     assert bridge.claims.net_worth(dead.id) == pytest.approx(0.0)
     assert bridge.death_writeoff_flow == pytest.approx(70.0)
-    assert bridge.bank_capital("BANK_0") == pytest.approx(bank_before - 70.0)
+    # probate waterfall (estate liquidation): the 100 of loan proceeds still parked on the
+    # sole-member account is estate money -- the creditor recovers up to the 70 it wrote off
+    # (bank ends whole), and the 30 residue stays put only because this stub has no fiscal
+    # account to escheat to
+    assert bridge.bank_capital("BANK_0") == pytest.approx(bank_before - 70.0 + 70.0)
+    assert bridge.econ.ledger.balance("H0") == pytest.approx(30.0)
 
 
 def test_insolvent_death_uses_cash_before_bank_writeoff_and_preserves_identity():
@@ -429,3 +434,183 @@ def test_insolvent_death_without_known_creditor_bank_halts():
 
     with pytest.raises(RuntimeError, match="missing creditor bank"):
         bridge.on_death(event, dead)
+
+
+def _estate_econ(*, with_fiscal: bool = False) -> tuple[DemographicEconomicBridge, "_EconStub"]:
+    """A sole-member household holding cash + a bond lot + firm equity + bank shares."""
+    from types import SimpleNamespace
+
+    balances = {"H0": 20.0, "BANK_0": 100.0}
+    if with_fiscal:
+        balances["TSY"] = 0.0
+    ledger = Ledger(balances)
+    ledger.allow_negative("BANK_0")
+    if with_fiscal:
+        ledger.allow_negative("TSY")
+    household = _HouseholdStub("H0", holdings={"C1": 2.0})
+    firm = SimpleNamespace(id="C1", shares_outstanding=10.0)
+    bank = Bank(id="BANK_0")
+    bank.shares_outstanding = 100.0
+    bank.owners = {"H0": 3.0}
+    econ = _EconStub(households=[household], ledger=ledger, banks=[bank])
+    econ.cfg = SimpleNamespace(per_firm_equity=True, bonds=True,
+                               securities=SimpleNamespace(bonds=True, bond_maturity=1, bond_coupon=0.0))
+    econ.c_firms = [firm]
+    econ.t = 0
+    econ._rate = 0.02
+    econ._fiscal = "TSY" if with_fiscal else "GOV_MISSING"
+    econ._bonds = [{"holder": "H0", "face": 5.0, "cost": 5.0, "matures_at": 99}]
+    econ._bond_holdings = {"H0": 5.0}
+    econ._bonds_outstanding = 5.0
+    if with_fiscal:
+        ledger._bal["TSY"] = -5.0   # the Treasury issued the bill (its debt); keeps A5 exact
+        ledger._M = ledger.total_money
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=econ,
+    )
+    bridge.demographic_state = _DemographicStateStub(people=[])
+    return bridge, econ
+
+
+def test_heirless_insolvent_death_liquidates_estate_for_the_creditor():
+    bridge, econ = _estate_econ(with_fiscal=True)
+    dead = _person(40, age=85)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[dead])
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=40.0)
+    sheet = bridge.claims.balance_sheet(dead.id)
+    sheet.bond_face_claim = 5.0
+    sheet.equity_claims["C1"] = 2.0
+    sheet.bank_equity_claims["BANK_0"] = 3.0
+    econ.ledger.create_loan("H0", 40.0)
+    econ.ledger.transfer("H0", "BANK_0", 40.0)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=3, date=date(2000, 1, 4), person_id=dead.id, age=85)
+
+    bridge.on_death(event, dead)
+
+    # bonds were redeemed at face against the Treasury and the proceeds (plus cash) went to
+    # the creditor; the residual debt was written off; the account ends empty
+    assert econ.ledger.balance("H0") == pytest.approx(0.0)
+    assert econ.ledger.debt("H0") == pytest.approx(0.0)
+    assert econ._bonds == []
+    assert econ._bonds_outstanding == pytest.approx(0.0)
+    # equity positions cancelled share-for-share on both sides
+    assert econ.households[0].holdings == {}
+    assert econ.c_firms[0].shares_outstanding == pytest.approx(8.0)
+    assert econ.banks[0].owners == {}
+    assert econ.banks[0].shares_outstanding == pytest.approx(97.0)
+    # cash 20 + redeemed bond 5 repay 25 of the 40 debt (repay destroys deposit+loan; the
+    # bank's balance is untouched by it); the residual 15 is written off against the bank
+    assert econ.ledger.balance("BANK_0") == pytest.approx(100.0 + 40.0 - 15.0)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_heirless_solvent_death_escheats_to_the_state():
+    bridge, econ = _estate_econ(with_fiscal=True)
+    dead = _person(41, age=90)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[dead])
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=0.0)
+    sheet = bridge.claims.balance_sheet(dead.id)
+    sheet.bond_face_claim = 5.0
+    sheet.equity_claims["C1"] = 2.0
+    sheet.bank_equity_claims["BANK_0"] = 3.0
+    event = DeathEvent(tick=4, date=date(2000, 1, 5), person_id=dead.id, age=90)
+    fiscal_before = econ.ledger.balance("TSY")
+
+    bridge.on_death(event, dead)
+
+    # bona vacantia: cash 20 + redeemed bond 5 escheat to the state; account and claims empty
+    # (the Treasury first pays 5 to redeem its bill, then receives the 25 estate)
+    assert econ.ledger.balance("H0") == pytest.approx(0.0)
+    assert econ.ledger.balance("TSY") == pytest.approx(fiscal_before - 5.0 + 25.0)
+    assert econ._bonds == []
+    assert econ.households[0].holdings == {}
+    assert econ.c_firms[0].shares_outstanding == pytest.approx(8.0)
+    assert econ.banks[0].owners == {}
+    assert getattr(econ, "_escheat_flow", 0.0) == pytest.approx(25.0)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_death_with_cohabitants_keeps_the_household_transfer_path():
+    bridge, econ = _estate_econ(with_fiscal=True)
+    survivor = _person(42, age=50)
+    dead = _person(43, age=80)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[survivor, dead])
+    bridge.claims.add_person(survivor.id, household_id=0, cash_claim=0.0)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=0.0)
+    sheet = bridge.claims.balance_sheet(dead.id)
+    sheet.equity_claims["C1"] = 2.0
+    event = DeathEvent(tick=5, date=date(2000, 1, 6), person_id=dead.id, age=80)
+
+    bridge.on_death(event, dead)
+
+    # securities pass INSIDE the household (no liquidation, no escheat) -- their design
+    assert econ.c_firms[0].shares_outstanding == pytest.approx(10.0)
+    assert econ.households[0].holdings == {"C1": 2.0}
+    assert econ.ledger.balance("H0") == pytest.approx(20.0)
+
+
+def test_heirless_solvent_death_settles_debt_before_escheat():
+    """The 6303 signature: solvent by claims (cash+bond >= debt) but carrying real ledger
+    debt -- the estate must repay/write off BEFORE the residue escheats, or the ledger debt
+    is stranded on an unowned account."""
+    bridge, econ = _estate_econ(with_fiscal=True)
+    dead = _person(44, age=82)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[dead])
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=12.0)
+    sheet = bridge.claims.balance_sheet(dead.id)
+    sheet.bond_face_claim = 5.0
+    econ.ledger.create_loan("H0", 12.0)
+    econ.ledger.transfer("H0", "BANK_0", 12.0)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=6, date=date(2000, 1, 7), person_id=dead.id, age=82)
+    fiscal_before = econ.ledger.balance("TSY")
+
+    bridge.on_death(event, dead)
+
+    # debt fully repaid from the estate (cash 20 + bond 5), residue 13 escheats
+    assert econ.ledger.debt("H0") == pytest.approx(0.0)
+    assert econ.ledger.balance("H0") == pytest.approx(0.0)
+    assert econ.ledger.balance("TSY") == pytest.approx(fiscal_before - 5.0 + 13.0)
+    assert getattr(econ, "_escheat_flow", 0.0) == pytest.approx(13.0)
+    bridge.assert_all_claim_identities(econ)
+
+
+def test_cohabitant_death_settles_the_deceaseds_debt_before_suspense():
+    ledger = Ledger({"H0": 20.0, "BANK_0": 100.0})
+    ledger.allow_negative("BANK_0")
+    bank = Bank(id="BANK_0")
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[bank]),
+    )
+    survivor = _person(45, age=48)
+    dead = _person(46, age=79)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[survivor, dead])
+    bridge.claims.add_person(survivor.id, household_id=0, cash_claim=0.0)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=8.0)
+    ledger.create_loan("H0", 8.0)
+    ledger.transfer("H0", "BANK_0", 8.0)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=7, date=date(2000, 1, 8), person_id=dead.id, age=79)
+
+    bridge.on_death(event, dead)
+
+    # estate debts settle first (real probate order): the dead's 8 repaid from their own
+    # cash; survivors inherit NET -- no debt claim passes; suspense = assets - debt = 12
+    # matches the account balance and the identity holds
+    assert ledger.debt("H0") == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(survivor.id).debt_claim == pytest.approx(0.0)
+    assert ledger.balance("H0") == pytest.approx(12.0)
+    assert bridge.claims.estate_suspense_by_household.get(0, 0.0) == pytest.approx(12.0)
+    bridge.assert_all_claim_identities(bridge.econ)
