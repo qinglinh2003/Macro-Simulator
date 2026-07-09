@@ -87,7 +87,13 @@ def test_central_bank_system_reads_grouped_config_view_for_policy_rate():
     from macro_sim.systems.central_bank import set_policy_rate
 
     view = SimpleNamespace(central_bank=False, r_interest=0.037)
-    econ = SimpleNamespace(cfg=CentralBankCfgTrap(view), _rate=0.0)
+    # the CB reads its live dials from econ.policy (the player's control surface);
+    # no hand-set rate here, so the frozen-config fallback path must be taken.
+    econ = SimpleNamespace(
+        cfg=CentralBankCfgTrap(view),
+        policy=SimpleNamespace(policy_rate_override=None),
+        _rate=0.0,
+    )
 
     set_policy_rate(econ)
 
@@ -106,8 +112,14 @@ def test_banking_system_reads_grouped_config_view_for_capital_constraint():
 def test_central_bank_system_reads_grouped_config_view_for_omo_gate():
     from macro_sim.systems.central_bank import run_omo_phase
 
-    view = SimpleNamespace(omo=False, bonds=True, interbank=True)
-    econ = SimpleNamespace(cfg=CentralBankCfgTrap(view), _omo_flow=99.0)
+    # the OMO stance is a LIVE policy dial (econ.policy) since v12.4's CB extraction;
+    # bonds/interbank (whether the machinery exists) stay structural config.
+    view = SimpleNamespace(bonds=True, interbank=True)
+    econ = SimpleNamespace(
+        cfg=CentralBankCfgTrap(view),
+        policy=SimpleNamespace(omo=False),
+        _omo_flow=99.0,
+    )
 
     run_omo_phase(econ)
 
