@@ -39,11 +39,52 @@ def reindex_bonds(econ: Any) -> None:
     econ._bond_holdings = idx
 
 
+def bump_bonds_version(econ: Any) -> None:
+    """Stamp every bond-lot mutation (append/remove/holder/face/cost) so per-tick valuation
+    caches know to rebuild. Missing a stamp would desync planning wealth from the lots; the
+    per-tick claim/securities identity gates would trip loudly."""
+    econ._bonds_version = getattr(econ, "_bonds_version", 0) + 1
+
+
+def _bond_valuations(econ: Any):
+    """One pass over the lots per (tick, lots-version): per-holder market-value lists and
+    per-holder (market - cost) delta lists, in lot order.
+
+    Replaces the former per-call full-lot scans (planning's per-household bond wealth and
+    per-loan bank economic capital were O(N_agents x N_lots) per tick -- 5.3k households x
+    30k lots at the 10k-person scale). Sums stay the same builtin over the same sequence
+    (compensated sum() per holder); bank deltas are replayed as the same += sequence.
+    """
+    # rate is in the key for out-of-loop callers (tests hike econ._rate mid-tick to probe the
+    # SVB channel); inside step() it is set once at the top of the tick, so it never churns.
+    key = (econ.t, getattr(econ, "_bonds_version", 0), econ._rate)
+    cached = getattr(econ, "_bond_valuation_cache", None)
+    if cached is not None and cached[0] == key:
+        return cached
+    mv_lists: Dict = {}
+    delta_lists: Dict = {}
+    for lot in econ._bonds:
+        mv = bond_market_value(econ, lot)
+        holder = lot["holder"]
+        mv_lists.setdefault(holder, []).append(mv)
+        delta_lists.setdefault(holder, []).append(mv - lot["cost"])
+    mv_sums = {holder: sum(values) for holder, values in mv_lists.items()}
+    cached = (key, mv_sums, delta_lists)
+    econ._bond_valuation_cache = cached
+    return cached
+
+
 def household_bond_value(econ: Any, household_id) -> float:
     cfg = econ.cfg.securities
     if not cfg.bonds:
         return 0.0
-    return sum(bond_market_value(econ, lot) for lot in econ._bonds if lot["holder"] == household_id)
+    return _bond_valuations(econ)[1].get(household_id, 0)
+
+
+def bank_bond_capital_deltas(econ: Any, bank_id) -> list:
+    """Per-lot (market - cost) for `bank_id`'s book, in lot order (bank_economic_capital
+    replays these with the same += sequence as its former full-lot scan)."""
+    return _bond_valuations(econ)[2].get(bank_id, ())
 
 
 def redeem_household_bonds(econ: Any, household_id, amount: float) -> None:
@@ -63,6 +104,7 @@ def redeem_household_bonds(econ: Any, household_id, amount: float) -> None:
         else:
             kept.append(lot)
     econ._bonds = kept
+    bump_bonds_version(econ)
     reindex_bonds(econ)
 
 
@@ -112,6 +154,7 @@ def run_bill_maturity_phase(econ: Any) -> None:
                         bridge.post_household_bond_trade(lot["holder"], cash_delta=f, face_delta=-f)
                 econ._bonds_outstanding -= f
         econ._bonds = [lot for lot in econ._bonds if lot["matures_at"] > econ.t]
+        bump_bonds_version(econ)
         reindex_bonds(econ)
 
 
@@ -157,6 +200,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "cost": buy,
                     "matures_at": econ.t + cfg.bond_maturity,
                 })
+                bump_bonds_version(econ)
                 econ._bonds_outstanding += buy
                 remaining -= buy
                 issued = True
@@ -183,6 +227,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "cost": want,
                     "matures_at": econ.t + cfg.bond_maturity,
                 })
+                bump_bonds_version(econ)
                 econ._bonds_outstanding += want
                 remaining -= want
                 issued = True

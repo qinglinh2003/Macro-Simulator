@@ -113,11 +113,12 @@ def bank_economic_capital(econ: Any, bank: Bank) -> float:
     cfg = econ.cfg.banking
     cap = econ.ledger.balance(bank.id)
     if cfg.bonds and econ._bonds:
-        from macro_sim.systems.securities import bond_market_value
+        from macro_sim.systems.securities import bank_bond_capital_deltas
 
-        for lot in econ._bonds:
-            if lot["holder"] == bank.id:
-                cap += bond_market_value(econ, lot) - lot["cost"]
+        # cached per-lot (market - cost) for this bank, replayed as the same += sequence the
+        # full-lot scan produced (this runs per loan grant -- O(N_lots) per call before).
+        for delta in bank_bond_capital_deltas(econ, bank.id):
+            cap += delta
     return cap
 
 
