@@ -642,3 +642,37 @@ def test_cross_household_marital_equalization_moves_ledger_money_with_the_claim(
     assert bridge.claims.balance_sheet(50).cash_claim == pytest.approx(0.0)
     assert bridge.claims.balance_sheet(51).cash_claim == pytest.approx(6.0)
     bridge.assert_all_claim_identities(bridge.econ)
+
+
+def test_dead_childs_claim_on_guardian_extinguishes_with_the_iou():
+    """Flavor 6 (H5988): a guardian household where the children's positive claims are backed
+    by the guardian's NEGATIVE claim (child-cost IOU), not by money. When a child dies with
+    outside heirs, the uncollectable IOU dies with them: heirs receive only what the account
+    holds, the guardian is forgiven the shortfall, and the identity is unchanged."""
+    ledger = Ledger({"H0": 0.0, "H1": 0.0, "BANK_0": 100.0})
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0", 1: "H1"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0"), _HouseholdStub("H1")], ledger=ledger),
+    )
+    guardian = _person(60, age=40)
+    child = _person(61, age=12)
+    child.alive = False
+    parent = _person(62, age=45)
+    parent.household_id = 1
+    child.mother_id = parent.id
+    bridge.demographic_state = _DemographicStateStub(people=[guardian, child, parent])
+    bridge.claims.add_person(guardian.id, household_id=0, cash_claim=-20.0)
+    bridge.claims.add_person(child.id, household_id=0, cash_claim=20.0)
+    bridge.claims.add_person(parent.id, household_id=1, cash_claim=0.0)
+    event = DeathEvent(tick=9, date=date(2000, 1, 10), person_id=child.id, age=12)
+
+    bridge.on_death(event, child)
+
+    # nothing to collect: the heir gets 0, the guardian's IOU is forgiven in full
+    assert ledger.balance("H0") == pytest.approx(0.0)
+    assert ledger.balance("H1") == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(parent.id).cash_claim == pytest.approx(0.0)
+    assert bridge.claims.balance_sheet(guardian.id).cash_claim == pytest.approx(0.0)
+    bridge.assert_all_claim_identities(bridge.econ)

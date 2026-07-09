@@ -671,6 +671,32 @@ class DemographicEconomicBridge:
         for member_id in self.claims.members_of_household(int(household_id)):
             self.claims.balance_sheet(member_id).bank_equity_claims.clear()
 
+    def _extinguish_intra_household_iou(self, dead_person_id: int, household_id: int, amount: float) -> None:
+        """The deceased's positive claim beyond the account balance is a claim ON the
+        household's negative claimants (an intra-household IOU). Outside heirs cannot collect
+        it, so it dies with the deceased: forgive the household debtors pro rata by the same
+        amount (their negative cash claims move toward zero). The mirror of
+        _absorb_negative_cash_claim. Any residue beyond the debtors' total (pure drift) stays
+        a write-down."""
+        remaining = float(amount)
+        if remaining <= 0.0:
+            return
+        debtors = [
+            (int(pid), -float(self.claims.balance_sheet(pid).cash_claim))
+            for pid in self.claims.members_of_household(int(household_id))
+            if int(pid) != int(dead_person_id) and float(self.claims.balance_sheet(pid).cash_claim) < 0.0
+        ]
+        total_owed = sum(owed for _, owed in debtors)
+        if total_owed <= 0.0:
+            return
+        forgiven = min(remaining, total_owed)
+        applied = 0.0
+        for pid, owed in debtors[:-1]:
+            cut = forgiven * owed / total_owed
+            self.claims.balance_sheet(pid).cash_claim += cut
+            applied += cut
+        self.claims.balance_sheet(debtors[-1][0]).cash_claim += forgiven - applied
+
     def _apply_dissolution_transfers(self, result: Any) -> None:
         """Marital-property equalization is a REAL transfer: when the spouses' sheets sit on
         DIFFERENT accounts (stale contracts across households), the ledger money must move
@@ -1541,13 +1567,18 @@ class DemographicEconomicBridge:
             moved_cash = cash
             if cash > 0.0 and src_account != dst_account and getattr(self.econ, "ledger", None) is not None:
                 # An estate distributes what the account actually holds at administration
-                # time. With several deaths settling against ONE shared account in the same
-                # kernel tick, an earlier settlement may have drained it; the unbacked part
-                # of this share is written down (the dead's claim shrinks to reality) rather
-                # than bounced off the A4 gate. Cohabitants' own claims stay protected.
+                # time. The unbacked part of this share is typically an INTRA-HOUSEHOLD IOU
+                # (e.g. a guardian's negative claim charged for the children's keep): it is
+                # uncollectable by outside heirs, so it dies with the deceased and the
+                # household debtors are forgiven the same amount -- both legs of the IOU
+                # extinguish together and the household identity is unchanged. Cohabitants'
+                # own positive claims stay protected.
                 protected = self._other_positive_cash_claims(src_person_id, src_sheet.household_id)
                 available = max(0.0, float(self.econ.ledger.balance(src_account)) - protected)
                 moved_cash = min(cash, available)
+                shortfall = cash - moved_cash
+                if shortfall > 0.0:
+                    self._extinguish_intra_household_iou(src_person_id, src_sheet.household_id, shortfall)
             src_sheet.cash_claim -= cash
             dst_sheet.cash_claim += moved_cash
             if src_account != dst_account:
