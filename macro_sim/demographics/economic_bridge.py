@@ -1538,11 +1538,22 @@ class DemographicEconomicBridge:
 
         cash = float(package["cash"]) * fraction
         if cash:
+            moved_cash = cash
+            if cash > 0.0 and src_account != dst_account and getattr(self.econ, "ledger", None) is not None:
+                # An estate distributes what the account actually holds at administration
+                # time. With several deaths settling against ONE shared account in the same
+                # kernel tick, an earlier settlement may have drained it; the unbacked part
+                # of this share is written down (the dead's claim shrinks to reality) rather
+                # than bounced off the A4 gate. Cohabitants' own claims stay protected.
+                protected = self._other_positive_cash_claims(src_person_id, src_sheet.household_id)
+                available = max(0.0, float(self.econ.ledger.balance(src_account)) - protected)
+                moved_cash = min(cash, available)
             src_sheet.cash_claim -= cash
-            dst_sheet.cash_claim += cash
+            dst_sheet.cash_claim += moved_cash
             if src_account != dst_account:
                 if cash > 0.0:
-                    self.econ.ledger.transfer(src_account, dst_account, cash)
+                    if moved_cash > 0.0:
+                        self.econ.ledger.transfer(src_account, dst_account, moved_cash)
                 else:
                     self.econ.ledger.transfer(dst_account, src_account, -cash)
 
