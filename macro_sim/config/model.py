@@ -19,7 +19,32 @@ That count is the parsimony target we protect (spec §7.4 read-out).
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
+
+
+def _cached_view(builder):
+    """Build a grouped config view once and reuse it (perf).
+
+    The view dataclasses are frozen snapshots of Config fields, and Config is frozen-by-
+    discipline after t=0 (Policy is the only run-time-mutable state), so the first-access
+    snapshot is the run's truth. Hot paths read views per call (e.g. bond valuation per
+    lot); without the cache each access CONSTRUCTED a fresh frozen dataclass -- tens of
+    thousands of builds per tick. The cache lives in __dict__ under a private key, which
+    dataclass __eq__/__repr__ ignore.
+    """
+    key = "_view_" + builder.__name__
+
+    @property
+    @functools.wraps(builder)
+    def prop(self):
+        cached = self.__dict__.get(key)
+        if cached is None:
+            cached = builder(self)
+            self.__dict__[key] = cached
+        return cached
+
+    return prop
 
 
 @dataclass
@@ -485,7 +510,7 @@ class Config:
         """v2 is active when a capital-goods sector exists."""
         return self.n_firms_k > 0
 
-    @property
+    @_cached_view
     def banking(self):
         """Passive grouped view of banking parameters for future system extraction."""
         from macro_sim.config.schema import BankingConfig
@@ -535,7 +560,7 @@ class Config:
             trend_lambda=self.trend_lambda,
         )
 
-    @property
+    @_cached_view
     def central_banking(self):
         """Passive grouped view of central-bank policy and reserve-quantity parameters."""
         from macro_sim.config.schema import CentralBankConfig
@@ -554,7 +579,7 @@ class Config:
             omo_drain_frac=self.omo_drain_frac,
         )
 
-    @property
+    @_cached_view
     def capital_goods(self):
         """Passive grouped view of capital-goods market parameters."""
         from macro_sim.config.schema import CapitalGoodsConfig
@@ -565,7 +590,7 @@ class Config:
             gov_investment_share=self.gov_investment_share,
         )
 
-    @property
+    @_cached_view
     def goods(self):
         """Passive grouped view of consumption-goods market parameters."""
         from macro_sim.config.schema import GoodsConfig
@@ -575,7 +600,7 @@ class Config:
             a=self.a,
         )
 
-    @property
+    @_cached_view
     def settlement(self):
         """Passive grouped view of settlement and household fiscal-flow parameters."""
         from macro_sim.config.schema import SettlementConfig
@@ -589,7 +614,7 @@ class Config:
             jg_productivity=self.jg_productivity,
         )
 
-    @property
+    @_cached_view
     def planning(self):
         """Passive grouped view of phase-1 planning parameters."""
         from macro_sim.config.schema import PlanningConfig
@@ -609,7 +634,7 @@ class Config:
             lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
         )
 
-    @property
+    @_cached_view
     def demographics(self):
         """Passive grouped view of demographic-economy integration parameters."""
         from macro_sim.config.schema import DemographicsConfig
@@ -632,7 +657,7 @@ class Config:
             demographic_annual_leave_rate_late=self.demographic_annual_leave_rate_late,
         )
 
-    @property
+    @_cached_view
     def securities(self):
         """Passive grouped view of government securities parameters."""
         from macro_sim.config.schema import SecuritiesConfig
@@ -652,7 +677,7 @@ class Config:
             bank_bond_duration_limit=self.bank_bond_duration_limit,
         )
 
-    @property
+    @_cached_view
     def firm_demographics(self):
         """Passive grouped view of consumption-firm entry, exit, and growth parameters."""
         from macro_sim.config.schema import FirmDemographicsConfig
@@ -673,7 +698,7 @@ class Config:
             shares_per_firm=self.shares_per_firm,
         )
 
-    @property
+    @_cached_view
     def credit(self):
         """Passive grouped view of credit creation and debt-service parameters."""
         from macro_sim.config.schema import CreditConfig
@@ -692,7 +717,7 @@ class Config:
             interest_by_deposits=self.interest_by_deposits,
         )
 
-    @property
+    @_cached_view
     def equity_market(self):
         """Passive grouped view of aggregate and per-firm equity-market parameters."""
         from macro_sim.config.schema import EquityConfig

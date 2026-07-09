@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import Any
 
 
@@ -13,13 +14,21 @@ def expected_remaining_life_years(age: int, rates) -> float:
     survival-at-age ratios:
 
     sum_{s=age}^{omega} l(s) / l(age)
+
+    Pure in (age, rates); rates is a frozen all-scalar dataclass, so the value is
+    memoized -- the uncached version rebuilt the full survival curve per call,
+    i.e. per household member per tick under lifecycle consumption.
     """
 
     if age < 0:
         return 0.0
     if age > rates.omega:
         return 0.0
+    return _expected_remaining_life_years_cached(age, rates)
 
+
+@lru_cache(maxsize=65536)
+def _expected_remaining_life_years_cached(age: int, rates) -> float:
     survival_probabilities = list(rates.survival_curve())
     expected_len = rates.omega + 1
     survivorship: list[float] = [1.0]
