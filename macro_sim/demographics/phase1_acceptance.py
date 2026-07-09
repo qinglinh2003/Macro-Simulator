@@ -27,7 +27,8 @@ from macro_sim.economy import Economy
 @dataclass(frozen=True)
 class Phase1AcceptanceConfig:
     name: str = "tiny"
-    version: str = "v123"
+    version: str = "v124"   # v13 rides the v12.4 base: resolution fund + entry bootstrap keep the
+    #                         bank sector alive at scale (v123 reproduces the pre-fix cascade)
     population: int = 200
     ticks: int = 90
     n_firms_c: int = 20

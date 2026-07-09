@@ -83,7 +83,7 @@ def _run_version(version: str, *, label: str, ticks: int, overrides: Mapping[str
 
 def run_single_version_visualization(
     *,
-    version: str = "v123",
+    version: str = "v124",
     label: str | None = None,
     output_dir: str | Path,
     ticks: int = DEFAULT_DEMOGRAPHIC_TICKS,
@@ -203,7 +203,7 @@ def _default_single_output_dir(version: str, label: str) -> Path:
 
 def main_single(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run and visualize one demographic macro-simulator version.")
-    parser.add_argument("--version", default="v123", help="Config factory name, e.g. v123")
+    parser.add_argument("--version", default="v124", help="Config factory name, e.g. v124")
     parser.add_argument("--label", default="v13_demo", help="Run artifact label")
     parser.add_argument("--ticks", type=int, default=DEFAULT_DEMOGRAPHIC_TICKS, help="Ticks to run")
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for CSV, metadata, and figures")
