@@ -184,6 +184,12 @@ class MicroDemographicKernel:
             if fertility_mode == "married_only" and marital_fertility_curve is None
             else marital_fertility_curve
         )
+        # The interpolation grid is fixed by the curve; building it per np.interp call allocated a
+        # fresh array per fertile woman per day.
+        self._fertility_curve_xp = (
+            np.arange(len(self.marital_fertility_curve), dtype=float)
+            if self.marital_fertility_curve is not None else None
+        )
 
     def tick(self, state: GenesisState, economic_state: object | None = None) -> TickResult:
         _ = economic_state
@@ -207,9 +213,9 @@ class MicroDemographicKernel:
                     person.age_years_on(state.current_date),
                     dt=dt_years,
                 )
-            if survives:
-                person.age = min(person.completed_age_on(state.current_date), self.rates.omega)
-            else:
+            if not survives:
+                # (survivors keep the age set in the update loop above -- recomputing
+                #  completed_age_on here returned the identical value)
                 person.alive = False
                 person.death_tick = tick
                 deaths += 1
@@ -231,7 +237,8 @@ class MicroDemographicKernel:
         for event in state.marriage_events[marriage_count_before:]:
             self.on_marriage(event)
 
-        people_by_id = {person.id: person for person in state.people}
+        # people_by_id from the top of the tick is still exact: nothing above adds or removes
+        # people (deaths/marriages only mutate Person fields), and births extend the list below.
         births: list[Person] = []
         for person in [candidate for candidate in state.people if candidate.alive]:
             if person.sex != "F" or person.age > self.rates.omega:
@@ -287,7 +294,7 @@ class MicroDemographicKernel:
         if father_id is None:
             return 0.0
         assert self.marital_fertility_curve is not None
-        return _curve_rate(self.marital_fertility_curve, age_years)
+        return _curve_rate(self.marital_fertility_curve, age_years, self._fertility_curve_xp)
 
 
 def _birth_father_id(mother: Person, people_by_id: dict[int, Person]) -> int | None:
@@ -299,10 +306,12 @@ def _birth_father_id(mother: Person, people_by_id: dict[int, Person]) -> int | N
     return partner.id
 
 
-def _curve_rate(curve: np.ndarray, age_years: float) -> float:
+def _curve_rate(curve: np.ndarray, age_years: float, xp: np.ndarray | None = None) -> float:
     if age_years < 0.0 or age_years > len(curve) - 1:
         return 0.0
-    return float(np.interp(age_years, np.arange(len(curve), dtype=float), curve))
+    if xp is None:
+        xp = np.arange(len(curve), dtype=float)
+    return float(np.interp(age_years, xp, curve))
 
 
 def _default_marital_fertility_curve(rates: Phase0VitalRates, social_config: SocialDynamicsConfig) -> np.ndarray:
