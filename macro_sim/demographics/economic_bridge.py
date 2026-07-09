@@ -793,6 +793,11 @@ class DemographicEconomicBridge:
         agent = self._new_household_agent(account_id, idx)
         self.econ.households.append(agent)
         self._household_agent_by_account[account_id] = agent
+        # v11.5's id->household map predates household creation; without this, a post-genesis
+        # household that buys bank equity is silently skipped by pay_bank_dividends.
+        hh_by_id = getattr(self.econ, "_hh_by_id", None)
+        if hh_by_id is not None:
+            hh_by_id[account_id] = agent
         self.household_to_account[household_id] = account_id
         self.account_to_household[account_id] = household_id
         return account_id
