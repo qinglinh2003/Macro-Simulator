@@ -27,6 +27,7 @@ from macro_sim.demographics.kernel import MicroDemographicKernel
 from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig, apply_leaving_home_dynamics
 from macro_sim.demographics.macro_signal import DemoMacroSignal
 from macro_sim.demographics.stratification import WealthStratification
+from macro_sim.housing import HousingRegistry
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -189,6 +190,17 @@ class Economy:
                 mortality_mult_lo=cfg.mortality_mult_lo,
                 mortality_mult_hi=cfg.mortality_mult_hi,
             )
+        # v15.0 housing: title registry + genesis endowment. One homogeneous dwelling per
+        # genesis household, 100% owner-occupied, no mortgage; newly formed households start
+        # houseless (they are the emergent buyers/renters of later stages). Price is FROZEN
+        # at the genesis anchor -- no market until v15.1, stock integrity before flows.
+        self.housing = None
+        self._house_price = 0.0
+        if cfg.housing_enabled:
+            self.housing = HousingRegistry()
+            self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
+            for h in self.households:
+                self.housing.mint(h.id)
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -389,6 +401,8 @@ class Economy:
         self.ledger.assert_non_negative()
         self.ledger.assert_reserves_conserved()   # v11.4: the reserve overlay conserves too (no-op if off)
         assert_securities_identities(self)        # v12: bond / CB-balance-sheet / master-NFA gates (no-op if off)
+        if self.housing is not None:
+            self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
             self.demographic_bridge.assert_all_claim_identities(self)
 

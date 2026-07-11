@@ -112,6 +112,10 @@ class Config:
     mortality_income_elasticity: float = 0.0  # gamma in M = clip(x^-gamma, lo, hi); 0 = off -- FREE
     mortality_mult_lo: float = 0.7
     mortality_mult_hi: float = 1.3
+    # -- v15.0 housing: title registry + genesis endowment (frozen price, zero market).
+    # A dwelling is a REAL asset in a registry, never money: A4/A5 are blind to it.
+    housing_enabled: bool = False           # one homogeneous dwelling per genesis household
+    house_price_income_years: float = 3.5   # frozen genesis valuation anchor (x annual wage income)
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1253,6 +1257,7 @@ class Config:
         assert self.fertility_income_elasticity >= 0.0 and self.mortality_income_elasticity >= 0.0, "feedback elasticities must be >= 0"
         assert 0.0 < self.fertility_mult_lo <= 1.0 <= self.fertility_mult_hi, "fertility multiplier bounds must bracket the neutral 1.0"
         assert 0.0 < self.mortality_mult_lo <= 1.0 <= self.mortality_mult_hi, "mortality multiplier bounds must bracket the neutral 1.0"
+        assert self.house_price_income_years > 0.0, "housing genesis anchor must be > 0"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

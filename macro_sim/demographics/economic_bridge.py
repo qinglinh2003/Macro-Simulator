@@ -1415,6 +1415,12 @@ class DemographicEconomicBridge:
             if total_face > 0.0:
                 self._move_bond_lots(old_account, heir_account, total_face)
                 heir_sheet.bond_face_claim += total_face
+        housing = getattr(econ, "housing", None)
+        if housing is not None:
+            # v15.0: dwelling TITLE follows the merge sweep -- an orphaned account holding a
+            # dwelling would be a title zombie (the registry analog of the dividend-collecting
+            # orphan account this sweep exists to prevent)
+            housing.transfer_all(old_account, heir_account)
 
     def _normalize_household_cash_claims_to_deposits(self, household_id: int, account_id: str) -> None:
         if self.econ is None or getattr(self.econ, "ledger", None) is None:
@@ -1863,6 +1869,14 @@ class DemographicEconomicBridge:
             if free_cash > 0.0 and fiscal is not None and econ.ledger.has_account(fiscal):
                 econ.ledger.transfer(account_id, fiscal, free_cash)
                 econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + free_cash
+            housing = getattr(econ, "housing", None)
+            if housing is not None and fiscal is not None:
+                # v15.0 stopgap: bona-vacantia dwellings escheat to the fiscal account. v15.1
+                # replaces this with a probate SALE whose cash proceeds run the proven money
+                # inheritance rails (in-kind heir transfers never need to exist).
+                moved = housing.transfer_all(account_id, fiscal)
+                if moved:
+                    econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
 
     def _reconcile_household_claims(self) -> None:
         econ = self.econ

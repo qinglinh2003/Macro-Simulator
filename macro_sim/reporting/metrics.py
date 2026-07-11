@@ -367,6 +367,20 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     else:
         rec["demographics_enabled"] = 0.0
 
+    housing = getattr(econ, "housing", None)
+    if housing is not None:
+        # v15.0: registry stock gauges (frozen price until the v15.1 market)
+        fiscal = getattr(econ, "_fiscal", None)
+        owner_households = sum(1 for h in households if housing.dwellings_of(h.id))
+        rec.update(
+            {
+                "dwellings_total": float(housing.count()),
+                "dwellings_fiscal": float(len(housing.dwellings_of(fiscal)) if fiscal else 0.0),
+                "homeowner_share": owner_households / max(1, len(households)),
+                "house_price": float(getattr(econ, "_house_price", 0.0)),
+            }
+        )
+
     # -- observable-but-not-yet-mechanistic metrics -----------------------
     # These are read-only aggregates over fields the model already maintains.
     # They support the visualization refactor without adding any behavioral
