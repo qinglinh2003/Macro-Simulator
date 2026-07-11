@@ -1871,12 +1871,18 @@ class DemographicEconomicBridge:
                 econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + free_cash
             housing = getattr(econ, "housing", None)
             if housing is not None and fiscal is not None:
-                # v15.0 stopgap: bona-vacantia dwellings escheat to the fiscal account. v15.1
-                # replaces this with a probate SALE whose cash proceeds run the proven money
-                # inheritance rails (in-kind heir transfers never need to exist).
-                moved = housing.transfer_all(account_id, fiscal)
-                if moved:
-                    econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
+                market = getattr(econ, "housing_market", None)
+                if market is not None:
+                    # v15.1: probate SALE -- the dwelling is listed (forced) with the empty
+                    # account as seller; sale proceeds escheat at the moment of sale. Deaths
+                    # become the market's involuntary supply floor.
+                    for dwelling in housing.dwellings_of(account_id):
+                        market.list_dwelling(econ, dwelling.id, account_id, forced=True)
+                else:
+                    # v15.0 stopgap: bona-vacantia dwellings escheat in kind
+                    moved = housing.transfer_all(account_id, fiscal)
+                    if moved:
+                        econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
 
     def _reconcile_household_claims(self) -> None:
         econ = self.econ

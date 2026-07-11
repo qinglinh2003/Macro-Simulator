@@ -1,0 +1,164 @@
+"""v15.1 resale market: posted-ask listings, monthly matching sessions, atomic sales.
+
+The secondary market IS the housing market (construction waits until v15.4). Grammar
+follows the model's native markets: posted prices + inventory-pressure decay + periodic
+matching (the marriage-market cadence), never a Walrasian auction.
+
+Listing inflows in v15.1 (forced-first discipline):
+  - PROBATE: empty households' dwellings are listed instead of escheated in kind;
+    sale proceeds go to the fiscal account (bona vacantia -- heir participation in
+    house value needs house claims in estate packages, a later refinement).
+  - DISTRESS: member households whose deposits fall below a floor list one dwelling
+    (selling the home for liquidity); proceeds post through the person-claim layer.
+
+Buyers: houseless households, cheapest-first over k visible listings, budget capped
+at deposits*(1-buffer). One purchase per session. With prices anchored at 3-4x annual
+income and no mortgages yet, this is by design a CASH-CONSTRAINED regime: thin volume,
+buyer's market -- the reference regime the v15.2 credit unlock is compared against.
+
+Every sale is ATOMIC: ledger transfer + registry title + person-claim postings inside
+this function, and the registry/claim hard gates assert after the phase.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from macro_sim.markets.matching import EPS
+
+
+@dataclass
+class Listing:
+    dwelling_id: int
+    seller_account: str
+    ask: float
+    listed_tick: int
+    forced: bool = False
+
+
+@dataclass
+class HousingMarket:
+    session_interval: int = 30
+    ask_markup: float = 0.05        # voluntary listings post above the reference price
+    forced_discount: float = 0.10   # probate/foreclosure listings post below it
+    ask_decay: float = 0.03         # per-session cut while unsold (inventory pressure)
+    search_k: int = 5               # buyer sees only the k cheapest listings
+    buyer_buffer: float = 0.25      # deposits share a buyer will not spend
+    distress_floor: float = 5.0     # deposits below this list the home for liquidity
+
+    listings: dict[int, Listing] = field(default_factory=dict)   # dwelling_id -> Listing
+    sales_total: int = 0
+    # per-session gauges (metrics read these; refreshed each session)
+    last_session_sales: int = 0
+    last_session_volume: float = 0.0
+    last_session_tom: float = 0.0        # mean time-on-market of the units SOLD
+    forced_share: float = 0.0            # forced share of current listings
+
+    def is_listed(self, dwelling_id: int) -> bool:
+        return dwelling_id in self.listings
+
+    def list_dwelling(self, econ: Any, dwelling_id: int, seller_account: str, *, forced: bool) -> None:
+        if dwelling_id in self.listings:
+            return
+        reference = max(EPS, float(econ._house_price))
+        ask = reference * ((1.0 - self.forced_discount) if forced else (1.0 + self.ask_markup))
+        self.listings[dwelling_id] = Listing(
+            dwelling_id=dwelling_id,
+            seller_account=seller_account,
+            ask=ask,
+            listed_tick=int(econ.t),
+            forced=forced,
+        )
+
+
+def run_housing_market_phase(econ: Any) -> None:
+    market = getattr(econ, "housing_market", None)
+    housing = getattr(econ, "housing", None)
+    if market is None or housing is None:
+        return
+    if econ.t % market.session_interval != 0:
+        return
+
+    _ingest_distress_listings(econ, market, housing)
+    _drop_stale_listings(econ, market, housing)
+
+    # ---- matching session: buyers cheapest-first over the k cheapest listings ----
+    led = econ.ledger
+    bridge = getattr(econ, "demographic_bridge", None)
+    fiscal = getattr(econ, "_fiscal", None)
+    book = sorted(market.listings.values(), key=lambda l: (l.ask, l.dwelling_id))
+    buyers = [
+        h for h in econ.households
+        if not housing.dwellings_of(h.id)
+        and (bridge is None or bridge.household_has_living_members(h.id))
+    ]
+    econ.rng.shuffle(buyers)
+
+    sold: list[tuple[Listing, float]] = []
+    for buyer in buyers:
+        if not book:
+            break
+        budget = led.balance(buyer.id) * (1.0 - market.buyer_buffer)
+        window = book[: market.search_k]
+        pick = next((l for l in window if l.ask <= budget), None)
+        if pick is None:
+            continue
+        price = pick.ask
+        # ---- atomic sale: ledger + claims + title in one place ----
+        led.transfer(buyer.id, pick.seller_account, price)
+        if bridge is not None:
+            buyer_hh = bridge.household_id_for_account(buyer.id)
+            bridge._post_household_cash_delta(buyer_hh, -price, reason="house_purchase")
+            seller_hh = bridge.account_to_household.get(pick.seller_account)
+            if seller_hh is not None and bridge.claims.members_of_household(int(seller_hh)):
+                bridge._post_household_cash_delta(int(seller_hh), price, reason="house_sale")
+            elif fiscal is not None and pick.seller_account != fiscal:
+                # memberless (probate) seller: proceeds escheat immediately -- parking cash
+                # on a memberless account would trip the claim identity next tick
+                proceeds = min(price, led.balance(pick.seller_account))
+                if proceeds > EPS:
+                    led.transfer(pick.seller_account, fiscal, proceeds)
+                    econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + proceeds
+        housing.transfer(pick.dwelling_id, buyer.id)
+        book.remove(pick)
+        del market.listings[pick.dwelling_id]
+        sold.append((pick, price))
+
+    # ---- price index (transaction-weighted, hold-last) + ask decay ----
+    if sold:
+        econ._house_price = sum(p for _, p in sold) / len(sold)
+        market.sales_total += len(sold)
+        market.last_session_tom = sum(econ.t - l.listed_tick for l, _ in sold) / len(sold)
+    market.last_session_sales = len(sold)
+    market.last_session_volume = sum(p for _, p in sold)
+    for listing in market.listings.values():
+        listing.ask = max(EPS, listing.ask * (1.0 - market.ask_decay))
+    n_listed = len(market.listings)
+    market.forced_share = (
+        sum(1 for l in market.listings.values() if l.forced) / n_listed if n_listed else 0.0
+    )
+
+
+def _ingest_distress_listings(econ: Any, market: HousingMarket, housing: Any) -> None:
+    led = econ.ledger
+    bridge = getattr(econ, "demographic_bridge", None)
+    for h in econ.households:
+        if led.balance(h.id) >= market.distress_floor:
+            continue
+        if bridge is not None and not bridge.household_has_living_members(h.id):
+            continue                      # memberless households are the probate flow's job
+        owned = housing.dwellings_of(h.id)
+        if not owned:
+            continue
+        dwelling = owned[0]
+        if not market.is_listed(dwelling.id):
+            market.list_dwelling(econ, dwelling.id, h.id, forced=False)
+
+
+def _drop_stale_listings(econ: Any, market: HousingMarket, housing: Any) -> None:
+    """A listing whose dwelling changed owner outside a sale (merge sweep, escheat)
+    belongs to the new owner's decision, not the old seller's."""
+    for dwelling_id, listing in list(market.listings.items()):
+        if housing.owner_of(dwelling_id) != listing.seller_account:
+            del market.listings[dwelling_id]

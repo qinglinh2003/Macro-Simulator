@@ -380,6 +380,17 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "house_price": float(getattr(econ, "_house_price", 0.0)),
             }
         )
+        market = getattr(econ, "housing_market", None)
+        if market is not None:
+            rec.update(
+                {
+                    "housing_listings": float(len(market.listings)),
+                    "housing_sales_session": float(market.last_session_sales),
+                    "housing_sales_total": float(market.sales_total),
+                    "housing_tom": float(market.last_session_tom),
+                    "housing_forced_share": float(market.forced_share),
+                }
+            )
 
     # -- observable-but-not-yet-mechanistic metrics -----------------------
     # These are read-only aggregates over fields the model already maintains.

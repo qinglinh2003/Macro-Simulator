@@ -116,6 +116,15 @@ class Config:
     # A dwelling is a REAL asset in a registry, never money: A4/A5 are blind to it.
     housing_enabled: bool = False           # one homogeneous dwelling per genesis household
     house_price_income_years: float = 3.5   # frozen genesis valuation anchor (x annual wage income)
+    # -- v15.1 resale market (posted asks, monthly sessions, cash-constrained regime).
+    housing_market_enabled: bool = False    # requires housing_enabled
+    housing_session_interval: int = 30      # matching cadence (marriage-market precedent)
+    housing_ask_markup: float = 0.05        # voluntary ask over the reference price
+    housing_forced_discount: float = 0.10   # probate/foreclosure asks under it
+    housing_ask_decay: float = 0.03         # per-session cut while unsold
+    housing_search_k: int = 5               # buyer sees the k cheapest listings
+    housing_buyer_buffer: float = 0.25      # deposits share a buyer keeps
+    housing_distress_floor: float = 5.0     # deposits below this list the home
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1258,6 +1267,11 @@ class Config:
         assert 0.0 < self.fertility_mult_lo <= 1.0 <= self.fertility_mult_hi, "fertility multiplier bounds must bracket the neutral 1.0"
         assert 0.0 < self.mortality_mult_lo <= 1.0 <= self.mortality_mult_hi, "mortality multiplier bounds must bracket the neutral 1.0"
         assert self.house_price_income_years > 0.0, "housing genesis anchor must be > 0"
+        assert not (self.housing_market_enabled and not self.housing_enabled), "housing market requires the registry"
+        assert self.housing_session_interval >= 1, "housing session interval must be >= 1 tick"
+        assert 0.0 <= self.housing_ask_decay < 1.0 and 0.0 <= self.housing_forced_discount < 1.0, "housing ask cuts are fractions"
+        assert 0.0 <= self.housing_buyer_buffer < 1.0, "housing buyer buffer is a deposits fraction"
+        assert self.housing_search_k >= 1, "buyers must see at least one listing"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

@@ -28,6 +28,7 @@ from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig
 from macro_sim.demographics.macro_signal import DemoMacroSignal
 from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.housing import HousingRegistry
+from macro_sim.housing.market import HousingMarket, run_housing_market_phase
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -195,12 +196,24 @@ class Economy:
         # houseless (they are the emergent buyers/renters of later stages). Price is FROZEN
         # at the genesis anchor -- no market until v15.1, stock integrity before flows.
         self.housing = None
+        self.housing_market = None
         self._house_price = 0.0
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
             self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
             for h in self.households:
                 self.housing.mint(h.id)
+            if cfg.housing_market_enabled:
+                # v15.1 resale market: probate/distress listings, monthly sessions
+                self.housing_market = HousingMarket(
+                    session_interval=cfg.housing_session_interval,
+                    ask_markup=cfg.housing_ask_markup,
+                    forced_discount=cfg.housing_forced_discount,
+                    ask_decay=cfg.housing_ask_decay,
+                    search_k=cfg.housing_search_k,
+                    buyer_buffer=cfg.housing_buyer_buffer,
+                    distress_floor=cfg.housing_distress_floor,
+                )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -340,6 +353,7 @@ class Economy:
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
         run_settlement_phase(self)
         run_debt_service_phase(self)      # v3 only; no-op when banks disabled
+        run_housing_market_phase(self)    # v15.1 only; monthly resale sessions (no-op off)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
         run_interbank_phase(self)         # v11.4 only; money-market funding of reserve deficits (no-op off)
