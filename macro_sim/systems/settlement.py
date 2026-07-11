@@ -26,6 +26,7 @@ def run_settlement_phase(econ: Any) -> None:
     n_h = len(flow_households)
     pol, gov = econ.policy, cfg.government
     econ._tax_profit = econ._tax_income = econ._tax_wealth = econ._benefit_paid = 0.0
+    econ._pension_paid = 0.0
     econ._jg_spending = econ._jg_capital_units = econ._jg_employment = 0.0   # v9.3 job guarantee
 
     # (i) firms pay dividends (cash-capped, A4) into the CLEARING account.
@@ -162,6 +163,23 @@ def run_household_fiscal_phase(econ: Any) -> None:
                     bridge.post_transfer_income(h.id, ben, reason="unemployment_benefit")
                 h.income_realized += ben
                 econ._benefit_paid += ben
+
+    if getattr(pol, "pension_replacement", 0.0) > 0.0 and bridge is not None:
+        # v13 old-age pension: the demographic economy's only transfer to non-workers. The JG
+        # and unemployment benefit both key off labor supply, so elders received NOTHING --
+        # savings-poor elder households sat on the consumption floor for entire runs.
+        wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
+        for h in hh:
+            elders = bridge.household_profile(h.id).elder_count
+            if elders <= 0:
+                continue
+            pen = pol.pension_replacement * wage_ref * elders
+            if pen > EPS:
+                led.transfer(econ._fiscal, h.id, pen)
+                bridge.post_transfer_income(h.id, pen, reason="pension")
+                h.income_realized += pen
+                econ._pension_paid = getattr(econ, "_pension_paid", 0.0) + pen
+                econ._benefit_paid += pen
 
     if pol.tax_wealth_rate > 0.0:
         po = {f.id: getattr(f, "share_price", 0.0) for f in econ.c_firms}

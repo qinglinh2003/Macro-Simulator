@@ -64,6 +64,9 @@ class CentralBankConfig:
     interbank: bool
     omo_reserve_target: float
     omo_drain_frac: float
+    omo_index_deposits: bool
+    cb_log_inflation: bool
+    reserve_floor_frac: float
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,8 @@ class SettlementConfig:
 @dataclass(frozen=True)
 class PlanningConfig:
     theta_wage: float
+    inventory_gap_close: float
+    delta: float
     theta_price: float
     lambda_q: float
     q_invest_floor: float
@@ -144,6 +149,9 @@ class SecuritiesConfig:
 class FirmDemographicsConfig:
     firm_dynamics: bool
     bankrupt_persist: int
+    entry_hurdle: float
+    shell_exit_ticks: int
+    real_entry_signal: bool
     entry_beta: float
     entry_max: int
     index_startup: bool

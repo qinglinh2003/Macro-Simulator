@@ -118,19 +118,25 @@ def unit_cost(firm: Firm) -> float:
 
 # -- target inventory & production (B-plan) -------------------------------------
 
-def plan_production(firm: Firm) -> None:
-    """I*_{f,t} = phi d^e ;  y*_{f,t} = max(0, d^e + I* - I_{f,t-1})  (§7.2).
+def plan_production(firm: Firm, gap_close: float = 1.0) -> None:
+    """I*_{f,t} = phi d^e ;  y*_{f,t} = max(0, d^e + gap_close (I* - I_{f,t-1}))  (§7.2).
 
     firm.inventory is still the end-of-(t-1) stock at planning time.
+
+    gap_close (v13) throttles how much of the inventory gap enters TODAY's production target.
+    1.0 reproduces the one-shot v12 rule exactly. On a one-day tick a multi-day inventory
+    cover (phi in days of demand) with one-shot closing asks for phi days of output at once --
+    the daily-calibrated economy ran at a 2% labor fill rate before this throttle existed.
     """
     firm.target_inventory = firm.phi * firm.demand_expected
-    firm.production_target = max(0.0, firm.demand_expected + firm.target_inventory - firm.inventory)
+    gap = firm.target_inventory - firm.inventory
+    firm.production_target = max(0.0, firm.demand_expected + gap_close * gap)
 
 
 # -- B4: wages (raise on shortage, never cut; DNWR floor automatic) --------------
 
 def plan_wage(firm: Firm, rng: random.Random, theta_wage: float,
-              min_wage: float = 0.0) -> None:
+              min_wage: float = 0.0, delta: float = 0.0) -> None:
     """Wage offer w_{f,t} (§7.2).
 
     Target rises only if the firm was labor-rationed last tick
@@ -147,7 +153,16 @@ def plan_wage(firm: Firm, rng: random.Random, theta_wage: float,
     so "rationed" is False on the first tick -> no first-tick raise (§8.1, point 3).
     """
     was_rationed = firm.hired_prev < firm.labor_demand_eff_prev - EPS
-    w_target = firm.wage * (1.0 + firm.omega) if was_rationed else firm.wage
+    if was_rationed:
+        w_target = firm.wage * (1.0 + firm.omega)
+    elif delta > 0.0 and firm.labor_demand_eff_prev > EPS:
+        # v13 downward wage flexibility: a firm that hired freely last tick lets its wage
+        # target drift down by delta. delta=0 keeps the strict-DNWR v12 behavior bit-identical.
+        # Without this, a deflation ratchets the real wage up without bound (the ZLB smoke run
+        # settled at real wage 4.5x and a 59% job-guarantee share).
+        w_target = firm.wage * (1.0 - delta)
+    else:
+        w_target = firm.wage
     if rng.random() < theta_wage:
         firm.wage = w_target
     # else: posted wage sticks at w_{f,t-1} (already in firm.wage)

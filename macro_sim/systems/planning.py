@@ -34,9 +34,9 @@ def run_planning_phase(econ: Any) -> None:
     #     demand (needed by Cobb-Douglas unit cost) -> wage -> price (wage BEFORE
     #     price) -> cash-capped labor demand -> investment (C-firms, B5).
     for f in econ.firms:
-        B.plan_production(f)
+        B.plan_production(f, cfg.inventory_gap_close)
         f.labor_demand_notional = B.labor_demand_notional(f, f.production_target, econ._pubcap_factor)
-        B.plan_wage(f, econ.rng, cfg.theta_wage, econ.policy.min_wage)
+        B.plan_wage(f, econ.rng, cfg.theta_wage, econ.policy.min_wage, cfg.delta)
         B.plan_price(f, econ.rng, cfg.theta_price)
         # Continuous cash cap (§8.1: floor(D/w) is a cap, not integer employment).
         cash_cap = econ.ledger.balance(f.id) / f.wage

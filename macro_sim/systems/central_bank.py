@@ -38,7 +38,14 @@ def run_omo_phase(econ: Any) -> None:
     banks = [b for b in econ.banks if b.alive]
     if not banks:
         return
-    target = pol.omo_reserve_target * econ._reserve_M0
+    if getattr(cfg, "omo_index_deposits", False):
+        # v13: index the reserve target to what the payment system actually needs -- the
+        # genesis-anchored nominal target detaches as soon as the price level moves (the sick
+        # 10k run drained 135M against a fixed 868k target and ran on LOLR for ten years)
+        target = pol.omo_reserve_target * cfg.reserve_floor_frac * econ.ledger.total_money
+    else:
+        target = pol.omo_reserve_target * econ._reserve_M0
+    econ._omo_target_value = target   # metrics: reserve_gap reads the SAME target the OMO acts on
     current = sum(econ.ledger.reserves(b.id) for b in banks)
     move = pol.omo_drain_frac * (current - target)
     if move > EPS:

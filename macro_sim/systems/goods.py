@@ -34,7 +34,12 @@ def run_goods_phase(econ: Any) -> None:
         if pol.gov_deficit_target > 0.0:
             target = pol.gov_deficit_target
             if pol.deficit_u_ref > 0.0:      # state-dependent: taper toward balance at full employment
-                target *= min(1.0, getattr(econ, "_prev_u", pol.deficit_u_ref) / pol.deficit_u_ref)
+                # v13: the multiplier used to be capped at 1.0, so fiscal policy pushed no harder
+                # at 30% unemployment than at 5% -- the ZLB slump had no fiscal counterweight.
+                # deficit_u_cap > 1 lets the deficit target scale with slack (still tapering to
+                # balance at full employment); cap 1.0 reproduces v12 exactly.
+                cap = float(getattr(econ.cfg, "deficit_u_cap", 1.0))
+                target *= min(cap, getattr(econ, "_prev_u", pol.deficit_u_ref) / pol.deficit_u_ref)
             gov_budget = max(
                 0.0,
                 getattr(econ, "_prev_tax_total", 0.0)

@@ -21,6 +21,7 @@ class Policy:
     gov_deficit_target: float = 0.0      # if >0: size gov consumption to maintain a deficit of this · GDP
     deficit_u_ref: float = 0.0           # if >0: state-dependent deficit -- scale target by min(1, u/this)
     benefit_replacement: float = 0.0     # b: unemployment benefit = b · wage_ref
+    pension_replacement: float = 0.0     # v13: old-age pension per elder = this · wage_ref (0 = off)
 
     # -- fiscal: revenue (four tax bases) ---------------------------------
     tax_profit_rate: float = 0.0         # τ_π on positive firm profit (pre-dividend)
@@ -64,6 +65,7 @@ class Policy:
             gov_deficit_target=cfg.gov_deficit_target,
             deficit_u_ref=cfg.deficit_u_ref,
             benefit_replacement=cfg.benefit_replacement,
+            pension_replacement=getattr(cfg, 'pension_replacement', 0.0),
             tax_profit_rate=cfg.tax_profit_rate,
             tax_income_rate=cfg.tax_income_rate,
             income_allowance=cfg.income_allowance,

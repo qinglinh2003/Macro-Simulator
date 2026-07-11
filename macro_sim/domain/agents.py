@@ -119,6 +119,7 @@ class Firm:
     investment_target: float = 0.0       # I*_{f,t}: notional capital-good demand (B5)
     investment: float = 0.0              # I_{f,t}: realized capital purchased this tick
     insolvent_ticks: int = 0             # v4: consecutive ticks with D-L<0 (bankruptcy counter)
+    idle_ticks: int = 0                  # v13: consecutive ticks with no production and no sales (shell-exit counter)
 
     # v6.1 per-firm equity (DESIGNDOC §18). Each firm is separately traded/valued.
     shares_outstanding: float = 0.0      # this firm's fixed share float (0 = not equitized)

@@ -244,6 +244,13 @@ class Config:
     omo: bool = False                     # open-market ops: drain reserves toward a target ⇒ interbank market binds
     omo_reserve_target: float = 0.0       # target Σ bank reserves as a FRACTION of genesis (0 ⇒ no OMO; e.g. 0.3)
     omo_drain_frac: float = 0.1           # per-tick fraction of the gap to the target drained/injected (smoothing)
+    # v13: a fixed NOMINAL reserve target detaches from the economy once the price level moves
+    # (the 10k x 3650t run drained 135M of reserves against an 868k target while deposits grew
+    # 100x -- LOLR became the system's only funding). Indexing targets reserves the payment
+    # system actually needs: omo_reserve_target x reserve_floor_frac x SigmaD (live deposits).
+    omo_index_deposits: bool = False      # False => genesis-anchored target (v12.4, bit-identical)
+    cb_log_inflation: bool = False        # CB reads ln(P/P_prev) instead of P/P_prev - 1: kills the
+    #                                       Jensen noise bias that inflated the per-tick inflation EMA ~7x
     lolr: bool = False                    # lender of last resort: CB funds a run-hit bank ⇒ no suspension cascade
     bank_bond_duration_limit: float = 0.0 # cap a bank's bond book at k·economic_capital (0 ⇒ no cap; the SVB floor)
     bank_resolution_fund: bool = False    # deposit-insurance/resolution: the STATE absorbs a failed bank's residual
@@ -256,6 +263,15 @@ class Config:
     bankrupt_persist: int = 10      # ticks a C-firm may be insolvent (D-L<0) before it dies
     entry_beta: float = 0.4         # entry sensitivity to excess profit -- FREE (damped)
     entry_max: int = 3              # max new firms per tick (cap; prevents entry overshoot)
+    # v13 entry/exit hygiene. Both default OFF => bit-identical to v12.4. At the 10k x 3650t
+    # scale the nominal entry signal (profit / capital UNITS vs the policy rate) saturates under
+    # inflation so entry pegs at entry_max forever, while never-trading shells (positive net
+    # worth by construction: indexed startup cash, no debt) can never die through the insolvency
+    # rule -- firm_count exploded to ~3.2k with 6% active, polluting stats and tick time.
+    shell_exit_ticks: int = 0       # liquidate a C-firm idle (no production AND no sales) this long; 0 = off
+    real_entry_signal: bool = False  # deflate the entry profit-rate by the price level + entrants start with 0 inventory
+    inventory_gap_close: float = 1.0  # fraction of the inventory gap entering TODAY's production target (1.0 = v12 one-shot)
+    entry_hurdle: float = 0.0       # risk premium added to the policy rate in the entry condition (0 = v12; at the ZLB entry never turned off)
     startup_deposits: float = 15.0   # new firm's initial deposits (from a household; conserved).
                                     # Lean: ~ household wealth in the drained state; firm grows via credit.
     startup_capital: float = 10.0   # new firm's initial capital (real asset, from nothing)
@@ -409,9 +425,14 @@ class Config:
     gov_deficit_target: float = 0.0       # if >0: size gov consumption to MAINTAIN a deficit of this·GDP
     #   (tax-financed G + a controlled deficit); overrides the quantity mode. 0 => quantity mode (g above)
     deficit_u_ref: float = 0.0            # if >0: STATE-DEPENDENT deficit -- scale the target by min(1, u/this),
+    deficit_u_cap: float = 1.0            # v13: max multiple of the deficit target under slack (1.0 = v12 cap)
     #   so it runs the full deficit under slack (u>=ref) but TAPERS to balance at full employment (u->0),
     #   stopping the injection from becoming pure inflation. Anchored to the natural rate (~0.05). 0=fixed target
     benefit_replacement: float = 0.0      # b: unemployment benefit = b·wage_ref -- anchored (OECD replacement)
+    pension_replacement: float = 0.0      # v13: old-age pension per elder person = this · wage_ref (0 = off).
+                                          # The only transfer reaching non-workers: without it elder households
+                                          # with no savings sit at the consumption floor (audit: elder/adult
+                                          # median consumption fell to 0.13, poverty ~44% at full employment)
     tax_profit_rate: float = 0.0          # τ_π on positive firm profit (pre-dividend) -- anchored (corporate tax)
     tax_income_rate: float = 0.0          # τ_y marginal rate on household labour+dividend income -- anchored
     income_allowance: float = 0.0         # a_x: personal allowance as fraction of mean income (progressivity; 0=flat)
@@ -577,6 +598,9 @@ class Config:
             interbank=self.interbank,
             omo_reserve_target=self.omo_reserve_target,
             omo_drain_frac=self.omo_drain_frac,
+            omo_index_deposits=self.omo_index_deposits,
+            cb_log_inflation=self.cb_log_inflation,
+            reserve_floor_frac=self.reserve_floor_frac,
         )
 
     @_cached_view
@@ -621,6 +645,8 @@ class Config:
 
         return PlanningConfig(
             theta_wage=self.theta_wage,
+            inventory_gap_close=self.inventory_gap_close,
+            delta=self.delta,
             theta_price=self.theta_price,
             lambda_q=self.lambda_q,
             q_invest_floor=self.q_invest_floor,
@@ -685,6 +711,9 @@ class Config:
         return FirmDemographicsConfig(
             firm_dynamics=self.firm_dynamics,
             bankrupt_persist=self.bankrupt_persist,
+            entry_hurdle=self.entry_hurdle,
+            shell_exit_ticks=self.shell_exit_ticks,
+            real_entry_signal=self.real_entry_signal,
             entry_beta=self.entry_beta,
             entry_max=self.entry_max,
             index_startup=self.index_startup,
@@ -1108,6 +1137,80 @@ class Config:
         return cls.v124(**{**dict(omo_reserve_target=0.3, omo_drain_frac=0.1, bank_bond_appetite=0.2,
                                   bank_bond_duration_limit=2.0, bond_maturity=8), **overrides})
 
+    @classmethod
+    def v13(cls, **overrides) -> "Config":
+        """v13: the demographic economy on a ONE-CALENDAR-DAY tick (the tick the demographic kernel
+        already assumes: kernel.py advances current_date by 1 day; ticks_per_year=365 throughout).
+
+        The v12.x rate family was calibrated for an abstract 'period' tick; run on a day calendar it
+        pays annual-scale rates 365x too often -- the 10k x 3650t audit traced the 45x price level,
+        the 116M debt snowball (coupon 1%/tick = the whole cash deficit), the -111M reserves and the
+        44% poverty rate to exactly that mismatch. This preset bakes in:
+
+        1. configs/calibrations/daily_tick.yaml (rates, adjustment speeds, EMAs / 365-day scale)
+        2. structural hygiene: demand price-elasticity ON (zero elasticity left NO price-competition
+           channel: markups saturated at mu_max from t29 and HHI ran 0.6-0.9), a REAL entry signal +
+           idle-shell exit (entry pegged at entry_max for 10 years while shells never died), the K
+           replacement floor (net capital formation had gone negative), zero entrant inventory
+           (3/tick x 10 units of goods appeared ex nihilo)
+        3. policy plumbing: deposit-indexed OMO reserve target and the log inflation sensor
+        4. demographics enabled at the 10k-person default of the visualization harness
+        """
+        daily = dict(
+            # planning, expectations, price, wage, consumption
+            lambda_d=0.0076, lambda_y=0.0076, theta_price=0.0037,
+            # wage Calvo: ~quarterly resets with ~0.75% moves (effective ~3%/yr). daily_tick.yaml
+            # scaled BOTH the hazard and the step -- the product (the actual adjustment speed)
+            # came out 7e-7/tick and posted wages froze at 1.000 for entire runs
+            theta_wage=0.011,
+            alpha2=5.5e-5,
+            # inventory: two weeks of demand cover, closed ~5%/day. daily_tick.yaml said phi=60
+            # (a quarter's 0.75 cover re-read in days) but plan_production closes the WHOLE gap
+            # in one tick -- every firm demanded ~60 days of output at once (labor fill hit 2%)
+            phi=14.0, inventory_gap_close=0.05,
+            # markup step (continuous, per tick): mu walked 0.05/day to its cap within a
+            # month at period scale; 6.7e-4/day drifts ~9pp of markup per year
+            eta=6.7e-4,
+            # wage step per Calvo reset (see theta_wage above); delta is set in `structural`
+            omega=0.0075,
+            # production, investment, capital
+            lambda_I=0.0019, delta_K=2.28e-4, lambda_q=0.0076, q_invest_smooth=1.0,
+            public_capital_depreciation=2.28e-4,
+            # credit, interest, debt service
+            r_interest=1.34e-4, r_neutral=1.34e-4, r_max=5.0e-4,
+            amort=0.0011, hh_amort=5.5e-4, bank_spread_disp=4.466666666666667e-5,
+            interbank_rate_base=0.0, interbank_tightness=0.0013698630136986301,
+            deposit_rate_disp=0.0,
+            # central bank and inflation rule
+            inflation_target=5.4e-5, infl_ema_lambda=0.0019, rate_inertia=0.9924,
+            taylor_phi_u=0.0014, omo_drain_frac=0.094,
+            # securities
+            bond_coupon=1.08e-4, bond_maturity=365,
+            # firm entry/exit and growth
+            bankrupt_persist=548, gibrat_sigma=0.0052,
+            # equity, portfolios, margin, bank equity
+            lambda_p=0.13, trend_lambda=0.023, equity_ema_lambda=0.0076,
+            resid_income_lambda=0.0019, portfolio_adjust=0.048,
+            bank_equity_lambda=0.0019, run_fear_persistence=0.952,
+            # fiscal stock tax (flow tax rates stay ratios on current flows)
+            tax_wealth_rate=5.479452054794521e-6,
+        )
+        structural = dict(
+            pref_price_elasticity=1.0,   # restore the demand-side price brake (R3)
+            real_entry_signal=True,      # deflated entry signal + zero entrant inventory (R5/A2)
+            shell_exit_ticks=365,        # idle shells liquidate after a year (R5)
+            k_replacement_floor=True,    # K-firms at least replace depreciation (R6)
+            delta=0.0075,                # symmetric downward wage step when hiring is easy (escapes the ZLB deflation ratchet)
+            entry_hurdle=1.34e-4,        # ~5%/yr equity premium: entry needs profit above rate + premium, not just above a floored rate
+            omo_index_deposits=True,     # reserve target follows deposits, not genesis (R4)
+            cb_log_inflation=True,       # Jensen-free inflation sensor (M1)
+            demographics_enabled=True,
+            demographic_lifecycle_consumption=True,
+            pension_replacement=0.4,     # old-age pension at the unemployment-benefit replacement rate
+            deficit_u_cap=4.0,           # fiscal stimulus scales with slack (up to 4x the 3%-GDP target)
+        )
+        return cls.v124(**{**daily, **structural, **overrides})
+
     def _validate(self) -> None:
         """Guard the axiom-forced relations up front (fail loud, not silently)."""
         assert self.a > 0, "productivity a must be > 0 (spec §8.1 degenerate guard)"
@@ -1125,7 +1228,7 @@ class Config:
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"
         assert 0.0 <= self.rho <= 1.0, "dividend payout ratio must be in [0,1]"
-        assert self.delta == 0.0, "kernel uses a strict DNWR floor (delta forced to 0)"
+        assert 0.0 <= self.delta < 0.01, "delta is a SLOW downward wage drift (v12 strict DNWR = 0; v13 allows a small positive step)"
         assert self.n_firms > 0 and self.n_households > 0
         # v2 guards (only bite when capital is enabled, but cheap to always check)
         assert 0.0 < self.alpha < 1.0, "Cobb-Douglas capital share alpha in (0,1)"
