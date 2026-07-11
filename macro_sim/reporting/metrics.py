@@ -404,6 +404,23 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "foreclosures_total": float(mortgage_book.foreclosures_total),
                 }
             )
+        rental = getattr(econ, "rental_market", None)
+        if rental is not None:
+            price = max(1e-9, float(getattr(econ, "_house_price", 0.0)))
+            rec.update(
+                {
+                    "tenancy_count": float(len(rental.tenancies)),
+                    "rental_vacancies": float(len(rental.vacancies(econ))),
+                    "rent_level": float(rental.rent_level),
+                    "rental_yield": float(rental.rent_level * 365.0 / price),
+                    "rent_paid_total": float(rental.rent_paid_total),
+                    "evictions_total": float(rental.evictions_total),
+                    "tenant_share": float(len(rental.tenancies)) / max(1, len(households)),
+                    "landlord_count": float(sum(
+                        1 for h in households if len(housing.dwellings_of(h.id)) > 1
+                    )),
+                }
+            )
 
     # -- observable-but-not-yet-mechanistic metrics -----------------------
     # These are read-only aggregates over fields the model already maintains.

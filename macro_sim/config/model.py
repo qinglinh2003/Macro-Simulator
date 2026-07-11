@@ -141,6 +141,15 @@ class Config:
     mortgage_ltv_cap: float = 0.8           # macroprudential handle, live from day one
     mortgage_foreclosure_ltv: float = 1.1   # foreclose when secured balance > this x value
     mortgage_arrears_floor: float = 2.0     # ...AND deposits below this floor
+    # -- v15.3 rental market: tenancies as persistent flows; rent level is an independent
+    # market state (vacancy pressure cuts it, unhoused demand raises it); landlords
+    # emerge from yield arbitrage (cash-only buy-to-let; leverage is a later flag).
+    housing_rental_enabled: bool = False    # requires housing_market_enabled
+    rent_yield0: float = 0.05               # genesis annual rent / price anchor
+    rent_adjust: float = 0.02               # per-session rent-level step
+    rent_burden_cap: float = 0.40           # tenant affordability cap vs realized income
+    rental_eviction_arrears: int = 30       # consecutive shortfall ticks before eviction
+    rental_investor_premium: float = 0.02   # buy-to-let when yield > deposit rate + premium
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1293,6 +1302,10 @@ class Config:
         assert not (self.mortgage_enabled and not self.housing_market_enabled), "mortgages require the resale market"
         assert 0.0 < self.mortgage_ltv_cap < 1.0, "mortgage LTV cap is a fraction of price"
         assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
+        assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
+        assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
+        assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
+        assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

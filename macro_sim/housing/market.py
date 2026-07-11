@@ -77,6 +77,9 @@ def run_housing_market_phase(econ: Any) -> None:
     housing = getattr(econ, "housing", None)
     if market is None or housing is None:
         return
+    rental = getattr(econ, "rental_market", None)
+    if rental is not None:
+        rental.collect_rents(econ)        # v15.3: tenancies pay every tick, not per session
     if econ.t % market.session_interval != 0:
         return
 
@@ -99,13 +102,32 @@ def run_housing_market_phase(econ: Any) -> None:
         and (bridge is None or bridge.household_has_living_members(h.id))
     ]
     econ.rng.shuffle(buyers)
+    if rental is not None:
+        # v15.3 investment demand: owner households join the buyer pool CASH-ONLY when
+        # the prevailing rental yield beats the deposit rate by the premium -- landlords
+        # emerge from arbitrage, they are never seeded. Need-driven buyers go first.
+        deposit_rate_annual = float(getattr(econ, "_rate", 0.0)) * 365.0
+        if rental.prevailing_yield(econ) > deposit_rate_annual + rental.investor_premium:
+            investors = [
+                h for h in econ.households
+                if housing.dwellings_of(h.id)
+                and (bridge is None or bridge.household_has_living_members(h.id))
+            ]
+            econ.rng.shuffle(investors)
+            buyers.extend(investors)
 
     sold: list[tuple[Listing, float]] = []
     for buyer in buyers:
         if not book:
             break
         cash_budget = led.balance(buyer.id) * (1.0 - market.buyer_buffer)
-        can_borrow = mortgage_book is not None and buyer.id not in mortgage_book.loans
+        # mortgages are owner-occupier credit: investors (already housed) buy CASH-ONLY
+        # in v15.3 -- buy-to-let leverage is a later, separately-gated flag
+        can_borrow = (
+            mortgage_book is not None
+            and buyer.id not in mortgage_book.loans
+            and not housing.dwellings_of(buyer.id)
+        )
         window = book[: market.search_k]
         pick = None
         for listing in window:
@@ -165,6 +187,12 @@ def run_housing_market_phase(econ: Any) -> None:
     market.forced_share = (
         sum(1 for l in market.listings.values() if l.forced) / n_listed if n_listed else 0.0
     )
+
+    if rental is not None:
+        # v15.3: after ownership settled this session -- terminate stale tenancies
+        # (sweep, not hooks), then match seekers to vacancies and adjust the rent level
+        rental.sweep_stale_tenancies(econ)
+        rental.match_tenants(econ)
 
 
 def _ingest_distress_listings(econ: Any, market: HousingMarket, housing: Any) -> None:

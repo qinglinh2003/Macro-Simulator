@@ -30,6 +30,7 @@ from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.housing import HousingRegistry
 from macro_sim.housing.market import HousingMarket, run_housing_market_phase
 from macro_sim.housing.mortgage import MortgageBook
+from macro_sim.housing.rental import RentalMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -204,6 +205,7 @@ class Economy:
         self.housing = None
         self.housing_market = None
         self.mortgage_book = None
+        self.rental_market = None
         self._house_price = 0.0
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
@@ -227,6 +229,17 @@ class Economy:
                     ltv_cap=cfg.mortgage_ltv_cap,
                     foreclosure_ltv=cfg.mortgage_foreclosure_ltv,
                     arrears_floor=cfg.mortgage_arrears_floor,
+                )
+            if cfg.housing_rental_enabled:
+                # v15.3: tenancy flows + emergent landlords; rent level seeded off the
+                # genesis price anchor, independent thereafter
+                self.rental_market = RentalMarket(
+                    rent_yield0=cfg.rent_yield0,
+                    rent_adjust=cfg.rent_adjust,
+                    rent_burden_cap=cfg.rent_burden_cap,
+                    eviction_arrears=cfg.rental_eviction_arrears,
+                    investor_premium=cfg.rental_investor_premium,
+                    rent_level=cfg.rent_yield0 * self._house_price / 365.0,
                 )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
