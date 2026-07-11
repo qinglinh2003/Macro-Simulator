@@ -112,6 +112,15 @@ class Config:
     mortality_income_elasticity: float = 0.0  # gamma in M = clip(x^-gamma, lo, hi); 0 = off -- FREE
     mortality_mult_lo: float = 0.7
     mortality_mult_hi: float = 1.3
+    # -- v14 Phase 3: rank-gradient strata (individual position -> individual hazard).
+    # Bucket multiplier exp(beta*(0.5-rank)), EXPOSURE-weighted mean 1 (Phase 3 moves WHO,
+    # Phase 2 moves HOW MANY). 0.0 = off = bit-identical. fertility gradient is SIGNED
+    # (>0 modern negative gradient: poor households more children).
+    mortality_rank_gradient: float = 0.0      # beta_m; production calibration ~0.8 -- FREE
+    fertility_rank_gradient: float = 0.0      # beta_f, signed -- FREE
+    strat_mult_lo: float = 0.5
+    strat_mult_hi: float = 2.0
+    marriage_assortativity: float = 0.0       # 3.3: years of age-mismatch per unit rank distance -- FREE
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1253,6 +1262,8 @@ class Config:
         assert self.fertility_income_elasticity >= 0.0 and self.mortality_income_elasticity >= 0.0, "feedback elasticities must be >= 0"
         assert 0.0 < self.fertility_mult_lo <= 1.0 <= self.fertility_mult_hi, "fertility multiplier bounds must bracket the neutral 1.0"
         assert 0.0 < self.mortality_mult_lo <= 1.0 <= self.mortality_mult_hi, "mortality multiplier bounds must bracket the neutral 1.0"
+        assert self.mortality_rank_gradient >= 0.0, "mortality rank gradient must be >= 0 (rich live longer)"
+        assert 0.0 < self.strat_mult_lo <= 1.0 <= self.strat_mult_hi, "stratum multiplier bounds must bracket the neutral 1.0"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

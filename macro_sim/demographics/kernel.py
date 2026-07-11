@@ -198,6 +198,7 @@ class MicroDemographicKernel:
         # economic position cannot enter the hazard here (Phase 3 boundary).
         fertility_scale = 1.0
         mortality_rates = self.rates
+        mortality_strata = fertility_strata = None
         if economic_state is not None:
             fertility_scale = float(getattr(economic_state, "fertility_macro_multiplier", 1.0))
             # v14 Phase 2.2: mortality arrives as a DERIVED Phase0VitalRates (G-M hazards are
@@ -205,6 +206,10 @@ class MicroDemographicKernel:
             # e(a) consumption table upstream read the same scaled object. Neutral multiplier
             # hands back the base instance itself.
             mortality_rates = getattr(economic_state, "effective_vital_rates", None) or self.rates
+            # v14 Phase 3: rank-gradient strata (household_id -> multiplier, mean-one by
+            # exposure weighting). None when off. s**m == survival under hazard x m exactly.
+            mortality_strata = getattr(economic_state, "mortality_strata", None)
+            fertility_strata = getattr(economic_state, "fertility_strata", None)
         state.tick_index += 1
         tick = state.tick_index
         state.current_date = state.current_date + timedelta(days=1)
@@ -221,10 +226,15 @@ class MicroDemographicKernel:
             if person.age >= self.rates.omega:
                 survives = False
             else:
-                survives = self.rng.random() < mortality_rates.survival_probability(
+                survival = mortality_rates.survival_probability(
                     person.age_years_on(state.current_date),
                     dt=dt_years,
                 )
+                if mortality_strata is not None and person.household_id is not None:
+                    stratum = mortality_strata.get(int(person.household_id), 1.0)
+                    if stratum != 1.0:
+                        survival **= stratum
+                survives = self.rng.random() < survival
             if not survives:
                 # (survivors keep the age set in the update loop above -- recomputing
                 #  completed_age_on here returned the identical value)
@@ -245,7 +255,13 @@ class MicroDemographicKernel:
         for event in state.divorce_events[divorce_count_before:]:
             self.on_divorce(event)
         marriage_count_before = len(state.marriage_events)
-        apply_marriage_market(state, config=self.social_config, rng=self.rng)
+        apply_marriage_market(
+            state,
+            config=self.social_config,
+            rng=self.rng,
+            # v14 Phase 3.3: wealth-rank homophily (None or assortativity 0 => original path)
+            household_ranks=getattr(economic_state, "household_ranks", None),
+        )
         for event in state.marriage_events[marriage_count_before:]:
             self.on_marriage(event)
 
@@ -259,6 +275,10 @@ class MicroDemographicKernel:
             annual_fertility = self._annual_fertility_rate(person, state.current_date, father_id)
             if fertility_scale != 1.0:      # guarded: neutral runs must not depend on x*1.0 exactness
                 annual_fertility *= fertility_scale
+            if fertility_strata is not None and person.household_id is not None:
+                stratum = fertility_strata.get(int(person.household_id), 1.0)
+                if stratum != 1.0:
+                    annual_fertility *= stratum
             if annual_fertility <= 0.0:
                 continue
             birth_count = int(self.rng.poisson(annual_fertility * dt_years))
