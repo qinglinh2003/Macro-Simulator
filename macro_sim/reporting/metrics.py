@@ -351,6 +351,19 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "e0_effective": float(getattr(bridge, "e0_effective", 0.0)),
             }
         )
+        strat = getattr(bridge, "stratification", None)
+        if strat is not None:
+            # v14 Phase 3.0: per-quintile vital gauges + the age-wealth confound gauge
+            rec.update(
+                {
+                    **{f"bucket{k}_deaths": float(strat.bucket_deaths[k]) for k in range(strat.buckets)},
+                    **{f"bucket{k}_births": float(strat.bucket_births[k]) for k in range(strat.buckets)},
+                    **{f"bucket{k}_wealth_share": float(strat.bucket_wealth_share[k]) for k in range(strat.buckets)},
+                    **{f"bucket{k}_pop_share": float(strat.bucket_pop_share[k]) for k in range(strat.buckets)},
+                    "age_rank_corr": float(strat.age_rank_corr),
+                    **{f"median_rank_band{i}": float(strat.median_rank_by_band[i]) for i in range(4)},
+                }
+            )
     else:
         rec["demographics_enabled"] = 0.0
 

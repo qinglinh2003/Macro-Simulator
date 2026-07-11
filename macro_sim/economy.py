@@ -26,6 +26,7 @@ from macro_sim.demographics.economic_bridge import initialize_person_claims_from
 from macro_sim.demographics.kernel import MicroDemographicKernel
 from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig, apply_leaving_home_dynamics
 from macro_sim.demographics.macro_signal import DemoMacroSignal
+from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -175,6 +176,8 @@ class Economy:
                 on_divorce=self.demographic_bridge.on_divorce,
                 social_config=self._demographic_social_config(),
             )
+            # v14 Phase 3.0: wealth stratification gauges (pure observation)
+            self.demographic_bridge.stratification = WealthStratification()
             # v14 Phase 2: macro->demography signal (pure observation until an elasticity is set)
             self.demographic_bridge.macro_signal = DemoMacroSignal(
                 halflife_years=cfg.demo_signal_halflife_years,

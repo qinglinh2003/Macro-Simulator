@@ -52,6 +52,7 @@ class DemographicEconomicBridge:
     orphan_support_spending: float = 0.0
     _bank_capital_adjustment: dict[str, float] = field(default_factory=dict)
     macro_signal: Any | None = None    # v14 Phase 2: DemoMacroSignal (None = feedback plumbing absent)
+    stratification: Any | None = None  # v14 Phase 3.0: WealthStratification (observation only)
     _effective_rates_cache: dict[float, Any] = field(default_factory=dict)   # mortality mult -> derived rates
     _e0_cache: dict[float, float] = field(default_factory=dict)              # mortality mult -> e0
 
@@ -178,6 +179,8 @@ class DemographicEconomicBridge:
             labor=rec.get("employment", 0.0),
             price=rec.get("price_index", 0.0),
         )
+        if self.stratification is not None:
+            self.stratification.observe_tick(econ, self, state.current_date.year)
 
     def assert_all_claim_identities(self, econ: Any | None = None) -> None:
         econ = econ or self.econ
@@ -485,6 +488,8 @@ class DemographicEconomicBridge:
     def on_birth(self, event: Any, newborn: Any) -> None:
         self.invalidate_people_index()
         household_id = int(newborn.household_id)
+        if self.stratification is not None:
+            self.stratification.record_birth(household_id)
         if not self.claims.has_person(int(newborn.id)):
             self.claims.add_person(int(newborn.id), household_id=household_id)
 
@@ -535,6 +540,8 @@ class DemographicEconomicBridge:
     def on_death(self, event: Any, dead_person: Any) -> None:
         self.invalidate_people_index()   # alive-status changed; re-scan live until the next refresh
         person_id = int(dead_person.id)
+        if self.stratification is not None:
+            self.stratification.record_death(dead_person.household_id)
         if not self.claims.has_person(person_id):
             self.claims.add_person(person_id, household_id=int(dead_person.household_id or 0))
         surviving_spouse_id = self._dissolve_marriage_for_death(person_id)
