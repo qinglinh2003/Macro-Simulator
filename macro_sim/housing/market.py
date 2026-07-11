@@ -82,6 +82,11 @@ def run_housing_market_phase(econ: Any) -> None:
 
     _ingest_distress_listings(econ, market, housing)
     _drop_stale_listings(econ, market, housing)
+    mortgage_book = getattr(econ, "mortgage_book", None)
+    if mortgage_book is not None:
+        # v15.2: reconcile secured balances against the ledger, run foreclosures --
+        # seized dwellings join this session's supply as forced bank listings
+        mortgage_book.maintain(econ)
 
     # ---- matching session: buyers cheapest-first over the k cheapest listings ----
     led = econ.ledger
@@ -99,23 +104,45 @@ def run_housing_market_phase(econ: Any) -> None:
     for buyer in buyers:
         if not book:
             break
-        budget = led.balance(buyer.id) * (1.0 - market.buyer_buffer)
+        cash_budget = led.balance(buyer.id) * (1.0 - market.buyer_buffer)
+        can_borrow = mortgage_book is not None and buyer.id not in mortgage_book.loans
         window = book[: market.search_k]
-        pick = next((l for l in window if l.ask <= budget), None)
+        pick = None
+        for listing in window:
+            if listing.ask <= cash_budget:
+                pick = listing
+                break
+            # v15.2 credit unlock: affordable with a mortgage iff the down payment
+            # (price minus LTV-capped loan) fits in the cash budget
+            if can_borrow and listing.ask * (1.0 - mortgage_book.ltv_cap) <= cash_budget:
+                pick = listing
+                break
         if pick is None:
             continue
         price = pick.ask
-        # ---- atomic sale: ledger + claims + title in one place ----
+        loan = 0.0
+        if price > cash_budget and can_borrow:
+            loan = min(price - cash_budget, mortgage_book.ltv_cap * price)
+        # ---- atomic sale: ledger + claims + title (+ mortgage) in one place ----
+        if loan > EPS:
+            # originate posts BOTH sides of loan-creates-deposit to the claims layer
+            # (post_household_debt_creation mirrors +cash and +debt), so the sale posting
+            # below is the FULL price -- posting loan-price here double-counts the loan
+            mortgage_book.originate(econ, buyer, pick.dwelling_id, loan)
         led.transfer(buyer.id, pick.seller_account, price)
         if bridge is not None:
             buyer_hh = bridge.household_id_for_account(buyer.id)
             bridge._post_household_cash_delta(buyer_hh, -price, reason="house_purchase")
             seller_hh = bridge.account_to_household.get(pick.seller_account)
-            if seller_hh is not None and bridge.claims.members_of_household(int(seller_hh)):
+            # 'living' must be a DEMOGRAPHIC-state fact: died-out households keep dead
+            # members' sheets (and orphan-moved minors) in the claims membership, which
+            # would masquerade as a living seller here
+            if seller_hh is not None and bridge.household_has_living_members(pick.seller_account):
                 bridge._post_household_cash_delta(int(seller_hh), price, reason="house_sale")
-            elif fiscal is not None and pick.seller_account != fiscal:
-                # memberless (probate) seller: proceeds escheat immediately -- parking cash
-                # on a memberless account would trip the claim identity next tick
+            elif seller_hh is not None and fiscal is not None and pick.seller_account != fiscal:
+                # memberless (probate) HOUSEHOLD seller: proceeds escheat immediately --
+                # parking cash on a memberless account trips the claim identity next tick.
+                # Institutional sellers (foreclosing banks) keep their proceeds.
                 proceeds = min(price, led.balance(pick.seller_account))
                 if proceeds > EPS:
                     led.transfer(pick.seller_account, fiscal, proceeds)

@@ -394,6 +394,16 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "housing_forced_share": float(market.forced_share),
                 }
             )
+        mortgage_book = getattr(econ, "mortgage_book", None)
+        if mortgage_book is not None:
+            rec.update(
+                {
+                    "mortgage_count": float(len(mortgage_book.loans)),
+                    "mortgage_balance_total": float(mortgage_book.balance_total()),
+                    "mortgage_originated_total": float(mortgage_book.originated_total),
+                    "foreclosures_total": float(mortgage_book.foreclosures_total),
+                }
+            )
 
     # -- observable-but-not-yet-mechanistic metrics -----------------------
     # These are read-only aggregates over fields the model already maintains.

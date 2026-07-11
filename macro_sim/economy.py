@@ -29,6 +29,7 @@ from macro_sim.demographics.macro_signal import DemoMacroSignal
 from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.housing import HousingRegistry
 from macro_sim.housing.market import HousingMarket, run_housing_market_phase
+from macro_sim.housing.mortgage import MortgageBook
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -202,6 +203,7 @@ class Economy:
         # at the genesis anchor -- no market until v15.1, stock integrity before flows.
         self.housing = None
         self.housing_market = None
+        self.mortgage_book = None
         self._house_price = 0.0
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
@@ -218,6 +220,13 @@ class Economy:
                     search_k=cfg.housing_search_k,
                     buyer_buffer=cfg.housing_buyer_buffer,
                     distress_floor=cfg.housing_distress_floor,
+                )
+            if cfg.mortgage_enabled:
+                # v15.2: collateralization book over the existing household credit rails
+                self.mortgage_book = MortgageBook(
+                    ltv_cap=cfg.mortgage_ltv_cap,
+                    foreclosure_ltv=cfg.mortgage_foreclosure_ltv,
+                    arrears_floor=cfg.mortgage_arrears_floor,
                 )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.

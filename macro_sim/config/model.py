@@ -134,6 +134,13 @@ class Config:
     housing_search_k: int = 5               # buyer sees the k cheapest listings
     housing_buyer_buffer: float = 0.25      # deposits share a buyer keeps
     housing_distress_floor: float = 5.0     # deposits below this list the home
+    # -- v15.2 mortgages: ordinary non-margin household ledger debt (the certified credit
+    # machinery amortizes it at hh_amort and charges the FLOATING loan rate -- monetary
+    # transmission for free); the book only tracks collateralization + foreclosure.
+    mortgage_enabled: bool = False          # requires housing_market_enabled
+    mortgage_ltv_cap: float = 0.8           # macroprudential handle, live from day one
+    mortgage_foreclosure_ltv: float = 1.1   # foreclose when secured balance > this x value
+    mortgage_arrears_floor: float = 2.0     # ...AND deposits below this floor
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1283,6 +1290,9 @@ class Config:
         assert 0.0 <= self.housing_ask_decay < 1.0 and 0.0 <= self.housing_forced_discount < 1.0, "housing ask cuts are fractions"
         assert 0.0 <= self.housing_buyer_buffer < 1.0, "housing buyer buffer is a deposits fraction"
         assert self.housing_search_k >= 1, "buyers must see at least one listing"
+        assert not (self.mortgage_enabled and not self.housing_market_enabled), "mortgages require the resale market"
+        assert 0.0 < self.mortgage_ltv_cap < 1.0, "mortgage LTV cap is a fraction of price"
+        assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"
