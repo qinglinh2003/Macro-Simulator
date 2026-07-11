@@ -19,6 +19,7 @@ Metric groups:
 
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Sequence
 
 import numpy as np
@@ -143,15 +144,21 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     total_money = float(led.total_money)   # broad money ΣD (incl. bank; endogenous in v3)
 
     # consumption sector (the "output/price" side; == all firms in v1)
-    prices = [f.price for f in cfirms]
-    markups = [f.markup for f in cfirms]
+    # v13 shell hygiene: posted-price/markup stats read ACTIVE SELLERS -- never-trading shells
+    # carried stale exploding posted prices that blew mean_price to 1e20 and buried tobin_q /
+    # wage medians in the 10k x 3650t audit. Falls back to all firms when nothing sold (t0).
+    _selling_c = [f for f in cfirms if f.sales > 1e-9]
+    _stat_c = _selling_c if _selling_c else cfirms
+    prices = [f.price for f in _stat_c]
+    markups = [f.markup for f in _stat_c]
     produced_c = [f.produced for f in cfirms]
     sales_c = [f.sales for f in cfirms]
     revenue_c = [f.revenue for f in cfirms]
     inventory_c = [f.inventory for f in cfirms]
 
     # all firms (labor/money/wages span both sectors)
-    wages = [f.wage for f in firms]
+    _hiring = [f for f in firms if f.hired > 1e-9]
+    wages = [f.wage for f in (_hiring if _hiring else firms)]
     wagebill = [f.wagebill for f in firms]
     profit = [f.profit for f in firms]
     labor_demand = [f.labor_demand_eff for f in firms]
@@ -187,6 +194,13 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     prev_p = getattr(econ, "_prev_price_index", None)
     inflation = (price_index / prev_p - 1.0) if (prev_p and prev_p > 1e-12) else 0.0
     econ._prev_price_index = price_index
+    hist = getattr(econ, "_price_index_history", None)
+    if hist is None:
+        from collections import deque
+        hist = econ._price_index_history = deque(maxlen=365)
+    yoy_base = hist[0] if len(hist) == 365 else (hist[0] if hist else price_index)
+    inflation_yoy = (price_index / yoy_base - 1.0) if yoy_base > 1e-12 else 0.0
+    hist.append(price_index)
 
     dividends_paid = float(getattr(econ, "_dividends_paid", 0.0))
     retained = max(0.0, total_profit) - dividends_paid  # positive profit not paid out
@@ -198,7 +212,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "total_money": total_money,
         "hh_money": hh_money,
         "firm_money": firm_money,
-        "hh_money_share": hh_money / total_money if total_money > 0 else 0.0,
+        "hh_money_share": hh_money / (hh_money + firm_money) if (hh_money + firm_money) > 0 else 0.0,
         "conservation_drift": abs(led.net_worth - led.genesis_money),   # A5 drift (=M0 drift in v1/v2)
 
         # -- circular flows (this tick) --------------------------------------
@@ -222,9 +236,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "price_std": _std(prices),
         "price_cv": cv(prices),
         "inflation": inflation,
+        "inflation_yoy": inflation_yoy,   # v13: trailing-365-tick price change (annual inflation on a day tick)
         "avg_markup": _mean(markups),
         "markup_std": _std(markups),
         "avg_wage": _mean(wages),
+        "avg_wage_paid": (total_wagebill / total_hired) if total_hired > 1e-9 else _mean(wages),
         "wage_std": _std(wages),
 
         # -- labor -----------------------------------------------------------
@@ -319,6 +335,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "elder_median_consumption": _quantile(elder_consumption, 0.5),
                 "estate_suspense_total": bridge.estates.total_net_worth(),
                 "inheritance_flow": float(getattr(econ, "_inheritance_flow", 0.0)),
+                "escheat_flow": float(getattr(econ, "_escheat_flow", 0.0)),
+                "pension_paid": float(getattr(econ, "_pension_paid", 0.0)),
+                "claim_reconciled_flow": float(getattr(econ, "_claim_reconciled_flow", 0.0)),
                 "public_guardian_children": float(public_guardian_children),
                 "orphan_support_spending": float(
                     getattr(bridge, "orphan_support_spending", getattr(econ, "_orphan_support_spending", 0.0))
@@ -376,9 +395,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "wage_p50": _quantile(wages, 0.50),
         "wage_p90": _quantile(wages, 0.90),
         "wage_p90_p10_ratio": _safe_ratio(_quantile(wages, 0.90), _quantile(wages, 0.10)),
-        "sector_avg_wage_C": _mean([f.wage for f in cfirms]),
-        "sector_avg_wage_K": _mean([f.wage for f in kfirms]),
-        "sector_wage_gap_C_vs_K": _mean([f.wage for f in cfirms]) - _mean([f.wage for f in kfirms]),
+        "sector_avg_wage_C": _mean([f.wage for f in cfirms if f.hired > 1e-9] or [f.wage for f in cfirms]),
+        "sector_avg_wage_K": _mean([f.wage for f in kfirms if f.hired > 1e-9] or [f.wage for f in kfirms]),
+        "sector_wage_gap_C_vs_K": (_mean([f.wage for f in cfirms if f.hired > 1e-9] or [f.wage for f in cfirms])
+                                   - _mean([f.wage for f in kfirms if f.hired > 1e-9] or [f.wage for f in kfirms])),
         "unit_labor_cost_mean": _mean(unit_labor_costs),
         "unit_labor_cost_cv": cv(unit_labor_costs),
         "production_target_total": production_target_c,
@@ -626,7 +646,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "household_leverage": hh_debt_total / max(1e-9, income_realized),  # debt / income
             "share_underwater": float(np.mean(nw < 0.0)),                     # fraction with D<L (net debtor)
             # net worth has negatives (borrowers) -> Gini on the min-shifted series (valid [0,1]).
-            "hh_networth_gini": gini(list(nw - nw.min())),
+            "hh_networth_gini": gini(list(np.maximum(nw, 0.0))),   # clip, not min-shift: one deep debtor made the shifted gini gyrate
             "hh_networth_min": float(nw.min()),
             "hh_networth_median": float(np.median(nw)),
             "consumption_credit_share": float(getattr(econ, "_hh_credit_new", 0.0)) / max(1e-9, cons),
@@ -822,7 +842,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "gov_deficit_to_revenue": (deficit / tax_total) if tax_total > 1e-9 else 0.0,
             "gov_deficit_to_gdp": (deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
             "cash_deficit_to_gdp": (cash_deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
-            "gov_debt_to_gdp": (gov_debt / nominal_output) if nominal_output > 1e-9 else 0.0,
+            "gov_debt_to_gdp": (gov_debt / (365.0 * nominal_output)) if nominal_output > 1e-9 else 0.0,  # vs ANNUAL GDP
             "gov_spending_share_of_gdp": (spend_total / nominal_output) if nominal_output > 1e-9 else 0.0,
             "augmented_gov_spending_share_of_gdp": (
                 augmented_spending / nominal_output
@@ -859,7 +879,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             - pol.taylor_phi_u * unemployment_gap
         )
         omo_target = (
-            cb_cfg.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))
+            float(getattr(econ, "_omo_target_value",
+                          cb_cfg.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))))
             if cb_cfg.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
         )
         bank_reserves_total = rec.get("bank_reserves_total", 0.0)
@@ -920,7 +941,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             usage = []
             for a in list(econ.firms) + list(econ.households):
                 bid = bank_for(econ, a.id).id
-                cap = max(1e-9, led.balance(bid))
+                cap = max(1e-9, float(getattr(econ.cfg, "bank_min_capital", 0.0)), led.balance(bid))
                 usage.append(led.debt(a.id) / (econ.cfg.bank_exposure_limit * cap))
             rec["large_exposure_usage_max"] = float(max(usage)) if usage else 0.0
         else:
@@ -1126,7 +1147,13 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "mean_real_consumption_per_person": _safe_ratio(rec.get("real_household_consumption", 0.0), population_alive),
         "orphan_support_per_child": _safe_ratio(rec.get("orphan_support_spending", 0.0), child_population),
     })
-    econ._prev_inflation = inflation          # v10: last tick's realised inflation feeds the Taylor EMA
+    if getattr(econ.cfg, "cb_log_inflation", False):
+        # v13: feed the Taylor EMA the LOG price change (ln(P/P_prev) = log1p(inflation)). The
+        # arithmetic per-tick change has a Jensen bias under index noise (the sick 10k run's EMA
+        # read ~7x the true trend), so the CB chased noise. The `inflation` column is unchanged.
+        econ._prev_inflation = math.log1p(inflation) if inflation > -1.0 else 0.0
+    else:
+        econ._prev_inflation = inflation      # v10: last tick's realised inflation feeds the Taylor EMA
     econ._prev_real_output = total_produced
     econ._prev_avg_wage = avg_wage
     econ._price_level = price_index          # v9.2: fed to the price-indexed startup endowment
