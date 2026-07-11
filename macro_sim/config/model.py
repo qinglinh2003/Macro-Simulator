@@ -96,6 +96,22 @@ class Config:
     demographic_leave_home_peak_end_age: int = 30
     demographic_annual_leave_rate_peak: float = 0.25
     demographic_annual_leave_rate_late: float = 0.05
+    # -- v14 Phase 2: macro -> vital-rate feedback (economy modulates fertility/mortality).
+    # One shared signal (annual real wage: level x_t via 5y-EWMA/baseline, cycle z_t vs
+    # pre-update EWMA), separately flag-gated channels. elasticity 0.0 = channel off and
+    # bit-identical to the pre-feedback baseline. Multipliers are KERNEL-LEVEL scalars:
+    # individual economic position never enters a hazard here (Phase 3 boundary).
+    demo_feedback_burnin_years: int = 4       # genesis-transient years DISCARDED from the signal
+                                              # (certified 10y replay: real wage ~3x over years 1-4
+                                              # relaxing from arbitrary initial prices; the EWMA
+                                              # must never smooth that slope into the baseline)
+    demo_signal_halflife_years: float = 5.0   # EWMA half-life separating level from cycle
+    fertility_income_elasticity: float = 0.0  # eps in F = clip(x^-eps, lo, hi); 0 = off -- FREE
+    fertility_mult_lo: float = 0.5
+    fertility_mult_hi: float = 1.5
+    mortality_income_elasticity: float = 0.0  # gamma in M = clip(x^-gamma, lo, hi); 0 = off -- FREE
+    mortality_mult_lo: float = 0.7
+    mortality_mult_hi: float = 1.3
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -681,6 +697,14 @@ class Config:
             demographic_leave_home_peak_end_age=self.demographic_leave_home_peak_end_age,
             demographic_annual_leave_rate_peak=self.demographic_annual_leave_rate_peak,
             demographic_annual_leave_rate_late=self.demographic_annual_leave_rate_late,
+            demo_feedback_burnin_years=self.demo_feedback_burnin_years,
+            demo_signal_halflife_years=self.demo_signal_halflife_years,
+            fertility_income_elasticity=self.fertility_income_elasticity,
+            fertility_mult_lo=self.fertility_mult_lo,
+            fertility_mult_hi=self.fertility_mult_hi,
+            mortality_income_elasticity=self.mortality_income_elasticity,
+            mortality_mult_lo=self.mortality_mult_lo,
+            mortality_mult_hi=self.mortality_mult_hi,
         )
 
     @_cached_view
@@ -1224,6 +1248,11 @@ class Config:
         assert self.demographic_leave_home_min_age >= 0, "leave-home min age must be >= 0"
         assert self.demographic_leave_home_peak_end_age >= self.demographic_leave_home_min_age, "leave-home peak end must be >= min age"
         assert self.demographic_annual_leave_rate_peak >= 0.0 and self.demographic_annual_leave_rate_late >= 0.0, "leave-home rates must be >= 0"
+        assert self.demo_feedback_burnin_years >= 1, "demo feedback burn-in must be >= 1 year"
+        assert self.demo_signal_halflife_years > 0.0, "demo signal half-life must be > 0"
+        assert self.fertility_income_elasticity >= 0.0 and self.mortality_income_elasticity >= 0.0, "feedback elasticities must be >= 0"
+        assert 0.0 < self.fertility_mult_lo <= 1.0 <= self.fertility_mult_hi, "fertility multiplier bounds must bracket the neutral 1.0"
+        assert 0.0 < self.mortality_mult_lo <= 1.0 <= self.mortality_mult_hi, "mortality multiplier bounds must bracket the neutral 1.0"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

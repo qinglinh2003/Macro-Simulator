@@ -342,6 +342,12 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "orphan_support_spending": float(
                     getattr(bridge, "orphan_support_spending", getattr(econ, "_orphan_support_spending", 0.0))
                 ),
+                # v14 Phase 2: macro->demography signal (annual; constant within the year). The
+                # values are the ones the kernel saw THIS tick (observe_macro runs after metrics).
+                "demo_signal_x": float(getattr(getattr(bridge, "macro_signal", None), "signal_x", 1.0)),
+                "demo_signal_z": float(getattr(getattr(bridge, "macro_signal", None), "signal_z", 1.0)),
+                "fertility_mult": float(getattr(getattr(bridge, "macro_signal", None), "fertility_mult", 1.0)),
+                "mortality_mult": float(getattr(getattr(bridge, "macro_signal", None), "mortality_mult", 1.0)),
             }
         )
     else:

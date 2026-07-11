@@ -25,6 +25,7 @@ from macro_sim.demographics import Phase0VitalRates, create_genesis_population
 from macro_sim.demographics.economic_bridge import initialize_person_claims_from_households
 from macro_sim.demographics.kernel import MicroDemographicKernel
 from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig, apply_leaving_home_dynamics
+from macro_sim.demographics.macro_signal import DemoMacroSignal
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -174,6 +175,17 @@ class Economy:
                 on_divorce=self.demographic_bridge.on_divorce,
                 social_config=self._demographic_social_config(),
             )
+            # v14 Phase 2: macro->demography signal (pure observation until an elasticity is set)
+            self.demographic_bridge.macro_signal = DemoMacroSignal(
+                halflife_years=cfg.demo_signal_halflife_years,
+                burnin_years=cfg.demo_feedback_burnin_years,
+                fertility_elasticity=cfg.fertility_income_elasticity,
+                fertility_mult_lo=cfg.fertility_mult_lo,
+                fertility_mult_hi=cfg.fertility_mult_hi,
+                mortality_elasticity=cfg.mortality_income_elasticity,
+                mortality_mult_lo=cfg.mortality_mult_lo,
+                mortality_mult_hi=cfg.mortality_mult_hi,
+            )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -321,6 +333,10 @@ class Economy:
         run_bank_entry_phase(self)        # v11.5 only; de-novo bank entry when banking is profitable (no-op off)
         run_bill_issuance_phase(self)     # v12.1 only; Treasury re-issues bills from end-of-tick idle (no-op off)
         rec = self._phase5_check_and_record()
+        if self.demographic_bridge is not None:
+            # feed the macro->demography signal AFTER metrics: rec carries the multiplier the
+            # kernel used this tick; an annual rollover here reaches the kernel next tick
+            self.demographic_bridge.observe_macro(self, rec)
         self._commit_cross_tick_state()
         self.t += 1
         return rec

@@ -127,6 +127,14 @@ class DemographicsConfig:
     demographic_leave_home_peak_end_age: int
     demographic_annual_leave_rate_peak: float
     demographic_annual_leave_rate_late: float
+    demo_feedback_burnin_years: int
+    demo_signal_halflife_years: float
+    fertility_income_elasticity: float
+    fertility_mult_lo: float
+    fertility_mult_hi: float
+    mortality_income_elasticity: float
+    mortality_mult_lo: float
+    mortality_mult_hi: float
 
 
 @dataclass(frozen=True)

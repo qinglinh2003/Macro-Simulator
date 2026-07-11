@@ -49,6 +49,7 @@ class DemographicEconomicBridge:
     death_writeoff_flow: float = 0.0
     orphan_support_spending: float = 0.0
     _bank_capital_adjustment: dict[str, float] = field(default_factory=dict)
+    macro_signal: Any | None = None    # v14 Phase 2: DemoMacroSignal (None = feedback plumbing absent)
 
     def __post_init__(self) -> None:
         self.account_to_household = {account: household for household, account in self.household_to_account.items()}
@@ -102,6 +103,37 @@ class DemographicEconomicBridge:
 
     def household_id_for_account(self, account_id: str) -> int:
         return self.account_to_household[account_id]
+
+    # ------------------------------------------------------------------
+    # v14 Phase 2: macro -> vital-rate feedback signal
+    # ------------------------------------------------------------------
+    @property
+    def fertility_macro_multiplier(self) -> float:
+        return self.macro_signal.fertility_mult if self.macro_signal is not None else 1.0
+
+    @property
+    def mortality_macro_multiplier(self) -> float:
+        return self.macro_signal.mortality_mult if self.macro_signal is not None else 1.0
+
+    def observe_macro(self, econ: Any, rec: dict) -> None:
+        """Feed one tick of realized macro state into the annual demography signal.
+
+        Called at the END of economy.step (after metrics), so `rec` is the canonical
+        per-tick snapshot: the multiplier recorded in `rec` is the one the kernel
+        actually used this tick, and any annual rollover computed here only takes
+        effect from the next tick's kernel run.
+        """
+        if self.macro_signal is None:
+            return
+        state = self._demographic_state_ref()
+        if state is None:
+            return
+        self.macro_signal.observe_tick(
+            year=state.current_date.year,
+            wages_paid=rec.get("wages_paid", 0.0),
+            labor=rec.get("employment", 0.0),
+            price=rec.get("price_index", 0.0),
+        )
 
     def assert_all_claim_identities(self, econ: Any | None = None) -> None:
         econ = econ or self.econ
