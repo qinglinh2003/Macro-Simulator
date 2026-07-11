@@ -131,12 +131,49 @@ class DemographicEconomicBridge:
         mortality through their existing signatures -- no cache bypass, no drift between
         what kills people and what they annuitize over.
         """
+        return self._derived_rates(self.mortality_macro_multiplier)
+
+    @property
+    def mortality_strata(self) -> dict[int, float] | None:
+        """v14 Phase 3.1: household_id -> mortality multiplier (rank gradient, mean-one).
+        None when the channel is off, so the kernel skips the lookup entirely."""
+        strat = self.stratification
+        if strat is None or not strat.mortality_strata:
+            return None
+        return strat.mortality_strata
+
+    @property
+    def fertility_strata(self) -> dict[int, float] | None:
+        strat = self.stratification
+        if strat is None or not strat.fertility_strata:
+            return None
+        return strat.fertility_strata
+
+    @property
+    def household_ranks(self) -> dict[int, float] | None:
+        """v14 Phase 3.3: wealth-rank snapshot for marriage-market homophily."""
+        strat = self.stratification
+        if strat is None or not strat.household_rank:
+            return None
+        return strat.household_rank
+
+    def _person_household_rank(self, person_id: int) -> float | None:
+        strat = self.stratification
+        if strat is None or not self.claims.has_person(person_id):
+            return None
+        household_id = self.claims.balance_sheet(person_id).household_id
+        if household_id is None:
+            return None
+        return strat.household_rank.get(int(household_id))
+
+    def _derived_rates(self, multiplier: float) -> Any | None:
+        """Scaled Phase0VitalRates for an arbitrary combined multiplier (macro x stratum),
+        cached per value (annual updates => a handful of keys per run)."""
         base = getattr(self.econ, "demographic_rates", None) if self.econ is not None else None
         if base is None:
             return None
-        multiplier = self.mortality_macro_multiplier
         if multiplier == 1.0:
-            return base                  # identity: neutral runs share the base object
+            return base
         cached = self._effective_rates_cache.get(multiplier)
         if cached is None:
             cached = dataclasses.replace(
@@ -368,10 +405,16 @@ class DemographicEconomicBridge:
         alpha_wealth_draw: float,
         ticks_per_year: int = 365,
     ) -> float:
-        # v14 Phase 2.2: households annuitize over the EFFECTIVE (mortality-scaled) life
-        # table -- longer lives spread wealth thinner. Neutral multiplier returns the same
-        # base object, so this line is inert (and bit-identical) when the channel is off.
-        effective = self.effective_vital_rates
+        # v14 Phase 2.2 + 3.1: households annuitize over the EFFECTIVE life table for
+        # their stratum -- combined multiplier = macro level x rank-gradient stratum, so
+        # the rich (longer expected lives) spread wealth thinner and save more WITHOUT any
+        # behavioral code. Neutral multipliers return the base object (bit-identical off).
+        combined = self.mortality_macro_multiplier
+        strata = self.mortality_strata
+        if strata:
+            household_id = self.household_id_for_account(account_id)
+            combined *= strata.get(int(household_id), 1.0)
+        effective = self._derived_rates(combined)
         if effective is not None:
             rates = effective
         return household_lifecycle_consumption_budget(
@@ -495,6 +538,12 @@ class DemographicEconomicBridge:
 
     def on_marriage(self, event: Any) -> None:
         self.invalidate_people_index()
+        if self.stratification is not None:
+            # pre-merge spousal ranks: the sheets still carry the OLD household ids here
+            self.stratification.record_marriage(
+                self._person_household_rank(int(event.spouse_a_id)),
+                self._person_household_rank(int(event.spouse_b_id)),
+            )
         self._sync_demographic_household(int(event.household_id))
         key = self._marriage_key(int(event.spouse_a_id), int(event.spouse_b_id))
         if key not in self.marriage_contracts:

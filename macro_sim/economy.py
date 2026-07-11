@@ -178,8 +178,13 @@ class Economy:
                 on_divorce=self.demographic_bridge.on_divorce,
                 social_config=self._demographic_social_config(),
             )
-            # v14 Phase 3.0: wealth stratification gauges (pure observation)
-            self.demographic_bridge.stratification = WealthStratification()
+            # v14 Phase 3.0 gauges + 3.1/3.2 rank-gradient strata (gradients 0.0 = pure observation)
+            self.demographic_bridge.stratification = WealthStratification(
+                mortality_gradient=cfg.mortality_rank_gradient,
+                fertility_gradient=cfg.fertility_rank_gradient,
+                mult_lo=cfg.strat_mult_lo,
+                mult_hi=cfg.strat_mult_hi,
+            )
             # v14 Phase 2: macro->demography signal (pure observation until an elasticity is set)
             self.demographic_bridge.macro_signal = DemoMacroSignal(
                 halflife_years=cfg.demo_signal_halflife_years,
@@ -378,6 +383,7 @@ class Economy:
             marriage_market_interval_days=cfg.demographic_marriage_market_interval_days,
             annual_marriage_rate_peak=cfg.demographic_annual_marriage_rate_peak,
             annual_divorce_rate_base=cfg.demographic_annual_divorce_rate_base,
+            marriage_assortativity=cfg.marriage_assortativity,
         )
 
     def _run_demographic_household_transitions(self) -> None:

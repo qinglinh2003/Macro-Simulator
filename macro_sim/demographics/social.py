@@ -44,6 +44,11 @@ class SocialDynamicsConfig:
     marriage_age_gap_penalty: float = 0.06
     marriage_same_household_forbidden: bool = True
     marriage_close_kin_forbidden: bool = True
+    # v14 Phase 3.3: wealth homophily. The candidate score adds
+    # assortativity * |rank_female - rank_male| YEARS of age-mismatch equivalent per unit
+    # rank distance. 0.0 (default) or a missing rank map takes the ORIGINAL code path --
+    # bit-identity by code path, not by weight equality.
+    marriage_assortativity: float = 0.0
 
     divorce_enabled: bool = True
     annual_divorce_rate_base: float = 0.012
@@ -211,6 +216,7 @@ def apply_marriage_market(
     *,
     config: SocialDynamicsConfig,
     rng: np.random.Generator,
+    household_ranks: dict[int, float] | None = None,
 ) -> None:
     if not config.marriage_enabled:
         return
@@ -230,10 +236,11 @@ def apply_marriage_market(
     rng.shuffle(females)
     rng.shuffle(males)
     unmatched_males = {person.id: person for person in males}
+    ranks = household_ranks if (household_ranks and config.marriage_assortativity != 0.0) else None
     for female in females:
         if female.partner_id is not None:
             continue
-        candidate = _best_marriage_candidate(female, unmatched_males.values(), config)
+        candidate = _best_marriage_candidate(female, unmatched_males.values(), config, ranks)
         if candidate is None:
             continue
         age_gap = abs(candidate.age - female.age)
@@ -358,7 +365,12 @@ def _marriage_duration_days(person: Person, current_date: date) -> int:
     return max(0, (current_date - person.marriage_start_date).days)
 
 
-def _best_marriage_candidate(female: Person, males, config: SocialDynamicsConfig) -> Person | None:
+def _best_marriage_candidate(
+    female: Person,
+    males,
+    config: SocialDynamicsConfig,
+    household_ranks: dict[int, float] | None = None,
+) -> Person | None:
     candidates = [
         male
         for male in males
@@ -367,7 +379,23 @@ def _best_marriage_candidate(female: Person, males, config: SocialDynamicsConfig
     if not candidates:
         return None
     target_age = female.age + config.marriage_age_gap_mean
-    return min(candidates, key=lambda male: (abs(male.age - target_age), abs(male.age - female.age), male.id))
+    if household_ranks is None:
+        return min(candidates, key=lambda male: (abs(male.age - target_age), abs(male.age - female.age), male.id))
+    # v14 Phase 3.3: wealth homophily -- rank distance priced in years of age mismatch.
+    # People carry their CURRENT household's rank (children of the rich marry rich:
+    # class reproduction through the marriage market, not through any hazard).
+    female_rank = household_ranks.get(int(female.household_id), 0.5) if female.household_id is not None else 0.5
+    weight = config.marriage_assortativity
+
+    def score(male: Person):
+        male_rank = household_ranks.get(int(male.household_id), 0.5) if male.household_id is not None else 0.5
+        return (
+            abs(male.age - target_age) + weight * abs(female_rank - male_rank),
+            abs(male.age - female.age),
+            male.id,
+        )
+
+    return min(candidates, key=score)
 
 
 def _compatible_spouses(a: Person, b: Person, config: SocialDynamicsConfig) -> bool:

@@ -362,6 +362,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     **{f"bucket{k}_pop_share": float(strat.bucket_pop_share[k]) for k in range(strat.buckets)},
                     "age_rank_corr": float(strat.age_rank_corr),
                     **{f"median_rank_band{i}": float(strat.median_rank_by_band[i]) for i in range(4)},
+                    **{f"bucket{k}_mortality_mult": float(strat.bucket_mortality_mult[k]) for k in range(strat.buckets)},
+                    **{f"bucket{k}_fertility_mult": float(strat.bucket_fertility_mult[k]) for k in range(strat.buckets)},
+                    "spousal_rank_corr": float(strat.spousal_rank_corr),
                 }
             )
     else:
