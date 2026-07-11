@@ -235,6 +235,29 @@ class PersonClaimLedger:
             elif reason == "transfer_income":
                 sheet.transfer_income_tick += share
 
+    def _debit_cash_proportional(self, members: list[int], amount: float) -> dict[int, float]:
+        """Split a household cash debit across members proportional to their positive cash
+        claims, capped at each claim. Equal splitting drove members with small claims negative
+        (the debt side clamped at 0 while cash did not), and a later household move that only
+        carries non-negative claims strands the negative remainder as a permanent claim/ledger
+        mismatch. Only when the whole household lacks backing does the shortfall fall back to an
+        equal split (the ledger already released the cash, so claims must follow)."""
+        sheets = {pid: self._sheets[pid] for pid in members}
+        positive = {pid: max(0.0, s.cash_claim) for pid, s in sheets.items()}
+        total_positive = sum(positive.values())
+        amount = float(amount)
+        takes: dict[int, float] = {}
+        if total_positive >= amount and total_positive > 0.0:
+            for pid in members:
+                takes[pid] = amount * positive[pid] / total_positive
+        else:
+            shortfall = (amount - total_positive) / len(members)
+            for pid in members:
+                takes[pid] = positive[pid] + shortfall
+        for pid, take in takes.items():
+            sheets[pid].cash_claim -= take
+        return takes
+
     def allocate_household_consumption(
         self,
         household_id: int,
@@ -245,11 +268,9 @@ class PersonClaimLedger:
         members = list(person_ids) if person_ids is not None else self.members_of_household(household_id)
         if not members or amount == 0.0:
             return
-        share = float(amount) / len(members)
-        for person_id in members:
-            sheet = self._sheets[person_id]
-            sheet.cash_claim -= share
-            sheet.consumption_allocated_tick += share
+        takes = self._debit_cash_proportional(members, amount)
+        for person_id, take in takes.items():
+            self._sheets[person_id].consumption_allocated_tick += take
 
     def allocate_person_consumption(self, person_id: int, amount: float) -> None:
         if amount == 0.0:
@@ -268,11 +289,38 @@ class PersonClaimLedger:
         members = list(person_ids) if person_ids is not None else self.members_of_household(household_id)
         if not members or amount == 0.0:
             return
-        share = float(amount) / len(members)
-        for person_id in members:
-            sheet = self._sheets[person_id]
-            sheet.cash_claim -= share
-            sheet.debt_claim = max(0.0, sheet.debt_claim - share)
+        self._debit_cash_proportional(members, amount)
+        # retire debt claims proportional to each member's outstanding debt so no member's
+        # clamp strands household debt on the others
+        sheets = [self._sheets[pid] for pid in members]
+        total_debt = sum(max(0.0, s.debt_claim) for s in sheets)
+        if total_debt > 0.0:
+            retire = min(float(amount), total_debt)
+            for s in sheets:
+                s.debt_claim = max(0.0, s.debt_claim - retire * max(0.0, s.debt_claim) / total_debt)
+
+    def reconcile_household_cash(self, household_id: int, target_cash: float) -> float:
+        """Restore the household cash-claim identity (`target_cash` = ledger balance minus
+        parked estate suspense) by an EQUAL SHIFT across members when -- and only when -- the
+        summed claims have drifted from it.
+
+        A negative member claim can be structural, not drift: with a parked estate the target
+        itself is (ledger - suspense) < 0 and a survivor's negative claim is exactly what makes
+        the identity hold (an intra-household IOU against the estate). The first version of
+        this method zeroed negative claims before comparing and thereby BROKE healthy
+        households into a permanent mismatch; do not clamp here -- only translate the sum."""
+        members = self.members_of_household(household_id)
+        if not members:
+            return 0.0
+        sheets = [self._sheets[pid] for pid in members]
+        total = sum(sheet.cash_claim for sheet in sheets)
+        diff = float(target_cash) - total
+        if abs(diff) <= CLAIM_TOL:
+            return 0.0
+        share = diff / len(sheets)
+        for sheet in sheets:
+            sheet.cash_claim += share
+        return abs(diff)
 
     def assert_household_claim_identity(
         self,

@@ -39,3 +39,6 @@ class EstateRegistry:
 
     def total_net_worth(self) -> float:
         return sum(record.net_worth for record in self._records.values() if not record.cleared)
+
+    def uncleared_records(self) -> list[EstateRecord]:
+        return [record for record in self._records.values() if not record.cleared]

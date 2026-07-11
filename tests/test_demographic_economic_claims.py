@@ -78,8 +78,11 @@ def test_claim_ledger_posts_household_flows_to_people_without_changing_total_net
 
     assert claims.balance_sheet(1).labor_income_tick == pytest.approx(10.0)
     assert claims.balance_sheet(2).labor_income_tick == pytest.approx(10.0)
-    assert claims.balance_sheet(1).consumption_allocated_tick == pytest.approx(5.0)
-    assert claims.balance_sheet(2).consumption_allocated_tick == pytest.approx(5.0)
+    # consumption debits allocate proportional to cash claims (40 vs 80 after income), capped
+    # at each claim -- the former equal split drove small-claim members negative
+    assert claims.balance_sheet(1).consumption_allocated_tick == pytest.approx(10.0 * 40.0 / 120.0)
+    assert claims.balance_sheet(2).consumption_allocated_tick == pytest.approx(10.0 * 80.0 / 120.0)
+    assert claims.balance_sheet(1).cash_claim >= 0.0 and claims.balance_sheet(2).cash_claim >= 0.0
     assert claims.total_net_worth() == pytest.approx(before + 10.0)
 
 

@@ -271,16 +271,22 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                 continue
             eq = sum(h.holdings.get(fid, 0.0) * by_id[fid].share_price for fid in h.watchlist if fid in by_id)
             if led.balance(h.id) + eq - h.margin_debt <= 0.0:
-                pay = min(led.balance(h.id), h.margin_debt)
+                # the margin_debt SHADOW can run stale-high when ledger debt left the account
+                # through channels that do not know about it (e.g. a debt claim inherited into
+                # another household moves ledger debt via transfer_debt): repay/write off no
+                # more than the LEDGER actually carries, then retire the shadow. Seed-5 of the
+                # ten-year sweep died here on write_off(715.03) vs ledger debt 704.74.
+                pay = min(led.balance(h.id), h.margin_debt, led.debt(h.id))
                 if pay > EPS:
                     led.repay(h.id, pay)
                     if bridge is not None:
                         bridge.post_household_debt_repayment(h.id, pay)
                     h.margin_debt -= pay
                 if h.margin_debt > EPS:
-                    bad = h.margin_debt
-                    led.write_off(h.id, bank_for(econ, h.id).id, h.margin_debt)
-                    if bridge is not None:
-                        bridge.post_household_debt_writeoff(h.id, bad)
+                    bad = min(h.margin_debt, led.debt(h.id))
+                    if bad > EPS:
+                        led.write_off(h.id, bank_for(econ, h.id).id, bad)
+                        if bridge is not None:
+                            bridge.post_household_debt_writeoff(h.id, bad)
                     h.margin_debt = 0.0
                 econ._hh_bankruptcies += 1

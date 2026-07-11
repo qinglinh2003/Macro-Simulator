@@ -874,16 +874,22 @@ class DemographicEconomicBridge:
         person_ids = self._claim_posting_ids(household_id)
         if not person_ids:
             return
+        if amount < 0.0:
+            # debits allocate proportional to positive claims (capped) -- an equal split drives
+            # small-claim members negative, and later household moves strand the negative
+            takes = self.claims._debit_cash_proportional(list(person_ids), -amount)
+            if reason == "tax_payment":
+                for person_id, take in takes.items():
+                    self.claims.balance_sheet(person_id).tax_paid_tick += take
+            return
         share = amount / len(person_ids)
         for person_id in person_ids:
             sheet = self.claims.balance_sheet(person_id)
             sheet.cash_claim += share
-            if reason == "capital_income" and share > 0.0:
+            if reason == "capital_income":
                 sheet.capital_income_tick += share
-            elif reason == "transfer_income" and share > 0.0:
+            elif reason == "transfer_income":
                 sheet.transfer_income_tick += share
-            elif reason == "tax_payment" and share < 0.0:
-                sheet.tax_paid_tick += -share
 
     def _post_household_debt_delta(self, household_id: int, amount: float) -> None:
         amount = float(amount)
@@ -1493,6 +1499,11 @@ class DemographicEconomicBridge:
                                + sum(package["equity"].values())
                                + sum(package["bank_equity"].values())
                                - float(package["debt"]))
+        # Flavor 7 residue: a negative-cash share an insolvent heir could not back stays on
+        # the dead sheet -- absorb it against the source household's positive claimants
+        # BEFORE clearing, or the wipe would inflate the household's claims past the ledger.
+        if float(self.claims.balance_sheet(dead_id).cash_claim) < 0.0:
+            self._absorb_negative_cash_claim(dead_id, household_id)
         self.claims.clear_person_claims(dead_id)
         estate = self.estates.create_suspense_estate(
             dead_id,
@@ -1502,6 +1513,10 @@ class DemographicEconomicBridge:
         )
         estate.net_worth = 0.0
         estate.cleared = True
+        if self.econ is not None:
+            # the claim package just moved to heirs: this IS the inheritance flow (the metric
+            # existed since v13 phase 1 but nothing ever wrote it)
+            self.econ._inheritance_flow = getattr(self.econ, "_inheritance_flow", 0.0) + estate_net_worth
         return True
 
     def _inheritance_weights(self, heirs: Any) -> dict[int, float]:
@@ -1564,8 +1579,8 @@ class DemographicEconomicBridge:
 
         cash = float(package["cash"]) * fraction
         if cash:
-            moved_cash = cash
-            if cash > 0.0 and src_account != dst_account and getattr(self.econ, "ledger", None) is not None:
+            have_ledger = getattr(self.econ, "ledger", None) is not None
+            if cash > 0.0 and src_account != dst_account and have_ledger:
                 # An estate distributes what the account actually holds at administration
                 # time. The unbacked part of this share is typically an INTRA-HOUSEHOLD IOU
                 # (e.g. a guardian's negative claim charged for the children's keep): it is
@@ -1579,14 +1594,31 @@ class DemographicEconomicBridge:
                 shortfall = cash - moved_cash
                 if shortfall > 0.0:
                     self._extinguish_intra_household_iou(src_person_id, src_sheet.household_id, shortfall)
-            src_sheet.cash_claim -= cash
-            dst_sheet.cash_claim += moved_cash
-            if src_account != dst_account:
-                if cash > 0.0:
-                    if moved_cash > 0.0:
-                        self.econ.ledger.transfer(src_account, dst_account, moved_cash)
-                else:
-                    self.econ.ledger.transfer(dst_account, src_account, -cash)
+                src_sheet.cash_claim -= cash
+                dst_sheet.cash_claim += moved_cash
+                if moved_cash > 0.0:
+                    self.econ.ledger.transfer(src_account, dst_account, moved_cash)
+            elif cash < 0.0 and src_account != dst_account and have_ledger:
+                # Flavor 7 (the mirror): inheriting a NEGATIVE claim means the heir owes the
+                # deceased's household the equalizing payment. A penniless heir cannot back
+                # it -- the ten-year acceptance run died here on an A4 OverdraftError (heir
+                # balance 0.11 vs 4.89 owed). Collect what the heir's account holds net of
+                # the cohabitants' protected claims; the uncollectable remainder stays on the
+                # dead sheet as a residual negative claim and is absorbed inside the source
+                # household by the caller (it dies with the deceased, like every other
+                # intra-household IOU no outsider can settle).
+                owed = -cash
+                protected = self._other_positive_cash_claims(dst_person_id, dst_sheet.household_id)
+                available = max(0.0, float(self.econ.ledger.balance(dst_account)) - protected)
+                moved = min(owed, available)
+                src_sheet.cash_claim += moved
+                dst_sheet.cash_claim -= moved
+                if moved > 0.0:
+                    self.econ.ledger.transfer(dst_account, src_account, moved)
+            else:
+                # same account (or no ledger): a pure claim relabeling, always backable
+                src_sheet.cash_claim -= cash
+                dst_sheet.cash_claim += cash
 
         debt = float(package["debt"]) * fraction
         if debt:
@@ -1594,6 +1626,10 @@ class DemographicEconomicBridge:
             dst_sheet.debt_claim += debt
             if src_account != dst_account and hasattr(self.econ.ledger, "transfer_debt"):
                 self.econ.ledger.transfer_debt(src_account, dst_account, debt)
+                # ledger debt just left the source account: the source agent's margin_debt
+                # shadow must follow, or a later margin call writes off more than the ledger
+                # carries (the seed-5 crash at t2519)
+                self._clamp_margin_debt_shadow(src_account)
 
         for asset_id, amount in package["equity"].items():
             moved = float(amount) * fraction
@@ -1656,6 +1692,102 @@ class DemographicEconomicBridge:
             return None
         return int(spouse_id)
 
+    def administer_estates(self, tick: int, *, probate_window: int = 365, sweep_interval: int = 30) -> None:
+        """Periodic probate administration -- the channel that was designed but never wired.
+
+        Parked suspense estates (heirless, cash-only deaths -- mostly genesis people whose
+        kinship links do not exist) previously sat in `estate_suspense` forever, a monotone
+        money leak that reached 32% of broad money at the 10k x 3650t scale. Heirs cannot
+        appear after death, so past the probate window the estate passes to the state
+        (bona vacantia), mirroring the securities-estate escheat branch in `on_death`.
+
+        The same sweep administers economic households with no living claimants (frozen
+        debt/deposit zombies) and reconciles per-household cash claims against the ledger
+        so one-off claim drift heals instead of alarming every tick until the end of the run.
+        """
+        econ = self.econ
+        if econ is None or getattr(econ, "ledger", None) is None:
+            return
+        for record in self.estates.uncleared_records():
+            if record.net_worth <= 0.0:
+                record.cleared = True
+                continue
+            if tick - record.created_tick >= probate_window:
+                self._escheat_estate_record(record)
+        if sweep_interval > 0 and tick % sweep_interval == 0:
+            self._administer_empty_households()
+            self._reconcile_household_claims()
+
+    def _escheat_estate_record(self, record: Any) -> None:
+        econ = self.econ
+        fiscal = getattr(econ, "_fiscal", None)
+        household_id = record.household_id
+        parked = 0.0
+        if household_id is not None:
+            parked = max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
+        amount = min(float(record.net_worth), parked)
+        account_id = self.household_to_account.get(int(household_id)) if household_id is not None else None
+        if (
+            amount > 0.0
+            and account_id is not None
+            and fiscal is not None
+            and econ.ledger.has_account(account_id)
+            and econ.ledger.has_account(fiscal)
+        ):
+            amount = min(amount, max(0.0, float(econ.ledger.balance(account_id))))
+            if amount > 0.0:
+                econ.ledger.transfer(account_id, fiscal, amount)
+                econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
+        if household_id is not None and amount > 0.0:
+            self.claims.clear_estate_suspense(amount, household_id=int(household_id))
+        record.net_worth = 0.0
+        record.cleared = True
+
+    def _administer_empty_households(self) -> None:
+        """Write off the debt and escheat the free cash of economic households whose
+        demographic members are all dead. Without this, a household whose last member died
+        while carrying margin debt freezes as a permanent negative-net-worth zombie."""
+        econ = self.econ
+        fiscal = getattr(econ, "_fiscal", None)
+        for h in list(getattr(econ, "households", [])):
+            household_id = self.account_to_household.get(h.id)
+            if household_id is None:
+                continue
+            if self.claims.members_of_household(int(household_id)):
+                continue
+            account_id = h.id
+            if not econ.ledger.has_account(account_id):
+                continue
+            debt = float(econ.ledger.debt(account_id))
+            if debt > 0.0:
+                repay = min(debt, max(0.0, float(econ.ledger.balance(account_id))))
+                if repay > 0.0:
+                    econ.ledger.repay(account_id, repay)
+                residual = float(econ.ledger.debt(account_id))
+                if residual > 0.0:
+                    bank_id = self._creditor_bank_for_person(-1, int(household_id))
+                    if bank_id is not None:
+                        econ.ledger.write_off(account_id, bank_id, residual)
+                        self._clamp_margin_debt_shadow(account_id)
+            suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
+            free_cash = max(0.0, float(econ.ledger.balance(account_id)) - suspense)
+            if free_cash > 0.0 and fiscal is not None and econ.ledger.has_account(fiscal):
+                econ.ledger.transfer(account_id, fiscal, free_cash)
+                econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + free_cash
+
+    def _reconcile_household_claims(self) -> None:
+        econ = self.econ
+        total_adjusted = 0.0
+        for h in getattr(econ, "households", []):
+            household_id = self.account_to_household.get(h.id)
+            if household_id is None or not econ.ledger.has_account(h.id):
+                continue
+            suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
+            target = float(econ.ledger.balance(h.id)) - suspense
+            total_adjusted += self.claims.reconcile_household_cash(int(household_id), target)
+        if total_adjusted > 0.0:
+            econ._claim_reconciled_flow = getattr(econ, "_claim_reconciled_flow", 0.0) + total_adjusted
+
     def _settle_estate_if_possible(
         self,
         estate: Any,
@@ -1684,6 +1816,7 @@ class DemographicEconomicBridge:
         payments = settle_estate(estate, heirs, self.claims)
         if self.econ is None or getattr(self.econ, "ledger", None) is None:
             return
+        self.econ._inheritance_flow = getattr(self.econ, "_inheritance_flow", 0.0) + sum(payments.values())
         src_account = self.account_for_household_id(int(estate.household_id))
         for heir_id, amount in payments.items():
             if amount <= 0.0:
