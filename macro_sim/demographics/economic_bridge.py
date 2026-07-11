@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
@@ -20,6 +21,7 @@ from macro_sim.demographics.estate import EstateRegistry
 from macro_sim.demographics.inheritance import select_default_heirs, settle_estate
 from macro_sim.demographics.kernel import MicroDemographicKernel, count_alive_by_age, create_genesis_population
 from macro_sim.demographics.lifecycle import household_lifecycle_consumption_budget
+from macro_sim.demographics.rates import expected_life_at_birth
 from macro_sim.demographics.marriage_economics import MarriageContract, dissolve_marriage, record_marriage_contract
 
 
@@ -50,6 +52,8 @@ class DemographicEconomicBridge:
     orphan_support_spending: float = 0.0
     _bank_capital_adjustment: dict[str, float] = field(default_factory=dict)
     macro_signal: Any | None = None    # v14 Phase 2: DemoMacroSignal (None = feedback plumbing absent)
+    _effective_rates_cache: dict[float, Any] = field(default_factory=dict)   # mortality mult -> derived rates
+    _e0_cache: dict[float, float] = field(default_factory=dict)              # mortality mult -> e0
 
     def __post_init__(self) -> None:
         self.account_to_household = {account: household for household, account in self.household_to_account.items()}
@@ -114,6 +118,46 @@ class DemographicEconomicBridge:
     @property
     def mortality_macro_multiplier(self) -> float:
         return self.macro_signal.mortality_mult if self.macro_signal is not None else 1.0
+
+    @property
+    def effective_vital_rates(self) -> Any | None:
+        """Mortality-scaled Phase0VitalRates (v14 Phase 2.2).
+
+        Gompertz-Makeham hazards are CLOSED under proportional scaling: hazard x M is
+        the same family with (a, b, infant_extra) each x M. Deriving one frozen rates
+        instance per multiplier value (annual => a handful per run) means the kernel's
+        survival draw AND the memoized e(a) lifecycle table both consume the scaled
+        mortality through their existing signatures -- no cache bypass, no drift between
+        what kills people and what they annuitize over.
+        """
+        base = getattr(self.econ, "demographic_rates", None) if self.econ is not None else None
+        if base is None:
+            return None
+        multiplier = self.mortality_macro_multiplier
+        if multiplier == 1.0:
+            return base                  # identity: neutral runs share the base object
+        cached = self._effective_rates_cache.get(multiplier)
+        if cached is None:
+            cached = dataclasses.replace(
+                base,
+                makeham_a=base.makeham_a * multiplier,
+                gompertz_b=base.gompertz_b * multiplier,
+                infant_extra=base.infant_extra * multiplier,
+            )
+            self._effective_rates_cache[multiplier] = cached
+        return cached
+
+    @property
+    def e0_effective(self) -> float:
+        rates = self.effective_vital_rates
+        if rates is None:
+            return 0.0
+        multiplier = self.mortality_macro_multiplier
+        value = self._e0_cache.get(multiplier)
+        if value is None:
+            value = expected_life_at_birth(rates)
+            self._e0_cache[multiplier] = value
+        return value
 
     def observe_macro(self, econ: Any, rec: dict) -> None:
         """Feed one tick of realized macro state into the annual demography signal.
@@ -321,6 +365,12 @@ class DemographicEconomicBridge:
         alpha_wealth_draw: float,
         ticks_per_year: int = 365,
     ) -> float:
+        # v14 Phase 2.2: households annuitize over the EFFECTIVE (mortality-scaled) life
+        # table -- longer lives spread wealth thinner. Neutral multiplier returns the same
+        # base object, so this line is inert (and bit-identical) when the channel is off.
+        effective = self.effective_vital_rates
+        if effective is not None:
+            rates = effective
         return household_lifecycle_consumption_budget(
             self.household_profile(account_id),
             self.claims,

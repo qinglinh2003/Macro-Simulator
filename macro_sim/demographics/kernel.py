@@ -197,8 +197,14 @@ class MicroDemographicKernel:
         # It is read once per tick: every woman gets the same multiplier, so individual
         # economic position cannot enter the hazard here (Phase 3 boundary).
         fertility_scale = 1.0
+        mortality_rates = self.rates
         if economic_state is not None:
             fertility_scale = float(getattr(economic_state, "fertility_macro_multiplier", 1.0))
+            # v14 Phase 2.2: mortality arrives as a DERIVED Phase0VitalRates (G-M hazards are
+            # closed under proportional scaling), so the survival draw below and the memoized
+            # e(a) consumption table upstream read the same scaled object. Neutral multiplier
+            # hands back the base instance itself.
+            mortality_rates = getattr(economic_state, "effective_vital_rates", None) or self.rates
         state.tick_index += 1
         tick = state.tick_index
         state.current_date = state.current_date + timedelta(days=1)
@@ -215,7 +221,7 @@ class MicroDemographicKernel:
             if person.age >= self.rates.omega:
                 survives = False
             else:
-                survives = self.rng.random() < self.rates.survival_probability(
+                survives = self.rng.random() < mortality_rates.survival_probability(
                     person.age_years_on(state.current_date),
                     dt=dt_years,
                 )

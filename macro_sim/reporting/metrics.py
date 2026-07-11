@@ -348,6 +348,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "demo_signal_z": float(getattr(getattr(bridge, "macro_signal", None), "signal_z", 1.0)),
                 "fertility_mult": float(getattr(getattr(bridge, "macro_signal", None), "fertility_mult", 1.0)),
                 "mortality_mult": float(getattr(getattr(bridge, "macro_signal", None), "mortality_mult", 1.0)),
+                "e0_effective": float(getattr(bridge, "e0_effective", 0.0)),
             }
         )
     else:
