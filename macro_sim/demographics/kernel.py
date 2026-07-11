@@ -192,7 +192,13 @@ class MicroDemographicKernel:
         )
 
     def tick(self, state: GenesisState, economic_state: object | None = None) -> TickResult:
-        _ = economic_state
+        # v14 Phase 2.1: the macro economy modulates the fertility hazard through ONE
+        # kernel-level scalar (annual, clipped, neutral-anchored -- see macro_signal.py).
+        # It is read once per tick: every woman gets the same multiplier, so individual
+        # economic position cannot enter the hazard here (Phase 3 boundary).
+        fertility_scale = 1.0
+        if economic_state is not None:
+            fertility_scale = float(getattr(economic_state, "fertility_macro_multiplier", 1.0))
         state.tick_index += 1
         tick = state.tick_index
         state.current_date = state.current_date + timedelta(days=1)
@@ -245,6 +251,8 @@ class MicroDemographicKernel:
                 continue
             father_id = _birth_father_id(person, people_by_id)
             annual_fertility = self._annual_fertility_rate(person, state.current_date, father_id)
+            if fertility_scale != 1.0:      # guarded: neutral runs must not depend on x*1.0 exactness
+                annual_fertility *= fertility_scale
             if annual_fertility <= 0.0:
                 continue
             birth_count = int(self.rng.poisson(annual_fertility * dt_years))
