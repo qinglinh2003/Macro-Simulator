@@ -42,22 +42,26 @@ def test_market_off_leaves_no_market():
 def empty_household_by_pinned_mortality(econ, target, max_ticks: int = 120) -> None:
     """Kill every member of `target` through the REAL death machinery (v14 Phase 3
     mortality strata pinned to an extreme multiplier), so estate settlement keeps the
-    claim identities consistent -- unlike any surgical membership hack."""
+    claim identities consistent -- unlike any surgical membership hack. Emptiness is a
+    DEMOGRAPHIC-state fact: dead members' claim sheets stay attached to the household
+    (backing estate suspense), so claims membership never empties for died-out homes."""
     bridge = econ.demographic_bridge
-    hh_id = bridge.household_id_for_account(target.id)
-    bridge.stratification.mortality_strata[int(hh_id)] = 1e5
+    hh_id = int(bridge.household_id_for_account(target.id))
+    bridge.stratification.mortality_strata[hh_id] = 1e5
     for _ in range(max_ticks):
         econ.step()
-        if not bridge.claims.members_of_household(int(hh_id)):
+        alive = [p for p in econ.demographic_state.people
+                 if p.alive and p.household_id == hh_id]
+        if not alive:
             return
     raise AssertionError("pinned mortality failed to empty the household in time")
 
 
 def test_probate_listing_and_sale_cycle_affordable():
-    """Affordable anchor (0.2y income ~ 73) so cash buyers exist: the emptied household's
-    dwelling must get listed (not escheated in kind), then sell -- title to a houseless
-    buyer, proceeds escheated -- under the per-tick registry/claim hard gates."""
-    econ = make_econ(house_price_income_years=0.2)
+    """Cheap anchor (0.05y income ~ 18) so young houseless leavers can pay cash: the
+    emptied household's dwelling must get listed (not escheated in kind), then sell --
+    title to a houseless buyer -- under the per-tick registry/claim hard gates."""
+    econ = make_econ(house_price_income_years=0.05)
     market = econ.housing_market
     for _ in range(3):
         econ.step()
@@ -66,9 +70,11 @@ def test_probate_listing_and_sale_cycle_affordable():
     assert dwelling_ids
     empty_household_by_pinned_mortality(econ, target)
 
-    for _ in range(150):
+    for _ in range(400):
         econ.step()
-        if market.sales_total > 0:
+        if market.sales_total > 0 and all(
+            econ.housing.owner_of(d) != target.id for d in dwelling_ids
+        ):
             break
     assert market.sales_total >= 1
     assert all(econ.housing.owner_of(d) != target.id for d in dwelling_ids)

@@ -900,6 +900,41 @@ class DemographicEconomicBridge:
         econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
         return amount
 
+    def _sweep_stranded_dwellings(self) -> None:
+        """v15 probate for dwellings, run on the periodic administration sweep: households
+        can empty demographically through SEVERAL paths that never touch the claims-empty
+        administration (deaths leave the dead members' sheets attached backing estate
+        suspense; ORPHAN GUARDIANSHIP moves the last minor out with no bridge hook at all).
+        A per-event hook misses whole families of these -- the sweep catches every dwelling
+        whose owner household has no living members. Market on: forced probate listing
+        (sale proceeds escheat at the moment of sale). Market off: bona-vacantia escheat
+        in kind (v15.0 stopgap)."""
+        econ = self.econ
+        housing = getattr(econ, "housing", None) if econ is not None else None
+        if housing is None:
+            return
+        market = getattr(econ, "housing_market", None)
+        fiscal = getattr(econ, "_fiscal", None)
+        state = self._demographic_state_ref()
+        if state is None:
+            return
+        living_households = {
+            int(person.household_id)
+            for person in getattr(state, "people", [])
+            if getattr(person, "alive", True) and person.household_id is not None
+        }
+        for account_id in list(housing.owners()):
+            household_id = self.account_to_household.get(account_id)
+            if household_id is None or int(household_id) in living_households:
+                continue
+            if market is not None:
+                for dwelling in housing.dwellings_of(account_id):
+                    market.list_dwelling(econ, dwelling.id, account_id, forced=True)
+            elif fiscal is not None:
+                moved = housing.transfer_all(account_id, fiscal)
+                if moved:
+                    econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
+
     def _clear_deceased_claims(self, person_id: int, household_id: int) -> None:
         self._absorb_negative_cash_claim(person_id, household_id)
         self._transfer_residual_asset_claims_to_household_claimants(person_id, household_id)
@@ -1861,6 +1896,7 @@ class DemographicEconomicBridge:
         if sweep_interval > 0 and tick % sweep_interval == 0:
             self._administer_empty_households()
             self._reconcile_household_claims()
+            self._sweep_stranded_dwellings()
 
     def _escheat_estate_record(self, record: Any) -> None:
         econ = self.econ
