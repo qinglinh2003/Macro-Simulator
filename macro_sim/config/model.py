@@ -121,6 +121,63 @@ class Config:
     strat_mult_lo: float = 0.5
     strat_mult_hi: float = 2.0
     marriage_assortativity: float = 0.0       # 3.3: years of age-mismatch per unit rank distance -- FREE
+    # -- v15.0 housing: title registry + genesis endowment (frozen price, zero market).
+    # A dwelling is a REAL asset in a registry, never money: A4/A5 are blind to it.
+    housing_enabled: bool = False           # one homogeneous dwelling per genesis household
+    house_price_income_years: float = 3.5   # frozen genesis valuation anchor (x annual wage income)
+    # -- v15.1 resale market (posted asks, monthly sessions, cash-constrained regime).
+    housing_market_enabled: bool = False    # requires housing_enabled
+    housing_session_interval: int = 30      # matching cadence (marriage-market precedent)
+    housing_ask_markup: float = 0.05        # voluntary ask over the reference price
+    housing_forced_discount: float = 0.10   # probate/foreclosure asks under it
+    housing_ask_decay: float = 0.03         # per-session cut while unsold
+    housing_search_k: int = 5               # buyer sees the k cheapest listings
+    housing_buyer_buffer: float = 0.25      # deposits share a buyer keeps
+    housing_distress_floor: float = 5.0     # deposits below this list the home
+    # -- v15.2 mortgages: ordinary non-margin household ledger debt (the certified credit
+    # machinery amortizes it at hh_amort and charges the FLOATING loan rate -- monetary
+    # transmission for free); the book only tracks collateralization + foreclosure.
+    mortgage_enabled: bool = False          # requires housing_market_enabled
+    mortgage_ltv_cap: float = 0.8           # macroprudential handle, live from day one
+    mortgage_foreclosure_ltv: float = 1.1   # foreclose when secured balance > this x value
+    mortgage_arrears_floor: float = 2.0     # ...AND deposits below this floor
+    # -- v15.3 rental market: tenancies as persistent flows; rent level is an independent
+    # market state (vacancy pressure cuts it, unhoused demand raises it); landlords
+    # emerge from yield arbitrage (cash-only buy-to-let; leverage is a later flag).
+    housing_rental_enabled: bool = False    # requires housing_market_enabled
+    rent_yield0: float = 0.05               # genesis annual rent / price anchor
+    rent_adjust: float = 0.02               # per-session rent-level step
+    rent_burden_cap: float = 0.40           # tenant affordability cap vs realized income
+    rental_eviction_arrears: int = 30       # consecutive shortfall ticks before eviction
+    rental_investor_premium: float = 0.02   # buy-to-let when yield > deposit rate + premium
+    # -- v15.4 construction: primary market + the long-run price anchor. Builders ride
+    # the native firm grammar (B1/B2, labor market, settlement); scarcity comes from a
+    # convex LAND FEE to the fiscal at minting and a yearly PERMIT quota (zoning handle).
+    # -- v15.5 couplings: ONE affordability signal (annual, burn-in discard), per-channel
+    # flags. Leave-home reads the rent burden (unaffordable rents delay leaving home =>
+    # cohabitation); fertility (channel 2.1d) reads price-to-income (housing as the
+    # child-rearing cost). 0.0 = channel off = bit-identical.
+    housing_signal_burnin_years: int = 4
+    housing_leave_elasticity: float = 0.0     # lambda in L = clip(burden^-lambda, lo, hi) -- FREE
+    housing_leave_mult_lo: float = 0.5
+    housing_leave_mult_hi: float = 1.5
+    housing_fertility_elasticity: float = 0.0 # 2.1d eps in F = clip(pti^-eps, lo, hi) -- FREE
+    housing_fertility_mult_lo: float = 0.5
+    housing_fertility_mult_hi: float = 1.5
+    housing_construction_enabled: bool = False   # requires housing_market_enabled
+    n_builders: int = 5
+    builder_productivity: float = 0.002     # dwelling units per labor-tick (~1.4 worker-years/unit)
+    builder_demand_seed: float = 0.005      # cold-start expected dwelling demand per tick
+    land_fee_share: float = 0.2             # land fee = share x price x (stock/stock0)^convexity
+    land_convexity: float = 1.0
+    housing_permits: int = 50               # dwellings mintable per year (zoning quota; live Policy lever)
+    # -- v15.5 policy handles + wealth-effect flag (all default off = bit-identical)
+    housing_transfer_tax: float = 0.0       # stamp duty on sale price -> fiscal (live lever)
+    housing_property_tax: float = 0.0       # annual rate on dwelling value -> fiscal (live lever)
+    housing_in_wealth_tax: bool = False     # include dwellings in the wealth-tax base (live lever)
+    housing_wealth_effect: float = 0.0      # housing value weight in the consumption wealth term
+                                            # (empirically WEAK vs financial wealth; the honest
+                                            # default is the emergent down-payment effect) -- FREE
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -683,6 +740,8 @@ class Config:
             demographic_lifecycle_consumption=self.demographic_lifecycle_consumption,
             lifecycle_alpha_income=self.lifecycle_alpha_income,
             lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
+            housing_wealth_effect=self.housing_wealth_effect,
+            alpha2=self.alpha2,
         )
 
     @_cached_view
@@ -1264,6 +1323,31 @@ class Config:
         assert 0.0 < self.mortality_mult_lo <= 1.0 <= self.mortality_mult_hi, "mortality multiplier bounds must bracket the neutral 1.0"
         assert self.mortality_rank_gradient >= 0.0, "mortality rank gradient must be >= 0 (rich live longer)"
         assert 0.0 < self.strat_mult_lo <= 1.0 <= self.strat_mult_hi, "stratum multiplier bounds must bracket the neutral 1.0"
+        assert self.house_price_income_years > 0.0, "housing genesis anchor must be > 0"
+        assert not (self.housing_market_enabled and not self.housing_enabled), "housing market requires the registry"
+        assert self.housing_session_interval >= 1, "housing session interval must be >= 1 tick"
+        assert 0.0 <= self.housing_ask_decay < 1.0 and 0.0 <= self.housing_forced_discount < 1.0, "housing ask cuts are fractions"
+        assert 0.0 <= self.housing_buyer_buffer < 1.0, "housing buyer buffer is a deposits fraction"
+        assert self.housing_search_k >= 1, "buyers must see at least one listing"
+        assert not (self.mortgage_enabled and not self.housing_market_enabled), "mortgages require the resale market"
+        assert 0.0 < self.mortgage_ltv_cap < 1.0, "mortgage LTV cap is a fraction of price"
+        assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
+        assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
+        assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
+        assert self.housing_signal_burnin_years >= 1, "housing signal burn-in must be >= 1 year"
+        assert self.housing_leave_elasticity >= 0.0 and self.housing_fertility_elasticity >= 0.0, "housing coupling elasticities must be >= 0"
+        assert 0.0 < self.housing_leave_mult_lo <= 1.0 <= self.housing_leave_mult_hi, "leave multiplier bounds must bracket 1.0"
+        assert 0.0 < self.housing_fertility_mult_lo <= 1.0 <= self.housing_fertility_mult_hi, "housing fertility bounds must bracket 1.0"
+        assert not ((self.housing_leave_elasticity > 0.0 or self.housing_fertility_elasticity > 0.0)
+                    and not self.housing_rental_enabled), "housing couplings need the rental market (rent signal)"
+        assert self.n_builders >= 1 or not self.housing_construction_enabled, "construction needs at least one builder"
+        assert self.builder_productivity > 0.0 and 0.0 <= self.land_fee_share and self.land_convexity >= 0.0, "builder params out of range"
+        assert self.housing_permits >= 0, "permit quota must be >= 0"
+        assert 0.0 <= self.housing_transfer_tax < 1.0 and 0.0 <= self.housing_property_tax < 1.0, "housing tax rates are fractions"
+        assert self.housing_wealth_effect >= 0.0, "housing wealth effect must be >= 0"
+        assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
+        assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
+        assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

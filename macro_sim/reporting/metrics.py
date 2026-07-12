@@ -370,6 +370,82 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     else:
         rec["demographics_enabled"] = 0.0
 
+    housing = getattr(econ, "housing", None)
+    if housing is not None:
+        # v15.0: registry stock gauges (frozen price until the v15.1 market)
+        fiscal = getattr(econ, "_fiscal", None)
+        owner_households = sum(1 for h in households if housing.dwellings_of(h.id))
+        rec.update(
+            {
+                "dwellings_total": float(housing.count()),
+                "dwellings_fiscal": float(len(housing.dwellings_of(fiscal)) if fiscal else 0.0),
+                "homeowner_share": owner_households / max(1, len(households)),
+                "house_price": float(getattr(econ, "_house_price", 0.0)),
+            }
+        )
+        market = getattr(econ, "housing_market", None)
+        if market is not None:
+            rec.update(
+                {
+                    "housing_listings": float(len(market.listings)),
+                    "housing_sales_session": float(market.last_session_sales),
+                    "housing_sales_total": float(market.sales_total),
+                    "housing_tom": float(market.last_session_tom),
+                    "housing_forced_share": float(market.forced_share),
+                    "transfer_tax_paid": float(getattr(econ, "_transfer_tax_paid", 0.0)),
+                    "property_tax_paid": float(getattr(econ, "_property_tax_paid", 0.0)),
+                }
+            )
+        mortgage_book = getattr(econ, "mortgage_book", None)
+        if mortgage_book is not None:
+            rec.update(
+                {
+                    "mortgage_count": float(len(mortgage_book.loans)),
+                    "mortgage_balance_total": float(mortgage_book.balance_total()),
+                    "mortgage_originated_total": float(mortgage_book.originated_total),
+                    "foreclosures_total": float(mortgage_book.foreclosures_total),
+                }
+            )
+        afford = getattr(econ, "housing_affordability", None)
+        if afford is not None:
+            rec.update(
+                {
+                    "housing_pti_ratio": float(afford.pti_ratio),
+                    "rent_burden_ratio": float(afford.rent_burden_ratio),
+                    "leave_home_mult": float(afford.leave_mult),
+                    "housing_fertility_mult": float(afford.fertility_mult),
+                }
+            )
+        builders = getattr(econ, "builders", None)
+        if builders:
+            rec.update(
+                {
+                    "dwellings_built_total": float(getattr(econ, "_dwellings_built", 0)),
+                    "land_fee_paid_total": float(getattr(econ, "_land_fee_paid", 0.0)),
+                    "builder_employment": float(sum(f.hired for f in builders)),
+                    "builder_inventory_units": float(sum(f.inventory for f in builders)),
+                    "builder_wip_units": float(sum(getattr(f, "wip", 0.0) for f in builders)),
+                    "permits_used_year": float(getattr(econ, "_permits_used", 0)),
+                }
+            )
+        rental = getattr(econ, "rental_market", None)
+        if rental is not None:
+            price = max(1e-9, float(getattr(econ, "_house_price", 0.0)))
+            rec.update(
+                {
+                    "tenancy_count": float(len(rental.tenancies)),
+                    "rental_vacancies": float(len(rental.vacancies(econ))),
+                    "rent_level": float(rental.rent_level),
+                    "rental_yield": float(rental.rent_level * 365.0 / price),
+                    "rent_paid_total": float(rental.rent_paid_total),
+                    "evictions_total": float(rental.evictions_total),
+                    "tenant_share": float(len(rental.tenancies)) / max(1, len(households)),
+                    "landlord_count": float(sum(
+                        1 for h in households if len(housing.dwellings_of(h.id)) > 1
+                    )),
+                }
+            )
+
     # -- observable-but-not-yet-mechanistic metrics -----------------------
     # These are read-only aggregates over fields the model already maintains.
     # They support the visualization refactor without adding any behavioral

@@ -27,6 +27,12 @@ from macro_sim.demographics.kernel import MicroDemographicKernel
 from macro_sim.demographics.lifecycle_households import LifecycleHouseholdConfig, apply_leaving_home_dynamics
 from macro_sim.demographics.macro_signal import DemoMacroSignal
 from macro_sim.demographics.stratification import WealthStratification
+from macro_sim.housing import HousingRegistry
+from macro_sim.housing.market import HousingMarket, run_housing_market_phase
+from macro_sim.housing.mortgage import MortgageBook
+from macro_sim.housing.affordability import HousingAffordabilitySignal
+from macro_sim.housing.construction import create_builders
+from macro_sim.housing.rental import RentalMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -194,6 +200,65 @@ class Economy:
                 mortality_mult_lo=cfg.mortality_mult_lo,
                 mortality_mult_hi=cfg.mortality_mult_hi,
             )
+        # v15.0 housing: title registry + genesis endowment. One homogeneous dwelling per
+        # genesis household, 100% owner-occupied, no mortgage; newly formed households start
+        # houseless (they are the emergent buyers/renters of later stages). Price is FROZEN
+        # at the genesis anchor -- no market until v15.1, stock integrity before flows.
+        self.housing = None
+        self.housing_market = None
+        self.mortgage_book = None
+        self.rental_market = None
+        self.housing_affordability = None
+        self._house_price = 0.0
+        if cfg.housing_enabled:
+            self.housing = HousingRegistry()
+            self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
+            for h in self.households:
+                self.housing.mint(h.id)
+            if cfg.housing_market_enabled:
+                # v15.1 resale market: probate/distress listings, monthly sessions
+                self.housing_market = HousingMarket(
+                    session_interval=cfg.housing_session_interval,
+                    ask_markup=cfg.housing_ask_markup,
+                    forced_discount=cfg.housing_forced_discount,
+                    ask_decay=cfg.housing_ask_decay,
+                    search_k=cfg.housing_search_k,
+                    buyer_buffer=cfg.housing_buyer_buffer,
+                    distress_floor=cfg.housing_distress_floor,
+                )
+            if cfg.mortgage_enabled:
+                # v15.2: collateralization book over the existing household credit rails
+                self.mortgage_book = MortgageBook(
+                    ltv_cap=cfg.mortgage_ltv_cap,
+                    foreclosure_ltv=cfg.mortgage_foreclosure_ltv,
+                    arrears_floor=cfg.mortgage_arrears_floor,
+                )
+            self._genesis_dwellings = self.housing.count()
+            if cfg.housing_rental_enabled:
+                # v15.3: tenancy flows + emergent landlords; rent level seeded off the
+                # genesis price anchor, independent thereafter
+                self.rental_market = RentalMarket(
+                    rent_yield0=cfg.rent_yield0,
+                    rent_adjust=cfg.rent_adjust,
+                    rent_burden_cap=cfg.rent_burden_cap,
+                    eviction_arrears=cfg.rental_eviction_arrears,
+                    investor_premium=cfg.rental_investor_premium,
+                    rent_level=cfg.rent_yield0 * self._house_price / 365.0,
+                )
+            if cfg.housing_construction_enabled:
+                # v15.4: builder firms on the native grammar; land fee + permits anchor
+                create_builders(self, cfg)
+            # v15.5: the shared affordability signal (always observed when housing is on;
+            # multipliers stay exactly 1 until an elasticity is set)
+            self.housing_affordability = HousingAffordabilitySignal(
+                burnin_years=cfg.housing_signal_burnin_years,
+                leave_elasticity=cfg.housing_leave_elasticity,
+                leave_mult_lo=cfg.housing_leave_mult_lo,
+                leave_mult_hi=cfg.housing_leave_mult_hi,
+                fertility_elasticity=cfg.housing_fertility_elasticity,
+                fertility_mult_lo=cfg.housing_fertility_mult_lo,
+                fertility_mult_hi=cfg.housing_fertility_mult_hi,
+            )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -333,6 +398,7 @@ class Economy:
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
         run_settlement_phase(self)
         run_debt_service_phase(self)      # v3 only; no-op when banks disabled
+        run_housing_market_phase(self)    # v15.1 only; monthly resale sessions (no-op off)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
         run_interbank_phase(self)         # v11.4 only; money-market funding of reserve deficits (no-op off)
@@ -345,6 +411,15 @@ class Economy:
             # feed the macro->demography signal AFTER metrics: rec carries the multiplier the
             # kernel used this tick; an annual rollover here reaches the kernel next tick
             self.demographic_bridge.observe_macro(self, rec)
+        if self.housing_affordability is not None and self.demographic_state is not None:
+            rent = self.rental_market.rent_level if self.rental_market is not None else 0.0
+            self.housing_affordability.observe_tick(
+                year=self.demographic_state.current_date.year,
+                house_price=self._house_price,
+                rent_level=rent,
+                wages_paid=rec.get("wages_paid", 0.0),
+                labor=rec.get("employment", 0.0),
+            )
         self._commit_cross_tick_state()
         self.t += 1
         return rec
@@ -363,13 +438,24 @@ class Economy:
     def _run_demographic_household_transitions(self) -> None:
         if not self.cfg.demographic_adult_leaving_home_enabled:
             return
+        # v15.5-1: unaffordable rents delay leaving home (cohabitation is the housing
+        # market's safety valve). The multiplier is annual, clipped, and exactly 1 when
+        # the channel is off -- the guarded scaling keeps neutral runs bit-identical.
+        leave_scale = 1.0
+        if self.housing_affordability is not None:
+            leave_scale = self.housing_affordability.leave_mult
+        rate_peak = self.cfg.demographic_annual_leave_rate_peak
+        rate_late = self.cfg.demographic_annual_leave_rate_late
+        if leave_scale != 1.0:
+            rate_peak *= leave_scale
+            rate_late *= leave_scale
         events = apply_leaving_home_dynamics(
             self.demographic_state,
             LifecycleHouseholdConfig(
                 leave_home_min_age=self.cfg.demographic_leave_home_min_age,
                 leave_home_peak_end_age=self.cfg.demographic_leave_home_peak_end_age,
-                annual_leave_rate_peak=self.cfg.demographic_annual_leave_rate_peak,
-                annual_leave_rate_late=self.cfg.demographic_annual_leave_rate_late,
+                annual_leave_rate_peak=rate_peak,
+                annual_leave_rate_late=rate_late,
             ),
             self._demographic_household_rng,
         )
@@ -395,6 +481,8 @@ class Economy:
         self.ledger.assert_non_negative()
         self.ledger.assert_reserves_conserved()   # v11.4: the reserve overlay conserves too (no-op if off)
         assert_securities_identities(self)        # v12: bond / CB-balance-sheet / master-NFA gates (no-op if off)
+        if self.housing is not None:
+            self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
             self.demographic_bridge.assert_all_claim_identities(self)
 

@@ -114,7 +114,14 @@ class DemographicEconomicBridge:
     # ------------------------------------------------------------------
     @property
     def fertility_macro_multiplier(self) -> float:
-        return self.macro_signal.fertility_mult if self.macro_signal is not None else 1.0
+        mult = self.macro_signal.fertility_mult if self.macro_signal is not None else 1.0
+        # v15.5 channel 2.1d: housing affordability (price-to-income) composes
+        # multiplicatively with the Phase 2 income channel -- the kernel keeps reading
+        # ONE scalar, and each factor is separately flag-gated and neutrality-anchored
+        housing_signal = getattr(self.econ, "housing_affordability", None) if self.econ is not None else None
+        if housing_signal is not None and housing_signal.fertility_mult != 1.0:
+            mult *= housing_signal.fertility_mult
+        return mult
 
     @property
     def mortality_macro_multiplier(self) -> float:
@@ -900,6 +907,41 @@ class DemographicEconomicBridge:
         econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
         return amount
 
+    def _sweep_stranded_dwellings(self) -> None:
+        """v15 probate for dwellings, run on the periodic administration sweep: households
+        can empty demographically through SEVERAL paths that never touch the claims-empty
+        administration (deaths leave the dead members' sheets attached backing estate
+        suspense; ORPHAN GUARDIANSHIP moves the last minor out with no bridge hook at all).
+        A per-event hook misses whole families of these -- the sweep catches every dwelling
+        whose owner household has no living members. Market on: forced probate listing
+        (sale proceeds escheat at the moment of sale). Market off: bona-vacantia escheat
+        in kind (v15.0 stopgap)."""
+        econ = self.econ
+        housing = getattr(econ, "housing", None) if econ is not None else None
+        if housing is None:
+            return
+        market = getattr(econ, "housing_market", None)
+        fiscal = getattr(econ, "_fiscal", None)
+        state = self._demographic_state_ref()
+        if state is None:
+            return
+        living_households = {
+            int(person.household_id)
+            for person in getattr(state, "people", [])
+            if getattr(person, "alive", True) and person.household_id is not None
+        }
+        for account_id in list(housing.owners()):
+            household_id = self.account_to_household.get(account_id)
+            if household_id is None or int(household_id) in living_households:
+                continue
+            if market is not None:
+                for dwelling in housing.dwellings_of(account_id):
+                    market.list_dwelling(econ, dwelling.id, account_id, forced=True)
+            elif fiscal is not None:
+                moved = housing.transfer_all(account_id, fiscal)
+                if moved:
+                    econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
+
     def _clear_deceased_claims(self, person_id: int, household_id: int) -> None:
         self._absorb_negative_cash_claim(person_id, household_id)
         self._transfer_residual_asset_claims_to_household_claimants(person_id, household_id)
@@ -1464,6 +1506,12 @@ class DemographicEconomicBridge:
             if total_face > 0.0:
                 self._move_bond_lots(old_account, heir_account, total_face)
                 heir_sheet.bond_face_claim += total_face
+        housing = getattr(econ, "housing", None)
+        if housing is not None:
+            # v15.0: dwelling TITLE follows the merge sweep -- an orphaned account holding a
+            # dwelling would be a title zombie (the registry analog of the dividend-collecting
+            # orphan account this sweep exists to prevent)
+            housing.transfer_all(old_account, heir_account)
 
     def _normalize_household_cash_claims_to_deposits(self, household_id: int, account_id: str) -> None:
         if self.econ is None or getattr(self.econ, "ledger", None) is None:
@@ -1855,6 +1903,7 @@ class DemographicEconomicBridge:
         if sweep_interval > 0 and tick % sweep_interval == 0:
             self._administer_empty_households()
             self._reconcile_household_claims()
+            self._sweep_stranded_dwellings()
 
     def _escheat_estate_record(self, record: Any) -> None:
         econ = self.econ
@@ -1912,6 +1961,20 @@ class DemographicEconomicBridge:
             if free_cash > 0.0 and fiscal is not None and econ.ledger.has_account(fiscal):
                 econ.ledger.transfer(account_id, fiscal, free_cash)
                 econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + free_cash
+            housing = getattr(econ, "housing", None)
+            if housing is not None and fiscal is not None:
+                market = getattr(econ, "housing_market", None)
+                if market is not None:
+                    # v15.1: probate SALE -- the dwelling is listed (forced) with the empty
+                    # account as seller; sale proceeds escheat at the moment of sale. Deaths
+                    # become the market's involuntary supply floor.
+                    for dwelling in housing.dwellings_of(account_id):
+                        market.list_dwelling(econ, dwelling.id, account_id, forced=True)
+                else:
+                    # v15.0 stopgap: bona-vacantia dwellings escheat in kind
+                    moved = housing.transfer_all(account_id, fiscal)
+                    if moved:
+                        econ._escheat_dwellings = getattr(econ, "_escheat_dwellings", 0) + moved
 
     def _reconcile_household_claims(self) -> None:
         econ = self.econ

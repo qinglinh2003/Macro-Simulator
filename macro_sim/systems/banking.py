@@ -335,6 +335,14 @@ def found_bank(econ: Any, founder, capital: float) -> None:
     from macro_sim.systems.securities import redeem_household_bonds
 
     cfg = econ.cfg.banking
+    # FUND FIRST, charter second: eligibility valued the founder's bonds at MARKET, but
+    # redemption PROCEEDS can fall slightly short of that valuation -- creating the bank
+    # before verifying the cash tripped A4 mid-charter with a zombie bank already on the
+    # books (rare-event exposure grows once housing/rents thin out founder cash)
+    if econ.ledger.balance(founder.id) < capital:
+        redeem_household_bonds(econ, founder.id, capital - econ.ledger.balance(founder.id))
+    if econ.ledger.balance(founder.id) < capital:
+        return                            # proceeds fell short: no charter this attempt
     bank_id = f"BANK_{econ._next_bank_id}"
     econ._next_bank_id += 1
     dispersion = cfg.bank_leverage_disp
@@ -348,8 +356,6 @@ def found_bank(econ: Any, founder, capital: float) -> None:
     econ._bank_ids.add(bank_id)
     econ.ledger.add_account(bank_id)
     econ.ledger.allow_negative(bank_id)
-    if econ.ledger.balance(founder.id) < capital:
-        redeem_household_bonds(econ, founder.id, capital - econ.ledger.balance(founder.id))
     econ.ledger.transfer(founder.id, bank_id, capital)
     bridge = getattr(econ, "demographic_bridge", None)
     econ._bank_spread[bank_id] = -abs(econ._bank_entry_rng.gauss(0.0, cfg.bank_spread_disp))

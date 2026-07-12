@@ -129,6 +129,23 @@ Acceptance:
 
 ## v15.2 — Mortgages (volatility grows teeth; the bank-survival test)
 
+> **Implementation notes (2026-07-12 night session — why v15.2 was deliberately NOT
+> started overnight, and how to start it):** household ledger debt is SHARED between
+> margin loans and any future mortgage, and the v13 margin-shadow drift family was
+> born exactly at "a write_off cleared the ledger while a shadow stayed". A mortgage
+> book therefore needs its own shadow discipline from the first line:
+> `MortgageLoan(household, dwelling_id, balance, rate)` book on the bank/bridge, with
+> EVERY ledger op that can touch household debt (repay / write_off / transfer_debt in
+> merge sweeps, divorce splits, death settlement) mirrored into the book the way
+> `_clamp_margin_debt_shadow` / `_move_margin_debt_shadow` do it -- and an every-tick
+> identity gate: sum(margin shadow + mortgage book) == ledger debt per household.
+> Servicing wants its own step in run_debt_service_phase (households currently only
+> service margin via the equity phase). Origination changes the buyer budget to
+> down-payment + LTV*price and books loan-creates-deposit through the ledger's
+> create_loan. Foreclosure = seize title -> forced listing at discount -> writedown
+> with the book mirrored. None of this is hard, but ALL of it is fault-line work that
+> deserves a fresh session with the estate probe green, not a 3am patch.
+
 - FLOATING RATE first (reprices with the policy rate: fastest transmission, no
   refinancing machinery). Fixed-rate + refinancing + lock-in is a later flag.
 - LTV cap (live macroprudential policy handle from day one), amortizing schedule,

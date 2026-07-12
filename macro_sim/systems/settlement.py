@@ -183,10 +183,16 @@ def run_household_fiscal_phase(econ: Any) -> None:
 
     if pol.tax_wealth_rate > 0.0:
         po = {f.id: getattr(f, "share_price", 0.0) for f in econ.c_firms}
+        housing = getattr(econ, "housing", None)
+        include_housing = housing is not None and getattr(pol, "housing_in_wealth_tax", False)
         nw_of = {}
         for h in hh:
             eq = sum(sh * po.get(fid, 0.0) for fid, sh in h.holdings.items())
             nw_of[h.id] = led.balance(h.id) + eq + bank_equity_value(econ, h.id) - led.debt(h.id)
+            if include_housing:
+                # v15.5 live lever: dwellings enter the wealth-tax base at market value
+                # (exempt by default -- the real-world owner-occupier exemption)
+                nw_of[h.id] += housing.units_of(h.id) * econ._house_price
         allowance = pol.wealth_allowance * (sum(max(0.0, v) for v in nw_of.values()) / max(1, n_h))
         for h in hh:
             base = max(0.0, nw_of[h.id] - allowance)
