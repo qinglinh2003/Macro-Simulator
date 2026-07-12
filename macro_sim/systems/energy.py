@@ -61,7 +61,14 @@ def create_e_firms(econ: Any, cfg: Any, balances: Dict[str, float]) -> None:
             markup=cfg.mu_firm0, demand_expected=d_seed,
             target_inventory_prev=cfg.phi * d_seed,
             sales_prev=d_seed,                     # neutral first B2 update
-            sells="energy", tech="linear",
+            # COBB-DOUGLAS + capacity clamp, NOT linear: a linear E-firm is excluded
+            # from capital deepening, so as the c-sector's unit labor cost falls with
+            # K-growth the energy RELATIVE price drifts up with c-productivity — a
+            # Baumol artifact (the 10y diagnostic measured 7x/decade with wages flat
+            # across sectors). CD with the same alpha lets uc_E fall in step; A_E =
+            # (kappa*util0)^alpha normalizes genesis unit labor cost to exactly w, so
+            # the p_efirm0 = (1+mu0)*w price anchor is preserved.
+            sells="energy", tech="cobb_douglas",
             # Long-run supply response rides the EXISTING K market (B5 accelerator with
             # v = 1/κ: K* = d^e/κ, capacity tracks demand). Without a K market (v1
             # kernel) there is no way to replace depreciation, so the honest kernel
@@ -69,12 +76,20 @@ def create_e_firms(econ: Any, cfg: Any, balances: Dict[str, float]) -> None:
             # the settlement capital commit entirely.
             invests=bool(cfg.capital_enabled),
             A=cfg.A, alpha=cfg.alpha,
-            v=(1.0 / cfg.kappa_E if cfg.capital_enabled else 0.0),
+            # RESERVE-MARGIN accelerator: k* = d^e/(kappa*util0), i.e. capacity targets
+            # demand at the anchored utilization, not exact match. Without the margin a
+            # purely adaptive accelerator chases a GROWING economy from behind forever:
+            # the 10y frontier diagnostic showed util pinned at 1.0 from t~400, recurring
+            # rationing waves, markup permanently at cap from t~2800, and an 8x relative
+            # price ratchet. Capacity industries plan reserve margins in reality; util0
+            # is already the genesis anchor, so this adds NO new dial.
+            v=(1.0 / (cfg.kappa_E * cfg.energy_util0) if cfg.capital_enabled else 0.0),
             lambda_I=(cfg.lambda_I if cfg.capital_enabled else 0.0),
             delta_K=(cfg.delta_K if cfg.capital_enabled else 0.0),
             capital=k_e0, capital_prev=k_e0,
             capacity_kappa=cfg.kappa_E,
         )
+        firm.A = (cfg.kappa_E * cfg.energy_util0) ** cfg.alpha   # genesis uc_E == w exactly
         balances[firm.id] = cfg.d_efirm0
         econ.firms.append(firm)
         econ.e_firms.append(firm)

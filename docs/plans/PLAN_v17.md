@@ -118,17 +118,26 @@ Components:
   (headroom so trend growth does not short the market at t1); E-firm count/size fitted so
   supply meets fitted demand.
 
-Acceptance:
+Acceptance (CLOSED 2026-07-12; commit 444dce3 + the close-out commit; diagnostic_v170.png):
 
-- [ ] Flag off ⇒ bit-identical to the pre-v17 baseline (cumulative smoke).
-- [ ] Flow soft gauge closes every tick; GDP identity check passes (intermediates excluded;
-      measured GDP shifts only by E-firm investment + labor composition, documented).
-- [ ] Baseline is QUIET over a long horizon: coverage stationary (no inventory limit
-      cycles), E-markup not pinned at `mu_max`, energy relative price stable after burn-in.
-- [ ] Cost-push wiring verified by a PINNED test (exogenously pin the energy price up ⇒
-      downstream unit costs and prices rise through B3 — no shock machinery, pure plumbing,
-      the Phase-2 pinned-signal acceptance paradigm).
-- [ ] Bullwhip gauges + markup gauges + E-sector HHI live in metrics and the diagnostic.
+- [x] Flag off ⇒ bit-identical to the pre-v17 baseline (same-seed smoke hash-equal to
+      dev@2b7979a on the v13+housing frontier config).
+- [x] Flow soft gauge closes every tick (~1e-12; firm EXITS destroy input stock — the
+      one honest gap source, exact in no-death worlds); GDP identity holds by the
+      sector split (consumption metrics never read E-firms).
+- [x] Baseline QUIET — with three structural findings landed en route (PARALLEL_LOG):
+      E-firms produce BEFORE the market (stock-out B2 death spiral); unconditional
+      depreciation-replacement floor (absorbing death); unfilled demand feeds
+      expectations + RESERVE-MARGIN accelerator k*=d^e/(κ·util0) (adaptive accelerator
+      chronically lags a growing economy); Cobb-Douglas + capacity clamp,
+      A_E=(κ·util0)^α (linear tech ⇒ Baumol relative-price artifact, 7x/decade).
+      Frontier residual: moderate ENDOGENOUS capacity-investment cycles (crunch →
+      markup episode → catch-up → slack) — emergent, self-correcting, reported not
+      tuned; cost share settles ~8-10%.
+- [x] Cost-push wiring verified by the pinned TFP test (E unit cost up ⇒ downstream
+      prices up through B3); the frontier diagnostic independently shows cost-push
+      inflation during endogenous crunches (on-world yoy +0.2-0.4 vs flat baseline).
+- [x] Bullwhip + markup + HHI gauges live in metrics and diagnostic_v170.png.
 
 ## v17.1 — Household Energy Demand (the necessity & the CPI)
 

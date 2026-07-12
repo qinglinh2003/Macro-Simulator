@@ -104,7 +104,7 @@ def test_pinned_cost_push_reaches_downstream_prices():
     for t in range(n_ticks):
         if t == pin_at:
             for ef in b.e_firms:
-                ef.a *= 0.5                        # uc = w/a doubles; B3 does the rest
+                ef.A *= 0.5                        # CD TFP cut: uc scales A^(-1/(1-alpha)) ~ 2.7x; B3 does the rest
         recs_b.append(b.step())
     e_a = sum(r["energy_price"] for r in recs_a[-50:]) / 50
     e_b = sum(r["energy_price"] for r in recs_b[-50:]) / 50
