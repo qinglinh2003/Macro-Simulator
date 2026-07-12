@@ -64,6 +64,7 @@ from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_dem
 from macro_sim.systems.goods import run_goods_phase
 from macro_sim.systems.labor import run_labor_phase
 from macro_sim.systems.planning import run_planning_phase
+from macro_sim.systems.production import run_production_phase
 from macro_sim.systems.securities import (
     assert_securities_identities,
     run_bill_issuance_phase,
@@ -393,7 +394,9 @@ class Economy:
         run_planning_phase(self)
         apply_gibrat_shock(self)          # v8.1 only; multiplicative market-share drift (no-op off)
         run_credit_phase(self)            # v3 only; no-op when banks disabled
-        run_labor_phase(self)
+        run_labor_phase(self)             # hiring only (production split out, trunk refactor)
+        # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
+        run_production_phase(self)        # [ANCHOR: production] output = f(hired labor)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
         run_settlement_phase(self)

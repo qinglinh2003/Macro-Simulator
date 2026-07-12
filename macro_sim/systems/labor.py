@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from macro_sim.behavior import planning as B
 from macro_sim.markets.matching import EPS
 
 
@@ -55,7 +54,5 @@ def run_labor_phase(econ: Any) -> None:
             if remaining[p] <= EPS:
                 p += 1
 
-        # Production: hired labor yields output added to inventory (§6.3).
-        # Sector-aware (B.produce): linear a*N, or Cobb-Douglas A K^alpha N^(1-alpha).
-        f.produced = B.produce(f, f.hired, econ._pubcap_factor)
-        f.inventory += f.produced
+        # Production moved to run_production_phase (v16/v17 trunk refactor): the labor
+        # phase is hiring only, so the energy market can sit between hiring and output.
