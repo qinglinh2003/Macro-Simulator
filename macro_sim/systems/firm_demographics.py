@@ -135,6 +135,7 @@ def liquidate_idle_firm(econ: Any, firm: Firm) -> None:
     residual = led.balance(firm.id) - led.debt(firm.id)
     if cfg.per_firm_equity and residual > EPS and firm.shares_outstanding > EPS:
         bridge = getattr(econ, "demographic_bridge", None)
+        fiscal = getattr(econ, "_fiscal", None)
         holders = [(h, h.holdings.get(firm.id, 0.0)) for h in econ.households]
         total_shares = sum(s for _, s in holders)
         if total_shares > EPS:
@@ -142,10 +143,23 @@ def liquidate_idle_firm(econ: Any, firm: Firm) -> None:
                 if shares <= 0.0:
                     continue
                 amount = residual * shares / total_shares
-                if amount > EPS:
-                    led.transfer(firm.id, h.id, amount)
-                    if bridge is not None:
-                        bridge.post_household_equity_trade(h.id, firm.id, cash_delta=amount, share_delta=0.0)
+                if amount <= EPS:
+                    continue
+                # 'living' must be a DEMOGRAPHIC-state fact (the v15 fault line):
+                # died-out households keep dead members' sheets in the claims
+                # membership and masquerade as living holders here -- crediting
+                # their LEDGER with no claims posting leaves a gap that surfaces
+                # as a negative cash claim once the household spends (the year-9
+                # portrait crash). Memberless holders' residual ESCHEATS, exactly
+                # like dead-seller housing proceeds.
+                if bridge is not None and not bridge.household_has_living_members(h.id):
+                    if fiscal is not None:
+                        led.transfer(firm.id, fiscal, amount)
+                        econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
+                    continue
+                led.transfer(firm.id, h.id, amount)
+                if bridge is not None:
+                    bridge.post_household_equity_trade(h.id, firm.id, cash_delta=amount, share_delta=0.0)
     bankrupt_firm(econ, firm)
 
 
