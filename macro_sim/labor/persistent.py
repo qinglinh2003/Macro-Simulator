@@ -45,8 +45,13 @@ class Suspension:
 @dataclass
 class LaborMarket:
     churn_annual: float = 0.28      # exogenous quits + individual dismissals (monthly ~2.4%)
-    lambda_fire: float = 0.10       # per-tick closure rate of the layoff gap
+    lambda_fire: float = 0.03       # per-tick closure rate of the layoff gap
     layoff_band: float = 0.05       # hysteresis: no action within +/- band x target
+    target_smooth: float = 0.02     # daily EMA on the FIRING target: hire fast, fire slow
+                                    # (the anti-churn damper the L1 portrait demanded --
+                                    # firing against raw daily targets cycled 2-8x the
+                                    # workforce per year against a ~15%/yr real anchor)
+    target_ema: dict[str, float] = field(default_factory=dict)
     # L1b suspension (the employment LOLR): liquidity != insolvency at the match level.
     # A suspended worker keeps the Job link (the recall right) but is NOT employed:
     # no pay, no work, no output -- and NO DEBT (zero new liability class). Under the
@@ -218,10 +223,18 @@ def run_persistent_labor_phase(econ: Any) -> None:
         wage = max(f.wage, EPS)
         affordable = int(led.balance(f.id) / wage)
 
-        # 3. demand-gap layoffs with hysteresis + partial adjustment (LIFO over actives)
+        # 3. demand-gap layoffs with hysteresis + partial adjustment (LIFO over actives).
+        # The firing decision reads a SMOOTHED target (daily EMA) while hiring reads the
+        # live one: firms grab workers fast but shed them only on persistent gaps --
+        # labor hoarding as an asymmetric adjustment rule.
+        ema = lm.target_ema.get(f.id)
+        ema = target if ema is None else ema + lm.target_smooth * (target - ema)
+        lm.target_ema[f.id] = ema
         active = actives_of(f)
-        excess = len(active) - target
-        band = lm.layoff_band * max(1.0, target)
+        excess = len(active) - ema
+        # the band floors at ONE WHOLE WORKER: at ~2-worker firms a relative band is
+        # invisible against integer granularity and the market cycles itself to death
+        band = max(1.0, lm.layoff_band * ema)
         if excess > band:
             fire_flow = lm.lambda_fire * (excess - band)
             n_fire = int(fire_flow)
@@ -245,6 +258,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 lm.separate(victim)
                 if accounts is not None:
                     accounts.layoff_seps_total += 1
+                    accounts.cash_layoffs_memo += 1
 
         # 4b. recall: cash recovered and demand wants them -> suspended return in place
         # (FIFO by suspension time), BEFORE any new hiring -- no re-matching friction

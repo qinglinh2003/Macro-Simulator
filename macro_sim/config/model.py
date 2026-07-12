@@ -187,8 +187,9 @@ class Config:
     # separation classes and adjustment dynamics (labor hoarding -> Okun).
     labor_matching: str = "spot"
     churn_annual: float = 0.28              # exogenous quits + individual dismissals (~2.4%/mo)
-    lambda_fire: float = 0.10               # per-tick closure of the layoff gap (hoarding dial)
+    lambda_fire: float = 0.03               # per-tick closure of the layoff gap (hoarding dial)
     layoff_band: float = 0.05               # hysteresis band as a fraction of target headcount
+    layoff_target_smooth: float = 0.02      # daily EMA on the firing target (hire fast, fire slow)
     # -- v16-L1b suspension: the employment LOLR. Cash-crunched firms SUSPEND (LIFO)
     # instead of firing: match kept, no pay, no debt; recall in place within the timer,
     # else auto-layoff. Suspended workers search as recall unemployment (accept an
