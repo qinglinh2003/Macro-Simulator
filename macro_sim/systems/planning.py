@@ -25,6 +25,7 @@ def run_planning_phase(econ: Any) -> None:
         h.consumption_budget = 0.0
         h.labor_sold = 0.0                  # v9: reset per-tick employment (for the benefit)
         h.jg_labor = 0.0                    # v9.3: reset per-tick job-guarantee employment
+        h.energy_spent = h.energy_units = 0.0   # v17.1: reset per-tick household energy
     for f in econ.firms:
         f.hired = f.produced = f.sales = 0.0
         f.revenue = f.wagebill = f.profit = 0.0

@@ -194,6 +194,79 @@ def test_entrants_join_the_energy_economy():
     assert all(f.energy_avg_cost > 0.0 for f in econ.c_firms)
 
 
+# ---------------------------------------------------------------------------
+# v17.1 -- household energy demand (necessity, headline/core CPI, energy poverty)
+# ---------------------------------------------------------------------------
+
+def test_hh_energy_share_and_poverty_gradient():
+    """CALIBRATED-WORLD test (the kernel is degenerate here: kernel E-firms cannot
+    invest, so their retained earnings become a money sink that drains the goods
+    economy through the necessity channel — probed, documented, and exactly why
+    calibration-flavored assertions live on v124). The anchored budget share holds and
+    the poverty gradient is EMERGENT: need is uniform per household while consumption
+    scales with income, so the poor spend a LARGER share, unseeded."""
+    econ = Economy(Config.v124(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=400, seed=5,
+                               energy_enabled=True, energy_household=True))
+    recs = econ.run()
+    late = recs[-150:]
+    share = sum(r["energy_hh_share_mean"] for r in late) / len(late)
+    assert 0.01 < share < 0.25, f"household energy share off anchor: {share:.3f}"
+    q1 = sum(r["energy_share_q1"] for r in late) / len(late)
+    q5 = sum(r["energy_share_q5"] for r in late) / len(late)
+    assert q1 > q5, f"poverty gradient missing: q1={q1:.3f} q5={q5:.3f}"
+    assert all(0.0 <= r["fuel_poverty_share"] <= 1.0 for r in late)
+    assert sum(r["energy_hh_spend"] for r in recs) > 0.0
+
+
+def test_hh_energy_necessity_inelastic():
+    """Necessity on the calibrated world: under a >1.2x energy price rise (mild E TFP
+    cut; a 2x cut demand-destroys the stabilizer-free KERNEL permanently — probed,
+    noted for 17.2), household energy UNITS barely move — the fixed-real-need rule
+    makes demand price-inelastic by construction."""
+    n_ticks, pin_at = 500, 200
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=n_ticks, seed=5,
+                energy_enabled=True, energy_household=True)
+    a = Economy(Config.v124(**base))
+    recs_a = a.run()
+    b = Economy(Config.v124(**base))
+    recs_b = []
+    for t in range(n_ticks):
+        if t == pin_at:
+            for ef in b.e_firms:
+                ef.A *= 0.8                        # uc x ~1.38 through CD
+        recs_b.append(b.step())
+    assert sum(r["energy_sold"] for r in recs_b[-50:]) > 0.0, \
+        "shocked run collapsed -- the price comparison would be vacuous (hold-last)"
+    e_a = sum(r["energy_price"] for r in recs_a[-50:]) / 50
+    e_b = sum(r["energy_price"] for r in recs_b[-50:]) / 50
+    assert e_b > 1.2 * e_a, f"price pin failed ({e_b:.3f} vs {e_a:.3f})"
+    u_a = sum(r["energy_hh_units"] for r in recs_a[-50:]) / 50
+    u_b = sum(r["energy_hh_units"] for r in recs_b[-50:]) / 50
+    assert u_b > 0.8 * u_a, f"household energy demand too elastic: {u_b:.3f} vs {u_a:.3f}"
+
+
+def test_headline_core_and_cb_reading():
+    """Headline CPI includes energy, core is the c-goods index; the CB reads headline
+    by default and `cb_core_inflation` flips its input — the two same-seed runs must
+    diverge (the feed is wired), while headline==core-neutral worlds stay identical."""
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=300, seed=4,
+                energy_enabled=True, energy_household=True)
+    head = Economy(Config.v124(**base)).run()
+    core = Economy(Config.v124(**base, cb_core_inflation=True)).run()
+    assert any(r.get("cpi_headline") for r in head), "headline index missing"
+    assert any(x["policy_rate"] != y["policy_rate"] for x, y in zip(head, core)), \
+        "cb_core_inflation did not change the CB's input"
+
+
+def test_hh_energy_off_is_170_identical():
+    """energy_household=False must leave the 17.0 energy world untouched (guarded
+    construction): same-seed series identical with the field block present."""
+    a = Economy(_kernel_energy(n_ticks=300)).run()
+    b = Economy(_kernel_energy(n_ticks=300, energy_hh_share=0.5, cb_core_inflation=True)).run()
+    for x, y in zip(a, b):
+        assert x["real_output"] == y["real_output"] and x["energy_price"] == y["energy_price"]
+
+
 def _main() -> None:
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for name, fn in tests:

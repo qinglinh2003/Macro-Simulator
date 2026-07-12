@@ -36,6 +36,14 @@ def energy_using_firms(econ: Any) -> List[Firm]:
     return [f for f in econ.c_firms + econ.k_firms if f.energy_intensity > 0.0]
 
 
+def household_energy_need(cfg: Any) -> float:
+    """v17.1: real energy need per household per tick, FIXED at the genesis anchor
+    (necessity): spend target = energy_hh_share x steady consumption (~w_firm0),
+    so need = share * w / p_E0. Uniform per household in v1 (size scaling is the
+    17.5 housing coupling's job)."""
+    return cfg.energy_hh_share * cfg.w_firm0 / cfg.p_efirm0
+
+
 def create_e_firms(econ: Any, cfg: Any, balances: Dict[str, float]) -> None:
     """Genesis, FITTED AT t0 (the v15 lesson): supply meets fitted demand at the
     anchored utilization, every input stock starts at its coverage target — no
@@ -43,9 +51,12 @@ def create_e_firms(econ: Any, cfg: Any, balances: Dict[str, float]) -> None:
     built (E-firms are a genesis sector, funded like c/k firms, not by fiscal).
     """
     econ.e_firms = []
-    # Aggregate per-tick energy demand implied by the downstream demand seeds.
+    # Aggregate per-tick energy demand implied by the downstream demand seeds
+    # (+ household necessity demand when 17.1 is on -- capacity must cover both).
     downstream = econ.c_firms + econ.k_firms
     demand_e0 = cfg.energy_intensity * sum(f.demand_expected for f in downstream)
+    if cfg.energy_household:
+        demand_e0 += household_energy_need(cfg) * len(econ.households)
     n_e = max(1, cfg.n_firms_e)
     d_seed = demand_e0 / n_e                       # per-E-firm expected demand (neutral B2 start)
     # Capacity fitted so the sector runs at energy_util0 at genesis (headroom).
@@ -155,6 +166,16 @@ def run_energy_phase(econ: Any) -> None:
             continue
         # excise (VAT grammar): the outlay buys energy worth budget/(1+t); rest reserved for tax
         orders.append(BuyOrder(account=f.id, demand=demand, budget=budget / (1.0 + tc), ref=f))
+    if cfg.energy_household:
+        # v17.1: households buy their necessity need in the SAME session (deposits-capped,
+        # A4). Documented behavioral primitive: need is met first, price-inelastically, up
+        # to the budget -- inelasticity is emergent from the fixed real need.
+        need = household_energy_need(cfg)
+        for h in econ.households:
+            budget = econ.ledger.balance(h.id)
+            if budget <= EPS:
+                continue
+            orders.append(BuyOrder(account=h.id, demand=need, budget=budget / (1.0 + tc), ref=h))
 
     # RESERVED RATIONING INTERFACE (17.4 plugs in here): a hook may reorder/filter
     # the buy orders before the session; None (default) = the native protocol.
@@ -190,6 +211,31 @@ def run_energy_phase(econ: Any) -> None:
             if excise > EPS:
                 econ.ledger.transfer(f.id, econ._fiscal, excise)
                 econ._tax_energy += excise
+    hh_spend = hh_units = 0.0
+    if cfg.energy_household:
+        bridge = getattr(econ, "demographic_bridge", None)
+        for h in econ.households:
+            q = bought_q.get(h.id, 0.0)
+            h.energy_units = q
+            h.energy_spent = bought_v.get(h.id, 0.0)
+            if q <= 0.0:
+                continue
+            hh_spend += h.energy_spent
+            hh_units += q
+            # household ledger outflows MUST post through the person-claim bridge
+            # (the v13 fault line: unposted household flows drift the claim identity)
+            if bridge is not None and h.energy_spent > EPS:
+                bridge.post_household_consumption(h.id, h.energy_spent)
+            if tc > 0.0:
+                excise = min(h.energy_spent * tc, econ.ledger.balance(h.id))
+                if excise > EPS:
+                    econ.ledger.transfer(h.id, econ._fiscal, excise)
+                    if bridge is not None:
+                        bridge.post_household_tax_payment(h.id, excise)
+                    econ._tax_energy += excise
+    econ._energy_hh_spend = hh_spend
+    econ._energy_hh_units = hh_units
+
     for off in offers:
         ef: Firm = off.ref
         ef.inventory = off.stock             # decremented live during trading

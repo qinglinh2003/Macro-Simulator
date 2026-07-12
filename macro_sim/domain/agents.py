@@ -45,6 +45,8 @@ class Household:
     margin_debt: float = 0.0       # v8: equity-collateralised debt (subset of ledger debt; interest-only)
     labor_sold: float = 0.0        # v9: labor units hired THIS tick (of the 1.0 supplied); 1-this = unemployed frac
     jg_labor: float = 0.0          # v9.3: labor units taken by the job guarantee this tick (buffer stock)
+    energy_spent: float = 0.0      # v17.1: household energy outlay this tick (consumption GDP)
+    energy_units: float = 0.0      # v17.1: energy units bought = consumed this tick (no storage)
 
     @classmethod
     def create(cls, idx: int, cfg: Config) -> "Household":

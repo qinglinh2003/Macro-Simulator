@@ -633,6 +633,18 @@ class Config:
     d_efirm0: float = 200.0             # E-firm tick-0 deposits
     p_efirm0: float = 1.2               # E-firm initial posted price (genesis avg-cost anchor)
     tax_energy_rate: float = 0.0        # excise on energy purchases (Policy lever; VAT grammar; inert)
+    # -- v17.1 household energy: necessity demand in the SAME market session (so the
+    # 17.4 rationing menu can arbitrate households vs industry). No household storage.
+    # Need is UNIFORM per household in v1 (size scaling arrives with the 17.5 housing
+    # coupling, where the size objects live); price-inelasticity is emergent from the
+    # buy-need-first rule, not assumed.
+    energy_household: bool = False      # v17.1 flag (requires energy_enabled)
+    energy_hh_share: float = 0.07       # genesis anchor: household energy spend / steady
+                                        # household consumption (~w_firm0) => need units
+                                        # = share * w_firm0 / p_efirm0, fixed thereafter
+    cb_core_inflation: bool = False     # CB Taylor input reads CORE (ex-energy) instead of
+                                        # headline once households buy energy -- the classic
+                                        # "which index through a supply shock" experiment
 
     def __post_init__(self) -> None:
         self._validate()
@@ -1385,6 +1397,8 @@ class Config:
         assert self.kappa_E > 0.0 and self.a_E > 0.0, "E-sector productivities must be > 0"
         assert 0.0 < self.energy_util0 <= 1.0, "genesis utilization is a fraction"
         assert 0.0 <= self.tax_energy_rate < 1.0, "energy excise is a fraction"
+        assert not (self.energy_household and not self.energy_enabled), "household energy requires the E-sector"
+        assert 0.0 < self.energy_hh_share < 1.0, "household energy share anchor is a fraction"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

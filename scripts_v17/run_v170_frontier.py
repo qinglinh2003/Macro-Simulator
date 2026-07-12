@@ -39,3 +39,5 @@ if __name__ == "__main__":
         run("energy_on", energy_enabled=True)
     if which in ("both", "baseline"):
         run("energy_off")
+    if which == "household":                      # v17.1 diagnostic twin (17.0 run is the reference)
+        run("energy_hh", energy_enabled=True, energy_household=True)

@@ -154,15 +154,23 @@ Acceptance (CLOSED 2026-07-12; commit 444dce3 + the close-out commit; diagnostic
 - Energy poverty gauges: bill share of income per household; share of households above the
   10% threshold (the classic fuel-poverty line); rank gradient across the Phase 3 strata.
 
-Acceptance:
+Acceptance (CLOSED 2026-07-12; diagnostic_v171.png; deviation: need is UNIFORM per
+household in v1 — size scaling belongs to the 17.5 housing coupling where the size
+objects live; the rank gradient is emergent from income variation regardless):
 
-- [ ] Flag off ⇒ 17.0 bit-identical; on ⇒ macro baseline undisturbed apart from documented
-      composition shifts (some consumption budget is now energy).
-- [ ] Energy budget share in the anchored band across the distribution; poverty gauges show
-      a rank gradient (the poor spend a larger share — emergent, not seeded).
-- [ ] Necessity verified: measured price elasticity of household energy demand ≪ goods
-      demand elasticity (emergent from the priority rule).
-- [ ] Headline vs core indices both live; burn-in discard respected downstream.
+- [x] Flag off ⇒ 17.0 bit-identical (same-seed series equality test with all 17.1
+      fields set); on ⇒ composition shift only (frontier output tracks the 17.0 twin).
+- [x] Share in band across the distribution: frontier probe 4.5% mean, poorest
+      quintile 8.1% vs richest 3.3% (2.4x, unseeded); fuel poverty 7%.
+- [x] Necessity verified on the calibrated world: household units move <20% under a
+      >1.2x energy price rise (fixed-real-need rule). KERNEL findings logged: kernel +
+      household energy is degenerate (E-firm retained-earnings sink — calibration
+      assertions live on v124 permanently); household fill is transparency-sensitive
+      at search_m=1 (no storage, no retry — noted for 17.4 rationing design).
+- [x] Headline & core CPI both live in the native transaction-weighted grammar; the
+      CB reads headline by default and `cb_core_inflation` demonstrably flips its
+      input (policy-rate paths diverge); household flows post through the
+      person-claim bridge (v13+housing hard gates green through 500t).
 
 ## v17.2 — The Shock Machinery & the Stagflation Experiments
 

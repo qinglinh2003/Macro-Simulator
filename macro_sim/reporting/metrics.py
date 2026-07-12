@@ -1259,10 +1259,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         e_produced = float(np.sum([f.produced for f in e_firms]))
         e_used = float(np.sum([f.energy_used for f in users]))
         e_bought = float(np.sum([f.energy_bought for f in users]))
+        hh_units = float(getattr(econ, "_energy_hh_units", 0.0))   # v17.1: consumed on purchase
         stock_total = (float(np.sum([f.energy_stock for f in users]))
                        + float(np.sum([f.inventory for f in e_firms])))
         prev_stock = getattr(econ, "_energy_prev_stock_total", None)
-        flow_gap = (e_produced - e_used - (stock_total - prev_stock)) if prev_stock is not None else 0.0
+        flow_gap = (e_produced - e_used - hh_units - (stock_total - prev_stock)) if prev_stock is not None else 0.0
         econ._energy_prev_stock_total = stock_total
         # AGGREGATE coverage (stock over sector expected use): per-firm ratios explode
         # when a shell's d^e -> 0 while it still holds stock (the v13 active-seller
@@ -1298,13 +1299,50 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                                                                             for f in e_firms])))),
             "tax_energy": float(getattr(econ, "_tax_energy", 0.0)),
         })
+        # -- v17.1 household energy: consumption GDP component, headline CPI, poverty --
+        if getattr(econ.cfg, "energy_household", False):
+            hh_spend = float(getattr(econ, "_energy_hh_spend", 0.0))
+            # Headline index in the native transaction-weighted grammar: household
+            # consumption basket = c-goods + energy, quantities aggregated at the (equal)
+            # genesis base prices. Core == the existing c-goods `price_index`.
+            headline = ((total_revenue + hh_spend) / (total_sales_u + hh_units)
+                        if (total_sales_u + hh_units) > 1e-12 else price_index)
+            prev_h = getattr(econ, "_prev_headline_index", None)
+            headline_infl = (headline / prev_h - 1.0) if (prev_h and prev_h > 1e-12) else 0.0
+            econ._prev_headline_index = headline
+            shares = [h.energy_spent / (h.energy_spent + h.spent)
+                      for h in households if (h.energy_spent + h.spent) > 1e-12]
+            n_q = max(1, len(households) // 5)
+            by_dep = sorted(households, key=lambda h: led.balance(h.id))
+            def _qshare(hs):
+                vals = [h.energy_spent / (h.energy_spent + h.spent)
+                        for h in hs if (h.energy_spent + h.spent) > 1e-12]
+                return _mean(vals)
+            q1, q5 = _qshare(by_dep[:n_q]), _qshare(by_dep[-n_q:])
+            rec.update({
+                "energy_hh_spend": hh_spend,                     # consumption GDP component
+                "energy_hh_units": hh_units,
+                "cpi_headline": headline,
+                "headline_inflation": headline_infl,
+                "energy_hh_share_mean": _mean(shares),
+                "fuel_poverty_share": _mean([1.0 if s > 0.10 else 0.0 for s in shares]),
+                "energy_share_q1": q1,                           # poorest deposit quintile
+                "energy_share_q5": q5,                           # richest deposit quintile
+            })
+    # v17.1: once households buy energy, the CB reads HEADLINE inflation by default;
+    # `cb_core_inflation` reverts its input to the c-goods core index (the "which index
+    # through a supply shock" experiment). Off (or no household energy) => unchanged.
+    _cb_infl = inflation
+    if (getattr(econ.cfg, "energy_household", False)
+            and not getattr(econ.cfg, "cb_core_inflation", False)):
+        _cb_infl = rec.get("headline_inflation", inflation)
     if getattr(econ.cfg, "cb_log_inflation", False):
         # v13: feed the Taylor EMA the LOG price change (ln(P/P_prev) = log1p(inflation)). The
         # arithmetic per-tick change has a Jensen bias under index noise (the sick 10k run's EMA
         # read ~7x the true trend), so the CB chased noise. The `inflation` column is unchanged.
-        econ._prev_inflation = math.log1p(inflation) if inflation > -1.0 else 0.0
+        econ._prev_inflation = math.log1p(_cb_infl) if _cb_infl > -1.0 else 0.0
     else:
-        econ._prev_inflation = inflation      # v10: last tick's realised inflation feeds the Taylor EMA
+        econ._prev_inflation = _cb_infl      # v10: last tick's realised inflation feeds the Taylor EMA
     econ._prev_real_output = total_produced
     econ._prev_avg_wage = avg_wage
     econ._price_level = price_index          # v9.2: fed to the price-indexed startup endowment
