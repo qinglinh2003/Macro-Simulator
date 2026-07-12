@@ -404,6 +404,16 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "foreclosures_total": float(mortgage_book.foreclosures_total),
                 }
             )
+        afford = getattr(econ, "housing_affordability", None)
+        if afford is not None:
+            rec.update(
+                {
+                    "housing_pti_ratio": float(afford.pti_ratio),
+                    "rent_burden_ratio": float(afford.rent_burden_ratio),
+                    "leave_home_mult": float(afford.leave_mult),
+                    "housing_fertility_mult": float(afford.fertility_mult),
+                }
+            )
         builders = getattr(econ, "builders", None)
         if builders:
             rec.update(

@@ -114,7 +114,14 @@ class DemographicEconomicBridge:
     # ------------------------------------------------------------------
     @property
     def fertility_macro_multiplier(self) -> float:
-        return self.macro_signal.fertility_mult if self.macro_signal is not None else 1.0
+        mult = self.macro_signal.fertility_mult if self.macro_signal is not None else 1.0
+        # v15.5 channel 2.1d: housing affordability (price-to-income) composes
+        # multiplicatively with the Phase 2 income channel -- the kernel keeps reading
+        # ONE scalar, and each factor is separately flag-gated and neutrality-anchored
+        housing_signal = getattr(self.econ, "housing_affordability", None) if self.econ is not None else None
+        if housing_signal is not None and housing_signal.fertility_mult != 1.0:
+            mult *= housing_signal.fertility_mult
+        return mult
 
     @property
     def mortality_macro_multiplier(self) -> float:

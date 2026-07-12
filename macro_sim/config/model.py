@@ -153,6 +153,17 @@ class Config:
     # -- v15.4 construction: primary market + the long-run price anchor. Builders ride
     # the native firm grammar (B1/B2, labor market, settlement); scarcity comes from a
     # convex LAND FEE to the fiscal at minting and a yearly PERMIT quota (zoning handle).
+    # -- v15.5 couplings: ONE affordability signal (annual, burn-in discard), per-channel
+    # flags. Leave-home reads the rent burden (unaffordable rents delay leaving home =>
+    # cohabitation); fertility (channel 2.1d) reads price-to-income (housing as the
+    # child-rearing cost). 0.0 = channel off = bit-identical.
+    housing_signal_burnin_years: int = 4
+    housing_leave_elasticity: float = 0.0     # lambda in L = clip(burden^-lambda, lo, hi) -- FREE
+    housing_leave_mult_lo: float = 0.5
+    housing_leave_mult_hi: float = 1.5
+    housing_fertility_elasticity: float = 0.0 # 2.1d eps in F = clip(pti^-eps, lo, hi) -- FREE
+    housing_fertility_mult_lo: float = 0.5
+    housing_fertility_mult_hi: float = 1.5
     housing_construction_enabled: bool = False   # requires housing_market_enabled
     n_builders: int = 5
     builder_productivity: float = 0.002     # dwelling units per labor-tick (~1.4 worker-years/unit)
@@ -1314,6 +1325,12 @@ class Config:
         assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
         assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
         assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
+        assert self.housing_signal_burnin_years >= 1, "housing signal burn-in must be >= 1 year"
+        assert self.housing_leave_elasticity >= 0.0 and self.housing_fertility_elasticity >= 0.0, "housing coupling elasticities must be >= 0"
+        assert 0.0 < self.housing_leave_mult_lo <= 1.0 <= self.housing_leave_mult_hi, "leave multiplier bounds must bracket 1.0"
+        assert 0.0 < self.housing_fertility_mult_lo <= 1.0 <= self.housing_fertility_mult_hi, "housing fertility bounds must bracket 1.0"
+        assert not ((self.housing_leave_elasticity > 0.0 or self.housing_fertility_elasticity > 0.0)
+                    and not self.housing_rental_enabled), "housing couplings need the rental market (rent signal)"
         assert self.n_builders >= 1 or not self.housing_construction_enabled, "construction needs at least one builder"
         assert self.builder_productivity > 0.0 and 0.0 <= self.land_fee_share and self.land_convexity >= 0.0, "builder params out of range"
         assert self.housing_permits >= 0, "permit quota must be >= 0"

@@ -30,6 +30,7 @@ from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.housing import HousingRegistry
 from macro_sim.housing.market import HousingMarket, run_housing_market_phase
 from macro_sim.housing.mortgage import MortgageBook
+from macro_sim.housing.affordability import HousingAffordabilitySignal
 from macro_sim.housing.construction import create_builders
 from macro_sim.housing.rental import RentalMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
@@ -207,6 +208,7 @@ class Economy:
         self.housing_market = None
         self.mortgage_book = None
         self.rental_market = None
+        self.housing_affordability = None
         self._house_price = 0.0
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
@@ -246,6 +248,17 @@ class Economy:
             if cfg.housing_construction_enabled:
                 # v15.4: builder firms on the native grammar; land fee + permits anchor
                 create_builders(self, cfg)
+            # v15.5: the shared affordability signal (always observed when housing is on;
+            # multipliers stay exactly 1 until an elasticity is set)
+            self.housing_affordability = HousingAffordabilitySignal(
+                burnin_years=cfg.housing_signal_burnin_years,
+                leave_elasticity=cfg.housing_leave_elasticity,
+                leave_mult_lo=cfg.housing_leave_mult_lo,
+                leave_mult_hi=cfg.housing_leave_mult_hi,
+                fertility_elasticity=cfg.housing_fertility_elasticity,
+                fertility_mult_lo=cfg.housing_fertility_mult_lo,
+                fertility_mult_hi=cfg.housing_fertility_mult_hi,
+            )
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0
@@ -398,6 +411,15 @@ class Economy:
             # feed the macro->demography signal AFTER metrics: rec carries the multiplier the
             # kernel used this tick; an annual rollover here reaches the kernel next tick
             self.demographic_bridge.observe_macro(self, rec)
+        if self.housing_affordability is not None and self.demographic_state is not None:
+            rent = self.rental_market.rent_level if self.rental_market is not None else 0.0
+            self.housing_affordability.observe_tick(
+                year=self.demographic_state.current_date.year,
+                house_price=self._house_price,
+                rent_level=rent,
+                wages_paid=rec.get("wages_paid", 0.0),
+                labor=rec.get("employment", 0.0),
+            )
         self._commit_cross_tick_state()
         self.t += 1
         return rec
@@ -416,13 +438,24 @@ class Economy:
     def _run_demographic_household_transitions(self) -> None:
         if not self.cfg.demographic_adult_leaving_home_enabled:
             return
+        # v15.5-1: unaffordable rents delay leaving home (cohabitation is the housing
+        # market's safety valve). The multiplier is annual, clipped, and exactly 1 when
+        # the channel is off -- the guarded scaling keeps neutral runs bit-identical.
+        leave_scale = 1.0
+        if self.housing_affordability is not None:
+            leave_scale = self.housing_affordability.leave_mult
+        rate_peak = self.cfg.demographic_annual_leave_rate_peak
+        rate_late = self.cfg.demographic_annual_leave_rate_late
+        if leave_scale != 1.0:
+            rate_peak *= leave_scale
+            rate_late *= leave_scale
         events = apply_leaving_home_dynamics(
             self.demographic_state,
             LifecycleHouseholdConfig(
                 leave_home_min_age=self.cfg.demographic_leave_home_min_age,
                 leave_home_peak_end_age=self.cfg.demographic_leave_home_peak_end_age,
-                annual_leave_rate_peak=self.cfg.demographic_annual_leave_rate_peak,
-                annual_leave_rate_late=self.cfg.demographic_annual_leave_rate_late,
+                annual_leave_rate_peak=rate_peak,
+                annual_leave_rate_late=rate_late,
             ),
             self._demographic_household_rng,
         )
