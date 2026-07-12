@@ -404,6 +404,18 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "foreclosures_total": float(mortgage_book.foreclosures_total),
                 }
             )
+        builders = getattr(econ, "builders", None)
+        if builders:
+            rec.update(
+                {
+                    "dwellings_built_total": float(getattr(econ, "_dwellings_built", 0)),
+                    "land_fee_paid_total": float(getattr(econ, "_land_fee_paid", 0.0)),
+                    "builder_employment": float(sum(f.hired for f in builders)),
+                    "builder_inventory_units": float(sum(f.inventory for f in builders)),
+                    "builder_wip_units": float(sum(getattr(f, "wip", 0.0) for f in builders)),
+                    "permits_used_year": float(getattr(econ, "_permits_used", 0)),
+                }
+            )
         rental = getattr(econ, "rental_market", None)
         if rental is not None:
             price = max(1e-9, float(getattr(econ, "_house_price", 0.0)))

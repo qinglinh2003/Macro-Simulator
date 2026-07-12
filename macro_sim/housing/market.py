@@ -80,6 +80,9 @@ def run_housing_market_phase(econ: Any) -> None:
     rental = getattr(econ, "rental_market", None)
     if rental is not None:
         rental.collect_rents(econ)        # v15.3: tenancies pay every tick, not per session
+    if getattr(econ, "builders", None):
+        from macro_sim.housing.construction import run_construction_step
+        run_construction_step(econ)       # v15.4: fold output, mint under permits+land fee
     if econ.t % market.session_interval != 0:
         return
 
@@ -169,6 +172,13 @@ def run_housing_market_phase(econ: Any) -> None:
                 if proceeds > EPS:
                     led.transfer(pick.seller_account, fiscal, proceeds)
                     econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + proceeds
+        builder = getattr(econ, "_builder_by_account", {}).get(pick.seller_account)
+        if builder is not None:
+            # v15.4 primary sale: feed the native firm grammar -- realized sales drive
+            # B2 demand expectations, revenue reaches settlement profit/dividends
+            builder.inventory = max(0.0, builder.inventory - 1.0)
+            builder.sales += 1.0
+            builder.revenue += price
         housing.transfer(pick.dwelling_id, buyer.id)
         book.remove(pick)
         del market.listings[pick.dwelling_id]

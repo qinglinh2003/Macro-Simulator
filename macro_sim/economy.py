@@ -30,6 +30,7 @@ from macro_sim.demographics.stratification import WealthStratification
 from macro_sim.housing import HousingRegistry
 from macro_sim.housing.market import HousingMarket, run_housing_market_phase
 from macro_sim.housing.mortgage import MortgageBook
+from macro_sim.housing.construction import create_builders
 from macro_sim.housing.rental import RentalMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
@@ -230,6 +231,7 @@ class Economy:
                     foreclosure_ltv=cfg.mortgage_foreclosure_ltv,
                     arrears_floor=cfg.mortgage_arrears_floor,
                 )
+            self._genesis_dwellings = self.housing.count()
             if cfg.housing_rental_enabled:
                 # v15.3: tenancy flows + emergent landlords; rent level seeded off the
                 # genesis price anchor, independent thereafter
@@ -241,6 +243,9 @@ class Economy:
                     investor_premium=cfg.rental_investor_premium,
                     rent_level=cfg.rent_yield0 * self._house_price / 365.0,
                 )
+            if cfg.housing_construction_enabled:
+                # v15.4: builder firms on the native grammar; land fee + permits anchor
+                create_builders(self, cfg)
         # v12 CB balance-sheet scaffolding (inert when bonds off): reserves = CB liability; assets = bonds it holds
         # + its claim on the TSY; TGA = the Treasury's account at the CB. Bonds are a separate overlay.
         self._cb_claim_on_tsy = 0.0

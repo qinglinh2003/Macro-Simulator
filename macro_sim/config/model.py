@@ -150,6 +150,16 @@ class Config:
     rent_burden_cap: float = 0.40           # tenant affordability cap vs realized income
     rental_eviction_arrears: int = 30       # consecutive shortfall ticks before eviction
     rental_investor_premium: float = 0.02   # buy-to-let when yield > deposit rate + premium
+    # -- v15.4 construction: primary market + the long-run price anchor. Builders ride
+    # the native firm grammar (B1/B2, labor market, settlement); scarcity comes from a
+    # convex LAND FEE to the fiscal at minting and a yearly PERMIT quota (zoning handle).
+    housing_construction_enabled: bool = False   # requires housing_market_enabled
+    n_builders: int = 5
+    builder_productivity: float = 0.002     # dwelling units per labor-tick (~1.4 worker-years/unit)
+    builder_demand_seed: float = 0.005      # cold-start expected dwelling demand per tick
+    land_fee_share: float = 0.2             # land fee = share x price x (stock/stock0)^convexity
+    land_convexity: float = 1.0
+    housing_permits: int = 50               # dwellings mintable per year (zoning quota)
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1303,6 +1313,10 @@ class Config:
         assert 0.0 < self.mortgage_ltv_cap < 1.0, "mortgage LTV cap is a fraction of price"
         assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
         assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
+        assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
+        assert self.n_builders >= 1 or not self.housing_construction_enabled, "construction needs at least one builder"
+        assert self.builder_productivity > 0.0 and 0.0 <= self.land_fee_share and self.land_convexity >= 0.0, "builder params out of range"
+        assert self.housing_permits >= 0, "permit quota must be >= 0"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"
