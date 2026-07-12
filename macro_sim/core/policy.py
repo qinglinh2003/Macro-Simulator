@@ -38,6 +38,8 @@ class Policy:
     energy_price_cap: float = 0.0        # v17.4: market asks clamped at the cap (0 = off)
     energy_rationing: str = "market"     # v17.4: who is cut under shortage (see Config)
     energy_cap_compensation: bool = False  # v17.4: fiscal covers the cap's revenue gap
+    energy_subsidy_rate: float = 0.0     # v17.5: rebate share of household energy bills
+    energy_subsidy_threshold: float = 0.0  # v17.5: 0 = flat; >0 = deposits-targeted (x mean)
 
     # -- labour -----------------------------------------------------------
     min_wage: float = 0.0                # wage floor (0 = off)
@@ -95,6 +97,8 @@ class Policy:
             energy_price_cap=getattr(cfg, "energy_price_cap", 0.0),
             energy_rationing=getattr(cfg, "energy_rationing", "market"),
             energy_cap_compensation=getattr(cfg, "energy_cap_compensation", False),
+            energy_subsidy_rate=getattr(cfg, "energy_subsidy_rate", 0.0),
+            energy_subsidy_threshold=getattr(cfg, "energy_subsidy_threshold", 0.0),
             min_wage=cfg.min_wage,
             job_guarantee=cfg.job_guarantee,
             jg_wage_ratio=cfg.jg_wage_ratio,

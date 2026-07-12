@@ -58,7 +58,7 @@ from macro_sim.systems.banking import (
 )
 from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
-from macro_sim.systems.energy import create_e_firms, run_energy_phase
+from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_energy_phase
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -134,12 +134,20 @@ class Economy:
         # opening wave). Appends to self.firms; a dedicated rng keeps the main stream
         # unperturbed. energy_enabled=False => no E-firms, no state => bit-identical.
         self.e_firms: List[Firm] = []
+        self.energy_poverty_signal = None
         if cfg.energy_enabled:
             create_e_firms(self, cfg, balances)
             self._energy_rng = random.Random(cfg.seed + 17_000)
             self._energy_price = cfg.p_efirm0     # transaction-weighted, hold-last (metrics)
             self._energy_sold = 0.0
             self._tax_energy = 0.0
+            if cfg.energy_household and cfg.demographics_enabled:
+                # v17.5: fuel poverty -> mortality (Phase-2 grammar; neutral until gamma set)
+                self.energy_poverty_signal = EnergyPovertySignal(
+                    burnin_years=cfg.energy_signal_burnin_years,
+                    gamma=cfg.energy_mortality_gamma,
+                    mult_hi=cfg.energy_mortality_mult_hi,
+                )
         self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5; + E in v17)
 
         # v9.1: economy-wide PUBLIC capital (a non-rival stock; government investment builds it, it raises
@@ -427,6 +435,12 @@ class Economy:
             # feed the macro->demography signal AFTER metrics: rec carries the multiplier the
             # kernel used this tick; an annual rollover here reaches the kernel next tick
             self.demographic_bridge.observe_macro(self, rec)
+        if self.energy_poverty_signal is not None and self.demographic_state is not None:
+            # v17.5: feed the fuel-poverty signal AFTER metrics (the housing-signal pattern)
+            self.energy_poverty_signal.observe_tick(
+                year=self.demographic_state.current_date.year,
+                fuel_poverty_share=rec.get("fuel_poverty_share", 0.0),
+            )
         if self.housing_affordability is not None and self.demographic_state is not None:
             rent = self.rental_market.rent_level if self.rental_market is not None else 0.0
             self.housing_affordability.observe_tick(

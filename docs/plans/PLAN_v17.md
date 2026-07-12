@@ -290,20 +290,40 @@ Acceptance (CLOSED 2026-07-12; diagnostic_v174.png; findings 14-15):
 
 ## v17.5 — Couplings (one at a time, the Phase 2 acceptance paradigm)
 
-Each its own flag, each with frozen-reference/paired-run acceptance:
+Each its own flag, each with frozen-reference/paired-run acceptance
+(CLOSED 2026-07-12 for the two live channels; diagnostic_v175.png):
 
-- **Housing × energy** (requires the v15.2 size-gate outcome): household energy need scales
-  with dwelling size — the housing stock becomes an energy-demand structure.
-- **Energy poverty → vital rates**: the Phase 2 channel grammar (pinned-signal acceptance,
-  burn-in discard) applied to the fuel-poverty share — cold-home mortality has real
-  empirical backing; effect sizes anchored, not tuned.
-- **Efficiency investment** (gated, optional): firms lower `e_coeff` by investing —
-  capital-energy substitution, giving the long-run demand elasticity that Leontief denies
-  in the short run.
-- **Targeted vs flat energy subsidy**: the §34 wealth-allowance reprise — flat subsidies
-  should prove regressive-in-effect, targeted ones pro-poor. Pre-registered.
+- [~] **Housing × energy** — DEFERRED as the plan's own red line requires: the v15.2
+  size gate never opened (the registry size scalar is identically 1.0), so the
+  coupling would be observationally vacuous. Lands when the gate opens.
+- [x] **Energy poverty → vital rates**: `EnergyPovertySignal` (annual fuel-poverty
+  share, burn-in DISCARDED, multiplier exactly 1.0 off) composes multiplicatively
+  into the bridge's mortality multiplier (the v15.5 housing-fertility precedent);
+  grammar unit-tested, kernel wiring verified on the frontier (multiplier > 1 with
+  gamma set; exactly the macro-signal value with the channel off).
+- [~] **Efficiency investment** — deferred (optional per plan; the capacity-expansion
+  machinery from 17.0 is the prerequisite it will ride on).
+- [x] **Targeted vs flat subsidy**: the §34 reprise CONFIRMED — at the same rate
+  through the same crunch, the targeted variant spends LESS fiscal money while
+  protecting the poorest quintile at least as well per unit spent (flat transfers
+  leak to households that never needed them).
 
 ---
+
+## ARC STATUS (2026-07-12): 17.0–17.5 machinery COMPLETE
+
+All five stages built, accepted, and pushed on `feat/energy-v17` (diagnostics v170–v175;
+15 numbered findings in PARALLEL_LOG). Remaining items are EXTERNALLY GATED:
+
+1. **Post-composition** (protocol §5, after v16 merges + the composition gate, owned by
+   this arc as second merger): the 17.2 stagflation experiment MATRIX (shock × policy
+   stack, disclaimer-free), the JG hard test (against the L2-recast buffer-stock JG),
+   and the pinned cost-push re-run with relationship wages (wage-price spiral plumbing).
+   Pre-registered expectations on file: flatter Okun under energy shocks (labor
+   hoarding × energy-capped output); magnitudes start 0.2–0.5 (finding 9).
+2. **v15.2 size gate**: housing × energy (need ∝ dwelling size) — vacuous until the
+   registry size scalar moves off 1.0.
+3. **Optional per plan**: efficiency investment (e_coeff falls with investment).
 
 ## Standing decision log (agreed in design discussion, 2026-07-12)
 

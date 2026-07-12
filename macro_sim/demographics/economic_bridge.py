@@ -125,7 +125,14 @@ class DemographicEconomicBridge:
 
     @property
     def mortality_macro_multiplier(self) -> float:
-        return self.macro_signal.mortality_mult if self.macro_signal is not None else 1.0
+        mult = self.macro_signal.mortality_mult if self.macro_signal is not None else 1.0
+        # v17.5: fuel poverty composes multiplicatively (cold-home mortality) -- the
+        # v15.5 housing-fertility precedent above; exactly 1.0 when the channel is
+        # off, so every pre-energy configuration stays bit-identical.
+        energy_signal = getattr(self.econ, "energy_poverty_signal", None) if self.econ is not None else None
+        if energy_signal is not None and energy_signal.mortality_mult != 1.0:
+            mult *= energy_signal.mortality_mult
+        return mult
 
     @property
     def effective_vital_rates(self) -> Any | None:

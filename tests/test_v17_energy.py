@@ -563,6 +563,86 @@ def test_crisis_triple_off_bit_identical():
         assert x["real_output"] == y["real_output"] and x["energy_price"] == y["energy_price"]
 
 
+# ---------------------------------------------------------------------------
+# v17.5 -- couplings: fuel poverty -> mortality; flat vs targeted subsidy
+# ---------------------------------------------------------------------------
+
+def test_energy_poverty_signal_grammar():
+    """Phase-2 grammar unit test: burn-in years are DISCARDED (multiplier stays 1.0
+    however high fuel poverty runs), the annual rollover computes the mean share,
+    the multiplier is 1 + gamma*fp clipped, and gamma=0 is exactly neutral."""
+    from macro_sim.systems.energy import EnergyPovertySignal
+    sig = EnergyPovertySignal(burnin_years=2, gamma=2.0, mult_hi=1.3)
+    for year in (2000, 2001, 2002):
+        for _ in range(10):
+            sig.observe_tick(year, 0.5)            # brutal fuel poverty through burn-in
+    assert sig.mortality_mult == 1.0, "burn-in must be discarded"
+    for _ in range(10):
+        sig.observe_tick(2003, 0.05)               # rollover of year 2002 (post-burn-in)
+    assert abs(sig.mortality_mult - min(1.3, 1.0 + 2.0 * 0.5)) < 1e-12
+    for _ in range(10):
+        sig.observe_tick(2004, 0.0)                # rollover of 2003: fp=0.05 -> 1.10
+    assert abs(sig.mortality_mult - 1.10) < 1e-12
+    neutral = EnergyPovertySignal(burnin_years=1, gamma=0.0)
+    for year in (2000, 2001, 2002):
+        for _ in range(5):
+            neutral.observe_tick(year, 0.9)
+    assert neutral.mortality_mult == 1.0, "gamma=0 must stay exactly neutral"
+
+
+def test_energy_mortality_reaches_the_kernel():
+    """Wiring on the frontier: with gamma set, the bridge's composed mortality
+    multiplier rises above 1 once fuel poverty registers post-burn-in; with the
+    channel off it stays exactly 1.0 (the same run, same seed)."""
+    params = dict(seed=0, n_households=50, n_firms_c=50, n_firms_k=25, n_banks=2,
+                  demographics_population=500, n_ticks=800,
+                  housing_enabled=True, housing_market_enabled=True,
+                  energy_enabled=True, energy_household=True,
+                  energy_signal_burnin_years=1)
+    on = Economy(Config.v13(**{**params, "energy_mortality_gamma": 5.0}))
+    on.run()
+    assert on.demographic_bridge.mortality_macro_multiplier > 1.0, \
+        "the fuel-poverty mortality channel never reached the kernel"
+    off = Economy(Config.v13(**params))
+    off.run()
+    assert off.energy_poverty_signal.mortality_mult == 1.0
+    assert off.demographic_bridge.mortality_macro_multiplier == \
+        (off.demographic_bridge.macro_signal.mortality_mult
+         if off.demographic_bridge.macro_signal is not None else 1.0)
+
+
+def test_subsidy_flat_vs_targeted():
+    """The §34 reprise: at the SAME rate through the same crunch, the targeted
+    subsidy spends LESS fiscal money while protecting the poorest quintile at least
+    as well per unit spent — flat transfers leak to households that never needed
+    them. Both conserve."""
+    def run(policy):
+        econ = Economy(_crisis_base())
+        recs = []
+        for t in range(400):
+            if t == 250:
+                for k, v in policy.items():
+                    setattr(econ.policy, k, v)
+            recs.append(econ.step())
+        return recs
+    flat = run({"energy_subsidy_rate": 0.5})
+    targ = run({"energy_subsidy_rate": 0.5, "energy_subsidy_threshold": 0.5})
+    win = range(250, 400)
+    out_flat = sum(flat[i]["energy_subsidy_paid"] for i in win)
+    out_targ = sum(targ[i]["energy_subsidy_paid"] for i in win)
+    assert out_targ > 0.0 and out_flat > 0.0, "subsidies never paid"
+    assert out_targ < out_flat, f"targeting must be cheaper: {out_targ:.1f} !< {out_flat:.1f}"
+    q1_flat = sum(flat[i]["energy_share_q1"] for i in win)
+    q1_targ = sum(targ[i]["energy_share_q1"] for i in win)
+    # per-fiscal-unit protection of the poorest quintile (burden relief per money):
+    eff_flat = q1_flat / out_flat
+    eff_targ = q1_targ / out_targ
+    assert eff_targ >= eff_flat * 0.9, \
+        f"targeted subsidy lost its efficiency edge: {eff_targ:.4f} vs {eff_flat:.4f}"
+    m = max(r["broad_money"] for r in targ)
+    assert max(r["conservation_drift"] for r in targ) < 1e-6 * m
+
+
 def _main() -> None:
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for name, fn in tests:

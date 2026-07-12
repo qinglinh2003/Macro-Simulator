@@ -67,6 +67,39 @@ def energy_using_firms(econ: Any) -> List[Firm]:
     return [f for f in econ.c_firms + econ.k_firms if f.energy_intensity > 0.0]
 
 
+class EnergyPovertySignal:
+    """v17.5: the annual fuel-poverty share -> a KERNEL-LEVEL mortality multiplier
+    (cold-home excess mortality has real empirical backing). Phase-2 grammar
+    throughout: annual rollover, burn-in years DISCARDED (the genesis transient's
+    fuel-poverty spike must never enter the baseline), multiplier exactly 1.0 while
+    the channel is off (gamma=0) or during burn-in; composed multiplicatively in the
+    bridge (the v15.5 housing-fertility precedent)."""
+
+    def __init__(self, burnin_years: int = 4, gamma: float = 0.0, mult_hi: float = 1.3):
+        self.burnin_years = burnin_years
+        self.gamma = gamma
+        self.mult_hi = mult_hi
+        self.mortality_mult = 1.0
+        self.fuel_poverty_annual = 0.0
+        self._year = None
+        self._acc = 0.0
+        self._n = 0
+        self._years_seen = 0
+
+    def observe_tick(self, year: int, fuel_poverty_share: float) -> None:
+        if self._year is None:
+            self._year = year
+        if year != self._year:                      # annual rollover
+            self._years_seen += 1
+            self.fuel_poverty_annual = self._acc / max(1, self._n)
+            if self.gamma > 0.0 and self._years_seen > self.burnin_years:
+                self.mortality_mult = min(self.mult_hi,
+                                          max(1.0, 1.0 + self.gamma * self.fuel_poverty_annual))
+            self._year, self._acc, self._n = year, 0.0, 0
+        self._acc += fuel_poverty_share
+        self._n += 1
+
+
 def household_energy_need(cfg: Any) -> float:
     """v17.1: real energy need per household per tick, FIXED at the genesis anchor
     (necessity): spend target = energy_hh_share x steady consumption (~w_firm0),
@@ -209,6 +242,7 @@ def run_energy_phase(econ: Any) -> None:
     econ._spr_flow = 0.0
     econ._energy_cap_comp = 0.0
     econ._energy_cap_binding = 0.0
+    econ._energy_subsidy_paid = 0.0
     gov = cfg.government
     tc = econ.policy.tax_energy_rate if gov else 0.0
 
@@ -332,6 +366,14 @@ def run_energy_phase(econ: Any) -> None:
     hh_spend = hh_units = 0.0
     if cfg.energy_household:
         bridge = getattr(econ, "demographic_bridge", None)
+        # v17.5 subsidy handles (Policy): flat rebate on household energy bills, or
+        # TARGETED below a deposits threshold (the §34 wealth-allowance reprise:
+        # flat transfers leak to the rich; targeting buys the same protection cheaper).
+        sub = econ.policy.energy_subsidy_rate if gov else 0.0
+        thr = econ.policy.energy_subsidy_threshold if gov else 0.0
+        mean_dep = 0.0
+        if sub > 0.0 and thr > 0.0:
+            mean_dep = sum(econ.ledger.balance(h.id) for h in econ.households) / max(1, len(econ.households))
         for h in econ.households:
             q = bought_q.get(h.id, 0.0)
             h.energy_units = q
@@ -351,6 +393,13 @@ def run_energy_phase(econ: Any) -> None:
                     if bridge is not None:
                         bridge.post_household_tax_payment(h.id, excise)
                     econ._tax_energy += excise
+            if sub > 0.0 and h.energy_spent > EPS and \
+                    (thr <= 0.0 or econ.ledger.balance(h.id) < thr * mean_dep):
+                rebate = sub * h.energy_spent
+                econ.ledger.transfer(econ._fiscal, h.id, rebate)
+                if bridge is not None:
+                    bridge.post_household_cash_delta(h.id, rebate, reason="energy_subsidy")
+                econ._energy_subsidy_paid += rebate
     econ._energy_hh_spend = hh_spend
     econ._energy_hh_units = hh_units
 

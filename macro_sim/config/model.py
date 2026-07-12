@@ -680,6 +680,18 @@ class Config:
                                         # destroy a mere ordering); proportional allocates
                                         # each seller's stock pro-rata to remaining demand
     energy_cap_compensation: bool = False  # Policy: fiscal covers (posted - cap) x sold
+    # -- v17.5 couplings (each its own dial, 0/off = bit-identical) --
+    energy_mortality_gamma: float = 0.0 # fuel poverty -> mortality: M = clip(1 + gamma*fp, 1, hi);
+                                        # Phase-2 grammar (annual, burn-in discard) -- FREE
+    energy_mortality_mult_hi: float = 1.3
+    energy_signal_burnin_years: int = 4
+    energy_subsidy_rate: float = 0.0    # Policy: rebate share of household energy bills
+    energy_subsidy_threshold: float = 0.0  # Policy: 0 = flat; >0 = only households with
+                                        # deposits < this x mean (the §34 targeting reprise)
+    # housing x energy (need ∝ dwelling size): AWAITS the v15.2 size gate -- the
+    # registry's size scalar is still identically 1.0, so the coupling would be
+    # observationally vacuous; lands when the gate opens. Efficiency investment
+    # (e_coeff falls with investment): optional per plan, deferred with it.
 
     def __post_init__(self) -> None:
         self._validate()
@@ -1450,6 +1462,13 @@ class Config:
             "unknown energy rationing rule"
         assert not (self.energy_cap_compensation and not self.government), \
             "cap compensation needs a fiscal account"
+        assert self.energy_mortality_gamma >= 0.0, "mortality gamma must be >= 0"
+        assert self.energy_mortality_mult_hi >= 1.0, "mortality cap must be >= 1"
+        assert self.energy_signal_burnin_years >= 1, "energy signal burn-in must be >= 1 year"
+        assert 0.0 <= self.energy_subsidy_rate < 1.0, "subsidy rate is a fraction"
+        assert self.energy_subsidy_threshold >= 0.0, "subsidy threshold must be >= 0"
+        assert not (self.energy_mortality_gamma > 0.0 and not self.energy_household), \
+            "the fuel-poverty mortality channel needs household energy"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

@@ -95,3 +95,26 @@ if __name__ == "__main__":
         run("energy_soe", energy_enabled=True, energy_household=True,
             energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
             soe_efirm=True, soe_price_at_cost=True)
+    if which == "social":                         # v17.5: mortality channel armed + targeted subsidy AT the shock
+        cfg = Config.v13(**{**PARAMS, **dict(
+            energy_enabled=True, energy_household=True,
+            energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
+            energy_mortality_gamma=2.0, energy_signal_burnin_years=2)})
+        econ = Economy(cfg)
+        t0 = time.time()
+        try:
+            for t in range(cfg.n_ticks):
+                if t == 1825:
+                    econ.policy.energy_subsidy_rate = 0.5
+                    econ.policy.energy_subsidy_threshold = 0.5   # targeted (the §34 lesson)
+                if t == 1825 + 365:
+                    econ.policy.energy_subsidy_rate = 0.0
+                econ.step()
+                if t % 365 == 0:
+                    print(f"[energy_social] t={t} ({time.time()-t0:.0f}s)", flush=True)
+        except Exception:
+            traceback.print_exc()
+            print(f"[energy_social] CRASHED at t={econ.t}", flush=True)
+        write_run_artifact(output_dir=OUT, label="energy_social", version="v17.5", cfg=cfg,
+                           records=econ.records)
+        print(f"[energy_social] done in {time.time()-t0:.0f}s", flush=True)
