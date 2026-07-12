@@ -35,13 +35,29 @@ class Job:
 
 
 @dataclass
+class Suspension:
+    firm_id: str
+    since_tick: int
+    wage_at: float                  # acceptance threshold base for on-pool search (theta x this)
+
+
+@dataclass
 class LaborMarket:
     churn_annual: float = 0.28      # exogenous quits + individual dismissals (monthly ~2.4%)
     lambda_fire: float = 0.10       # per-tick closure rate of the layoff gap
     layoff_band: float = 0.05       # hysteresis: no action within +/- band x target
+    # L1b suspension (the employment LOLR): liquidity != insolvency at the match level.
+    # A suspended worker keeps the Job link (the recall right) but is NOT employed:
+    # no pay, no work, no output -- and NO DEBT (zero new liability class). Under the
+    # uncapped JG they are absorbed by the safety net automatically, so S is a MEMO
+    # stock (recall rights), never a partition state.
+    suspension_enabled: bool = False
+    suspension_timer: int = 45      # ticks before an unrecalled suspension converts to layoff
+    quit_discount: float = 0.9      # accept an outside offer iff wage >= this x suspended wage
 
     jobs: dict[int, Job] = field(default_factory=dict)          # person_id -> Job
     rosters: dict[str, list[int]] = field(default_factory=dict) # firm_id -> hire-ordered ids
+    suspended: dict[int, Suspension] = field(default_factory=dict)  # person_id -> Suspension
 
     def roster_of(self, firm_id: str) -> list[int]:
         return self.rosters.setdefault(firm_id, [])
@@ -52,6 +68,7 @@ class LaborMarket:
 
     def separate(self, person_id: int) -> None:
         job = self.jobs.pop(person_id, None)
+        self.suspended.pop(person_id, None)
         if job is not None:
             roster = self.rosters.get(job.firm_id)
             if roster is not None:
@@ -60,17 +77,22 @@ class LaborMarket:
                 except ValueError:
                     pass
 
+    def active_count(self, firm_id: str) -> int:
+        return sum(1 for pid in self.rosters.get(firm_id, ()) if pid not in self.suspended)
+
     def on_person_death(self, person_id: int, accounts: Any | None = None) -> None:
         if person_id in self.jobs:
+            was_suspended = person_id in self.suspended
             self.separate(person_id)
-            if accounts is not None:
-                accounts.death_seps_total += 1
+            if accounts is not None and not was_suspended:
+                accounts.death_seps_total += 1    # suspended exits are S-side, not E-flows
 
     def on_firm_exit(self, firm_id: str, accounts: Any | None = None) -> None:
         """Bankruptcy / liquidation = the whole roster into the pool at once."""
         for person_id in list(self.rosters.get(firm_id, ())):
+            was_suspended = person_id in self.suspended
             self.separate(person_id)
-            if accounts is not None:
+            if accounts is not None and not was_suspended:
                 accounts.bankruptcy_seps_total += 1
         self.rosters.pop(firm_id, None)
 
@@ -102,17 +124,27 @@ def run_persistent_labor_phase(econ: Any) -> None:
     # guardianship moves and every future emptying path are covered by construction) ----
     for person_id in list(lm.jobs.keys()):
         person = person_index.get(person_id)
-        if person is None:
-            lm.separate(person_id)
-            if accounts is not None:
-                accounts.death_seps_total += 1
-        elif supply_of.get(person_id, 0.0) <= 0.0 or person_id not in household_account_of:
-            lm.separate(person_id)          # age-out (retirement): an exit, kept in the
-            if accounts is not None:        # death/exit class of the fixed taxonomy
+        gone = person is None or supply_of.get(person_id, 0.0) <= 0.0 \
+            or person_id not in household_account_of
+        if gone:
+            was_suspended = person_id in lm.suspended
+            lm.separate(person_id)          # deaths AND age-outs: the exit class
+            if accounts is not None and not was_suspended:
                 accounts.death_seps_total += 1
 
-    # ---- 2. churn: one daily hazard for quits + individual dismissals ----
+    # ---- 1b. suspension lifecycle: timeouts convert to layoff (S-side, no E-flow) ----
+    if lm.suspension_enabled:
+        for person_id, susp in list(lm.suspended.items()):
+            if econ.t - susp.since_tick >= lm.suspension_timer:
+                lm.separate(person_id)
+                if accounts is not None:
+                    accounts.suspension_timeouts_total += 1
+
+    # ---- 2. churn: one daily hazard for quits + individual dismissals (ACTIVE only:
+    # a suspended worker has nothing to quit from -- their exit path is the pool) ----
     for person_id in list(lm.jobs.keys()):
+        if person_id in lm.suspended:
+            continue
         if rng.random() < churn_daily:
             lm.separate(person_id)
             if accounts is not None:
@@ -122,52 +154,91 @@ def run_persistent_labor_phase(econ: Any) -> None:
     firms_order = list(econ.firms)
     rng.shuffle(firms_order)
 
-    # searcher pool: working-age, alive, jobless (shuffled once; consumed by pointer)
+    # searcher pool: the jobless PLUS the suspended (recall unemployment: they search
+    # with a reservation of quit_discount x their suspended wage)
     pool = [
         pid for pid, s in supply_of.items()
-        if s > 0.0 and pid not in lm.jobs and pid in household_account_of
+        if s > 0.0 and pid in household_account_of
+        and (pid not in lm.jobs or pid in lm.suspended)
     ]
     rng.shuffle(pool)
-    pool_ptr = 0
 
     for f in firms_order:
         roster = lm.roster_of(f.id)
         target = max(0.0, float(f.labor_demand_eff))
+        wage = max(f.wage, EPS)
+        affordable = int(led.balance(f.id) / wage)
 
-        # 3. demand-gap layoffs with hysteresis + partial adjustment (LIFO)
-        excess = len(roster) - target
+        def actives() -> list[int]:
+            return [pid for pid in roster if pid not in lm.suspended]
+
+        # 3. demand-gap layoffs with hysteresis + partial adjustment (LIFO over actives)
+        active = actives()
+        excess = len(active) - target
         band = lm.layoff_band * max(1.0, target)
         if excess > band:
             fire_flow = lm.lambda_fire * (excess - band)
             n_fire = int(fire_flow)
             if rng.random() < fire_flow - n_fire:
                 n_fire += 1
-            for _ in range(min(n_fire, len(roster))):
-                victim = roster[-1]                 # LIFO: the most recent hire
+            for victim in list(reversed(active))[:n_fire]:
                 lm.separate(victim)
                 if accounts is not None:
                     accounts.layoff_seps_total += 1
 
-        # 4. cash-crunch: the roster must be payable from live deposits (A4)
-        wage = max(f.wage, EPS)
-        affordable = int(led.balance(f.id) / wage)
-        while len(roster) > affordable:
-            victim = roster[-1]
-            lm.separate(victim)
-            if accounts is not None:
-                accounts.layoff_seps_total += 1
+        # 4. cash-crunch ladder: suspend (L1b, the employment LOLR) or fire (L1)
+        active = actives()
+        while len(active) > affordable:
+            victim = active.pop()                   # LIFO
+            if lm.suspension_enabled:
+                lm.suspended[victim] = Suspension(firm_id=f.id, since_tick=econ.t, wage_at=wage)
+                if accounts is not None:
+                    accounts.suspensions_total += 1
+            else:
+                lm.separate(victim)
+                if accounts is not None:
+                    accounts.layoff_seps_total += 1
 
-        # 5. hiring: fill toward the target (instant in L1; matching friction = L2)
-        while len(roster) + 1 <= target + 0.5 and pool_ptr < len(pool):
-            if len(roster) + 1 > affordable:
+        # 4b. recall: cash recovered and demand wants them -> suspended return in place
+        # (FIFO by suspension time), BEFORE any new hiring -- no re-matching friction
+        if lm.suspension_enabled:
+            own_suspended = sorted(
+                (pid for pid in roster if lm.suspended.get(pid) is not None
+                 and lm.suspended[pid].firm_id == f.id),
+                key=lambda pid: lm.suspended[pid].since_tick,
+            )
+            for pid in own_suspended:
+                if len(actives()) + 1 > min(affordable, target + 0.5):
+                    break
+                del lm.suspended[pid]
+                if accounts is not None:
+                    accounts.recalls_total += 1
+
+        # 5. hiring: fill toward the target (instant in L1; matching friction = L2).
+        # Suspended candidates accept iff the offer clears their reservation.
+        pool_idx = 0
+        while len(actives()) + 1 <= target + 0.5 and pool_idx < len(pool):
+            if len(actives()) + 1 > affordable:
                 break                               # cash cap binds
-            lm.hire(pool[pool_ptr], f.id, date)
+            candidate = pool[pool_idx]
+            pool_idx += 1
+            if candidate in lm.jobs and candidate not in lm.suspended:
+                continue                            # already employed elsewhere this tick
+            susp = lm.suspended.get(candidate)
+            if susp is not None:
+                if susp.firm_id == f.id or wage < lm.quit_discount * susp.wage_at:
+                    continue                        # waiting beats this offer
+                lm.separate(candidate)              # poached: the old link dies (S-side)
+                if accounts is not None:
+                    accounts.suspension_poached_total += 1
+            lm.hire(candidate, f.id, date)
             if accounts is not None:
                 accounts.hires_total += 1
-            pool_ptr += 1
 
-        # 6. wages: every member paid at the posted wage into their CURRENT household
-        for person_id in roster:
+        # 6. wages: every ACTIVE member paid at the posted wage into their CURRENT
+        # household; suspended members: no pay, no work (the benefit/JG machinery
+        # catches them through labor_sold = 0 with zero new code)
+        for person_id in actives():
             account = household_account_of.get(person_id)
             if account is None:
                 continue

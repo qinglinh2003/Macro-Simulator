@@ -189,6 +189,13 @@ class Config:
     churn_annual: float = 0.28              # exogenous quits + individual dismissals (~2.4%/mo)
     lambda_fire: float = 0.10               # per-tick closure of the layoff gap (hoarding dial)
     layoff_band: float = 0.05               # hysteresis band as a fraction of target headcount
+    # -- v16-L1b suspension: the employment LOLR. Cash-crunched firms SUSPEND (LIFO)
+    # instead of firing: match kept, no pay, no debt; recall in place within the timer,
+    # else auto-layoff. Suspended workers search as recall unemployment (accept an
+    # offer iff wage >= quit_discount x suspended wage).
+    labor_suspension: bool = False
+    suspension_timer: int = 45
+    suspension_quit_discount: float = 0.9
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1360,6 +1367,8 @@ class Config:
         assert not (self.labor_matching == "persistent" and not self.demographics_enabled), "persistent labor needs persons (demographics)"
         assert not (self.labor_matching == "persistent" and not self.labor_accounting), "persistent labor requires the accounting gate"
         assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
+        assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
+        assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"

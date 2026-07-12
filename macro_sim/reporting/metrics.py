@@ -378,7 +378,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             {
                 "labor_E": float(accounts.employed),
                 "labor_U": float(accounts.unemployed),
-                "labor_S": float(accounts.suspended),
+                "labor_S": float(accounts.suspended_memo),
                 "labor_JG": float(accounts.job_guarantee),
                 "labor_OLF": float(accounts.out_of_labor_force),
                 "labor_u_rate": float(accounts.unemployment_rate),
@@ -390,6 +390,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "labor_bankruptcy_seps_total": float(accounts.bankruptcy_seps_total),
                 "labor_death_seps_total": float(accounts.death_seps_total),
                 "labor_recalls_total": float(accounts.recalls_total),
+                "labor_suspensions_total": float(accounts.suspensions_total),
+                "labor_susp_timeouts_total": float(accounts.suspension_timeouts_total),
+                "labor_susp_poached_total": float(accounts.suspension_poached_total),
             }
         )
 

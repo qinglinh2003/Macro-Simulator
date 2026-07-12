@@ -39,7 +39,14 @@ class LaborAccounts:
     layoff_seps_total: float = 0.0      # demand-gap layoffs
     bankruptcy_seps_total: float = 0.0  # firm-exit mass layoffs
     death_seps_total: float = 0.0
-    recalls_total: float = 0.0          # suspension -> employed (L1b)
+    recalls_total: float = 0.0          # suspension -> employed (L1b; an E-inflow)
+    # L1b suspension flows. Suspension is a MEMO attribute (recall rights), never a
+    # partition state: under the uncapped JG the safety net absorbs suspended workers,
+    # so they sit in U/JG for the partition while suspended_memo reports the stock.
+    suspensions_total: float = 0.0          # E -> suspended (an E-outflow)
+    suspension_timeouts_total: float = 0.0  # suspended -> laid off (S-side memo)
+    suspension_poached_total: float = 0.0   # suspended -> hired elsewhere (S-side memo)
+    suspended_memo: float = 0.0             # current recall-rights stock
 
     def observe_spot(self, econ: Any) -> None:
         """Derive the aggregate stocks from the spot market's household quantities."""
@@ -94,9 +101,12 @@ class LaborAccounts:
             if person.household_id is not None:
                 supply += labor_supply_for_person(person)
         self.labor_supply = supply
-        self.employed = float(len(lm.jobs))
+        # E = active jobs; suspended workers hold a recall RIGHT, not employment --
+        # they carry no pay/work and are absorbed by U/JG in the partition
+        self.suspended_memo = float(len(lm.suspended))
+        self.employed = float(len(lm.jobs)) - self.suspended_memo
         self.job_guarantee = sum(float(getattr(h, "jg_labor", 0.0)) for h in econ.households)
-        self.suspended = 0.0                    # L1b will report it
+        self.suspended = 0.0                    # partition-S stays 0 (memo carries the stock)
         self.unemployed = max(0.0, supply - self.employed - self.job_guarantee)
         self.out_of_labor_force = max(0.0, persons - supply)
         self.vacancies = sum(
@@ -110,6 +120,7 @@ class LaborAccounts:
             self.hires_total + self.recalls_total
             - self.churn_seps_total - self.layoff_seps_total
             - self.bankruptcy_seps_total - self.death_seps_total
+            - self.suspensions_total
         )
         if self._prev_employed >= 0.0:
             expected = self._prev_employed + (flow_balance - self._prev_flow_balance)

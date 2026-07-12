@@ -223,6 +223,9 @@ class Economy:
                 churn_annual=cfg.churn_annual,
                 lambda_fire=cfg.lambda_fire,
                 layoff_band=cfg.layoff_band,
+                suspension_enabled=cfg.labor_suspension,
+                suspension_timer=cfg.suspension_timer,
+                quit_discount=cfg.suspension_quit_discount,
             )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
