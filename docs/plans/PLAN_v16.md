@@ -202,3 +202,38 @@ indefinitely deferred as accounting-cost-maximal). Suspended workers:
 
 After the v15 merge. One stage at a time, full acceptance before the next; L1b may
 land with L1 or immediately after; L3b belongs to the L3 acceptance cycle.
+
+## L6 — Sub-Person Firm Scale (post-acceptance addendum; the §4 catch)
+
+Unplanned stage, forced by the §4 holdout rerun: under whole-person employment
+the K SECTOR WENT EXTINCT (per-firm demand ~0.1 worker < the integer hiring
+threshold; the sales-only demand signal turned one missed hire into an
+information deadlock -- empty shelf -> zero sales -> zero expectations). Every
+L0-L5 acceptance number above was measured on that capital-starved economy
+(aggregate K bleeding -52%/10y). No labor portrait caught it: none had a
+capital panel (now mandatory).
+
+Three mechanisms (flags default off; spot + flag-off persistent bit-identical):
+footfall (`capital_rationed_signal` -- unmet buy orders enter B2 expectations),
+subscale exit (`firm_subscale_exit` -- below 0.5 workers of expected demand for
+180d => liquidation at 1/90 daily hazard; builders exempt; sector floor of one),
+K entry (`capital_firm_entry` -- every incumbent above 2x viability => entry at
+1/60 hazard, funded from sector retained earnings). Firm count becomes an
+emergent equilibrium (probe: 25 -> 1 -> 3-5 firms x 2-3 whole persons).
+
+- [x] K sector revives with WHOLE-PERSON jobs; capital stock grows (+356% probe).
+- [x] Consolidation self-terminates (never extinguishes); entry re-expands.
+- [x] Escheat fix: liquidation residual to MEMBERLESS holder households routes
+      to fiscal (the v15 dead-seller pattern; 4th fault-line instance).
+- [x] RE-ACCEPTANCE on the healthy economy: pass-through ratio 2.03 (capital
+      deepening AMPLIFIES the x1.5 TFP gain -- the growth channel is alive;
+      placebo 0.999 unchanged). §4: 5/8 with T6 Zipf now a TEXTBOOK -0.98/-1.03
+      (emergent Simon/Gabaix from exit-entry churn, no gibrat hack).
+- [ ] STALE-NUMBER CAVEAT: the u*/Beveridge/Okun portrait figures quoted in
+      L1/L2 above were measured PRE-L6 (starved economy). §4 3-seed reads on the
+      healthy economy: u ~5.2%, tick-level Okun corr -0.95. The full-stack
+      portrait + diagnostic rerun on the healthy economy is the one OPEN item.
+- [ ] HANDED-OVER FINDING (do not chase in v16): investment is ACYCLICAL and
+      leverage decouples from output (T3 -0.06 / T7 -0.01) -- L6 entry waves and
+      K inventory cycles set investment timing, not the demand cycle. Same
+      family as the stabilizer-flattened Phillips (T1, pre-v16).
