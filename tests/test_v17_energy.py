@@ -313,16 +313,20 @@ def test_buffering_state_dependence():
     HIGH initial coverage — the early post-shock output drop (first 30 ticks) is
     smaller when downstream stocks are deep than when they are shallow."""
     def drop(cov_ticks):
+        # magnitude 0.8: the sector idles ~0.4-0.5 utilization in v124, so a mild cut
+        # never binds and the comparison measures noise (the first cut of this test
+        # did exactly that -- refuted by its own bind-guard below).
         base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=320, seed=7,
                     energy_enabled=True, energy_coverage_ticks=cov_ticks)
         ref = Economy(Config.v124(**base)).run()
         shk = Economy(Config.v124(**base, energy_shock_at=250,
-                                  energy_shock_magnitude=0.5)).run()
+                                  energy_shock_magnitude=0.8)).run()
         early = range(255, 285)
         r0 = sum(ref[i]["real_output"] for i in early)
         r1 = sum(shk[i]["real_output"] for i in early)
         return (r0 - r1) / max(1.0, r0)
     d_low, d_high = drop(5.0), drop(60.0)
+    assert d_low > 0.01, f"the shock never bit (shallow-stock drop {d_low:.4f}) -- test misconfigured"
     assert d_high < d_low, \
         f"buffering refuted: early drop {d_high:.3f} (deep stocks) !< {d_low:.3f} (shallow)"
 
@@ -338,6 +342,98 @@ def test_windfall_tax_remits_and_conserves():
     assert sum(r.get("tax_energy_windfall", 0.0) for r in recs[200:]) > 0.0, "windfall never remitted"
     m = max(r["broad_money"] for r in recs)
     assert max(r["conservation_drift"] for r in recs) < 1e-6 * m
+
+
+# ---------------------------------------------------------------------------
+# v17.3 -- strategic reserve, state ownership, hoarding
+# ---------------------------------------------------------------------------
+
+def test_spr_builds_and_conserves():
+    """The fiscal node accumulates the reserve toward target through ordinary session
+    buys (deficit-financed, conserving); the flow gauge still closes EXACTLY with the
+    SPR in the stock total. Kernel + government: the fiscal account exists and NO firm
+    exits destroy stocks (v124's death spikes are the gauge's one legitimate source,
+    so exactness asserts belong in no-death worlds — the 17.0 lesson)."""
+    econ = Economy(Config(n_households=200, n_firms_c=20, n_firms_k=10, n_ticks=300, seed=8,
+                          government=True, bank_enabled=True,   # v9 needs A5 money; v3 needs v2
+                          energy_enabled=True, spr_target_units=60.0, spr_flow_cap=1.0))
+    recs = econ.run()
+    assert econ._spr_stock > 30.0, f"SPR never built ({econ._spr_stock:.1f})"
+    scale = max(1.0, max(r["energy_produced"] for r in recs))
+    assert max(abs(r["energy_flow_gap"]) for r in recs[1:]) < 1e-9 * scale, \
+        "flow gauge broke with the SPR"
+    assert max(r["conservation_drift"] for r in recs) < 1e-6 * max(r["total_money"] for r in recs)
+
+
+def test_spr_release_damps_the_shock():
+    """THE HEADLINE 17.3 EXPERIMENT, clean pair: BOTH worlds build the same reserve
+    (identical prefix, same seed); at the shock one RELEASES (Policy target -> 0),
+    the other holds. Release must reduce unmet demand through the crunch. (The first
+    cut compared against a no-SPR world — the build phase perturbs the whole
+    trajectory and seed-chaos swamped a 2/tick release; refuted, redesigned.)"""
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=420, seed=8,
+                energy_enabled=True, energy_shock_at=300, energy_shock_magnitude=0.5,
+                energy_shock_duration=80, spr_target_units=150.0, spr_flow_cap=5.0)
+    hold = Economy(Config.v124(**base))
+    recs_hold = hold.run()
+    rel = Economy(Config.v124(**base))
+    recs_rel = []
+    for t in range(420):
+        if t == 300:
+            rel.policy.spr_target_units = 0.0   # RELEASE: the live-lever use-case
+        recs_rel.append(rel.step())
+    for x, y in zip(recs_hold[:300], recs_rel[:300]):
+        assert x["real_output"] == y["real_output"], "prefix must be identical (same build)"
+    # DIRECT RELIEF while the reserve lasts (stock 150 / flow 5 => ~30 ticks):
+    window = range(300, 330)
+    unf_hold = sum(recs_hold[i]["energy_unfilled"] for i in window)
+    unf_rel = sum(recs_rel[i]["energy_unfilled"] for i in window)
+    assert unf_rel < unf_hold, f"release did not damp the shortage: {unf_rel:.0f} !< {unf_hold:.0f}"
+    # FINDING 12 (report, not assert): after the reserve empties, unfilled flips HIGHER
+    # in the release world -- the cheap SPR supply stole E-firm sales, dragged their B2
+    # expectations down, and CROWDED OUT the private capacity response (probe: E output
+    # -15% in the following windows, d^e 32 vs 38 at the end). Front-loaded relief,
+    # muted supply signal: the classic SPR-release policy debate, emergent.
+    assert max(r["spr_stock"] for r in recs_rel) > 80.0 and recs_rel[-1]["spr_stock"] < 5.0, \
+        "the reserve never built or never released"
+
+
+def test_soe_dividends_and_at_cost_pricing():
+    """State ownership: the SOE's dividends reach fiscal (households never see them);
+    with at-cost pricing on, the SOE posts exactly its unit cost each tick."""
+    econ = Economy(Config.v124(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=300, seed=8,
+                               energy_enabled=True, soe_efirm=True, soe_price_at_cost=True))
+    recs = econ.run()
+    assert econ.e_firms[0].state_owned and not econ.e_firms[1].state_owned
+    assert sum(r["soe_dividends"] for r in recs) > 0.0, "SOE dividends never reached fiscal"
+    assert econ.e_firms[0].markup == 0.0, "at-cost pricing did not pin the SOE markup"
+    m = max(r["broad_money"] for r in recs)
+    assert max(r["conservation_drift"] for r in recs) < 1e-6 * m
+
+
+def test_hoarding_mechanism_fires():
+    """Hoarding (flag, DEFAULT OFF) asserts the MECHANISM, reports the net: with the
+    flag on, total addressed demand (sold + unfilled) through the crunch is HIGHER —
+    trend-following firms order more exactly when prices spike. FINDING (first run,
+    kept): the NET unfilled was LOWER with hoarding — pre-shock price uptrends had
+    already built deeper precautionary buffers, and hoarding-as-insurance beat
+    hoarding-as-panic at this config. The 1970s amplification needs the panic to
+    START post-shortage; the net sign is emergent, not asserted."""
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=420, seed=8,
+                energy_enabled=True, energy_shock_at=300, energy_shock_magnitude=0.5,
+                energy_shock_duration=80)
+    off = Economy(Config.v124(**base)).run()
+    on = Economy(Config.v124(**base, energy_hoarding_beta=3.0)).run()
+    window = range(300, 420)
+    addressed_off = sum(off[i]["energy_sold"] + off[i]["energy_unfilled"] for i in window)
+    addressed_on = sum(on[i]["energy_sold"] + on[i]["energy_unfilled"] for i in window)
+    assert addressed_on > addressed_off, \
+        f"hoarding demand never fired: {addressed_on:.0f} !> {addressed_off:.0f}"
+    # the net (report-only, both directions legitimate): print for the run log
+    unf_off = sum(off[i]["energy_unfilled"] for i in window)
+    unf_on = sum(on[i]["energy_unfilled"] for i in window)
+    print(f"    [hoarding net] unfilled on={unf_on:.0f} vs off={unf_off:.0f} "
+          f"({'amplifies' if unf_on > unf_off else 'insures (pre-buffer dominates)'})")
 
 
 def _main() -> None:

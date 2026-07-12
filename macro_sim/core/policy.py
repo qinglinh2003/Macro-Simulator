@@ -32,6 +32,9 @@ class Policy:
     wealth_allowance: float = 0.0        # progressive wealth-tax exemption as a multiple of mean net worth
     tax_energy_rate: float = 0.0         # v17.0: excise on energy purchases (VAT grammar; inert at 0)
     tax_energy_windfall: float = 0.0     # v17.2: profit surtax on E-firms (shock-response instrument)
+    spr_target_units: float = 0.0        # v17.3: strategic-reserve stock target (0 = off)
+    spr_flow_cap: float = 0.0            # v17.3: max SPR units traded per tick
+    soe_price_at_cost: bool = False      # v17.3: the state-owned E-firm prices at unit cost
 
     # -- labour -----------------------------------------------------------
     min_wage: float = 0.0                # wage floor (0 = off)
@@ -83,6 +86,9 @@ class Policy:
             wealth_allowance=cfg.wealth_allowance,
             tax_energy_rate=getattr(cfg, "tax_energy_rate", 0.0),
             tax_energy_windfall=getattr(cfg, "tax_energy_windfall", 0.0),
+            spr_target_units=getattr(cfg, "spr_target_units", 0.0),
+            spr_flow_cap=getattr(cfg, "spr_flow_cap", 0.0),
+            soe_price_at_cost=getattr(cfg, "soe_price_at_cost", False),
             min_wage=cfg.min_wage,
             job_guarantee=cfg.job_guarantee,
             jg_wage_ratio=cfg.jg_wage_ratio,

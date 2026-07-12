@@ -104,6 +104,8 @@ def create_e_firms(econ: Any, cfg: Any, balances: Dict[str, float]) -> None:
         balances[firm.id] = cfg.d_efirm0
         econ.firms.append(firm)
         econ.e_firms.append(firm)
+    if cfg.soe_efirm and econ.e_firms:
+        econ.e_firms[0].state_owned = True   # v17.3: E0 is the SOE (dividends -> fiscal)
     # Downstream Leontief coefficient + input stocks at the coverage target,
     # valued at the genesis energy price anchor.
     for f in downstream:
@@ -173,13 +175,32 @@ def run_energy_phase(econ: Any) -> None:
     apply_energy_shock(econ)
     _produce_e_firms(econ)
     econ._tax_energy = 0.0
+    econ._spr_flow = 0.0
     gov = cfg.government
     tc = econ.policy.tax_energy_rate if gov else 0.0
+
+    # v17.3 SOE pricing rule: the state-owned E-firm posts unit cost (markup 0),
+    # bypassing Calvo -- a state pricing rule, not a market one. Live Policy lever.
+    if gov and econ.policy.soe_price_at_cost:
+        for ef in econ.e_firms:
+            if ef.state_owned:
+                ef.markup = 0.0
+                ef.price = B.unit_cost(ef)
+
+    # v17.3 hoarding (default OFF): firms scale the coverage target with the energy
+    # price TREND (slow EMA reference) -- the 1970s anticipatory-stockpiling amplifier.
+    # beta=0 => multiplier exactly 1.0 => bit-identical.
+    slow = getattr(econ, "_energy_price_slow", cfg.p_efirm0)
+    econ._energy_price_slow = slow + (getattr(econ, "_energy_price", cfg.p_efirm0) - slow) / 30.0
+    hoard_mult = 1.0
+    if cfg.energy_hoarding_beta > 0.0 and slow > EPS:
+        trend = getattr(econ, "_energy_price", cfg.p_efirm0) / slow - 1.0
+        hoard_mult = 1.0 + cfg.energy_hoarding_beta * max(0.0, trend)
 
     orders: List[BuyOrder] = []
     for f in energy_using_firms(econ):
         use_need = f.energy_intensity * f.production_target
-        target_stock = cfg.energy_coverage_ticks * f.energy_intensity * f.demand_expected
+        target_stock = hoard_mult * cfg.energy_coverage_ticks * f.energy_intensity * f.demand_expected
         demand = use_need + cfg.energy_gap_close * (target_stock - f.energy_stock)
         f.energy_bought = 0.0
         if demand <= EPS:
@@ -200,6 +221,21 @@ def run_energy_phase(econ: Any) -> None:
                 continue
             orders.append(BuyOrder(account=h.id, demand=need, budget=budget / (1.0 + tc), ref=h))
 
+    # v17.3 SPR: below target the fiscal node BUYS (deficit-financed: the fiscal
+    # account may run negative, transfers conserve); above target it SELLS at just
+    # under the cheapest ask (a release undercuts to move), proceeds -> fiscal.
+    # All flows are ordinary session trades: A5-safe by construction.
+    spr_buy = spr_sell = 0.0
+    pol = econ.policy
+    if gov and pol.spr_flow_cap > 0.0:
+        stock = getattr(econ, "_spr_stock", 0.0)
+        if pol.spr_target_units > stock + EPS:
+            spr_buy = min(pol.spr_target_units - stock, pol.spr_flow_cap)
+            orders.append(BuyOrder(account=econ._fiscal, demand=spr_buy,
+                                   budget=float("inf"), ref=None))
+        elif stock > pol.spr_target_units + EPS:
+            spr_sell = min(stock - pol.spr_target_units, pol.spr_flow_cap)
+
     # RESERVED RATIONING INTERFACE (17.4 plugs in here): a hook may reorder/filter
     # the buy orders before the session; None (default) = the native protocol.
     ordering = getattr(econ, "energy_buyer_ordering", None)
@@ -208,6 +244,11 @@ def run_energy_phase(econ: Any) -> None:
 
     offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f)
               for f in econ.e_firms]
+    spr_offer = None
+    if spr_sell > EPS:
+        release_price = 0.999 * min(f.price for f in econ.e_firms)
+        spr_offer = SellOffer(account=econ._fiscal, stock=spr_sell, price=release_price, ref=None)
+        offers.append(spr_offer)
     trades = execute_market(orders, offers, protocol=econ.protocol,
                             rng=econ._energy_rng, ledger=econ.ledger)
 
@@ -259,7 +300,20 @@ def run_energy_phase(econ: Any) -> None:
     econ._energy_hh_spend = hh_spend
     econ._energy_hh_units = hh_units
 
+    # v17.3 SPR settlement: buys enter the reserve stock; a release drains it.
+    if gov and (spr_buy > 0.0 or spr_offer is not None):
+        q_in = bought_q.get(econ._fiscal, 0.0)
+        econ._spr_stock = getattr(econ, "_spr_stock", 0.0) + q_in
+        econ._spr_cost = getattr(econ, "_spr_cost", 0.0) + bought_v.get(econ._fiscal, 0.0)
+        if spr_offer is not None and spr_offer.sold > 0.0:
+            avg = econ._spr_cost / max(EPS, econ._spr_stock)
+            econ._spr_stock = max(0.0, econ._spr_stock - spr_offer.sold)
+            econ._spr_cost = max(0.0, econ._spr_cost - avg * spr_offer.sold)
+        econ._spr_flow = q_in - (spr_offer.sold if spr_offer is not None else 0.0)
+
     for off in offers:
+        if off.ref is None:
+            continue                         # the SPR release offer (settled above)
         ef: Firm = off.ref
         ef.inventory = off.stock             # decremented live during trading
         ef.sales = off.sold
@@ -282,7 +336,10 @@ def run_energy_phase(econ: Any) -> None:
             ef.demand_expected += ef.lambda_d * unfilled * share
     econ._energy_unfilled = unfilled
 
-    # Transaction-weighted price index, hold-last (burn-in discard is downstream's duty).
-    if total_q > EPS:
-        econ._energy_price = total_v / total_q
-    econ._energy_sold = total_q
+    # Transaction-weighted price index over ALL session trades (firms + households +
+    # SPR), hold-last (burn-in discard is downstream's duty).
+    idx_q = sum(tr.qty for tr in trades)
+    idx_v = sum(tr.value for tr in trades)
+    if idx_q > EPS:
+        econ._energy_price = idx_v / idx_q
+    econ._energy_sold = idx_q

@@ -656,6 +656,20 @@ class Config:
     energy_shock_duration: int = 0      # 0 = permanent step; >0 = pulse of this many ticks
     tax_energy_windfall: float = 0.0    # Policy: profit surtax on E-firms (shock-response
                                         # fiscal instrument; reduces the dividend pool)
+    # -- v17.3 strategic reserve, state ownership, hoarding --
+    spr_target_units: float = 0.0       # Policy: SPR stock target (0 = off). Below target the
+                                        # fiscal node BUYS in the session (deficit-financed,
+                                        # conserving); above it (e.g. release: target -> 0) it
+                                        # SELLS at just under the cheapest ask, proceeds -> fiscal
+    spr_flow_cap: float = 0.0           # Policy: max units the SPR trades per tick
+    soe_efirm: bool = False             # E0 is STATE-OWNED: its dividends flow to fiscal
+                                        # (ownership without shares -- the K-firm precedent
+                                        # says E-firms are not equitized)
+    soe_price_at_cost: bool = False     # Policy: the SOE prices at unit cost (markup 0, no
+                                        # Calvo) -- the market-power discipline experiment
+    energy_hoarding_beta: float = 0.0   # firms scale the coverage target by (1 + beta *
+                                        # max(0, energy price trend)) -- the 1970s queue
+                                        # amplifier, a separate flag, DEFAULT OFF
 
     def __post_init__(self) -> None:
         self._validate()
@@ -1414,6 +1428,13 @@ class Config:
         assert 0.0 <= self.energy_shock_magnitude < 1.0, "shock magnitude is a fractional capacity cut"
         assert self.energy_shock_duration >= 0, "shock duration must be >= 0 (0 = permanent)"
         assert 0.0 <= self.tax_energy_windfall < 1.0, "windfall surtax is a fraction"
+        assert self.spr_target_units >= 0.0 and self.spr_flow_cap >= 0.0, "SPR params must be >= 0"
+        assert not (self.spr_target_units > 0.0 and not (self.energy_enabled and self.government)), \
+            "the SPR needs the E-sector and a fiscal account"
+        assert not (self.soe_efirm and not (self.energy_enabled and self.government)), \
+            "the SOE needs the E-sector and a fiscal account"
+        assert not (self.soe_price_at_cost and not self.soe_efirm), "at-cost pricing needs the SOE"
+        assert self.energy_hoarding_beta >= 0.0, "hoarding beta must be >= 0"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

@@ -148,6 +148,7 @@ class Firm:
     energy_used: float = 0.0             # scratch: energy consumed in production this tick
     energy_cost_used: float = 0.0        # scratch: cost of energy consumed (enters profit)
     energy_bought: float = 0.0           # scratch: units bought this tick (restock-share gauge)
+    state_owned: bool = False            # v17.3: SOE flag (dividends -> fiscal; optional at-cost pricing)
 
     @classmethod
     def create(cls, idx: int, cfg: Config) -> "Firm":

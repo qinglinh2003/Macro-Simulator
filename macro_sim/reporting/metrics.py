@@ -1261,7 +1261,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         e_bought = float(np.sum([f.energy_bought for f in users]))
         hh_units = float(getattr(econ, "_energy_hh_units", 0.0))   # v17.1: consumed on purchase
         stock_total = (float(np.sum([f.energy_stock for f in users]))
-                       + float(np.sum([f.inventory for f in e_firms])))
+                       + float(np.sum([f.inventory for f in e_firms]))
+                       + float(getattr(econ, "_spr_stock", 0.0)))   # v17.3: the SPR is a stock too
         prev_stock = getattr(econ, "_energy_prev_stock_total", None)
         flow_gap = (e_produced - e_used - hh_units - (stock_total - prev_stock)) if prev_stock is not None else 0.0
         econ._energy_prev_stock_total = stock_total
@@ -1300,6 +1301,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "tax_energy": float(getattr(econ, "_tax_energy", 0.0)),
             "tax_energy_windfall": float(getattr(econ, "_tax_energy_windfall", 0.0)),  # v17.2
             "energy_shock_active": float(getattr(econ, "_energy_shock_active", 0.0)),  # v17.2 bookkeeping
+            "spr_stock": float(getattr(econ, "_spr_stock", 0.0)),                      # v17.3
+            "spr_flow": float(getattr(econ, "_spr_flow", 0.0)),                        # v17.3 (+build/-release)
+            "soe_dividends": float(getattr(econ, "_soe_dividends", 0.0)),              # v17.3
         })
         # -- v17.1 household energy: consumption GDP component, headline CPI, poverty --
         if getattr(econ.cfg, "energy_household", False):

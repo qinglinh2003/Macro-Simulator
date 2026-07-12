@@ -45,3 +45,23 @@ if __name__ == "__main__":
         run("energy_shock", energy_enabled=True, energy_household=True,
             energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
             tax_energy_windfall=0.3)
+    if which == "spr":                            # v17.3: same shock, but an SPR built in advance
+        cfg = Config.v13(**{**PARAMS, **dict(
+            energy_enabled=True, energy_household=True,
+            energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
+            tax_energy_windfall=0.3, spr_target_units=3000.0, spr_flow_cap=20.0)})
+        econ = Economy(cfg)
+        t0 = time.time()
+        try:
+            for t in range(cfg.n_ticks):
+                if t == 1825:
+                    econ.policy.spr_target_units = 0.0   # RELEASE at the shock (live lever)
+                econ.step()
+                if t % 365 == 0:
+                    print(f"[energy_spr] t={t} ({time.time()-t0:.0f}s)", flush=True)
+        except Exception:
+            traceback.print_exc()
+            print(f"[energy_spr] CRASHED at t={econ.t} -- dumping partial series", flush=True)
+        write_run_artifact(output_dir=OUT, label="energy_spr", version="v17.3", cfg=cfg,
+                           records=econ.records)
+        print(f"[energy_spr] done: {len(econ.records)} ticks in {time.time()-t0:.0f}s", flush=True)

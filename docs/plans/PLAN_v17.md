@@ -222,13 +222,27 @@ JG hard test run POST-COMPOSITION per protocol §5):
 - **Hoarding flag** (default OFF): firms over-target restock when expecting price rises —
   the 1970s queue amplifier, switchable, reported not tuned.
 
-Acceptance:
+Acceptance (CLOSED 2026-07-12; diagnostic_v173.png; findings 11-13):
 
-- [ ] SPR build/release conserves (ledger flows + flow gauge through the fiscal stock);
-      release measurably damps the shock price path vs the 17.2 reference.
-- [ ] SOE dividends reach fiscal; SOE-at-cost effect on private E-markups measured and
-      reported either way.
-- [ ] Hoarding ON amplifies the shock (documented); OFF ⇒ bit-identical.
+- [x] SPR build/release conserves (session buys/sells, deficit-financed, flow gauge
+      exact in no-death worlds); release damps the crunch in the clean policy pair
+      (hold-vs-release, identical prefix): unfilled −33% while the reserve lasts.
+      FINDING 12: after it empties, unfilled flips HIGHER — the cheap release stole
+      E-firm sales, dragged B2 expectations down, and CROWDED OUT the private
+      capacity response (E output −15% in later windows). Front-loaded relief,
+      muted supply signal — the classic SPR policy debate, emergent. The frontier
+      portrait (3000 units / 150-tick release) fully neutralizes the year-5 pulse
+      and shows the same post-release echo.
+- [x] SOE dividends reach fiscal; at-cost pricing pins the SOE's markup at 0.
+      FINDING 13 (reported either way, as promised): NO discipline effect on private
+      markups under sector-wide shortage (both pinned at cap; the at-cost seller
+      sells out its capacity and the residual demand is unchanged) — discipline
+      needs slack + search transparency to bite.
+- [x] Hoarding mechanism fires (addressed demand higher through the crunch);
+      OFF ⇒ bit-identical. FINDING 11: the NET effect at β=3 was INSURANCE, not
+      amplification — pre-shock uptrends had already built deeper precautionary
+      buffers, and the buffer beat the panic. The '70s amplification needs the
+      panic to START post-shortage; the net sign is emergent, not asserted.
 
 ## v17.4 — Price Cap, Rationing & Compensation (the crisis triple)
 

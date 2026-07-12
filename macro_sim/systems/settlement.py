@@ -28,6 +28,7 @@ def run_settlement_phase(econ: Any) -> None:
     econ._tax_profit = econ._tax_income = econ._tax_wealth = econ._benefit_paid = 0.0
     econ._pension_paid = 0.0
     econ._tax_energy_windfall = 0.0      # v17.2 per-tick reset
+    econ._soe_dividends = 0.0            # v17.3 per-tick reset
     econ._jg_spending = econ._jg_capital_units = econ._jg_employment = 0.0   # v9.3 job guarantee
 
     # (i) firms pay dividends (cash-capped, A4) into the CLEARING account.
@@ -56,6 +57,12 @@ def run_settlement_phase(econ: Any) -> None:
         payable = min(div_pool, econ.ledger.balance(f.id))
         f.dividend_shortfall = div_pool - payable
         if payable <= EPS:
+            continue
+        if getattr(f, "state_owned", False) and gov:
+            # v17.3 SOE: the state owner collects the dividend (fiscal revenue),
+            # households never see it. Guarded: no firm is state_owned unless the flag set it.
+            econ.ledger.transfer(f.id, econ._fiscal, payable)
+            econ._soe_dividends = getattr(econ, "_soe_dividends", 0.0) + payable
             continue
         econ.ledger.transfer(f.id, "CLEARING", payable)
         total_div += payable
