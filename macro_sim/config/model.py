@@ -178,6 +178,76 @@ class Config:
     housing_wealth_effect: float = 0.0      # housing value weight in the consumption wealth term
                                             # (empirically WEAK vs financial wealth; the honest
                                             # default is the emergent down-payment effect) -- FREE
+    # -- v16-L0 labor accounting: the five-state taxonomy (E/U/S/JG/OLF), aggregate
+    # stocks, vacancy stock, and the per-tick stock identity HARD GATE (the labor A5).
+    # Pure observation under the spot market; rosters make the states real at L1.
+    labor_accounting: bool = True
+    # -- v16-L1: persistent person-level rosters. "spot" (default) keeps the certified
+    # daily market verbatim; "persistent" attaches employment to PERSONS with four
+    # separation classes and adjustment dynamics (labor hoarding -> Okun).
+    labor_matching: str = "spot"
+    churn_annual: float = 0.28              # exogenous quits + individual dismissals (~2.4%/mo)
+    lambda_fire: float = 0.03               # per-tick closure of the layoff gap (hoarding dial)
+    layoff_band: float = 0.05               # hysteresis band as a fraction of target headcount
+    layoff_target_smooth: float = 0.02      # daily EMA on the firing target (hire fast, fire slow)
+    # -- v16-L1b suspension: the employment LOLR. Cash-crunched firms SUSPEND (LIFO)
+    # instead of firing: match kept, no pay, no debt; recall in place within the timer,
+    # else auto-layoff. Suspended workers search as recall unemployment (accept an
+    # offer iff wage >= quit_discount x suspended wage).
+    labor_suspension: bool = False
+    suspension_timer: int = 45
+    suspension_quit_discount: float = 0.9
+    # -- v16-L2 matching friction: hiring through contacts; u* is born here and the
+    # JG becomes a searchable buffer (JG workers hold no Job link => searchers by
+    # construction). search intensity ~0.15/day => mean unemployment ~2 months.
+    labor_matching_friction: bool = False
+    job_search_intensity: float = 0.15
+    # -- v16-L3 relationship wages (the pass-through prize) + L3b job ladder.
+    labor_relationship_wages: bool = False
+    labor_job_ladder: bool = False
+    ladder_search_intensity: float = 0.03
+    ladder_premium: float = 0.05
+    # -- v16-L4 person efficiency: the human-capital slot. e_i ~ lognormal MEAN ONE,
+    # drawn once at FIRST hire (dedicated substream seed+16_002); earnings = wage x e_i
+    # (wage_of is the single authority -- every cash gate prices it); f.hired counts
+    # EFFICIENCY UNITS (feeds production), labor_sold counts HEADS (feeds JG/welfare).
+    labor_person_efficiency: bool = False
+    efficiency_sigma: float = 0.35
+    # -- v16-L5 participation margin: the reservation wage. Outside option = what the
+    # welfare state pays a non-worker (max of JG wage and benefit rate); jobless search
+    # iff expected earnings (wage_ref x e_i) >= markup x outside, incumbents paid below
+    # it quit to welfare at a daily hazard. A SEARCH decision: non-searchers stay in
+    # partition-U on welfare (memo-gauged); the JG/benefit machinery is untouched.
+    labor_participation: bool = False
+    reservation_markup: float = 1.0
+    welfare_quit_hazard: float = 0.02
+    # -- v16-L6 sub-person firm scale. The whole-person employment grammar imposes a
+    # MINIMUM VIABLE FIRM SCALE; industries fragmented below it (the K sector at this
+    # calibration: ~0.1 worker/firm) starve and go extinct through an information
+    # deadlock (empty shelf -> zero sales -> zero expected demand). Two orthogonal
+    # mechanisms, one per defect:
+    # (1) footfall -- unmet capital-market buy orders enter sellers' demand
+    #     expectations (an order book: demand stays observable at zero inventory);
+    capital_rationed_signal: bool = False
+    # (2) subscale exit -- a firm whose expected demand stays below the viability
+    #     line (in workers) exits by liquidation at a daily HAZARD (staggered, so
+    #     survivors inherit the demand share and the consolidation self-terminates).
+    #     Builders are EXEMPT (their demand is hard-cyclical by design; their
+    #     demography belongs to the housing grammar).
+    firm_subscale_exit: bool = False
+    subscale_viability_workers: float = 0.5   # "cannot justify half a person"
+    subscale_grace_days: int = 180            # sustained sub-viability before at-risk
+    subscale_exit_hazard: float = 1.0 / 90.0  # daily exit prob once at risk (~3mo)
+    # (3) demand-driven K ENTRY -- the expanding half of the consolidation story:
+    #     when EVERY incumbent K-firm is capacity-short (notional labor demand above
+    #     k_entry_demand x viability), a new K-firm enters at a daily hazard, funded
+    #     from SECTOR RETAINED EARNINGS (the cash-richest incumbent seeds it -- the
+    #     spin-off shortcut; founder-household K equity is deferred with the rest of
+    #     K-sector equity). Exit prunes overshoot => firm count becomes an emergent
+    #     equilibrium of the two hazards.
+    capital_firm_entry: bool = False
+    k_entry_demand: float = 2.0               # entry line, in multiples of viability
+    k_entry_hazard: float = 1.0 / 60.0        # daily entry prob while the sector is short
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -782,6 +852,7 @@ class Config:
             capital_enabled=self.capital_enabled,
             government=self.government,
             gov_investment_share=self.gov_investment_share,
+            rationed_signal=self.capital_rationed_signal,
         )
 
     @_cached_view
@@ -1433,6 +1504,24 @@ class Config:
         assert self.housing_permits >= 0, "permit quota must be >= 0"
         assert 0.0 <= self.housing_transfer_tax < 1.0 and 0.0 <= self.housing_property_tax < 1.0, "housing tax rates are fractions"
         assert self.housing_wealth_effect >= 0.0, "housing wealth effect must be >= 0"
+        assert self.labor_matching in ("spot", "persistent"), "labor_matching must be 'spot' or 'persistent'"
+        assert not (self.labor_matching == "persistent" and not self.demographics_enabled), "persistent labor needs persons (demographics)"
+        assert not (self.labor_matching == "persistent" and not self.labor_accounting), "persistent labor requires the accounting gate"
+        assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
+        assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
+        assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
+        assert not (self.labor_person_efficiency and self.labor_matching != "persistent"), "person efficiency needs persistent rosters (e_i lives on hires)"
+        assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"
+        assert not (self.labor_participation and self.labor_matching != "persistent"), "participation margin needs persistent rosters"
+        assert self.reservation_markup >= 0.0 and 0.0 <= self.welfare_quit_hazard <= 1.0, "participation params out of range"
+        assert self.subscale_viability_workers >= 0.0 and self.subscale_grace_days >= 1, "subscale exit params out of range"
+        assert 0.0 <= self.subscale_exit_hazard <= 1.0, "subscale_exit_hazard is a daily probability"
+        assert self.k_entry_demand >= 1.0 and 0.0 <= self.k_entry_hazard <= 1.0, "K entry params out of range"
+        assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
+        assert not (self.labor_relationship_wages and self.labor_matching != "persistent"), "relationship wages need persistent rosters"
+        assert not (self.labor_job_ladder and not self.labor_relationship_wages), "the job ladder needs relationship wages (it compares against job.wage)"
+        assert 0.0 < self.ladder_search_intensity <= 1.0 and self.ladder_premium >= 0.0, "ladder params out of range"
+        assert 0.0 < self.job_search_intensity <= 1.0 or not self.labor_matching_friction, "search intensity is a daily contact probability"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"

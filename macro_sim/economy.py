@@ -33,6 +33,8 @@ from macro_sim.housing.mortgage import MortgageBook
 from macro_sim.housing.affordability import HousingAffordabilitySignal
 from macro_sim.housing.construction import create_builders
 from macro_sim.housing.rental import RentalMarket
+from macro_sim.labor import LaborAccounts
+from macro_sim.labor.persistent import LaborMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -231,6 +233,37 @@ class Economy:
         self.rental_market = None
         self.housing_affordability = None
         self._house_price = 0.0
+        # v16-L0: labor accounting (observation shell under spot; real stocks from L1)
+        self.labor_accounts = LaborAccounts() if cfg.labor_accounting else None
+        # v16-L1: persistent rosters (dedicated rng substream; main stream untouched)
+        self.labor_market = None
+        self._labor_rng = random.Random(cfg.seed + 16_001)
+        # v16-L4: efficiency draws on their OWN substream -- toggling the flag leaves
+        # the labor stream's consumption order untouched (controlled comparisons)
+        self._eff_rng = random.Random(cfg.seed + 16_002)
+        # v16-L6: subscale-exit hazard draws (same isolation rationale)
+        self._subscale_rng = random.Random(cfg.seed + 16_003)
+        if cfg.labor_matching == "persistent":
+            self.labor_market = LaborMarket(
+                churn_annual=cfg.churn_annual,
+                lambda_fire=cfg.lambda_fire,
+                layoff_band=cfg.layoff_band,
+                target_smooth=cfg.layoff_target_smooth,
+                suspension_enabled=cfg.labor_suspension,
+                suspension_timer=cfg.suspension_timer,
+                quit_discount=cfg.suspension_quit_discount,
+                friction_enabled=cfg.labor_matching_friction,
+                search_intensity=cfg.job_search_intensity,
+                relationship_wages=cfg.labor_relationship_wages,
+                job_ladder=cfg.labor_job_ladder,
+                ladder_intensity=cfg.ladder_search_intensity,
+                ladder_premium=cfg.ladder_premium,
+                person_efficiency=cfg.labor_person_efficiency,
+                efficiency_sigma=cfg.efficiency_sigma,
+                participation_enabled=cfg.labor_participation,
+                reservation_markup=cfg.reservation_markup,
+                welfare_quit_hazard=cfg.welfare_quit_hazard,
+            )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
             self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
@@ -515,6 +548,14 @@ class Economy:
             self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
             self.demographic_bridge.assert_all_claim_identities(self)
+        if self.labor_accounts is not None:
+            # v16-L0/L1: the labor A5 -- E+U+S+JG must partition the labor supply,
+            # and under rosters every stock delta must equal its counted flows
+            if self.labor_market is not None:
+                self.labor_accounts.observe_persistent(self, self.labor_market)
+            else:
+                self.labor_accounts.observe_spot(self)
+            self.labor_accounts.assert_identity()
 
         # Rich per-tick snapshot (metrics.py) -- pure observation.
         rec = metrics.compute_tick_metrics(self)
@@ -530,4 +571,5 @@ class Economy:
             f.labor_demand_eff_prev = f.labor_demand_eff
             f.hired_prev = f.hired
             f.sales_prev = f.sales
+            f.rationed_prev = f.rationed_demand
         # households: income_realized persists as-is (consumed next tick's Phase 1).

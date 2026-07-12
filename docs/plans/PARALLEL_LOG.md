@@ -11,3 +11,60 @@
 - 2026-07-12 [v17] 17.4 SHIPPED (crisis triple + the 2022 four-way artifact) + findings 14-15: (14) markup pricing OVERSHOOTS clearing in a crunch -- a cap can RAISE traded volume while bleeding seller margins (the real damage channel); (15) crisis instruments are live levers AT the shock, never standing institutions (a t0 cap kills the sector pre-experiment). Four-way scorecard: SPR best macro, cap-triple best household protection (cheap: fiscal 441), SOE at-cost WORST shortage, no-intervention worst output. Priority rationing = two sequential sessions (native shuffle destroys ordering); proportional = own path.
 - 2026-07-12 [v17] 17.5 SHIPPED + **THE v17 ARC IS MACHINERY-COMPLETE** (17.0-17.5, diagnostics v170-v175, 15 numbered findings, 453-suite green). Cross-surface touch declared: economic_bridge.mortality_macro_multiplier gains the fuel-poverty composition block (mirrors the in-file v15.5 housing-fertility precedent; exactly 1.0 off). Deferred-by-gate: housing×energy (v15.2 size scalar still ≡1.0), efficiency investment (optional).
 - 2026-07-12 [v17→v16] COMPOSITION-GATE HANDOFF (what v17 runs after v16 merges, per protocol §5): ① both-flags-on same-seed smoke; ② pinned cost-push re-run WITH relationship wages (wage-price spiral plumbing); ③ labor stock-flow gate with E-firms as ordinary employers; ④ THEN the 17.2 stagflation matrix (disclaimer-free) + JG hard test (L2-recast buffer-stock JG). Pre-registered: flatter Okun under energy shocks (labor hoarding × energy-capped output); shock magnitudes 0.2-0.5 (finding 9: 2x kills stabilizer-free worlds).
+- 2026-07-12 | v16 | KICKOFF. Trunk refactor landed on dev (2b7979a, bit-identical,
+  suite 420/420). feat/labor-v16 forked from dev@2b7979a, worktree
+  ../macro-simulator-v16. Starting L0 (labor accounting + stock-flow gate).
+- 2026-07-12 | v16 | L0 FROZEN (08c3e67): five-state accounting + stock identity gate.
+- 2026-07-12 | v16 | L1 FROZEN (99a2d28): person rosters, four separations, hoarding
+  dynamics, per-person wage attribution, flow-reconciliation gate. Bit-identical off;
+  regression 237/237. Okun portrait running. Next: L1b suspension.
+- 2026-07-12 | v16 | L1b FROZEN (d29608b): suspension as the employment LOLR --
+  memo attribute (uncapped JG absorbs suspended workers; partition-S stays 0),
+  LIFO suspend on cash crunch, FIFO recall in place, timeout->layoff, poaching
+  with a reservation (0.9 x suspended wage). Probe: suspension ON cuts the
+  layoff rate 9.89x -> 4.13x and cash layoffs -> 0.
+- 2026-07-12 | v16 | L2 FROZEN (5c1f955): matching friction -- per-searcher
+  contacts with congestion; u* emerges. The contact-lag double-count forced the
+  THREE-PASS restructure (separations -> hiring -> wages, same-tick pay); the
+  partition gate caught it in one tick.
+- 2026-07-12 | v16 | L3+L3b FROZEN (59f45ce): relationship wages (entry wage
+  locks; leap-safe anniversary reviews, upward-only DNWR; delta drift hits the
+  POSTED wage only -- the v14 pass-through cure) + the job ladder (E->E as
+  churn+hire, net zero in the gate).
+- 2026-07-12 | v16 | CALIBRATION (d110c9d): integer band floor (one whole worker),
+  EMA-smoothed firing target (hire fast / fire slow), lambda_fire 0.10->0.03.
+  Steady-state layoffs 9.9x -> 2.2x of E per year; residual heat = daily demand
+  volatility at ~2.5-worker firm scale, documented with all dials exposed.
+- 2026-07-12 | v16 | L4 FROZEN (c1d26a5): person efficiency e_i ~ lognormal mean
+  one, drawn once at first hire (substream seed+16_002), carried for life.
+  Earnings = wage x e_i via wage_of (single authority); production consumes
+  EFFICIENCY UNITS, JG/welfare counts HEADS. Decomposition gauges shipped.
+- 2026-07-12 | v16 | L5 FROZEN (fa8c2cc): participation margin. Reservation =
+  markup x max(JG wage, benefit); jobless below the line do not search (memo
+  over partition-U), incumbents below it quit to welfare (a REAL flow class in
+  the gate). Benefit-trap + JG-wage-floor experiments land as tests; at
+  jg_wage_ratio 1.1 cannibalization runs through jobs never FORMING, not quits.
+  Labor suite 51/51; flag-off shared-column digest bit-identical throughout.
+- 2026-07-12 | v16 | Full-arc acceptance running: pass-through pair (a x1.5 must
+  RAISE the real incumbent wage) + full-stack Beveridge/Okun/u* portrait, 10y.
+- 2026-07-12 | v16 | FULL-ARC ACCEPTANCE PASSED. The prize: productivity x1.5
+  (A=a=a_K) -> real incumbent wage ratio 1.490 vs 1.50 theoretical = 99.4%
+  pass-through (v14 spot: ~1.0, all leaked); placebo leg (a/a_K only) = 0.999.
+  Full-stack 10y portrait: u* 6.0% (band 4-6%), Okun slope -0.20 / corr -0.78
+  (hoarding attenuates), procyclical quits +0.42, incumbent wages follow posted
+  with a monthly-scale lag, earnings dispersion person-driven (L4). Honest
+  caveats logged in PLAN_v16: v-rate LEVELS hot, E->E ladder rate hot,
+  employment-lag null under uncapped JG. diagnostic_v16.png shipped.
+  v16 arc COMPLETE on feat/labor-v16; ready to merge per protocol (v16 first).
+- 2026-07-13 | v16 | MERGED INTO dev (12d802f). L0-L6 complete: persistent
+  person-level employment + sub-person firm scale; pass-through 2.03; §4 5/8
+  (T6 Zipf emergent -0.98); labor suite 56/56; spot bit-identical. v17 IS CLEAR
+  TO MERGE onto dev@12d802f per protocol. The composition gate (v16 full stack
+  x v17 energy flags, gates green + bit-identity) belongs to the v17 merger,
+  then 17.2. NOTE for v17: under labor_person_efficiency, f.hired is in
+  EFFICIENCY UNITS (effective labor input -- min(a*L, energy/e_coeff) semantics
+  unchanged, but check e_coeff calibration); recommend enabling the L6 flags
+  (footfall/subscale-exit/K-entry) in any v16-stack acceptance runs, since the
+  K sector starves without them under persistent matching. Open v16 items
+  (documented in PLAN_v16 L6 addendum): healthy-economy portrait rerun;
+  investment-acyclicality finding (T3/T7).

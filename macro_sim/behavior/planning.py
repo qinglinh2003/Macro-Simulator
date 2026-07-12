@@ -48,8 +48,14 @@ def _sign(x: float) -> float:
 # -- B2: adaptive (error-correction) expectations -------------------------------
 
 def update_demand_expectation(firm: Firm) -> None:
-    """d^e_{f,t} = d^e_{f,t-1} + lambda_d (sales_{f,t-1} - d^e_{f,t-1})  (§7.2)."""
-    firm.demand_expected += firm.lambda_d * (firm.sales_prev - firm.demand_expected)
+    """d^e_{f,t} = d^e_{f,t-1} + lambda_d (signal_{f,t-1} - d^e_{f,t-1})  (§7.2).
+
+    v16-L6: the signal is sales PLUS the firm's share of rationed (unmet) buyer
+    demand -- the order-book/footfall term. Without it a stocked-out seller reads
+    zero sales as zero demand and expectations spiral to extinction (the K-sector
+    deadlock). rationed_prev is identically 0.0 with the flag off (bit-identical)."""
+    signal = firm.sales_prev + firm.rationed_prev
+    firm.demand_expected += firm.lambda_d * (signal - firm.demand_expected)
     if firm.demand_expected < 0.0:
         firm.demand_expected = 0.0  # demand can't be negative (A4 spirit); guard, surfaced
 

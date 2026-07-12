@@ -86,6 +86,12 @@ class Firm:
     labor_demand_eff_prev: float = 0.0   # N^{d,eff}_{f,t-1}: for rationing detection (B4)
     hired_prev: float = 0.0              # N_{f,t-1}: realized hiring last tick (B4)
     sales_prev: float = 0.0              # sales_{f,t-1}: feeds demand expectation (B2)
+    # v16-L6 footfall: share of UNMET buyer demand (order-book signal; keeps demand
+    # observable at zero inventory). Enters B2 alongside sales, NEVER revenue.
+    # Both identically 0.0 with the flag off (bit-identical: x + 0.0 == x).
+    rationed_demand: float = 0.0
+    rationed_prev: float = 0.0
+    subscale_ticks: int = 0              # v16-L6: consecutive ticks below the viability line
 
     # -- within-tick scratch (recomputed each tick) ------------------------
     target_inventory: float = 0.0        # I*_{f,t}
