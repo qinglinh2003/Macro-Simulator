@@ -45,3 +45,15 @@
   caveats logged in PLAN_v16: v-rate LEVELS hot, E->E ladder rate hot,
   employment-lag null under uncapped JG. diagnostic_v16.png shipped.
   v16 arc COMPLETE on feat/labor-v16; ready to merge per protocol (v16 first).
+- 2026-07-13 | v16 | MERGED INTO dev (12d802f). L0-L6 complete: persistent
+  person-level employment + sub-person firm scale; pass-through 2.03; §4 5/8
+  (T6 Zipf emergent -0.98); labor suite 56/56; spot bit-identical. v17 IS CLEAR
+  TO MERGE onto dev@12d802f per protocol. The composition gate (v16 full stack
+  x v17 energy flags, gates green + bit-identity) belongs to the v17 merger,
+  then 17.2. NOTE for v17: under labor_person_efficiency, f.hired is in
+  EFFICIENCY UNITS (effective labor input -- min(a*L, energy/e_coeff) semantics
+  unchanged, but check e_coeff calibration); recommend enabling the L6 flags
+  (footfall/subscale-exit/K-entry) in any v16-stack acceptance runs, since the
+  K sector starves without them under persistent matching. Open v16 items
+  (documented in PLAN_v16 L6 addendum): healthy-economy portrait rerun;
+  investment-acyclicality finding (T3/T7).
