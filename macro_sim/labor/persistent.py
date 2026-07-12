@@ -32,6 +32,7 @@ class Job:
     person_id: int
     firm_id: str
     hire_date: Any                  # datetime.date (real calendar; leap-safe anniversaries)
+    wage: float = 0.0               # L3: locked at hire; anniversary reviews ratchet it
 
 
 @dataclass
@@ -62,6 +63,16 @@ class LaborMarket:
     # construction -- the buffer stock drains back to private employment.
     friction_enabled: bool = False
     search_intensity: float = 0.15
+    # L3 relationship wages: the entry wage is LOCKED at hire; incumbents reprice only
+    # at their hire anniversary, upward-only (per-person DNWR). The free-hire drift
+    # delta keeps applying to the POSTED wage alone -- the v14 pass-through blocker's
+    # cure: productivity gains reach incumbents through sticky wages + falling prices.
+    relationship_wages: bool = False
+    # L3b on-the-job ladder: incumbent wage discipline. Employed workers sample one
+    # hiring firm at ladder_intensity; they switch iff posted >= wage x (1 + premium).
+    job_ladder: bool = False
+    ladder_intensity: float = 0.03
+    ladder_premium: float = 0.05
     vacancy_age: dict[str, int] = field(default_factory=dict)   # consecutive gap ticks per firm
 
     jobs: dict[int, Job] = field(default_factory=dict)          # person_id -> Job
@@ -71,8 +82,9 @@ class LaborMarket:
     def roster_of(self, firm_id: str) -> list[int]:
         return self.rosters.setdefault(firm_id, [])
 
-    def hire(self, person_id: int, firm_id: str, date: Any) -> None:
-        self.jobs[person_id] = Job(person_id=person_id, firm_id=firm_id, hire_date=date)
+    def hire(self, person_id: int, firm_id: str, date: Any, wage: float = 0.0) -> None:
+        self.jobs[person_id] = Job(person_id=person_id, firm_id=firm_id,
+                                   hire_date=date, wage=wage)
         self.roster_of(firm_id).append(person_id)
 
     def separate(self, person_id: int) -> None:
@@ -85,6 +97,14 @@ class LaborMarket:
                     roster.remove(person_id)
                 except ValueError:
                     pass
+
+    def wage_of(self, person_id: int, firm) -> float:
+        """The wage a member is actually paid: relationship wage under L3, posted else."""
+        if self.relationship_wages:
+            job = self.jobs.get(person_id)
+            if job is not None and job.wage > 0.0:
+                return job.wage
+        return max(float(firm.wage), 1e-12)
 
     def active_count(self, firm_id: str) -> int:
         return sum(1 for pid in self.rosters.get(firm_id, ()) if pid not in self.suspended)
@@ -163,6 +183,23 @@ def run_persistent_labor_phase(econ: Any) -> None:
     firms_order = list(econ.firms)
     rng.shuffle(firms_order)
 
+    # ---- 2b. (L3) anniversary reviews: incumbents reprice on their hire date,
+    # UPWARD ONLY (per-person DNWR) toward the current posted wage. Feb-29 hires
+    # review on Feb-28 in common years (real-calendar, leap-safe). ----
+    firm_by_id = {f.id: f for f in econ.firms}
+    if lm.relationship_wages:
+        for job in lm.jobs.values():
+            if job.person_id in lm.suspended:
+                continue
+            hd = job.hire_date
+            month, day = hd.month, hd.day
+            if month == 2 and day == 29 and not (date.year % 4 == 0 and (date.year % 100 != 0 or date.year % 400 == 0)):
+                day = 28
+            if (date.month, date.day) == (month, day) and date != hd:
+                firm = firm_by_id.get(job.firm_id)
+                if firm is not None:
+                    job.wage = max(job.wage, float(firm.wage), float(econ.policy.min_wage))
+
     # searcher pool: the jobless PLUS the suspended (recall unemployment: they search
     # with a reservation of quit_discount x their suspended wage)
     pool = [
@@ -195,9 +232,10 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 if accounts is not None:
                     accounts.layoff_seps_total += 1
 
-        # 4. cash-crunch ladder: suspend (L1b, the employment LOLR) or fire (L1)
+        # 4. cash-crunch ladder: suspend (L1b, the employment LOLR) or fire (L1).
+        # Under L3 wages are heterogeneous: the test is the actual wagebill vs cash.
         active = actives_of(f)
-        while len(active) > affordable:
+        while active and sum(lm.wage_of(pid, f) for pid in active) > led.balance(f.id):
             victim = active.pop()                   # LIFO
             if lm.suspension_enabled:
                 lm.suspended[victim] = Suspension(firm_id=f.id, since_tick=econ.t, wage_at=wage)
@@ -217,7 +255,9 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 key=lambda pid: lm.suspended[pid].since_tick,
             )
             for pid in own_suspended:
-                if len(actives_of(f)) + 1 > min(affordable, target + 0.5):
+                current = actives_of(f)
+                bill = sum(lm.wage_of(q, f) for q in current)
+                if len(current) + 1 > target + 0.5 or bill + lm.wage_of(pid, f) > led.balance(f.id):
                     break
                 del lm.suspended[pid]
                 if accounts is not None:
@@ -242,8 +282,9 @@ def run_persistent_labor_phase(econ: Any) -> None:
             wage = max(f.wage, EPS)
             affordable = int(led.balance(f.id) / wage)
             while len(actives_of(f)) + 1 <= target + 0.5 and pool_idx < len(pool):
-                if len(actives_of(f)) + 1 > affordable:
-                    break                           # cash cap binds
+                bill = sum(lm.wage_of(q, f) for q in actives_of(f))
+                if bill + wage > led.balance(f.id):
+                    break                           # cash cap binds (heterogeneous bill)
                 candidate = pool[pool_idx]
                 pool_idx += 1
                 if candidate in lm.jobs and candidate not in lm.suspended:
@@ -269,8 +310,8 @@ def run_persistent_labor_phase(econ: Any) -> None:
             f = hiring_list[idx]
             wage = max(f.wage, EPS)
             gap = float(f.labor_demand_eff) - lm.active_count(f.id)
-            affordable = int(led.balance(f.id) / wage)
-            if gap < 0.5 or lm.active_count(f.id) + 1 > affordable:
+            bill = sum(lm.wage_of(q, f) for q in lm.rosters.get(f.id, ()) if q not in lm.suspended)
+            if gap < 0.5 or bill + wage > led.balance(f.id):
                 hiring_list[idx] = hiring_list[-1]  # stale vacancy: drop it, contact wasted
                 hiring_list.pop()
                 continue
@@ -286,16 +327,49 @@ def run_persistent_labor_phase(econ: Any) -> None:
             else:
                 lm.vacancy_age.pop(f.id, None)
 
+    # ---- PASS B2 (L3b): the on-the-job ladder -- incumbent wage discipline. Employed
+    # workers sample ONE hiring firm at ladder_intensity and switch iff the posted
+    # wage clears their own wage x (1 + premium). An E->E move: counted as churn+hire
+    # (net zero for the reconciliation gate) plus the ladder memo. ----
+    if lm.job_ladder and lm.relationship_wages:
+        ladder_hiring = [
+            f for f in econ.firms
+            if float(f.labor_demand_eff) - lm.active_count(f.id) > 0.5
+            and led.balance(f.id) > max(f.wage, EPS)
+        ]
+        if ladder_hiring:
+            for person_id in list(lm.jobs.keys()):
+                if person_id in lm.suspended:
+                    continue
+                if rng.random() >= lm.ladder_intensity:
+                    continue
+                f = ladder_hiring[rng.randrange(len(ladder_hiring))]
+                job = lm.jobs[person_id]
+                if f.id == job.firm_id:
+                    continue
+                wage = max(f.wage, EPS)
+                gap = float(f.labor_demand_eff) - lm.active_count(f.id)
+                bill = sum(lm.wage_of(q, f) for q in lm.rosters.get(f.id, ()) if q not in lm.suspended)
+                if gap < 0.5 or bill + wage > led.balance(f.id):
+                    continue                        # stale posting: contact wasted
+                if wage < job.wage * (1.0 + lm.ladder_premium):
+                    continue                        # the raise is not worth the jump
+                lm.separate(person_id)
+                lm.hire(person_id, f.id, date, wage=wage)
+                if accounts is not None:
+                    accounts.churn_seps_total += 1
+                    accounts.hires_total += 1
+                    accounts.ladder_moves_total += 1
+
     # ---- PASS C: wages -- every ACTIVE member (including this tick's hires) paid at
     # the posted wage into their CURRENT household; suspended members: no pay, no work
     # (the benefit/JG machinery catches them through labor_sold = 0) ----
     for f in firms_order:
-        wage = max(f.wage, EPS)
         for person_id in actives_of(f):
             account = household_account_of.get(person_id)
             if account is None:
                 continue
-            pay = min(wage, led.balance(f.id))
+            pay = min(lm.wage_of(person_id, f), led.balance(f.id))
             if pay <= EPS:
                 break
             led.transfer(f.id, account, pay)
@@ -319,7 +393,7 @@ def _try_hire(lm: LaborMarket, accounts: Any, f: Any, candidate: int, wage: floa
         lm.separate(candidate)                      # poached: the old link dies (S-side)
         if accounts is not None:
             accounts.suspension_poached_total += 1
-    lm.hire(candidate, f.id, date)
+    lm.hire(candidate, f.id, date, wage=wage)
     if accounts is not None:
         accounts.hires_total += 1
     return True

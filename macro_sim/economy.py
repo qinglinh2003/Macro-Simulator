@@ -228,6 +228,10 @@ class Economy:
                 quit_discount=cfg.suspension_quit_discount,
                 friction_enabled=cfg.labor_matching_friction,
                 search_intensity=cfg.job_search_intensity,
+                relationship_wages=cfg.labor_relationship_wages,
+                job_ladder=cfg.labor_job_ladder,
+                ladder_intensity=cfg.ladder_search_intensity,
+                ladder_premium=cfg.ladder_premium,
             )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()

@@ -201,6 +201,11 @@ class Config:
     # construction). search intensity ~0.15/day => mean unemployment ~2 months.
     labor_matching_friction: bool = False
     job_search_intensity: float = 0.15
+    # -- v16-L3 relationship wages (the pass-through prize) + L3b job ladder.
+    labor_relationship_wages: bool = False
+    labor_job_ladder: bool = False
+    ladder_search_intensity: float = 0.03
+    ladder_premium: float = 0.05
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1375,6 +1380,9 @@ class Config:
         assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
         assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
+        assert not (self.labor_relationship_wages and self.labor_matching != "persistent"), "relationship wages need persistent rosters"
+        assert not (self.labor_job_ladder and not self.labor_relationship_wages), "the job ladder needs relationship wages (it compares against job.wage)"
+        assert 0.0 < self.ladder_search_intensity <= 1.0 and self.ladder_premium >= 0.0, "ladder params out of range"
         assert 0.0 < self.job_search_intensity <= 1.0 or not self.labor_matching_friction, "search intensity is a daily contact probability"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"

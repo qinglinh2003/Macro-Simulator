@@ -47,6 +47,7 @@ class LaborAccounts:
     suspension_timeouts_total: float = 0.0  # suspended -> laid off (S-side memo)
     suspension_poached_total: float = 0.0   # suspended -> hired elsewhere (S-side memo)
     suspended_memo: float = 0.0             # current recall-rights stock
+    ladder_moves_total: float = 0.0         # L3b E->E job-to-job switches (memo)
 
     def observe_spot(self, econ: Any) -> None:
         """Derive the aggregate stocks from the spot market's household quantities."""
