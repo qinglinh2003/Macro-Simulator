@@ -74,6 +74,7 @@ class CapitalGoodsConfig:
     capital_enabled: bool
     government: bool
     gov_investment_share: float
+    rationed_signal: bool = False   # v16-L6 footfall: unmet buy orders enter K-firm expectations
 
 
 @dataclass(frozen=True)

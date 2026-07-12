@@ -35,6 +35,18 @@ def run_capital_goods_phase(econ: Any) -> None:
         kf.sales = off.sold
         kf.revenue = off.sold * off.price
 
+    # v16-L6 footfall: unmet order units become an OBSERVABLE demand signal, split
+    # equally across K-firms (the zero-stock sellers are exactly who needs to see
+    # it). Expectations-only -- no money, no goods, no revenue moves here.
+    if cfg.rationed_signal and econ.k_firms:
+        unmet = sum(max(0.0, o.demand - bought.get(o.account, 0.0)) for o in orders)
+        share = unmet / len(econ.k_firms)
+        for kf in econ.k_firms:
+            kf.rationed_demand = share
+    else:
+        for kf in econ.k_firms:
+            kf.rationed_demand = 0.0
+
     # v9.1 government investment: buy remaining K-goods cheapest-first, building public capital.
     if cfg.government and cfg.gov_investment_share > 0.0:
         budget = cfg.gov_investment_share * getattr(econ, "_prev_nominal_output", 0.0)

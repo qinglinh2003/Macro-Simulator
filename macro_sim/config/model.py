@@ -221,6 +221,33 @@ class Config:
     labor_participation: bool = False
     reservation_markup: float = 1.0
     welfare_quit_hazard: float = 0.02
+    # -- v16-L6 sub-person firm scale. The whole-person employment grammar imposes a
+    # MINIMUM VIABLE FIRM SCALE; industries fragmented below it (the K sector at this
+    # calibration: ~0.1 worker/firm) starve and go extinct through an information
+    # deadlock (empty shelf -> zero sales -> zero expected demand). Two orthogonal
+    # mechanisms, one per defect:
+    # (1) footfall -- unmet capital-market buy orders enter sellers' demand
+    #     expectations (an order book: demand stays observable at zero inventory);
+    capital_rationed_signal: bool = False
+    # (2) subscale exit -- a firm whose expected demand stays below the viability
+    #     line (in workers) exits by liquidation at a daily HAZARD (staggered, so
+    #     survivors inherit the demand share and the consolidation self-terminates).
+    #     Builders are EXEMPT (their demand is hard-cyclical by design; their
+    #     demography belongs to the housing grammar).
+    firm_subscale_exit: bool = False
+    subscale_viability_workers: float = 0.5   # "cannot justify half a person"
+    subscale_grace_days: int = 180            # sustained sub-viability before at-risk
+    subscale_exit_hazard: float = 1.0 / 90.0  # daily exit prob once at risk (~3mo)
+    # (3) demand-driven K ENTRY -- the expanding half of the consolidation story:
+    #     when EVERY incumbent K-firm is capacity-short (notional labor demand above
+    #     k_entry_demand x viability), a new K-firm enters at a daily hazard, funded
+    #     from SECTOR RETAINED EARNINGS (the cash-richest incumbent seeds it -- the
+    #     spin-off shortcut; founder-household K equity is deferred with the rest of
+    #     K-sector equity). Exit prunes overshoot => firm count becomes an emergent
+    #     equilibrium of the two hazards.
+    capital_firm_entry: bool = False
+    k_entry_demand: float = 2.0               # entry line, in multiples of viability
+    k_entry_hazard: float = 1.0 / 60.0        # daily entry prob while the sector is short
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -737,6 +764,7 @@ class Config:
             capital_enabled=self.capital_enabled,
             government=self.government,
             gov_investment_share=self.gov_investment_share,
+            rationed_signal=self.capital_rationed_signal,
         )
 
     @_cached_view
@@ -1398,6 +1426,9 @@ class Config:
         assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"
         assert not (self.labor_participation and self.labor_matching != "persistent"), "participation margin needs persistent rosters"
         assert self.reservation_markup >= 0.0 and 0.0 <= self.welfare_quit_hazard <= 1.0, "participation params out of range"
+        assert self.subscale_viability_workers >= 0.0 and self.subscale_grace_days >= 1, "subscale exit params out of range"
+        assert 0.0 <= self.subscale_exit_hazard <= 1.0, "subscale_exit_hazard is a daily probability"
+        assert self.k_entry_demand >= 1.0 and 0.0 <= self.k_entry_hazard <= 1.0, "K entry params out of range"
         assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
         assert not (self.labor_relationship_wages and self.labor_matching != "persistent"), "relationship wages need persistent rosters"
         assert not (self.labor_job_ladder and not self.labor_relationship_wages), "the job ladder needs relationship wages (it compares against job.wage)"

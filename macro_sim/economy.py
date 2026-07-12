@@ -221,6 +221,8 @@ class Economy:
         # v16-L4: efficiency draws on their OWN substream -- toggling the flag leaves
         # the labor stream's consumption order untouched (controlled comparisons)
         self._eff_rng = random.Random(cfg.seed + 16_002)
+        # v16-L6: subscale-exit hazard draws (same isolation rationale)
+        self._subscale_rng = random.Random(cfg.seed + 16_003)
         if cfg.labor_matching == "persistent":
             self.labor_market = LaborMarket(
                 churn_annual=cfg.churn_annual,
@@ -542,4 +544,5 @@ class Economy:
             f.labor_demand_eff_prev = f.labor_demand_eff
             f.hired_prev = f.hired
             f.sales_prev = f.sales
+            f.rationed_prev = f.rationed_demand
         # households: income_realized persists as-is (consumed next tick's Phase 1).
