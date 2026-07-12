@@ -370,6 +370,62 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     else:
         rec["demographics_enabled"] = 0.0
 
+    accounts = getattr(econ, "labor_accounts", None)
+    if accounts is not None:
+        # v16-L0: the five-state labor taxonomy + the Beveridge pair. Flow counters are
+        # zero under the spot market; L1 populates them.
+        rec.update(
+            {
+                "labor_E": float(accounts.employed),
+                "labor_U": float(accounts.unemployed),
+                "labor_S": float(accounts.suspended_memo),
+                "labor_JG": float(accounts.job_guarantee),
+                "labor_OLF": float(accounts.out_of_labor_force),
+                "labor_u_rate": float(accounts.unemployment_rate),
+                "labor_vacancies": float(accounts.vacancies),
+                "labor_v_rate": float(accounts.vacancy_rate),
+                "labor_hires_total": float(accounts.hires_total),
+                "labor_churn_seps_total": float(accounts.churn_seps_total),
+                "labor_layoff_seps_total": float(accounts.layoff_seps_total),
+                "labor_bankruptcy_seps_total": float(accounts.bankruptcy_seps_total),
+                "labor_death_seps_total": float(accounts.death_seps_total),
+                "labor_recalls_total": float(accounts.recalls_total),
+                "labor_suspensions_total": float(accounts.suspensions_total),
+                "labor_susp_timeouts_total": float(accounts.suspension_timeouts_total),
+                "labor_susp_poached_total": float(accounts.suspension_poached_total),
+                "labor_ladder_moves_total": float(accounts.ladder_moves_total),
+                "labor_welfare_quits_total": float(accounts.welfare_quits_total),
+                "labor_nonsearching_memo": float(accounts.nonsearching_memo),
+                "labor_incumbent_wage_mean": (
+                    (lambda jobs: sum(j.wage for j in jobs) / len(jobs) if jobs else 0.0)(
+                        [j for j in getattr(getattr(econ, "labor_market", None), "jobs", {}).values()
+                         if j.wage > 0.0]
+                    ) if getattr(econ, "labor_market", None) is not None else 0.0
+                ),
+                "labor_vacancy_age_mean": (
+                    float(sum(getattr(econ.labor_market, "vacancy_age", {}).values()))
+                    / max(1, len(getattr(econ.labor_market, "vacancy_age", {}) or {1: 0}))
+                    if getattr(econ, "labor_market", None) is not None else 0.0
+                ),
+            }
+        )
+        lm = getattr(econ, "labor_market", None)
+        if lm is not None and getattr(lm, "person_efficiency", False):
+            # v16-L4 decomposition gauges: earnings dispersion splits into the FIRM
+            # component (log base wage) and the PERSON component (log e_i) -- under
+            # independence var(log earn) ~ var(log w) + var(log e)
+            active = [(j, lm.efficiency.get(pid, 1.0))
+                      for pid, j in lm.jobs.items() if pid not in lm.suspended]
+            es = np.array([e for _, e in active]) if active else np.array([1.0])
+            ws = np.array([max(j.wage, 1e-12) for j, _ in active]) if active else np.array([1.0])
+            rec.update(
+                {
+                    "labor_eff_employed_mean": float(np.mean(es)),
+                    "labor_earn_var_logw": float(np.var(np.log(ws))),
+                    "labor_earn_var_loge": float(np.var(np.log(es))),
+                }
+            )
+
     housing = getattr(econ, "housing", None)
     if housing is not None:
         # v15.0: registry stock gauges (frozen price until the v15.1 market)

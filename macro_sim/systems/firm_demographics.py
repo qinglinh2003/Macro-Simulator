@@ -49,7 +49,35 @@ def run_firm_demographics_phase(econ: Any) -> None:
     for f in idle_exits:
         liquidate_idle_firm(econ, f)
 
+    # v16-L6 subscale exit: whole-person employment imposes a MINIMUM VIABLE FIRM
+    # SCALE. A firm whose expected demand (footfall included) cannot justify the
+    # viability line in WORKERS for the grace period exits by liquidation at a daily
+    # HAZARD -- staggered deaths, so survivors inherit the demand share and the
+    # consolidation self-terminates above the line. C and K firms; builders are
+    # EXEMPT (hard-cyclical demand; their demography belongs to the housing grammar).
+    # K-firm ENTRY does not exist yet (documented): the consolidation is one-way
+    # down to the viable count, floored at one firm per sector.
+    if econ.cfg.firm_subscale_exit:
+        from macro_sim.behavior import planning as B
+        subscale_exits = []
+        for f in list(econ.c_firms) + list(econ.k_firms):
+            need = B.labor_demand_notional(f, f.demand_expected, econ._pubcap_factor)
+            if need < econ.cfg.subscale_viability_workers:
+                f.subscale_ticks += 1
+                if (f.subscale_ticks >= econ.cfg.subscale_grace_days
+                        and econ._subscale_rng.random() < econ.cfg.subscale_exit_hazard):
+                    subscale_exits.append(f)
+            else:
+                f.subscale_ticks = 0
+        for f in subscale_exits:
+            sector = econ.k_firms if f in econ.k_firms else econ.c_firms
+            if len(sector) <= 1:
+                continue                     # never extinguish a whole sector
+            liquidate_idle_firm(econ, f)
+
     enter_consumption_firms(econ)
+    if econ.cfg.capital_firm_entry:
+        enter_capital_firms(econ)
 
 
 def bankrupt_firm(econ: Any, firm: Firm) -> None:
@@ -78,7 +106,14 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
                 )
             if firm.id in h.watchlist:
                 h.watchlist.remove(firm.id)
-    econ.c_firms.remove(firm)
+    if getattr(econ, "labor_market", None) is not None:
+        # v16-L1: firm exit is a MASS LAYOFF -- the whole roster enters the pool
+        # (the credit-crunch -> bankruptcy -> unemployment chain becomes explicit)
+        econ.labor_market.on_firm_exit(firm.id, getattr(econ, "labor_accounts", None))
+    if firm in econ.c_firms:
+        econ.c_firms.remove(firm)
+    elif firm in econ.k_firms:              # v16-L6: subscale exit reaches K-firms too
+        econ.k_firms.remove(firm)
     econ.firms.remove(firm)
     if firm in econ.investing_firms:
         econ.investing_firms.remove(firm)
@@ -100,6 +135,7 @@ def liquidate_idle_firm(econ: Any, firm: Firm) -> None:
     residual = led.balance(firm.id) - led.debt(firm.id)
     if cfg.per_firm_equity and residual > EPS and firm.shares_outstanding > EPS:
         bridge = getattr(econ, "demographic_bridge", None)
+        fiscal = getattr(econ, "_fiscal", None)
         holders = [(h, h.holdings.get(firm.id, 0.0)) for h in econ.households]
         total_shares = sum(s for _, s in holders)
         if total_shares > EPS:
@@ -107,10 +143,23 @@ def liquidate_idle_firm(econ: Any, firm: Firm) -> None:
                 if shares <= 0.0:
                     continue
                 amount = residual * shares / total_shares
-                if amount > EPS:
-                    led.transfer(firm.id, h.id, amount)
-                    if bridge is not None:
-                        bridge.post_household_equity_trade(h.id, firm.id, cash_delta=amount, share_delta=0.0)
+                if amount <= EPS:
+                    continue
+                # 'living' must be a DEMOGRAPHIC-state fact (the v15 fault line):
+                # died-out households keep dead members' sheets in the claims
+                # membership and masquerade as living holders here -- crediting
+                # their LEDGER with no claims posting leaves a gap that surfaces
+                # as a negative cash claim once the household spends (the year-9
+                # portrait crash). Memberless holders' residual ESCHEATS, exactly
+                # like dead-seller housing proceeds.
+                if bridge is not None and not bridge.household_has_living_members(h.id):
+                    if fiscal is not None:
+                        led.transfer(firm.id, fiscal, amount)
+                        econ._escheat_flow = getattr(econ, "_escheat_flow", 0.0) + amount
+                    continue
+                led.transfer(firm.id, h.id, amount)
+                if bridge is not None:
+                    bridge.post_household_equity_trade(h.id, firm.id, cash_delta=amount, share_delta=0.0)
     bankrupt_firm(econ, firm)
 
 
@@ -155,6 +204,54 @@ def enter_consumption_firms(econ: Any) -> None:
         if funder is None:
             break
         birth_consumption_firm(econ, funder, startup_deposits, capital_lots=capital_lots)
+
+
+def enter_capital_firms(econ: Any) -> None:
+    """v16-L6 demand-driven K entry (the expanding half of consolidation).
+
+    Trigger: EVERY incumbent K-firm's notional labor demand sits above
+    k_entry_demand x the viability line (the sector is visibly capacity-short --
+    footfall makes this observable even at zero inventory). Then, at a daily
+    hazard, one K-firm enters: market-anchored price/wage/expectations, no free
+    inventory, seeded from the cash-richest incumbent's retained earnings (the
+    spin-off shortcut -- K-sector founder equity is deferred with the rest of
+    K equity). Subscale exit prunes any overshoot, so the K-firm count is an
+    emergent equilibrium of the two hazards, not a config constant."""
+    from macro_sim.behavior import planning as B
+    cfg = econ.cfg
+    incumbents = list(econ.k_firms)
+    if not incumbents:
+        return
+    line = cfg.k_entry_demand * cfg.subscale_viability_workers
+    if any(B.labor_demand_notional(f, f.demand_expected, econ._pubcap_factor) < line
+           for f in incumbents):
+        return
+    if econ._subscale_rng.random() >= cfg.k_entry_hazard:
+        return
+    deposits = startup_cash(econ)
+    funder = max(incumbents, key=lambda f: econ.ledger.balance(f.id))
+    if econ.ledger.balance(funder.id) < 2.0 * deposits:
+        return                              # the sector cannot finance expansion yet
+    idx = getattr(econ, "_next_k_id", cfg.n_firms_k)   # genesis takes K0..K{n-1}
+    econ._next_k_id = idx + 1
+    firm = Firm.create_k_firm(idx, econ.cfg)
+    n = len(incumbents)
+    firm.inventory = 0.0                    # entrants produce before they sell
+    firm.price = sum(f.price for f in incumbents) / n
+    firm.wage = sum(f.wage for f in incumbents) / n
+    firm.demand_expected = sum(f.demand_expected for f in incumbents) / n
+    firm.sales_prev = firm.demand_expected  # neutral first B2 update
+    firm.target_inventory_prev = firm.phi * firm.demand_expected
+    econ.ledger.add_account(firm.id)
+    if len(econ.banks) > 1:
+        econ._bank_of[firm.id] = bank_for(econ, funder.id)
+        econ._node_of.pop(firm.id, None)
+    econ.ledger.transfer(funder.id, firm.id, deposits)
+    econ.k_firms.append(firm)
+    econ.firms.append(firm)
+    if firm.invests:
+        econ.investing_firms.append(firm)
+    econ._births += 1
 
 
 def _quote_startup_capital(econ: Any, need: float):
