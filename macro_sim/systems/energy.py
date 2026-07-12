@@ -26,8 +26,39 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from macro_sim.behavior import planning as B
-from macro_sim.domain.agents import Firm
-from macro_sim.markets.matching import EPS, BuyOrder, SellOffer, execute_market
+from macro_sim.domain.agents import Firm, Household
+from macro_sim.markets.matching import EPS, BuyOrder, SellOffer, Trade, execute_market
+
+
+def _proportional_clearing(orders: List[BuyOrder], offers: List[SellOffer],
+                           ledger: Any) -> List[Trade]:
+    """v17.4 proportional rationing: each seller's stock is allocated pro-rata to the
+    buyers' ORIGINAL demands (budget-capped per buyer, A4). No sampling, no queue —
+    everyone is cut by the same fraction. O(B x S)."""
+    trades: List[Trade] = []
+    total_d = sum(o.demand for o in orders)
+    if total_d <= EPS:
+        return trades
+    shares = [o.demand / total_d for o in orders]
+    remaining = [o.demand for o in orders]
+    budgets = [o.budget for o in orders]
+    for off in offers:
+        if off.stock <= EPS or off.price <= EPS:
+            continue
+        alloc_base = off.stock
+        for i, o in enumerate(orders):
+            q = min(alloc_base * shares[i], remaining[i], budgets[i] / off.price, off.stock)
+            if q <= EPS:
+                continue
+            val = q * off.price
+            ledger.transfer(o.account, off.account, val)
+            off.stock -= q
+            off.sold += q
+            remaining[i] -= q
+            budgets[i] -= val
+            trades.append(Trade(buyer=o.account, seller=off.account, qty=q,
+                                price=off.price, value=val))
+    return trades
 
 
 def energy_using_firms(econ: Any) -> List[Firm]:
@@ -176,6 +207,8 @@ def run_energy_phase(econ: Any) -> None:
     _produce_e_firms(econ)
     econ._tax_energy = 0.0
     econ._spr_flow = 0.0
+    econ._energy_cap_comp = 0.0
+    econ._energy_cap_binding = 0.0
     gov = cfg.government
     tc = econ.policy.tax_energy_rate if gov else 0.0
 
@@ -242,15 +275,36 @@ def run_energy_phase(econ: Any) -> None:
     if ordering is not None:
         orders = ordering(econ, orders)
 
-    offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f)
+    # v17.4 PRICE CAP: market asks are CLAMPED at the cap (the posted price keeps its
+    # own B3 dynamics -- the cap is a market rule, not a repricing). 0 = off.
+    cap = econ.policy.energy_price_cap if gov else 0.0
+    def _ask(p: float) -> float:
+        return min(p, cap) if cap > 0.0 else p
+    offers = [SellOffer(account=f.id, stock=f.inventory, price=_ask(f.price), ref=f)
               for f in econ.e_firms]
     spr_offer = None
     if spr_sell > EPS:
-        release_price = 0.999 * min(f.price for f in econ.e_firms)
+        release_price = _ask(0.999 * min(f.price for f in econ.e_firms))
         spr_offer = SellOffer(account=econ._fiscal, stock=spr_sell, price=release_price, ref=None)
         offers.append(spr_offer)
-    trades = execute_market(orders, offers, protocol=econ.protocol,
-                            rng=econ._energy_rng, ledger=econ.ledger)
+
+    # v17.4 RATIONING MENU. Priority classes clear in TWO sequential sessions (the
+    # native shuffle destroys mere ordering); the SPR's own buy order yields to the
+    # priority class. "proportional" bypasses sampling entirely.
+    rationing = econ.policy.energy_rationing if gov else "market"
+    if rationing == "proportional":
+        trades = _proportional_clearing(orders, offers, econ.ledger)
+    elif rationing in ("household_first", "industry_first"):
+        hh = [o for o in orders if isinstance(o.ref, Household)]
+        rest = [o for o in orders if not isinstance(o.ref, Household)]
+        first, second = (hh, rest) if rationing == "household_first" else (rest, hh)
+        trades = execute_market(first, offers, protocol=econ.protocol,
+                                rng=econ._energy_rng, ledger=econ.ledger)
+        trades += execute_market(second, offers, protocol=econ.protocol,
+                                 rng=econ._energy_rng, ledger=econ.ledger)
+    else:
+        trades = execute_market(orders, offers, protocol=econ.protocol,
+                                rng=econ._energy_rng, ledger=econ.ledger)
 
     bought_q: Dict[str, float] = {}
     bought_v: Dict[str, float] = {}
@@ -317,7 +371,20 @@ def run_energy_phase(econ: Any) -> None:
         ef: Firm = off.ref
         ef.inventory = off.stock             # decremented live during trading
         ef.sales = off.sold
-        ef.revenue = off.sold * off.price
+        ef.revenue = off.sold * off.price    # off.price = the CAPPED ask when the cap binds
+
+    # v17.4 COMPENSATION: fiscal covers the cap's revenue gap (posted - cap) x sold —
+    # a CASH transfer keeping the sector solvent, deliberately NOT booked as revenue
+    # (B2/B3 must keep reading true market sales). Without it a binding cap is a
+    # documented sector-killer, not a default.
+    if cap > 0.0 and gov:
+        for ef in econ.e_firms:
+            if ef.price > cap:
+                econ._energy_cap_binding = 1.0
+                if econ.policy.energy_cap_compensation and ef.sales > EPS:
+                    comp = (ef.price - cap) * ef.sales
+                    econ.ledger.transfer(econ._fiscal, ef.id, comp)
+                    econ._energy_cap_comp += comp
 
     # UNFILLED demand feeds expectations (the capacity-blindness fix). Under a hard
     # capacity cap, sales can never exceed kappa*K, so B2-on-sales ratchets d^e down to

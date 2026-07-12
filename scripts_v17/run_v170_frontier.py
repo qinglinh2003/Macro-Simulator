@@ -65,3 +65,33 @@ if __name__ == "__main__":
         write_run_artifact(output_dir=OUT, label="energy_spr", version="v17.3", cfg=cfg,
                            records=econ.records)
         print(f"[energy_spr] done: {len(econ.records)} ticks in {time.time()-t0:.0f}s", flush=True)
+    if which == "captriple":                      # v17.4: cap+compensation+household_first AT the
+        # shock (live levers), lifted one year later -- the 2022 pattern
+        cfg = Config.v13(**{**PARAMS, **dict(
+            energy_enabled=True, energy_household=True,
+            energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180)})
+        econ = Economy(cfg)
+        t0 = time.time()
+        try:
+            for t in range(cfg.n_ticks):
+                if t == 1825:
+                    econ.policy.energy_price_cap = 1.1 * econ._energy_price
+                    econ.policy.energy_rationing = "household_first"
+                    econ.policy.energy_cap_compensation = True
+                if t == 1825 + 365:
+                    econ.policy.energy_price_cap = 0.0
+                    econ.policy.energy_rationing = "market"
+                    econ.policy.energy_cap_compensation = False
+                econ.step()
+                if t % 365 == 0:
+                    print(f"[energy_captriple] t={t} ({time.time()-t0:.0f}s)", flush=True)
+        except Exception:
+            traceback.print_exc()
+            print(f"[energy_captriple] CRASHED at t={econ.t}", flush=True)
+        write_run_artifact(output_dir=OUT, label="energy_captriple", version="v17.4", cfg=cfg,
+                           records=econ.records)
+        print(f"[energy_captriple] done in {time.time()-t0:.0f}s", flush=True)
+    if which == "soe":                            # v17.4 comparison arm: SOE at-cost through the shock
+        run("energy_soe", energy_enabled=True, energy_household=True,
+            energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
+            soe_efirm=True, soe_price_at_cost=True)

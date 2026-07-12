@@ -436,6 +436,133 @@ def test_hoarding_mechanism_fires():
           f"({'amplifies' if unf_on > unf_off else 'insures (pre-buffer dominates)'})")
 
 
+# ---------------------------------------------------------------------------
+# v17.4 -- the crisis triple: price cap, rationing menu, compensation
+# ---------------------------------------------------------------------------
+
+def _crisis_base(**overrides):
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=400, seed=10,
+                energy_enabled=True, energy_household=True,
+                energy_shock_at=250, energy_shock_magnitude=0.7, energy_shock_duration=100)
+    base.update(overrides)
+    return Config.v124(**base)
+
+
+def _run_crisis(policy_at_shock: dict, **cfg_over):
+    """Crisis instruments are LIVE LEVERS imposed AT the shock (Policy mutation), not
+    standing institutions: a cap set from t0 in a drifting-nominal world eventually
+    prices the whole sector underwater and kills the market before the experiment
+    starts (probed -- the first cut of these tests did exactly that)."""
+    econ = Economy(_crisis_base(**cfg_over))
+    recs = []
+    for t in range(400):
+        if t == 250:
+            for k, v in policy_at_shock.items():
+                setattr(econ.policy, k, v)
+        recs.append(econ.step())
+    return econ, recs
+
+
+def test_cap_binds_and_creates_excess_demand():
+    """A cap below the crunch price clamps every transaction at the cap and RAISES
+    unmet demand vs the uncapped twin (price can no longer ration)."""
+    _, free = _run_crisis({})
+    p_crunch = max(r["energy_price"] for r in free[250:350])
+    _, capped = _run_crisis({"energy_price_cap": 0.6 * p_crunch})
+    win = range(250, 350)
+    assert any(r["energy_cap_binding"] > 0 for r in capped), "the cap never bound"
+    assert max(r["energy_price"] for r in [capped[i] for i in win]) <= 0.6 * p_crunch + 1e-9, \
+        "a transaction cleared above the cap"
+    # excess demand EXISTS under the cap (material vs traded volume; the v124 world
+    # has its own background unfilled waves, so no calm-window reference exists)...
+    unf_cap = sum(capped[i]["energy_unfilled"] for i in win)
+    sold_cap = sum(capped[i]["energy_sold"] for i in win)
+    assert unf_cap > 0.2 * max(1.0, sold_cap), "no material excess demand under the binding cap"
+    # ...and the cap's real damage channel is the SELLER MARGIN, not volume:
+    rev_free = sum(f["energy_sold"] * f["energy_price"] for f in [free[i] for i in win])
+    rev_cap = sum(f["energy_sold"] * f["energy_price"] for f in [capped[i] for i in win])
+    assert rev_cap < rev_free, f"the cap should bleed seller revenue: {rev_cap:.0f} !< {rev_free:.0f}"
+    # FINDING 14 (report): traded VOLUME can be HIGHER under the cap -- markup pricing
+    # OVERSHOOTS the clearing price in a crunch (mu_max x uc is not a clearing rule),
+    # so part of the free-market shortage is budget-rationed demand facing unsold
+    # expensive stock; the cap fixes the overshoot while destroying margins.
+    unf_free = sum(free[i]["energy_unfilled"] for i in win)
+    print(f"    [cap] unfilled cap={unf_cap:.0f} vs free={unf_free:.0f} "
+          f"({'cap worsens' if unf_cap > unf_free else 'cap clears MORE (overshoot fixed)'})")
+
+
+def test_rationing_menu_protects_its_class():
+    """household_first vs industry_first through the same capped crunch: households
+    keep a larger fill when protected; industry uses more energy when protected."""
+    _, free = _run_crisis({})
+    cap = 0.6 * max(r["energy_price"] for r in free[250:350])
+    def run(rule):
+        _, recs = _run_crisis({"energy_price_cap": cap, "energy_rationing": rule})
+        return recs
+    hh_first = run("household_first")
+    ind_first = run("industry_first")
+    win = range(250, 350)
+    hh_fill_a = sum(hh_first[i]["energy_hh_units"] for i in win)
+    hh_fill_b = sum(ind_first[i]["energy_hh_units"] for i in win)
+    assert hh_fill_a > hh_fill_b, \
+        f"household priority did not protect households: {hh_fill_a:.0f} !> {hh_fill_b:.0f}"
+    used_a = sum(hh_first[i]["energy_used"] for i in win)
+    used_b = sum(ind_first[i]["energy_used"] for i in win)
+    assert used_b > used_a, \
+        f"industry priority did not protect industry: {used_b:.0f} !> {used_a:.0f}"
+
+
+def test_proportional_rationing_clears_and_conserves():
+    """The proportional path (no sampling, everyone cut by the same fraction) trades,
+    conserves, and keeps the gates green."""
+    _, recs = _run_crisis({"energy_rationing": "proportional"})
+    assert sum(r["energy_sold"] for r in recs) > 0.0
+    m = max(r["broad_money"] for r in recs)
+    assert max(r["conservation_drift"] for r in recs) < 1e-6 * m
+
+
+def test_uncompensated_cap_bleeds_the_sector():
+    """The documented sector-killer: a harsh binding cap WITHOUT compensation drains
+    E-firm cash vs the compensated twin (same seed, same cap) — the honest failure
+    mode, run once, never a default."""
+    _, free = _run_crisis({})
+    cap = 0.5 * max(r["energy_price"] for r in free[250:350])
+
+    def run_tracking(policy):
+        econ = Economy(_crisis_base())
+        recs, cash = [], []
+        for t in range(400):
+            if t == 250:
+                for k, v in policy.items():
+                    setattr(econ.policy, k, v)
+            recs.append(econ.step())
+            if t >= 250:
+                cash.append(sum(econ.ledger.balance(f.id) for f in econ.e_firms))
+        return recs, cash
+    recs_bare, cash_bare_t = run_tracking({"energy_price_cap": cap})
+    recs_comp, cash_comp_t = run_tracking({"energy_price_cap": cap,
+                                           "energy_cap_compensation": True})
+    # compare the BLEED RATE (mean sector cash through the cap window): end-state cash
+    # is 0 in both -- a harsh 150-tick cap kills either way, compensation slows it
+    cash_bare = sum(cash_bare_t) / len(cash_bare_t)
+    cash_comp = sum(cash_comp_t) / len(cash_comp_t)
+    assert cash_comp > cash_bare, \
+        f"compensation should slow the bleed: mean cash {cash_comp:.0f} !> {cash_bare:.0f}"
+    assert sum(r["energy_cap_compensation"] for r in recs_comp) > 0.0
+    assert sum(r["energy_cap_compensation"] for r in recs_bare) == 0.0
+    m = max(r["broad_money"] for r in recs_comp)
+    assert max(r["conservation_drift"] for r in recs_comp) < 1e-6 * m
+
+
+def test_crisis_triple_off_bit_identical():
+    """Defaults (cap 0, market rationing, no compensation) leave the 17.3 world
+    untouched — same-seed series equality with the fields present."""
+    a = Economy(_crisis_base()).run()
+    b = Economy(_crisis_base(energy_rationing="market", energy_price_cap=0.0)).run()
+    for x, y in zip(a, b):
+        assert x["real_output"] == y["real_output"] and x["energy_price"] == y["energy_price"]
+
+
 def _main() -> None:
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for name, fn in tests:

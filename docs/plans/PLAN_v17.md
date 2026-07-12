@@ -263,14 +263,30 @@ scenario, not the default).
   as one controlled experiment, with distributional (energy poverty, strata) and macro
   (inflation, output, fiscal cost) scorecards.
 
-Acceptance:
+Acceptance (CLOSED 2026-07-12; diagnostic_v174.png; findings 14-15):
 
-- [ ] Cap binding ⇒ measured excess demand; rationing conserves quantities; atomic flows.
-- [ ] Uncompensated-cap run documents E-firm insolvency (the honest failure mode).
-- [ ] Household-priority vs industry-priority produce distinct macro paths (protecting
-      consumption vs production), decomposed and written up.
-- [ ] The four-way policy comparison ships as `diagnostic_v174.png` + a results note.
-- [ ] All flags off ⇒ bit-identical.
+- [x] Cap binds ⇒ transactions clamped, material excess demand measured; every
+      rationing rule conserves (per-tick gates). FINDING 14: traded VOLUME can be
+      HIGHER under the cap — markup pricing OVERSHOOTS the clearing price in a
+      crunch (mu_max·uc is not a clearing rule), so part of the free-market shortage
+      is budget-rationed demand facing unsold expensive stock; the cap's real damage
+      channel is the SELLER MARGIN.
+- [x] Uncompensated cap documents the sector-killer: compensation demonstrably slows
+      the cash bleed (mean sector cash through the window; a harsh 150-tick cap
+      kills either way). FINDING 15 (test-design, kept in the file): crisis
+      instruments are LIVE LEVERS imposed AT the shock — a cap standing from t0 in a
+      drifting-nominal world prices the sector underwater and kills the market
+      before the experiment starts.
+- [x] household_first vs industry_first protect their class (fills measured both
+      ways; two-session clearing since the native shuffle destroys mere ordering;
+      proportional = its own sampling-free path).
+- [x] THE HEADLINE ARTIFACT shipped: four arms through the same year-5 pulse
+      (scorecard, window+aftermath): no-intervention output 506k / unfilled 28.3k /
+      hh-fill 3246; SPR release 606k / 10.2k / 4651 (best macro, crowding-out echo
+      after); cap+comp+hh-first 522k / 19.1k / 5126 (BEST household protection,
+      fiscal cost 441); SOE at-cost 522k / 32.0k / 2834 (WORST shortage: the at-cost
+      seller attracts demand it cannot serve).
+- [x] All flags off ⇒ bit-identical (same-seed series equality).
 
 ## v17.5 — Couplings (one at a time, the Phase 2 acceptance paradigm)
 

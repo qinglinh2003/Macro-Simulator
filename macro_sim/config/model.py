@@ -670,6 +670,16 @@ class Config:
     energy_hoarding_beta: float = 0.0   # firms scale the coverage target by (1 + beta *
                                         # max(0, energy price trend)) -- the 1970s queue
                                         # amplifier, a separate flag, DEFAULT OFF
+    # -- v17.4 the crisis triple (one mechanism in reality: a binding cap creates
+    # excess demand => a rationing rule must answer WHO IS CUT, and E-firm losses
+    # => a compensation transfer, or the cap is a documented sector-killer).
+    energy_price_cap: float = 0.0       # Policy: market asks clamped at the cap (0 = off)
+    energy_rationing: str = "market"    # Policy: market | household_first | industry_first
+                                        # | proportional. Priority classes clear in two
+                                        # sequential sessions (the native shuffle would
+                                        # destroy a mere ordering); proportional allocates
+                                        # each seller's stock pro-rata to remaining demand
+    energy_cap_compensation: bool = False  # Policy: fiscal covers (posted - cap) x sold
 
     def __post_init__(self) -> None:
         self._validate()
@@ -1435,6 +1445,11 @@ class Config:
             "the SOE needs the E-sector and a fiscal account"
         assert not (self.soe_price_at_cost and not self.soe_efirm), "at-cost pricing needs the SOE"
         assert self.energy_hoarding_beta >= 0.0, "hoarding beta must be >= 0"
+        assert self.energy_price_cap >= 0.0, "the price cap must be >= 0 (0 = off)"
+        assert self.energy_rationing in ("market", "household_first", "industry_first", "proportional"), \
+            "unknown energy rationing rule"
+        assert not (self.energy_cap_compensation and not self.government), \
+            "cap compensation needs a fiscal account"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

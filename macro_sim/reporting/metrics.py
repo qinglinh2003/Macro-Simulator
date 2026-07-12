@@ -1304,6 +1304,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "spr_stock": float(getattr(econ, "_spr_stock", 0.0)),                      # v17.3
             "spr_flow": float(getattr(econ, "_spr_flow", 0.0)),                        # v17.3 (+build/-release)
             "soe_dividends": float(getattr(econ, "_soe_dividends", 0.0)),              # v17.3
+            "energy_cap_binding": float(getattr(econ, "_energy_cap_binding", 0.0)),    # v17.4
+            "energy_cap_compensation": float(getattr(econ, "_energy_cap_comp", 0.0)),  # v17.4
         })
         # -- v17.1 household energy: consumption GDP component, headline CPI, poverty --
         if getattr(econ.cfg, "energy_household", False):

@@ -35,6 +35,9 @@ class Policy:
     spr_target_units: float = 0.0        # v17.3: strategic-reserve stock target (0 = off)
     spr_flow_cap: float = 0.0            # v17.3: max SPR units traded per tick
     soe_price_at_cost: bool = False      # v17.3: the state-owned E-firm prices at unit cost
+    energy_price_cap: float = 0.0        # v17.4: market asks clamped at the cap (0 = off)
+    energy_rationing: str = "market"     # v17.4: who is cut under shortage (see Config)
+    energy_cap_compensation: bool = False  # v17.4: fiscal covers the cap's revenue gap
 
     # -- labour -----------------------------------------------------------
     min_wage: float = 0.0                # wage floor (0 = off)
@@ -89,6 +92,9 @@ class Policy:
             spr_target_units=getattr(cfg, "spr_target_units", 0.0),
             spr_flow_cap=getattr(cfg, "spr_flow_cap", 0.0),
             soe_price_at_cost=getattr(cfg, "soe_price_at_cost", False),
+            energy_price_cap=getattr(cfg, "energy_price_cap", 0.0),
+            energy_rationing=getattr(cfg, "energy_rationing", "market"),
+            energy_cap_compensation=getattr(cfg, "energy_cap_compensation", False),
             min_wage=cfg.min_wage,
             job_guarantee=cfg.job_guarantee,
             jg_wage_ratio=cfg.jg_wage_ratio,
