@@ -36,3 +36,12 @@
   Labor suite 51/51; flag-off shared-column digest bit-identical throughout.
 - 2026-07-12 | v16 | Full-arc acceptance running: pass-through pair (a x1.5 must
   RAISE the real incumbent wage) + full-stack Beveridge/Okun/u* portrait, 10y.
+- 2026-07-12 | v16 | FULL-ARC ACCEPTANCE PASSED. The prize: productivity x1.5
+  (A=a=a_K) -> real incumbent wage ratio 1.490 vs 1.50 theoretical = 99.4%
+  pass-through (v14 spot: ~1.0, all leaked); placebo leg (a/a_K only) = 0.999.
+  Full-stack 10y portrait: u* 6.0% (band 4-6%), Okun slope -0.20 / corr -0.78
+  (hoarding attenuates), procyclical quits +0.42, incumbent wages follow posted
+  with a monthly-scale lag, earnings dispersion person-driven (L4). Honest
+  caveats logged in PLAN_v16: v-rate LEVELS hot, E->E ladder rate hot,
+  employment-lag null under uncapped JG. diagnostic_v16.png shipped.
+  v16 arc COMPLETE on feat/labor-v16; ready to merge per protocol (v16 first).
