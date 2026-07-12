@@ -178,6 +178,10 @@ class Config:
     housing_wealth_effect: float = 0.0      # housing value weight in the consumption wealth term
                                             # (empirically WEAK vs financial wealth; the honest
                                             # default is the emergent down-payment effect) -- FREE
+    # -- v16-L0 labor accounting: the five-state taxonomy (E/U/S/JG/OLF), aggregate
+    # stocks, vacancy stock, and the per-tick stock identity HARD GATE (the labor A5).
+    # Pure observation under the spot market; rosters make the states real at L1.
+    labor_accounting: bool = True
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE

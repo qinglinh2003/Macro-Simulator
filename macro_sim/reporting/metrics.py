@@ -370,6 +370,29 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     else:
         rec["demographics_enabled"] = 0.0
 
+    accounts = getattr(econ, "labor_accounts", None)
+    if accounts is not None:
+        # v16-L0: the five-state labor taxonomy + the Beveridge pair. Flow counters are
+        # zero under the spot market; L1 populates them.
+        rec.update(
+            {
+                "labor_E": float(accounts.employed),
+                "labor_U": float(accounts.unemployed),
+                "labor_S": float(accounts.suspended),
+                "labor_JG": float(accounts.job_guarantee),
+                "labor_OLF": float(accounts.out_of_labor_force),
+                "labor_u_rate": float(accounts.unemployment_rate),
+                "labor_vacancies": float(accounts.vacancies),
+                "labor_v_rate": float(accounts.vacancy_rate),
+                "labor_hires_total": float(accounts.hires_total),
+                "labor_churn_seps_total": float(accounts.churn_seps_total),
+                "labor_layoff_seps_total": float(accounts.layoff_seps_total),
+                "labor_bankruptcy_seps_total": float(accounts.bankruptcy_seps_total),
+                "labor_death_seps_total": float(accounts.death_seps_total),
+                "labor_recalls_total": float(accounts.recalls_total),
+            }
+        )
+
     housing = getattr(econ, "housing", None)
     if housing is not None:
         # v15.0: registry stock gauges (frozen price until the v15.1 market)

@@ -33,6 +33,7 @@ from macro_sim.housing.mortgage import MortgageBook
 from macro_sim.housing.affordability import HousingAffordabilitySignal
 from macro_sim.housing.construction import create_builders
 from macro_sim.housing.rental import RentalMarket
+from macro_sim.labor import LaborAccounts
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -211,6 +212,8 @@ class Economy:
         self.rental_market = None
         self.housing_affordability = None
         self._house_price = 0.0
+        # v16-L0: labor accounting (observation shell under spot; real stocks from L1)
+        self.labor_accounts = LaborAccounts() if cfg.labor_accounting else None
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
             self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
@@ -488,6 +491,10 @@ class Economy:
             self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
             self.demographic_bridge.assert_all_claim_identities(self)
+        if self.labor_accounts is not None:
+            # v16-L0: the labor A5 -- E+U+S+JG must partition the labor supply
+            self.labor_accounts.observe_spot(self)
+            self.labor_accounts.assert_identity()
 
         # Rich per-tick snapshot (metrics.py) -- pure observation.
         rec = metrics.compute_tick_metrics(self)
