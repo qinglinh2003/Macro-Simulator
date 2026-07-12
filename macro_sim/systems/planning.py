@@ -77,3 +77,17 @@ def run_planning_phase(econ: Any) -> None:
             curvature=cfg.mpc_wealth_curvature,
             wealth_ref=cfg.d_household0,
         )
+
+    # v15.5: housing wealth effect (default 0 = off). Deliberately a separate, WEAK dial:
+    # the honest default is the emergent down-payment effect (buying drains deposits and
+    # the alpha2 term contracts consumption); this flag adds the "feeling richer" channel
+    # on top for policy experiments, on BOTH consumption paths.
+    hwe = float(getattr(cfg, "housing_wealth_effect", 0.0))
+    housing = getattr(econ, "housing", None)
+    if hwe > 0.0 and housing is not None:
+        alpha2 = cfg.alpha2
+        price = float(getattr(econ, "_house_price", 0.0))
+        for h in econ.households:
+            units = housing.units_of(h.id)
+            if units > 0.0:
+                h.consumption_budget += hwe * alpha2 * units * price

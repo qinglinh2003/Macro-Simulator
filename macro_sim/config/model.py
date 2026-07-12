@@ -170,7 +170,14 @@ class Config:
     builder_demand_seed: float = 0.005      # cold-start expected dwelling demand per tick
     land_fee_share: float = 0.2             # land fee = share x price x (stock/stock0)^convexity
     land_convexity: float = 1.0
-    housing_permits: int = 50               # dwellings mintable per year (zoning quota)
+    housing_permits: int = 50               # dwellings mintable per year (zoning quota; live Policy lever)
+    # -- v15.5 policy handles + wealth-effect flag (all default off = bit-identical)
+    housing_transfer_tax: float = 0.0       # stamp duty on sale price -> fiscal (live lever)
+    housing_property_tax: float = 0.0       # annual rate on dwelling value -> fiscal (live lever)
+    housing_in_wealth_tax: bool = False     # include dwellings in the wealth-tax base (live lever)
+    housing_wealth_effect: float = 0.0      # housing value weight in the consumption wealth term
+                                            # (empirically WEAK vs financial wealth; the honest
+                                            # default is the emergent down-payment effect) -- FREE
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -733,6 +740,8 @@ class Config:
             demographic_lifecycle_consumption=self.demographic_lifecycle_consumption,
             lifecycle_alpha_income=self.lifecycle_alpha_income,
             lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
+            housing_wealth_effect=self.housing_wealth_effect,
+            alpha2=self.alpha2,
         )
 
     @_cached_view
@@ -1334,6 +1343,8 @@ class Config:
         assert self.n_builders >= 1 or not self.housing_construction_enabled, "construction needs at least one builder"
         assert self.builder_productivity > 0.0 and 0.0 <= self.land_fee_share and self.land_convexity >= 0.0, "builder params out of range"
         assert self.housing_permits >= 0, "permit quota must be >= 0"
+        assert 0.0 <= self.housing_transfer_tax < 1.0 and 0.0 <= self.housing_property_tax < 1.0, "housing tax rates are fractions"
+        assert self.housing_wealth_effect >= 0.0, "housing wealth effect must be >= 0"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"

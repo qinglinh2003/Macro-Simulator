@@ -57,6 +57,8 @@ class MortgageBook:
     def maintain(self, econ: Any) -> None:
         """Per-session reconciliation: derive each secured balance from the ledger truth,
         close paid-off or collateral-less entries, then run the foreclosure test."""
+        # v15.5: the LTV cap is a LIVE macroprudential lever (Policy), synced per session
+        self.ltv_cap = float(getattr(econ.policy, "mortgage_ltv_cap", self.ltv_cap))
         led = econ.ledger
         housing = econ.housing
         market = econ.housing_market

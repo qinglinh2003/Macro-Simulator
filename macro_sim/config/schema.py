@@ -108,6 +108,8 @@ class PlanningConfig:
     demographic_lifecycle_consumption: bool
     lifecycle_alpha_income: float
     lifecycle_alpha_wealth_draw: float
+    housing_wealth_effect: float
+    alpha2: float
 
 
 @dataclass(frozen=True)

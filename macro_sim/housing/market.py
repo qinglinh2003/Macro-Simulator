@@ -80,6 +80,7 @@ def run_housing_market_phase(econ: Any) -> None:
     rental = getattr(econ, "rental_market", None)
     if rental is not None:
         rental.collect_rents(econ)        # v15.3: tenancies pay every tick, not per session
+    _collect_property_tax(econ, housing)  # v15.5: live lever; no-op at rate 0
     if getattr(econ, "builders", None):
         from macro_sim.housing.construction import run_construction_step
         run_construction_step(econ)       # v15.4: fold output, mint under permits+land fee
@@ -120,6 +121,7 @@ def run_housing_market_phase(econ: Any) -> None:
             buyers.extend(investors)
 
     sold: list[tuple[Listing, float]] = []
+    transfer_tax_rate = float(getattr(econ.policy, "housing_transfer_tax", 0.0))
     for buyer in buyers:
         if not book:
             break
@@ -134,20 +136,23 @@ def run_housing_market_phase(econ: Any) -> None:
         window = book[: market.search_k]
         pick = None
         for listing in window:
-            if listing.ask <= cash_budget:
+            # v15.5: stamp duty is part of the buyer's cash need (tax is never financed)
+            tax_cost = transfer_tax_rate * listing.ask
+            if listing.ask + tax_cost <= cash_budget:
                 pick = listing
                 break
             # v15.2 credit unlock: affordable with a mortgage iff the down payment
-            # (price minus LTV-capped loan) fits in the cash budget
-            if can_borrow and listing.ask * (1.0 - mortgage_book.ltv_cap) <= cash_budget:
+            # (price minus LTV-capped loan) plus the duty fits in the cash budget
+            if can_borrow and listing.ask * (1.0 - mortgage_book.ltv_cap) + tax_cost <= cash_budget:
                 pick = listing
                 break
         if pick is None:
             continue
         price = pick.ask
+        duty = transfer_tax_rate * price
         loan = 0.0
-        if price > cash_budget and can_borrow:
-            loan = min(price - cash_budget, mortgage_book.ltv_cap * price)
+        if price + duty > cash_budget and can_borrow:
+            loan = min(price + duty - cash_budget, mortgage_book.ltv_cap * price)
         # ---- atomic sale: ledger + claims + title (+ mortgage) in one place ----
         if loan > EPS:
             # originate posts BOTH sides of loan-creates-deposit to the claims layer
@@ -155,9 +160,12 @@ def run_housing_market_phase(econ: Any) -> None:
             # below is the FULL price -- posting loan-price here double-counts the loan
             mortgage_book.originate(econ, buyer, pick.dwelling_id, loan)
         led.transfer(buyer.id, pick.seller_account, price)
+        if duty > EPS and fiscal is not None:
+            led.transfer(buyer.id, fiscal, duty)
+            econ._transfer_tax_paid = getattr(econ, "_transfer_tax_paid", 0.0) + duty
         if bridge is not None:
             buyer_hh = bridge.household_id_for_account(buyer.id)
-            bridge._post_household_cash_delta(buyer_hh, -price, reason="house_purchase")
+            bridge._post_household_cash_delta(buyer_hh, -(price + duty), reason="house_purchase")
             seller_hh = bridge.account_to_household.get(pick.seller_account)
             # 'living' must be a DEMOGRAPHIC-state fact: died-out households keep dead
             # members' sheets (and orphan-moved minors) in the claims membership, which
@@ -203,6 +211,29 @@ def run_housing_market_phase(econ: Any) -> None:
         # (sweep, not hooks), then match seekers to vacancies and adjust the rent level
         rental.sweep_stale_tenancies(econ)
         rental.match_tenants(econ)
+
+
+def _collect_property_tax(econ: Any, housing: Any) -> None:
+    """v15.5 property tax: annual rate on dwelling value, drip-paid per tick (A4-capped),
+    owner household -> fiscal, posted through the person-claim layer."""
+    rate = float(getattr(econ.policy, "housing_property_tax", 0.0))
+    fiscal = getattr(econ, "_fiscal", None)
+    if rate <= 0.0 or fiscal is None:
+        return
+    led = econ.ledger
+    bridge = getattr(econ, "demographic_bridge", None)
+    for h in econ.households:
+        units = housing.units_of(h.id)
+        if units <= EPS:
+            continue
+        if bridge is not None and not bridge.household_has_living_members(h.id):
+            continue                      # died-out owners: the stranded sweep handles title
+        tax = min(rate * econ._house_price * units / 365.0, led.balance(h.id))
+        if tax > EPS:
+            led.transfer(h.id, fiscal, tax)
+            if bridge is not None:
+                bridge.post_household_tax_payment(h.id, tax)
+            econ._property_tax_paid = getattr(econ, "_property_tax_paid", 0.0) + tax
 
 
 def _ingest_distress_listings(econ: Any, market: HousingMarket, housing: Any) -> None:

@@ -57,6 +57,13 @@ class Policy:
     kappa: float = 3.0                   # firm credit leverage multiple L^max = κ·NW
     hh_credit_limit: float = 2.0         # household debt-to-income (DTI) cap
 
+    # -- v15.5 housing handles (live levers; seeded from Config) --
+    mortgage_ltv_cap: float = 0.8        # owner-occupier mortgage LTV (macroprudential)
+    housing_permits: int = 50            # dwellings mintable per year (zoning)
+    housing_transfer_tax: float = 0.0    # stamp duty on sale price -> fiscal
+    housing_property_tax: float = 0.0    # annual rate on dwelling value -> fiscal
+    housing_in_wealth_tax: bool = False  # include dwelling value in the wealth-tax base
+
     @classmethod
     def from_config(cls, cfg) -> "Policy":
         """Seed the live levers from the frozen config (their t=0 stance)."""
@@ -89,4 +96,9 @@ class Policy:
             margin_max=cfg.margin_max,
             kappa=cfg.kappa,
             hh_credit_limit=cfg.hh_credit_limit,
+            mortgage_ltv_cap=getattr(cfg, "mortgage_ltv_cap", 0.8),
+            housing_permits=getattr(cfg, "housing_permits", 50),
+            housing_transfer_tax=getattr(cfg, "housing_transfer_tax", 0.0),
+            housing_property_tax=getattr(cfg, "housing_property_tax", 0.0),
+            housing_in_wealth_tax=getattr(cfg, "housing_in_wealth_tax", False),
         )

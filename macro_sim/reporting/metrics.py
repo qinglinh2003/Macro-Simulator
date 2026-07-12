@@ -392,6 +392,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "housing_sales_total": float(market.sales_total),
                     "housing_tom": float(market.last_session_tom),
                     "housing_forced_share": float(market.forced_share),
+                    "transfer_tax_paid": float(getattr(econ, "_transfer_tax_paid", 0.0)),
+                    "property_tax_paid": float(getattr(econ, "_property_tax_paid", 0.0)),
                 }
             )
         mortgage_book = getattr(econ, "mortgage_book", None)
