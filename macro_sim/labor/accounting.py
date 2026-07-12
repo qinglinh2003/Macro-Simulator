@@ -76,6 +76,52 @@ class LaborAccounts:
             if getattr(self, name) < -_TOL:
                 raise AssertionError(f"labor stock {name} went negative: {getattr(self, name)}")
 
+    # ------------------------------------------------------------------
+    # persistent mode (L1+): true stocks from the rosters, flows reconciled
+    # ------------------------------------------------------------------
+    _prev_employed: float = -1.0
+    _prev_flow_balance: float = 0.0
+
+    def observe_persistent(self, econ: Any, lm: Any) -> None:
+        bridge = econ.demographic_bridge
+        from macro_sim.demographics.economic_state import labor_supply_for_person
+        state = bridge._demographic_state_ref()
+        supply = persons = 0.0
+        for person in state.people:
+            if not person.alive:
+                continue
+            persons += 1.0
+            if person.household_id is not None:
+                supply += labor_supply_for_person(person)
+        self.labor_supply = supply
+        self.employed = float(len(lm.jobs))
+        self.job_guarantee = sum(float(getattr(h, "jg_labor", 0.0)) for h in econ.households)
+        self.suspended = 0.0                    # L1b will report it
+        self.unemployed = max(0.0, supply - self.employed - self.job_guarantee)
+        self.out_of_labor_force = max(0.0, persons - supply)
+        self.vacancies = sum(
+            max(0.0, float(f.labor_demand_eff) - len(lm.rosters.get(f.id, ())))
+            for f in econ.firms
+        )
+        # flow reconciliation: the delta of the employment stock must equal the net
+        # counted flows since the last observation -- the gate's TEETH (any uncounted
+        # roster mutation shows up here within one tick)
+        flow_balance = (
+            self.hires_total + self.recalls_total
+            - self.churn_seps_total - self.layoff_seps_total
+            - self.bankruptcy_seps_total - self.death_seps_total
+        )
+        if self._prev_employed >= 0.0:
+            expected = self._prev_employed + (flow_balance - self._prev_flow_balance)
+            if abs(expected - self.employed) > _TOL:
+                raise AssertionError(
+                    f"labor flow reconciliation failed: E={self.employed} but "
+                    f"prev E + net flows = {expected} "
+                    f"(net flow delta {flow_balance - self._prev_flow_balance})"
+                )
+        self._prev_employed = self.employed
+        self._prev_flow_balance = flow_balance
+
     @property
     def unemployment_rate(self) -> float:
         force = self.employed + self.unemployed + self.suspended + self.job_guarantee

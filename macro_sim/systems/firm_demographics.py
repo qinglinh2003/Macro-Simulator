@@ -78,6 +78,10 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
                 )
             if firm.id in h.watchlist:
                 h.watchlist.remove(firm.id)
+    if getattr(econ, "labor_market", None) is not None:
+        # v16-L1: firm exit is a MASS LAYOFF -- the whole roster enters the pool
+        # (the credit-crunch -> bankruptcy -> unemployment chain becomes explicit)
+        econ.labor_market.on_firm_exit(firm.id, getattr(econ, "labor_accounts", None))
     econ.c_firms.remove(firm)
     econ.firms.remove(firm)
     if firm in econ.investing_firms:

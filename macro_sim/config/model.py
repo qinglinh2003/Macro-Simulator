@@ -182,6 +182,13 @@ class Config:
     # stocks, vacancy stock, and the per-tick stock identity HARD GATE (the labor A5).
     # Pure observation under the spot market; rosters make the states real at L1.
     labor_accounting: bool = True
+    # -- v16-L1: persistent person-level rosters. "spot" (default) keeps the certified
+    # daily market verbatim; "persistent" attaches employment to PERSONS with four
+    # separation classes and adjustment dynamics (labor hoarding -> Okun).
+    labor_matching: str = "spot"
+    churn_annual: float = 0.28              # exogenous quits + individual dismissals (~2.4%/mo)
+    lambda_fire: float = 0.10               # per-tick closure of the layoff gap (hoarding dial)
+    layoff_band: float = 0.05               # hysteresis band as a fraction of target headcount
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1349,6 +1356,10 @@ class Config:
         assert self.housing_permits >= 0, "permit quota must be >= 0"
         assert 0.0 <= self.housing_transfer_tax < 1.0 and 0.0 <= self.housing_property_tax < 1.0, "housing tax rates are fractions"
         assert self.housing_wealth_effect >= 0.0, "housing wealth effect must be >= 0"
+        assert self.labor_matching in ("spot", "persistent"), "labor_matching must be 'spot' or 'persistent'"
+        assert not (self.labor_matching == "persistent" and not self.demographics_enabled), "persistent labor needs persons (demographics)"
+        assert not (self.labor_matching == "persistent" and not self.labor_accounting), "persistent labor requires the accounting gate"
+        assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"

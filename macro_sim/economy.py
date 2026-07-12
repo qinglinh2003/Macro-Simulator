@@ -34,6 +34,7 @@ from macro_sim.housing.affordability import HousingAffordabilitySignal
 from macro_sim.housing.construction import create_builders
 from macro_sim.housing.rental import RentalMarket
 from macro_sim.labor import LaborAccounts
+from macro_sim.labor.persistent import LaborMarket
 from macro_sim.demographics.social import SocialDynamicsConfig
 from macro_sim.domain.agents import Bank, EquityMarket, Firm, Household
 from macro_sim.markets.matching import (
@@ -214,6 +215,15 @@ class Economy:
         self._house_price = 0.0
         # v16-L0: labor accounting (observation shell under spot; real stocks from L1)
         self.labor_accounts = LaborAccounts() if cfg.labor_accounting else None
+        # v16-L1: persistent rosters (dedicated rng substream; main stream untouched)
+        self.labor_market = None
+        self._labor_rng = random.Random(cfg.seed + 16_001)
+        if cfg.labor_matching == "persistent":
+            self.labor_market = LaborMarket(
+                churn_annual=cfg.churn_annual,
+                lambda_fire=cfg.lambda_fire,
+                layoff_band=cfg.layoff_band,
+            )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()
             self._house_price = cfg.house_price_income_years * 365.0 * cfg.w_firm0
@@ -492,8 +502,12 @@ class Economy:
         if self.demographic_bridge is not None:
             self.demographic_bridge.assert_all_claim_identities(self)
         if self.labor_accounts is not None:
-            # v16-L0: the labor A5 -- E+U+S+JG must partition the labor supply
-            self.labor_accounts.observe_spot(self)
+            # v16-L0/L1: the labor A5 -- E+U+S+JG must partition the labor supply,
+            # and under rosters every stock delta must equal its counted flows
+            if self.labor_market is not None:
+                self.labor_accounts.observe_persistent(self, self.labor_market)
+            else:
+                self.labor_accounts.observe_spot(self)
             self.labor_accounts.assert_identity()
 
         # Rich per-tick snapshot (metrics.py) -- pure observation.
