@@ -407,6 +407,22 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 ),
             }
         )
+        lm = getattr(econ, "labor_market", None)
+        if lm is not None and getattr(lm, "person_efficiency", False):
+            # v16-L4 decomposition gauges: earnings dispersion splits into the FIRM
+            # component (log base wage) and the PERSON component (log e_i) -- under
+            # independence var(log earn) ~ var(log w) + var(log e)
+            active = [(j, lm.efficiency.get(pid, 1.0))
+                      for pid, j in lm.jobs.items() if pid not in lm.suspended]
+            es = np.array([e for _, e in active]) if active else np.array([1.0])
+            ws = np.array([max(j.wage, 1e-12) for j, _ in active]) if active else np.array([1.0])
+            rec.update(
+                {
+                    "labor_eff_employed_mean": float(np.mean(es)),
+                    "labor_earn_var_logw": float(np.var(np.log(ws))),
+                    "labor_earn_var_loge": float(np.var(np.log(es))),
+                }
+            )
 
     housing = getattr(econ, "housing", None)
     if housing is not None:

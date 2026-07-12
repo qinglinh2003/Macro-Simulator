@@ -78,6 +78,15 @@ class LaborMarket:
     job_ladder: bool = False
     ladder_intensity: float = 0.03
     ladder_premium: float = 0.05
+    # L4 person efficiency: the human-capital slot. e_i ~ lognormal, MEAN ONE
+    # (mu = -sigma^2/2), drawn ONCE at first hire from a dedicated substream and
+    # carried for life (across jobs and unemployment spells). Earnings = wage x e_i
+    # through wage_of (the single authority: every cash check prices it); firms
+    # produce with EFFICIENCY UNITS (f.hired) while heads feed the JG/welfare
+    # residual (labor_sold). Parent->child transmission is Phase 3.4, NOT v16.
+    person_efficiency: bool = False
+    efficiency_sigma: float = 0.35
+    efficiency: dict[int, float] = field(default_factory=dict)  # person_id -> e_i
     vacancy_age: dict[str, int] = field(default_factory=dict)   # consecutive gap ticks per firm
 
     jobs: dict[int, Job] = field(default_factory=dict)          # person_id -> Job
@@ -104,17 +113,34 @@ class LaborMarket:
                     pass
 
     def wage_of(self, person_id: int, firm) -> float:
-        """The wage a member is actually paid: relationship wage under L3, posted else."""
+        """The wage a member is actually paid: relationship wage under L3, posted else;
+        times the person's efficiency under L4 (single authority: cash checks see it)."""
         if self.relationship_wages:
             job = self.jobs.get(person_id)
             if job is not None and job.wage > 0.0:
-                return job.wage
-        return max(float(firm.wage), 1e-12)
+                base = job.wage
+            else:
+                base = max(float(firm.wage), 1e-12)
+        else:
+            base = max(float(firm.wage), 1e-12)
+        if self.person_efficiency:
+            return base * self.efficiency.get(person_id, 1.0)
+        return base
+
+    def e_of(self, person_id: int) -> float:
+        return self.efficiency.get(person_id, 1.0)
+
+    def ensure_efficiency(self, person_id: int, rng: Any) -> None:
+        """Draw e_i at FIRST hire (never redrawn: it is a person attribute)."""
+        if self.person_efficiency and person_id not in self.efficiency:
+            mu = -0.5 * self.efficiency_sigma * self.efficiency_sigma
+            self.efficiency[person_id] = rng.lognormvariate(mu, self.efficiency_sigma)
 
     def active_count(self, firm_id: str) -> int:
         return sum(1 for pid in self.rosters.get(firm_id, ()) if pid not in self.suspended)
 
     def on_person_death(self, person_id: int, accounts: Any | None = None) -> None:
+        self.efficiency.pop(person_id, None)      # human capital dies with the person
         if person_id in self.jobs:
             was_suspended = person_id in self.suspended
             self.separate(person_id)
@@ -134,6 +160,7 @@ class LaborMarket:
 def run_persistent_labor_phase(econ: Any) -> None:
     lm = econ.labor_market
     rng = econ._labor_rng
+    eff_rng = getattr(econ, "_eff_rng", None)       # L4 substream (draws only if enabled)
     bridge = econ.demographic_bridge
     accounts = econ.labor_accounts
     led = econ.ledger
@@ -163,6 +190,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
         if gone:
             was_suspended = person_id in lm.suspended
             lm.separate(person_id)          # deaths AND age-outs: the exit class
+            lm.efficiency.pop(person_id, None)
             if accounts is not None and not was_suspended:
                 accounts.death_seps_total += 1
 
@@ -303,7 +331,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 pool_idx += 1
                 if candidate in lm.jobs and candidate not in lm.suspended:
                     continue                        # already employed elsewhere this tick
-                _try_hire(lm, accounts, f, candidate, wage, date)
+                _try_hire(lm, accounts, f, candidate, wage, date, eff_rng)
     else:
         # the contact process: each searcher contacts ONE random hiring firm with prob
         # search_intensity; landing on a just-filled or cash-capped firm WASTES the
@@ -329,7 +357,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 hiring_list[idx] = hiring_list[-1]  # stale vacancy: drop it, contact wasted
                 hiring_list.pop()
                 continue
-            if _try_hire(lm, accounts, f, candidate, wage, date):
+            if _try_hire(lm, accounts, f, candidate, wage, date, eff_rng):
                 if float(f.labor_demand_eff) - lm.active_count(f.id) < 0.5:
                     hiring_list[idx] = hiring_list[-1]
                     hiring_list.pop()
@@ -390,7 +418,8 @@ def run_persistent_labor_phase(econ: Any) -> None:
             # per-PERSON attribution through the existing targeted-recipients API --
             # individual labor histories become real objects (Phase 3 gauges upgrade)
             bridge.post_labor_income(account, pay, worker_person_ids=[person_id])
-            f.hired += 1.0
+            # L4: production consumes EFFICIENCY UNITS; heads stay in labor_sold below
+            f.hired += lm.e_of(person_id) if lm.person_efficiency else 1.0
             f.wagebill += pay
             agent = bridge._household_agent(account)
             if agent is not None:
@@ -398,7 +427,8 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 agent.labor_sold += 1.0
 
 
-def _try_hire(lm: LaborMarket, accounts: Any, f: Any, candidate: int, wage: float, date: Any) -> bool:
+def _try_hire(lm: LaborMarket, accounts: Any, f: Any, candidate: int, wage: float, date: Any,
+              eff_rng: Any = None) -> bool:
     """Shared hire attempt: suspended candidates hold out for their reservation."""
     susp = lm.suspended.get(candidate)
     if susp is not None:
@@ -407,6 +437,8 @@ def _try_hire(lm: LaborMarket, accounts: Any, f: Any, candidate: int, wage: floa
         lm.separate(candidate)                      # poached: the old link dies (S-side)
         if accounts is not None:
             accounts.suspension_poached_total += 1
+    if eff_rng is not None:
+        lm.ensure_efficiency(candidate, eff_rng)    # L4: e_i is born at the first hire
     lm.hire(candidate, f.id, date, wage=wage)
     if accounts is not None:
         accounts.hires_total += 1

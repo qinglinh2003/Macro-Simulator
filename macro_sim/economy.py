@@ -218,6 +218,9 @@ class Economy:
         # v16-L1: persistent rosters (dedicated rng substream; main stream untouched)
         self.labor_market = None
         self._labor_rng = random.Random(cfg.seed + 16_001)
+        # v16-L4: efficiency draws on their OWN substream -- toggling the flag leaves
+        # the labor stream's consumption order untouched (controlled comparisons)
+        self._eff_rng = random.Random(cfg.seed + 16_002)
         if cfg.labor_matching == "persistent":
             self.labor_market = LaborMarket(
                 churn_annual=cfg.churn_annual,
@@ -233,6 +236,8 @@ class Economy:
                 job_ladder=cfg.labor_job_ladder,
                 ladder_intensity=cfg.ladder_search_intensity,
                 ladder_premium=cfg.ladder_premium,
+                person_efficiency=cfg.labor_person_efficiency,
+                efficiency_sigma=cfg.efficiency_sigma,
             )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()

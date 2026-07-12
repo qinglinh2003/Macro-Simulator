@@ -207,6 +207,12 @@ class Config:
     labor_job_ladder: bool = False
     ladder_search_intensity: float = 0.03
     ladder_premium: float = 0.05
+    # -- v16-L4 person efficiency: the human-capital slot. e_i ~ lognormal MEAN ONE,
+    # drawn once at FIRST hire (dedicated substream seed+16_002); earnings = wage x e_i
+    # (wage_of is the single authority -- every cash gate prices it); f.hired counts
+    # EFFICIENCY UNITS (feeds production), labor_sold counts HEADS (feeds JG/welfare).
+    labor_person_efficiency: bool = False
+    efficiency_sigma: float = 0.35
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1380,6 +1386,8 @@ class Config:
         assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
         assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
+        assert not (self.labor_person_efficiency and self.labor_matching != "persistent"), "person efficiency needs persistent rosters (e_i lives on hires)"
+        assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"
         assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
         assert not (self.labor_relationship_wages and self.labor_matching != "persistent"), "relationship wages need persistent rosters"
         assert not (self.labor_job_ladder and not self.labor_relationship_wages), "the job ladder needs relationship wages (it compares against job.wage)"
