@@ -92,11 +92,14 @@ def test_timeout_converts_to_layoff():
     drain_firm(econ, firm)
     econ.step()
     assert len(lm.suspended) >= 1
-    before = a.suspension_timeouts_total
-    for _ in range(10):                  # timer 5 << 10: unrecalled suspensions expire
+    before = a.suspension_timeouts_total + a.suspension_poached_total
+    for _ in range(10):                  # timer 5 << 10: unrecalled suspensions resolve
         drain_firm(econ, firm)           # keep it broke
         econ.step()
-    assert a.suspension_timeouts_total > before
+    # a suspension at a permanently-broke firm ends within the timer -- by TIMEOUT or
+    # by being POACHED into a live job (post-calibration, poaching usually wins)
+    assert a.suspension_timeouts_total + a.suspension_poached_total > before
+    assert not any(s.firm_id == firm.id for s in lm.suspended.values())
 
 
 def test_suspended_reservation_respected_in_unit():
