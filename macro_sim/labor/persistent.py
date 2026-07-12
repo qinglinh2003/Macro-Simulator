@@ -87,6 +87,17 @@ class LaborMarket:
     person_efficiency: bool = False
     efficiency_sigma: float = 0.35
     efficiency: dict[int, float] = field(default_factory=dict)  # person_id -> e_i
+    # L5 participation margin: the reservation wage. The outside option is what the
+    # welfare state actually pays a non-worker (max of the JG wage and the benefit
+    # rate); a jobless person SEARCHES iff their expected private earnings
+    # (wage_ref x e_i) clear reservation_markup x outside, and an incumbent whose
+    # actual pay sits below that line QUITS TO WELFARE at a daily hazard. This is a
+    # SEARCH decision, not an accounting rewrite: non-searchers stay in partition-U
+    # (jobless on welfare) with a memo stock -- the JG/benefit machinery is untouched.
+    participation_enabled: bool = False
+    reservation_markup: float = 1.0
+    welfare_quit_hazard: float = 0.02   # per-tick quit hazard for below-reservation incumbents
+    nonsearch: set[int] = field(default_factory=set)            # this tick's voluntary idle
     vacancy_age: dict[str, int] = field(default_factory=dict)   # consecutive gap ticks per firm
 
     jobs: dict[int, Job] = field(default_factory=dict)          # person_id -> Job
@@ -233,11 +244,47 @@ def run_persistent_labor_phase(econ: Any) -> None:
                 if firm is not None:
                     job.wage = max(job.wage, float(firm.wage), float(econ.policy.min_wage))
 
+    # ---- 2c. (L5) the participation margin: reservation = markup x the welfare
+    # state's outside option (max of JG wage and benefit rate). Incumbents PAID below
+    # it quit to welfare at a daily hazard (the policy-sensitive quit class); jobless
+    # persons whose EXPECTED private earnings (wage_ref x e_i; e defaults to 1 before
+    # the first job -- unknown ability, optimistic) fall below it do not search. A
+    # search decision, not an accounting rewrite: non-searchers stay in partition-U
+    # on welfare, gauged by the memo stock. Suspended workers keep their own recall
+    # reservation and are exempt. ----
+    if lm.participation_enabled:
+        pol = econ.policy
+        wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
+        outside = 0.0
+        if pol.job_guarantee and pol.jg_wage_ratio > 0.0:
+            outside = max(pol.jg_wage_ratio * wage_ref, pol.min_wage)
+        outside = max(outside, pol.benefit_replacement * wage_ref)
+        reservation = lm.reservation_markup * outside
+        if reservation > 0.0:
+            for person_id, job in list(lm.jobs.items()):
+                if person_id in lm.suspended:
+                    continue
+                firm = firm_by_id.get(job.firm_id)
+                if firm is None:
+                    continue
+                if lm.wage_of(person_id, firm) < reservation \
+                        and rng.random() < lm.welfare_quit_hazard:
+                    lm.separate(person_id)
+                    if accounts is not None:
+                        accounts.welfare_quits_total += 1
+        lm.nonsearch = {
+            pid for pid, s in supply_of.items()
+            if s > 0.0 and pid not in lm.jobs
+            and wage_ref * lm.e_of(pid) < reservation
+        }
+    else:
+        lm.nonsearch = set()
+
     # searcher pool: the jobless PLUS the suspended (recall unemployment: they search
     # with a reservation of quit_discount x their suspended wage)
     pool = [
         pid for pid, s in supply_of.items()
-        if s > 0.0 and pid in household_account_of
+        if s > 0.0 and pid in household_account_of and pid not in lm.nonsearch
         and (pid not in lm.jobs or pid in lm.suspended)
     ]
     rng.shuffle(pool)
@@ -310,7 +357,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
     # firm's suspended roster the same tick and the recall option never exists)
     pool = [
         pid for pid, s in supply_of.items()
-        if s > 0.0 and pid in household_account_of
+        if s > 0.0 and pid in household_account_of and pid not in lm.nonsearch
         and (pid not in lm.jobs
              or (pid in lm.suspended and lm.suspended[pid].since_tick < econ.t))
     ]

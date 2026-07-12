@@ -49,6 +49,10 @@ class LaborAccounts:
     suspended_memo: float = 0.0             # current recall-rights stock
     ladder_moves_total: float = 0.0         # L3b E->E job-to-job switches (memo)
     cash_layoffs_memo: float = 0.0          # layoff subset caused by the cash crunch
+    # L5 participation margin: quits to welfare are a REAL separation class (an
+    # E-outflow in the gate); voluntary non-search is a memo stock over partition-U.
+    welfare_quits_total: float = 0.0
+    nonsearching_memo: float = 0.0
 
     def observe_spot(self, econ: Any) -> None:
         """Derive the aggregate stocks from the spot market's household quantities."""
@@ -118,11 +122,12 @@ class LaborAccounts:
         # flow reconciliation: the delta of the employment stock must equal the net
         # counted flows since the last observation -- the gate's TEETH (any uncounted
         # roster mutation shows up here within one tick)
+        self.nonsearching_memo = float(len(getattr(lm, "nonsearch", ()) or ()))
         flow_balance = (
             self.hires_total + self.recalls_total
             - self.churn_seps_total - self.layoff_seps_total
             - self.bankruptcy_seps_total - self.death_seps_total
-            - self.suspensions_total
+            - self.suspensions_total - self.welfare_quits_total
         )
         if self._prev_employed >= 0.0:
             expected = self._prev_employed + (flow_balance - self._prev_flow_balance)

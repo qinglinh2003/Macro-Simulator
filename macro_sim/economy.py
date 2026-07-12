@@ -238,6 +238,9 @@ class Economy:
                 ladder_premium=cfg.ladder_premium,
                 person_efficiency=cfg.labor_person_efficiency,
                 efficiency_sigma=cfg.efficiency_sigma,
+                participation_enabled=cfg.labor_participation,
+                reservation_markup=cfg.reservation_markup,
+                welfare_quit_hazard=cfg.welfare_quit_hazard,
             )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()

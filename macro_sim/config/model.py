@@ -213,6 +213,14 @@ class Config:
     # EFFICIENCY UNITS (feeds production), labor_sold counts HEADS (feeds JG/welfare).
     labor_person_efficiency: bool = False
     efficiency_sigma: float = 0.35
+    # -- v16-L5 participation margin: the reservation wage. Outside option = what the
+    # welfare state pays a non-worker (max of JG wage and benefit rate); jobless search
+    # iff expected earnings (wage_ref x e_i) >= markup x outside, incumbents paid below
+    # it quit to welfare at a daily hazard. A SEARCH decision: non-searchers stay in
+    # partition-U on welfare (memo-gauged); the JG/benefit machinery is untouched.
+    labor_participation: bool = False
+    reservation_markup: float = 1.0
+    welfare_quit_hazard: float = 0.02
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1388,6 +1396,8 @@ class Config:
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
         assert not (self.labor_person_efficiency and self.labor_matching != "persistent"), "person efficiency needs persistent rosters (e_i lives on hires)"
         assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"
+        assert not (self.labor_participation and self.labor_matching != "persistent"), "participation margin needs persistent rosters"
+        assert self.reservation_markup >= 0.0 and 0.0 <= self.welfare_quit_hazard <= 1.0, "participation params out of range"
         assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
         assert not (self.labor_relationship_wages and self.labor_matching != "persistent"), "relationship wages need persistent rosters"
         assert not (self.labor_job_ladder and not self.labor_relationship_wages), "the job ladder needs relationship wages (it compares against job.wage)"

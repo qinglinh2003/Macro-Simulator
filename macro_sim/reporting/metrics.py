@@ -394,6 +394,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "labor_susp_timeouts_total": float(accounts.suspension_timeouts_total),
                 "labor_susp_poached_total": float(accounts.suspension_poached_total),
                 "labor_ladder_moves_total": float(accounts.ladder_moves_total),
+                "labor_welfare_quits_total": float(accounts.welfare_quits_total),
+                "labor_nonsearching_memo": float(accounts.nonsearching_memo),
                 "labor_incumbent_wage_mean": (
                     (lambda jobs: sum(j.wage for j in jobs) / len(jobs) if jobs else 0.0)(
                         [j for j in getattr(getattr(econ, "labor_market", None), "jobs", {}).values()
