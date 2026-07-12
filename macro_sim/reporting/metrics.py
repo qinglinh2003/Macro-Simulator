@@ -393,6 +393,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "labor_suspensions_total": float(accounts.suspensions_total),
                 "labor_susp_timeouts_total": float(accounts.suspension_timeouts_total),
                 "labor_susp_poached_total": float(accounts.suspension_poached_total),
+                "labor_vacancy_age_mean": (
+                    float(sum(getattr(econ.labor_market, "vacancy_age", {}).values()))
+                    / max(1, len(getattr(econ.labor_market, "vacancy_age", {}) or {1: 0}))
+                    if getattr(econ, "labor_market", None) is not None else 0.0
+                ),
             }
         )
 

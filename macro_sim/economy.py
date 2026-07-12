@@ -226,6 +226,8 @@ class Economy:
                 suspension_enabled=cfg.labor_suspension,
                 suspension_timer=cfg.suspension_timer,
                 quit_discount=cfg.suspension_quit_discount,
+                friction_enabled=cfg.labor_matching_friction,
+                search_intensity=cfg.job_search_intensity,
             )
         if cfg.housing_enabled:
             self.housing = HousingRegistry()

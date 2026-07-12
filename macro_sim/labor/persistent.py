@@ -54,6 +54,15 @@ class LaborMarket:
     suspension_enabled: bool = False
     suspension_timer: int = 45      # ticks before an unrecalled suspension converts to layoff
     quit_discount: float = 0.9      # accept an outside offer iff wage >= this x suspended wage
+    # L2 matching friction: hiring happens through CONTACTS, not a Walrasian sweep.
+    # Each searcher contacts one random hiring firm per tick with prob search_intensity;
+    # contacting a firm whose gap just filled wastes the contact (congestion). u* is the
+    # balance of churn inflow against contact-success outflow (~2 months mean duration
+    # at the defaults). JG workers hold no Job link, so they are searchers by
+    # construction -- the buffer stock drains back to private employment.
+    friction_enabled: bool = False
+    search_intensity: float = 0.15
+    vacancy_age: dict[str, int] = field(default_factory=dict)   # consecutive gap ticks per firm
 
     jobs: dict[int, Job] = field(default_factory=dict)          # person_id -> Job
     rosters: dict[str, list[int]] = field(default_factory=dict) # firm_id -> hire-ordered ids
@@ -163,17 +172,17 @@ def run_persistent_labor_phase(econ: Any) -> None:
     ]
     rng.shuffle(pool)
 
+    def actives_of(f) -> list[int]:
+        return [pid for pid in lm.roster_of(f.id) if pid not in lm.suspended]
+
+    # ---- PASS A: firm-side separations, suspensions, recalls ----
     for f in firms_order:
-        roster = lm.roster_of(f.id)
         target = max(0.0, float(f.labor_demand_eff))
         wage = max(f.wage, EPS)
         affordable = int(led.balance(f.id) / wage)
 
-        def actives() -> list[int]:
-            return [pid for pid in roster if pid not in lm.suspended]
-
         # 3. demand-gap layoffs with hysteresis + partial adjustment (LIFO over actives)
-        active = actives()
+        active = actives_of(f)
         excess = len(active) - target
         band = lm.layoff_band * max(1.0, target)
         if excess > band:
@@ -187,7 +196,7 @@ def run_persistent_labor_phase(econ: Any) -> None:
                     accounts.layoff_seps_total += 1
 
         # 4. cash-crunch ladder: suspend (L1b, the employment LOLR) or fire (L1)
-        active = actives()
+        active = actives_of(f)
         while len(active) > affordable:
             victim = active.pop()                   # LIFO
             if lm.suspension_enabled:
@@ -203,42 +212,86 @@ def run_persistent_labor_phase(econ: Any) -> None:
         # (FIFO by suspension time), BEFORE any new hiring -- no re-matching friction
         if lm.suspension_enabled:
             own_suspended = sorted(
-                (pid for pid in roster if lm.suspended.get(pid) is not None
+                (pid for pid in lm.roster_of(f.id) if lm.suspended.get(pid) is not None
                  and lm.suspended[pid].firm_id == f.id),
                 key=lambda pid: lm.suspended[pid].since_tick,
             )
             for pid in own_suspended:
-                if len(actives()) + 1 > min(affordable, target + 0.5):
+                if len(actives_of(f)) + 1 > min(affordable, target + 0.5):
                     break
                 del lm.suspended[pid]
                 if accounts is not None:
                     accounts.recalls_total += 1
 
-        # 5. hiring: fill toward the target (instant in L1; matching friction = L2).
-        # Suspended candidates accept iff the offer clears their reservation.
-        pool_idx = 0
-        while len(actives()) + 1 <= target + 0.5 and pool_idx < len(pool):
-            if len(actives()) + 1 > affordable:
-                break                               # cash cap binds
-            candidate = pool[pool_idx]
-            pool_idx += 1
-            if candidate in lm.jobs and candidate not in lm.suspended:
-                continue                            # already employed elsewhere this tick
-            susp = lm.suspended.get(candidate)
-            if susp is not None:
-                if susp.firm_id == f.id or wage < lm.quit_discount * susp.wage_at:
-                    continue                        # waiting beats this offer
-                lm.separate(candidate)              # poached: the old link dies (S-side)
-                if accounts is not None:
-                    accounts.suspension_poached_total += 1
-            lm.hire(candidate, f.id, date)
-            if accounts is not None:
-                accounts.hires_total += 1
+    # freshly separated workers rejoin the pool for THIS tick's hiring; the JUST-
+    # suspended do not search until tomorrow (else instant-fill mode vacuums a
+    # firm's suspended roster the same tick and the recall option never exists)
+    pool = [
+        pid for pid, s in supply_of.items()
+        if s > 0.0 and pid in household_account_of
+        and (pid not in lm.jobs
+             or (pid in lm.suspended and lm.suspended[pid].since_tick < econ.t))
+    ]
+    rng.shuffle(pool)
 
-        # 6. wages: every ACTIVE member paid at the posted wage into their CURRENT
-        # household; suspended members: no pay, no work (the benefit/JG machinery
-        # catches them through labor_sold = 0 with zero new code)
-        for person_id in actives():
+    # ---- PASS B: hiring (instant fill in L1; friction contacts in L2) ----
+    if not lm.friction_enabled:
+        pool_idx = 0
+        for f in firms_order:
+            target = max(0.0, float(f.labor_demand_eff))
+            wage = max(f.wage, EPS)
+            affordable = int(led.balance(f.id) / wage)
+            while len(actives_of(f)) + 1 <= target + 0.5 and pool_idx < len(pool):
+                if len(actives_of(f)) + 1 > affordable:
+                    break                           # cash cap binds
+                candidate = pool[pool_idx]
+                pool_idx += 1
+                if candidate in lm.jobs and candidate not in lm.suspended:
+                    continue                        # already employed elsewhere this tick
+                _try_hire(lm, accounts, f, candidate, wage, date)
+    else:
+        # the contact process: each searcher contacts ONE random hiring firm with prob
+        # search_intensity; landing on a just-filled or cash-capped firm WASTES the
+        # contact (congestion). u* = churn inflow vs contact-success outflow.
+        hiring_list = [
+            f for f in econ.firms
+            if float(f.labor_demand_eff) - lm.active_count(f.id) > 0.5
+            and led.balance(f.id) > max(f.wage, EPS)
+        ]
+        for candidate in pool:
+            if not hiring_list:
+                break
+            if candidate in lm.jobs and candidate not in lm.suspended:
+                continue                            # employed (non-suspended): not searching
+            if rng.random() >= lm.search_intensity:
+                continue                            # no contact today
+            idx = rng.randrange(len(hiring_list))
+            f = hiring_list[idx]
+            wage = max(f.wage, EPS)
+            gap = float(f.labor_demand_eff) - lm.active_count(f.id)
+            affordable = int(led.balance(f.id) / wage)
+            if gap < 0.5 or lm.active_count(f.id) + 1 > affordable:
+                hiring_list[idx] = hiring_list[-1]  # stale vacancy: drop it, contact wasted
+                hiring_list.pop()
+                continue
+            if _try_hire(lm, accounts, f, candidate, wage, date):
+                if float(f.labor_demand_eff) - lm.active_count(f.id) < 0.5:
+                    hiring_list[idx] = hiring_list[-1]
+                    hiring_list.pop()
+
+        # vacancy-age gauge: consecutive ticks each firm has carried an unfilled gap
+        for f in econ.firms:
+            if float(f.labor_demand_eff) - lm.active_count(f.id) > 0.5:
+                lm.vacancy_age[f.id] = lm.vacancy_age.get(f.id, 0) + 1
+            else:
+                lm.vacancy_age.pop(f.id, None)
+
+    # ---- PASS C: wages -- every ACTIVE member (including this tick's hires) paid at
+    # the posted wage into their CURRENT household; suspended members: no pay, no work
+    # (the benefit/JG machinery catches them through labor_sold = 0) ----
+    for f in firms_order:
+        wage = max(f.wage, EPS)
+        for person_id in actives_of(f):
             account = household_account_of.get(person_id)
             if account is None:
                 continue
@@ -255,3 +308,18 @@ def run_persistent_labor_phase(econ: Any) -> None:
             if agent is not None:
                 agent.income_realized += pay
                 agent.labor_sold += 1.0
+
+
+def _try_hire(lm: LaborMarket, accounts: Any, f: Any, candidate: int, wage: float, date: Any) -> bool:
+    """Shared hire attempt: suspended candidates hold out for their reservation."""
+    susp = lm.suspended.get(candidate)
+    if susp is not None:
+        if susp.firm_id == f.id or wage < lm.quit_discount * susp.wage_at:
+            return False                            # waiting beats this offer
+        lm.separate(candidate)                      # poached: the old link dies (S-side)
+        if accounts is not None:
+            accounts.suspension_poached_total += 1
+    lm.hire(candidate, f.id, date)
+    if accounts is not None:
+        accounts.hires_total += 1
+    return True

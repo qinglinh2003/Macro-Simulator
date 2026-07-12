@@ -196,6 +196,11 @@ class Config:
     labor_suspension: bool = False
     suspension_timer: int = 45
     suspension_quit_discount: float = 0.9
+    # -- v16-L2 matching friction: hiring through contacts; u* is born here and the
+    # JG becomes a searchable buffer (JG workers hold no Job link => searchers by
+    # construction). search intensity ~0.15/day => mean unemployment ~2 months.
+    labor_matching_friction: bool = False
+    job_search_intensity: float = 0.15
     mpc_dispersion: float = 0.0     # (CONTROL, demoted) cross-household dispersion of (alpha1,
                                     # alpha2): exogenous saving-preference heterogeneity. Kept as a
                                     # comparison against the endogenous mechanism below. 0 = off. -- FREE
@@ -1369,6 +1374,8 @@ class Config:
         assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
         assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
+        assert not (self.labor_matching_friction and self.labor_matching != "persistent"), "matching friction needs persistent rosters"
+        assert 0.0 < self.job_search_intensity <= 1.0 or not self.labor_matching_friction, "search intensity is a daily contact probability"
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"

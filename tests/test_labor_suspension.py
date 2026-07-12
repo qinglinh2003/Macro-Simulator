@@ -110,9 +110,13 @@ def test_suspended_reservation_respected_in_unit():
     lm.suspended[person] = Suspension(firm_id=lm.jobs[person].firm_id,
                                       since_tick=econ.t, wage_at=100.0)
     econ.labor_accounts.suspensions_total += 1   # count the synthetic E->S move, or the
-    poached_before = econ.labor_accounts.suspension_poached_total  # flow gate fires (it did)
-    econ.step()
-    assert econ.labor_accounts.suspension_poached_total == poached_before
+    old_firm = lm.jobs[person].firm_id           # flow gate fires (it did)
+    for _ in range(3):
+        econ.step()
+    # OTHER (naturally cheap) suspensions may get poached; THIS one holds out --
+    # no firm posts >= 0.9 x 100
+    assert person in lm.suspended
+    assert lm.jobs[person].firm_id == old_firm
 
 
 def test_flag_off_never_suspends():
