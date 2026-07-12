@@ -80,6 +80,18 @@ def test_land_fee_is_convex_in_the_stock():
     assert increments[-1] > 0.0
 
 
+def test_first_mint_reachable_at_production_productivity():
+    """Regression for the mid-gestation starvation zombie: at the PRODUCTION
+    productivity (0.002 => ~500 labor-ticks per dwelling) the seed capital must carry
+    the builder through the whole first gestation INCLUDING the land fee at the end.
+    The hot-productivity tests above cannot catch this."""
+    econ = make_econ(n_ticks=400)          # default builder_productivity
+    for _ in range(320):
+        econ.step()
+    assert getattr(econ, "_dwellings_built", 0) >= 1
+    assert all(econ.ledger.balance(b.id) >= 0.0 for b in econ.builders)
+
+
 def test_construction_off_leaves_no_trace():
     econ = make_econ(housing_construction_enabled=False)
     assert not getattr(econ, "builders", None)

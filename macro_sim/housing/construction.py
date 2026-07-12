@@ -45,12 +45,17 @@ def create_builders(econ: Any, cfg: Any) -> None:
         econ.ledger.add_account(firm.id)
         # A5-safe seed capital: the state funds the builder (fiscal may run negative);
         # genesis money is already fixed, so this is a conserving transfer, not creation.
-        # Sized to wages PLUS one land fee -- otherwise the first mint is unreachable
-        # (fee ~ land_share x price > d_firm0: a bootstrap deadlock, revenue needs a
-        # sale, a sale needs a mint, a mint needs the fee)
+        # Sized to the FULL FIRST-UNIT GESTATION: buffer + the wage bill of one whole
+        # dwelling (wage/a labor-ticks) + one land fee. Static sizing (buffer + fee
+        # only) starved the builder mid-gestation at production productivity: the
+        # first dwelling FINISHED as WIP but the account hit zero before the land fee
+        # -- a zombie holding an unmintable house (found via the integrated portrait;
+        # the hot-productivity acceptance test had masked it). Revenue from the first
+        # sale funds every later round.
         fiscal = getattr(econ, "_fiscal", None)
         if fiscal is not None:
-            seed = cfg.d_firm0 + cfg.land_fee_share * econ._house_price
+            gestation_wages = cfg.w_firm0 / max(cfg.builder_productivity, 1e-12)
+            seed = cfg.d_firm0 + gestation_wages + cfg.land_fee_share * econ._house_price
             econ.ledger.transfer(fiscal, firm.id, seed)
         # no explicit bank assignment: bank_for() falls back to the first alive bank,
         # and _bank_of does not exist yet at this point in Economy.__init__
@@ -97,8 +102,9 @@ def run_construction_step(econ: Any) -> None:
         if econ._house_price > unit_cost:
             firm.demand_expected = max(firm.demand_expected, cfg.builder_demand_seed)
         while firm.wip >= 1.0:
-            if econ._permits_used >= cfg.housing_permits:
-                break                            # the zoning quota binds this year
+            permits = int(getattr(econ.policy, "housing_permits", cfg.housing_permits))
+            if econ._permits_used >= permits:
+                break                            # the zoning quota binds this year (live Policy lever)
             if fiscal is None or econ.ledger.balance(firm.id) < land_fee:
                 break                            # cannot pay for land: unit stays as WIP
             if land_fee > EPS:
