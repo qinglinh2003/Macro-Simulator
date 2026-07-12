@@ -33,7 +33,9 @@ def run_settlement_phase(econ: Any) -> None:
     total_div = 0.0
     div_by_firm = {}                               # firm_id -> payable (v8.4 pro-rata payout)
     for f in econ.firms:
-        f.profit = f.revenue - f.wagebill          # investment is NOT a cost (asset swap)
+        # investment is NOT a cost (asset swap); energy USED is opex (v17.0; 0 when off,
+        # and x - 0.0 == x exactly, so the pre-energy baseline stays bit-identical)
+        f.profit = f.revenue - f.wagebill - f.energy_cost_used
         f.dividend_shortfall = 0.0
         ptax = 0.0
         if gov and pol.tax_profit_rate > 0.0 and f.profit > EPS:

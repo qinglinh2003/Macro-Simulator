@@ -35,6 +35,10 @@ def run_planning_phase(econ: Any) -> None:
     #     price) -> cash-capped labor demand -> investment (C-firms, B5).
     for f in econ.firms:
         B.plan_production(f, cfg.inventory_gap_close)
+        if f.capacity_kappa > 0.0:
+            # v17.0 capacity edge (E-firms): never plan past kappa*K, so labor demand is
+            # capped at the capacity-implied headcount (short-run supply inelasticity).
+            f.production_target = min(f.production_target, f.capacity_kappa * f.capital)
         f.labor_demand_notional = B.labor_demand_notional(f, f.production_target, econ._pubcap_factor)
         B.plan_wage(f, econ.rng, cfg.theta_wage, econ.policy.min_wage, cfg.delta)
         B.plan_price(f, econ.rng, cfg.theta_price)
@@ -47,6 +51,12 @@ def run_planning_phase(econ: Any) -> None:
             # least replace depreciation, removing the "never invests" failure so
             # any remaining collapse must be the structural absorbing state.
             if cfg.k_replacement_floor and f.sells == "capital":
+                f.investment_target = max(f.investment_target, f.delta_K * f.capital)
+            # v17.0: E-firms carry the same floor UNCONDITIONALLY -- it is an existence
+            # condition, not a diagnostic: a demand slump zeroes the accelerator, K
+            # depreciates away, and a dead E-sector is ABSORBING (recovery demand cannot
+            # be produced, sales stay 0, d^e stays 0 -- found in the v124+energy probe).
+            if f.sells == "energy":
                 f.investment_target = max(f.investment_target, f.delta_K * f.capital)
 
     # (d) household consumption budget from expected income + wealth (deposits, plus the weighted equity

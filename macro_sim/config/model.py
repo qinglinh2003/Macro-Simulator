@@ -605,6 +605,35 @@ class Config:
     p_kfirm0: float = 1.2           # K-firm initial posted price
     inv_kfirm0: float = 5.0         # K-firm initial capital-good inventory
 
+    # ======================================================================
+    # v17.0 -- energy: the first INTERMEDIATE input (PLAN_v17). E-firms produce a
+    # storable commodity under a CAPACITY edge (y = min(a·L, κ·K)); c/k firms need
+    # energy_intensity units per output unit (Leontief), hold an input stock at a
+    # coverage target, and energy cost enters the B3 unit cost. Energy sold to firms
+    # is intermediate consumption (never GDP); the E-sector's demographics are FROZEN
+    # through the 17.x arc. energy_enabled=False => no E-firms exist, every hook is
+    # a guarded no-op => bit-identical.
+    # ======================================================================
+    energy_enabled: bool = False        # v17.0 master switch (E-sector + energy market)
+    n_firms_e: int = 4                  # E-firm count (frozen; entry needs a construction lag, later flag)
+    energy_intensity: float = 0.05      # e: energy units per unit of c/k output (uniform in v1)
+    energy_coverage_ticks: float = 30.0 # downstream input-stock target, in ticks of expected use
+                                        # (30 days on the day-tick calendar = the crude-stock anchor)
+    energy_gap_close: float = 0.05      # restock gap-closing throttle (the phi-grammar mirror; the
+                                        # v13 one-shot-closing lesson applies to input stocks too)
+    kappa_E: float = 1.0                # capacity edge: energy units per unit of E-capital per tick
+    a_E: float = 1.0                    # E-firm labor productivity. NOTE: B3 prices at markup on
+                                        # LABOR cost, so a sector's relative price is pinned by its
+                                        # labor productivity -- the 5-8% cost-share anchor forces
+                                        # a_E ~ a (p_E ~ (1+mu)w/a_E). The capacity edge still binds
+                                        # PLANS (planning caps y* at kappa*K before labor inversion),
+                                        # so supply stays short-run inelastic under demand surges.
+    energy_util0: float = 0.85          # genesis capacity utilization (headroom so trend growth
+                                        # does not short the market at t1)
+    d_efirm0: float = 200.0             # E-firm tick-0 deposits
+    p_efirm0: float = 1.2               # E-firm initial posted price (genesis avg-cost anchor)
+    tax_energy_rate: float = 0.0        # excise on energy purchases (Policy lever; VAT grammar; inert)
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -1348,6 +1377,14 @@ class Config:
         assert self.rent_yield0 > 0.0 and 0.0 <= self.rent_adjust < 1.0, "rent level params out of range"
         assert 0.0 < self.rent_burden_cap <= 1.0, "rent burden cap is an income fraction"
         assert self.rental_eviction_arrears >= 1, "eviction needs at least one missed tick"
+        # v17.0 energy guards
+        assert self.n_firms_e >= 1 or not self.energy_enabled, "energy needs at least one E-firm"
+        assert self.energy_intensity >= 0.0, "energy intensity must be >= 0"
+        assert self.energy_coverage_ticks >= 0.0, "energy coverage target must be >= 0"
+        assert 0.0 < self.energy_gap_close <= 1.0, "energy restock throttle in (0,1]"
+        assert self.kappa_E > 0.0 and self.a_E > 0.0, "E-sector productivities must be > 0"
+        assert 0.0 < self.energy_util0 <= 1.0, "genesis utilization is a fraction"
+        assert 0.0 <= self.tax_energy_rate < 1.0, "energy excise is a fraction"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

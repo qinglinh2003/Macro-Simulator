@@ -113,6 +113,7 @@ def unit_cost(firm: Firm) -> float:
         y = firm.production_target
         base = (firm.wage * firm.labor_demand_notional / y) if y > EPS \
             else firm.wage / (firm.A * firm.capital ** firm.alpha)   # y*≈0 fallback (uc at N=1)
+    base += firm.energy_intensity * firm.energy_avg_cost   # v17.0: Leontief energy cost/unit (0 when off)
     return base * (1.0 + firm.dis_slope * firm.production_target)
 
 

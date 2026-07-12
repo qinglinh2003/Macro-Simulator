@@ -58,6 +58,7 @@ from macro_sim.systems.banking import (
 )
 from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
+from macro_sim.systems.energy import create_e_firms, run_energy_phase
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -128,7 +129,18 @@ class Economy:
             for f in self.c_firms:
                 balances[f.id] = cfg.d_firm0
         self.firms: List[Firm] = self.c_firms + self.k_firms   # all firms (single labor pool)
-        self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5)
+        # v17.0 energy sector (PLAN_v17): E-firms on the native grammar, genesis FITTED
+        # (supply = demand at anchored utilization; input stocks at coverage target -- no
+        # opening wave). Appends to self.firms; a dedicated rng keeps the main stream
+        # unperturbed. energy_enabled=False => no E-firms, no state => bit-identical.
+        self.e_firms: List[Firm] = []
+        if cfg.energy_enabled:
+            create_e_firms(self, cfg, balances)
+            self._energy_rng = random.Random(cfg.seed + 17_000)
+            self._energy_price = cfg.p_efirm0     # transaction-weighted, hold-last (metrics)
+            self._energy_sold = 0.0
+            self._tax_energy = 0.0
+        self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5; + E in v17)
 
         # v9.1: economy-wide PUBLIC capital (a non-rival stock; government investment builds it, it raises
         # every firm's productivity). K_ref = genesis private C-capital, so the factor (1+K_pub/K_ref)^γ
@@ -396,6 +408,7 @@ class Economy:
         run_credit_phase(self)            # v3 only; no-op when banks disabled
         run_labor_phase(self)             # hiring only (production split out, trunk refactor)
         # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
+        run_energy_phase(self)            # v17.0 only; firms buy energy before producing (no-op off)
         run_production_phase(self)        # [ANCHOR: production] output = f(hired labor)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled

@@ -287,7 +287,8 @@ def test_lifecycle_budget_returns_zero_for_empty_demographic_household_account()
 
 def test_equal_dividends_skip_empty_demographic_household_accounts():
     households = [_HouseholdStub("H0"), _HouseholdStub("H1")]
-    firm = SimpleNamespace(id="F0", revenue=10.0, wagebill=0.0, rho=1.0, profit=0.0, dividend_shortfall=0.0)
+    firm = SimpleNamespace(id="F0", revenue=10.0, wagebill=0.0, rho=1.0, profit=0.0, dividend_shortfall=0.0,
+                           energy_cost_used=0.0)   # v17.0: settlement profit reads the energy opex field
     econ = SimpleNamespace(
         households=households,
         firms=[firm],

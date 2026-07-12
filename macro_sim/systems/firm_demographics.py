@@ -7,6 +7,7 @@ from typing import Any
 from macro_sim.domain.agents import Firm
 from macro_sim.markets.matching import EPS
 from macro_sim.systems.banking import bank_for
+from macro_sim.systems.energy import seed_entrant_energy
 
 
 def apply_gibrat_shock(econ: Any) -> None:
@@ -210,6 +211,7 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
         firm.capital_prev = 0.0
     if cfg.gibrat_growth:
         firm.attractiveness = cfg.gibrat_entry_a0
+    seed_entrant_energy(econ, firm)   # v17.0: entrants join houseless of energy (no-op off)
     econ.ledger.add_account(firm.id)
     if len(econ.banks) > 1:
         econ._bank_of[firm.id] = bank_for(econ, funder.id)

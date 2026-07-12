@@ -27,7 +27,9 @@ def run_capital_goods_phase(econ: Any) -> None:
     bought: Dict[str, float] = {}
     for tr in trades:
         bought[tr.buyer] = bought.get(tr.buyer, 0.0) + tr.qty
-    for f in econ.c_firms:
+    for f in econ.investing_firms:
+        # push results onto the SAME list the orders came from (v17.0: E-firms invest in
+        # capacity through this market; == c_firms in every pre-energy preset ⇒ bit-identical)
         f.investment = bought.get(f.id, 0.0)          # realized capital units (I_{f,t})
     for off in offers:                                # K-firms' sales come from THIS market
         kf: Firm = off.ref

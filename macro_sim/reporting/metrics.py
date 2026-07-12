@@ -1246,6 +1246,58 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "mean_real_consumption_per_person": _safe_ratio(rec.get("real_household_consumption", 0.0), population_alive),
         "orphan_support_per_child": _safe_ratio(rec.get("orphan_support_spending", 0.0), child_population),
     })
+    # ----------------------------------------------------------------------
+    # v17.0 energy gauges (PLAN_v17) -- pure observation. The three standing watches:
+    # FLOW (produced == used + Δstocks, the soft conservation gauge), BULLWHIP
+    # (coverage stationarity + restock share), MARKUP DISCIPLINE (E-markup mean,
+    # time-at-ceiling share, sector HHI). Energy revenue is intermediate: none of the
+    # consumption-GDP series above read E-firms, by construction of the sector split.
+    # ----------------------------------------------------------------------
+    if getattr(econ.cfg, "energy_enabled", False):
+        e_firms = econ.e_firms
+        users = [f for f in list(cfirms) + list(kfirms) if f.energy_intensity > 0.0]
+        e_produced = float(np.sum([f.produced for f in e_firms]))
+        e_used = float(np.sum([f.energy_used for f in users]))
+        e_bought = float(np.sum([f.energy_bought for f in users]))
+        stock_total = (float(np.sum([f.energy_stock for f in users]))
+                       + float(np.sum([f.inventory for f in e_firms])))
+        prev_stock = getattr(econ, "_energy_prev_stock_total", None)
+        flow_gap = (e_produced - e_used - (stock_total - prev_stock)) if prev_stock is not None else 0.0
+        econ._energy_prev_stock_total = stock_total
+        # AGGREGATE coverage (stock over sector expected use): per-firm ratios explode
+        # when a shell's d^e -> 0 while it still holds stock (the v13 active-seller
+        # hygiene lesson); the aggregate is the stable gauge, the min reads ACTIVE firms.
+        _use_expected = float(np.sum([f.energy_intensity * f.demand_expected for f in users]))
+        _stock_down = float(np.sum([f.energy_stock for f in users]))
+        _active_u = [f for f in users if f.energy_intensity * f.demand_expected > 1e-6]
+        coverage = ([_stock_down / _use_expected] if _use_expected > 1e-9 else [])
+        coverage_min = ([f.energy_stock / (f.energy_intensity * f.demand_expected) for f in _active_u]
+                        or [0.0])
+        e_sales = [f.sales for f in e_firms]
+        e_sales_tot = float(np.sum(e_sales))
+        e_cost_used_tot = float(np.sum([f.energy_cost_used for f in users]))
+        _e_active = [f for f in e_firms if f.sales > 1e-9] or list(e_firms)
+        rec.update({
+            "energy_price": float(getattr(econ, "_energy_price", 0.0)),   # transaction-weighted, hold-last
+            "energy_produced": e_produced,
+            "energy_sold": float(getattr(econ, "_energy_sold", 0.0)),
+            "energy_used": e_used,
+            "energy_bought": e_bought,
+            "energy_stock_total": stock_total,                       # downstream input + E output stocks
+            "energy_flow_gap": flow_gap,                             # soft gauge: ≈0 every tick
+            "energy_coverage_mean": _mean(coverage),                 # AGGREGATE ticks of expected use held
+            "energy_coverage_min": float(min(coverage_min)),         # worst ACTIVE firm
+            "energy_unfilled": float(getattr(econ, "_energy_unfilled", 0.0)),
+            "energy_restock_share": (max(0.0, e_bought - e_used) / e_bought) if e_bought > 1e-9 else 0.0,
+            "energy_cost_share": (e_cost_used_tot / (total_wagebill + e_cost_used_tot))
+                                 if (total_wagebill + e_cost_used_tot) > 1e-9 else 0.0,
+            "e_markup_mean": _mean([f.markup for f in _e_active]),
+            "e_markup_at_cap_share": _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in e_firms]),
+            "e_hhi": (float(np.sum([(s / e_sales_tot) ** 2 for s in e_sales])) if e_sales_tot > 1e-9 else 0.0),
+            "e_capacity_utilization": (e_produced / max(1e-9, float(np.sum([f.capacity_kappa * f.capital
+                                                                            for f in e_firms])))),
+            "tax_energy": float(getattr(econ, "_tax_energy", 0.0)),
+        })
     if getattr(econ.cfg, "cb_log_inflation", False):
         # v13: feed the Taylor EMA the LOG price change (ln(P/P_prev) = log1p(inflation)). The
         # arithmetic per-tick change has a Jensen bias under index noise (the sick 10k run's EMA

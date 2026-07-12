@@ -135,6 +135,18 @@ class Firm:
     attractiveness: float = 1.0          # v8.1: market-share weight (Gibrat random walk); goods demand
                                          # is allocated ∝ attractiveness^β. NOT money, not in any conservation.
 
+    # v17.0 energy (PLAN_v17). Defaults are inert: capacity_kappa=0 = no capacity edge;
+    # energy_intensity=0 = no energy input. Stocks are OUTSIDE items (like inventory):
+    # A4/A5 blind, average-cost valuation for the B3 unit cost.
+    capacity_kappa: float = 0.0          # >0 (E-firms): output capped at κ·K (the capacity edge)
+    energy_intensity: float = 0.0        # e: energy units per output unit (c/k firms when energy on)
+    energy_stock: float = 0.0            # input inventory (energy units held for production)
+    energy_stock_cost: float = 0.0       # cost basis of the stock (average-cost valuation)
+    energy_avg_cost: float = 0.0         # hold-last avg cost per unit (feeds the B3 unit cost)
+    energy_used: float = 0.0             # scratch: energy consumed in production this tick
+    energy_cost_used: float = 0.0        # scratch: cost of energy consumed (enters profit)
+    energy_bought: float = 0.0           # scratch: units bought this tick (restock-share gauge)
+
     @classmethod
     def create(cls, idx: int, cfg: Config) -> "Firm":
         return cls(
