@@ -645,6 +645,17 @@ class Config:
     cb_core_inflation: bool = False     # CB Taylor input reads CORE (ex-energy) instead of
                                         # headline once households buy energy -- the classic
                                         # "which index through a supply shock" experiment
+    # -- v17.2 the capacity shock SCENARIO (the model's first deliberate exogenous
+    # shock; a SCENARIO, never a default). kappa multiplier: capacity_kappa *= (1-mag)
+    # at shock_at; a pulse (duration>0) restores it exactly. The accelerator's v stays
+    # at its genesis technology -- after a PERMANENT cut the sector re-expands K through
+    # the unfilled-demand channel, slowly (that lag IS the experiment). Magnitudes are
+    # calibrated-world territory: a 2x cut kills the stabilizer-free kernel outright.
+    energy_shock_at: int = 0            # tick the shock lands (0 = no shock, bit-identical)
+    energy_shock_magnitude: float = 0.0 # fractional capacity cut (0.3 = -30% kappa)
+    energy_shock_duration: int = 0      # 0 = permanent step; >0 = pulse of this many ticks
+    tax_energy_windfall: float = 0.0    # Policy: profit surtax on E-firms (shock-response
+                                        # fiscal instrument; reduces the dividend pool)
 
     def __post_init__(self) -> None:
         self._validate()
@@ -1399,6 +1410,10 @@ class Config:
         assert 0.0 <= self.tax_energy_rate < 1.0, "energy excise is a fraction"
         assert not (self.energy_household and not self.energy_enabled), "household energy requires the E-sector"
         assert 0.0 < self.energy_hh_share < 1.0, "household energy share anchor is a fraction"
+        assert not (self.energy_shock_at > 0 and not self.energy_enabled), "the capacity shock needs the E-sector"
+        assert 0.0 <= self.energy_shock_magnitude < 1.0, "shock magnitude is a fractional capacity cut"
+        assert self.energy_shock_duration >= 0, "shock duration must be >= 0 (0 = permanent)"
+        assert 0.0 <= self.tax_energy_windfall < 1.0, "windfall surtax is a fraction"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

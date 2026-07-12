@@ -194,14 +194,21 @@ objects live; the rank gradient is emergent from income variation regardless):
 - Shock machinery, buffering acceptance, and windfall tax land inside the arc (spot labor
   is fine for them — their gates are inventory/price dynamics, not employment readings).
 
-Acceptance:
+Acceptance (arc-scope CLOSED 2026-07-12, diagnostic_v172.png; the experiment MATRIX +
+JG hard test run POST-COMPOSITION per protocol §5):
 
-- [ ] Shock off ⇒ bit-identical; pulse shock fully mean-reverts (no ratchet in any stock).
-- [ ] Inventory buffering visible: impact delay/peak vary with initial coverage as
-      pre-registered (or the refutation is documented).
-- [ ] The stagflation signature exists: inflation ↑ while output ↓ — the first time the
-      model produces it; decomposition attributes it to the cost channel (unit-cost series).
-- [ ] JG hard test executed and written up; windfall tax conserves through fiscal.
+- [x] Shock off ⇒ bit-identical (same-seed prefix equality through shock_at); pulse
+      restores κ float-EXACTLY (stored value) and mean-reverts (output within 15% of
+      the no-shock twin late; coverage rebuilds; no stock ratchet).
+- [x] Inventory buffering PRE-REGISTERED AND CONFIRMED: the early post-shock output
+      drop is smaller under deep initial coverage (5 vs 60 ticks paired) — the
+      storability payoff, measured.
+- [x] The cost-push signature exists on the frontier pulse: shock-world yoy inflation
+      ~+0.1 vs twin −0.2 through the window while output dips 30% and recovers —
+      inflation ↑ with output ↓, the model's first deliberate stagflation episode.
+      (The FULL matrix decomposition + policy-stack sweep: post-composition.)
+- [ ] JG hard test — POST-COMPOSITION (tests the L2-recast buffer-stock JG).
+- [x] Windfall surtax remits to fiscal (reduces the dividend pool) and conserves.
 
 ## v17.3 — Strategic Reserve, State Ownership & Hoarding
 

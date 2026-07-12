@@ -1298,6 +1298,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "e_capacity_utilization": (e_produced / max(1e-9, float(np.sum([f.capacity_kappa * f.capital
                                                                             for f in e_firms])))),
             "tax_energy": float(getattr(econ, "_tax_energy", 0.0)),
+            "tax_energy_windfall": float(getattr(econ, "_tax_energy_windfall", 0.0)),  # v17.2
+            "energy_shock_active": float(getattr(econ, "_energy_shock_active", 0.0)),  # v17.2 bookkeeping
         })
         # -- v17.1 household energy: consumption GDP component, headline CPI, poverty --
         if getattr(econ.cfg, "energy_household", False):

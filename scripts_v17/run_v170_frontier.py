@@ -41,3 +41,7 @@ if __name__ == "__main__":
         run("energy_off")
     if which == "household":                      # v17.1 diagnostic twin (17.0 run is the reference)
         run("energy_hh", energy_enabled=True, energy_household=True)
+    if which == "shock":                          # v17.2 diagnostic: a year-5 pulse, -40% capacity, 180 days
+        run("energy_shock", energy_enabled=True, energy_household=True,
+            energy_shock_at=1825, energy_shock_magnitude=0.4, energy_shock_duration=180,
+            tax_energy_windfall=0.3)

@@ -31,6 +31,7 @@ class Policy:
     tax_wealth_rate: float = 0.0         # τ_w on household net worth (the stock)
     wealth_allowance: float = 0.0        # progressive wealth-tax exemption as a multiple of mean net worth
     tax_energy_rate: float = 0.0         # v17.0: excise on energy purchases (VAT grammar; inert at 0)
+    tax_energy_windfall: float = 0.0     # v17.2: profit surtax on E-firms (shock-response instrument)
 
     # -- labour -----------------------------------------------------------
     min_wage: float = 0.0                # wage floor (0 = off)
@@ -81,6 +82,7 @@ class Policy:
             tax_wealth_rate=cfg.tax_wealth_rate,
             wealth_allowance=cfg.wealth_allowance,
             tax_energy_rate=getattr(cfg, "tax_energy_rate", 0.0),
+            tax_energy_windfall=getattr(cfg, "tax_energy_windfall", 0.0),
             min_wage=cfg.min_wage,
             job_guarantee=cfg.job_guarantee,
             jg_wage_ratio=cfg.jg_wage_ratio,

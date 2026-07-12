@@ -140,6 +140,28 @@ def _produce_e_firms(econ: Any) -> None:
         f.inventory += f.produced
 
 
+def apply_energy_shock(econ: Any) -> None:
+    """v17.2: the capacity-shock SCENARIO (the model's first deliberate exogenous
+    shock). kappa multiplier at shock_at; a pulse restores it EXACTLY at the end
+    (float-exact: store the pre-shock value instead of dividing back). The
+    accelerator's v keeps its genesis technology: after a permanent cut, capacity
+    re-expands through the unfilled-demand channel with a lag — the lag IS the
+    experiment. energy_shock_at=0 => never fires => bit-identical."""
+    cfg = econ.cfg
+    if cfg.energy_shock_at <= 0:
+        return
+    if econ.t == cfg.energy_shock_at:
+        econ._energy_kappa0 = [ef.capacity_kappa for ef in econ.e_firms]
+        for ef in econ.e_firms:
+            ef.capacity_kappa *= (1.0 - cfg.energy_shock_magnitude)
+        econ._energy_shock_active = 1.0
+    elif (cfg.energy_shock_duration > 0
+          and econ.t == cfg.energy_shock_at + cfg.energy_shock_duration):
+        for ef, k0 in zip(econ.e_firms, getattr(econ, "_energy_kappa0", [])):
+            ef.capacity_kappa = k0
+        econ._energy_shock_active = 0.0
+
+
 def run_energy_phase(econ: Any) -> None:
     """The energy phase (every tick, [ANCHOR: post-labor]): E-firms produce, then
     downstream firms buy today's planned use plus a throttled restock toward the
@@ -148,6 +170,7 @@ def run_energy_phase(econ: Any) -> None:
     cfg = econ.cfg
     if not cfg.energy_enabled:
         return
+    apply_energy_shock(econ)
     _produce_e_firms(econ)
     econ._tax_energy = 0.0
     gov = cfg.government

@@ -27,6 +27,7 @@ def run_settlement_phase(econ: Any) -> None:
     pol, gov = econ.policy, cfg.government
     econ._tax_profit = econ._tax_income = econ._tax_wealth = econ._benefit_paid = 0.0
     econ._pension_paid = 0.0
+    econ._tax_energy_windfall = 0.0      # v17.2 per-tick reset
     econ._jg_spending = econ._jg_capital_units = econ._jg_employment = 0.0   # v9.3 job guarantee
 
     # (i) firms pay dividends (cash-capped, A4) into the CLEARING account.
@@ -43,7 +44,13 @@ def run_settlement_phase(econ: Any) -> None:
             if ptax > EPS:
                 econ.ledger.transfer(f.id, econ._fiscal, ptax)
                 econ._tax_profit += ptax
-        div_pool = f.rho * max(0.0, f.profit - ptax)   # only positive after-tax profit pays out
+        wtax = 0.0                                     # v17.2 windfall surtax on E-firms (0.0 => exact no-op)
+        if gov and pol.tax_energy_windfall > 0.0 and f.sells == "energy" and f.profit > EPS:
+            wtax = min(pol.tax_energy_windfall * max(0.0, f.profit - ptax), econ.ledger.balance(f.id))
+            if wtax > EPS:
+                econ.ledger.transfer(f.id, econ._fiscal, wtax)
+                econ._tax_energy_windfall = getattr(econ, "_tax_energy_windfall", 0.0) + wtax
+        div_pool = f.rho * max(0.0, f.profit - ptax - wtax)   # only positive after-tax profit pays out
         if div_pool <= EPS:
             continue
         payable = min(div_pool, econ.ledger.balance(f.id))

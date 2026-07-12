@@ -267,6 +267,79 @@ def test_hh_energy_off_is_170_identical():
         assert x["real_output"] == y["real_output"] and x["energy_price"] == y["energy_price"]
 
 
+# ---------------------------------------------------------------------------
+# v17.2 -- the capacity-shock scenario machinery (the experiment MATRIX runs
+# post-composition per the parallel protocol §5; these gates are arc-scope)
+# ---------------------------------------------------------------------------
+
+def test_shock_prefix_identical_then_diverges():
+    """Scenario discipline: with the shock configured, the same-seed series is
+    IDENTICAL before shock_at (the scenario machinery consumes nothing early) and
+    diverges after (the shock is real)."""
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=350, seed=6,
+                energy_enabled=True)
+    a = Economy(Config.v124(**base)).run()
+    b = Economy(Config.v124(**base, energy_shock_at=200,
+                            energy_shock_magnitude=0.3)).run()
+    for x, y in zip(a[:200], b[:200]):
+        assert x["real_output"] == y["real_output"] and x["energy_price"] == y["energy_price"]
+    assert any(x["energy_produced"] != y["energy_produced"] for x, y in zip(a[200:], b[200:])), \
+        "the shock never bit"
+
+
+def test_pulse_restores_kappa_exactly_and_mean_reverts():
+    """A pulse restores capacity_kappa float-EXACTLY (stored value, not divide-back)
+    and the economy mean-reverts: no permanent ratchet in any energy stock or price
+    relative to the same-seed no-shock twin."""
+    base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=700, seed=6,
+                energy_enabled=True)
+    a = Economy(Config.v124(**base))
+    recs_a = a.run()
+    b = Economy(Config.v124(**base, energy_shock_at=250, energy_shock_magnitude=0.3,
+                            energy_shock_duration=60))
+    recs_b = b.run()
+    for ea, eb in zip(a.e_firms, b.e_firms):
+        assert ea.capacity_kappa == eb.capacity_kappa, "pulse did not restore kappa exactly"
+    ry_a = sum(r["real_output"] for r in recs_a[-100:]) / 100
+    ry_b = sum(r["real_output"] for r in recs_b[-100:]) / 100
+    assert abs(ry_b / ry_a - 1.0) < 0.15, f"no mean reversion: {ry_b:.0f} vs {ry_a:.0f}"
+    cov_b = sum(r["energy_coverage_mean"] for r in recs_b[-50:]) / 50
+    cov_a = sum(r["energy_coverage_mean"] for r in recs_a[-50:]) / 50
+    assert cov_b > 0.5 * cov_a, "coverage never recovered from the pulse"
+
+
+def test_buffering_state_dependence():
+    """PRE-REGISTERED (the storability payoff): the same shock hits SOFTER EARLY under
+    HIGH initial coverage — the early post-shock output drop (first 30 ticks) is
+    smaller when downstream stocks are deep than when they are shallow."""
+    def drop(cov_ticks):
+        base = dict(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=320, seed=7,
+                    energy_enabled=True, energy_coverage_ticks=cov_ticks)
+        ref = Economy(Config.v124(**base)).run()
+        shk = Economy(Config.v124(**base, energy_shock_at=250,
+                                  energy_shock_magnitude=0.5)).run()
+        early = range(255, 285)
+        r0 = sum(ref[i]["real_output"] for i in early)
+        r1 = sum(shk[i]["real_output"] for i in early)
+        return (r0 - r1) / max(1.0, r0)
+    d_low, d_high = drop(5.0), drop(60.0)
+    assert d_high < d_low, \
+        f"buffering refuted: early drop {d_high:.3f} (deep stocks) !< {d_low:.3f} (shallow)"
+
+
+def test_windfall_tax_remits_and_conserves():
+    """The shock-response fiscal instrument: with the surtax live, E windfalls reach
+    fiscal after the shock, the dividend pool shrinks accordingly, and every
+    conservation gate stays green."""
+    econ = Economy(Config.v124(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=400, seed=6,
+                               energy_enabled=True, energy_shock_at=200,
+                               energy_shock_magnitude=0.4, tax_energy_windfall=0.5))
+    recs = econ.run()
+    assert sum(r.get("tax_energy_windfall", 0.0) for r in recs[200:]) > 0.0, "windfall never remitted"
+    m = max(r["broad_money"] for r in recs)
+    assert max(r["conservation_drift"] for r in recs) < 1e-6 * m
+
+
 def _main() -> None:
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for name, fn in tests:
