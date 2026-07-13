@@ -19,6 +19,11 @@ def _pair():
     return poor, rich
 
 
+def _world(pair, **kw):
+    return World([*pair], base_seed=9, trade=True, capital=True, migration=True,
+                 capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2, **kw)
+
+
 def _mean(recs, key, i, n=40):
     return sum(r[key][i] for r in recs[-n:]) / n
 
@@ -65,3 +70,32 @@ def test_remittances_lift_current_account():
     assert remit > 0.0                          # net remittance inflow to the labor exporter
     assert ca > ca_ex_remit                     # remittances improve the current account
     assert remit > 0.3 * abs(ca_ex_remit)       # ... materially (a large share of the CA)
+
+
+# -- migration POLICY levers --------------------------------------------------
+
+def test_immigration_cap_throttles_migration():
+    """POLICY: an immigration quota on the host binds ⇒ fewer migrants than open borders ⇒
+    the wage gap persists (policy blocks convergence)."""
+    open_w = _world(_pair())
+    open_w.run()
+    capped = _world(_pair(), immigration_cap=0.03)     # rich admits ≤ 3% of its population
+    capped.run()
+    for econ in capped.economies:
+        econ.ledger.assert_conserved()
+    assert capped.world_records[-1]["migrant_stock"][0] < open_w.world_records[-1]["migrant_stock"][0]
+    assert any(r["immigration_binding"][1] for r in capped.world_records)   # the quota bound
+
+
+def test_remittance_tax_diverts_to_fiscal_and_conserves():
+    """POLICY: an origin remittance tax skims the inflow to the government (fiscal revenue),
+    lowering the net that reaches households; conserving."""
+    taxed = _world(_pair(), remittance_tax=0.25)
+    taxed.run()
+    untaxed = _world(_pair())
+    untaxed.run()
+    for econ in taxed.economies:
+        econ.ledger.assert_conserved()
+        econ.ledger.assert_non_negative()
+    assert _mean(taxed.world_records, "remittances", 0) < _mean(untaxed.world_records, "remittances", 0)
+    assert _mean(taxed.world_records, "remittance_tax_rev", 0) > 0.0    # government collected revenue

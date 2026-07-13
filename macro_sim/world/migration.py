@@ -30,38 +30,73 @@ def run_migration(world) -> None:
     econs = world.economies
     n = world.n
     rw = [_real_wage(e) for e in econs]
-    remit = [0.0] * n
+
+    # 1. each origin's desired stock, driven by the real-wage pull toward its best host,
+    #    capped by its own emigration ceiling (a structural friction).
+    host_of = [-1] * n
     for i in range(n):
         host = max((j for j in range(n) if j != i), key=lambda j: rw[j], default=None)
         if host is None:
             continue
-        gap = (rw[host] - rw[i]) / max(1e-9, rw[i])              # real-wage pull toward the host
+        host_of[i] = host
+        gap = (rw[host] - rw[i]) / max(1e-9, rw[i])
         pop = len(econs[i].households)
-        cap = world.migration_max_share * pop
+        own_cap = world.migration_max_share * pop
         if gap > 0.0:
-            world._migrant_stock[i] = min(cap, world._migrant_stock[i] + world.migration_rate * gap * pop)
+            world._migrant_stock[i] = min(own_cap, world._migrant_stock[i] + world.migration_rate * gap * pop)
         else:
-            world._migrant_stock[i] = max(0.0, world._migrant_stock[i] * (1.0 - world.migration_rate))  # return home
+            world._migrant_stock[i] = max(0.0, world._migrant_stock[i] * (1.0 - world.migration_rate))
+
+    # 2. POLICY — the immigration cap/quota (a run-time government lever): each host admits
+    #    at most `immigration_cap × its population` immigrants in total. When it binds, the
+    #    would-be migrants are turned away (stocks scaled down) ⇒ the wage gap PERSISTS
+    #    (policy blocks convergence). None ⇒ open borders ⇒ the v22.1 mechanism unchanged.
+    world._immigration_binding = [False] * n
+    if world.immigration_cap is not None:
+        for h in range(n):
+            incoming = [i for i in range(n) if host_of[i] == h]
+            total = sum(world._migrant_stock[i] for i in incoming)
+            ceiling = world.immigration_cap * len(econs[h].households)
+            if total > ceiling + EPS and total > 0.0:
+                scale = ceiling / total
+                for i in incoming:
+                    world._migrant_stock[i] *= scale
+                world._immigration_binding[h] = True
+
+    # 3. remittances (net of the remittance tax, a fiscal policy lever).
+    remit = [0.0] * n
+    tax_rev = [0.0] * n
+    for i in range(n):
+        host = host_of[i]
         S = world._migrant_stock[i]
-        if S <= EPS:
+        if host < 0 or S <= EPS:
             continue
         remit_host = world.remittance_share * S * _wage(econs[host])   # migrant earnings sent home (curr_host)
-        remit[i] = _remit(world, host, i, remit_host)
+        remit[i], tax_rev[i] = _remit(world, host, i, remit_host)
     world._remittances = remit
+    world._remittance_tax_rev = tax_rev
 
 
-def _remit(world, host: int, origin: int, amount_host: float) -> float:
+def _remit(world, host: int, origin: int, amount_host: float):
     """Conserving cross-border transfer host → origin. Collect ``amount_host`` (curr_host)
-    from host households, convert at the rate, distribute to origin households. Routed
-    through the dealer (net-zero passthrough). Returns the delivered amount (curr_origin)."""
+    from host households, convert at the rate, then — POLICY — the origin government levies a
+    REMITTANCE TAX on the inflow (revenue to its fiscal account); the net reaches origin
+    households. Routed through the dealer (net-zero passthrough). Returns (net_remittance,
+    tax_revenue) in curr_origin."""
     if amount_host <= EPS:
-        return 0.0
+        return 0.0, 0.0
     collected = _collect(world.economies[host], amount_host)
     if collected <= EPS:
-        return 0.0
+        return 0.0, 0.0
     amount_origin = collected * world.rates.bilateral(origin, host)   # curr_host → curr_origin
-    _distribute(world.economies[origin], amount_origin)
-    return amount_origin
+    oe = world.economies[origin]
+    tax = 0.0
+    fiscal = getattr(oe, "_fiscal", None)
+    if world.remittance_tax > 0.0 and fiscal is not None and oe.ledger.has_account(fiscal):
+        tax = world.remittance_tax * amount_origin
+        oe.ledger.transfer(DEALER_ID, fiscal, tax)                   # remittance tax → origin fiscal
+    _distribute(oe, amount_origin - tax)                             # net to origin households
+    return amount_origin - tax, tax
 
 
 def _collect(econ, amount: float) -> float:

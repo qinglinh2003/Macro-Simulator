@@ -63,6 +63,8 @@ class World:
         migration_rate: float = 0.02,
         migration_max_share: float = 0.25,
         remittance_share: float = 0.2,
+        immigration_cap: float | None = None,   # POLICY: host admits ≤ cap × pop (None = open)
+        remittance_tax: float = 0.0,             # POLICY: origin taxes inbound remittances
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -90,6 +92,10 @@ class World:
         self.migration_rate = migration_rate
         self.migration_max_share = migration_max_share
         self.remittance_share = remittance_share
+        # v22 migration POLICY (run-time government levers, distinct from the structural
+        # knobs above): the immigration cap/quota + the remittance tax.
+        self.immigration_cap = immigration_cap
+        self.remittance_tax = remittance_tax
         self.capital_mobility = capital_mobility
         self.capital_adjust = capital_adjust
         self.periods_per_year = periods_per_year
@@ -106,6 +112,8 @@ class World:
         self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
         self._migrant_stock: List[float] = [0.0] * self.n   # v22: emigrants from i, working abroad
         self._remittances: List[float] = [0.0] * self.n     # v22: remittances received by i (curr_i)
+        self._remittance_tax_rev: List[float] = [0.0] * self.n   # v22: remittance-tax revenue (curr_i)
+        self._immigration_binding: List[bool] = [False] * self.n  # v22: is the host's quota binding?
         self.rates: RateVector | None = None
         self.dealer: FXDealer | None = None
         self.world_records: List[dict] = []
@@ -182,6 +190,8 @@ class World:
                 "migrant_stock": list(self._migrant_stock),
                 "remittances": remit,
                 "current_account": current_account,
+                "remittance_tax_rev": [self._remittance_tax_rev[i] / e[i] for i in range(self.n)],
+                "immigration_binding": list(self._immigration_binding),
             }
         )
 

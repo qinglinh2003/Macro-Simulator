@@ -52,6 +52,11 @@ labor. The people-flow analog of v20 trade friction and v21 capital mobility.
 - **v22.1** — migrant stock (wage-driven) + remittance transfer (conserving, dealer-routed)
   + the full current-account gauge. Gate: migration off ⇒ v21 exactly; conservation; the
   labor-exporting economy's CA > its trade balance (remittance wedge).
+- **v22.1-policy (DONE)** — migration POLICY (run-time government levers, distinct from the
+  structural knobs): the **immigration cap/quota** (a host admits ≤ `cap × pop`; binding ⇒
+  the flow is throttled and wage convergence is blocked) and the **remittance tax** (the
+  origin skims inbound remittances to its fiscal account). First tools of the border-
+  governance layer (§12 Layer C), the migration analog of v20 tariffs / v21 capital controls.
 - **v22.2 (optional)** — the labor-supply reallocation (the origin loses workers → tighter
   labor market / higher wages at home → convergence; the host gains labor). The real-side
   counterpart to the financial remittance flow.
