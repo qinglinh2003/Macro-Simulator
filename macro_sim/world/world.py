@@ -14,6 +14,7 @@ from typing import List
 
 from macro_sim.config import Config
 from macro_sim.economy import Economy
+from macro_sim.world.capital import capital_interest
 from macro_sim.world.fx import FXDealer, RateVector
 from macro_sim.world.trade import prepare_trade, settle_trade
 
@@ -47,9 +48,13 @@ class World:
         base_seed: int | None = None,
         couple: bool = False,
         trade: bool = False,
+        capital: bool = False,
         fx_lambda: float = 0.05,
         fx_friction: float = 0.03,
         fx_trade_cap: float = 0.15,
+        capital_mobility: float = 0.0,
+        capital_adjust: float = 0.1,
+        periods_per_year: float = 12.0,
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -70,11 +75,16 @@ class World:
         # v20.1 FX layer. couple=False ⇒ no FX objects, no dealer accounts ⇒ the World is
         # exactly v20.0 (bit-identical). couple=True installs the rate vector + the dealer
         # (one account per economy); with zero trade it is INERT (rates flat, inventory 0).
-        self.couple = couple or trade          # trade implies the FX layer
+        self.couple = couple or trade or capital   # trade/capital imply the FX layer
         self.trade = trade
+        self.capital = capital                 # v21: persistent cross-border positions
+        self.capital_mobility = capital_mobility
+        self.capital_adjust = capital_adjust
+        self.periods_per_year = periods_per_year
         self.fx_lambda = fx_lambda
         self.fx_friction = fx_friction
         self.fx_trade_cap = fx_trade_cap
+        self._factor_income: List[float] = [0.0] * self.n
         self.rates: RateVector | None = None
         self.dealer: FXDealer | None = None
         self.world_records: List[dict] = []
@@ -119,19 +129,25 @@ class World:
             return
         if self.trade:
             settle_trade(self)                # read imports, update stale state, grope rate
+        if self.capital:
+            capital_interest(self)            # v21: factor income on cross-border positions
         self.dealer.book_revaluation(self.rates)
         inv = self.dealer.inventory()
         e = self.rates.e
-        # Per-economy trade balance in the numéraire; multilateral Σ ≡ 0 by construction
-        # (one economy's export is another's import). The dealer's net worth is the same
-        # aggregate seen as a stock (gate #2, §6).
         bop_numeraire = self.dealer.net_worth_numeraire(self.rates)
+        # v21 external-position gauges (numéraire): NFA_i = −(dealer i-position)/e_i (a
+        # positive dealer position is a foreign CLAIM on economy i ⇒ i's net foreign
+        # LIABILITY); factor income_i (received) = −(i's interest outflow)/e_i.
+        nfa = [-inv[i] / e[i] for i in range(self.n)]
+        factor = [-self._factor_income[i] / e[i] for i in range(self.n)]
         self.world_records.append(
             {
                 "t": self.t,
                 "e": list(e),
                 "dealer_inventory": list(inv),
                 "import_value": list(self._prev_import_value),
+                "nfa": nfa,
+                "factor_income": factor,
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
             }

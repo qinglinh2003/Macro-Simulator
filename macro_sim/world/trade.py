@@ -13,6 +13,7 @@ mean-reversion (§3).
 from __future__ import annotations
 
 from macro_sim.markets.matching import EPS, SellOffer
+from macro_sim.world.capital import capital_financing, capital_grope_signal
 from macro_sim.world.fx import DEALER_ID
 
 
@@ -55,6 +56,7 @@ def prepare_trade(world) -> None:
         budget_i = prev_export[i]
         if budget_i <= EPS:
             budget_i = world.fx_trade_cap * _capacity_real(econ) * best_price   # bootstrap
+        budget_i = max(0.0, budget_i + capital_financing(world, i, best_price))  # v21: capital finances a deficit
         cap_real = min(world.fx_trade_cap * _capacity_real(econ), budget_i / best_price)
         econ._fx_import_offer = (
             SellOffer(account=DEALER_ID, stock=cap_real, price=best_price, ref=None)
@@ -95,6 +97,7 @@ def settle_trade(world) -> None:
     # Normalize by money stock so λ is scale-free; fixed economy-id order (§9).
     signal = world.dealer.inventory()
     scaled = [signal[i] / max(1.0, econs[i].ledger.total_money) for i in range(n)]
+    scaled = capital_grope_signal(world, scaled)   # v21: grope toward the capital-sustained position
     world.rates.grope(scaled, world.fx_lambda)
 
 
