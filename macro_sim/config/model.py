@@ -801,6 +801,15 @@ class Config:
     n_firm_share: float = 0.5              # fraction of c-firms tagged NECESSITY (sector sizes;
                                            # the rest are LUXURY). Entry picks a sector by profit.
 
+    # -- v18.4 inter-household family transfers (the first-line private safety net) --
+    # A household that cannot afford its necessity need from live deposits is topped up
+    # by kin households (parents / adult children, via the v13 relation links) holding a
+    # surplus above their own need x a buffer. Atomic + conserving through the person-
+    # claim/ledger rails; surfaces the truly exposed (no kin, no assets). Off ⇒ no-op ⇒
+    # bit-identical. Needs the sector split (necessity price) + demographics (kin links).
+    family_transfers: bool = False         # v18.4 master flag
+    family_transfer_buffer: float = 1.5    # a donor keeps its own need x this before giving
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -1609,6 +1618,12 @@ class Config:
         assert 0.0 < self.n_firm_share < 1.0, "necessity-firm share must be a strict fraction"
         assert not (self.consumption_strata and self.n_firms_c < 2), \
             "the sector split needs at least 2 c-firms (one per sector)"
+        # v18.4 family transfers
+        assert self.family_transfer_buffer >= 1.0, "the donor buffer must be >= 1 (keep own need first)"
+        assert not (self.family_transfers and not self.consumption_strata), \
+            "family transfers need the necessity price (the sector split)"
+        assert not (self.family_transfers and not self.demographics_enabled), \
+            "family transfers need person-level kin links (demographics)"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

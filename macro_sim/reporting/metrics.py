@@ -380,6 +380,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "n_firms_luxury": float(L["n"]),
         })
 
+    # v18.4 family transfers (the first-line private safety net)
+    if getattr(econ.cfg, "family_transfers", False):
+        rec.update({
+            "family_transfer_total": float(getattr(econ, "_family_transfer_total", 0.0)),
+            "family_transfer_recipients": float(getattr(econ, "_family_transfer_recipients", 0.0)),
+            "family_exposed": float(getattr(econ, "_family_exposed", 0.0)),   # in need, no kin donor
+        })
+
     if bridge is not None:
         state = getattr(econ, "demographic_state", None)
         alive_people = [person for person in getattr(state, "people", []) if getattr(person, "alive", True)]

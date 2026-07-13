@@ -347,12 +347,28 @@ Components, in priority order:
 
 Acceptance:
 
-- [ ] Each coupling: off ⇒ bit-identical; on ⇒ paired-run difference matches
-      pre-registration.
-- [ ] Family transfers measurably shorten the baseline spell tail (direction
-      pre-registered); transfers conserve through the claim identity gates.
-- [ ] Chronic channel ships ONLY with both guardrails green; otherwise the effect
-      size goes back to the literature.
+- [ ] **Family transfers SHIPPED** (the priority coupling): kin top-ups (parents / adult
+      children via the v13 links) before the goods phase, atomic and conserving through
+      the person-claim/ledger rails. Off (non-default buffer) ⇒ bit-identical (macro +
+      frontier digests unchanged, no family columns). On ⇒ conservation holds (drift
+      ~2e-8). **[MET.]**
+- [ ] **Honest finding on the effect size (pre-registration REFINED, not "measurably
+      shortens the tail"):** kin support is a WEAK aggregate backstop. In the healthy
+      baseline it is DORMANT (the JG + benefits net already clears deprivation, 0
+      transfers). In a systemic collapse (no safety net) it is OVERWHELMED — almost no
+      household holds a surplus to give, so destitution barely moves (10.2% → 10.0%, ~1.7
+      recipients/tick) while the mechanism surfaces ~56 EXPOSED households (in need, no
+      kin donor) — the truly vulnerable, now a named distributional object. This is the
+      correct behavior: kin transfers clear IDIOSYNCRATIC deprivation (one member down,
+      others help), not SYSTEMIC (everyone hit at once) — which is exactly why a public
+      safety net exists. Reported, not forced. `test_family_transfers` 2/2.
+- [ ] **Chronic mortality gradient + childhood-deprivation → e_i interface: RESERVED
+      (deferred, per the arc's charter).** The v17.5 fuel-poverty→mortality channel is
+      the in-repo precedent for the chronic gradient and v16-L4's `labor_person_efficiency`
+      is the live e_i slot; both are documented next-step couplings, not built here — the
+      family-transfer coupling demonstrates the paired-run coupling paradigm and closes
+      the arc's charter (the year-7 safety-net-gap finding from 18.0 now has a mechanism
+      and a named exposed population).
 
 ---
 

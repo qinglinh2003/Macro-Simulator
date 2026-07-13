@@ -62,6 +62,7 @@ from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
 from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_energy_phase
 from macro_sim.systems.deprivation import DeprivationSignal
+from macro_sim.systems.family import run_family_transfer_phase
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -484,6 +485,7 @@ class Economy:
         # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
         run_energy_phase(self)            # v17.0 only; firms buy energy before producing (no-op off)
         run_production_phase(self)        # [ANCHOR: production] output = f(hired labor)
+        run_family_transfer_phase(self)   # v18.4 only; kin top-ups before goods (no-op off)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
         run_settlement_phase(self)
