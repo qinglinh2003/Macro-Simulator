@@ -298,12 +298,13 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             rev = float(sum(f.revenue for f in firms))
             units = float(sum(f.sales for f in firms))
             out = float(sum(f.produced for f in firms))
+            cap = float(sum(f.capital for f in firms))          # v18.5: sector capital (reallocation watch)
             sell = [f for f in firms if f.sales > 1e-9] or list(firms)
             price = rev / units if units > 1e-12 else _mean([f.price for f in sell])
             mk = _mean([f.markup for f in sell])
             at_cap = _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in firms])
             hhi = float(sum((f.revenue / rev) ** 2 for f in firms)) if rev > 1e-12 else 0.0
-            return dict(rev=rev, units=units, out=out, price=price, mk=mk, at_cap=at_cap,
+            return dict(rev=rev, units=units, out=out, cap=cap, price=price, mk=mk, at_cap=at_cap,
                         hhi=hhi, n=len(firms))
         N, L = _sector(econ.n_firms), _sector(econ.l_firms)
         tot_cons = N["rev"] + L["rev"]
@@ -378,6 +379,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "luxury_hhi": L["hhi"],
             "n_firms_necessity": float(N["n"]),
             "n_firms_luxury": float(L["n"]),
+            "necessity_capital": N["cap"],                       # v18.5 sector capital + share
+            "luxury_capital": L["cap"],
+            "necessity_capital_share": (N["cap"] / (N["cap"] + L["cap"]))
+                                       if (N["cap"] + L["cap"]) > 1e-12 else 0.0,
         })
 
     # v18.4 family transfers (the first-line private safety net)

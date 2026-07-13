@@ -910,6 +910,7 @@ class Config:
         return GoodsConfig(
             government=self.government,
             a=self.a,
+            consumption_strata=self.consumption_strata,
         )
 
     @_cached_view

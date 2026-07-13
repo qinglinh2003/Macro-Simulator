@@ -95,8 +95,8 @@ def run_goods_phase(econ: Any) -> None:
     gov = cfg.government
     tc = econ.policy.tax_consumption_rate if gov else 0.0
     # v18.1: two-session split when consumption strata are on; otherwise the single
-    # session below, verbatim (off ⇒ bit-identical).
-    strata = getattr(econ.cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
+    # session below, verbatim (off ⇒ bit-identical). Read via the grouped goods view.
+    strata = getattr(cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
     if strata:
         trades, hh_budget_total = _run_split_sessions(econ, tc)
         _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total)
@@ -143,7 +143,7 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_
     # v9 VAT: households remit consumption tax on realised goods spending to GOV (reserved above, cash-capped).
     # v18.3: with the split on, necessities and luxuries carry their own rates (τ_N, τ_L);
     # with both = τ_c this reduces to the uniform remit (bit-identical).
-    strata = getattr(econ.cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
+    strata = getattr(cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
     tc_N, tc_L = _vat_rates(econ, tc) if strata else (tc, tc)
     if tc > 0.0 or (strata and (tc_N > 0.0 or tc_L > 0.0)):
         for h in econ.households:

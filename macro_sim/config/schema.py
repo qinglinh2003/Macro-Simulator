@@ -81,6 +81,7 @@ class CapitalGoodsConfig:
 class GoodsConfig:
     government: bool
     a: float
+    consumption_strata: bool = False       # v18.1: the necessity/luxury session split
 
 
 @dataclass(frozen=True)
