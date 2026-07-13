@@ -207,7 +207,27 @@ JG hard test run POST-COMPOSITION per protocol §5):
       ~+0.1 vs twin −0.2 through the window while output dips 30% and recovers —
       inflation ↑ with output ↓, the model's first deliberate stagflation episode.
       (The FULL matrix decomposition + policy-stack sweep: post-composition.)
-- [ ] JG hard test — POST-COMPOSITION (tests the L2-recast buffer-stock JG).
+- [x] POST-COMPOSITION MATRIX executed (within-pair twins; the cross-arm first cut
+      was caught mixing ten years of baseline divergence). Seed-0 result: the
+      headline-fed Taylor default did the MOST damage (−15.5% output, +0.55
+      inflation, a CB-induced second dip) vs core-reading −2.1% / frozen-rate −0.8%
+      — the monetary-overreaction-to-oil-shocks pattern, emergent. HONESTY
+      DOWNGRADE: seed 1 REVERSES the CB gradient (−4.7% vs −8.0%) — the channel
+      EXISTS (the seed-0 hiking cycle is mechanically real) but its dominance is
+      NOT seed-robust at NH50/500p; a multi-seed battery at scale (prun.run_jobs)
+      is the standing follow-up. PRE-REGISTERED FLAT OKUN CONFIRMED at seed 0
+      (output −15%, u < 1pp — labor hoarding × energy-capped output).
+- [x] JG hard test (the L2-recast buffer-stock JG): through the supply shock the
+      buffer neither balloons (Δjg ≤ 0.017) nor visibly amplifies inflation
+      (jg_off −0.06 only) — hoarding keeps workers inside firms, so the buffer
+      barely engages. The multi-version-old open thread can close as "benign at these
+      magnitudes"; re-examined whenever magnitudes above 0.5 become interesting.
+      INCIDENT (closed as unreproduced-but-armed): one seed-2 replication run
+      tripped the person-claim hard gate (hh 143). 18/18 hunt legs clean (the
+      exact sequence x 3 salts, per-phase probes); every structural hypothesis
+      eliminated; the sole unrecreated condition was maximum machine load.
+      scripts_v17/hunt_claim_bug.py stays armed — a recurrence yields
+      tick+phase+household forensics. Watch note, not a blocker.
 - [x] Windfall surtax remits to fiscal (reduces the dividend pool) and conserves.
 
 ## v17.3 — Strategic Reserve, State Ownership & Hoarding
