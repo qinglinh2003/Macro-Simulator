@@ -680,6 +680,12 @@ class DemographicEconomicBridge:
             self._liquidate_deceased_securities(person_id, sheet.household_id)
         unpaid = self._repay_deceased_debt_with_cash(person_id, max_unpaid=unpaid)
         self.write_off_deceased_debt(person_id, unpaid, bank_id)
+        if not sole_claimant:
+            # whatever cash the repay caps left on the deceased stays in the household
+            # ledger account, so the CLAIM must pass to the co-claimants too -- clearing
+            # it destroys claims against money that never moved (the solvent branch parks
+            # this value in estate suspense; the sole-claimant waterfall drains the ledger)
+            self._transfer_residual_cash_claim_to_household_claimants(person_id, sheet.household_id)
         self._clear_deceased_claims(person_id, sheet.household_id)
         if sole_claimant:
             # the probate waterfall on the emptied estate account (net of parked suspense):
@@ -973,6 +979,19 @@ class DemographicEconomicBridge:
         for other_id, cash in positive_claimants:
             self.claims.balance_sheet(other_id).cash_claim -= absorbed * cash / total_positive
         sheet.cash_claim += absorbed
+
+    def _transfer_residual_cash_claim_to_household_claimants(self, person_id: int, household_id: int) -> None:
+        recipients = [
+            int(other_id)
+            for other_id in self.claims.members_of_household(int(household_id))
+            if int(other_id) != int(person_id)
+        ]
+        cash = float(self.claims.balance_sheet(person_id).cash_claim)
+        if not recipients or cash <= 0.0:
+            return
+        share = cash / len(recipients)
+        for recipient_id in recipients:
+            self.claims.transfer_cash_claim(person_id, recipient_id, share)
 
     def _transfer_residual_asset_claims_to_household_claimants(self, person_id: int, household_id: int) -> None:
         recipients = [
