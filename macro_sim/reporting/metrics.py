@@ -143,6 +143,25 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     firm_money = float(np.sum(firm_dep))
     total_money = float(led.total_money)   # broad money ΣD (incl. bank; endogenous in v3)
 
+    # Shell hygiene, HOUSEHOLD edition (mirror of the firm-seller rule below):
+    # demographically dissolved households keep their agent + ledger account for
+    # accounting continuity (escheat drains them to zero) but accumulate
+    # monotonically, so COUNT-based distributional statistics -- gini, quantiles,
+    # top shares, poverty -- scan households with LIVING members only. Aggregate
+    # SUMS keep scanning everyone: residual shell stocks must stay visible in totals.
+    _bridge = getattr(econ, "demographic_bridge", None)
+    if _bridge is not None:
+        live_mask = np.asarray(
+            [_bridge.household_has_living_members(h.id) for h in households], dtype=bool
+        )
+        live_households = [h for h, alive in zip(households, live_mask) if alive]
+        live_dep = [d for d, alive in zip(hh_dep, live_mask) if alive]
+    else:
+        live_mask = np.ones(n_h, dtype=bool)
+        live_households = households
+        live_dep = hh_dep
+    n_live = len(live_households)
+
     # consumption sector (the "output/price" side; == all firms in v1)
     # v13 shell hygiene: posted-price/markup stats read ACTIVE SELLERS -- never-trading shells
     # carried stale exploding posted prices that blew mean_price to 1e20 and buried tobin_q /
@@ -266,11 +285,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "unsatisfied_demand_ratio": float(getattr(econ, "_unsat_ratio", 0.0)),
 
         # -- distributions (for §4: wealth shape, Zipf firm size) ------------
-        "hh_wealth_gini": gini(hh_dep),
-        "hh_wealth_top10_share": top_share(hh_dep, 0.10),
-        "hh_wealth_cv": cv(hh_dep),
-        "hh_wealth_min": float(np.min(hh_dep)) if hh_dep else 0.0,
-        "hh_wealth_max": float(np.max(hh_dep)) if hh_dep else 0.0,
+        "hh_wealth_gini": gini(live_dep),
+        "hh_wealth_top10_share": top_share(live_dep, 0.10),
+        "hh_wealth_cv": cv(live_dep),
+        "hh_wealth_min": float(np.min(live_dep)) if live_dep else 0.0,
+        "hh_wealth_max": float(np.max(live_dep)) if live_dep else 0.0,
         "firm_deposits_gini": gini(firm_dep),
         "firm_size_gini_output": gini(produced_all),
         "firm_size_top_share_output": top_share(produced_all, 0.20),
@@ -430,12 +449,12 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     if housing is not None:
         # v15.0: registry stock gauges (frozen price until the v15.1 market)
         fiscal = getattr(econ, "_fiscal", None)
-        owner_households = sum(1 for h in households if housing.dwellings_of(h.id))
+        owner_households = sum(1 for h in live_households if housing.dwellings_of(h.id))
         rec.update(
             {
                 "dwellings_total": float(housing.count()),
                 "dwellings_fiscal": float(len(housing.dwellings_of(fiscal)) if fiscal else 0.0),
-                "homeowner_share": owner_households / max(1, len(households)),
+                "homeowner_share": owner_households / max(1, n_live),
                 "house_price": float(getattr(econ, "_house_price", 0.0)),
             }
         )
@@ -495,9 +514,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "rental_yield": float(rental.rent_level * 365.0 / price),
                     "rent_paid_total": float(rental.rent_paid_total),
                     "evictions_total": float(rental.evictions_total),
-                    "tenant_share": float(len(rental.tenancies)) / max(1, len(households)),
+                    "tenant_share": float(len(rental.tenancies)) / max(1, n_live),
                     "landlord_count": float(sum(
-                        1 for h in households if len(housing.dwellings_of(h.id)) > 1
+                        1 for h in live_households if len(housing.dwellings_of(h.id)) > 1
                     )),
                 }
             )
@@ -594,11 +613,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "cash_labor_constraint_rate": _safe_ratio(labor_gap, labor_notional),
         "cash_constrained_firm_share": _safe_ratio(float(len(cash_constrained)), float(len(firms))),
         "labor_rationed_firm_share": _safe_ratio(float(len(labor_rationed)), float(len(firms))),
-        "labor_sold_gini": gini([h.labor_sold for h in households]),
-        "full_unemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) <= 1e-9 for h in households]))
-        if households else 0.0,
-        "underemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) < 1.0 - 1e-9 for h in households]))
-        if households else 0.0,
+        "labor_sold_gini": gini([h.labor_sold for h in live_households]),
+        "full_unemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) <= 1e-9 for h in live_households]))
+        if live_households else 0.0,
+        "underemployed_share": float(np.mean([(h.labor_sold + h.jg_labor) < 1.0 - 1e-9 for h in live_households]))
+        if live_households else 0.0,
         "employment_C": c_hired,
         "employment_K": k_hired,
         "labor_demand_C": c_labor_demand,
@@ -735,6 +754,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         market_cap = mkt.price * mkt.float_shares
         # household wealth NOW includes equity (choice 乙): D_h + shares_h·p.
         hh_wealth = [hh_dep[i] + households[i].shares * mkt.price for i in range(n_h)]
+        live_wealth = [w for w, alive in zip(hh_wealth, live_mask) if alive]
         rec.update({
             "stock_price": float(mkt.price),
             "market_cap": float(market_cap),
@@ -744,7 +764,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "tobin_q": float(market_cap / mkt.book_value) if abs(mkt.book_value) > 1e-9 else 0.0,
             "equity_trend": float(mkt.trend),
             "equity_turnover": float(getattr(econ, "_equity_turnover", 0.0)),
-            "hh_wealth_gini_incl_equity": gini(hh_wealth),         # 乙: the T8-relevant measure
+            "hh_wealth_gini_incl_equity": gini(live_wealth),       # 乙: the T8-relevant measure
             "equity_wealth_share": float(mkt.price * mkt.float_shares
                                          / max(1e-9, np.sum(hh_wealth))),
             "dividend_yield": float(dividends_paid / market_cap) if market_cap > 1e-9 else 0.0,
@@ -762,6 +782,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         eq_val = [float(np.sum([sh * price_of.get(fid, 0.0) for fid, sh in h.holdings.items()]))
                   for h in households]
         hh_wealth = [hh_dep[i] + eq_val[i] for i in range(n_h)]
+        live_eq_val = [v for v, alive in zip(eq_val, live_mask) if alive]
+        live_wealth = [w for w, alive in zip(hh_wealth, live_mask) if alive]
         held: Dict[str, float] = {}
         for h in households:
             for fid, sh in h.holdings.items():
@@ -776,8 +798,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "tobin_q_dispersion": float(np.std(qs)) if qs else 0.0,
             "n_firms_q_above_1": float(np.sum(np.asarray(qs) > 1.0)) if qs else 0.0,
             "share_price_dispersion": cv(share_prices),
-            "equity_ownership_gini": gini(eq_val),           # who owns equity (founder concentration)
-            "hh_wealth_gini_incl_equity": gini(hh_wealth),   # T8 with per-firm equity (choice 乙)
+            "equity_ownership_gini": gini(live_eq_val),      # who owns equity (founder concentration)
+            "hh_wealth_gini_incl_equity": gini(live_wealth), # T8 with per-firm equity (choice 乙)
             "equity_wealth_share": mkt_cap / max(1e-9, float(np.sum(hh_wealth))),
             "investment_q_corr": iq,                          # v6.1b: does investment track q?
             "shares_conservation_drift": float(drift),        # per-firm float gate (== 0)
@@ -792,6 +814,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     if getattr(econ.cfg, "household_credit", False):
         debts = [led.debt(h.id) for h in households]
         nw = np.asarray([hh_dep[i] - debts[i] for i in range(n_h)])   # net worth = D - L (can be <0)
+        live_nw = nw[live_mask]                                       # shape stats over living households only
         hh_debt_total = float(np.sum(debts))
         cons = total_revenue                                          # consumption this tick
         rec.update({
@@ -799,11 +822,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "household_credit_new": float(getattr(econ, "_hh_credit_new", 0.0)),
             "hh_interest_paid": float(getattr(econ, "_hh_interest", 0.0)),
             "household_leverage": hh_debt_total / max(1e-9, income_realized),  # debt / income
-            "share_underwater": float(np.mean(nw < 0.0)),                     # fraction with D<L (net debtor)
+            "share_underwater": float(np.mean(live_nw < 0.0)) if live_nw.size else 0.0,  # fraction with D<L (net debtor)
             # net worth has negatives (borrowers) -> Gini on the min-shifted series (valid [0,1]).
-            "hh_networth_gini": gini(list(np.maximum(nw, 0.0))),   # clip, not min-shift: one deep debtor made the shifted gini gyrate
-            "hh_networth_min": float(nw.min()),
-            "hh_networth_median": float(np.median(nw)),
+            "hh_networth_gini": gini(list(np.maximum(live_nw, 0.0))),   # clip, not min-shift: one deep debtor made the shifted gini gyrate
+            "hh_networth_min": float(live_nw.min()) if live_nw.size else 0.0,
+            "hh_networth_median": float(np.median(live_nw)) if live_nw.size else 0.0,
             "consumption_credit_share": float(getattr(econ, "_hh_credit_new", 0.0)) / max(1e-9, cons),
         })
 
@@ -824,15 +847,17 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         margin = np.asarray([h.margin_debt for h in households])
         bankeq = np.asarray(bankeq_list) if bankeq_list is not None else 0.0   # v11.5: bank-equity wealth
         nw_full = np.asarray(hh_dep) + eqv + bankeq - debt_arr  # TRUE net worth: cash + equity (firm+bank) − debt
+        live_nw_full = nw_full[live_mask]                      # T8 concentration over living households only
+        _nw_shift = list(live_nw_full - live_nw_full.min()) if live_nw_full.size else []
         rec.update({
             "household_margin_debt": float(np.sum(margin)),
             "avg_household_leverage": float(np.sum(eqv) / max(1e-9, np.sum(nw_full))),  # equity / net worth
             "margin_deleveraged": float(getattr(econ, "_hh_margin_repaid", 0.0)),       # fire-sale repay
             "margin_credit_new": float(getattr(econ, "_hh_margin_new", 0.0)),
             # T8 with leverage: is wealth (cash+equity−debt) concentrating in a few?
-            "hh_full_networth_gini": gini(list(nw_full - nw_full.min())),
-            "hh_full_networth_top10": top_share(list(nw_full - nw_full.min()), 0.10),
-            "share_margin_underwater": float(np.mean(nw_full < 0.0)),
+            "hh_full_networth_gini": gini(_nw_shift),
+            "hh_full_networth_top10": top_share(_nw_shift, 0.10),
+            "share_margin_underwater": float(np.mean(live_nw_full < 0.0)) if live_nw_full.size else 0.0,
         })
 
     # ----------------------------------------------------------------------
@@ -874,17 +899,21 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "total_debt_service_ratio": ((rec.get("total_interest_paid", rec.get("interest_paid", 0.0))
                                       + rec.get("total_principal_repaid", rec.get("principal_repaid", 0.0)))
                                      / nominal_output) if nominal_output > 1e-9 else 0.0,
-        "income_gini": gini([h.income_realized for h in households]),          # income inequality
-        "consumption_gini": gini([h.spent for h in households]),               # consumption inequality
+        "income_gini": gini([h.income_realized for h in live_households]),     # income inequality
+        "consumption_gini": gini([h.spent for h in live_households]),          # consumption inequality
     })
     # -- distributional / bottom-tail WELFARE (§8.3): what aggregates & Gini miss -- pure observation.
     #    Consumption is the welfare basis; LEVEL measures are REAL (÷ price_index), ratios stay nominal
     #    (scale-invariant). Relative poverty line = 50% of median consumption (adapts to inflation/growth).
-    cons = np.asarray([h.spent for h in households], float)
-    inc = np.asarray([h.income_realized for h in households], float)
+    #    Welfare is a per-LIVING-household statistic: a demographically dissolved shell consumes a
+    #    permanent zero, which would masquerade as destitution (poverty_gap pinned at 1.0, bottom
+    #    deciles at 0) and swamp every headcount. Sums are shell-invariant (shells spend 0) so the
+    #    aggregate real_household_consumption is unchanged whether it scans live or all.
+    cons = np.asarray([h.spent for h in live_households], float)
+    inc = np.asarray([h.income_realized for h in live_households], float)
     defl = price_index if price_index > 1e-12 else 1.0
     real_c = cons / defl
-    med_c, med_i = float(np.median(cons)), float(np.median(inc))
+    med_c, med_i = float(np.median(cons)) if cons.size else 0.0, float(np.median(inc)) if inc.size else 0.0
     line = 0.5 * med_c
     poor = cons < line
     nbot = max(1, len(real_c) // 10)
@@ -928,35 +957,44 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         [float(sum(bond_mv_by_holder.get(h.id, ()))) for h in households], dtype=float
     )
     full_networth = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values - hh_debt
-    full_networth_shifted = full_networth - float(full_networth.min()) if full_networth.size else full_networth
     gross_assets = np.asarray(hh_dep, dtype=float) + firm_equity_values + bank_equity_values + bond_market_values
+    # live-only views for the count / quantile / gini / share statistics (shells contribute a
+    # frozen zero that distorts every distributional shape); the explicit *_total / gross_* SUMS
+    # below stay on the full arrays so residual shell stocks remain visible in aggregates.
+    live_dep_arr = np.asarray(hh_dep, dtype=float)[live_mask]
+    live_debt = hh_debt[live_mask]
+    live_firm_eq = firm_equity_values[live_mask]
+    live_bank_eq = bank_equity_values[live_mask]
+    live_bond_mv = bond_market_values[live_mask]
+    live_networth = full_networth[live_mask]
+    live_networth_shifted = live_networth - float(live_networth.min()) if live_networth.size else live_networth
     rec.update({
         "mean_real_consumption_per_household": float(real_c.mean()) if real_c.size else 0.0,
         "median_real_consumption": float(np.median(real_c)) if real_c.size else 0.0,
         "bottom25_consumption": float(np.sort(real_c)[:bottom25_n].mean()) if real_c.size else 0.0,
-        "subsistence_gap_ratio": _safe_ratio(float(subsistence_gap.sum()), subsist * n_h),
+        "subsistence_gap_ratio": _safe_ratio(float(subsistence_gap.sum()), subsist * n_live),
         "median_real_household_income": float(np.median(inc / defl)) if inc.size else 0.0,
         "consumption_realization_rate": _safe_ratio(effective_cons, desired_cons),
         "real_household_consumption": float(real_c.sum()),
-        "hh_deposit_p10": _quantile(hh_dep, 0.10),
-        "hh_deposit_median": _quantile(hh_dep, 0.50),
-        "hh_deposit_p90": _quantile(hh_dep, 0.90),
-        "household_debt_gini": gini(hh_debt),
-        "household_debt_top10_share": top_share(hh_debt, 0.10),
-        "equity_wealth_top10_share": top_share(firm_equity_values, 0.10),
-        "bank_equity_top10_share": top_share(bank_equity_values, 0.10),
-        "bond_wealth_gini": gini(bond_market_values),
-        "bond_wealth_top10_share": top_share(bond_market_values, 0.10),
+        "hh_deposit_p10": _quantile(list(live_dep_arr), 0.10),
+        "hh_deposit_median": _quantile(list(live_dep_arr), 0.50),
+        "hh_deposit_p90": _quantile(list(live_dep_arr), 0.90),
+        "household_debt_gini": gini(live_debt),
+        "household_debt_top10_share": top_share(live_debt, 0.10),
+        "equity_wealth_top10_share": top_share(live_firm_eq, 0.10),
+        "bank_equity_top10_share": top_share(live_bank_eq, 0.10),
+        "bond_wealth_gini": gini(live_bond_mv),
+        "bond_wealth_top10_share": top_share(live_bond_mv, 0.10),
         "bond_wealth_share": _safe_ratio(float(bond_market_values.sum()), float(gross_assets.sum())),
         "hh_full_networth_total": float(full_networth.sum()) if full_networth.size else 0.0,
-        "hh_full_networth_skew": _skew(full_networth),
-        "hh_full_networth_excess_kurtosis": _excess_kurtosis(full_networth),
+        "hh_full_networth_skew": _skew(live_networth),
+        "hh_full_networth_excess_kurtosis": _excess_kurtosis(live_networth),
         "gross_household_assets_total": float(gross_assets.sum()) if gross_assets.size else 0.0,
-        "household_underwater_share": float(np.mean(full_networth < 0.0)) if full_networth.size else 0.0,
-        "full_networth_p10": _quantile(full_networth, 0.10),
-        "full_networth_p50": _quantile(full_networth, 0.50),
-        "full_networth_p90": _quantile(full_networth, 0.90),
-        "hh_full_networth_gini_observed": gini(full_networth_shifted),
+        "household_underwater_share": float(np.mean(live_networth < 0.0)) if live_networth.size else 0.0,
+        "full_networth_p10": _quantile(list(live_networth), 0.10),
+        "full_networth_p50": _quantile(list(live_networth), 0.50),
+        "full_networth_p90": _quantile(list(live_networth), 0.90),
+        "hh_full_networth_gini_observed": gini(live_networth_shifted),
     })
     # v9 government (§28): fiscal flows + NORMALISED balances (raw stocks are unreadable). deficit>0 =
     # net injection (spend>tax); expressed as a share of revenue AND of GDP. gov_debt = −GOV balance.
@@ -1004,8 +1042,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             ) if nominal_output > 1e-9 else 0.0,
             "hh_bankruptcies": float(getattr(econ, "_hh_bankruptcies", 0.0)),
             "benefit_recipient_share": float(np.mean([
-                (h.labor_sold + h.jg_labor) <= 1e-9 for h in households
-            ])) if households and benefit_paid > 0.0 else 0.0,
+                (h.labor_sold + h.jg_labor) <= 1e-9 for h in live_households
+            ])) if live_households and benefit_paid > 0.0 else 0.0,
         })
         econ._prev_tax_total = tax_total          # fed to next tick's deficit-targeting rule
         econ._prev_benefit = benefit_paid
@@ -1138,13 +1176,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         if getattr(econ.cfg, "bank_equity", False):
             bankeq_h = bankeq_list if bankeq_list is not None \
                 else [bank_equity_value(econ, h.id) for h in econ.households]
+            live_bankeq_h = [v for v, alive in zip(bankeq_h, live_mask) if alive]
             alive_bk = [b for b in econ.banks if b.alive]
             pp = [b.share_price / b.share_peak for b in alive_bk if b.share_peak > 1e-9]
             rec.update({
                 "bank_births": float(getattr(econ, "_bank_births", 0)),
                 "bank_deaths": float(getattr(econ, "_bank_deaths", 0)),
                 "bank_equity_total": float(sum(bankeq_h)),
-                "bank_equity_gini": float(gini([max(0.0, v) for v in bankeq_h])),   # bank-OWNERSHIP concentration
+                "bank_equity_gini": float(gini([max(0.0, v) for v in live_bankeq_h])),   # bank-OWNERSHIP concentration
                 "bank_deposit_flight": float(getattr(econ, "_run_flight_volume", 0.0)),   # run flight volume
                 "bank_fear": float(getattr(econ, "_bank_fear", 0.0)),
                 "bank_min_price_peak": float(min(pp)) if pp else 1.0,   # worst price/peak = deepest distress signal
