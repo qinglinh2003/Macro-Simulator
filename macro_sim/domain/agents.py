@@ -117,6 +117,7 @@ class Firm:
     # all consumption logic bit-identical); "necessity" | "luxury" when the split is on.
     # sells stays "consumption" for both so every existing consumption code path works.
     consumption_sector: str = ""
+    switch_pressure: int = 0             # v18.5: consecutive ticks the OTHER sector out-returned this one
     tech: str = "linear"                 # "linear" (y=a N) | "cobb_douglas" (y=A K^α N^{1-α})
     invests: bool = False                # only C-firms invest (B5)
     A: float = 1.0                       # TFP (Cobb-Douglas)

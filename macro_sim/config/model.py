@@ -810,6 +810,20 @@ class Config:
     family_transfers: bool = False         # v18.4 master flag
     family_transfer_buffer: float = 1.5    # a donor keeps its own need x this before giving
 
+    # -- v18.5 supply-side reallocation: product-line SWITCHING --
+    # The emergent investment+entry channel already reallocates capital toward the growing
+    # sector, but EXISTING capital is stuck (necessity is over-capitalized ~13pp vs its
+    # shrunk demand). Switching lets a firm RETOOL its stuck capital to the other sector,
+    # closing the demand-capital lag -- at a cost (a fraction of capital lost) and with
+    # friction (a sustained return gap + a low hazard), so structural transformation stays
+    # a slow, non-oscillating process (the v16 search-friction analog on the supply side).
+    # Off ⇒ no-op ⇒ bit-identical. Needs the sector split.
+    sector_switching: bool = False         # v18.5 master flag
+    switch_retool_loss: float = 0.3        # fraction of capital lost when a firm retools
+    switch_return_gap: float = 0.5         # the other sector's profit rate must beat own by this
+    switch_pressure_days: int = 60         # sustained ticks of the gap before a firm is eligible
+    switch_hazard: float = 0.01            # daily switch probability once eligible (rare)
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -1625,6 +1639,13 @@ class Config:
             "family transfers need the necessity price (the sector split)"
         assert not (self.family_transfers and not self.demographics_enabled), \
             "family transfers need person-level kin links (demographics)"
+        # v18.5 sector switching
+        assert 0.0 <= self.switch_retool_loss < 1.0, "retool loss is a fraction of capital"
+        assert 0.0 <= self.switch_hazard <= 1.0, "switch hazard is a daily probability"
+        assert self.switch_return_gap >= 0.0 and self.switch_pressure_days >= 1, \
+            "switch gap/pressure must be non-negative / >= 1 day"
+        assert not (self.sector_switching and not self.consumption_strata), \
+            "sector switching needs the necessity/luxury split"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

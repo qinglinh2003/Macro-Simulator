@@ -63,6 +63,7 @@ from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
 from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_energy_phase
 from macro_sim.systems.deprivation import DeprivationSignal
 from macro_sim.systems.family import run_family_transfer_phase
+from macro_sim.systems.switching import run_sector_switching_phase
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -174,6 +175,8 @@ class Economy:
             # quantity as a poor one of the same size ⇒ necessity SHARE falls with income
             # (Engel's law emerges from the fixed quantity, not seeded).
             self._necessity_need_per_unit = cfg.necessity_share0 * cfg.w_firm0 / cfg.p_firm0
+        if cfg.sector_switching:
+            self._switch_rng = random.Random(cfg.seed + 18_500)   # dedicated substream
 
         # v18.0: subsistence basket & deprivation gauges (OBSERVATION ONLY; needs person-
         # level consumption). Off ⇒ never constructed ⇒ bit-identical.
@@ -492,6 +495,7 @@ class Economy:
         run_debt_service_phase(self)      # v3 only; no-op when banks disabled
         run_housing_market_phase(self)    # v15.1 only; monthly resale sessions (no-op off)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
+        run_sector_switching_phase(self)  # v18.5 only; firms retool between N/L sectors (no-op off)
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
         run_interbank_phase(self)         # v11.4 only; money-market funding of reserve deficits (no-op off)
         run_bank_runs_phase(self)         # v11.5 only; depositor runs (flight + panic; queued withdrawals; no-op off)

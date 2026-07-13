@@ -384,6 +384,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "necessity_capital_share": (N["cap"] / (N["cap"] + L["cap"]))
                                        if (N["cap"] + L["cap"]) > 1e-12 else 0.0,
         })
+        if getattr(econ.cfg, "sector_switching", False):
+            rec.update({
+                "sector_switches": float(getattr(econ, "_sector_switches", 0.0)),
+                "sector_switch_capital": float(getattr(econ, "_sector_switch_capital", 0.0)),
+            })
 
     # v18.4 family transfers (the first-line private safety net)
     if getattr(econ.cfg, "family_transfers", False):
