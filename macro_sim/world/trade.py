@@ -13,7 +13,7 @@ mean-reversion (§3).
 from __future__ import annotations
 
 from macro_sim.markets.matching import EPS, SellOffer
-from macro_sim.world.capital import capital_financing, capital_grope_signal
+from macro_sim.world.capital import capital_financing, capital_grope_signal, peg_defense
 from macro_sim.world.fx import DEALER_ID
 
 
@@ -97,7 +97,8 @@ def settle_trade(world) -> None:
     # Normalize by money stock so λ is scale-free; fixed economy-id order (§9).
     signal = world.dealer.inventory()
     scaled = [signal[i] / max(1.0, econs[i].ledger.total_money) for i in range(n)]
-    scaled = capital_grope_signal(world, scaled)   # v21: grope toward the capital-sustained position
+    scaled = capital_grope_signal(world, scaled)   # v21.1: grope toward the capital-sustained position
+    scaled = peg_defense(world, scaled)            # v21.2: peg freezes the rate, reserves absorb
     world.rates.grope(scaled, world.fx_lambda)
 
 

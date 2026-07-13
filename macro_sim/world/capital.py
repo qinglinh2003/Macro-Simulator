@@ -25,6 +25,40 @@ def _funder(econ):
     return None
 
 
+def peg_defense(world, scaled):
+    """The trilemma (PLAN_v21 §3). Under a PEG the exchange rate is FIXED and the central
+    bank absorbs the imbalance onto FX reserves (the CB becomes the dealer of last resort).
+    Open capital + an INDEPENDENT interest rate ⇒ persistent pressure ⇒ reserves drift
+    monotonically ⇒ the peg is unsustainable: the CB has lost monetary autonomy (fixed rate
+    + open capital + independent policy — pick two). Reserves hitting zero BREAKS the peg
+    (the rate floats and devalues — a currency crisis, the reserve-drain analog of a bank
+    run). Returns the (frozen while the peg holds) grope signal. peg off ⇒ unchanged."""
+    if not world.peg:
+        return scaled
+    if world._peg_intact:
+        # The trilemma proper: the pegged economy (0) runs an interest rate that differs
+        # from the anchor. With open capital that mismatch is a CONTINUOUS one-way flow the
+        # CB must keep offsetting from reserves (the position never settles — the CB
+        # sterilises it). A LOWER rate ⇒ capital flees ⇒ the CB sells reserves to defend.
+        # the POLICY rate (cfg.r_interest) — the deliberate monetary-policy choice, not the
+        # endogenous Taylor path — is what defines "independent policy" under the peg.
+        rates = [float(e.cfg.r_interest) for e in world.economies]
+        r_mean = sum(rates) / world.n
+        mismatch = r_mean - rates[0]                  # >0 ⇒ econ0 rate too LOW ⇒ outflow ⇒ drain
+        M0 = world.economies[0].ledger.total_money
+        pressure = world.capital_mobility * mismatch * M0
+        world._reserves -= pressure * world.peg_reserve_scale
+        world._pent_up += pressure                    # suppressed depreciation accumulates
+        if world._reserves <= 0.0:
+            world._reserves = 0.0
+            world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
+            release = [0.0] * world.n                 # release pent-up pressure = DEVALUATION
+            release[0] = max(0.0, world._pent_up / max(1.0, M0))
+            return release
+        return [0.0] * world.n                        # rate frozen — the peg holds
+    return scaled                                     # peg already broken ⇒ free float
+
+
 def capital_interest(world) -> None:
     """Factor income (the GNP≠GDP wedge): the dealer's position in currency i earns economy
     i's rate. A positive dealer position (foreigners' claim on i) ⇒ economy i PAYS interest

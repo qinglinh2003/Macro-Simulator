@@ -55,6 +55,9 @@ class World:
         capital_mobility: float = 0.0,
         capital_adjust: float = 0.1,
         periods_per_year: float = 12.0,
+        peg: bool = False,
+        peg_reserves0: float = 5000.0,
+        peg_reserve_scale: float = 1.0e5,
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -85,6 +88,13 @@ class World:
         self.fx_friction = fx_friction
         self.fx_trade_cap = fx_trade_cap
         self._factor_income: List[float] = [0.0] * self.n
+        # v21.2 peg / trilemma: economy 0 pegs its rate; the CB absorbs the imbalance onto
+        # reserves; reserves hitting zero breaks the peg (devaluation = currency crisis).
+        self.peg = peg
+        self.peg_reserve_scale = peg_reserve_scale
+        self._reserves = peg_reserves0
+        self._peg_intact = True
+        self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
         self.rates: RateVector | None = None
         self.dealer: FXDealer | None = None
         self.world_records: List[dict] = []
@@ -150,6 +160,8 @@ class World:
                 "factor_income": factor,
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
+                "reserves": self._reserves,
+                "peg_intact": self._peg_intact,
             }
         )
 
