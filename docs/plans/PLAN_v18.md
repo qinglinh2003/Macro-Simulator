@@ -1,9 +1,25 @@
 # V18 Consumption Stratification Plan — Necessities, Luxuries & the Deprivation Boundary
 
-> **STATUS: ACTIVE (kickoff 2026-07-13).** Preconditions are MET: the v16 labor arc
-> (L0–L6) and the v17 energy arc (17.0–17.5) are both merged into dev and the
-> composition gate PASSED (dev@b8fecd4, PARALLEL_LOG 2026-07-13). v18 forks from
-> dev@b8fecd4 on `feat/consumption-v18`, worktree `../macro-simulator-v18`.
+> **STATUS: COMPLETE (2026-07-13).** All five stages landed on `feat/consumption-v18`
+> (forked from dev@b8fecd4). 18.0 subsistence basket & deprivation gauges + resource-gated
+> domain boundary; 18.1 necessity/luxury split & budget hierarchy (Engel 4.48×); 18.2
+> group-CPI index + the deflationary-shock finding; 18.3 differential VAT (zero-rating
+> necessities is progressive); 18.4 inter-household family transfers (conserving; kin
+> support is idiosyncratic-not-systemic). Every stage flag-off bit-identical to
+> dev@b8fecd4 (cumulative macro + frontier digests unchanged). Per-stage tests:
+> deprivation 6, strata 4, group_cpi 3, differential_vat 2, family 2. Diagnostics
+> v180/v181/v182 shipped.
+>
+> **Headline honest findings (the portrait caught what the tests missed):** (1) the 10y
+> deprivation portrait exposed a bank-shakeout LIQUIDITY artifact → the resource gate
+> (a destitute household must also be deposit-poor); (2) the group-CPI compounding of
+> sales-weighted sector prices blew up to a 57× artifact → a bounded price-LEVEL index;
+> (3) the endogenous energy shock is DEFLATIONARY (the regressive bite is on quantities,
+> not prices — the 2022-Europe intuition refuted); (4) kin transfers are overwhelmed by
+> systemic shocks and surface the exposed no-kin population.
+>
+> **Preconditions were MET at kickoff:** the v16 labor arc (L0–L6) and v17 energy arc
+> (17.0–17.5) are both merged into dev and the composition gate PASSED (dev@b8fecd4).
 > Code references below verified against b8fecd4.
 >
 > **v16/v17 handoff notes that bind this arc:** under `labor_person_efficiency`,
