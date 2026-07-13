@@ -65,6 +65,9 @@ class World:
         remittance_share: float = 0.2,
         immigration_cap: float | None = None,   # POLICY: host admits ≤ cap × pop (None = open)
         remittance_tax: float = 0.0,             # POLICY: origin taxes inbound remittances
+        tariff: float = 0.0,                     # POLICY (trade): import tax → importer's fiscus
+        capital_control: float = 0.0,            # POLICY (capital): throttle capital flows, in [0,1]
+        sanctions=None,                          # POLICY (strategic): frozenset({i,j}) pairs — no bilateral flow
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -96,6 +99,10 @@ class World:
         # knobs above): the immigration cap/quota + the remittance tax.
         self.immigration_cap = immigration_cap
         self.remittance_tax = remittance_tax
+        self.tariff = tariff                   # trade policy
+        self.capital_control = capital_control  # capital policy (0 = free, 1 = closed)
+        self.sanctions = sanctions or set()     # strategic: blocked bilateral pairs
+        self._tariff_rev: List[float] = [0.0] * self.n
         self.capital_mobility = capital_mobility
         self.capital_adjust = capital_adjust
         self.periods_per_year = periods_per_year
@@ -192,6 +199,7 @@ class World:
                 "current_account": current_account,
                 "remittance_tax_rev": [self._remittance_tax_rev[i] / e[i] for i in range(self.n)],
                 "immigration_binding": list(self._immigration_binding),
+                "tariff_rev": [self._tariff_rev[i] / e[i] for i in range(self.n)],
             }
         )
 
@@ -200,6 +208,10 @@ class World:
         for _ in range(n):
             self.step()
         return [econ.records for econ in self.economies]
+
+    def sanctioned(self, i: int, j: int) -> bool:
+        """Whether economies i and j have severed their bilateral flows (a sanction)."""
+        return frozenset({i, j}) in self.sanctions
 
     # -- convenience -----------------------------------------------------------
     @property

@@ -46,7 +46,9 @@ def peg_defense(world, scaled):
         r_mean = sum(rates) / world.n
         mismatch = r_mean - rates[0]                  # >0 ⇒ econ0 rate too LOW ⇒ outflow ⇒ drain
         M0 = world.economies[0].ledger.total_money
-        pressure = world.capital_mobility * mismatch * M0
+        # POLICY: capital controls throttle the flow that drains reserves — closing the
+        # account lets the peg + an independent rate BOTH survive (the trilemma's 3rd corner).
+        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control)
         world._reserves -= pressure * world.peg_reserve_scale
         world._pent_up += pressure                    # suppressed depreciation accumulates
         if world._reserves <= 0.0:
@@ -95,7 +97,9 @@ def capital_financing(world, i, best_price) -> float:
         return 0.0
     target = target_positions(world)[i]
     current = world.economies[i].ledger.balance(DEALER_ID)
-    return world.capital_adjust * (target - current)
+    # POLICY: capital controls throttle the flow (0 = free mobility, 1 = closed account).
+    # Closing the account lets a peg keep monetary autonomy — the trilemma's third corner.
+    return world.capital_adjust * (target - current) * (1.0 - world.capital_control)
 
 
 def capital_grope_signal(world, scaled):

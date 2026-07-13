@@ -35,7 +35,9 @@ def run_migration(world) -> None:
     #    capped by its own emigration ceiling (a structural friction).
     host_of = [-1] * n
     for i in range(n):
-        host = max((j for j in range(n) if j != i), key=lambda j: rw[j], default=None)
+        # POLICY: sanctioned partners are not migration destinations (no bilateral flow).
+        candidates = [j for j in range(n) if j != i and not world.sanctioned(i, j)]
+        host = max(candidates, key=lambda j: rw[j], default=None)
         if host is None:
             continue
         host_of[i] = host

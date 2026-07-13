@@ -38,14 +38,17 @@ def prepare_trade(world) -> None:
     rates = world.rates
     fric = world.fx_friction
     prev_export = world._last_export_value          # curr_i, last tick
+    # POLICY: a tariff (import tax) marks up the import price — protective (fewer imports) —
+    # and its revenue is skimmed to the importer's fiscus in settle_trade. off ⇒ no markup.
+    tariff = 1.0 + world.tariff
     for i, econ in enumerate(econs):
         best_price = None
         best_j = -1
         for j in range(n):
-            if j == i:
+            if j == i or world.sanctioned(i, j):  # POLICY: sanctioned partners do not trade
                 continue
             pj = econs[j]._price_level            # curr_j, last tick (stale coupling)
-            price_i = pj * rates.bilateral(i, j) * (1.0 + fric)
+            price_i = pj * rates.bilateral(i, j) * (1.0 + fric) * tariff
             if pj > EPS and (best_price is None or price_i < best_price):
                 best_price, best_j = price_i, j   # economy i imports from its CHEAPEST source
         world._import_source[i] = best_j
@@ -74,12 +77,25 @@ def settle_trade(world) -> None:
     rates = world.rates
 
     import_value = [0.0] * n
+    tariff_rev = [0.0] * n
     for i, econ in enumerate(econs):
         off = getattr(econ, "_fx_import_offer", None)
-        import_value[i] = (off.sold * off.price) if off is not None else 0.0
+        gross = (off.sold * off.price) if off is not None else 0.0
         econ._fx_import_offer = None
         econ._fx_export_order = None
+        # POLICY tariff: split the gross into the goods base (funds the export mirror) and
+        # the tariff, which the dealer remits to the importer's fiscus (conserving).
+        base = gross / (1.0 + world.tariff)
+        rev = gross - base
+        fiscal = getattr(econ, "_fiscal", None)
+        if rev > EPS and fiscal is not None and econ.ledger.has_account(fiscal):
+            econ.ledger.transfer(DEALER_ID, fiscal, rev)
+            tariff_rev[i] = rev
+            import_value[i] = base
+        else:
+            import_value[i] = gross           # no fiscus to collect it ⇒ tariff is inert
     world._prev_import_value = import_value
+    world._tariff_rev = tariff_rev
 
     # Ship exports: economy k supplies exactly the imports that were SOURCED FROM it this
     # tick (Σ_i import_value[i] where source[i]==k), valued in curr_k. Correct sourcing (not
