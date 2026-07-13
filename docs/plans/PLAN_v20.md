@@ -1,11 +1,12 @@
 # V20 Open Economy Plan — Fiat, Foreign Exchange & Coupled Multi-Economy Trade
 
-> **STATUS: DRAFT — DESIGN ONLY, NOT STARTED (2026-07-13).** This document records the
-> money+FX+trade module design converged in discussion. No code yet. **S0 (the `World`
-> container + instantiable `Economy`) is BLOCKED on coordinating object boundaries with
-> the v19 arc** (`feat/tech-tfp-v19` = technical object refactor + exogenous TFP drift),
-> which is very likely delivering exactly the instantiable-`Economy` refactor this needs.
-> Do NOT build a second parallel object model — see §S0/v19 boundary.
+> **STATUS: DESIGN CONVERGED — READY TO BUILD pending ONE unblock (2026-07-13).** The
+> money+FX+trade module design is converged: foundational seven pinned (§0.5), every
+> structural decision settled (§10), residuals are calibration-only (§13), the phased
+> minor-version plan is concrete (§11). No code yet. **The single blocker is the v20.0/v19
+> object boundary** — v20.0 (`World` + instantiable `Economy`) rides the v19 refactor
+> (`feat/tech-tfp-v19` = technical object refactor + exogenous TFP drift). Do NOT build a
+> second parallel object model — resolve §S0/v19 boundary first, then v20.0 can start.
 >
 > **Scope of THIS plan:** fiat money + foreign exchange + the trade system (Layer A's
 > first two flows), under a **fully-coupled multi-economy (L2)** target. International
@@ -353,18 +354,25 @@ debugging pain. Single-machine multicore is the ceiling worth targeting; distrib
 
 ## 8. Genesis / quiet baseline (L2)
 
-At genesis, all N economies are in a **balanced** state: trade balances *multilaterally*
-at the initial rate vector, rates are flat, no economy accumulates. With the flag on but
-nothing pushing, the coupled system must **stay quiet** (rates flat, trade balanced). If
-it drifts at genesis, the calibration is wrong. Only *then* perturb one economy's
-character and watch divergence. (Standard project discipline: quiet baseline first.)
+**CONVERGED — the quiet baseline is N *identical* economies.** Same config, differing only
+by id / RNG seed. Symmetry does the calibration work: **no genesis solve needed** — the
+balanced rate vector is the normalized unit and trade is symmetric. With Armington
+love-of-variety, identical economies **still trade** (each wants the other's variety) —
+*intra-industry, balanced* trade — so the trade+FX machinery is genuinely exercised while
+the system stays quiet: nonzero flows, zero *net* imbalance, rates flat, dealer inventory
+mean-reverting to zero. If it drifts here, the machinery (not the economics) has a bug.
+**Divergence is introduced only later** (v20.3) by perturbing one economy's productivity.
+(Standard project discipline: quiet baseline first.)
 
 ## 9. Determinism checklist (non-negotiable under bit-identity)
 
 - **Fixed reduction order** across economies (sort by id before summing — float addition
   is non-associative; nondeterministic arrival order → different bits).
-- **Per-economy independent, deterministically-seeded RNG** (results must not depend on
-  scheduling).
+- **Per-economy independent, deterministically-seeded RNG** — **CONVERGED:** each economy's
+  stream seeded from `base_seed` + economy id; the World coupling/dealer layer gets its own
+  separate stream. Results must not depend on scheduling. (Adding economy B must not
+  perturb economy A's stream — this is what makes the N=1≡dev gate and cumulative
+  bit-identity hold.)
 - **Fixed coupling cadence** — every tick to start (correctness first); relax to every
   `K` ticks (fixed `K`, *not* data-dependent "sync when necessary", which would break
   reproducibility) only if profiling demands. The FX friction we need for stability
@@ -399,22 +407,24 @@ character and watch divergence. (Standard project discipline: quiet baseline fir
 dealer inventory scale/buffer, Armington σ, the genesis rate vector — chosen jointly so
 genesis stays quiet and shocks do not oscillate (§7 lever 2).
 
-## 11. Staging (L2 is the target; still built in layers)
+## 11. The phased minor-version plan (v20.0 → v20.4)
 
-- **S0 — prerequisite refactor.** `World` container + instantiable `Economy`; **N=1,
-  coupling off ≡ closed dev (gate #3).** No coupling yet. **BLOCKED on v19 boundary.**
-- **S1 — first real L2.** 2 economies, coupling on, trade only, rates grope, inventory
-  mean-reverts. Two balanced economies stay balanced (quiet baseline).
-- **S2 — divergence.** Give the 2 economies different characters → watch divergence
-  (surplus/deficit, appreciation/depreciation). Import competition hits the v18 N/L
-  sectors; terms-of-trade shock connects to v17 (energy as an import = the real oil
-  shock).
-- **S3 — generalize to N.** Numéraire + derived cross-rates + multilateral balance;
-  vehicle-currency emergence becomes observable (N≥3).
-- **S4 — capital account.** Dealer/residents hold persistent, yield-driven positions →
-  NFA, interest parity, the trilemma.
+v20's scope is the foundational seven (§0.5) + trade. Each minor version is flag-gated,
+ships per-stage tests + a `diagnostic_v20X.png`, and is **cumulatively bit-identical**
+(flag off ≡ the previous version's frontier digest). **The capital account is v21, not
+v20** (§12).
 
-Each stage: flag-gated, per-stage tests, cumulative bit-identity, a `diagnostic_v2XX.png`.
+| Ver | Delivers (components) | Flag-on behavior | Gate (flag off / on) |
+|---|---|---|---|
+| **v20.0** | ①② tags + `World` container + BSP tick *skeleton* (empty barrier) + per-economy RNG | N economies run **uncoupled** | **N=1 ≡ closed dev, byte-identical**; N=2 uncoupled ≡ two independent dev runs. **Rides v19 — see S0 boundary.** |
+| **v20.1** | ③④ + ⑥/⑦ scaffolding: multi-currency, rate vector, numéraire normalization, `FXDealer`, BoP + valuation account, FX gauges — **trade OFF** | FX machinery live but **zero trade** | off ≡ v20.0; on ⇒ **rate flat, inventory 0, BoP trivially Σ=0** (machinery inert when it should be — isolation test) |
+| **v20.2** | ⑤ trade (Armington CES-over-origin session hook), completing ⑥/⑦ — **first real L2** | **N identical economies**, balanced intra-industry trade, rate gropes + inventory mean-reverts | off ≡ v20.1; on ⇒ **quiet baseline holds** (balanced, rates flat) + all four conservation gates green |
+| **v20.3** | divergence *experiment* (no new machinery): perturb one economy's TFP | specialization emerges; real-rate divergence; surplus/deficit; import competition on v18 N/L | findings + comparative portrait diagnostic; conservation gates still green |
+| **v20.4** | generalize to **N=3**: derived cross-rates, multilateral balance, vehicle-currency observation | 3 coupled economies; triangular consistency | cross-rate arbitrage-free (gate #4); multilateral Σ=0 |
+
+**v20.0–v20.2 are the load-bearing build** (foundation + first coupling); v20.3 is the
+payoff experiment; v20.4 opens the N>2 phenomena. Terms-of-trade / energy-as-import shocks
+(the real oil shock) ride on v20.2's machinery as scenarios once divergence works.
 
 ## S0 / v19 boundary coordination (do this FIRST, before any code)
 
