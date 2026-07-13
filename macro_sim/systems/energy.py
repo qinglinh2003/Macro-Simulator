@@ -200,7 +200,7 @@ def _produce_e_firms(econ: Any) -> None:
     supply implodes exactly when demand explodes (found in the 17.0 kernel probe;
     the phase order is the load-bearing difference from the goods market)."""
     for f in econ.e_firms:
-        f.produced = B.produce(f, f.hired, econ._pubcap_factor)
+        f.produced = B.produce(f, f.hired, econ._output_factor(f))
         if f.capacity_kappa > 0.0:
             f.produced = min(f.produced, f.capacity_kappa * f.capital)
         f.inventory += f.produced

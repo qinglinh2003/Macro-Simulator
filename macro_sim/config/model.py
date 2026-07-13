@@ -668,6 +668,17 @@ class Config:
     A: float = 1.0                  # TFP, consumption sector -- scale (normalize)
     a_K: float = 1.0                # labor productivity, capital sector -- scale (A:a_K ratio meaningful)
 
+    # v19 (PLAN_v19): technology as an object -- an economy-wide TFP index Z(t) applied as a
+    # production-seam MULTIPLIER (like _pubcap_factor), NOT a per-firm A mutation. All defaults
+    # keep Z pinned at 1.0 => every pre-v19 config bit-identical.
+    tfp_drift_rate: float = 0.0     # annual trend growth g of the Hicks-neutral index (0 = frozen)
+    tfp_drift_sigma: float = 0.0    # std of the i.i.d. innovation on the daily growth rate (0 = deterministic)
+    tfp_law: str = "exogenous"      # "exogenous" (trend) | "learning" (endogenous LBD seam, 2.x)
+    tfp_learning_theta: float = 0.0 # learning-by-doing elasticity Z=(cumout/base)^theta (0 = inert)
+    tfp_drift_c: float = 0.0        # per-sector trend overrides (0 = use the uniform tfp_drift_rate)
+    tfp_drift_k: float = 0.0
+    tfp_drift_e: float = 0.0
+
     # v2 initial endowments / postings (transient; K_firm0 strictly > 0)
     K_firm0: float = 20.0           # initial C-firm capital (must be > 0 for Cobb-Douglas)
     d_cfirm0: float = 200.0         # C-firm tick-0 deposits
@@ -1571,6 +1582,9 @@ class Config:
         assert not (self.labor_matching == "persistent" and not self.labor_accounting), "persistent labor requires the accounting gate"
         assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
         assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
+        assert self.tfp_law in ("exogenous", "learning"), "tfp_law must be 'exogenous' or 'learning'"
+        assert self.tfp_drift_sigma >= 0.0, "tfp_drift_sigma is a std, must be >= 0"
+        assert self.tfp_learning_theta >= 0.0, "tfp_learning_theta must be >= 0"
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
         assert not (self.labor_person_efficiency and self.labor_matching != "persistent"), "person efficiency needs persistent rosters (e_i lives on hires)"
         assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"

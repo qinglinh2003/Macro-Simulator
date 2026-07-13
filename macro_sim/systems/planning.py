@@ -40,7 +40,7 @@ def run_planning_phase(econ: Any) -> None:
             # v17.0 capacity edge (E-firms): never plan past kappa*K, so labor demand is
             # capped at the capacity-implied headcount (short-run supply inelasticity).
             f.production_target = min(f.production_target, f.capacity_kappa * f.capital)
-        f.labor_demand_notional = B.labor_demand_notional(f, f.production_target, econ._pubcap_factor)
+        f.labor_demand_notional = B.labor_demand_notional(f, f.production_target, econ._output_factor(f))
         B.plan_wage(f, econ.rng, cfg.theta_wage, econ.policy.min_wage, cfg.delta)
         B.plan_price(f, econ.rng, cfg.theta_price)
         # Continuous cash cap (§8.1: floor(D/w) is a cap, not integer employment).

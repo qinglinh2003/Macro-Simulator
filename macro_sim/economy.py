@@ -14,7 +14,7 @@ money, so it never touches the ledger.
 from __future__ import annotations
 
 import random
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from macro_sim.behavior.planning import diversify_mpc
 from macro_sim.config import Config
@@ -71,6 +71,7 @@ from macro_sim.systems.goods import run_goods_phase
 from macro_sim.systems.labor import run_labor_phase
 from macro_sim.systems.planning import run_planning_phase
 from macro_sim.systems.production import run_production_phase
+from macro_sim.systems.technology import Technology
 from macro_sim.systems.securities import (
     assert_securities_identities,
     run_bill_issuance_phase,
@@ -195,6 +196,20 @@ class Economy:
         self.public_capital = 0.0
         self.K_ref = max(EPS, sum(f.capital for f in self.c_firms))
         self._pubcap_factor = 1.0
+        # v19: the technology index Z(t). Inert by default (Z=1.0 => bit-identical). A dedicated
+        # substream (seed + 19_000) feeds any stochastic drift so the main stream is unperturbed.
+        self.technology = Technology(
+            drift_rate=cfg.tfp_drift_rate,
+            drift_sigma=cfg.tfp_drift_sigma,
+            law=cfg.tfp_law,
+            learning_theta=cfg.tfp_learning_theta,
+            sector_drift={
+                s: r for s, r in (("c", cfg.tfp_drift_c), ("k", cfg.tfp_drift_k), ("e", cfg.tfp_drift_e))
+                if r != 0.0
+            },
+            rng=random.Random(cfg.seed + 19_000),
+        )
+        self._cumulative_output_by_sector = {"c": 0.0, "k": 0.0, "e": 0.0}
         self._price_level = cfg.p_firm0          # v9.2: current price level (updated each tick in metrics)
 
         # v3/v11: bank(s) (money creators). Each holds its own deposits (retained interest = capital) and
@@ -460,6 +475,11 @@ class Economy:
     # ======================================================================
     # One tick
     # ======================================================================
+    def _output_factor(self, firm: Any) -> float:
+        """v19: the composite production-seam multiplier = public-capital factor x TFP index.
+        Both are 1.0 by default, so this is exactly ``_pubcap_factor`` (x1.0) when inert."""
+        return self._pubcap_factor * self.technology.factor_for(firm)
+
     def step(self) -> dict:
         set_policy_rate(self)             # v10: set this tick's policy rate (off ⇒ frozen r_interest)
         if self.cfg.interbank and len(self.banks) > 1:   # v11.4: begin this tick's intraday reserve tracking
@@ -469,6 +489,7 @@ class Economy:
         # v9.1: the public-capital productivity factor for this tick (from last tick's K_pub). γ=0 ⇒ 1.0.
         self._pubcap_factor = ((1.0 + self.public_capital / self.K_ref) ** self.cfg.public_capital_gamma
                                if self.cfg.public_capital_gamma > 0.0 else 1.0)
+        self.technology.step(self)        # v19: advance Z(t) before planning/production (inert off)
         run_bill_maturity_phase(self)     # v12.1 only; one-period bills mature to deposits BEFORE planning (no-op off)
         if self.demographic_kernel is not None:
             # The kernel window mutates people (deaths/marriages/guardianship moves), so the bridge

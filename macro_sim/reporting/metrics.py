@@ -1026,6 +1026,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "real_wage": (avg_wage / price_index) if price_index > 1e-12 else 0.0,
         "labor_productivity": (total_produced / total_hired) if total_hired > 1e-9 else 0.0,
         "labor_share": (total_wagebill / va) if va > 1e-9 else 0.0,   # functional distribution
+        # v19: the technology index Z(t) per sector (1.0 while inert) + its annualised growth.
+        "tfp_index_c": float(econ.technology.factor("c")) if hasattr(econ, "technology") else 1.0,
+        "tfp_index_k": float(econ.technology.factor("k")) if hasattr(econ, "technology") else 1.0,
+        "tfp_index_e": float(econ.technology.factor("e")) if hasattr(econ, "technology") else 1.0,
         "savings_rate": ((income_realized - effective_cons) / income_realized) if income_realized > 1e-9 else 0.0,
         "money_velocity": (nominal_output / total_money) if total_money > 1e-9 else 0.0,
         "credit_to_gdp": (rec.get("total_credit", 0.0) / nominal_output) if nominal_output > 1e-9 else 0.0,
@@ -1431,6 +1435,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     total_dependency = _safe_ratio(child_population + elder_population, adult_population)
     rec.update({
         "population_alive": population_alive,
+        # v19: per-capita real output -- the object whose long-run growth rate the exogenous
+        # TFP drift is pre-registered against (BGP: -> g/(1-alpha) for the Cobb-Douglas sector).
+        "per_capita_real_output": _safe_ratio(rec.get("real_output", 0.0), population_alive),
         "child_population": child_population,
         "adult_population": adult_population,
         "working_age_population": working_age_population,
