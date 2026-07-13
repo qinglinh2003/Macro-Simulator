@@ -54,16 +54,63 @@ by that seed:
    clearing is the pathology this model has paid for twice (labor v16, capital v18); the
    dealer's inventory is the buffer that lets the rate grope.
 
-## 2. Exchange-rate representation — numéraire vector, cross-rates derived
+## 2. Exchange-rate representation — the numéraire as a gauge, cross-rates derived
 
 Do NOT track N(N−1)/2 bilateral rates and police consistency. Represent **N rates
 against an abstract world numéraire**: `e_i` = units of currency `i` per numéraire unit.
+Bilateral rate `i↔j = e_i / e_j`; **all cross-rates derive from the single vector `e` ⇒
+triangular no-arbitrage holds by construction.** Groping acts only on the **N−1
+independent** ratios.
 
-- Bilateral rate `i↔j = e_i / e_j`; **all cross-rates derive from the single vector `e`
-  ⇒ triangular no-arbitrage holds by construction.**
-- Groping/clearing act only on the **N−1 independent `e_i`** (one numéraire anchor).
-- The numéraire is a *representation* choice; it does **not** prevent one currency
-  behaviorally *emerging* as the settlement/vehicle currency (an N≥3 phenomenon, later).
+**The numéraire is a measuring rod, NOT an asset.** Nobody holds it, nobody settles in
+it, the dealer has NO inventory of it. It is purely the denominator we quote rates
+against. It is emphatically **not** a world/vehicle currency (which would be a real
+settlement asset with dealer inventory — that is an emergent behavioral object, §2.2).
+
+### 2.1 Gauge freedom → why a normalization is mandatory
+
+Only the ratios `e_i/e_j` (N−1 of them) are physical. Multiplying every `e_i` by a common
+λ leaves all bilateral rates unchanged — a **gauge freedom**; the overall scale is a
+redundant degree of freedom with no economic meaning. **The numéraire is exactly the
+choice that fixes this gauge.** We therefore **re-normalize the `e` vector every tick**
+(project it back onto the gauge-fixing surface); otherwise the overall scale random-walks
+— invisible to the economics but corrosive to determinism, to any numéraire-denominated
+quantity, and to numerical hygiene (`e_i` drifting toward 0/∞).
+
+**Chosen normalization — symmetric geometric currency basket:**
+`Σ_i w_i · log(e_i) = 0`  (i.e. `Π_i e_i^{w_i} = 1`), weights `w_i` fixed at genesis.
+- **Symmetric** — privileges no single currency (a single-currency anchor `e_1≡1` would
+  let currency 1's own inflation/noise contaminate every measured rate; rejected for a
+  comparative lab).
+- **Geometric / log-space** — the correct space for ratio objects (halving vs doubling
+  symmetric); an arithmetic mean would be dominated by the numerically largest `e_i`.
+- One scalar constraint pins the one redundant DOF, leaving exactly N−1 physical rates.
+- Weights: start **equal (`1/N`)**; economy-size weighting is an option (deferred).
+
+### 2.2 Numéraire (measurement) ⊥ vehicle currency (behavior)
+
+The numéraire is the **modeler's measurement gauge**; a vehicle/reserve currency is an
+**emergent behavioral outcome** (which currency agents route settlement through / hold as
+reserves, an N≥3 phenomenon). These are **orthogonal** — we can measure against a
+symmetric basket while, say, currency 2 endogenously becomes the settlement hub. Keeping
+them separate is scientific hygiene: the measurement convention must not prejudge the
+emergent outcome we want to observe.
+
+### 2.3 The numéraire's three roles (the dealer does NOT need it operationally)
+
+The dealer only ever does **bilateral swaps** (currency `i` for `j`) and holds real-
+currency inventory — it needs no numéraire to operate. The numéraire serves only us:
+(1) compact rate vector with self-consistent derived cross-rates; (2) a common unit for
+aggregate gates/metrics — the multilateral BoP identity `Σ_i (trade balance_i in
+numéraire) ≡ 0` (gate #2) is stated in it; (3) gauge-fixing for the groping (§2.1).
+
+### 2.4 Nominal vs real — do not read `e_i` as "real" anything
+
+The numéraire fixes the **nominal** books. **Trade is driven by the REAL exchange rate,
+not the nominal one:** `real_ij = (e_i/e_j) · (P_j/P_i)`, derived from nominal rates +
+domestic price levels. Under the basket normalization the numéraire is itself a basket of
+the currencies, so it inflates with the world — `e_i` measures nominal relative currency
+value only. The economics runs on the derived real rate; §4's trade decisions use it.
 
 ## 3. The FX dealer — a World-level object
 
@@ -234,7 +281,14 @@ persistently instead of mean-reverting** — i.e. the capital account:
 
 ## 12. Open drill-downs (next design sessions)
 
-- The exact `e_i` groping rule (functional form, speed parameter, inventory-feedback term).
+- ✅ **RESOLVED — abstract numéraire** (§2): a gauge choice, not an asset; symmetric
+  geometric-basket normalization `Π e_i^{w_i}=1` re-applied each tick; numéraire ⊥ vehicle
+  currency; nominal-vs-real distinction. *Remaining sub-choices:* basket weights `w_i`
+  (equal to start) and whether re-normalization interacts with groping stability.
+- The exact `e_i` groping rule — **sketch:** `log e_i += λ·(X_i/scale)` on currency-`i`
+  excess-demand `X_i`, then subtract `Σ_j w_j log e_j` to re-impose the gauge; `Σ_i X_i ≡
+  0` (Walras / gate #2) with fixed-id reduction. *Open:* speed `λ`, scale term,
+  inventory-feedback coupling, and the groping/normalization stability interaction.
 - Iceberg friction parameterization (per-unit vs proportional; per-pair vs uniform).
 - Which existing goods are tradable, and how export demand / import supply enter the
   goods session without disturbing its flag-off byte-identity.
