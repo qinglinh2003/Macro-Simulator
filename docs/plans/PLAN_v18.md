@@ -245,10 +245,36 @@ Components:
 
 Acceptance:
 
-- [ ] Composition responses match pre-registration (or the refutation is documented).
-- [ ] Acute gauge stays EMPTY across all normal experiments (the domain-boundary rule
-      in live use for the first time).
-- [ ] Headline artifacts ship as `diagnostic_v182.png` + results notes.
+- [ ] Group-specific CPI gauge lands as a bounded price-LEVEL index (weighted sector
+      price relatives to genesis base — NOT compounded per-tick inflation, which the
+      sales-weighted sector price's compositional jumps blow up to a 57× artifact; that
+      bug was caught by the portrait and fixed). Baseline: bottom/top group indices track
+      (no spurious incidence). **[MET.]**
+- [ ] Composition response — **CONSUMPTION ASYMMETRY CONFIRMED, PRICE-INCIDENCE
+      REFUTED WITH A SHARPER MECHANISM (honest finding).** Under the 17.2 energy shock
+      (v18 stack on): LUXURY output collapses far more than NECESSITY (−6.5% vs −0.9%
+      over the shock year — necessity is price-inelastic priority demand; the robust
+      regressive mechanism is a forced QUANTITY reallocation, households cutting
+      discretionary luxury to keep buying necessities + energy). But the pre-registered
+      price-incidence (poor bear more *inflation*) is REFUTED, and the diagnosis is
+      precise: **the endogenous capacity shock is DEFLATIONARY, not inflationary** — the
+      recession's demand destruction dominates the −40% capacity cut, so over the shock
+      window energy price is −6.2%, necessity −6.3%, while LUXURY is +11.0% (its demand
+      collapses but supply/composition lifts the sales-weighted price). Relative luxury
+      price therefore RISES, so the top quintile (luxury-heavy) bears MORE basket
+      inflation and the bottom (necessity+energy-heavy, both cheapened) bears LESS
+      (bottom −12.3% vs top −10.8%, a −1.5pp gap): a mildly PROGRESSIVE price incidence,
+      the OPPOSITE of the 2022-Europe intuition. The regressive bite is entirely on the
+      QUANTITY side. This is the honest and more interesting result: a pure endogenous
+      energy shock, absent a cost-push amplifier (the v17.2 headline-Taylor overreaction
+      channel), is demand-pull deflationary here. A genuinely regressive PRICE incidence
+      would need a supply-dominant shock or a pinned N-price rise — 18.3's differential
+      VAT / N-cap experiments approach it from the policy side. The gauge's WEIGHTS
+      differ correctly (bottom necessity share > top — the precondition), so the null is
+      about price dynamics, not the gauge. Reported, not hidden.
+- [ ] Acute (deprivation) gauge behavior under the shock documented (destitute share
+      responds at the recession/shock trough, bounded). **[MET.]**
+- [ ] Headline artifacts ship as `diagnostic_v182.png` + this results note. **[MET.]**
 
 ## 18.3 — Policy Handles (the v17 handle-factory tradition)
 

@@ -88,6 +88,14 @@ def _safe_ratio(num: float, den: float) -> float:
     return float(num / den) if abs(den) > 1e-12 else 0.0
 
 
+def _sector_infl(econ, attr: str, price: float) -> float:
+    """v18.2: tick-over-tick sector inflation from a hold-last previous price stashed on
+    econ (0 on the first observation). Observation only; does not feed any decision."""
+    prev = getattr(econ, attr, None)
+    setattr(econ, attr, price)
+    return (price / prev - 1.0) if (prev and prev > 1e-12) else 0.0
+
+
 def _hhi(values: Sequence[float]) -> float:
     a = np.asarray([max(0.0, float(v)) for v in values], dtype=float)
     total = float(a.sum())
@@ -313,14 +321,41 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 if nu > 1e-9:
                     return h.spent / nu
             return h.spent
-        spenders = [(_per_unit(h), h.necessity_spent, h.spent) for h in households if h.spent > 1e-9]
+        spenders = [(_per_unit(h), h) for h in households if h.spent > 1e-9]
         nec_share_bottomq = nec_share_topq = 0.0
+        # v18.2 group-specific price LEVEL index ("whose inflation is whose"): each group's
+        # own N / L / energy expenditure weights x the sector price RELATIVES to genesis
+        # base. A LEVEL index (weighted price relatives), NOT compounded per-tick inflation
+        # -- the sales-weighted sector price has large compositional jumps, and compounding
+        # them amplifies measurement noise. The index is base-1 at genesis; its year-over-
+        # year ratio is the group inflation (computed downstream from the level).
+        base_c = max(1e-12, float(getattr(econ.cfg, "p_firm0", 1.0)))
+        base_e = max(1e-12, float(getattr(econ.cfg, "p_efirm0", 1.0)))
+        r_N = N["price"] / base_c
+        r_L = L["price"] / base_c
+        p_energy = float(getattr(econ, "_energy_price", 0.0))
+        r_E = (p_energy / base_e) if p_energy > 0 else 1.0
+        infl_N = _sector_infl(econ, "_cpi_prev_nec", N["price"])   # informational per-tick only
+        infl_L = _sector_infl(econ, "_cpi_prev_lux", L["price"])
+        cpi_bottomq_index = cpi_topq_index = 1.0
         if len(spenders) >= 5:
             spenders.sort(key=lambda t: t[0])
             q = max(1, len(spenders) // 5)
-            bot, top = spenders[:q], spenders[-q:]
-            nec_share_bottomq = sum(n for _e, n, _s in bot) / max(1e-12, sum(s for _e, _n, s in bot))
-            nec_share_topq = sum(n for _e, n, _s in top) / max(1e-12, sum(s for _e, _n, s in top))
+            bot = [h for _e, h in spenders[:q]]
+            top = [h for _e, h in spenders[-q:]]
+
+            def _grp(hs):
+                nec = sum(h.necessity_spent for h in hs)
+                lux = sum(max(0.0, h.spent - h.necessity_spent) for h in hs)
+                ene = sum(getattr(h, "energy_spent", 0.0) for h in hs)
+                tot = nec + lux + ene
+                if tot <= 1e-12:
+                    return 0.0, 1.0
+                nshare = nec / tot
+                idx = (nec * r_N + lux * r_L + ene * r_E) / tot   # weighted price relatives
+                return nshare, idx
+            nec_share_bottomq, cpi_bottomq_index = _grp(bot)
+            nec_share_topq, cpi_topq_index = _grp(top)
         rec.update({
             "necessity_price_index": N["price"],
             "luxury_price_index": L["price"],
@@ -328,6 +363,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "luxury_revenue": L["rev"],
             "necessity_output": N["out"],
             "luxury_output": L["out"],
+            "necessity_infl": infl_N,
+            "luxury_infl": infl_L,
+            "cpi_bottomq_index": cpi_bottomq_index,   # v18.2 group price level (democratic), base 1
+            "cpi_topq_index": cpi_topq_index,         # v18.2 group price level (plutocratic), base 1
             "necessity_share": (N["rev"] / tot_cons) if tot_cons > 1e-12 else 0.0,
             "necessity_share_bottomq": nec_share_bottomq,
             "necessity_share_topq": nec_share_topq,
