@@ -222,10 +222,12 @@ JG hard test run POST-COMPOSITION per protocol §5):
       (jg_off −0.06 only) — hoarding keeps workers inside firms, so the buffer
       barely engages. The multi-version-old open thread can close as "benign at these
       magnitudes"; re-examined whenever magnitudes above 0.5 become interesting.
-      OPEN INCIDENT: the seed-2 replication tripped the person-claim hard gate
-      once (hh 143, shock leg, non-reproducible in isolated/salted probes so far)
-      — phase-probe hunt battery running; energy+shock experiments on the both
-      stacks carry a caution flag until it is caught.
+      INCIDENT (closed as unreproduced-but-armed): one seed-2 replication run
+      tripped the person-claim hard gate (hh 143). 18/18 hunt legs clean (the
+      exact sequence x 3 salts, per-phase probes); every structural hypothesis
+      eliminated; the sole unrecreated condition was maximum machine load.
+      scripts_v17/hunt_claim_bug.py stays armed — a recurrence yields
+      tick+phase+household forensics. Watch note, not a blocker.
 - [x] Windfall surtax remits to fiscal (reduces the dividend pool) and conserves.
 
 ## v17.3 — Strategic Reserve, State Ownership & Hoarding
