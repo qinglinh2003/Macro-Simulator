@@ -1,11 +1,24 @@
 # V18.5+ Supply-Side Sector Differentiation — the Dual of the Consumption Split
 
-> **STATUS: DRAFT.** The supply-side continuation of the v18 consumption-stratification
-> arc (NOT a new v19 — same theme, same branch `feat/consumption-v18`). v18.0–18.4 split
-> DEMAND into necessity/luxury; 18.5+ let SUPPLY follow — firms differentiate by which
-> class they produce, and capital + entry/exit REALLOCATE between sectors as growth and
-> demand composition shift. Structural transformation and Baumol-style relative-price
-> change should EMERGE, not be seeded. Builds on the merged v18 core.
+> **STATUS: 18.5 COMPLETE; 18.6 (multi-product) DEFERRED to a future arc; ARC CLOSED
+> (2026-07-13).** 18.5 shipped: (a) structural transformation already EMERGES from the
+> investment+entry channel (necessity capital share 0.54→0.37 over 10y growth), with
+> capital lagging demand ~13pp; (b) product-line SWITCHING closes ~23% of that lag,
+> conserving and quiet. 18.7 Baumol REFUTED in the long run (supply reallocation clears
+> the wedge — the v18.2 wedge is a short-run friction effect). **18.6 multi-product
+> DEFERRED by a data-driven decision:** the "conglomerate ownership concentration" it
+> would add ALREADY EXISTS — 99% of equity holders (and 34/34 top-decile owners) span
+> BOTH sectors via their portfolios, so the distribution→structure feedback loop's
+> ownership tightness is already present. The only unique payoff left for 18.6 is the
+> HIGH-cost fused-per-line firm (resilience via a fused balance sheet, short-run supply
+> elasticity, cross-line pricing) — IO-flavored, tangential to the consumption-
+> stratification theme, and a proper separate arc (diversified/conglomerate firms). The
+> whole v18 arc (demand 18.0–18.4 + supply 18.5) merges into dev here.
+>
+> The supply-side continuation of the v18 consumption-stratification arc (NOT a new v19 —
+> same theme, same branch). v18.0–18.4 split DEMAND into necessity/luxury; 18.5 let
+> SUPPLY follow — firms differentiate by which class they produce, and capital +
+> entry/exit REALLOCATE between sectors as growth and demand composition shift.
 
 **Thesis.** v18 gave half the picture: the rich shift their budget share to luxury, but
 no firm reallocates to catch that shift — the sector partition is frozen at genesis
