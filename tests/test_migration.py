@@ -1,0 +1,67 @@
+"""v22.1 — migration & remittances (PLAN_v22): labor crosses to higher wages, money flows
+home, completing the current account (trade + factor income + transfers).
+
+Gates: (1) migration off ⇒ no migrant stock, economies conserve as v21; (2) conservation
+with migration on; (3) the low-wage economy is the net labor EXPORTER and the net remittance
+RECEIVER; (4) remittances lift the labor-exporter's current account above its trade+factor
+balance (the remittance wedge).
+"""
+
+from __future__ import annotations
+
+from macro_sim.config import Config
+from macro_sim.world import World
+
+
+def _pair():
+    poor = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=0.7)
+    rich = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=1.3)
+    return poor, rich
+
+
+def _mean(recs, key, i, n=40):
+    return sum(r[key][i] for r in recs[-n:]) / n
+
+
+def test_migration_off_no_flow_and_conserves():
+    poor, rich = _pair()
+    world = World([poor, rich], base_seed=9, trade=True, capital=True, capital_mobility=1.0)  # migration off
+    world.run()
+    assert world.world_records[-1]["migrant_stock"] == [0.0, 0.0]
+    for econ in world.economies:
+        econ.ledger.assert_conserved()
+
+
+def test_migration_conserves():
+    poor, rich = _pair()
+    world = World([poor, rich], base_seed=9, trade=True, capital=True, migration=True,
+                  capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2)
+    world.run()
+    for econ in world.economies:
+        econ.ledger.assert_conserved()
+        econ.ledger.assert_non_negative()
+
+
+def test_low_wage_economy_exports_labor_and_receives_remittances():
+    poor, rich = _pair()
+    world = World([poor, rich], base_seed=9, trade=True, capital=True, migration=True,
+                  capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2)
+    world.run()
+    last = world.world_records[-1]
+    assert last["migrant_stock"][0] > last["migrant_stock"][1]        # poor = net labor exporter
+    assert _mean(world.world_records, "remittances", 0) > _mean(world.world_records, "remittances", 1)
+
+
+def test_remittances_lift_current_account():
+    """The labor-exporter's current account (with remittances) exceeds its trade+factor
+    balance — remittances finance the deficit (the Philippines/Bangladesh pattern)."""
+    poor, rich = _pair()
+    world = World([poor, rich], base_seed=9, trade=True, capital=True, migration=True,
+                  capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2)
+    world.run()
+    ca = _mean(world.world_records, "current_account", 0)
+    remit = _mean(world.world_records, "remittances", 0)
+    ca_ex_remit = ca - remit                    # trade balance + factor income only
+    assert remit > 0.0                          # net remittance inflow to the labor exporter
+    assert ca > ca_ex_remit                     # remittances improve the current account
+    assert remit > 0.3 * abs(ca_ex_remit)       # ... materially (a large share of the CA)

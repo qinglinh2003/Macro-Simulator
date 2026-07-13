@@ -16,6 +16,7 @@ from macro_sim.config import Config
 from macro_sim.economy import Economy
 from macro_sim.world.capital import capital_interest
 from macro_sim.world.fx import FXDealer, RateVector
+from macro_sim.world.migration import run_migration
 from macro_sim.world.trade import prepare_trade, settle_trade
 
 # Per-economy seeds must be far-spaced: each `Economy` derives many substreams as
@@ -58,6 +59,10 @@ class World:
         peg: bool = False,
         peg_reserves0: float = 5000.0,
         peg_reserve_scale: float = 1.0e5,
+        migration: bool = False,
+        migration_rate: float = 0.02,
+        migration_max_share: float = 0.25,
+        remittance_share: float = 0.2,
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -78,9 +83,13 @@ class World:
         # v20.1 FX layer. couple=False ⇒ no FX objects, no dealer accounts ⇒ the World is
         # exactly v20.0 (bit-identical). couple=True installs the rate vector + the dealer
         # (one account per economy); with zero trade it is INERT (rates flat, inventory 0).
-        self.couple = couple or trade or capital   # trade/capital imply the FX layer
+        self.couple = couple or trade or capital or migration   # any cross-border flow needs the FX layer
         self.trade = trade
         self.capital = capital                 # v21: persistent cross-border positions
+        self.migration = migration             # v22: labor flow + remittances
+        self.migration_rate = migration_rate
+        self.migration_max_share = migration_max_share
+        self.remittance_share = remittance_share
         self.capital_mobility = capital_mobility
         self.capital_adjust = capital_adjust
         self.periods_per_year = periods_per_year
@@ -95,6 +104,8 @@ class World:
         self._reserves = peg_reserves0
         self._peg_intact = True
         self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
+        self._migrant_stock: List[float] = [0.0] * self.n   # v22: emigrants from i, working abroad
+        self._remittances: List[float] = [0.0] * self.n     # v22: remittances received by i (curr_i)
         self.rates: RateVector | None = None
         self.dealer: FXDealer | None = None
         self.world_records: List[dict] = []
@@ -141,6 +152,8 @@ class World:
             settle_trade(self)                # read imports, update stale state, grope rate
         if self.capital:
             capital_interest(self)            # v21: factor income on cross-border positions
+        if self.migration:
+            run_migration(self)               # v22: labor flow + remittances
         self.dealer.book_revaluation(self.rates)
         inv = self.dealer.inventory()
         e = self.rates.e
@@ -150,6 +163,10 @@ class World:
         # LIABILITY); factor income_i (received) = −(i's interest outflow)/e_i.
         nfa = [-inv[i] / e[i] for i in range(self.n)]
         factor = [-self._factor_income[i] / e[i] for i in range(self.n)]
+        # v22 full current account (numéraire) = trade balance + factor income + remittances.
+        remit = [self._remittances[i] / e[i] for i in range(self.n)]
+        tb = [(self._last_export_value[i] - self._prev_import_value[i]) / e[i] for i in range(self.n)]
+        current_account = [tb[i] + factor[i] + remit[i] for i in range(self.n)]
         self.world_records.append(
             {
                 "t": self.t,
@@ -162,6 +179,9 @@ class World:
                 "dealer_valuation": self.dealer.valuation,
                 "reserves": self._reserves,
                 "peg_intact": self._peg_intact,
+                "migrant_stock": list(self._migrant_stock),
+                "remittances": remit,
+                "current_account": current_account,
             }
         )
 
