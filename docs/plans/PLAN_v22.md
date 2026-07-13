@@ -1,9 +1,22 @@
 # V22 Migration & Remittances Plan — Layer A's people flow + the full current account
 
-> **STATUS: DRAFT — building on `feat/migration-v22` (forked from v21@3b3ef29).** v22 adds
-> the last of Layer A's flows — **people (labor) crossing borders** — plus the transfer it
-> generates (**remittances**), completing the current account: trade + factor income (v21)
-> + **transfers (v22)**. Reuses the v20/v21 dealer/FX machinery whole.
+> **STATUS: IMPLEMENTED — v22.0–v22.1 built/tested/committed on `feat/migration-v22`
+> (forked from v21@3b3ef29).** v22 adds Layer A's people flow + remittances, completing the
+> current account. Reuses the v20/v21 machinery whole. 4 v22 tests green (migration off ⇒
+> v21 exactly); diagnostic_v221.
+>
+> **What landed (v22.1, `world/migration.py`, commit e4ec57b):** workers migrate toward
+> higher REAL wages (a wage-gap-driven, bounded residency stock); migrants remit a share
+> home via a conserving dealer-routed transfer (host households → dealer → origin
+> households). The full current account = trade + factor income + remittances is gauged.
+> **Finding:** the low-wage economy is the net labor EXPORTER and remittance RECEIVER, and
+> remittances lift its current account from deficit to surplus (the Philippines/Bangladesh
+> pattern) — and are the v18 deprivation escape valve, now present.
+>
+> **Honest scope:** v22.1 is the FINANCIAL side (remittances + current account) with the
+> migrant stock a wage-driven gauge; the REAL labor-force reallocation (v22.2 — actually
+> shrinking the origin's workforce / growing the host's, driving wage convergence) touches
+> each economy's labor internals and is the deeper, still-open lift.
 
 ## 0. What crosses now: people
 
