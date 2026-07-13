@@ -25,7 +25,7 @@ from typing import Dict, List, Sequence
 import numpy as np
 
 from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
-from macro_sim.demographics.economic_state import build_household_economic_profiles
+from macro_sim.demographics.economic_state import build_household_economic_profiles, need_weight_for_person
 from macro_sim.systems.banking import bank_economic_capital, bank_equity_value, bank_for
 from macro_sim.systems.securities import bond_market_value
 
@@ -86,6 +86,14 @@ def _quantile(x: Sequence[float], q: float) -> float:
 
 def _safe_ratio(num: float, den: float) -> float:
     return float(num / den) if abs(den) > 1e-12 else 0.0
+
+
+def _sector_infl(econ, attr: str, price: float) -> float:
+    """v18.2: tick-over-tick sector inflation from a hold-last previous price stashed on
+    econ (0 on the first observation). Observation only; does not feed any decision."""
+    prev = getattr(econ, attr, None)
+    setattr(econ, attr, price)
+    return (price / prev - 1.0) if (prev and prev > 1e-12) else 0.0
 
 
 def _hhi(values: Sequence[float]) -> float:
@@ -300,6 +308,115 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "n_firms_selling": float(np.sum(np.asarray(sales_all) > 1e-9)),
     }
 
+    # v18.1 consumption sector split gauges: sector prices (feed the group CPIs in 18.2),
+    # the aggregate necessity share (Engel level) + a rank gradient (Engel EMERGENCE),
+    # sector markups + time-at-ceiling + HHI (the markup watch), and sector firm counts
+    # (the entry-oscillation watch). Only present when the split is on.
+    if getattr(econ.cfg, "consumption_strata", False) and getattr(econ, "n_firms", None):
+        def _sector(firms):
+            rev = float(sum(f.revenue for f in firms))
+            units = float(sum(f.sales for f in firms))
+            out = float(sum(f.produced for f in firms))
+            cap = float(sum(f.capital for f in firms))          # v18.5: sector capital (reallocation watch)
+            sell = [f for f in firms if f.sales > 1e-9] or list(firms)
+            price = rev / units if units > 1e-12 else _mean([f.price for f in sell])
+            mk = _mean([f.markup for f in sell])
+            at_cap = _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in firms])
+            hhi = float(sum((f.revenue / rev) ** 2 for f in firms)) if rev > 1e-12 else 0.0
+            return dict(rev=rev, units=units, out=out, cap=cap, price=price, mk=mk, at_cap=at_cap,
+                        hhi=hhi, n=len(firms))
+        N, L = _sector(econ.n_firms), _sector(econ.l_firms)
+        tot_cons = N["rev"] + L["rev"]
+        # Engel EMERGENCE: necessity share for the bottom vs top quintile of households
+        # ranked by expenditure PER NEED-UNIT (affluence per person). The Engel axis must
+        # be per-capita: the fixed necessity need scales with household size, so total
+        # household expenditure is confounded by size and its gradient washes out; per
+        # need-unit, necessity share ≈ const / (expenditure-per-unit) — a clean 1/E
+        # decline. §4-style structural judge; the gradient is not seeded.
+        bridge_ref = getattr(econ, "demographic_bridge", None)
+
+        def _per_unit(h):
+            if bridge_ref is not None:
+                nu = bridge_ref.household_profile(h.id).need_units
+                if nu > 1e-9:
+                    return h.spent / nu
+            return h.spent
+        spenders = [(_per_unit(h), h) for h in households if h.spent > 1e-9]
+        nec_share_bottomq = nec_share_topq = 0.0
+        # v18.2 group-specific price LEVEL index ("whose inflation is whose"): each group's
+        # own N / L / energy expenditure weights x the sector price RELATIVES to genesis
+        # base. A LEVEL index (weighted price relatives), NOT compounded per-tick inflation
+        # -- the sales-weighted sector price has large compositional jumps, and compounding
+        # them amplifies measurement noise. The index is base-1 at genesis; its year-over-
+        # year ratio is the group inflation (computed downstream from the level).
+        base_c = max(1e-12, float(getattr(econ.cfg, "p_firm0", 1.0)))
+        base_e = max(1e-12, float(getattr(econ.cfg, "p_efirm0", 1.0)))
+        r_N = N["price"] / base_c
+        r_L = L["price"] / base_c
+        p_energy = float(getattr(econ, "_energy_price", 0.0))
+        r_E = (p_energy / base_e) if p_energy > 0 else 1.0
+        infl_N = _sector_infl(econ, "_cpi_prev_nec", N["price"])   # informational per-tick only
+        infl_L = _sector_infl(econ, "_cpi_prev_lux", L["price"])
+        cpi_bottomq_index = cpi_topq_index = 1.0
+        if len(spenders) >= 5:
+            spenders.sort(key=lambda t: t[0])
+            q = max(1, len(spenders) // 5)
+            bot = [h for _e, h in spenders[:q]]
+            top = [h for _e, h in spenders[-q:]]
+
+            def _grp(hs):
+                nec = sum(h.necessity_spent for h in hs)
+                lux = sum(max(0.0, h.spent - h.necessity_spent) for h in hs)
+                ene = sum(getattr(h, "energy_spent", 0.0) for h in hs)
+                tot = nec + lux + ene
+                if tot <= 1e-12:
+                    return 0.0, 1.0
+                nshare = nec / tot
+                idx = (nec * r_N + lux * r_L + ene * r_E) / tot   # weighted price relatives
+                return nshare, idx
+            nec_share_bottomq, cpi_bottomq_index = _grp(bot)
+            nec_share_topq, cpi_topq_index = _grp(top)
+        rec.update({
+            "necessity_price_index": N["price"],
+            "luxury_price_index": L["price"],
+            "necessity_revenue": N["rev"],
+            "luxury_revenue": L["rev"],
+            "necessity_output": N["out"],
+            "luxury_output": L["out"],
+            "necessity_infl": infl_N,
+            "luxury_infl": infl_L,
+            "cpi_bottomq_index": cpi_bottomq_index,   # v18.2 group price level (democratic), base 1
+            "cpi_topq_index": cpi_topq_index,         # v18.2 group price level (plutocratic), base 1
+            "necessity_share": (N["rev"] / tot_cons) if tot_cons > 1e-12 else 0.0,
+            "necessity_share_bottomq": nec_share_bottomq,
+            "necessity_share_topq": nec_share_topq,
+            "necessity_markup": N["mk"],
+            "luxury_markup": L["mk"],
+            "necessity_markup_at_cap": N["at_cap"],
+            "luxury_markup_at_cap": L["at_cap"],
+            "necessity_hhi": N["hhi"],
+            "luxury_hhi": L["hhi"],
+            "n_firms_necessity": float(N["n"]),
+            "n_firms_luxury": float(L["n"]),
+            "necessity_capital": N["cap"],                       # v18.5 sector capital + share
+            "luxury_capital": L["cap"],
+            "necessity_capital_share": (N["cap"] / (N["cap"] + L["cap"]))
+                                       if (N["cap"] + L["cap"]) > 1e-12 else 0.0,
+        })
+        if getattr(econ.cfg, "sector_switching", False):
+            rec.update({
+                "sector_switches": float(getattr(econ, "_sector_switches", 0.0)),
+                "sector_switch_capital": float(getattr(econ, "_sector_switch_capital", 0.0)),
+            })
+
+    # v18.4 family transfers (the first-line private safety net)
+    if getattr(econ.cfg, "family_transfers", False):
+        rec.update({
+            "family_transfer_total": float(getattr(econ, "_family_transfer_total", 0.0)),
+            "family_transfer_recipients": float(getattr(econ, "_family_transfer_recipients", 0.0)),
+            "family_exposed": float(getattr(econ, "_family_exposed", 0.0)),   # in need, no kin donor
+        })
+
     if bridge is not None:
         state = getattr(econ, "demographic_state", None)
         alive_people = [person for person in getattr(state, "people", []) if getattr(person, "alive", True)]
@@ -370,6 +487,24 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "e0_effective": float(getattr(bridge, "e0_effective", 0.0)),
             }
         )
+        # v18.0 deprivation gauges (observation only). Coverage is measured at the
+        # HOUSEHOLD unit (the model charges dependents' needs to supporting adults, so a
+        # child's own allocation is ~0), then inherited by members. The signal owns the
+        # cumulative->flow differencing (consumption_allocated_tick is a lifetime stock)
+        # and all aggregation; metrics just hands it the raw per-person snapshot.
+        dep = getattr(econ, "deprivation_signal", None)
+        if dep is not None and state is not None:
+            dep_persons = [
+                (int(person.id), int(person.household_id), need_weight_for_person(person),
+                 bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick,
+                 int(getattr(person, "age", 0)),
+                 bridge.claims.balance_sheet(int(person.id)).net_worth,
+                 bridge.claims.balance_sheet(int(person.id)).cash_claim)
+                for person in alive_people if bridge.claims.has_person(int(person.id))
+            ]
+            rec.update(dep.observe(
+                year=int(state.current_date.year), price_index=price_index, persons=dep_persons))
+
         strat = getattr(bridge, "stratification", None)
         if strat is not None:
             # v14 Phase 3.0: per-quintile vital gauges + the age-wealth confound gauge

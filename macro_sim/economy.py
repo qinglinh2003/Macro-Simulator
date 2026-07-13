@@ -61,6 +61,9 @@ from macro_sim.systems.banking import (
 from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
 from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_energy_phase
+from macro_sim.systems.deprivation import DeprivationSignal
+from macro_sim.systems.family import run_family_transfer_phase
+from macro_sim.systems.switching import run_sector_switching_phase
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -151,6 +154,40 @@ class Economy:
                     mult_hi=cfg.energy_mortality_mult_hi,
                 )
         self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5; + E in v17)
+
+        # v18.1: consumption sector split (NECESSITY / LUXURY). Tag genesis c-firms into
+        # two sub-sectors; the household goods phase then runs two sequenced sessions
+        # (necessity first, quantity-targeted; luxury takes the residual). The necessity
+        # need per need-unit is anchored to genesis config (the v17.1 energy-need idiom),
+        # never to realized consumption. Off ⇒ lists empty, consumption_sector "" ⇒
+        # single session ⇒ bit-identical.
+        self.n_firms: List[Firm] = []
+        self.l_firms: List[Firm] = []
+        self._necessity_need_per_unit = 0.0
+        if cfg.consumption_strata:
+            n_nec = max(1, min(len(self.c_firms) - 1, round(cfg.n_firm_share * len(self.c_firms))))
+            for i, f in enumerate(self.c_firms):
+                f.consumption_sector = "necessity" if i < n_nec else "luxury"
+            self.n_firms = [f for f in self.c_firms if f.consumption_sector == "necessity"]
+            self.l_firms = [f for f in self.c_firms if f.consumption_sector == "luxury"]
+            # genesis fit: necessity spending per need-unit ≈ share x wage ⇒ real quantity
+            # = share x w_firm0 / p_firm0 (frozen). A rich household buys the SAME necessity
+            # quantity as a poor one of the same size ⇒ necessity SHARE falls with income
+            # (Engel's law emerges from the fixed quantity, not seeded).
+            self._necessity_need_per_unit = cfg.necessity_share0 * cfg.w_firm0 / cfg.p_firm0
+        if cfg.sector_switching:
+            self._switch_rng = random.Random(cfg.seed + 18_500)   # dedicated substream
+
+        # v18.0: subsistence basket & deprivation gauges (OBSERVATION ONLY; needs person-
+        # level consumption). Off ⇒ never constructed ⇒ bit-identical.
+        self.deprivation_signal = None
+        if cfg.deprivation_gauges and cfg.demographics_enabled:
+            self.deprivation_signal = DeprivationSignal(
+                subsistence_share=cfg.subsistence_share,
+                burnin_years=cfg.deprivation_burnin_years,
+                acute_days=cfg.deprivation_acute_days,
+                chronic_days=cfg.deprivation_chronic_days,
+            )
 
         # v9.1: economy-wide PUBLIC capital (a non-rival stock; government investment builds it, it raises
         # every firm's productivity). K_ref = genesis private C-capital, so the factor (1+K_pub/K_ref)^γ
@@ -451,12 +488,14 @@ class Economy:
         # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
         run_energy_phase(self)            # v17.0 only; firms buy energy before producing (no-op off)
         run_production_phase(self)        # [ANCHOR: production] output = f(hired labor)
+        run_family_transfer_phase(self)   # v18.4 only; kin top-ups before goods (no-op off)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
         run_settlement_phase(self)
         run_debt_service_phase(self)      # v3 only; no-op when banks disabled
         run_housing_market_phase(self)    # v15.1 only; monthly resale sessions (no-op off)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
+        run_sector_switching_phase(self)  # v18.5 only; firms retool between N/L sectors (no-op off)
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
         run_interbank_phase(self)         # v11.4 only; money-market funding of reserve deficits (no-op off)
         run_bank_runs_phase(self)         # v11.5 only; depositor runs (flight + panic; queued withdrawals; no-op off)

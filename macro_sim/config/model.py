@@ -763,6 +763,67 @@ class Config:
     # observationally vacuous; lands when the gate opens. Efficiency investment
     # (e_coeff falls with investment): optional per plan, deferred with it.
 
+    # ===================== v18: consumption stratification ========================
+    # -- v18.0 subsistence basket & deprivation gauges (OBSERVATION ONLY) --
+    # The basket is an external MEASUREMENT standard, not a decision input: a
+    # per-person subsistence real-consumption floor (needs-weighted), fitted once at
+    # genesis to a fraction of mean per-capita consumption (the poverty-line idiom),
+    # then FROZEN. Coverage = realized real consumption / basket cost at current
+    # prices; spell counters track consecutive days below the 100/60/30% thresholds.
+    # A sustained ACUTE spell sets a DOMAIN-BOUNDARY health flag: per the research
+    # ruling (PLAN_v18), acute deprivation is NOT a death mechanism -- it marks the
+    # edge of the model's validity domain (post-breach demographic/long-run paths are
+    # out of domain; distributional readouts stay valid). Off => bit-identical.
+    deprivation_gauges: bool = False       # v18.0 master flag (observation only)
+    subsistence_share: float = 0.5         # basket = share x genesis mean per-capita real
+                                           # consumption (needs-weighted per person); fitted
+                                           # at genesis, then frozen (external anchor)
+    deprivation_burnin_years: int = 3      # discard the genesis relaxation before anchoring
+                                           # (the housing/energy-signal burn-in idiom; 3y
+                                           # clears the worst of the v13 genesis clearing slump)
+    deprivation_acute_days: int = 7        # a sub-30% spell this long trips the domain flag
+    deprivation_chronic_days: int = 30     # a sub-60% spell this long trips the domain flag
+
+    # -- v18.1 sector split & the budget hierarchy (the structural stage) --
+    # Consumption goods split into NECESSITY and LUXURY sectors. The household goods
+    # phase becomes two sequenced sessions of the existing market protocol: NECESSITY
+    # first (quantity-targeted at a fixed per-need-unit basket -- the non-homothetic
+    # primitive), LUXURY takes the residual budget. Engel's law (necessity SHARE falls
+    # with income) must EMERGE from the fixed necessity quantity, not be seeded. The
+    # necessity need is anchored to genesis config (the v17.1 energy-need idiom:
+    # quantity = share x w_firm0 / p_firm0 per need-unit), never to realized (transient)
+    # consumption. c-firms are tagged necessity/luxury by `n_firm_share`; entry picks a
+    # sector by per-sector profit. Off => single session => bit-identical.
+    consumption_strata: bool = False       # v18.1 master flag
+    necessity_share0: float = 0.5          # genesis necessity share of goods consumption
+                                           # (the 40-55% anchor); sets the per-need-unit
+                                           # necessity quantity = share x w_firm0 / p_firm0
+    n_firm_share: float = 0.5              # fraction of c-firms tagged NECESSITY (sector sizes;
+                                           # the rest are LUXURY). Entry picks a sector by profit.
+
+    # -- v18.4 inter-household family transfers (the first-line private safety net) --
+    # A household that cannot afford its necessity need from live deposits is topped up
+    # by kin households (parents / adult children, via the v13 relation links) holding a
+    # surplus above their own need x a buffer. Atomic + conserving through the person-
+    # claim/ledger rails; surfaces the truly exposed (no kin, no assets). Off ⇒ no-op ⇒
+    # bit-identical. Needs the sector split (necessity price) + demographics (kin links).
+    family_transfers: bool = False         # v18.4 master flag
+    family_transfer_buffer: float = 1.5    # a donor keeps its own need x this before giving
+
+    # -- v18.5 supply-side reallocation: product-line SWITCHING --
+    # The emergent investment+entry channel already reallocates capital toward the growing
+    # sector, but EXISTING capital is stuck (necessity is over-capitalized ~13pp vs its
+    # shrunk demand). Switching lets a firm RETOOL its stuck capital to the other sector,
+    # closing the demand-capital lag -- at a cost (a fraction of capital lost) and with
+    # friction (a sustained return gap + a low hazard), so structural transformation stays
+    # a slow, non-oscillating process (the v16 search-friction analog on the supply side).
+    # Off ⇒ no-op ⇒ bit-identical. Needs the sector split.
+    sector_switching: bool = False         # v18.5 master flag
+    switch_retool_loss: float = 0.3        # fraction of capital lost when a firm retools
+    switch_return_gap: float = 0.5         # the other sector's profit rate must beat own by this
+    switch_pressure_days: int = 60         # sustained ticks of the gap before a firm is eligible
+    switch_hazard: float = 0.01            # daily switch probability once eligible (rare)
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -863,6 +924,7 @@ class Config:
         return GoodsConfig(
             government=self.government,
             a=self.a,
+            consumption_strata=self.consumption_strata,
         )
 
     @_cached_view
@@ -1558,6 +1620,32 @@ class Config:
         assert self.energy_subsidy_threshold >= 0.0, "subsidy threshold must be >= 0"
         assert not (self.energy_mortality_gamma > 0.0 and not self.energy_household), \
             "the fuel-poverty mortality channel needs household energy"
+        # v18.0 deprivation gauges (observation only)
+        assert not (self.deprivation_gauges and not self.demographics_enabled), \
+            "deprivation gauges need person-level consumption (demographics)"
+        assert 0.0 < self.subsistence_share <= 1.0, \
+            "subsistence share is a fraction of mean per-capita consumption"
+        assert self.deprivation_burnin_years >= 1, "deprivation burn-in must be >= 1 year"
+        assert self.deprivation_acute_days >= 1 and self.deprivation_chronic_days >= 1, \
+            "deprivation spell thresholds must be >= 1 day"
+        # v18.1 sector split
+        assert 0.0 < self.necessity_share0 < 1.0, "necessity share is a fraction of goods consumption"
+        assert 0.0 < self.n_firm_share < 1.0, "necessity-firm share must be a strict fraction"
+        assert not (self.consumption_strata and self.n_firms_c < 2), \
+            "the sector split needs at least 2 c-firms (one per sector)"
+        # v18.4 family transfers
+        assert self.family_transfer_buffer >= 1.0, "the donor buffer must be >= 1 (keep own need first)"
+        assert not (self.family_transfers and not self.consumption_strata), \
+            "family transfers need the necessity price (the sector split)"
+        assert not (self.family_transfers and not self.demographics_enabled), \
+            "family transfers need person-level kin links (demographics)"
+        # v18.5 sector switching
+        assert 0.0 <= self.switch_retool_loss < 1.0, "retool loss is a fraction of capital"
+        assert 0.0 <= self.switch_hazard <= 1.0, "switch hazard is a daily probability"
+        assert self.switch_return_gap >= 0.0 and self.switch_pressure_days >= 1, \
+            "switch gap/pressure must be non-negative / >= 1 day"
+        assert not (self.sector_switching and not self.consumption_strata), \
+            "sector switching needs the necessity/luxury split"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"
