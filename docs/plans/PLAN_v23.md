@@ -226,6 +226,73 @@ inventory to the firm's borrowing base, so asset values feed borrowing capacity.
 default-off bit-identical; acceptance pre-registers that the financial accelerator now
 produces the asset-price → investment feedback the v8 arc was after.
 
+### Tier 1 (seventh) — monetary policy has NO transmission channel to demand
+
+**Root cause.** The interest rate never reaches the two decisions it is supposed to govern:
+- **Investment.** `plan_investment`: `K* = v · demand_expected`, `I* = λ_I(K* − K) + δ_K·K`,
+  tilted by Tobin's q ([planning.py:206-224](../../macro_sim/behavior/planning.py)). The
+  desired capital-output ratio `v` is a FIXED PARAMETER (2.5). In any real model K*/Y depends
+  on the USER COST of capital (r + δ) — cheap money ⇒ a higher desired capital stock. Here it
+  is a constant. **A grep for `r_interest` / `_rate` / `user_cost` / `rental` across
+  `behavior/planning.py` returns NOTHING: the interest rate is absent from firm planning
+  entirely.** r reaches investment only indirectly, through Tobin's q — and q's
+  residual-income premium is `f.profit − r·book`, built on the EBITDA of Tier-1 #4, which
+  mutes it further.
+- **Consumption.** B1 is `C = α₁·Y^e + α₂·D_{t−1}` — the wealth term is DEPOSITS only
+  ("Choice 甲"), equity wealth is off by default, and **r does not enter at all**: there is no
+  intertemporal substitution.
+
+So the CB's only live channels are (a) debt-service cash flow and (b) the weak, EBITDA-muted
+q tilt. **The central bank can distort but it cannot stimulate.** This completes the
+explanation of the v19 audit: easing does not stimulate a deflating economy because the
+user-cost channel was never wired.
+
+**Patch #8 — wire the cost of capital into the decisions.** Make the desired capital stock a
+function of the user cost (r + δ) rather than a constant `v`; consider an r term in the
+consumption/saving margin. Flag-gated, default-off bit-identical. Acceptance: pre-register
+that monetary policy acquires a real transmission channel and re-run the nominal-anchor audit.
+
+---
+
+## THE UNIFYING FINDING: the model has no COST OF CAPITAL, anywhere
+
+Tier-1 #4, #5, #6 and #7 are four faces of a single root cause. The price of capital — the
+central price of any macroeconomic model — governs **none** of the decisions it should:
+
+| where capital's cost belongs | what the model does |
+|---|---|
+| in the **output price** (`unit_cost`) | absent — labour + energy only (#5) |
+| in the **P&L** (depreciation, interest) | absent — profit is EBITDA (#4) |
+| in the **investment decision** (user cost r+δ) | absent — `v` is a constant, r never enters planning (#7) |
+| in **borrowing capacity** (capital as collateral) | absent — NW = cash − debt (#6) |
+
+This one omission explains the model's whole signature pathology:
+- the **persistent −4 to −8%/yr deflation** (capital deepening lowers unit LABOUR cost, prices
+  follow, and the capital that replaced the labour is never charged);
+- **why TFP drift could not stop it** (drift lowers unit labour cost further ⇒ MORE deflation
+  — exactly the v19 measurement);
+- **why monetary policy is impotent** (no user-cost channel);
+- **why the financial accelerator never appears** (no P&L channel, no collateral channel);
+- and it re-frames the v19 headline: the CB is reacting to a deflation the **cost side
+  manufactures**.
+
+**Therefore v23's build order is: fix the COST OF CAPITAL first (#5/#4/#6/#7), then re-run the
+nominal-anchor audit, and only then decide whether the price-index (#1) and nominal-anchor
+(#2) patches are still needed.** The CB may look entirely different once it is no longer
+chasing a structurally manufactured disinflation.
+
+---
+
+## Investigated and REFUTED (recorded so nobody re-hunts them)
+
+- **Shell-household behavioural leakage — DOES NOT EXIST.** Suspected after the metrics-layer
+  fix, but settlement already routes every flow through `_flow_households`
+  ([settlement.py:16-20](../../macro_sim/systems/settlement.py)), which filters on
+  `household_has_living_members`; dividends, the income-tax allowance and the wealth-tax
+  allowance are all already shell-clean. The housing package carries the same guard
+  (`market.py` ×5, `rental.py` ×5; `match_tenants` filters seekers explicitly). The eviction
+  spike in the v17 portrait is therefore REAL, not a shell artifact.
+
 ### Minor notes (fold into whichever patch touches the same file)
 
 - **Unemployment mixes units.** `unemployment_rate = 1 − total_hired / labor_supply`
@@ -237,6 +304,15 @@ produces the asset-price → investment feedback the v8 arc was after.
   so fix it while the price-index patch is in the same file.
 - **Duplicate key.** `per_capita_real_output` and `real_output_per_capita`
   ([metrics.py:1440,1464](../../macro_sim/reporting/metrics.py)) compute the identical thing.
+- **Two net-worth definitions for the same firm.** The equity market values a firm at
+  `cash + capital − debt` ([equity.py:20,61,132](../../macro_sim/systems/equity.py)) while the
+  bank lends against `cash − debt` ([planning.py:247](../../macro_sim/behavior/planning.py)).
+  The capital-inclusive measure ALREADY EXISTS and is simply not used for credit — which makes
+  Patch #7 (capital as collateral) a small change, not a new concept. (Same pattern as the GDP
+  finding: the right measure exists, the wrong one is wired in.)
+- **Inventory is not an asset.** It appears in no book value or net worth (grep finds no
+  inventory valuation anywhere), so inventory-heavy firms are undervalued in q and in any
+  collateral base built in Patch #7.
 
 ### Tier 2+ — DROPPED
 
