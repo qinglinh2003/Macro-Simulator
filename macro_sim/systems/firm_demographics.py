@@ -62,7 +62,7 @@ def run_firm_demographics_phase(econ: Any) -> None:
         from macro_sim.behavior import planning as B
         subscale_exits = []
         for f in list(econ.c_firms) + list(econ.k_firms):
-            need = B.labor_demand_notional(f, f.demand_expected, econ._pubcap_factor)
+            need = B.labor_demand_notional(f, f.demand_expected, econ._output_factor(f))
             if need < econ.cfg.subscale_viability_workers:
                 f.subscale_ticks += 1
                 if (f.subscale_ticks >= econ.cfg.subscale_grace_days
@@ -229,7 +229,7 @@ def enter_capital_firms(econ: Any) -> None:
     if not incumbents:
         return
     line = cfg.k_entry_demand * cfg.subscale_viability_workers
-    if any(B.labor_demand_notional(f, f.demand_expected, econ._pubcap_factor) < line
+    if any(B.labor_demand_notional(f, f.demand_expected, econ._output_factor(f)) < line
            for f in incumbents):
         return
     if econ._subscale_rng.random() >= cfg.k_entry_hazard:

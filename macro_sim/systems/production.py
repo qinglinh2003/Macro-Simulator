@@ -29,7 +29,7 @@ def run_production_phase(econ: Any) -> None:
     for f in econ.firms:
         if energy_on and f.capacity_kappa > 0.0:
             continue                     # E-firms already produced (pre-market, energy.py)
-        f.produced = B.produce(f, f.hired, econ._pubcap_factor)
+        f.produced = B.produce(f, f.hired, econ._output_factor(f))
         if energy_on:
             if f.energy_intensity > 0.0:
                 f.energy_used = f.energy_cost_used = 0.0
