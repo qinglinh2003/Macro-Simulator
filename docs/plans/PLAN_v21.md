@@ -1,10 +1,24 @@
 # V21 International Capital Plan — the financial account (the keystone deferred from v20)
 
-> **STATUS: DRAFT — building on `feat/capital-v21` (forked from v20@78ce471).** v21 adds
-> Layer A's third flow — **financial claims across borders** — the keystone of the
-> deferred panorama (PLAN_v20 §12). It reuses the v20 money/FX/trade machinery whole; the
-> single new mechanism is **letting the dealer's (and residents') inventory DRIFT
-> persistently instead of mean-reverting**, driven by the interest differential.
+> **STATUS: IMPLEMENTED — v21.0–v21.2 built/tested/committed on `feat/capital-v21`
+> (forked from v20@78ce471).** v21 adds Layer A's third flow — **financial claims across
+> borders**. Reuses the v20 machinery whole; capital = persistent yield-driven positions.
+> 7 v21 tests + 18 v20 tests green (capital off ⇒ v20 exactly). Diagnostics v211/v212.
+>
+> **What landed:** v21.1 (`world/capital.py`) — portfolio-balance target `target_i =
+> mobility·(rate_i−r_mean)·M_i`; capital finances a persistent deficit toward it; rate
+> gropes toward the capital-sustained position; **high-rate economy = net DEBTOR, pays
+> factor income (GNP<GDP wedge, a gauge)** — the carry pattern (commit a671913). v21.2 —
+> **peg regime**: the CB freezes the rate + absorbs onto reserves; open capital + an
+> independent policy rate drains reserves to zero ⇒ **peg breaks + devaluation (currency
+> crisis)**; a matched rate is sustainable but surrenders monetary autonomy — **the
+> impossible trinity, emergent** (commit 180fae6).
+>
+> **Honest simplifications (documented, non-blocking):** factor income is a GAUGE (its
+> money flow compounds and destabilises the NFA dynamics — deferred); the NFA sign is
+> robust only at sufficient capital mobility (trade noise dominates at low mobility); the
+> devaluation is a pent-up-pressure release, not a full re-clearing. Sudden-stop as a
+> confidence *shock* (vs the standing rate mismatch here) is a natural next scenario.
 
 ## 0. The seam from v20 (why capital is exactly one relaxation)
 
