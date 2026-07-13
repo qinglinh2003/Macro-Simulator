@@ -1,6 +1,12 @@
 # V18 Consumption Stratification Plan — Necessities, Luxuries & the Deprivation Boundary
 
-> **STATUS: COMPLETE (2026-07-13).** All five stages landed on `feat/consumption-v18`
+> **STATUS: DEMAND SIDE COMPLETE (2026-07-13); SUPPLY SIDE (18.5+) PLANNED.** The arc
+> CONTINUES on `feat/consumption-v18` — the supply-side dual (firms differentiate by which
+> class they produce; capital + entry/exit reallocate between sectors) is drafted in
+> [`PLAN_v18.5.md`](PLAN_v18.5.md). The whole arc (demand 18.0–18.4 + supply 18.5+) merges
+> into dev once the supply side lands. Demand-side core below:
+>
+> All five demand-side stages landed on `feat/consumption-v18`
 > (forked from dev@b8fecd4). 18.0 subsistence basket & deprivation gauges + resource-gated
 > domain boundary; 18.1 necessity/luxury split & budget hierarchy (Engel 4.48×); 18.2
 > group-CPI index + the deflationary-shock finding; 18.3 differential VAT (zero-rating
