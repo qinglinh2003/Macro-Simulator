@@ -21,7 +21,7 @@ import numpy as np                        # noqa: E402
 from macro_sim.config import Config       # noqa: E402
 from macro_sim.economy import Economy     # noqa: E402
 
-OUT = "outputs/visualizations/v180/diagnostic_v180.png"
+OUT = "artifacts/diagnostics/diagnostic_v180.png"
 N_TICKS = 3650
 
 
