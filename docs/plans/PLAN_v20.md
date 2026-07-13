@@ -1,12 +1,24 @@
 # V20 Open Economy Plan — Fiat, Foreign Exchange & Coupled Multi-Economy Trade
 
-> **STATUS: DESIGN CONVERGED — READY TO BUILD pending ONE unblock (2026-07-13).** The
-> money+FX+trade module design is converged: foundational seven pinned (§0.5), every
-> structural decision settled (§10), residuals are calibration-only (§13), the phased
-> minor-version plan is concrete (§11). No code yet. **The single blocker is the v20.0/v19
-> object boundary** — v20.0 (`World` + instantiable `Economy`) rides the v19 refactor
-> (`feat/tech-tfp-v19` = technical object refactor + exogenous TFP drift). Do NOT build a
-> second parallel object model — resolve §S0/v19 boundary first, then v20.0 can start.
+> **STATUS: IMPLEMENTED — v20.0–v20.4 built, tested, committed (2026-07-13).** The
+> money+FX+trade module (foundational seven, §0.5) is built on `feat/open-economy-v20`.
+> `Economy` proved already-instantiable, so v20.0 wrapped it with NO changes — the v19
+> object refactor was NOT needed (the S0/v19 boundary is moot for this scope; a future
+> deeper refactor may still share ground). 21 world tests pass; the closed-economy
+> frontier digest `44e28563` is unchanged (bit-identity preserved). Diagnostics
+> v200/v202/v203/v204 shipped. See the per-stage summary at the end of §11.
+>
+> **Honest findings from the build (data spoke):** (1) trade BALANCES at the pure-trade
+> layer — the dealer holds only a small bounded inventory; persistent surpluses/deficits
+> need the capital account (v21), matching the design. (2) The model is DEMAND-CONSTRAINED,
+> so the productivity axis moves prices/employment but barely moves output — productivity
+> divergence is MUTED; SCALE (trade-exposure) is the clearer axis. (3) Exports had to be
+> PRODUCED-TO-ORDER (mirror of realized imports) for the dealer to balance — an elastic
+> import vs inventory-constrained export asymmetry the rate (a relative price) cannot fix.
+> (4) N≥3 sourcing concentrates onto the cheapest source ⇒ a vehicle/hub currency emerges;
+> the single-cheapest-source rule (not full Armington) amplifies rate moves — Armington
+> love-of-variety is the noted refinement. (5) The multilateral BoP is a per-tick FLOW
+> identity; the stock at current rates carries real valuation effects (a v21 concern).
 >
 > **Scope of THIS plan:** fiat money + foreign exchange + the trade system (Layer A's
 > first two flows), under a **fully-coupled multi-economy (L2)** target. International
@@ -483,6 +495,31 @@ v20** (§12).
 **v20.0–v20.2 are the load-bearing build** (foundation + first coupling); v20.3 is the
 payoff experiment; v20.4 opens the N>2 phenomena. Terms-of-trade / energy-as-import shocks
 (the real oil shock) ride on v20.2's machinery as scenarios once divergence works.
+
+### Implementation summary (as built)
+
+- **v20.0** `macro_sim/world/{__init__,world}.py` — `World` wraps N `Economy` objects
+  (unchanged), tags + BSP tick skeleton + far-spaced per-economy seeds. Gate: N=1 ≡ bare
+  Economy byte-identical (macro + frontier `44e28563`). `test_world_container`, smoke,
+  `diagnostic_v200`. Commit `e4dc4d5`.
+- **v20.1** `world/fx.py` — `RateVector` (geometric-basket numéraire, triangular-consistent)
+  + `FXDealer` (per-economy ledger account, `allow_negative`, revaluation booking); behind
+  a `couple` flag, inert with zero trade. `test_world_fx`. Commit `e4dc4d5`.
+- **v20.2** `world/trade.py` + guarded hook in `systems/goods.py` — dealer-routed imports
+  (session `SellOffer`, export-financed) + produced-to-order mirror exports; grope on net
+  inventory. Clone quiet baseline exact (dealer ~1e-14), diverse bounded+conserving, BoP
+  identity. `test_world_trade`, `diagnostic_v202`. Commit `959bb4c`.
+- **v20.3** `world/country.py` — `CountryProfile` overlay + archetype presets + divergence
+  experiment/findings. `test_country_profile`, `experiment_v203`, `diagnostic_v203`.
+  Commit `1e945eb`.
+- **v20.4** import-source tracking (correct N≥3 sourcing) — triangular consistency exact,
+  vehicle-currency emergence, bounded rates. `test_world_n3`, `diagnostic_v204`.
+  Commit `5da9017`.
+
+**Deferred / noted refinements:** Armington love-of-variety (homogeneous-good price
+competition shipped instead); trade injection into the v18 split-session (strata) path
+(single-session only); per-household import allocation; the demographic aging/young axis
+(needs demographic-arc knobs). None block the arc; all are documented in code.
 
 ## S0 / v19 boundary coordination (do this FIRST, before any code)
 
