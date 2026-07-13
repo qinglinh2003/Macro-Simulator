@@ -784,6 +784,23 @@ class Config:
     deprivation_acute_days: int = 7        # a sub-30% spell this long trips the domain flag
     deprivation_chronic_days: int = 30     # a sub-60% spell this long trips the domain flag
 
+    # -- v18.1 sector split & the budget hierarchy (the structural stage) --
+    # Consumption goods split into NECESSITY and LUXURY sectors. The household goods
+    # phase becomes two sequenced sessions of the existing market protocol: NECESSITY
+    # first (quantity-targeted at a fixed per-need-unit basket -- the non-homothetic
+    # primitive), LUXURY takes the residual budget. Engel's law (necessity SHARE falls
+    # with income) must EMERGE from the fixed necessity quantity, not be seeded. The
+    # necessity need is anchored to genesis config (the v17.1 energy-need idiom:
+    # quantity = share x w_firm0 / p_firm0 per need-unit), never to realized (transient)
+    # consumption. c-firms are tagged necessity/luxury by `n_firm_share`; entry picks a
+    # sector by per-sector profit. Off => single session => bit-identical.
+    consumption_strata: bool = False       # v18.1 master flag
+    necessity_share0: float = 0.5          # genesis necessity share of goods consumption
+                                           # (the 40-55% anchor); sets the per-need-unit
+                                           # necessity quantity = share x w_firm0 / p_firm0
+    n_firm_share: float = 0.5              # fraction of c-firms tagged NECESSITY (sector sizes;
+                                           # the rest are LUXURY). Entry picks a sector by profit.
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -1587,6 +1604,11 @@ class Config:
         assert self.deprivation_burnin_years >= 1, "deprivation burn-in must be >= 1 year"
         assert self.deprivation_acute_days >= 1 and self.deprivation_chronic_days >= 1, \
             "deprivation spell thresholds must be >= 1 day"
+        # v18.1 sector split
+        assert 0.0 < self.necessity_share0 < 1.0, "necessity share is a fraction of goods consumption"
+        assert 0.0 < self.n_firm_share < 1.0, "necessity-firm share must be a strict fraction"
+        assert not (self.consumption_strata and self.n_firms_c < 2), \
+            "the sector split needs at least 2 c-firms (one per sector)"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

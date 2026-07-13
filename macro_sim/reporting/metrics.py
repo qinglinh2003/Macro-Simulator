@@ -281,6 +281,66 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "n_firms_selling": float(np.sum(np.asarray(sales_all) > 1e-9)),
     }
 
+    # v18.1 consumption sector split gauges: sector prices (feed the group CPIs in 18.2),
+    # the aggregate necessity share (Engel level) + a rank gradient (Engel EMERGENCE),
+    # sector markups + time-at-ceiling + HHI (the markup watch), and sector firm counts
+    # (the entry-oscillation watch). Only present when the split is on.
+    if getattr(econ.cfg, "consumption_strata", False) and getattr(econ, "n_firms", None):
+        def _sector(firms):
+            rev = float(sum(f.revenue for f in firms))
+            units = float(sum(f.sales for f in firms))
+            out = float(sum(f.produced for f in firms))
+            sell = [f for f in firms if f.sales > 1e-9] or list(firms)
+            price = rev / units if units > 1e-12 else _mean([f.price for f in sell])
+            mk = _mean([f.markup for f in sell])
+            at_cap = _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in firms])
+            hhi = float(sum((f.revenue / rev) ** 2 for f in firms)) if rev > 1e-12 else 0.0
+            return dict(rev=rev, units=units, out=out, price=price, mk=mk, at_cap=at_cap,
+                        hhi=hhi, n=len(firms))
+        N, L = _sector(econ.n_firms), _sector(econ.l_firms)
+        tot_cons = N["rev"] + L["rev"]
+        # Engel EMERGENCE: necessity share for the bottom vs top quintile of households
+        # ranked by expenditure PER NEED-UNIT (affluence per person). The Engel axis must
+        # be per-capita: the fixed necessity need scales with household size, so total
+        # household expenditure is confounded by size and its gradient washes out; per
+        # need-unit, necessity share ≈ const / (expenditure-per-unit) — a clean 1/E
+        # decline. §4-style structural judge; the gradient is not seeded.
+        bridge_ref = getattr(econ, "demographic_bridge", None)
+
+        def _per_unit(h):
+            if bridge_ref is not None:
+                nu = bridge_ref.household_profile(h.id).need_units
+                if nu > 1e-9:
+                    return h.spent / nu
+            return h.spent
+        spenders = [(_per_unit(h), h.necessity_spent, h.spent) for h in households if h.spent > 1e-9]
+        nec_share_bottomq = nec_share_topq = 0.0
+        if len(spenders) >= 5:
+            spenders.sort(key=lambda t: t[0])
+            q = max(1, len(spenders) // 5)
+            bot, top = spenders[:q], spenders[-q:]
+            nec_share_bottomq = sum(n for _e, n, _s in bot) / max(1e-12, sum(s for _e, _n, s in bot))
+            nec_share_topq = sum(n for _e, n, _s in top) / max(1e-12, sum(s for _e, _n, s in top))
+        rec.update({
+            "necessity_price_index": N["price"],
+            "luxury_price_index": L["price"],
+            "necessity_revenue": N["rev"],
+            "luxury_revenue": L["rev"],
+            "necessity_output": N["out"],
+            "luxury_output": L["out"],
+            "necessity_share": (N["rev"] / tot_cons) if tot_cons > 1e-12 else 0.0,
+            "necessity_share_bottomq": nec_share_bottomq,
+            "necessity_share_topq": nec_share_topq,
+            "necessity_markup": N["mk"],
+            "luxury_markup": L["mk"],
+            "necessity_markup_at_cap": N["at_cap"],
+            "luxury_markup_at_cap": L["at_cap"],
+            "necessity_hhi": N["hhi"],
+            "luxury_hhi": L["hhi"],
+            "n_firms_necessity": float(N["n"]),
+            "n_firms_luxury": float(L["n"]),
+        })
+
     if bridge is not None:
         state = getattr(econ, "demographic_state", None)
         alive_people = [person for person in getattr(state, "people", []) if getattr(person, "alive", True)]

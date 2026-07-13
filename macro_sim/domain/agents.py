@@ -34,6 +34,7 @@ class Household:
     income_realized: float = 0.0   # Y_{h,t}: wages + dividends received THIS tick
     consumption_budget: float = 0.0  # C_{h,t}: desired nominal budget (B1), pre-rationing
     spent: float = 0.0             # realized goods spending this tick (<= budget, <= deposits)
+    necessity_spent: float = 0.0   # v18.1: of `spent`, the part on necessities (0 when split off)
 
     # -- v6 capital market (choice 乙): equity holdings + smoothed equity wealth --------
     shares: float = 0.0            # units of the aggregate equity index held (NOT money; v6 mode)
@@ -112,6 +113,10 @@ class Firm:
     # so the v1 code path is bit-identical (PLAN_v2 §0, Option A).
     # ======================================================================
     sells: str = "consumption"           # "consumption" | "capital"
+    # v18.1 consumption sub-sector. "" = undifferentiated (the single-good default, keeps
+    # all consumption logic bit-identical); "necessity" | "luxury" when the split is on.
+    # sells stays "consumption" for both so every existing consumption code path works.
+    consumption_sector: str = ""
     tech: str = "linear"                 # "linear" (y=a N) | "cobb_douglas" (y=A K^α N^{1-α})
     invests: bool = False                # only C-firms invest (B5)
     A: float = 1.0                       # TFP (Cobb-Douglas)

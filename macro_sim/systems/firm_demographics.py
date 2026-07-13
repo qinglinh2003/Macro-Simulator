@@ -113,6 +113,11 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
         econ.labor_market.on_firm_exit(firm.id, getattr(econ, "labor_accounts", None))
     if firm in econ.c_firms:
         econ.c_firms.remove(firm)
+        # v18.1: keep the sub-sector lists consistent on exit
+        if firm in econ.n_firms:
+            econ.n_firms.remove(firm)
+        elif firm in econ.l_firms:
+            econ.l_firms.remove(firm)
     elif firm in econ.k_firms:              # v16-L6: subscale exit reaches K-firms too
         econ.k_firms.remove(firm)
     econ.firms.remove(firm)
@@ -288,6 +293,18 @@ def pick_funder(econ: Any, need: float) -> Any:
     return None
 
 
+def _pick_entry_sector(econ: Any) -> str:
+    """v18.1: the higher median profit-RATE sector attracts entry (mirrors the aggregate
+    entry signal, per sector). Ties / empty sectors default to necessity."""
+    def rate(firms):
+        p = max(EPS, econ._price_level)
+        rates = sorted(f.profit / (f.capital * p) for f in firms if f.capital > EPS)
+        if not rates:
+            rates = sorted(f.profit for f in firms) or [0.0]   # pre-capital entrants: raw profit
+        return rates[len(rates) // 2]
+    return "luxury" if rate(econ.l_firms) > rate(econ.n_firms) else "necessity"
+
+
 def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = None,
                            capital_lots: Any = None) -> None:
     cfg = econ.cfg.firm_demographics
@@ -335,6 +352,12 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
     econ.c_firms.append(firm)
     econ.firms.append(firm)
     econ.investing_firms.append(firm)
+    # v18.1: route the entrant to the sub-sector with the stronger profit signal (entry
+    # is NOT frozen -- these are ordinary competitive sectors). Off ⇒ lists stay empty.
+    if getattr(econ.cfg, "consumption_strata", False):
+        sector = _pick_entry_sector(econ)
+        firm.consumption_sector = sector
+        (econ.n_firms if sector == "necessity" else econ.l_firms).append(firm)
     if cfg.per_firm_equity:
         firm.shares_outstanding = cfg.shares_per_firm
         book = startup_deposits + (capital_cost if capital_lots else cfg.startup_capital)

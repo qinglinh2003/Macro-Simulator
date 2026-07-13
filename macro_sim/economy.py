@@ -153,6 +153,27 @@ class Economy:
                 )
         self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5; + E in v17)
 
+        # v18.1: consumption sector split (NECESSITY / LUXURY). Tag genesis c-firms into
+        # two sub-sectors; the household goods phase then runs two sequenced sessions
+        # (necessity first, quantity-targeted; luxury takes the residual). The necessity
+        # need per need-unit is anchored to genesis config (the v17.1 energy-need idiom),
+        # never to realized consumption. Off ⇒ lists empty, consumption_sector "" ⇒
+        # single session ⇒ bit-identical.
+        self.n_firms: List[Firm] = []
+        self.l_firms: List[Firm] = []
+        self._necessity_need_per_unit = 0.0
+        if cfg.consumption_strata:
+            n_nec = max(1, min(len(self.c_firms) - 1, round(cfg.n_firm_share * len(self.c_firms))))
+            for i, f in enumerate(self.c_firms):
+                f.consumption_sector = "necessity" if i < n_nec else "luxury"
+            self.n_firms = [f for f in self.c_firms if f.consumption_sector == "necessity"]
+            self.l_firms = [f for f in self.c_firms if f.consumption_sector == "luxury"]
+            # genesis fit: necessity spending per need-unit ≈ share x wage ⇒ real quantity
+            # = share x w_firm0 / p_firm0 (frozen). A rich household buys the SAME necessity
+            # quantity as a poor one of the same size ⇒ necessity SHARE falls with income
+            # (Engel's law emerges from the fixed quantity, not seeded).
+            self._necessity_need_per_unit = cfg.necessity_share0 * cfg.w_firm0 / cfg.p_firm0
+
         # v18.0: subsistence basket & deprivation gauges (OBSERVATION ONLY; needs person-
         # level consumption). Off ⇒ never constructed ⇒ bit-identical.
         self.deprivation_signal = None
