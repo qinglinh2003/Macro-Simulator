@@ -7,10 +7,10 @@
 > which is very likely delivering exactly the instantiable-`Economy` refactor this needs.
 > Do NOT build a second parallel object model — see §S0/v19 boundary.
 >
-> **Scope of THIS plan:** fiat money + foreign exchange + the trade system, under a
-> **fully-coupled multi-economy (L2)** target. Capital account, pegged regimes, currency
-> crises, and migration are named but **OUT of scope here** (they all grow from one seam —
-> see §12 TODO).
+> **Scope of THIS plan:** fiat money + foreign exchange + the trade system (Layer A's
+> first two flows), under a **fully-coupled multi-economy (L2)** target. International
+> capital, migration, the derived-income layer, and governance/strategic interaction are
+> **OUT of scope here** — see the full open-economy component panorama + roadmap in §12.
 >
 > Branch `feat/open-economy-v20` forked from dev@19457d0 (v16 labor + v17 energy + v18
 > consumption all merged).
@@ -354,22 +354,69 @@ Before writing S0, agree with the v19 line on:
 Building a second, parallel object model here would collide with v19. This section must
 resolve before S0 code.
 
-## 12. Out of scope here — the one seam everything grows from
+## 12. Out of scope here — the full open-economy component panorama
 
-All of the following grow from **letting the dealer's (and residents') inventory drift
-persistently instead of mean-reverting** — i.e. the capital account:
+This module delivers only the first two flows. To see what remains (and why v20 is the
+right *first* slice), the whole open economy organizes under one principle: **an open
+economy = what can cross a border + who sets the rules on the crossing.** "What can
+cross" is a near-closed list, which gives completeness confidence. Three layers:
 
-- **Capital account / capital flows** (yield-driven persistent positions) → NFA,
-  covered/uncovered interest parity, the impossible trinity.
-- **Pegged regime** = swap the private dealer for the **central bank** as dealer of last
-  resort: fixes the price, absorbs all imbalance onto FX **reserves** (its inventory).
-- **Currency crises** = a peg + a shock + the reserve constraint → reserve depletion →
-  devaluation, **reusing the existing bank-run / reserve-tier / LoLR machinery** (v11.4/
-  v11.5/v12.4) — the crisis emerges, it is not tuned.
-- **Terms-of-trade / oil shocks** = shock world prices; energy-as-import turns v17's
-  domestic capacity cut into the real imported-oil shock.
-- **Migration** = the deprivation escape valve v18 flagged as missing in a closed economy
-  (deprived households emigrate instead of lingering out-of-domain) + foreign labor.
+### Layer A — the flows (what physically crosses)
+
+| Crosses the border | Component | Status |
+|---|---|---|
+| goods / services | international **trade** | ✅ this module |
+| money | **FX** market | ✅ this module |
+| financial claims | **international capital** (FDI / portfolio / cross-border lending) | ✗ the keystone gap |
+| people (labor) | **migration** / labor mobility | ✗ |
+| technology / ideas | **tech diffusion** (imitation, FDI-embodied catch-up) | ✗ (v19 TFP is *exogenous drift*, not cross-border diffusion — coordinate) |
+
+**Capital is the keystone:** it turns a transient trade imbalance into a *persistent*
+position (NFA) — mechanically, it is exactly **letting the dealer's (and residents')
+inventory drift instead of mean-reverting** (§3). It unlocks the trilemma, sudden stops,
+contagion, and gives Layer B and most of Layer C something to bite on.
+
+### Layer B — the derived-income layer (current account *beyond* trade)
+
+Emerges only once capital + people flow; conceptually distinct because it makes **current
+account ≠ trade balance** and opens the **GNP ≠ GDP** wedge:
+
+- **Factor income** — returns on foreign-held capital + migrant wages crossing borders.
+- **Transfers** — remittances (need migration) + foreign aid (need governance).
+
+### Layer C — governance / regime + strategic interaction (the rules on the flows)
+
+The first layer where economies act with **intent** toward each other, not as mechanical
+price-takers:
+
+- **International monetary/financial governance** — the exchange-rate regime as a *system*
+  (gold standard / Bretton Woods / dollar system), reserve-currency anchor, **capital
+  controls**, international LoLR (IMF, swap lines), crisis resolution. *Includes:*
+  - **Pegged regime** = swap the private dealer for the **central bank** as dealer of last
+    resort — fixes the price, absorbs all imbalance onto FX **reserves** (its inventory).
+  - **Currency crises** = peg + shock + reserve constraint → reserve depletion →
+    devaluation, **reusing the bank-run / reserve-tier / LoLR machinery** (v11.4/11.5/
+    12.4) — the crisis emerges, it is not tuned.
+- **International trade governance** — tariffs/quotas (§4.4 placeholder), trade
+  agreements, trade wars, sanctions.
+- **Strategic interaction** — competitive devaluation (currency wars), beggar-thy-neighbor
+  policy, coordination vs. conflict. Governance only *bites* once trade + capital flows
+  are large (capital controls are moot without capital flows; trade wars moot without big
+  trade).
+
+### Cross-cutting shocks (ride whichever layer they hit)
+
+- **Terms-of-trade / oil shocks** = shock world prices; energy-as-import (v17) turns the
+  domestic capacity cut into the *real* imported-oil shock.
+
+### Dependency ordering (the roadmap beyond v20)
+
+1. **International capital** (keystone) — unlocks Layer B factor income, the trilemma,
+   crises, and Layer C's "capital controls / IMF".
+2. **Migration** (parallel) — unlocks remittances, the v18 deprivation escape valve,
+   cross-border demographic transfer.
+3. **Governance + strategic layer** sits on top — only meaningful once flows are large.
+4. **Tech diffusion** — a side channel, coordinate with the v19 TFP line.
 
 ## 13. Open drill-downs (next design sessions)
 
