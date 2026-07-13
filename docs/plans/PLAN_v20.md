@@ -31,6 +31,54 @@ them coupled, and watch emergent comparative outcomes — who runs surplus/defic
 currency appreciates/depreciates, who imports inflation, whether a shock in one
 propagates through trade + exchange rates.
 
+## 0.5 The foundational component set — the pinned scope of v20
+
+**Organizing insight — foundation = primitives; the rest of the panorama (§12) = the same
+primitives reused with different payloads / rules.** Trade = the cross-border transaction
+primitive with a *goods* payload; capital = same primitive, *financial-claim* payload;
+migration = same primitive, *person* payload (+ residency change); governance = *rules* on
+the primitive; stocks/IIP/systemic = *accumulation* of it. So the base is genuinely small
+and reusable, and **v20 = the foundation + the single simplest payload (trade)** — a
+complete, completable slice. Everything else adds payloads/rules on the SAME base later
+and does **not** re-touch it.
+
+Built on top of N *existing* closed economies (households/firms/banks/CB/treasury —
+unchanged), the open-economy foundation is **seven components**:
+
+**Structural (make the open economy exist & stay accounting-closed):**
+1. **The two tags — residency + currency-denomination.** The atoms that turn N closed
+   economies into one open system: every agent/asset is tagged by which economy it belongs
+   to and which money it is denominated in. Without them "cross-border" is undefined; all
+   later objects (capital, factor income, foreign holdings, migration) derive from them.
+   **Get these wrong and capital/migration/income all require rework — highest-stakes.**
+2. **The `World` container + orchestration.** Holds N instantiable `Economy` objects and
+   runs the BSP tick (independent domestic step + coupling barrier). This is S0 (rides the
+   v19 refactor).
+3. **Multi-currency system + exchange-rate vector** (numéraire + derived cross-rates, §2).
+4. **The FX conversion mechanism** (the dealer, §3). [2+3+4 = the money/FX layer.]
+5. **The cross-border transaction primitive** — real leg one way, claim/money the other,
+   honestly settled. Trade is its first payload. **⑤ = decision + substitution-smoothing +
+   settlement, not just accounting:** it must include the who-transacts *decision rule*,
+   and an Armington-style *substitution smoothing* (perfect substitutes + a friction band
+   → bang-bang oscillation that wrecks the §8 quiet baseline).
+6. **The BoP accounting spine** — the conservation law closing the open system (multilateral
+   `Σ=0`); the open-economy analog of the closed A5 gate. **⑥ must be complete enough to
+   book the dealer's cross-currency position AND its valuation/revaluation** — a rate move
+   revalues held inventory with no transaction; unbooked, conservation leaks and the spine
+   is fiction.
+
+**Epistemic (make the open economy serve its purpose):**
+7. **The observability / measurement layer.** The entire point (§0) is to *watch* emergent
+   comparative outcomes; without gauges you build an unreadable machine. Trade balance,
+   nominal & real exchange rates, terms of trade, specialization pattern, per-good
+   export/import volumes, NFA (= dealer inventory) — plus **health flags** for the new
+   failure modes (rate groping non-convergence, persistent imbalance, inventory blow-up).
+   Foundational to *purpose* and to the per-version diagnostic discipline, not to existence.
+
+**Correctly deferred (NOT foundational to v20):** international capital, migration, the
+derived-income layer, governance/strategic interaction, stocks/IIP/systemic emergence,
+forward-looking expectations (static is fine at the trade-only layer). See §12.
+
 ## 1. First-principles grounding (why these objects and no others)
 
 Three closed economies, each already at its own internal equilibrium, "discover" each
