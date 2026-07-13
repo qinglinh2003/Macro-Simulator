@@ -475,6 +475,15 @@ class Economy:
     # ======================================================================
     # One tick
     # ======================================================================
+    def _accumulate_sector_output(self) -> None:
+        """v19: running sum of produced output per sector -- the state the learning-by-doing
+        law reads. Pure observation when tfp_law != 'learning' (nothing reads it), so it never
+        perturbs the exogenous/off trajectory."""
+        acc = self._cumulative_output_by_sector
+        acc["c"] += float(sum(f.produced for f in self.c_firms))
+        acc["k"] += float(sum(f.produced for f in getattr(self, "k_firms", ()) or ()))
+        acc["e"] += float(sum(f.produced for f in getattr(self, "e_firms", ()) or ()))
+
     def _output_factor(self, firm: Any) -> float:
         """v19: the composite production-seam multiplier = public-capital factor x TFP index.
         Both are 1.0 by default, so this is exactly ``_pubcap_factor`` (x1.0) when inert."""
@@ -509,6 +518,7 @@ class Economy:
         # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
         run_energy_phase(self)            # v17.0 only; firms buy energy before producing (no-op off)
         run_production_phase(self)        # [ANCHOR: production] output = f(hired labor)
+        self._accumulate_sector_output()  # v19: cumulative output per sector (LBD reads it; obs-only when exogenous)
         run_family_transfer_phase(self)   # v18.4 only; kin top-ups before goods (no-op off)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled

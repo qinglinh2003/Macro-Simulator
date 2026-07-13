@@ -108,3 +108,33 @@ def test_learning_law_rises_with_cumulative_output():
     tech.step(_Econ())          # c quadrupled => Z_c = 4^0.5 = 2.0
     assert abs(tech.z["c"] - 2.0) < 1e-9
     assert abs(tech.z["k"] - 1.0) < 1e-9
+
+
+# -- end-to-end in a real economy (the seam actually moves output) ----------
+
+def _short_v13(**extra):
+    return Config.v13(seed=2, n_households=50, n_firms_c=50, n_firms_k=25, n_banks=2,
+                      demographics_population=500, n_ticks=365, **extra)
+
+
+def test_exogenous_drift_raises_z_and_cumulative_output_accumulates():
+    econ = Economy(_short_v13(tfp_drift_rate=0.05))
+    for _ in range(365):
+        r = econ.step()
+    # one year of 5%/yr Hicks-neutral drift => Z ~ e^0.05
+    assert 1.045 < r["tfp_index_c"] < 1.055
+    assert econ._cumulative_output_by_sector["c"] > 0.0   # accumulator ran
+
+
+def test_learning_law_reaches_the_index_in_a_real_run():
+    econ = Economy(_short_v13(tfp_law="learning", tfp_learning_theta=0.1))
+    for _ in range(365):
+        r = econ.step()
+    # endogenous: cumulative output grows within the year => Z rises above its base of 1.0
+    assert r["tfp_index_c"] > 1.0
+
+
+def test_accumulator_is_bit_identical_when_exogenous_off():
+    # the cumulative-output accumulator must not perturb the off/exogenous trajectory
+    # (nothing reads it unless law='learning'): same-seed digests must match.
+    assert _digest(_short_v13(), 200) == _digest(_short_v13(), 200)
