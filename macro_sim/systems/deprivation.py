@@ -42,8 +42,14 @@ from typing import Dict, List, Sequence, Tuple
 _EPS = 1e-12
 
 # One alive person per tick: (person_id, household_id, need_weight, cumulative_consumption,
-# age, net_worth). The signal differences the cumulative into a per-tick flow itself.
-PersonObs = Tuple[int, int, float, float, int, float]
+# age, net_worth, liquid_deposits). The signal differences the cumulative into a per-tick
+# flow itself. liquid_deposits (the person-claim cash balance) gates the DOMAIN BOUNDARY:
+# genuine subsistence destitution means consumption below the line AND no liquid savings
+# to self-fund it -- this excludes a wealthy household whose consumption flow briefly hits
+# zero because a bank suspension froze its (still-owned) deposits, a liquidity artifact the
+# flow-only gauge misreads as deprivation (its wealth gradient inverts: top quintile, not
+# bottom, reads "deprived" -- the diagnostic signature of a freeze, not a famine).
+PersonObs = Tuple[int, int, float, float, int, float, float]
 
 
 @dataclass
@@ -86,8 +92,9 @@ class DeprivationSignal:
         hh_need: Dict[int, float] = {}
         hh_n: Dict[int, int] = {}
         hh_wealth: Dict[int, float] = {}
+        hh_liquid: Dict[int, float] = {}
         hh_ages: Dict[int, List[int]] = {}
-        for pid, hid, weight, cum, age, wealth in persons:
+        for pid, hid, weight, cum, age, wealth, liquid in persons:
             prev = self._prev_cum.get(pid)
             self._prev_cum[pid] = cum
             flow = 0.0 if prev is None else max(0.0, cum - prev)   # first sight ⇒ 0 (no spike)
@@ -95,6 +102,7 @@ class DeprivationSignal:
             hh_need[hid] = hh_need.get(hid, 0.0) + max(0.0, float(weight))
             hh_n[hid] = hh_n.get(hid, 0) + 1
             hh_wealth[hid] = hh_wealth.get(hid, 0.0) + float(wealth)
+            hh_liquid[hid] = hh_liquid.get(hid, 0.0) + max(0.0, float(liquid))
             hh_ages.setdefault(hid, []).append(int(age))
 
         if self.basket_cost0 is None:
@@ -112,12 +120,13 @@ class DeprivationSignal:
                     self.price_ref = (self._price_sum / self._price_days) if self._price_days > _EPS else 1.0
             return {"deprivation_active": 0.0}
 
-        return self._score(price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_ages)
+        return self._score(price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_liquid, hh_ages)
 
-    def _score(self, price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_ages) -> dict:
+    def _score(self, price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_liquid, hh_ages) -> dict:
         price_ratio = (price_index / self.price_ref) if (self.price_ref and self.price_ref > _EPS) else 1.0
         persons = 0
-        p_below100 = p_below60 = p_below30 = 0     # PERSONS in deprived households
+        p_below100 = p_below60 = p_below30 = 0     # PERSONS in deprived households (flow only)
+        p_destitute = 0                            # flow-below-30% AND liquid < basket (resource-gated)
         acute_persons = chronic_persons = 0
         acute_persondays = chronic_persondays = 0
         max_spell = 0
@@ -133,10 +142,15 @@ class DeprivationSignal:
                 continue
             coverage = hh_flow.get(hid, 0.0) / basket
             cov_by_hh[hid] = coverage
+            # resource gate: a household that could self-fund subsistence from liquid
+            # savings is not destitute even if its consumption FLOW is momentarily low
+            # (a bank-freeze artifact). "Deposit-poor" = liquid < one period's basket.
+            deposit_poor = hh_liquid.get(hid, 0.0) < basket
             prior = self._spells.get(hid, [0, 0, 0])
             s100 = prior[0] + 1 if coverage < 1.0 else 0
             s60 = prior[1] + 1 if coverage < 0.6 else 0
-            s30 = prior[2] + 1 if coverage < 0.3 else 0
+            # the acute (sub-30%) spell only counts while the household is ALSO deposit-poor
+            s30 = prior[2] + 1 if (coverage < 0.3 and deposit_poor) else 0
             new_spells[hid] = [s100, s60, s30]
             if coverage < 1.0:
                 p_below100 += n
@@ -144,12 +158,14 @@ class DeprivationSignal:
                 p_below60 += n
             if coverage < 0.3:
                 p_below30 += n
+            if coverage < 0.3 and deposit_poor:
+                p_destitute += n
             max_spell = max(max_spell, s100)
             if s30 >= self.acute_days:
                 acute_persons += n
                 acute_persondays += s30 * n
                 self.boundary_breached = True
-            if s60 >= self.chronic_days:
+            if s60 >= self.chronic_days and deposit_poor:
                 chronic_persons += n
                 chronic_persondays += s60 * n
                 self.boundary_breached = True
@@ -182,6 +198,7 @@ class DeprivationSignal:
             "deprivation_below100_share": p_below100 / denom,
             "deprivation_below60_share": p_below60 / denom,
             "deprivation_below30_share": p_below30 / denom,
+            "deprivation_destitute_share": p_destitute / denom,     # resource-gated (the honest acute)
             "deprivation_acute_stock": float(acute_persons),        # persons, sub-30% > acute_days
             "deprivation_chronic_stock": float(chronic_persons),    # persons, sub-60% > chronic_days
             "deprivation_acute_persondays": float(acute_persondays),

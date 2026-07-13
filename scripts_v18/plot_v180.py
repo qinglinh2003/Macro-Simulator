@@ -88,10 +88,17 @@ def main():
     ax[1, 1].plot(yrs2, smooth(col(no_net, "deprivation_below100_share_topq")), label="top wealth Q", color="C0")
     ax[1, 1].set_title("below-line share by wealth quintile (no safety net)"); ax[1, 1].legend(fontsize=8)
 
-    # 6: healthy baseline below-line share (must stay ~0 sustained)
-    ax[1, 2].plot(yrs, smooth(col(healthy, "deprivation_below100_share")), label="<100%", color="C1")
-    ax[1, 2].plot(yrs, smooth(col(healthy, "deprivation_below60_share")), label="<60%", color="C3")
-    ax[1, 2].set_title("deprivation share (HEALTHY baseline — the quiet check)"); ax[1, 2].legend(fontsize=8)
+    # 6: healthy baseline -- raw flow share vs resource-GATED destitute share. The gate
+    # separates the year-8.5 bank-shakeout liquidity artifact (raw flow spike, wealthy
+    # frozen households) from the genuine recession destitution core (gated) that
+    # coincides with the u spike.
+    ax[1, 2].plot(yrs, smooth(col(healthy, "deprivation_below30_share")), label="<30% (raw flow)", color="C1")
+    ax[1, 2].plot(yrs, smooth(col(healthy, "deprivation_destitute_share")), label="destitute (gated)", color="k")
+    axu = ax[1, 2].twinx()
+    uh = col(healthy, "person_unemployment_rate")
+    axu.plot(yrs, smooth(uh), label="u (rhs)", color="C7", lw=0.8, ls=":")
+    axu.set_ylabel("unemployment", fontsize=8)
+    ax[1, 2].set_title("HEALTHY baseline: raw flow vs gated destitute (+u)"); ax[1, 2].legend(fontsize=8, loc="upper left")
 
     for a in ax.flat:
         a.set_xlabel("year"); a.grid(alpha=0.25)

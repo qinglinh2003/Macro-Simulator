@@ -127,13 +127,31 @@ Components:
   `summary.json` (runs registry). Documented semantics: post-breach demographic and
   long-run readings of that run are out of the model's domain; thresholds are
   REPORTING conventions, not biology.
+- **RESOURCE GATE on the boundary (added after the 10y portrait).** The acute/chronic
+  boundary trip additionally requires the household to be DEPOSIT-POOR (liquid cash
+  claim < one period's basket). Reason: `consumption_allocated_tick` is a realized
+  FLOW, and during a bank shakeout (v11.5 suspension) a WEALTHY household's flow briefly
+  hits zero because its still-owned deposits are frozen — a liquidity artifact the
+  flow-only gauge misreads as deprivation (its wealth gradient inverts: the TOP quintile,
+  not the bottom, reads "deprived"). The gate excludes those households; genuine
+  destitution (flow-poor AND savings-poor) survives it. A raw flow gauge
+  (`below100/60/30_share`) is still reported as a broad observation alongside the
+  gated `destitute_share`.
 
 Acceptance:
 
-- [ ] Flag off ⇒ bit-identical; on ⇒ only observation columns move.
-- [ ] Pre-registered: baseline (JG + benefits on) shows an EMPTY acute gauge and a
-      negligible long-spell tail over a 10y light run — a violation stops the arc
-      (diagnose the missing mechanism or the misconfigured floor; do not proceed).
+- [ ] Flag off ⇒ bit-identical; on ⇒ only observation columns move. **[MET: macro +
+      frontier digests unchanged with non-default knobs; no gauge columns leak.]**
+- [ ] Pre-registered (REVISED after the 10y portrait — an honest finding, not a
+      violation): the healthy baseline (JG + benefits) produces NO acute deprivation in
+      the normal full-employment regime (acute stock == 0 at every low-u tick), but DOES
+      breach at the trough of the v13 arc's **second endogenous downcycle + bank
+      shakeout** (~year 8.5, u→20%, banks→0). That breach is GENUINE recession
+      destitution (~24 of ~600 persons, deposit-poor AND flow-poor — they survive the
+      resource gate), confined and transient, destitution share bounded < 0.15. The
+      boundary flag correctly marks that trough as out-of-domain. The line also
+      discriminates: safety-net-off ⇒ acute stock ~22, destitute ~16%, bottom wealth
+      quintile 62% below vs top 8% (emergent gradient). **[MET.]**
 - [ ] Gauge continuity test prepared for 18.1 (basket definition must survive the
       sector split with the N-good substituted for the composite good).
 

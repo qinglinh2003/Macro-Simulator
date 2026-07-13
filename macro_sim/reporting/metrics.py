@@ -362,7 +362,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 (int(person.id), int(person.household_id), need_weight_for_person(person),
                  bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick,
                  int(getattr(person, "age", 0)),
-                 bridge.claims.balance_sheet(int(person.id)).net_worth)
+                 bridge.claims.balance_sheet(int(person.id)).net_worth,
+                 bridge.claims.balance_sheet(int(person.id)).cash_claim)
                 for person in alive_people if bridge.claims.has_person(int(person.id))
             ]
             rec.update(dep.observe(
