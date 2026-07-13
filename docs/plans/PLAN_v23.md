@@ -165,6 +165,67 @@ is flag-gated with a default-off bit-identical path and needs a real acceptance:
 **pre-register that the financial accelerator STRENGTHENS** and re-test the Minsky dynamics
 the v8/v11 arcs were after.
 
+### Tier 1 (fifth) — CAPITAL IS A FREE INPUT: it enters neither the price nor the profit
+### ⇒ the pricing rule manufactures the deflation we have been chasing since v17
+
+**Root cause.** Capital is never charged for, anywhere:
+- **Pricing.** `unit_cost` = unit LABOR cost (+ the v17 Leontief energy term) × the v5 scale
+  diseconomy ([planning.py:101-122](../../macro_sim/behavior/planning.py)). No capital cost,
+  no interest. B3 then posts `p = (1 + markup) × unit_cost` — **priced as if capital were
+  free**.
+- **Profit.** `f.profit = revenue − wages − energy` (Tier-1 #4 above). No depreciation, no
+  interest.
+
+**The consequence, and it is the deepest finding in this list: the pricing rule mechanically
+converts CAPITAL DEEPENING into DEFLATION.** As the economy accumulates capital and
+substitutes it for labour, labour input per unit of output falls, so unit LABOUR cost falls,
+so `unit_cost` falls, so posted prices fall. But the capital cost that REPLACED that labour is
+invisible to the pricing rule. True unit cost (labour + capital consumption) does not fall
+nearly as much. Real economies do not deflate from capital deepening precisely because the
+capital has to be paid for; here it does not.
+
+**This unifies the mysteries of the last two arcs:**
+- the persistent −4 to −8%/yr deflation in every v17/v19 portrait;
+- **why TFP drift could not stop it** — drift raises output per worker, which lowers unit
+  labour cost further, which deflates MORE. That is exactly what the v19 audit measured
+  ("TFP drift barely moves the nominal outcome");
+- the overstated profit and the dividends paid out of EBITDA;
+- and it puts the v19 headline in a new light: **the CB may be reacting to a deflation the
+  PRICING RULE manufactures.** "The central bank is the deflation engine" may itself be a
+  downstream symptom.
+
+**Patch #6 — charge for capital.** Put a capital-consumption term (depreciation, or a rental
+rate on the capital employed per unit) into `unit_cost` so pricing sees the input it is
+actually using, and expense depreciation in `f.profit` (shared with Patch #5). Flag-gated,
+default-off bit-identical. **This RE-SCOPES patches #1 and #2: fix the COST side first, then
+re-run the nominal-anchor audit** — the CB may look very different once it is no longer
+chasing a structurally manufactured disinflation.
+
+### Tier 1 (sixth) — firm net worth is CASH ONLY: capital is not collateral, so the
+### collateral channel of the financial accelerator cannot exist
+
+**Root cause.** `credit_grant` caps debt at `kappa · NW` where **`NW = deposits − debt`** —
+purely FINANCIAL net worth ([planning.py:240-247](../../macro_sim/behavior/planning.py)). The
+firm's capital stock and inventory — its actual productive assets — are not in it. A grep for
+`collateral` across firm lending returns NOTHING: there is no collateral concept in firm
+credit at all (households have mortgage LTV; firms have nothing).
+
+So a capital-rich, cash-poor firm cannot borrow, while a cash-rich, capital-less firm borrows
+freely — backwards from real collateral-based lending, where the capital stock IS the
+collateral. The docstring claims "this one line is the whole Minsky-leverage engine", but the
+engine is built on financial net worth alone, so **the collateral channel of the financial
+accelerator (Bernanke-Gertler: asset prices → collateral value → borrowing capacity →
+investment) cannot exist.**
+
+Together with Tier-1 #4, **BOTH channels of the financial accelerator are absent by
+construction** — the P&L channel (leverage never bites in profit) and the collateral channel
+(assets never support borrowing).
+
+**Patch #7 — capital as collateral.** Add the (depreciated, possibly marked) capital stock and
+inventory to the firm's borrowing base, so asset values feed borrowing capacity. Flag-gated,
+default-off bit-identical; acceptance pre-registers that the financial accelerator now
+produces the asset-price → investment feedback the v8 arc was after.
+
 ### Minor notes (fold into whichever patch touches the same file)
 
 - **Unemployment mixes units.** `unemployment_rate = 1 − total_hired / labor_supply`
