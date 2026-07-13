@@ -39,13 +39,15 @@ def prepare_trade(world) -> None:
     prev_export = world._last_export_value          # curr_i, last tick
     for i, econ in enumerate(econs):
         best_price = None
+        best_j = -1
         for j in range(n):
             if j == i:
                 continue
             pj = econs[j]._price_level            # curr_j, last tick (stale coupling)
             price_i = pj * rates.bilateral(i, j) * (1.0 + fric)
             if pj > EPS and (best_price is None or price_i < best_price):
-                best_price = price_i
+                best_price, best_j = price_i, j   # economy i imports from its CHEAPEST source
+        world._import_source[i] = best_j
         if best_price is None:
             econ._fx_import_offer = econ._fx_export_order = None
             continue
@@ -77,16 +79,16 @@ def settle_trade(world) -> None:
         econ._fx_export_order = None
     world._prev_import_value = import_value
 
-    # Ship exports: economy i supplies Σ_{j≠i} (economy j's imports sourced from i), valued
-    # in curr_i. Same-tick pairing ⇒ the dealer nets to ~0 when trade is symmetric.
+    # Ship exports: economy k supplies exactly the imports that were SOURCED FROM it this
+    # tick (Σ_i import_value[i] where source[i]==k), valued in curr_k. Correct sourcing (not
+    # "everyone imports from everyone") keeps the dealer balanced for N ≥ 3, not just N = 2.
     export_value = [0.0] * n
-    for i, econ in enumerate(econs):
+    for k, econ in enumerate(econs):
         target = 0.0
-        for j in range(n):
-            if j == i:
-                continue
-            target += import_value[j] * rates.bilateral(i, j)   # curr_j import → curr_i
-        export_value[i] = _ship_exports(econ, target)
+        for i in range(n):
+            if i != k and world._import_source[i] == k:
+                target += import_value[i] * rates.bilateral(k, i)   # curr_i import → curr_k
+        export_value[k] = _ship_exports(econ, target)
     world._last_export_value = export_value
 
     # Dealer residual net inventory (curr_i); >0 ⇒ deficit ⇒ curr_i depreciates (e_i ↑).

@@ -80,6 +80,7 @@ class World:
         self.world_records: List[dict] = []
         self._prev_import_value: List[float] = [0.0] * self.n   # curr_i, stale coupling
         self._last_export_value: List[float] = [0.0] * self.n   # curr_i, export financing
+        self._import_source: List[int] = [-1] * self.n          # economy i's cheapest source j
         if self.couple:
             self.rates = RateVector(self.n)
             self.dealer = FXDealer(self.economies)
