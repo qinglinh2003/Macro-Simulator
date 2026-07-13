@@ -66,8 +66,13 @@ class World:
         immigration_cap: float | None = None,   # POLICY: host admits ≤ cap × pop (None = open)
         remittance_tax: float = 0.0,             # POLICY: origin taxes inbound remittances
         tariff: float = 0.0,                     # POLICY (trade): import tax → importer's fiscus
+        import_quota=None,                       # POLICY (trade): cap import VOLUME (share of capacity)
+        export_subsidy=None,                     # POLICY (trade): exporter's fiscus subsidises (<0 = export tax)
         capital_control: float = 0.0,            # POLICY (capital): throttle capital flows, in [0,1]
         sanctions=None,                          # POLICY (strategic): frozenset({i,j}) pairs — no bilateral flow
+        emigration_cap=None,                     # POLICY (migration): origin restricts its own exit
+        outward_remittance_tax: float = 0.0,     # POLICY (migration): HOST taxes outbound remittances
+        guest_worker_return: float = 0.0,        # POLICY (migration): temporary migration — return rate
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -100,9 +105,15 @@ class World:
         self.immigration_cap = immigration_cap
         self.remittance_tax = remittance_tax
         self.tariff = tariff                   # trade policy
+        self.import_quota = import_quota
+        self.export_subsidy = export_subsidy
         self.capital_control = capital_control  # capital policy (0 = free, 1 = closed)
         self.sanctions = sanctions or set()     # strategic: blocked bilateral pairs
+        self.emigration_cap = emigration_cap    # migration policy
+        self.outward_remittance_tax = outward_remittance_tax
+        self.guest_worker_return = guest_worker_return
         self._tariff_rev: List[float] = [0.0] * self.n
+        self._export_subsidy_cost: List[float] = [0.0] * self.n
         self.capital_mobility = capital_mobility
         self.capital_adjust = capital_adjust
         self.periods_per_year = periods_per_year
@@ -200,6 +211,7 @@ class World:
                 "remittance_tax_rev": [self._remittance_tax_rev[i] / e[i] for i in range(self.n)],
                 "immigration_binding": list(self._immigration_binding),
                 "tariff_rev": [self._tariff_rev[i] / e[i] for i in range(self.n)],
+                "export_subsidy_cost": [self._export_subsidy_cost[i] / e[i] for i in range(self.n)],
             }
         )
 

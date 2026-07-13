@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from macro_sim.markets.matching import EPS
 from macro_sim.world.fx import DEALER_ID
+from macro_sim.world.trade import lever
 
 
 def _real_wage(econ) -> float:
@@ -44,10 +45,17 @@ def run_migration(world) -> None:
         gap = (rw[host] - rw[i]) / max(1e-9, rw[i])
         pop = len(econs[i].households)
         own_cap = world.migration_max_share * pop
+        # POLICY: an EMIGRATION cap — the origin restricts its own people from leaving.
+        if world.emigration_cap is not None:
+            own_cap = min(own_cap, lever(world.emigration_cap, i) * pop)
         if gap > 0.0:
             world._migrant_stock[i] = min(own_cap, world._migrant_stock[i] + world.migration_rate * gap * pop)
         else:
             world._migrant_stock[i] = max(0.0, world._migrant_stock[i] * (1.0 - world.migration_rate))
+        # POLICY: a GUEST-WORKER regime — migrants are temporary and return home at a rate
+        # (permanent settlement ⇒ 0). Applied after the pull, so it damps the steady state.
+        if world.guest_worker_return > 0.0:
+            world._migrant_stock[i] *= (1.0 - world.guest_worker_return)
 
     # 2. POLICY — the immigration cap/quota (a run-time government lever): each host admits
     #    at most `immigration_cap × its population` immigrants in total. When it binds, the
@@ -90,6 +98,15 @@ def _remit(world, host: int, origin: int, amount_host: float):
     collected = _collect(world.economies[host], amount_host)
     if collected <= EPS:
         return 0.0, 0.0
+    # POLICY: the HOST may tax OUTWARD remittances (e.g. the Gulf states) — levied before the
+    # money leaves, revenue to the host's fiscus.
+    he = world.economies[host]
+    h_fiscal = getattr(he, "_fiscal", None)
+    if world.outward_remittance_tax > 0.0 and h_fiscal is not None and he.ledger.has_account(h_fiscal):
+        out_tax = world.outward_remittance_tax * collected
+        if out_tax > EPS:
+            he.ledger.transfer(DEALER_ID, h_fiscal, out_tax)   # host taxes the outflow
+            collected -= out_tax
     amount_origin = collected * world.rates.bilateral(origin, host)   # curr_host → curr_origin
     oe = world.economies[origin]
     tax = 0.0
