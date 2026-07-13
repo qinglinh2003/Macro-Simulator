@@ -25,7 +25,7 @@ from typing import Dict, List, Sequence
 import numpy as np
 
 from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
-from macro_sim.demographics.economic_state import build_household_economic_profiles
+from macro_sim.demographics.economic_state import build_household_economic_profiles, need_weight_for_person
 from macro_sim.systems.banking import bank_economic_capital, bank_equity_value, bank_for
 from macro_sim.systems.securities import bond_market_value
 
@@ -351,6 +351,23 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "e0_effective": float(getattr(bridge, "e0_effective", 0.0)),
             }
         )
+        # v18.0 deprivation gauges (observation only). Coverage is measured at the
+        # HOUSEHOLD unit (the model charges dependents' needs to supporting adults, so a
+        # child's own allocation is ~0), then inherited by members. The signal owns the
+        # cumulative->flow differencing (consumption_allocated_tick is a lifetime stock)
+        # and all aggregation; metrics just hands it the raw per-person snapshot.
+        dep = getattr(econ, "deprivation_signal", None)
+        if dep is not None and state is not None:
+            dep_persons = [
+                (int(person.id), int(person.household_id), need_weight_for_person(person),
+                 bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick,
+                 int(getattr(person, "age", 0)),
+                 bridge.claims.balance_sheet(int(person.id)).net_worth)
+                for person in alive_people if bridge.claims.has_person(int(person.id))
+            ]
+            rec.update(dep.observe(
+                year=int(state.current_date.year), price_index=price_index, persons=dep_persons))
+
         strat = getattr(bridge, "stratification", None)
         if strat is not None:
             # v14 Phase 3.0: per-quintile vital gauges + the age-wealth confound gauge

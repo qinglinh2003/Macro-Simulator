@@ -763,6 +763,27 @@ class Config:
     # observationally vacuous; lands when the gate opens. Efficiency investment
     # (e_coeff falls with investment): optional per plan, deferred with it.
 
+    # ===================== v18: consumption stratification ========================
+    # -- v18.0 subsistence basket & deprivation gauges (OBSERVATION ONLY) --
+    # The basket is an external MEASUREMENT standard, not a decision input: a
+    # per-person subsistence real-consumption floor (needs-weighted), fitted once at
+    # genesis to a fraction of mean per-capita consumption (the poverty-line idiom),
+    # then FROZEN. Coverage = realized real consumption / basket cost at current
+    # prices; spell counters track consecutive days below the 100/60/30% thresholds.
+    # A sustained ACUTE spell sets a DOMAIN-BOUNDARY health flag: per the research
+    # ruling (PLAN_v18), acute deprivation is NOT a death mechanism -- it marks the
+    # edge of the model's validity domain (post-breach demographic/long-run paths are
+    # out of domain; distributional readouts stay valid). Off => bit-identical.
+    deprivation_gauges: bool = False       # v18.0 master flag (observation only)
+    subsistence_share: float = 0.5         # basket = share x genesis mean per-capita real
+                                           # consumption (needs-weighted per person); fitted
+                                           # at genesis, then frozen (external anchor)
+    deprivation_burnin_years: int = 3      # discard the genesis relaxation before anchoring
+                                           # (the housing/energy-signal burn-in idiom; 3y
+                                           # clears the worst of the v13 genesis clearing slump)
+    deprivation_acute_days: int = 7        # a sub-30% spell this long trips the domain flag
+    deprivation_chronic_days: int = 30     # a sub-60% spell this long trips the domain flag
+
     def __post_init__(self) -> None:
         self._validate()
 
@@ -1558,6 +1579,14 @@ class Config:
         assert self.energy_subsidy_threshold >= 0.0, "subsidy threshold must be >= 0"
         assert not (self.energy_mortality_gamma > 0.0 and not self.energy_household), \
             "the fuel-poverty mortality channel needs household energy"
+        # v18.0 deprivation gauges (observation only)
+        assert not (self.deprivation_gauges and not self.demographics_enabled), \
+            "deprivation gauges need person-level consumption (demographics)"
+        assert 0.0 < self.subsistence_share <= 1.0, \
+            "subsistence share is a fraction of mean per-capita consumption"
+        assert self.deprivation_burnin_years >= 1, "deprivation burn-in must be >= 1 year"
+        assert self.deprivation_acute_days >= 1 and self.deprivation_chronic_days >= 1, \
+            "deprivation spell thresholds must be >= 1 day"
         assert 0.0 <= self.theta_price <= 1.0, "theta_price is a probability"
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"

@@ -61,6 +61,7 @@ from macro_sim.systems.banking import (
 from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
 from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_energy_phase
+from macro_sim.systems.deprivation import DeprivationSignal
 from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
@@ -151,6 +152,17 @@ class Economy:
                     mult_hi=cfg.energy_mortality_mult_hi,
                 )
         self.investing_firms: List[Firm] = [f for f in self.firms if f.invests]  # C (+ K in v2.5; + E in v17)
+
+        # v18.0: subsistence basket & deprivation gauges (OBSERVATION ONLY; needs person-
+        # level consumption). Off ⇒ never constructed ⇒ bit-identical.
+        self.deprivation_signal = None
+        if cfg.deprivation_gauges and cfg.demographics_enabled:
+            self.deprivation_signal = DeprivationSignal(
+                subsistence_share=cfg.subsistence_share,
+                burnin_years=cfg.deprivation_burnin_years,
+                acute_days=cfg.deprivation_acute_days,
+                chronic_days=cfg.deprivation_chronic_days,
+            )
 
         # v9.1: economy-wide PUBLIC capital (a non-rival stock; government investment builds it, it raises
         # every firm's productivity). K_ref = genesis private C-capital, so the factor (1+K_pub/K_ref)^γ

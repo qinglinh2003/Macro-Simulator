@@ -101,6 +101,14 @@ def summarize(cfg: Config, records: List[dict], *, burn_in_frac: float = 0.5,
         "price_class": price_class,
         "depressed_trap": u_mean > 0.5,      # heuristic flag, not a verdict
     }
+    # v18.0 domain boundary: a sustained ACUTE deprivation spell means the run has left
+    # the model's validity domain (acute deprivation is not modeled as death -- the
+    # research ruling). Post-breach demographic/long-run readings are OUT OF DOMAIN;
+    # distributional readouts stay valid. Sticky per-tick flag => any() over the series.
+    if any(r.get("deprivation_boundary", 0.0) >= 1.0 for r in records):
+        health["deprivation_boundary"] = True
+        health["deprivation_acute_persondays"] = float(
+            sum(r.get("deprivation_acute_persondays", 0.0) for r in records))
 
     return {
         "meta": {
