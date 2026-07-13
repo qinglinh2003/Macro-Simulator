@@ -1,11 +1,41 @@
 # V19 Plan — Technology as an Object, and Exogenous TFP Drift
 
-> **STATUS: 19.0/19.1/19.3 mechanism COMPLETE + accepted; 19.2 audit running (2026-07-13).**
-> Branch `feat/tech-tfp-v19` from dev@19457d0. Commits: b59f0a6 (19.0 object+seam + 19.1
-> exogenous drift), 0e26c66 (19.3 LBD seam + accumulator). Bit-identity gate PASSED
-> (v9/v13/full-stack cumulative digests a7b1937f/8aa01d8c/1bce181d, before == after, and
-> again with the new metrics once v19 keys are excluded — the economic trajectory is
-> provably unchanged when drift is off). technology suite 12/12.
+> **STATUS: ARC COMPLETE (2026-07-14) — ready to merge.** Branch `feat/tech-tfp-v19`
+> from dev@19457d0. Commits: b59f0a6 (19.0 object+seam + 19.1 exogenous drift), 0e26c66
+> (19.3 LBD seam + accumulator), cfcae28 (19.1 acceptance close-out + diagnostic_v190),
+> + this close-out. Bit-identity gate PASSED (v9/v13/full-stack cumulative digests
+> a7b1937f/8aa01d8c/1bce181d, before == after, and again with the new metrics once v19
+> keys are excluded — the economic trajectory is provably unchanged when drift is off).
+> technology suite 12/12; FULL regression 530 passed / 0 failed (xdist).
+>
+> **19.2 NOMINAL-ANCHOR AUDIT (pre-registered hypothesis CONFIRMED, with a sharper
+> mechanism than expected).** Full stack, TFP drift ON (g=1.4%), same seed, mature-segment
+> (yr6-10) mean annual inflation vs pi*=1.97%:
+>
+> | regime | mature inflation |
+> |---|---|
+> | frozen (central_bank OFF) | **+0.17%/yr** ← closest to stable |
+> | headline Taylor (v13 default) | −4.62%/yr |
+> | core Taylor (ex-energy CPI) | **−7.26%/yr** ← worst |
+> | control (headline CB, NO drift) | −4.61%/yr |
+>
+> Findings: (1) **NO regime delivers pi*** — there is no nominal anchor pinning the price
+> level to target. (2) **The active CB is the deflation ENGINE, not the cure**: switching
+> it OFF leaves prices near-stable (+0.17%), both active regimes deflate hard. Monetary
+> overreaction (Bernanke-Gertler-Watson), the same signature as the 17.2 matrix (headline
+> Taylor stack does the most damage). (3) **Core-targeting is WORSE than headline**
+> (−7.26 vs −4.62): stripping energy, the CB sees more disinflation and eases harder, but
+> easing does not stimulate a deflating economy — it deepens the spiral. (4) **TFP drift
+> barely moves the nominal outcome** under a fixed regime (headline −4.62 with drift vs
+> −4.61 without) — a clean real/nominal dichotomy: real growth passes to quantities, the
+> monetary regime governs the price level. diagnostic_v191 shipped.
+>
+> **Implication for the roadmap:** the nominal-anchor FIX (19.2's contingency) IS needed
+> and is now scoped by the audit — the failure is a Taylor rule that mistakes
+> productivity/capital-deepening disinflation for demand weakness. Candidate fixes (a
+> nominal-GDP / money-growth target, or a productivity-adjusted inflation target) belong
+> to a follow-on patch, NOT this arc — the audit's job was to name the failure, which it
+> did. Logged as the top open thread for the next monetary patch.
 >
 > **19.1 ACCEPTANCE (honest, pre-registered + refuted + re-derived):**
 > - The pre-registered "yr6-10 per-capita CAGR → g/(1−α)=2.0%" was REFUTED — not a
