@@ -180,6 +180,17 @@ Walrasian version. Under groping, the honest statement is *mean-reverting invent
 Start with **one dedicated `FXDealer`** (simplest); banks-as-dealers (more realistic
 correspondent picture) is a later refinement.
 
+**CONVERGED — groping IS the mean-reversion.** The rate gropes on the dealer's **net
+inventory** (inventory = accumulated flow imbalance = the excess-demand signal), so
+"grope on flow imbalance" and "mean-revert inventory" are one rule, not two.
+
+**CONVERGED — dealer P&L / ownership / revaluation.** The dealer runs a **zero spread**
+(pure passthrough) at the base. A rate move revalues its held inventory with no
+transaction; that gain/loss is booked to a **World-level valuation account tracked by the
+BoP spine (§6)** so conservation never leaks. The dealer's net worth is **unowned** at
+v20 (floats, booked for conservation, not distributed to any residents) — ownership /
+distribution is a capital-layer concern (§12).
+
 ## 4. The international trade system — N local markets, arbitrage-connected
 
 **Organizing frame: trade is N *local* goods markets connected by arbitrage, NOT one
@@ -198,8 +209,10 @@ session decision now ranges over foreign options, fed in via the §5 barrier.
 ### 4.1 The two defining knobs (they set the system's character)
 
 1. **Tradable / non-tradable partition — the highest-leverage structural choice.**
-   Tradable candidates: energy (v17), necessity, luxury, capital goods. Non-tradable:
-   housing/land (v15 — the natural anchor), labor (until migration). *Why it dominates:*
+   **CONVERGED (§10): tradable = necessity + luxury; non-tradable anchor = housing/land
+   (v15); energy & capital goods NOT tradable at the base** (energy-as-intermediate-import
+   is a flagged S2 extension). Non-tradable candidates also include labor (until migration).
+   *Why it dominates:*
    the non-tradable sector is what lets the **real exchange rate move at all**. If
    everything trades, prices equalize and the real rate is pinned (degenerate). Housing as
    the non-tradable anchor gives room for real-rate movement, persistent price-level gaps,
@@ -214,13 +227,19 @@ session decision now ranges over foreign options, fed in via the §5 barrier.
 ### 4.2 Structure: a trade network, and what it produces
 
 With N economies, each good has a **bilateral flow matrix** (who ships to whom). Friction
-may be **per-pair** (distance ⇒ gravity-like trade: near/large partners trade more) or
-**uniform** (symmetric network). Under the tentative "same goods, different productivity"
-motive (§10 fork), trade is **inter-industry / arbitrage-driven**: the low-cost producer
-of a good exports it, the high-cost one imports it. The system's **emergent product is a
-specialization pattern** — which economy becomes the necessity-exporter, which the
-luxury-exporter — the comparative-advantage equilibrium the flows converge toward. That
-pattern is the headline outcome to observe.
+is **CONVERGED (§10): proportional iceberg, uniform across pairs at the base** (N=2 has one
+pair); per-pair (distance ⇒ gravity, near/large partners trade more) is deferred to S3.
+
+**CONVERGED — trade motive: same good, Armington-differentiated by origin.** Not "same vs
+distinct goods" — the resolution is a *single* good whose home and foreign varieties are
+**imperfect substitutes** under a CES aggregator with finite elasticity σ. This keeps the
+import-competition / comparative-advantage story (low-cost producer exports, high-cost
+imports; connects v18) **while killing the perfect-substitute bang-bang** (perfect
+substitutes + a friction band ⇒ demand flips discontinuously at the band edge ⇒ oscillation
+that wrecks the §8 quiet baseline). σ is a calibrated parameter. The system's **emergent
+product is a specialization pattern** — which economy becomes the necessity-exporter, which
+the luxury-exporter — the comparative-advantage equilibrium the flows converge toward, the
+headline outcome to observe.
 
 ### 4.3 Trade ⊗ FX — one set of transactions, two dual books
 
@@ -238,14 +257,13 @@ Tariffs, quotas, export subsidies sit **on the flows** as Policy-layer (run-time
 Pareto-improving within an economy** (cheap-import consumers win, undercut producers
 lose), the origin of trade barriers and a hook into the v18 distributional line.
 
-### 4.5 Structural forks still OPEN (not locked — see §10, §13)
+### 4.5 Structural forks — now CONVERGED (see §10)
 
-- **Same goods, different productivity** (import competition, connects v18) **vs distinct
-  goods per economy** (pure variety gains).
-- **Final-goods trade only vs intermediate-goods trade** — energy-as-tradable-intermediate
-  makes an import a production *input*, creating **global value chains**: an energy
-  exporter's shock propagates through importers' costs (the real oil shock, connects v17).
-- **Trade-network shape** — per-pair (gravity) vs uniform friction.
+- Trade motive → **same good, Armington-differentiated by origin** (§4.2).
+- Trade scope → **final goods only at base**; energy-as-intermediate (global value chains,
+  the real oil shock connecting v17) is a **flagged S2 extension**, not the base.
+- Network shape → **uniform proportional friction at base**; per-pair gravity at S3 (§4.2).
+- Tradable partition → **necessity + luxury tradable; housing non-tradable anchor** (§4.1).
 
 ### 4.6 Meshing with the existing arcs (v15 / v17 / v18)
 
@@ -310,7 +328,10 @@ debugging pain. Single-machine multicore is the ceiling worth targeting; distrib
    `Δ(currency i stock) = domestic_creation_i − destruction_i + Δ(dealer_i_inventory)`.
    Balanced cross-border flows do NOT change currency `i`'s stock (an exporter is paid in
    `i`-money that an importer already spent). A5 holds per economy with residual **exactly
-   equal to the dealer's `i`-inventory** — reconcile as a gate.
+   equal to the dealer's `i`-inventory** — reconcile as a gate. **The dealer's cross-
+   currency revaluation (a rate move re-pricing held inventory with no transaction) is
+   booked to a World-level valuation account** — without it, numéraire-denominated
+   conservation leaks (§3).
 2. **Multilateral BoP identity:** `Σ_i (trade balance_i, valued in numéraire) ≡ 0` (one
    economy's export is another's import). This is the closed-economy conservation law's
    L2 analog and must hold to the penny.
@@ -350,22 +371,33 @@ character and watch divergence. (Standard project discipline: quiet baseline fir
   conveniently also makes slow-moving coupling variables safe to exchange every `K`.
 - Dealer updates also run in fixed order.
 
-## 10. Design forks — settled vs open
+## 10. Converged decisions (one row per component)
 
-**Settled:**
-
-| Fork | Options | Decision |
+| Component / fork | Decision | Deferred variant |
 |---|---|---|
-| Economies | SOE stub / L1 parallel / **L2 coupled** | **L2** (user ruling §0) |
-| Settlement medium | single world money / **fiats + rates** | fiats + rate vector |
-| Rate representation | bilateral matrix / **numéraire vector** | numéraire vector, cross-rates derived |
-| Regime | **float first** / peg | float; peg is degenerate until capital flows exist (§12) |
-| Dealer | **dedicated FXDealer** / banks | dedicated first; banks later |
-| Parallelism | **serial-first BSP shape** / process pool now | serial-first; parallelize on profiling evidence |
+| Economies (L-level) | **L2 coupled** (§0) | — |
+| N at first coupling | **N=2 for S1** (one bilateral rate, no cross-rate burden) | N=3 at S3 (cross-rate + vehicle currency) |
+| Settlement medium | **fiats + rate vector** | single world money |
+| Rate representation | **numéraire vector, cross-rates derived** | — |
+| Basket weights `w_i` | **equal, 1/N** | economy-size weights |
+| Regime | **float first** | peg (degenerate until capital, §12) |
+| Dealer | **one dedicated `FXDealer`, World-level** | banks-as-dealers |
+| Dealer groping | **grope on net inventory** (= mean-reversion, one rule) | — |
+| Dealer P&L / ownership | **zero spread; revaluation → World valuation account; unowned** | ownership/distribution at capital layer |
+| Tags | **residency + currency as first-class fields; only dealer holds FX o/n** | residents hold FX (capital layer) |
+| Trade motive | **same good, Armington-differentiated by origin** (finite σ) | distinct goods / perfect substitutes |
+| Trade scope | **final goods only** | energy-as-intermediate = flagged S2 |
+| Tradable partition | **necessity + luxury tradable; housing non-tradable anchor** | energy/capital tradable later |
+| Friction | **proportional iceberg, uniform across pairs** | per-pair gravity at S3 |
+| Trade → session entry | **CES-over-origin inside each v18 session; export = mirror injection; energy→N→L order kept; flag-off byte-identical** | — |
+| Real rate: trade vs report | **decisions use per-good Armington relative price; reported REER = CPI-based; tradable/non-tradable gap reported separately** (BS/Dutch disease) | — |
+| Character (S2) | **minimal — vary productivity/TFP only first**; shared base config + per-economy override | multi-dim character later |
+| Expectations | **static / backward-looking** (stale coupling) | forward-looking at capital layer |
+| Parallelism | **serial-first BSP shape** | process pool on profiling evidence |
 
-**Still open (trade-system structure — §4.5):** same-goods-diff-productivity vs distinct
-goods; final-only vs intermediate trade (energy); per-pair (gravity) vs uniform friction;
-the tradable/non-tradable partition itself.
+**Calibration targets (not structural — fit to the §8 quiet baseline):** groping speed λ,
+dealer inventory scale/buffer, Armington σ, the genesis rate vector — chosen jointly so
+genesis stays quiet and shocks do not oscillate (§7 lever 2).
 
 ## 11. Staging (L2 is the target; still built in layers)
 
@@ -466,19 +498,17 @@ price-takers:
 3. **Governance + strategic layer** sits on top — only meaningful once flows are large.
 4. **Tech diffusion** — a side channel, coordinate with the v19 TFP line.
 
-## 13. Open drill-downs (next design sessions)
+## 13. Residual opens (all now CALIBRATION, not structure)
 
-- ✅ **RESOLVED — abstract numéraire** (§2): a gauge choice, not an asset; symmetric
-  geometric-basket normalization `Π e_i^{w_i}=1` re-applied each tick; numéraire ⊥ vehicle
-  currency; nominal-vs-real distinction. *Remaining sub-choices:* basket weights `w_i`
-  (equal to start) and whether re-normalization interacts with groping stability.
-- The exact `e_i` groping rule — **sketch:** `log e_i += λ·(X_i/scale)` on currency-`i`
-  excess-demand `X_i`, then subtract `Σ_j w_j log e_j` to re-impose the gauge; `Σ_i X_i ≡
-  0` (Walras / gate #2) with fixed-id reduction. *Open:* speed `λ`, scale term,
-  inventory-feedback coupling, and the groping/normalization stability interaction.
-- **Tradable/non-tradable partition** (§4.1) — which of energy/necessity/luxury/capital
-  are tradable; housing as the non-tradable anchor.
-- Iceberg friction parameterization (per-unit vs proportional; per-pair vs uniform).
-- How export demand / import supply enter the v18 goods session (energy→N→L hierarchy)
-  without disturbing its flag-off byte-identity.
-- Whether the FXDealer is dedicated or the banks collectively (correspondent picture).
+Structural forks are converged in §10. What remains is calibration + one implementation
+mechanism, all resolved against the §8 quiet baseline rather than by fiat:
+
+- **Groping rule** — form settled: `log e_i += λ·(net_inventory_i/scale)`, then subtract
+  `Σ_j w_j log e_j` to re-impose the gauge; fixed-id reduction (Walras: `Σ_i` imbalance
+  `≡ 0` = gate #2). *Calibrate:* λ, the inventory scale, and its interaction with the
+  normalization projection (the groping/normalization stability question).
+- **Armington σ** — calibrate to the quiet baseline (finite, smooths the origin choice).
+- **Genesis rate vector** — solve once at setup for multilateral-balanced trade (§8).
+- **Session-entry implementation** — the exact CES-over-origin hook in each v18 session,
+  proven flag-off byte-identical (foreign-origin weight → 0 reproduces dev). Mechanism,
+  not a decision.
