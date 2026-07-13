@@ -199,6 +199,26 @@ lose), the origin of trade barriers and a hook into the v18 distributional line.
   exporter's shock propagates through importers' costs (the real oil shock, connects v17).
 - **Trade-network shape** — per-pair (gravity) vs uniform friction.
 
+### 4.6 Meshing with the existing arcs (v15 / v17 / v18)
+
+v20 reuses far more than it builds. The only genuinely new objects are the `World`
+container, the FX dealer, and the rate vector; the trade⊗FX system otherwise **plugs into
+existing machinery**. But two inherited *conclusions* must be re-validated under openness,
+not assumed to carry over.
+
+| Existing | What v20 trade⊗FX uses it for | Free win / watch |
+|---|---|---|
+| **v18 N/L session hierarchy** | the per-session **injection site** for trade (foreign sources added to each session's choice set; exports as extra demand) | *Free:* import competition inherits distributional meaning (necessity imports shield the poor, luxury imports hit the luxury sector). *Watch:* preserve the energy→N→L budget hierarchy (it is physical phase order) and keep injection **flag-off byte-identical**. |
+| **v18 group-CPI / price-level index** | the domestic price levels `P_i` for the real exchange rate `real_ij=(e_i/e_j)(P_j/P_i)` | *Free:* the bounded level-index (built to kill the 57× compounding artifact) is exactly the right tool — no new price measure. *Watch:* which group's `P` (tradable basket vs total CPI) defines competitiveness — a §13 choice. |
+| **v17 energy (intermediate input + shock)** | **intermediate-goods trade** / global value chains / the *real* oil shock (energy-as-import makes an import a production input) | *Free:* v17's κ capacity cut, only an approximation of an oil shock, becomes a true terms-of-trade/import shock. *Watch:* v18 found the closed-economy energy shock is **deflationary** (demand destruction > cost push) — **re-test under openness**; sign depends on net energy importer/exporter + pass-through of depreciation. Pre-register, don't inherit. |
+| **v15 housing / land** | the **non-tradable anchor** (§4.1) that gives the real exchange rate room to move | *Free:* Balassa-Samuelson, Dutch disease, competitiveness all become possible. *Watch:* a cross-module feedback loop (import inflation → real rate → house prices → wealth effect → consumption) — a stability concern for §7 lever 2. |
+| **v11.4/11.5/12.4 crisis machinery** | (§12) currency-crisis reuse under a peg | later stage, not this module |
+
+**Two inherited conclusions to re-validate, not assume:** (1) the energy shock's
+deflationary sign (v18 finding #3); (2) the energy→N→L hierarchy's semantics once foreign
+sources enter the sessions. Three cross-module feedback loops to watch for stability:
+import-competition→distribution, energy→supply-chain, exchange-rate→housing-wealth.
+
 ## 5. The tick — Bulk Synchronous Parallel (BSP)
 
 Each tick has two parts: a **thin central coupling barrier** + a **heavy independent
