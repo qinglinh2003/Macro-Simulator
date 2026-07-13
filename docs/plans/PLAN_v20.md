@@ -80,6 +80,64 @@ unchanged), the open-economy foundation is **seven components**:
 derived-income layer, governance/strategic interaction, stocks/IIP/systemic emergence,
 forward-looking expectations (static is fine at the trade-only layer). See §12.
 
+## 0.6 The country-character interface (`CountryProfile`)
+
+The comparative lab (§0) needs identical-*structure* economies to **look like different
+countries** by genesis parameters alone. `CountryProfile` is a **named Config overlay
+applied at genesis** — NOT new machinery — that gathers parameters scattered across
+v13/v15/v16/v17/v18/v20 into a few **interpretable economic axes**; an archetype is a
+preset point in that space. (Config-layer, consistent with the Config/Policy discipline.)
+
+**Honest constraint — pick archetypes extreme on the model's *crown-jewel* axes, not on
+axes it can't express.** Strong axes (rich emergent behavior): **demographics (v13),
+housing/land (v15), consumption stratification N/L (v18), energy (v17)**, plus openness
+(v20). Weak/absent: institutional quality, finance hub, sovereign wealth fund, peg,
+distinct services sector. Archetypes whose *defining* feature sits on a weak axis come out
+**muted**. Also: several open-economy-defining features are **deferred past v20 base** —
+oil *export* needs energy-tradable (S2), external wealth / SWF needs the capital account
+(v21), a peg needs the peg regime (v21). So v20 base yields **domestic silhouettes**; the
+interface is designed **forward-compatible** (full axis set now, each axis tagged with the
+version that activates it), and expressiveness fills in as components land.
+
+| Character axis | Maps to (existing params) | Live at v20 base? |
+|---|---|---|
+| Productivity / TFP | production / labor efficiency (v16) | ✅ |
+| Scale & demographics | initial population / age / fertility (v13) | ✅ |
+| Sector tilt | necessity/luxury share, energy intensity (v17/v18) | ✅ |
+| Resource endowment | energy capacity vs demand (net exporter/importer) (v17) | domestic ✅; **export at S2** |
+| Openness | trade friction, per-economy (v20) | ✅ (v20.2) |
+| Financial depth | bank count / capital (v11) | ✅ |
+| Policy regime | Taylor / fiscal / tax-redistribution (v10/v18); FX regime | float ✅; **peg v21** |
+| Land scarcity | land / housing supply (v15) | ✅ |
+| Institutional quality | *proxy:* matching efficiency (v16) + tax-collection / leakage | ⚠️ may need one thin param |
+| Savings / external wealth | household saving propensity; **SWF/external assets = capital** | domestic ✅; **external v21** |
+
+**Recommended archetypes — each extreme on a *different* crown-jewel axis (maximal
+separation + best-simulated):**
+
+1. **Aging-rich creditor** (Japan/Germany-type) — *demographics: aging pole.* Shrinking
+   labor → wages up, growth down; high savings; housing wealth held by the old;
+   deflationary tilt; structural surplus once capital exists. **Fully base-expressible.**
+2. **Young developing producer** (India/Nigeria-type) — *demographics: young pole (the
+   opposite of #1).* Booming labor → employment up, wages compressed; low savings; high
+   necessity share (Engel); fast catch-up as TFP rises. **Fully base-expressible.**
+3. **Land-scarce entrepôt** (Singapore/HK-type) — *housing + openness.* Reframed off the
+   "finance hub" (inexpressible) onto land scarcity + ultra-openness: house prices
+   dominate wealth, housing burden squeezes consumption, trade-dominated. Base-expressible
+   (housing now, openness v20.2).
+4. **Petrostate** (Gulf/Saudi-type) — *energy.* Terms-of-trade swings, Dutch disease.
+   **Defining feature (oil export) activates at S2**; muted at base.
+
+**#1 vs #2 is v20.3's first divergence pair** — the sharpest, cleanest, fully
+base-expressible contrast (one axis — demographics, the model's deepest arc — drives
+labor, savings, housing, consumption, growth at once); #3 rides v20.2, #4 waits for S2.
+This reconciles with §10's "minimal-first": the full interface is defined now, but the
+v20.3 *controlled experiment* still perturbs primarily the demographic/TFP axis.
+
+**Possible thin new params (the only additions; everything else is regathering):**
+an institutional-quality proxy (efficiency/leakage) and a household saving-propensity knob,
+*if* the existing configs don't already expose them.
+
 ## 1. First-principles grounding (why these objects and no others)
 
 Three closed economies, each already at its own internal equilibrium, "discover" each
@@ -399,7 +457,7 @@ mean-reverting to zero. If it drifts here, the machinery (not the economics) has
 | Friction | **proportional iceberg, uniform across pairs** | per-pair gravity at S3 |
 | Trade → session entry | **CES-over-origin inside each v18 session; export = mirror injection; energy→N→L order kept; flag-off byte-identical** | — |
 | Real rate: trade vs report | **decisions use per-good Armington relative price; reported REER = CPI-based; tradable/non-tradable gap reported separately** (BS/Dutch disease) | — |
-| Character (S2) | **minimal — vary productivity/TFP only first**; shared base config + per-economy override | multi-dim character later |
+| Character | **`CountryProfile` genesis overlay** (§0.6); v20.3 first divergence = **aging-rich vs young-developing** (demographic axis, minimal + sharpest) | richer archetypes as axes activate (S2/v21) |
 | Expectations | **static / backward-looking** (stale coupling) | forward-looking at capital layer |
 | Parallelism | **serial-first BSP shape** | process pool on profiling evidence |
 
@@ -419,7 +477,7 @@ v20** (§12).
 | **v20.0** | ①② tags + `World` container + BSP tick *skeleton* (empty barrier) + per-economy RNG | N economies run **uncoupled** | **N=1 ≡ closed dev, byte-identical**; N=2 uncoupled ≡ two independent dev runs. **Rides v19 — see S0 boundary.** |
 | **v20.1** | ③④ + ⑥/⑦ scaffolding: multi-currency, rate vector, numéraire normalization, `FXDealer`, BoP + valuation account, FX gauges — **trade OFF** | FX machinery live but **zero trade** | off ≡ v20.0; on ⇒ **rate flat, inventory 0, BoP trivially Σ=0** (machinery inert when it should be — isolation test) |
 | **v20.2** | ⑤ trade (Armington CES-over-origin session hook), completing ⑥/⑦ — **first real L2** | **N identical economies**, balanced intra-industry trade, rate gropes + inventory mean-reverts | off ≡ v20.1; on ⇒ **quiet baseline holds** (balanced, rates flat) + all four conservation gates green |
-| **v20.3** | divergence *experiment* (no new machinery): perturb one economy's TFP | specialization emerges; real-rate divergence; surplus/deficit; import competition on v18 N/L | findings + comparative portrait diagnostic; conservation gates still green |
+| **v20.3** | divergence *experiment* via `CountryProfile` (§0.6): **aging-rich vs young-developing** | specialization emerges; real-rate divergence; surplus/deficit; import competition on v18 N/L | findings + comparative portrait diagnostic; conservation gates still green |
 | **v20.4** | generalize to **N=3**: derived cross-rates, multilateral balance, vehicle-currency observation | 3 coupled economies; triangular consistency | cross-rate arbitrage-free (gate #4); multilateral Σ=0 |
 
 **v20.0–v20.2 are the load-bearing build** (foundation + first coupling); v20.3 is the
