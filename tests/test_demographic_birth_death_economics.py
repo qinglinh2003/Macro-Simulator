@@ -337,6 +337,9 @@ def test_insolvent_death_infers_creditor_bank_from_household_bank_mapping():
 
 
 def test_insolvent_death_repayment_does_not_consume_other_person_cash_claims():
+    # identity-consistent setup (the every-tick gate makes anything else unreachable):
+    # retained +40, cohabitant -10, dead +20 sums to the ledger's 50. The protection
+    # cap binds strictly: available = 50 - 40 = 10 < the deceased's 20 of cash.
     ledger = Ledger({"H0": 50.0, "BANK_0": 100.0})
     ledger.allow_negative("BANK_0")
     ledger.create_loan("H0", 60.0)
@@ -349,19 +352,24 @@ def test_insolvent_death_repayment_does_not_consume_other_person_cash_claims():
     )
     retained = _person(50, age=80)
     retained.alive = False
+    negative = _person(58, age=45)
     dead = _person(51, age=70)
     dead.alive = False
-    bridge.demographic_state = _DemographicStateStub(people=[retained, dead])
+    bridge.demographic_state = _DemographicStateStub(people=[retained, negative, dead])
     bridge.claims.add_person(retained.id, household_id=0, cash_claim=40.0)
-    bridge.claims.add_person(dead.id, household_id=0, cash_claim=50.0, debt_claim=60.0)
+    bridge.claims.add_person(negative.id, household_id=0, cash_claim=-10.0)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=20.0, debt_claim=60.0)
     bridge.assign_person_creditor_bank(dead.id, "BANK_0")
     event = DeathEvent(tick=9, date=date(2000, 1, 10), person_id=dead.id, age=70)
 
     bridge.on_death(event, dead)
 
+    # repay paid 10 (capped by the co-claimants' protected 40), the write-off ate the
+    # rest of the ledger loan, and the deceased's residual +10 passed to the heirs
     assert ledger.balance("H0") == pytest.approx(40.0)
     assert ledger.debt("H0") == pytest.approx(0.0)
-    assert bridge.claims.balance_sheet(retained.id).cash_claim == pytest.approx(40.0)
+    assert bridge.claims.balance_sheet(retained.id).cash_claim == pytest.approx(45.0)
+    assert bridge.claims.balance_sheet(negative.id).cash_claim == pytest.approx(-5.0)
     assert bridge.death_writeoff_flow == pytest.approx(50.0)
     bridge.assert_all_claim_identities(bridge.econ)
 
@@ -423,6 +431,37 @@ def test_insolvent_death_residual_asset_claims_move_to_household_claimants_befor
 
     assert bridge.claims.balance_sheet(retained.id).equity_claims["F1"] == pytest.approx(2.0)
     assert bridge.claims.balance_sheet(dead.id).equity_claims == {}
+    bridge.assert_all_claim_identities(bridge.econ)
+
+
+def test_insolvent_death_residual_positive_cash_claim_moves_to_household_claimants():
+    """The t550 full-stack crash shape: the deceased is claims-insolvent (debt claim
+    exceeds gross assets) yet still holds a POSITIVE cash claim after the repay caps
+    fire (here: no ledger loan backs the claim, so repay pays zero). The household
+    ledger cash never moves, so the claim must pass to the co-claimants -- clearing
+    it destroyed 0.83 of claims against unmoved money and tripped the identity gate."""
+    ledger = Ledger({"H0": 0.50, "BANK_0": 100.0})
+    ledger.allow_negative("BANK_0")
+    bridge = DemographicEconomicBridge(
+        claims=PersonClaimLedger(),
+        household_to_account={0: "H0"},
+        estates=EstateRegistry(),
+        econ=_EconStub(households=[_HouseholdStub("H0")], ledger=ledger, banks=[Bank(id="BANK_0")]),
+    )
+    retained = _person(56, age=40)
+    dead = _person(57, age=70)
+    dead.alive = False
+    bridge.demographic_state = _DemographicStateStub(people=[retained, dead])
+    bridge.claims.add_person(retained.id, household_id=0, cash_claim=-0.33)
+    bridge.claims.add_person(dead.id, household_id=0, cash_claim=0.83, debt_claim=1.0)
+    bridge.assign_person_creditor_bank(dead.id, "BANK_0")
+    event = DeathEvent(tick=12, date=date(2000, 1, 13), person_id=dead.id, age=70)
+
+    bridge.on_death(event, dead)
+
+    assert ledger.balance("H0") == pytest.approx(0.50)
+    assert bridge.claims.balance_sheet(retained.id).cash_claim == pytest.approx(0.50)
+    assert bridge.claims.balance_sheet(dead.id).cash_claim == pytest.approx(0.0)
     bridge.assert_all_claim_identities(bridge.econ)
 
 
