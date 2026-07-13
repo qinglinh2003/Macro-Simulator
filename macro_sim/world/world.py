@@ -15,6 +15,7 @@ from typing import List
 from macro_sim.config import Config
 from macro_sim.economy import Economy
 from macro_sim.world.fx import FXDealer, RateVector
+from macro_sim.world.trade import prepare_trade, settle_trade
 
 # Per-economy seeds must be far-spaced: each `Economy` derives many substreams as
 # `cfg.seed + <offset>` with offsets up to ~90007 and some only 1 apart (e.g. 13000,
@@ -45,7 +46,10 @@ class World:
         *,
         base_seed: int | None = None,
         couple: bool = False,
-        fx_lambda: float = 0.0,
+        trade: bool = False,
+        fx_lambda: float = 0.05,
+        fx_friction: float = 0.03,
+        fx_trade_cap: float = 0.15,
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -66,12 +70,17 @@ class World:
         # v20.1 FX layer. couple=False ⇒ no FX objects, no dealer accounts ⇒ the World is
         # exactly v20.0 (bit-identical). couple=True installs the rate vector + the dealer
         # (one account per economy); with zero trade it is INERT (rates flat, inventory 0).
-        self.couple = couple
+        self.couple = couple or trade          # trade implies the FX layer
+        self.trade = trade
         self.fx_lambda = fx_lambda
+        self.fx_friction = fx_friction
+        self.fx_trade_cap = fx_trade_cap
         self.rates: RateVector | None = None
         self.dealer: FXDealer | None = None
         self.world_records: List[dict] = []
-        if couple:
+        self._prev_import_value: List[float] = [0.0] * self.n   # curr_i, stale coupling
+        self._last_export_value: List[float] = [0.0] * self.n   # curr_i, export financing
+        if self.couple:
             self.rates = RateVector(self.n)
             self.dealer = FXDealer(self.economies)
 
@@ -95,27 +104,33 @@ class World:
         """
         if not self.couple:
             return
-        signal = self.dealer.inventory()                      # zero at v20.1 (no flows yet)
-        self.rates.grope(signal, self.fx_lambda)
+        if self.trade:
+            prepare_trade(self)               # set each economy's import offer + export order
+        # (v20.1 with couple-only and no trade: nothing to set; groping happens in settle.)
 
     def _dealer_update(self, recs: List[dict]) -> None:
-        """Book the dealer's revaluation and record the World FX gauges (§6/§7).
+        """Settle realized trade, grope the rate on the dealer's net inventory, book the
+        revaluation, and record the World FX gauges (§6/§7).
 
-        v20.1: no trade ⇒ inventory 0, rates flat ⇒ every gauge is trivially zero/unit.
+        v20.1 (couple, no trade): inventory 0, rates flat ⇒ every gauge trivially zero/unit.
         """
         if not self.couple:
             return
+        if self.trade:
+            settle_trade(self)                # read imports, update stale state, grope rate
         self.dealer.book_revaluation(self.rates)
         inv = self.dealer.inventory()
         e = self.rates.e
-        # Multilateral BoP in the numéraire = the dealer's net worth (Σ inventory_i / e_i);
-        # ≡ 0 to float tolerance when trade is balanced / absent (gate #2, §6).
+        # Per-economy trade balance in the numéraire; multilateral Σ ≡ 0 by construction
+        # (one economy's export is another's import). The dealer's net worth is the same
+        # aggregate seen as a stock (gate #2, §6).
         bop_numeraire = self.dealer.net_worth_numeraire(self.rates)
         self.world_records.append(
             {
                 "t": self.t,
                 "e": list(e),
                 "dealer_inventory": list(inv),
+                "import_value": list(self._prev_import_value),
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
             }

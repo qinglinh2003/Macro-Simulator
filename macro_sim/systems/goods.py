@@ -113,13 +113,35 @@ def run_goods_phase(econ: Any) -> None:
 
     # Sellers are the consumption sector only (K-firms sell in Phase 3.5).
     offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.c_firms]
+    _inject_foreign_trade(econ, orders, offers)   # v20.2 open economy; no-op off ⇒ bit-identical
     trades = execute_market(orders, offers, protocol=econ.protocol, rng=econ.rng, ledger=econ.ledger)
     for off in offers:
         f: Firm = off.ref
+        if f is None:                        # v20.2: the foreign import offer (seller=dealer), not a domestic firm
+            continue
         f.inventory = off.stock              # decremented live during trading
         f.sales = off.sold                   # household purchases (government buys separately below)
         f.revenue = off.sold * off.price     # price fixed within the tick
     _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total)
+
+
+def _inject_foreign_trade(econ: Any, orders: List, offers: List) -> None:
+    """v20.2 open economy: add the FX dealer's cross-border offer/order into the domestic
+    goods session (PLAN_v20 §4). The World sets these on the economy in the coupling
+    barrier (last-tick foreign price × rate × (1+friction)); absent ⇒ closed economy ⇒
+    bit-identical. Money routes through the dealer via the real matching engine, so each
+    economy's ledger conserves by construction:
+      * import offer  — seller = DEALER: households buy foreign goods, paying the dealer
+        in domestic currency (dealer's inventory rises; import competition vs domestic firms);
+      * export order  — buyer = DEALER: the dealer buys domestic goods for foreign buyers,
+        paying domestic firms in domestic currency (dealer's inventory falls; goods ship out).
+    """
+    off = getattr(econ, "_fx_import_offer", None)
+    if off is not None and off.stock > EPS and off.price > EPS:
+        offers.append(off)
+    order = getattr(econ, "_fx_export_order", None)
+    if order is not None and order.budget > EPS:
+        orders.append(order)
 
 
 def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_budget_total: float) -> None:
