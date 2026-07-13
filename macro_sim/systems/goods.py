@@ -22,24 +22,35 @@ def _necessity_need_for(econ: Any, h: Any) -> float:
     return per_unit * bridge.household_profile(h.id).need_units
 
 
+def _vat_rates(econ: Any, tc: float):
+    """v18.3 per-sector VAT rates. None (default) ⇒ fall back to the uniform τ_c ⇒
+    bit-identical to the pre-18.3 path."""
+    pol = getattr(econ, "policy", None)
+    tn = getattr(pol, "tax_necessity_rate", None)
+    tl = getattr(pol, "tax_luxury_rate", None)
+    return (tn if tn is not None else tc), (tl if tl is not None else tc)
+
+
 def _run_split_sessions(econ: Any, tc: float):
     """v18.1: the two-session household goods market. NECESSITY first (quantity-targeted
     at the household's necessity need, over n_firms), then LUXURY (the residual budget,
     demand=inf, over l_firms). Returns (trades, hh_budget_total). Necessity SHARE falls
-    with income because the necessity quantity is fixed — Engel's law emerges here."""
+    with income because the necessity quantity is fixed — Engel's law emerges here.
+    v18.3: each session reserves its own VAT (τ_N on necessities, τ_L on luxuries); with
+    both = τ_c this is bit-identical to the uniform path."""
     led = econ.ledger
-    budget_goods: Dict[str, float] = {}       # h.id -> A4-capped goods budget (÷(1+tc))
+    tc_N, tc_L = _vat_rates(econ, tc)
+    deposits: Dict[str, float] = {}           # h.id -> A4-capped deposits available for goods
     nec_orders: List[BuyOrder] = []
     for h in econ.households:
-        budget = min(h.consumption_budget, led.balance(h.id))
-        if budget <= EPS:
+        dep = min(h.consumption_budget, led.balance(h.id))
+        if dep <= EPS:
             continue
-        bg = budget / (1.0 + tc)
-        budget_goods[h.id] = bg
+        deposits[h.id] = dep
         need = _necessity_need_for(econ, h)
         if need > EPS:
-            nec_orders.append(BuyOrder(account=h.id, demand=need, budget=bg, ref=h))
-    hh_budget_total = sum(budget_goods.values())
+            nec_orders.append(BuyOrder(account=h.id, demand=need, budget=dep / (1.0 + tc_N), ref=h))
+    hh_budget_total = sum(dep / (1.0 + tc) for dep in deposits.values())   # unsat gauge (uniform ref)
 
     n_offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.n_firms]
     nec_trades = execute_market(nec_orders, n_offers, protocol=econ.protocol, rng=econ.rng, ledger=led)
@@ -52,12 +63,13 @@ def _run_split_sessions(econ: Any, tc: float):
     for tr in nec_trades:
         nec_spent[tr.buyer] = nec_spent.get(tr.buyer, 0.0) + tr.value
 
-    # LUXURY: whatever budget the necessity session did not absorb (either the household
-    # capped its necessity at `need` and has money left, OR necessities stocked out and
-    # the unspent budget carries over here).
+    # LUXURY: the deposits left after the necessity outlay (goods value + its VAT),
+    # de-VAT'd at the luxury rate.
     lux_orders: List[BuyOrder] = []
     for h in econ.households:
-        resid = budget_goods.get(h.id, 0.0) - nec_spent.get(h.id, 0.0)
+        dep = deposits.get(h.id, 0.0)
+        nec_outlay = nec_spent.get(h.id, 0.0) * (1.0 + tc_N)
+        resid = (dep - nec_outlay) / (1.0 + tc_L)
         if resid > EPS:
             lux_orders.append(BuyOrder(account=h.id, demand=float("inf"), budget=resid, ref=h))
     l_offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.l_firms]
@@ -129,9 +141,17 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_
     econ._gov_consumption = spent_by.get(econ._fiscal, 0.0)      # government's realised real purchases
 
     # v9 VAT: households remit consumption tax on realised goods spending to GOV (reserved above, cash-capped).
-    if tc > 0.0:
+    # v18.3: with the split on, necessities and luxuries carry their own rates (τ_N, τ_L);
+    # with both = τ_c this reduces to the uniform remit (bit-identical).
+    strata = getattr(econ.cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
+    tc_N, tc_L = _vat_rates(econ, tc) if strata else (tc, tc)
+    if tc > 0.0 or (strata and (tc_N > 0.0 or tc_L > 0.0)):
         for h in econ.households:
-            vat = min(h.spent * tc, econ.ledger.balance(h.id))
+            if strata:
+                due = h.necessity_spent * tc_N + max(0.0, h.spent - h.necessity_spent) * tc_L
+            else:
+                due = h.spent * tc
+            vat = min(due, econ.ledger.balance(h.id))
             if vat > EPS:
                 econ.ledger.transfer(h.id, econ._fiscal, vat)
                 if bridge is not None:

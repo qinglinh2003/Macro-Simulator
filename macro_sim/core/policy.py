@@ -28,6 +28,12 @@ class Policy:
     tax_income_rate: float = 0.0         # τ_y on household labour+dividend income
     income_allowance: float = 0.0        # a_x: personal allowance as a fraction of mean income (progressivity)
     tax_consumption_rate: float = 0.0    # τ_c: VAT on goods purchases
+    # v18.3 differential VAT (live levers; None ⇒ fall back to τ_c ⇒ bit-identical). Only
+    # bind when the consumption split is on. Zero-rating necessities (tax_necessity_rate=0
+    # while τ_c>0) is the classic progressive instrument -- the §34 reprise on the
+    # consumption side.
+    tax_necessity_rate: "float | None" = None
+    tax_luxury_rate: "float | None" = None
     tax_wealth_rate: float = 0.0         # τ_w on household net worth (the stock)
     wealth_allowance: float = 0.0        # progressive wealth-tax exemption as a multiple of mean net worth
     tax_energy_rate: float = 0.0         # v17.0: excise on energy purchases (VAT grammar; inert at 0)

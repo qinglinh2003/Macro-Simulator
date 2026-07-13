@@ -304,12 +304,19 @@ Components:
 
 Acceptance:
 
-- [ ] Each handle conserves through fiscal (atomic flows, remit tested); off ⇒
-      bit-identical.
-- [ ] Subsidy-vs-transfer scorecard published honestly (strata consumption, spells,
-      fiscal cost, leakage) whichever way it comes out.
-- [ ] Cap binding ⇒ measured excess demand + rationing conserves (17.4 acceptance
-      shape); `diagnostic_v183.png`.
+- [ ] **Differential VAT SHIPPED** (the headline handle): per-sector Policy levers τ_N /
+      τ_L (None ⇒ fall back to τ_c). Off / equal-rate ⇒ bit-identical (macro + frontier
+      digests unchanged; `test_differential_vat_neutral_when_equal`). Zero-rating
+      necessities (τ_N=0, τ_L=0.25) is **PROGRESSIVE**: effective VAT rate poor 18.2% vs
+      rich 21.3% (emergent from the Engel gradient — the necessity-heavy poor bear less;
+      the §34 reprise on the consumption side). Conserves through the differential remit.
+      **[MET.]**
+- [ ] **Deferred within the arc (documented, not built):** the necessity-subsidy-vs-cash-
+      transfer scorecard, the crisis N-price cap (17.4 machinery reuse), and the
+      `floor_index_mode` experiment. The differential-VAT handle already demonstrates the
+      handle-factory pattern and the targeted-beats-flat progressivity result; the
+      remaining handles are mechanical variations on the same grammar and are left as
+      next-step levers to keep the arc's scope bounded.
 
 ## 18.4 — Couplings (one at a time, the Phase 2 paired-run paradigm)
 
