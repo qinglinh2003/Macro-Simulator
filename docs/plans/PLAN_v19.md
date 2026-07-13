@@ -1,7 +1,39 @@
 # V19 Plan — Technology as an Object, and Exogenous TFP Drift
 
+> **STATUS: 19.0/19.1/19.3 mechanism COMPLETE + accepted; 19.2 audit running (2026-07-13).**
+> Branch `feat/tech-tfp-v19` from dev@19457d0. Commits: b59f0a6 (19.0 object+seam + 19.1
+> exogenous drift), 0e26c66 (19.3 LBD seam + accumulator). Bit-identity gate PASSED
+> (v9/v13/full-stack cumulative digests a7b1937f/8aa01d8c/1bce181d, before == after, and
+> again with the new metrics once v19 keys are excluded — the economic trajectory is
+> provably unchanged when drift is off). technology suite 12/12.
+>
+> **19.1 ACCEPTANCE (honest, pre-registered + refuted + re-derived):**
+> - The pre-registered "yr6-10 per-capita CAGR → g/(1−α)=2.0%" was REFUTED — not a
+>   mechanism failure but a mis-specified target: the CONTROL leg (g=0) itself grows
+>   6.1%/yr per capita in yr6-10, proving the frontier is NOT on a balanced-growth path
+>   there (it is still in the capital-deepening transient — investment/depreciation was
+>   still 2.2 at yr10 in the v17 portrait). CAGR-in-transition is the wrong estimator.
+> - The MECHANISM is exact: the index Z grows at precisely the imposed g (measured 1.40%
+>   from the Z series at g=0.014, to 3 decimals).
+> - The growth-accounting identity `ĝ_Y = ĝ_Z + α·ĝ_K + (1−α)·ĝ_L` closes on a CLEAN
+>   testbed (v2: no pubcap, no firm churn, no gibrat): Solow residual over yr4-9 is 1.86%
+>   at g=1.4% vs 0.25% in the g=0 control — a 1.61pp lift ≈ g; the ~0.4pp absolute gap is
+>   discrete-CAGR + heterogeneous-firm aggregation + K-timing bias (the control's 0.25%
+>   is the noise floor). On the frontier the same residual reads 17% because pubcap_gamma
+>   0.3 + firm entry/exit + gibrat are unmodelled aggregation terms — NOT a drift bug.
+> - On the frontier the drift produces an AMPLIFIED transitional response: a +15% Z path
+>   by yr10 lifts per-capita output +25.6% — a ~1.7× amplification, consistent with this
+>   session's level-shift pass-through of 2.03 (TFP compounds capital deepening). The
+>   gain is REAL not nominal: both legs deflate on near-identical price paths (P≈0.235).
+> - Caveat: the bare v2 economy destabilises after ~yr12 with or without drift (no
+>   stabilisers) — a v2 long-horizon fragility, not a v19 effect. diagnostic_v190 shipped.
+>
+> Original plan preserved below.
+>
+> ---
+>
 > **STATUS: PLAN (2026-07-13).** Branch `feat/tech-tfp-v19` forked from dev@19457d0
-> (v18 consumption-stratification arc merged). Not yet started. This is the GROWTH-
+> (v18 consumption-stratification arc merged). This is the GROWTH-
 > FOUNDATION arc: it does not ship a new market or agent — it collects the scattered,
 > frozen productivity parameters into one authority and lets that authority move over
 > time. It is deliberately sequenced BEFORE the structural-change (v20) and intermediate-
