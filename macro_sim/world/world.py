@@ -17,7 +17,7 @@ from macro_sim.economy import Economy
 from macro_sim.world.capital import capital_interest
 from macro_sim.world.fx import FXDealer, RateVector
 from macro_sim.world.migration import run_migration
-from macro_sim.world.trade import prepare_trade, settle_trade
+from macro_sim.world.trade import grope_rates, prepare_trade, settle_trade
 
 # Per-economy seeds must be far-spaced: each `Economy` derives many substreams as
 # `cfg.seed + <offset>` with offsets up to ~90007 and some only 1 apart (e.g. 13000,
@@ -146,7 +146,14 @@ class World:
     # One BSP tick: coupling barrier -> independent domestic step -> dealer
     # ======================================================================
     def step(self) -> List[dict]:
-        self._coupling_barrier()                              # thin central barrier
+        self._coupling_barrier()                              # thin central barrier (moves no money)
+        if self.couple:
+            # Snapshot the dealer's position + rates BEFORE any cross-border money moves.
+            # The IMPORT leg settles inside the domestic step (households pay the dealer in
+            # the goods session), so the snapshot must precede it — else the flow gate would
+            # see only the export leg.
+            self._inv0 = self.dealer.inventory()
+            self._e0 = self.rates.e
         recs = [econ.step() for econ in self.economies]       # INDEPENDENT domestic step
         self._dealer_update(recs)                             # dealer inventory update
         self.t += 1
@@ -174,13 +181,21 @@ class World:
         """
         if not self.couple:
             return
+        inv0, e0 = self._inv0, self._e0   # snapshotted in step(), before the domestic step
+
         if self.trade:
-            settle_trade(self)                # read imports, update stale state, grope rate
+            settle_trade(self)                # imports/exports/tariff flows (no groping)
         if self.capital:
             capital_interest(self)            # v21: factor income on cross-border positions
         if self.migration:
             run_migration(self)               # v22: labor flow + remittances
-        self.dealer.book_revaluation(self.rates)
+
+        # HARD GATE (pre-grope, so no revaluation contaminates it): the dealer is a
+        # passthrough ⇒ its numéraire FLOW ≡ 0 — the multilateral BoP identity.
+        self.dealer.assert_flow_is_passthrough(inv0, e0)
+        grope_rates(self)                     # NOW move the rates (every flow has settled)
+        self.dealer.book_revaluation(e0, self.rates)   # the only source of net-worth change
+
         inv = self.dealer.inventory()
         e = self.rates.e
         bop_numeraire = self.dealer.net_worth_numeraire(self.rates)
