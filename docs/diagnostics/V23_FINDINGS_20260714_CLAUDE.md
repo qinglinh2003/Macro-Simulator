@@ -89,6 +89,33 @@ This explains, in one stroke:
   deflation engine". The CB was reacting to a deflation the COST SIDE manufactured. It was
   an amplifier, not the cause.
 
+### 2.1 The v19 nominal-anchor audit, RE-RUN on the fixed foundation — its headline is REFUTED
+
+v19 audited the CB regimes and concluded: **"the active Taylor CB is the deflation engine —
+switching it off leaves prices near-stable"** (frozen +0.17%/yr, headline Taylor -4.62%, core
+-7.26%, none at pi*). That was measured on the broken clock. Re-run identically with the clock
+fixed and the second contract on (3 seeds, 2191 ticks, mature segment, pi* = 1.97%/yr):
+
+| regime | mature inflation | v19 (broken clock) | real GDP | unemployment | JG share |
+|---|---|---|---|---|---|
+| frozen (no CB) | **+0.81%** | +0.17% | 506.3 | **13.8%** | **13.5%** |
+| Taylor on the fixed-basket CPI | **+4.68%** | — | **529.6** | **11.0%** | **10.6%** |
+| Taylor on the legacy index (v19's arm) | **+3.84%** | **-4.62%** | **533.5** | **10.4%** | **10.3%** |
+
+**Three corrections:**
+
+1. **The CB no longer deflates — the sign flipped.** The very same rule and regime goes from
+   -4.62% to **+3.84%**. Nothing about the central bank changed; only the FOUNDATION did.
+2. **The CB is a STABILISER, not a destroyer.** Switching it off costs 5% of output, and adds
+   ~3.4pp of unemployment and ~3.2pp of job-guarantee dependence. It is doing its job.
+3. **The real defect is an OVERSHOOT, not a deflation.** No regime hits pi*: frozen undershoots
+   (+0.81%), every active CB overshoots (+3.8..4.7%). "There is no nominal anchor" SURVIVES —
+   but with the opposite sign.
+
+**The v19 headline was an artefact.** The CB was chasing a deflation the capital-clock bug had
+MANUFACTURED (capital was economically absent, so the pricing rule never charged for it), easing
+into it, and then being blamed for the very deflation it was pursuing. It was the scapegoat.
+
 ---
 
 ## 3. Second finding: dust jobs (a crash)
