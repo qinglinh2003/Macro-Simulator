@@ -17,6 +17,31 @@
 > migrant stock a wage-driven gauge; the REAL labor-force reallocation (v22.2 — actually
 > shrinking the origin's workforce / growing the host's, driving wage convergence) touches
 > each economy's labor internals and is the deeper, still-open lift.
+>
+> ### Findings forced by the accounting fix (the identity audit paid for itself)
+>
+> Making factor income a REAL money flow and the peg's reserves a REAL account broke two
+> migration tests — and the breakage exposed that the ORIGINAL demo rested on a false premise:
+>
+> 1. **The "poor vs rich" pair was a fiction.** It was built on a productivity gap
+>    (`a`=0.7 vs 1.3), but this model is **DEMAND-CONSTRAINED**: doubling `a` moved neither
+>    output (206 vs 202) nor nominal wages (1.317 vs 1.327) nor employment (both full) — the
+>    same demand simply needs fewer workers. **There was no wage gap at all**, so the
+>    migration direction was decided by noise and flipped whenever anything perturbed it.
+>    (This is v20 finding #2 resurfacing, and it also means the v20.3 `CountryProfile`
+>    productivity axis is largely inert — the wage/price anchors are the live lever.)
+> 2. **Two mechanism bugs the fiction had hidden:**
+>    (a) migration keyed off the INSTANTANEOUS real wage, so on a noisy series BOTH economies
+>    momentarily out-earned each other and each started "sending" people — now smoothed (an
+>    EMA: nobody emigrates on a one-tick flicker);
+>    (b) it used wage/own-price-index, but **remittances raise the origin's price level**,
+>    depressing its measured real wage and pulling in MORE migrants — a perverse loop that a
+>    quota (cutting remittances) would flip outright. Now it uses the **migrant's actual
+>    calculus**: the foreign wage converted home at the exchange rate vs the home wage.
+>
+> With a genuine WAGE gap (via `w_firm0`/`p_firm0`: realized wages 0.92 vs 1.80) the flow is
+> one-directional and robust across every policy: open ⇒ 50 migrants, quota 3% ⇒ exactly 6,
+> remittance tax ⇒ unchanged (it does not alter the migration incentive).
 
 ## 0. What crosses now: people
 

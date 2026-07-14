@@ -30,19 +30,35 @@ def _wage(econ) -> float:
 def run_migration(world) -> None:
     econs = world.economies
     n = world.n
-    rw = [_real_wage(e) for e in econs]
+    # The MIGRANT'S CALCULUS: what I would earn abroad, converted home at the exchange rate,
+    # versus what I earn at home. Deliberately NOT wage/own-price-index: remittances raise the
+    # ORIGIN's price level, which would depress its measured "real wage" and pull in yet more
+    # migrants — a perverse self-reinforcing loop that, once a quota cuts the remittances,
+    # flips the flow's direction outright. The nominal wage at the rate is what a migrant who
+    # remits home actually faces.
+    #
+    # And it is SMOOTHED: nobody emigrates on a one-tick wage flicker. On the raw series both
+    # economies momentarily out-earn each other and each starts "sending" people — nonsense.
+    # Migration responds to a PERSISTENT gap.
+    raw = [_wage(e) for e in econs]
+    if world._rw_ema is None:
+        world._rw_ema = list(raw)
+    a = world.wage_smoothing
+    world._rw_ema = [a * raw[i] + (1.0 - a) * world._rw_ema[i] for i in range(n)]
+    w_ema = world._rw_ema
 
-    # 1. each origin's desired stock, driven by the real-wage pull toward its best host,
+    # 1. each origin's desired stock, driven by the wage pull toward its best host,
     #    capped by its own emigration ceiling (a structural friction).
     host_of = [-1] * n
     for i in range(n):
         # POLICY: sanctioned partners are not migration destinations (no bilateral flow).
         candidates = [j for j in range(n) if j != i and not world.sanctioned(i, j)]
-        host = max(candidates, key=lambda j: rw[j], default=None)
-        if host is None:
+        if not candidates:
             continue
+        home_value = {j: w_ema[j] * world.rates.bilateral(i, j) for j in candidates}
+        host = max(candidates, key=lambda j: home_value[j])
         host_of[i] = host
-        gap = (rw[host] - rw[i]) / max(1e-9, rw[i])
+        gap = (home_value[host] - w_ema[i]) / max(1e-9, w_ema[i])
         pop = len(econs[i].households)
         own_cap = world.migration_max_share * pop
         # POLICY: an EMIGRATION cap — the origin restricts its own people from leaving.

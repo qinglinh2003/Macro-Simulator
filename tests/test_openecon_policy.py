@@ -107,9 +107,13 @@ def test_export_tax_raises_revenue():
 # -- migration policy: exit control, host remittance tax, guest workers --------
 
 def _mig(**kw):
-    poor = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=0.7)
-    rich = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=1.3)
-    w = World([poor, rich], base_seed=9, trade=True, capital=True, migration=True,
+    # The gap must be in WAGES, not productivity: this model is demand-constrained, so `a`
+    # moves neither output nor wages and would give no wage gap for migration to respond to.
+    lo = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
+                     w_firm0=0.7, p_firm0=0.85)
+    hi = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
+                     w_firm0=1.4, p_firm0=1.7)
+    w = World([lo, hi], base_seed=9, trade=True, capital=True, migration=True,
               capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2, **kw)
     w.run()
     return w
