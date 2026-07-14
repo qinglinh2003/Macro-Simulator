@@ -16,6 +16,7 @@ Degenerate-case guards are explicit and surfaced (spec §8.1), never silent.
 
 from __future__ import annotations
 
+import math
 import random
 
 from macro_sim.domain.agents import Firm, Household
@@ -98,7 +99,58 @@ def labor_demand_notional(firm: Firm, y_target: float, pubcap_factor: float = 1.
     return (yt / (firm.A * firm.capital ** firm.alpha)) ** (1.0 / (1.0 - firm.alpha))
 
 
-def unit_cost(firm: Firm) -> float:
+def capital_service_cost(
+    firm: Firm,
+    *,
+    replacement_price: float,
+    opportunity_rate: float,
+) -> float:
+    """Nominal per-tick service cost of the opening productive-capital stock.
+
+    ``firm.capital`` is a physical stock, while ``replacement_price`` is money
+    per unit of capital goods.  Depreciation and the marginal financing/opportunity
+    rate are both per tick, so their product has units of money per tick.  We do
+    not subtract contemporaneous CPI inflation: the relevant expectation would be
+    *capital-goods* price inflation, for which the model does not yet have a
+    committed lagged expectation.  This is therefore the explicit zero-expected-
+    capital-gain user-cost convention.
+    """
+    values = (replacement_price, opportunity_rate, firm.capital, firm.delta_K)
+    if not all(math.isfinite(float(value)) for value in values):
+        raise ValueError("capital-service inputs must be finite")
+    capital_value = max(0.0, float(replacement_price)) * max(0.0, float(firm.capital))
+    service_rate = max(0.0, float(firm.delta_K)) + max(0.0, float(opportunity_rate))
+    return capital_value * service_rate
+
+
+def capital_service_unit_cost(
+    firm: Firm,
+    *,
+    replacement_price: float,
+    opportunity_rate: float,
+) -> float:
+    """Allocate nominal capital service over planned physical output.
+
+    A zero-output plan has no units over which a unit cost can honestly be
+    allocated.  Returning zero keeps the quote finite and leaves the existing
+    zero-plan fallback in charge; the fixed service cost remains observable in
+    ``capital_service_cost`` rather than being hidden behind an EPS divisor.
+    """
+    if firm.production_target <= EPS:
+        return 0.0
+    return capital_service_cost(
+        firm,
+        replacement_price=replacement_price,
+        opportunity_rate=opportunity_rate,
+    ) / float(firm.production_target)
+
+
+def unit_cost(
+    firm: Firm,
+    capital_unit_cost: float = 0.0,
+    *,
+    productivity_adjusted: bool = True,
+) -> float:
     """Unit cost for the B3 markup. Base = unit LABOR cost (vintages explicit, PLAN_v2
     §1.5): Cobb-Douglas uc_labor = w N^d / y* (planned avg labor cost); linear = w/a.
 
@@ -112,15 +164,26 @@ def unit_cost(firm: Firm) -> float:
     -> insolvency -> death), which works even at m=1. The surprise (§14): this de-concentrates
     ONLY at LOW transparency; under m>=2 winner-take-all the leader is merely rotated, not
     thinned, so concentration persists. With dis_slope=0 (v1-v4) uc is unchanged."""
-    if firm.tech == "linear":
+    y = firm.production_target
+    if y > EPS and (productivity_adjusted or firm.tech != "linear"):
+        # ``labor_demand_notional`` already reflects the composite TFP/public-capital
+        # output factor.  Pricing the planned wage bill over planned output therefore
+        # passes linear-sector productivity gains into unit cost instead of leaving
+        # them as a pure profit windfall.
+        base = firm.wage * firm.labor_demand_notional / y
+    elif firm.tech == "linear":
         base = firm.wage / firm.a
     else:
         assert firm.capital > 0.0, "Cobb-Douglas firm needs K>0 (§8.1 guard)"
-        y = firm.production_target
-        base = (firm.wage * firm.labor_demand_notional / y) if y > EPS \
-            else firm.wage / (firm.A * firm.capital ** firm.alpha)   # y*≈0 fallback (uc at N=1)
+        base = firm.wage / (firm.A * firm.capital ** firm.alpha)   # y*≈0 fallback (uc at N=1)
     base += firm.energy_intensity * firm.energy_avg_cost   # v17.0: Leontief energy cost/unit (0 when off)
-    return base * (1.0 + firm.dis_slope * firm.production_target)
+    scaled_variable_cost = base * (1.0 + firm.dis_slope * firm.production_target)
+    if capital_unit_cost > 0.0:
+        # Long-run price recovery only.  Accounting separately recognizes
+        # replacement-cost depreciation and realized cash interest; this term
+        # never posts a ledger transfer or a second P&L expense.
+        return scaled_variable_cost + capital_unit_cost
+    return scaled_variable_cost
 
 
 # -- target inventory & production (B-plan) -------------------------------------
@@ -143,7 +206,8 @@ def plan_production(firm: Firm, gap_close: float = 1.0) -> None:
 # -- B4: wages (raise on shortage, never cut; DNWR floor automatic) --------------
 
 def plan_wage(firm: Firm, rng: random.Random, theta_wage: float,
-              min_wage: float = 0.0, delta: float = 0.0) -> None:
+              min_wage: float = 0.0, delta: float = 0.0,
+              expected_inflation: float = 0.0, wage_indexation: float = 0.0) -> None:
     """Wage offer w_{f,t} (§7.2).
 
     Target rises only if the firm was labor-rationed last tick
@@ -158,18 +222,41 @@ def plan_wage(firm: Firm, rng: random.Random, theta_wage: float,
 
     tick-0 cold start: labor_demand_eff_prev and hired_prev are both 0 (agents.py),
     so "rationed" is False on the first tick -> no first-tick raise (§8.1, point 3).
+
+    v23 WAGE INDEXATION. Until now this rule was PURELY a labour-market tightness rule --
+    prices appear nowhere in it -- so the nominal wage was anchored to nothing and the REAL
+    wage was a free-floating residual. That was survivable only while the model deflated:
+
+      * `delta` (the downward drift) was added in v13 to stop a DEFLATION from ratcheting the
+        real wage up without bound. But that deflation was itself an ARTEFACT of the capital
+        clock bug: capital was economically absent, so the pricing rule never charged for it.
+      * With the clock fixed prices RISE, and with the second contract labour is well supplied,
+        so firms hire freely and the `delta` drift fires constantly -- driving NOMINAL wages
+        DOWN through an inflation. Measured (baseline_s1): wage inflation -0.5%/yr against
+        price inflation +7.4%/yr, with the real wage collapsing 0.954 -> 0.792 (-17%), which is
+        what pushes households under the subsistence basket.
+
+    A patch built for a bug became a defect once the bug was fixed. Real wage-setting indexes to
+    prices (explicitly, or through bargaining). With `wage_indexation` > 0 the tightness terms
+    apply to the REAL wage and expected inflation is the nominal baseline:
+
+        w_target = w * (1 + indexation * pi_e (+ omega if rationed | - delta if hiring freely))
+
+    `expected_inflation` is COMMITTED observation state -- the same lag/EMA the monetary
+    transmission reads, never this tick's price. wage_indexation=0 => bit-identical.
     """
+    drift = wage_indexation * float(expected_inflation)
     was_rationed = firm.hired_prev < firm.labor_demand_eff_prev - EPS
     if was_rationed:
-        w_target = firm.wage * (1.0 + firm.omega)
+        w_target = firm.wage * (1.0 + drift + firm.omega)
     elif delta > 0.0 and firm.labor_demand_eff_prev > EPS:
         # v13 downward wage flexibility: a firm that hired freely last tick lets its wage
         # target drift down by delta. delta=0 keeps the strict-DNWR v12 behavior bit-identical.
-        # Without this, a deflation ratchets the real wage up without bound (the ZLB smoke run
-        # settled at real wage 4.5x and a 59% job-guarantee share).
-        w_target = firm.wage * (1.0 - delta)
+        # Under indexation the cut is in REAL terms: it can no longer drive the NOMINAL wage
+        # down while prices are rising.
+        w_target = firm.wage * (1.0 + drift - delta)
     else:
-        w_target = firm.wage
+        w_target = firm.wage * (1.0 + drift)
     if rng.random() < theta_wage:
         firm.wage = w_target
     # else: posted wage sticks at w_{f,t-1} (already in firm.wage)
@@ -180,7 +267,14 @@ def plan_wage(firm: Firm, rng: random.Random, theta_wage: float,
 
 # -- B3: cost-plus pricing with Calvo stickiness --------------------------------
 
-def plan_price(firm: Firm, rng: random.Random, theta_price: float) -> None:
+def plan_price(
+    firm: Firm,
+    rng: random.Random,
+    theta_price: float,
+    capital_unit_cost: float = 0.0,
+    *,
+    productivity_adjusted: bool = True,
+) -> None:
     """Posted price p_{f,t} (§7.2, B3). MUST run after plan_wage (uc reads firm.wage)
     and after labor_demand_notional is set (Cobb-Douglas uc needs N^d).
 
@@ -194,7 +288,11 @@ def plan_price(firm: Firm, rng: random.Random, theta_price: float) -> None:
     s = _sign(firm.target_inventory_prev - firm.inventory)
     firm.markup = min(firm.mu_max, max(firm.mu_min, firm.markup + firm.eta * s))
 
-    p_target = (1.0 + firm.markup) * unit_cost(firm)
+    p_target = (1.0 + firm.markup) * unit_cost(
+        firm,
+        capital_unit_cost,
+        productivity_adjusted=productivity_adjusted,
+    )
     if rng.random() < theta_price:
         firm.price = p_target
     # else: posted price sticks at p_{f,t-1}
@@ -203,8 +301,62 @@ def plan_price(firm: Firm, rng: random.Random, theta_price: float) -> None:
 
 # -- B5: investment via the accelerator (v2, consumption firms only) -------------
 
-def plan_investment(firm: Firm, lambda_q: float = 0.0,
-                    q_floor: float = 0.5, q_cap: float = 2.0) -> None:
+def investment_user_cost_multiplier(
+    *,
+    nominal_loan_rate: float,
+    expected_inflation: float,
+    neutral_nominal_rate: float,
+    inflation_target: float,
+    depreciation: float,
+    elasticity: float,
+    multiplier_min: float,
+    multiplier_max: float,
+    user_cost_floor: float,
+) -> float:
+    """Return a bounded investment response to the expected real user cost.
+
+    All rates are per tick.  The current cost is ``r_loan - pi_expected + delta``;
+    its neutral benchmark is ``r_neutral_loan - pi_target + delta``.  Nominal rates
+    respect the ZLB, while a positive cost floor makes negative-real-rate states
+    finite.  The multiplier is a constant-elasticity response to their ratio and is
+    clipped explicitly, so an inflation spike cannot make desired capital diverge.
+    """
+    values = (
+        nominal_loan_rate, expected_inflation, neutral_nominal_rate,
+        inflation_target, depreciation, elasticity, multiplier_min,
+        multiplier_max, user_cost_floor,
+    )
+    if not all(math.isfinite(float(value)) for value in values):
+        raise ValueError("user-cost inputs must be finite")
+    if elasticity <= 0.0:
+        return 1.0
+    current = max(
+        user_cost_floor,
+        max(0.0, nominal_loan_rate) - expected_inflation + max(0.0, depreciation),
+    )
+    neutral = max(
+        user_cost_floor,
+        max(0.0, neutral_nominal_rate) - inflation_target + max(0.0, depreciation),
+    )
+    response = (current / neutral) ** (-elasticity)
+    return min(multiplier_max, max(multiplier_min, response))
+
+
+def plan_investment(
+    firm: Firm,
+    lambda_q: float = 0.0,
+    q_floor: float = 0.5,
+    q_cap: float = 2.0,
+    *,
+    nominal_loan_rate: float | None = None,
+    expected_inflation: float = 0.0,
+    neutral_nominal_rate: float = 0.0,
+    inflation_target: float = 0.0,
+    user_cost_elasticity: float = 0.0,
+    user_cost_multiplier_min: float = 0.5,
+    user_cost_multiplier_max: float = 1.5,
+    user_cost_floor: float = 1.0e-9,
+) -> None:
     """Notional capital-good demand I*_{f,t} (B5, §10.4). C-firms only.
 
         K*_{f,t} = v · y^e_{C,f,t}   (desired capital tracks expected output)
@@ -213,7 +365,10 @@ def plan_investment(firm: Firm, lambda_q: float = 0.0,
     Partial adjustment (λ_I damps accelerator overshoot) plus depreciation replacement.
     v6.1b: a per-firm Tobin's q multiplier g(q)=clip(1+λ_q(q−1), q_floor, q_cap) tilts
     investment by market valuation -- the financial→real channel (high q ⇒ invest more).
-    λ_q=0 (or q=1) ⇒ g=1 ⇒ pure accelerator (bit-identical). Capped later by cash + M1 supply.
+    With an explicit loan rate, a second bounded multiplier responds to the expected
+    real financing user cost plus depreciation, relative to the neutral-rate
+    benchmark.  Omitting the rate keeps the historical accelerator bit-identical.
+    Capped later by cash + M1 supply.
     """
     if not firm.invests:
         firm.investment_target = 0.0
@@ -223,6 +378,18 @@ def plan_investment(firm: Firm, lambda_q: float = 0.0,
     if lambda_q > 0.0:
         g = min(q_cap, max(q_floor, 1.0 + lambda_q * (firm.tobin_q_ema - 1.0)))   # v8.3: smoothed q
         target *= g
+    if nominal_loan_rate is not None:
+        target *= investment_user_cost_multiplier(
+            nominal_loan_rate=nominal_loan_rate,
+            expected_inflation=expected_inflation,
+            neutral_nominal_rate=neutral_nominal_rate,
+            inflation_target=inflation_target,
+            depreciation=firm.delta_K,
+            elasticity=user_cost_elasticity,
+            multiplier_min=user_cost_multiplier_min,
+            multiplier_max=user_cost_multiplier_max,
+            user_cost_floor=user_cost_floor,
+        )
     firm.investment_target = target
 
 
@@ -237,14 +404,66 @@ def credit_request(firm: Firm, deposits: float, p_k_est: float) -> float:
     return max(0.0, wage_need + investment_need - deposits)
 
 
-def credit_grant(requested: float, deposits: float, debt: float, kappa: float) -> float:
-    """B7: the loan the bank grants (§12.4). Debt is capped at kappa·NW, NW=D−L
-    (financial net worth). Returns additional credit this tick, in [0, requested].
-    Insolvent (NW<=0) => 0. This one line is the whole Minsky-leverage engine."""
-    nw = deposits - debt
+def firm_debt_service_headroom(
+    *,
+    expected_operating_cash_flow: float,
+    debt: float,
+    loan_rate: float,
+    amort: float,
+    min_dscr: float,
+) -> float:
+    """Additional debt consistent with a transparent one-tick DSCR constraint.
+
+    Expected operating cash flow is the pre-financing cash available for contractual
+    principal plus interest.  Both ``loan_rate`` and ``amort`` are per tick, matching
+    actual debt service.  At a zero service rate the constraint is non-binding; at
+    positive rates, a hike can only weakly reduce headroom.
+    """
+    service_rate = max(0.0, loan_rate) + max(0.0, amort)
+    if service_rate <= EPS:
+        return math.inf
+    supported_total_debt = max(0.0, expected_operating_cash_flow) / (
+        max(1.0, min_dscr) * service_rate
+    )
+    return max(0.0, supported_total_debt - max(0.0, debt))
+
+
+def credit_grant(
+    requested: float,
+    deposits: float,
+    debt: float,
+    kappa: float,
+    *,
+    book_equity: float | None = None,
+    borrowing_base_proxy: float | None = None,
+    expected_operating_cash_flow: float | None = None,
+    loan_rate: float = 0.0,
+    amort: float = 0.0,
+    min_dscr: float = 1.0,
+) -> float:
+    """B7: additional credit allowed by leverage, assets, and optional DSCR.
+
+    The historical path caps debt at ``kappa * (deposits - debt)``.  Callers may
+    instead supply nominal ``book_equity`` plus a gross-debt
+    ``borrowing_base_proxy`` frozen before origination.  Existing debt is then
+    deducted once from each gross ceiling.  The borrowing base is not a claim
+    priority or default-recovery model; those legal/settlement layers remain
+    explicitly out of scope.
+    """
+    nw = deposits - debt if book_equity is None else book_equity
     if nw <= 0.0:
         return 0.0
     room = kappa * nw - debt          # headroom above existing debt
+    if borrowing_base_proxy is not None:
+        room = min(room, max(0.0, borrowing_base_proxy) - debt)
+    if expected_operating_cash_flow is not None:
+        room = min(room, firm_debt_service_headroom(
+            expected_operating_cash_flow=expected_operating_cash_flow,
+            debt=debt,
+            loan_rate=loan_rate,
+            amort=amort,
+            min_dscr=min_dscr,
+        ))
     return max(0.0, min(requested, room))
 
 
@@ -288,6 +507,61 @@ def plan_consumption(hh: Household, deposits_prev: float, equity_wealth: float =
     hh.consumption_budget = hh.alpha1 * hh.y_expected + wealth_term
     if hh.consumption_budget < 0.0:
         hh.consumption_budget = 0.0
+
+
+def household_contractual_debt_service(
+    *,
+    debt: float,
+    margin_debt: float,
+    loan_rate: float,
+    amort: float,
+    interest_arrears: float = 0.0,
+) -> float:
+    """Scheduled household cash service for the next settlement, per tick.
+
+    Ordinary consumer and mortgage principal amortizes; margin principal remains
+    callable in the equity phase and is therefore excluded here.  Interest applies
+    to all live ledger debt, exactly as in household debt settlement.  Carried
+    interest is a memo claim: it increases cash service without becoming principal
+    or attracting interest itself.
+    """
+    live_debt = max(0.0, debt)
+    margin = min(live_debt, max(0.0, margin_debt))
+    amortizing = live_debt - margin
+    return (
+        max(0.0, interest_arrears)
+        + max(0.0, amort) * amortizing
+        + max(0.0, loan_rate) * live_debt
+    )
+
+
+def reserve_household_debt_service(
+    consumption_budget: float,
+    *,
+    deposits: float,
+    debt: float,
+    margin_debt: float,
+    loan_rate: float,
+    amort: float,
+    interest_arrears: float = 0.0,
+) -> float:
+    """Cash-cap desired goods spending so contractual debt service remains available.
+
+    This is a plan, not a transfer: actual principal and interest are posted once in
+    the debt-service phase, so the reservation cannot double-charge the household.
+    A cash-rich debtor whose planned spending already leaves enough for service is
+    unchanged; subtracting service directly from the *budget* would create a false
+    income effect.  A cash-poor debtor is capped at deposits less scheduled service.
+    """
+    service = household_contractual_debt_service(
+        debt=debt,
+        margin_debt=margin_debt,
+        loan_rate=loan_rate,
+        amort=amort,
+        interest_arrears=interest_arrears,
+    )
+    spendable_cash = max(0.0, float(deposits) - service)
+    return min(max(0.0, float(consumption_budget)), spendable_cash)
 
 
 # -- v6: portfolio choice (equity vs deposits) ----------------------------------

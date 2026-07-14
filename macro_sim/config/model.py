@@ -75,6 +75,15 @@ class Config:
 
     # -- wages (B4), DNWR floor + raise-on-shortage ------------------------
     delta: float = 0.0              # downward wage flexibility -- FORCED (strict DNWR floor)
+    # v23: B4 was PURELY a labour-tightness rule -- prices appear nowhere in it -- so the nominal
+    # wage was anchored to nothing and the REAL wage was a free-floating residual. `delta` was
+    # added in v13 to stop a DEFLATION ratcheting the real wage up, but that deflation was an
+    # ARTEFACT of the capital-clock bug. With the clock fixed prices RISE, and with labour well
+    # supplied the delta drift now pushes NOMINAL wages DOWN through an inflation (measured:
+    # wage -0.5%/yr against prices +7.4%/yr; real wage -17%; households fall under the
+    # subsistence basket). With indexation the tightness terms apply to the REAL wage and
+    # committed expected inflation is the nominal baseline. 0.0 => bit-identical.
+    wage_indexation: float = 0.0    # 0 = no price feedback (legacy); 1 = full indexation
     omega: float = 0.02             # wage-raise step on labor shortage -- FREE
     theta_wage: float = 0.15        # rewage probability / tick -- anchored (wage-rigidity data)
 
@@ -1108,6 +1117,7 @@ class Config:
             theta_wage=self.theta_wage,
             inventory_gap_close=self.inventory_gap_close,
             delta=self.delta,
+            wage_indexation=self.wage_indexation,
             theta_price=self.theta_price,
             firm_full_pnl=self.firm_full_pnl,
             capital_service_pricing=self.capital_service_pricing,

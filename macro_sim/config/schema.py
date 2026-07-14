@@ -8,16 +8,21 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class BankingConfig:
     bank_enabled: bool
+    bank_realized_pnl: bool
     n_banks: int
     seed: int
     bank_leverage_mean: float
     bank_leverage_disp: float
     bank_assignment: str
     bank_capital_constraint: bool
+    unified_bank_rwa: bool
+    mortgage_risk_weight: float
+    mortgage_min_capital_ratio: float
     bank_migrate_on_failure: bool
     bank_target_capital_ratio: float
     bank_exposure_limit: float
     bank_rate_competition: bool
+    bank_relationship_lock_in: bool
     bank_spread_disp: float
     bank_search_m: int
     interbank: bool
@@ -82,11 +87,17 @@ class GoodsConfig:
     government: bool
     a: float
     consumption_strata: bool = False       # v18.1: the necessity/luxury session split
+    rationed_signal: bool = False          # v23: attributable C-firm stock-out visits
+    monetary_direct_transmission: bool = False  # v23: reserve live contractual service
+    household_interest_arrears: bool = False    # v23: include carried memo interest
 
 
 @dataclass(frozen=True)
 class SettlementConfig:
     government: bool
+    firm_full_pnl: bool
+    capital_service_pricing: bool
+    priced_firm_balance_sheet: bool
     pro_rata_dividends: bool
     per_firm_equity: bool
     gov_investment_share: float
@@ -99,7 +110,10 @@ class PlanningConfig:
     theta_wage: float
     inventory_gap_close: float
     delta: float
+    wage_indexation: float   # v23: price feedback in B4 (0 = the legacy tightness-only rule)
     theta_price: float
+    firm_full_pnl: bool
+    capital_service_pricing: bool
     lambda_q: float
     q_invest_floor: float
     q_invest_cap: float
@@ -112,6 +126,12 @@ class PlanningConfig:
     lifecycle_alpha_wealth_draw: float
     housing_wealth_effect: float
     alpha2: float
+    monetary_direct_transmission: bool
+    investment_user_cost_elasticity: float
+    investment_user_cost_multiplier_min: float
+    investment_user_cost_multiplier_max: float
+    investment_user_cost_floor: float
+    hh_amort: float
 
 
 @dataclass(frozen=True)
@@ -180,6 +200,9 @@ class FirmDemographicsConfig:
 @dataclass(frozen=True)
 class CreditConfig:
     bank_enabled: bool
+    firm_full_pnl: bool
+    bank_realized_pnl: bool
+    household_interest_arrears: bool
     household_credit: bool
     hh_subsistence: float
     amort: float
@@ -190,6 +213,8 @@ class CreditConfig:
     deposit_rate_disp: float
     bank_equity: bool
     interest_by_deposits: bool
+    monetary_direct_transmission: bool
+    firm_credit_min_dscr: float
 
 
 @dataclass(frozen=True)
@@ -214,3 +239,4 @@ class EquityConfig:
     equity_finance: bool
     lambda_issue: float
     household_bankruptcy: bool
+    priced_firm_balance_sheet: bool = False
