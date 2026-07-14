@@ -63,6 +63,13 @@ FULL_FRONTIER_FLAGS: dict[str, Any] = {
     # now-real replacement flow would consume ~1/3 of the labour force.
     "capital_annual_clock": True,
     "a_K": 2.4,
+    # v23: an in-work minimum income guarantee. The unemployment benefit pays for UNSOLD labour,
+    # so it is blind to a worker who sells ALL their labour and still earns too little -- which
+    # v16-L4's earnings dispersion (pay = wage x e_i) manufactures. Without this the last CRITICAL
+    # (deprivation boundary) latches on a fully-employed household earning 56% of median income.
+    # Tested on income, run after the unemployment benefit; eliminates the CRITICAL at near-zero
+    # fiscal cost (benefit spend 27.39 -> 27.30) and steadies inflation (4.8% -> 3.1%).
+    "benefit_income_floor": 0.6,
 }
 
 
