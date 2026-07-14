@@ -14,10 +14,10 @@ from typing import List
 
 from macro_sim.config import Config
 from macro_sim.economy import Economy
-from macro_sim.world.capital import capital_interest
+from macro_sim.world.capital import CBRES_ID, capital_interest, seed_reserves
 from macro_sim.world.fx import FXDealer, RateVector
 from macro_sim.world.migration import run_migration
-from macro_sim.world.trade import prepare_trade, settle_trade
+from macro_sim.world.trade import grope_rates, prepare_trade, settle_trade
 
 # Per-economy seeds must be far-spaced: each `Economy` derives many substreams as
 # `cfg.seed + <offset>` with offsets up to ~90007 and some only 1 apart (e.g. 13000,
@@ -73,6 +73,7 @@ class World:
         emigration_cap=None,                     # POLICY (migration): origin restricts its own exit
         outward_remittance_tax: float = 0.0,     # POLICY (migration): HOST taxes outbound remittances
         guest_worker_return: float = 0.0,        # POLICY (migration): temporary migration — return rate
+        wage_smoothing: float = 0.02,            # migration reacts to a PERSISTENT wage gap, not a blip
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -112,6 +113,8 @@ class World:
         self.emigration_cap = emigration_cap    # migration policy
         self.outward_remittance_tax = outward_remittance_tax
         self.guest_worker_return = guest_worker_return
+        self.wage_smoothing = wage_smoothing
+        self._rw_ema = None
         self._tariff_rev: List[float] = [0.0] * self.n
         self._export_subsidy_cost: List[float] = [0.0] * self.n
         self.capital_mobility = capital_mobility
@@ -124,8 +127,9 @@ class World:
         # v21.2 peg / trilemma: economy 0 pegs its rate; the CB absorbs the imbalance onto
         # reserves; reserves hitting zero breaks the peg (devaluation = currency crisis).
         self.peg = peg
+        self.peg_anchor = 1 if self.n > 1 else 0   # the currency economy 0 pegs to
         self.peg_reserve_scale = peg_reserve_scale
-        self._reserves = peg_reserves0
+        self._peg_reserves0 = peg_reserves0
         self._peg_intact = True
         self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
         self._migrant_stock: List[float] = [0.0] * self.n   # v22: emigrants from i, working abroad
@@ -141,12 +145,29 @@ class World:
         if self.couple:
             self.rates = RateVector(self.n)
             self.dealer = FXDealer(self.economies)
+        if self.peg and self.n > 1:
+            seed_reserves(self, peg_reserves0)     # the CB acquires real FX reserves
+
+    def reserves(self) -> float:
+        """The pegging CB's FX reserves — a REAL balance (the anchor currency it holds),
+        not a scalar. Zero ⇒ the peg cannot be defended."""
+        if not self.peg or self.n < 2:
+            return 0.0
+        led = self.economies[self.peg_anchor].ledger
+        return led.balance(CBRES_ID) if led.has_account(CBRES_ID) else 0.0
 
     # ======================================================================
     # One BSP tick: coupling barrier -> independent domestic step -> dealer
     # ======================================================================
     def step(self) -> List[dict]:
-        self._coupling_barrier()                              # thin central barrier
+        self._coupling_barrier()                              # thin central barrier (moves no money)
+        if self.couple:
+            # Snapshot the dealer's position + rates BEFORE any cross-border money moves.
+            # The IMPORT leg settles inside the domestic step (households pay the dealer in
+            # the goods session), so the snapshot must precede it — else the flow gate would
+            # see only the export leg.
+            self._inv0 = self.dealer.inventory()
+            self._e0 = self.rates.e
         recs = [econ.step() for econ in self.economies]       # INDEPENDENT domestic step
         self._dealer_update(recs)                             # dealer inventory update
         self.t += 1
@@ -174,20 +195,37 @@ class World:
         """
         if not self.couple:
             return
+        inv0, e0 = self._inv0, self._e0   # snapshotted in step(), before the domestic step
+
         if self.trade:
-            settle_trade(self)                # read imports, update stale state, grope rate
+            settle_trade(self)                # imports/exports/tariff flows (no groping)
         if self.capital:
             capital_interest(self)            # v21: factor income on cross-border positions
         if self.migration:
             run_migration(self)               # v22: labor flow + remittances
-        self.dealer.book_revaluation(self.rates)
+
+        # HARD GATE (pre-grope, so no revaluation contaminates it): the dealer is a
+        # passthrough ⇒ its numéraire FLOW ≡ 0 — the multilateral BoP identity.
+        self.dealer.assert_flow_is_passthrough(inv0, e0)
+        grope_rates(self)                     # NOW move the rates (every flow has settled)
+        self.dealer.book_revaluation(e0, self.rates)   # the only source of net-worth change
+
         inv = self.dealer.inventory()
         e = self.rates.e
         bop_numeraire = self.dealer.net_worth_numeraire(self.rates)
         # v21 external-position gauges (numéraire): NFA_i = −(dealer i-position)/e_i (a
         # positive dealer position is a foreign CLAIM on economy i ⇒ i's net foreign
         # LIABILITY); factor income_i (received) = −(i's interest outflow)/e_i.
+        # NFA_i = (i's foreign ASSETS) − (foreigners' CLAIMS on i), in the numéraire.
+        # The dealer's position is the claims; the pegging CB's FX reserves are a real
+        # foreign asset of economy 0 AND a foreign claim on the anchor — the two cancel in
+        # the world sum, so Σ_i NFA_i = −(cumulative revaluation) still closes exactly.
         nfa = [-inv[i] / e[i] for i in range(self.n)]
+        res = self.reserves()
+        if self.peg and self.n > 1 and res != 0.0:
+            a = self.peg_anchor
+            nfa[0] += res / e[a]      # economy 0 HOLDS the anchor's currency (a foreign asset)
+            nfa[a] -= res / e[a]      # ... which is a foreign claim ON the anchor
         factor = [-self._factor_income[i] / e[i] for i in range(self.n)]
         # v22 full current account (numéraire) = trade balance + factor income + remittances.
         remit = [self._remittances[i] / e[i] for i in range(self.n)]
@@ -203,7 +241,7 @@ class World:
                 "factor_income": factor,
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
-                "reserves": self._reserves,
+                "reserves": self.reserves(),
                 "peg_intact": self._peg_intact,
                 "migrant_stock": list(self._migrant_stock),
                 "remittances": remit,

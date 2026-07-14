@@ -131,6 +131,13 @@ def settle_trade(world) -> None:
 
     # Dealer residual net inventory (curr_i); >0 ⇒ deficit ⇒ curr_i depreciates (e_i ↑).
     # Normalize by money stock so λ is scale-free; fixed economy-id order (§9).
+
+def grope_rates(world) -> None:
+    """Move the exchange rates on the dealer's end-of-tick net inventory. Called AFTER every
+    cross-border flow has settled, so all flows in a tick occur at ONE rate vector — which is
+    what makes the flow/revaluation decomposition (and the passthrough gate) exact."""
+    econs = world.economies
+    n = world.n
     signal = world.dealer.inventory()
     scaled = [signal[i] / max(1.0, econs[i].ledger.total_money) for i in range(n)]
     scaled = capital_grope_signal(world, scaled)   # v21.1: grope toward the capital-sustained position

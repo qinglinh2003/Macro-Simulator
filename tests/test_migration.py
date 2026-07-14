@@ -14,9 +14,18 @@ from macro_sim.world import World
 
 
 def _pair():
-    poor = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=0.7)
-    rich = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0, a=1.3)
-    return poor, rich
+    """A LOW-WAGE and a HIGH-WAGE economy — the gap must be in WAGES, not productivity.
+
+    This model is DEMAND-constrained: doubling labor productivity `a` moves neither output
+    nor wages (the same demand simply needs fewer workers), so a productivity gap gives no
+    wage gap at all and the migration direction is then decided by noise. Migration responds
+    to wages, so the economies must actually differ in wages (the genesis wage/price anchors).
+    """
+    lo = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
+                     w_firm0=0.7, p_firm0=0.85)      # low-wage
+    hi = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
+                     w_firm0=1.4, p_firm0=1.7)       # high-wage
+    return lo, hi
 
 
 def _world(pair, **kw):

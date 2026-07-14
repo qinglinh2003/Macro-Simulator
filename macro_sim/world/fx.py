@@ -16,6 +16,12 @@ from typing import List
 DEALER_ID = "FXDEALER"
 
 
+class BalanceOfPaymentsError(Exception):
+    """The dealer's numéraire FLOW was not zero — a cross-border payload created or
+    destroyed value. The open-economy analog of `ConservationError`: always a bug, never
+    economics."""
+
+
 class RateVector:
     """N nominal exchange rates against an abstract geometric-basket numéraire (§2).
 
@@ -85,12 +91,46 @@ class FXDealer:
         inv = self.inventory()
         return sum(rates.to_numeraire(inv[i], i) for i in range(len(inv)))
 
-    def book_revaluation(self, rates: RateVector) -> float:
-        """Book the numéraire revaluation of held inventory since last tick (no
-        transaction) into the valuation account, and return this tick's delta. At flat
-        rates + zero inventory this is 0 (v20.1)."""
-        nw = self.net_worth_numeraire(rates)
-        delta = nw - self._prev_networth
-        self.valuation += delta
-        self._prev_networth = nw
-        return delta
+    def assert_flow_is_passthrough(self, inv0, e0, tol: float = 1e-6) -> float:
+        """**The open-economy hard gate — the multilateral BoP / passthrough identity.**
+
+        The dealer is a zero-spread intermediary: every cross-border transaction credits it
+        in one currency and debits it an EQUAL NUMÉRAIRE VALUE in another (an importer's
+        payment funds the exporter; a remittance collected funds the payout; a tariff skim
+        is exactly the gap between the gross and the base). So the tick's FLOW — its
+        position change valued at the rates the flows happened at — must be ZERO:
+
+            FLOW = Σ_i (inv1_i − inv0_i) / e0_i  ≡  0.
+
+        A nonzero FLOW means some cross-border payload created or destroyed value. This is
+        the analog of the closed economy's `ConservationError` — always a bug, never
+        economics. Unlike a gauge, it can actually fail. Called BEFORE the rates grope, so
+        no revaluation contaminates it.
+        """
+        inv1 = self.inventory()
+        flow = sum((inv1[i] - inv0[i]) / e0[i] for i in range(len(inv1)))
+        scale = max(1.0, sum(abs(inv1[i]) / e0[i] for i in range(len(inv1))))
+        if abs(flow) > tol * scale:
+            raise BalanceOfPaymentsError(
+                f"dealer flow is not a passthrough (multilateral BoP violated): "
+                f"flow={flow!r} numéraire (tol={tol * scale:.3e}) — a cross-border payload "
+                f"created or destroyed value"
+            )
+        return flow
+
+    def book_revaluation(self, e0, rates: RateVector) -> float:
+        """Re-price the END-OF-TICK position from the pre-grope rates ``e0`` to the new
+        rates. This is the ONLY source of change in the dealer's numéraire net worth (the
+        flow being zero by the gate above), so the world identity closes exactly:
+
+            Σ_i NFA_i  =  −(cumulative revaluation)
+
+        — the world's apparent net position with itself is EXACTLY the accumulated valuation
+        effect (the valuation channel), not zero but fully explained.
+        """
+        inv = self.inventory()
+        e1 = rates.e
+        reval = sum(inv[i] * (1.0 / e1[i] - 1.0 / e0[i]) for i in range(len(inv)))
+        self.valuation += reval
+        self._prev_networth = self.net_worth_numeraire(rates)
+        return reval
