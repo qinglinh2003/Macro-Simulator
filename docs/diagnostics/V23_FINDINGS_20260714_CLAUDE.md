@@ -234,12 +234,18 @@ by 52% and inflation from 0.8% to 2.8%. That is a behavioural result, not a defe
 
 ## 7. Recommended next steps
 
-1. ~~Prove or refute the lock-in/RWA hypothesis~~ — **DONE, refuted (§5.1)**. The RWA breach is a benign concentration state. Do not spend an arc on it.
-   capital-breached lender is refusing credit to borrowers who have no alternative. If
-   confirmed, the minimal fix is to let a borrower whose relationship lender cannot lend obtain
-   NEW credit from a bank with headroom — which needs per-lender debt, i.e. the typed loan
-   contract.
-2. **Diagnose the single destitute household** in `baseline_s1` from tick 1717, and the 12%
-   real-wage decline that accompanies it.
-3. **Typed loan contracts** are now the keystone: they unblock collateral recovery, deposit
-   funding cost attribution, and the RWA/lock-in interaction all at once.
+1. ~~Prove or refute the lock-in/RWA hypothesis~~ — **DONE, refuted (§5.1).** The RWA breach is a
+   benign concentration/stock state with no measured macro harm. Do not spend an arc on it, and
+   do NOT justify typed loan contracts with it.
+2. **Diagnose the single destitute household** in `baseline_s1` from tick 1717. This is the last
+   CRITICAL, and its character has completely changed: 0.2% destitution (< 1 household) with a
+   healthy banking sector, against 14.4% and a total bank wipeout before the fixes. Look at the
+   **12% real-wage decline** (0.914 -> 0.803) that accompanies it — nominal wages are lagging
+   5-17% inflation, which is the plausible mechanism.
+3. **The nominal anchor** (`monetary.easing_blocked_by_zlb`) is now a GENUINE question rather
+   than an artefact. With the cost side fixed, the deflation is no longer manufactured, so the
+   v19 nominal-anchor audit is worth re-running on this foundation — its old headline ("the CB
+   is the deflation engine") was measured on the broken clock and is superseded.
+4. The remaining known scope limits (deposit funding cost, collateral recovery, typed loan
+   contracts, inventory COGS) stand on their own merits as accounting completeness, not as
+   blockers surfaced by these findings.
