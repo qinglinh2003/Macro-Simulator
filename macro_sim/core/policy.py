@@ -21,6 +21,20 @@ class Policy:
     gov_deficit_target: float = 0.0      # if >0: size gov consumption to maintain a deficit of this · GDP
     deficit_u_ref: float = 0.0           # if >0: state-dependent deficit -- scale target by min(1, u/this)
     benefit_replacement: float = 0.0     # b: unemployment benefit = b · wage_ref
+    # v23 IN-WORK SUPPORT (a minimum income guarantee). The unemployment benefit above pays for
+    # UNSOLD LABOUR (supply - labor_sold - jg_labor): it is a QUANTITY rule. It insures the
+    # jobless and is completely blind to a worker who sells ALL of their labour and still earns
+    # too little. v16-L4 then made earnings dispersed (pay = wage x e_i, sigma = 0.35), so the
+    # model now MANUFACTURES working poor -- but this v9 safety net was designed before person
+    # efficiency existed and was never updated for it.
+    #
+    # The last CRITICAL (welfare.deprivation_domain_boundary) is exactly that hole: the destitute
+    # household is a 40-year-old working a FULL 1.0 FTE, earning 56% of median income with 0.07
+    # in deposits against a median of 863, and receiving ZERO support -- because they have a job.
+    #
+    # This lever tops household income up to `income_floor x wage_ref x labour_supply`,
+    # REGARDLESS of employment status. 0.0 => the branch never fires => bit-identical.
+    benefit_income_floor: float = 0.0
     pension_replacement: float = 0.0     # v13: old-age pension per elder = this · wage_ref (0 = off)
 
     # -- fiscal: revenue (four tax bases) ---------------------------------
@@ -88,6 +102,7 @@ class Policy:
             gov_deficit_target=cfg.gov_deficit_target,
             deficit_u_ref=cfg.deficit_u_ref,
             benefit_replacement=cfg.benefit_replacement,
+            benefit_income_floor=cfg.benefit_income_floor,
             pension_replacement=getattr(cfg, 'pension_replacement', 0.0),
             tax_profit_rate=cfg.tax_profit_rate,
             tax_income_rate=cfg.tax_income_rate,

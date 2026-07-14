@@ -651,6 +651,11 @@ class Config:
     #   so it runs the full deficit under slack (u>=ref) but TAPERS to balance at full employment (u->0),
     #   stopping the injection from becoming pure inflation. Anchored to the natural rate (~0.05). 0=fixed target
     benefit_replacement: float = 0.0      # b: unemployment benefit = b·wage_ref -- anchored (OECD replacement)
+    # v23: a minimum income guarantee, tested on INCOME rather than on unsold hours. The benefit
+    # above is a QUANTITY rule and is blind to a worker who sells ALL their labour and still
+    # earns too little -- which v16-L4's earnings dispersion (pay = wage x e_i) manufactures.
+    # 0.0 => never fires => bit-identical.
+    benefit_income_floor: float = 0.0     # top income up to this x wage_ref x labour supply
     pension_replacement: float = 0.0      # v13: old-age pension per elder person = this · wage_ref (0 = off).
                                           # The only transfer reaching non-workers: without it elder households
                                           # with no savings sit at the consumption floor (audit: elder/adult
