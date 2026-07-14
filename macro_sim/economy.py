@@ -51,6 +51,7 @@ from macro_sim.systems.banking import (
     draw_bank_spreads,
     draw_deposit_spreads,
     enable_reserves,
+    reset_bank_realized_pnl,
     resolve_bank_failures,
     run_bank_entry_phase,
     run_bank_runs_phase,
@@ -64,8 +65,15 @@ from macro_sim.systems.energy import EnergyPovertySignal, create_e_firms, run_en
 from macro_sim.systems.deprivation import DeprivationSignal
 from macro_sim.systems.family import run_family_transfer_phase
 from macro_sim.systems.switching import run_sector_switching_phase
-from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
+from macro_sim.systems.credit import (
+    finalize_bank_pnl,
+    run_credit_phase,
+    run_debt_service_phase,
+    run_firm_debt_service_phase,
+    run_household_debt_service_phase,
+)
 from macro_sim.systems.equity import run_equity_phase, setup_per_firm_equity
+from macro_sim.systems.firm_balance_sheet import firm_equity_book_value
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
 from macro_sim.systems.goods import run_goods_phase
 from macro_sim.systems.labor import run_labor_phase
@@ -189,6 +197,10 @@ class Economy:
                 acute_days=cfg.deprivation_acute_days,
                 chronic_days=cfg.deprivation_chronic_days,
             )
+        if cfg.national_accounts_metrics:
+            from macro_sim.reporting.national_accounts import NationalAccountsTracker
+
+            self._national_accounts = NationalAccountsTracker()
 
         # v9.1: economy-wide PUBLIC capital (a non-rival stock; government investment builds it, it raises
         # every firm's productivity). K_ref = genesis private C-capital, so the factor (1+K_pub/K_ref)^γ
@@ -211,6 +223,14 @@ class Economy:
         )
         self._cumulative_output_by_sector = {"c": 0.0, "k": 0.0, "e": 0.0}
         self._price_level = cfg.p_firm0          # v9.2: current price level (updated each tick in metrics)
+        if (
+            cfg.firm_full_pnl
+            or cfg.capital_service_pricing
+            or cfg.priced_firm_balance_sheet
+        ):
+            self._firm_pnl_capital_price = cfg.p_kfirm0
+        if cfg.firm_full_pnl:
+            self._firm_pnl_closed = False
 
         # v3/v11: bank(s) (money creators). Each holds its own deposits (retained interest = capital) and
         # reserves = M (§A5 label). v11: n_banks accounts, splitting the genesis equity buffer; n_banks=1 ⇒ a
@@ -297,6 +317,8 @@ class Economy:
         self._subscale_rng = random.Random(cfg.seed + 16_003)
         if cfg.labor_matching == "persistent":
             self.labor_market = LaborMarket(
+                fractional_hours=cfg.labor_fractional_hours,
+                second_job=cfg.labor_second_job,
                 churn_annual=cfg.churn_annual,
                 lambda_fire=cfg.lambda_fire,
                 layoff_band=cfg.layoff_band,
@@ -338,6 +360,11 @@ class Economy:
                     ltv_cap=cfg.mortgage_ltv_cap,
                     foreclosure_ltv=cfg.mortgage_foreclosure_ltv,
                     arrears_floor=cfg.mortgage_arrears_floor,
+                    underwriting_enabled=cfg.mortgage_underwriting,
+                    dsti_cap=cfg.mortgage_dsti_cap,
+                    stress_rate_addon=cfg.mortgage_stress_rate_addon,
+                    risk_weight=cfg.mortgage_risk_weight,
+                    min_capital_ratio=cfg.mortgage_min_capital_ratio,
                 )
             self._genesis_dwellings = self.housing.count()
             if cfg.housing_rental_enabled:
@@ -381,6 +408,10 @@ class Economy:
         # `_reserve_M0` = genesis reserve total (the OMO target is a fraction of it); `_lolr_advances` = outstanding
         # emergency reserves lent to run-hit banks.
         self._cb_absorbed = 0.0
+        # Per-bank zero-coupon CB-bill / reverse-repo claims created by an OMO
+        # reserve drain.  The aggregate is the central bank's matching liability;
+        # reserves are never retired without this counterasset.
+        self._cb_omo_claims: Dict[str, float] = {bk.id: 0.0 for bk in self.banks}
         self._reserve_M0 = 0.0
         self._lolr_advances = 0.0
         self._omo_flow = 0.0                                 # this tick's net reserve drain(+)/inject(−) via OMO
@@ -423,8 +454,7 @@ class Economy:
         if cfg.capital_market and not cfg.per_firm_equity:
             # aggregate index: float split EQUALLY; price = book/float so bubble gap starts 0.
             self.equity = EquityMarket.create(cfg)
-            book0 = sum(self.ledger.balance(f.id) - self.ledger.debt(f.id) + f.capital
-                        for f in self.c_firms)
+            book0 = sum(firm_equity_book_value(self, f) for f in self.c_firms)
             self.equity.book_value = book0
             self.equity.price = self.equity.last_price = max(EPS, book0 / cfg.float_shares)
             self.equity.fundamental = self.equity.price
@@ -442,6 +472,11 @@ class Economy:
         # v4 firm-demographics state: unique-id counter (never reuse indices) + scratch.
         self._next_c_id = cfg.n_firms_c
         self._births = self._deaths = 0
+        # Firms can settle economically and then exit before the tick snapshot is
+        # collected.  Keep their just-closed income statements in the reporting
+        # perimeter for this tick only; otherwise borrower and bank cash journals
+        # retain the payment while aggregate firm P&L silently drops it.
+        self._exited_firms_tick: list[Any] = []
         self._writeoffs = 0.0
 
         self.records: List[dict] = []
@@ -490,6 +525,44 @@ class Economy:
         return self._pubcap_factor * self.technology.factor_for(firm)
 
     def step(self) -> dict:
+        """Advance one closed-economy tick.
+
+        ``World`` uses the two private phase hooks directly so cross-border cash and
+        goods flows can settle after every country's goods market has cleared but
+        before domestic P&L, fiscal settlement, metrics, and cross-tick state commit.
+        Calling :meth:`step` keeps the historical closed-economy order exactly.
+        """
+        self._run_pre_settlement_phases()
+        return self._run_settlement_and_commit_phases()
+
+    def _run_pre_settlement_phases(self) -> None:
+        """Run a tick through goods and capital-goods markets.
+
+        This is the open-economy coupling seam: realized imports are known at return,
+        while no firm P&L, domestic hard gate, metric, sensor, or lagged behavioral
+        state has yet been committed.
+        """
+        if self.cfg.government and self.ledger.has_account(self._fiscal):
+            # Opening stock for an exact Treasury-account movement gauge.  World
+            # tariffs, remittances and factor income arrive after this snapshot but
+            # before the same tick's record is committed.
+            self._fiscal_opening_balance = self.ledger.balance(self._fiscal)
+        # Tick-flow journals must open before any subsystem can post against the
+        # Treasury.  Their cumulative counterparts, where present, are retained.
+        self._land_fee_paid_tick = 0.0
+        self._bank_resolution_fund_paid = 0.0
+        self._escheat_flow = 0.0
+        self._spr_purchase_paid = 0.0
+        self._spr_sale_revenue = 0.0
+        self._exited_firms_tick = []
+        national_accounts = getattr(self, "_national_accounts", None)
+        if national_accounts is not None:
+            national_accounts.open_tick(self)
+        # Open every tick-wide loss journal before *any* subsystem can write to it.
+        # Resetting the aggregate inside firm demographics used to erase mortgage
+        # foreclosures booked earlier in the same settlement window.
+        self._writeoffs = 0.0
+        reset_bank_realized_pnl(self)     # open realized bank P&L before coupons/deaths/credit flows
         set_policy_rate(self)             # v10: set this tick's policy rate (off ⇒ frozen r_interest)
         if self.cfg.interbank and len(self.banks) > 1:   # v11.4: begin this tick's intraday reserve tracking
             run_deposit_competition(self)                # depositors migrate toward higher deposit rates
@@ -505,7 +578,6 @@ class Economy:
             # falls back to live scans inside it; afterwards the state is frozen for the rest of the
             # tick and every economic phase reads the rebuilt O(1) person indexes.
             self._inheritance_flow = 0.0
-            self._escheat_flow = 0.0
             self.demographic_bridge.invalidate_people_index()
             self.demographic_kernel.tick(self.demographic_state, economic_state=self.demographic_bridge)
             self._run_demographic_household_transitions()
@@ -522,15 +594,33 @@ class Economy:
         run_family_transfer_phase(self)   # v18.4 only; kin top-ups before goods (no-op off)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
-        run_settlement_phase(self)
-        run_debt_service_phase(self)      # v3 only; no-op when banks disabled
-        run_housing_market_phase(self)    # v15.1 only; monthly resale sessions (no-op off)
+
+    def _run_settlement_and_commit_phases(self) -> dict:
+        """Close an already-cleared tick and commit its authoritative snapshot."""
+        if self.cfg.firm_full_pnl:
+            # Cash interest belongs in the same income statement that supplies
+            # the corporate-tax base and dividend ceiling.  Both borrower
+            # services precede housing: mortgage maintenance sees post-service
+            # balances, while a builder's primary-sale revenue reaches the
+            # current income statement instead of being erased next planning.
+            run_firm_debt_service_phase(self)
+            run_household_debt_service_phase(self)
+            run_housing_market_phase(self)
+            run_settlement_phase(self)
+        else:
+            run_settlement_phase(self)
+            run_debt_service_phase(self)  # v3 only; no-op when banks disabled
+            run_housing_market_phase(self)  # v15.1 only; monthly resale sessions (no-op off)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
         run_sector_switching_phase(self)  # v18.5 only; firms retool between N/L sectors (no-op off)
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
         run_interbank_phase(self)         # v11.4 only; money-market funding of reserve deficits (no-op off)
         run_bank_runs_phase(self)         # v11.5 only; depositor runs (flight + panic; queued withdrawals; no-op off)
         resolve_bank_failures(self)       # v11 only; insolvent banks fail + borrowers migrate (no-op off)
+        # Failure resolution can default bilateral interbank principal onto a
+        # surviving creditor.  Close P&L only after those losses exist, so the
+        # creditor cannot distribute pre-default earnings in the same tick.
+        finalize_bank_pnl(self)           # net realized income/losses, then dividends + valuation
         run_bank_entry_phase(self)        # v11.5 only; de-novo bank entry when banking is profitable (no-op off)
         run_bill_issuance_phase(self)     # v12.1 only; Treasury re-issues bills from end-of-tick idle (no-op off)
         rec = self._phase5_check_and_record()
@@ -629,6 +719,9 @@ class Economy:
 
         # Rich per-tick snapshot (metrics.py) -- pure observation.
         rec = metrics.compute_tick_metrics(self)
+        # Reporting is freely repeatable; metric-derived behavioral sensors and
+        # differencing histories advance once, explicitly, only for an accepted tick.
+        metrics.commit_tick_metrics(self, rec)
         self.records.append(rec)
         return rec
 
