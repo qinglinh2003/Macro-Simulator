@@ -163,7 +163,7 @@ Still open:
 | Finding | Severity | Note |
 |---|---|---|
 | `welfare.deprivation_domain_boundary` | CRITICAL | **Character completely changed.** Destitution peak fell from **14.4% -> 0.2%** and the banking sector no longer collapses (7-8 banks alive, RWA utilisation 0.20, vs "all commercial banks are gone"). 0.2% of ~130 households is LESS THAN ONE household: the sticky boundary now latches on an individual outcome, not a systemic crisis. Diagnose that household's resource shortfall; the real signal alongside it is a **12% fall in the real wage** (0.914 -> 0.803) as nominal wages lag 5-17% inflation. |
-| `banking.rwa_capital_breach` | HIGH (new) | Sector capital is ample (aggregate RWA utilisation **0.20**) but at least one bank sits at **1.08** of its own envelope, 86% of the tail. Hypothesis, not yet proven: **`bank_relationship_lock_in` x a per-bank capital limit strands borrowers.** A borrower with existing debt must return to its own lender; if that lender is RWA-breached it can lend nothing, even though the sector has 80% headroom. Credit is not allocated to where capital is. This is blocked behind the untyped-loan-contract limit (one scalar principal, one lender), which is why it is a known scope limit. |
+| `banking.rwa_capital_breach` | HIGH (new) | Sector capital is ample (aggregate RWA utilisation **0.20**) but at least one bank sits at **1.08** of its own envelope, 86% of the tail. **See §5.1: the obvious hypothesis was tested and REFUTED — the breach is a benign concentration/stock effect, not a credit-allocation failure.** |
 | `monetary.easing_blocked_by_zlb` | HIGH | Returned once inflation fell to ~0. Now a genuine nominal-anchor question rather than an artefact of a manufactured deflation. |
 | `banking.deposit_funding_cost_missing` | HIGH | known scope limit (unchanged) |
 | `credit.collateral_recovery_missing` | HIGH | known scope limit (unchanged) |
@@ -172,6 +172,30 @@ Still open:
 | `labor.large_job_guarantee_buffer` | HIGH | unchanged |
 | `accounting.inventory_cogs_matching_missing` | MEDIUM | known scope limit (unchanged) |
 | `credit.leverage_cap_nonbinding` | MEDIUM | new; consistent with the ample sector capital above |
+
+### 5.1 The lock-in / RWA hypothesis: TESTED AND REFUTED
+
+The natural reading of the RWA breach was: `bank_relationship_lock_in` forces a borrower with
+existing debt back to its own lender, so if that lender is capital-breached the borrower is
+starved **even though the sector has 80% headroom** — credit failing to reach where capital is.
+It would have made typed loan contracts the keystone that unblocks everything.
+
+Same-seed twin, lock-in on vs off (3 seeds, 1460t):
+
+| lock_in | sector RWA util | total credit | destitute | real GDP | production realization | inflation |
+|---|---|---|---|---|---|---|
+| **on** | 0.210 | **17961** | 0.000 | 479.3 | 0.744 | 2.77% |
+| off | 0.154 | **11779** | 0.000 | 486.2 | 0.758 | 0.83% |
+
+**Refuted, and in the opposite direction.** Turning lock-in OFF *reduces* credit by 34%, and the
+real economy is essentially unchanged (GDP 479 vs 486, destitution zero in both). Lock-in does
+not starve borrowers; it CONCENTRATES lending at a few relationship banks — which is what pushes
+an individual bank over its own envelope while the sector keeps 80% headroom. The breach is a
+**grandfathered stock/concentration state with no measured macro harm**, exactly as the suite's
+own recommendation suspected ("separate grandfathered stock breaches from new-credit decisions").
+
+Side finding worth keeping: **relationship lending is expansionary** — lock-in raises total credit
+by 52% and inflation from 0.8% to 2.8%. That is a behavioural result, not a defect.
 
 ### Test state
 
@@ -188,7 +212,13 @@ Still open:
   (verified: `v/K_firm0/A` untouched at 2.5/20.0/1.0). The test PASSES on committed HEAD
   (264d1d2) with the whole uncommitted patch set stashed — and `macro_sim/systems/switching.py`
   is in that uncommitted set. **Attribution: the inherited patch set, not the capital clock.**
-  Confirm by stashing only the non-`1fb9c2a` changes and re-running.
+
+  Note on isolation: you CANNOT separate the two by stashing. `1fb9c2a` edited files the
+  inherited patch set had already modified (`config/model.py`, `labor/persistent.py`,
+  `labor/accounting.py`, `economy.py`), so the commit necessarily baked in their state of those
+  files. Stashing `macro_sim/` then reverts the OTHER inherited files and leaves an inconsistent
+  tree that fails at import. The attribution above rests on the code-path argument plus the
+  clean-HEAD pass, not on a stash experiment.
 
 ---
 
@@ -204,7 +234,7 @@ Still open:
 
 ## 7. Recommended next steps
 
-1. **Prove or refute the lock-in/RWA hypothesis** (§5): trace, per bank, whether a
+1. ~~Prove or refute the lock-in/RWA hypothesis~~ — **DONE, refuted (§5.1)**. The RWA breach is a benign concentration state. Do not spend an arc on it.
    capital-breached lender is refusing credit to borrowers who have no alternative. If
    confirmed, the minimal fix is to let a borrower whose relationship lender cannot lend obtain
    NEW credit from a bank with headroom — which needs per-lender debt, i.e. the typed loan
