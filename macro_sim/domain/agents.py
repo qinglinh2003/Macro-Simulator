@@ -44,6 +44,16 @@ class Household:
     holdings: dict = field(default_factory=dict)   # firm_id -> shares held (sparse)
     watchlist: list = field(default_factory=list)  # firm_ids this household trades (incl. its own)
     margin_debt: float = 0.0       # v8: equity-collateralised debt (subset of ledger debt; interest-only)
+    # v23 household credit income-statement bridge.  ``credit_interest_arrears``
+    # is a persistent memo liability, never ledger principal or bank RWA.  The
+    # remaining fields are a tick-tagged journal used for exact stock-flow output.
+    credit_interest_arrears: float = 0.0
+    credit_interest_arrears_opening: float = 0.0
+    credit_interest_accrued: float = 0.0
+    credit_interest_due: float = 0.0
+    credit_interest_cash_paid: float = 0.0
+    credit_interest_arrears_extinguished: float = 0.0
+    credit_interest_journal_tick: int = -1
     labor_sold: float = 0.0        # v9: labor units hired THIS tick (of the 1.0 supplied); 1-this = unemployed frac
     jg_labor: float = 0.0          # v9.3: labor units taken by the job guarantee this tick (buffer stock)
     energy_spent: float = 0.0      # v17.1: household energy outlay this tick (consumption GDP)
@@ -104,8 +114,43 @@ class Firm:
     sales: float = 0.0                   # units sold this tick
     revenue: float = 0.0                 # p_f * sales
     wagebill: float = 0.0                # w_f * hired
-    profit: float = 0.0                  # revenue - wagebill
+    profit: float = 0.0                  # legacy EBITDA-like earnings; full-P&L mode aliases net income
     dividend_shortfall: float = 0.0      # dividends owed but cash-capped (A4, §1.1)
+
+    # Optional long-run capital-service pricing bridge.  These are planning
+    # quantities only: they influence the posted quote but never post cash or
+    # enter P&L as a second expense.
+    pricing_capital_price: float = 0.0
+    pricing_capital_service_rate: float = 0.0
+    pricing_capital_service_cost: float = 0.0
+    pricing_capital_unit_cost: float = 0.0
+
+    # Optional full firm income statement.  Every ``pnl_*`` flow is for the
+    # current tick except ``pnl_interest_arrears``, which is the closing stock
+    # of unpaid contractual interest carried into the next debt-service phase.
+    # The explicit namespace prevents nominal expenses from being confused
+    # with the physical capital/investment fields below.
+    pnl_revenue: float = 0.0
+    pnl_revenue_carry_opening: float = 0.0
+    pnl_revenue_carry: float = 0.0
+    pnl_intermediate_inputs: float = 0.0
+    pnl_compensation: float = 0.0
+    pnl_ebitda: float = 0.0
+    pnl_capital_price: float = 0.0
+    pnl_depreciation: float = 0.0
+    pnl_ebit: float = 0.0
+    pnl_interest_accrued: float = 0.0
+    pnl_interest_arrears_opening: float = 0.0
+    pnl_interest_due: float = 0.0
+    pnl_interest_expense: float = 0.0
+    pnl_interest_shortfall: float = 0.0
+    pnl_interest_arrears: float = 0.0
+    pnl_pre_tax_income: float = 0.0
+    pnl_profit_tax: float = 0.0
+    pnl_windfall_tax: float = 0.0
+    pnl_net_income: float = 0.0
+    pnl_dividends_paid: float = 0.0
+    pnl_retained_earnings: float = 0.0
 
     # ======================================================================
     # v2 -- sector attributes + capital (DESIGNDOC §10). Defaults reproduce a
@@ -132,7 +177,7 @@ class Firm:
     capital_prev: float = 0.0            # K_{f,t-1} snapshot at commit (for the law-of-motion test)
     investment_target: float = 0.0       # I*_{f,t}: notional capital-good demand (B5)
     investment: float = 0.0              # I_{f,t}: realized capital purchased this tick
-    insolvent_ticks: int = 0             # v4: consecutive ticks with D-L<0 (bankruptcy counter)
+    insolvent_ticks: int = 0             # consecutive ticks with active book-equity measure < 0
     idle_ticks: int = 0                  # v13: consecutive ticks with no production and no sales (shell-exit counter)
 
     # v6.1 per-firm equity (DESIGNDOC §18). Each firm is separately traded/valued.
@@ -246,18 +291,50 @@ class Firm:
         )
 
 
+@dataclass(frozen=True)
+class InterbankClaim:
+    """One overnight bank-to-bank position, mirrored on both counterparties.
+
+    ``principal`` is the reserve principal still outstanding.  ``rate`` is the
+    per-tick rate fixed when that principal was advanced (a weighted average if
+    a rolled position and new money share a counterparty).  Interest is cash-
+    realized only; an unpaid amount remains an explicit claim rather than being
+    silently erased or booked as income.
+    """
+
+    principal: float
+    rate: float
+    accrued_interest: float = 0.0
+
+
 @dataclass
 class Bank:
     """The single v3 bank (DESIGNDOC §12). Money is in the ledger (its own deposits
     from retained interest); loan assets = the borrowers' debts (also in the ledger).
-    This holds only the non-ledger state: reserves (the conserved M it carries, §A5;
-    documented, not load-bearing) and per-tick interest bookkeeping.
+    This holds the non-deposit state: realized P&L, ownership, and—when the reserve
+    overlay is enabled—bilateral interbank claims. Live reserves remain authoritative
+    in the ledger's settlement overlay.
     """
     id: str = "BANK"
     rho: float = 0.5               # payout ratio of profit (interest income), like a firm
     reserves: float = 0.0          # base money it holds so ΣR = M (set by economy at genesis)
-    interest_income: float = 0.0   # interest received this tick (scratch)
-    profit: float = 0.0            # = interest_income (no operating costs in minimal v3)
+    # Realized per-tick P&L legs. ``interest_income`` is retained as the legacy
+    # loan-interest alias used by older reports; the named legs are authoritative.
+    interest_income: float = 0.0
+    loan_interest: float = 0.0
+    bond_coupon: float = 0.0
+    interbank_interest_income: float = 0.0
+    interbank_interest_expense: float = 0.0
+    external_interest_expense: float = 0.0
+    deposit_funding_cost: float = 0.0    # v23: contractual interest PAID to depositors (cost of funds)
+    realized_credit_losses: float = 0.0
+    dividends_paid: float = 0.0
+    profit: float = 0.0            # finalized realized net income, before dividends
+    # Overnight reserve claims, keyed by counterparty bank id.  Every asset is
+    # mirrored by the borrower's equal liability; the banking hard gate checks
+    # the bilateral records and aggregate asset=liability identity each phase.
+    interbank_assets: dict[str, InterbankClaim] = field(default_factory=dict)
+    interbank_liabilities: dict[str, InterbankClaim] = field(default_factory=dict)
     kappa_bank: float = 10.0       # v11: leverage cap (loan_book ≤ κ_bank·capital) -- risk appetite
     alive: bool = True             # v11: False once insolvent + resolved (removed from lending)
     # v11.5: the bank is OWNED (equity). Shares held by households; profit → dividends to owners; a valuation

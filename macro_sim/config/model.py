@@ -743,6 +743,11 @@ class Config:
     # bit-identical to v10.
     # ======================================================================
     interest_by_deposits: bool = False    # v10.1: distribute bank interest ∝ household deposits (else equal split)
+    # v23: contractual deposit interest -- the bank's COST OF FUNDS. interest_by_deposits above is
+    # a DISTRIBUTION rule (it splits leftover dividends by deposit share); it is not a P&L expense.
+    # This pays deposit_rate x deposit each tick as a real bank->depositor transfer, booked against
+    # bank profit so a net-interest-margin squeeze becomes possible. 0 => bit-identical.
+    deposit_rate: float = 0.0             # per-tick contractual interest paid on household deposits
 
     # ======================================================================
     # v9.2 -- remove the fixed-nominal-startup money NON-NEUTRALITY (DESIGNDOC §30). New firms enter with a
@@ -1241,6 +1246,7 @@ class Config:
             deposit_rate_disp=self.deposit_rate_disp,
             bank_equity=self.bank_equity,
             interest_by_deposits=self.interest_by_deposits,
+            deposit_rate=self.deposit_rate,
             monetary_direct_transmission=self.monetary_direct_transmission,
             firm_credit_min_dscr=self.firm_credit_min_dscr,
         )

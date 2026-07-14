@@ -213,6 +213,7 @@ class CreditConfig:
     deposit_rate_disp: float
     bank_equity: bool
     interest_by_deposits: bool
+    deposit_rate: float
     monetary_direct_transmission: bool
     firm_credit_min_dscr: float
 
