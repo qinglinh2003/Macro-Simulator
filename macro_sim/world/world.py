@@ -130,13 +130,18 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
     for name in (
         "migration_rate",
         "migration_max_share",
-        "remittance_share",
         "remittance_tax",
         "outward_remittance_tax",
-        "guest_worker_return",
         "wage_smoothing",
     ):
         _bounded_number(name, values[name], lower=0.0, upper=1.0)
+
+    # per-economy migration policy (scalar broadcasts => bit-identical). remittance_share is the
+    # origin diaspora's send-home rate; guest_worker_return is the HOST's temporary-migration return
+    # rate. Vectors let e.g. India remit more, or the Gulf/Hub run guest-worker regimes the others do not.
+    for name in ("remittance_share", "guest_worker_return"):
+        for index, item in enumerate(_per_economy_values(name, values[name], n)):
+            _bounded_number(f"{name}[{index}]", item, lower=0.0, upper=1.0)
 
     # capital_control is per-economy (scalar broadcasts): the multi-economy layer stored it as a
     # single world-wide scalar, so one economy could not close its account while others stayed
@@ -146,9 +151,12 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
     ):
         _bounded_number(f"capital_control[{index}]", item, lower=0.0, upper=1.0)
 
+    # immigration_cap: None => open borders everywhere; a scalar broadcasts; a vector caps each HOST
+    # separately (a host admits <= cap x its population). A very large per-host value = effectively open.
     immigration_cap = values["immigration_cap"]
     if immigration_cap is not None:
-        _bounded_number("immigration_cap", immigration_cap, lower=0.0)
+        for index, item in enumerate(_per_economy_values("immigration_cap", immigration_cap, n)):
+            _bounded_number(f"immigration_cap[{index}]", item, lower=0.0)
 
     emigration_cap = values["emigration_cap"]
     if emigration_cap is not None:
