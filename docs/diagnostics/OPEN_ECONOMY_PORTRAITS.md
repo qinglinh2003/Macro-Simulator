@@ -166,6 +166,38 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
+### FINDING 3 (FIXED, commit a97b902) — `capital_control` was an INCONSISTENT throttle
+
+Surfaced by the smoke causal matrix: the `capital_control` arm produced LARGER external positions
+(NFA ≈ 268/572/262) than the open-account `rate_divergence` arm (≈ 80/−32/16) — closing the account
+appeared to *inflate* the external sector, backwards from the trilemma.
+
+**Root cause.** `capital_control` throttled the capital FLOW (`capital_financing`) and peg defense by
+`(1 − capital_control)`, but `capital_grope_signal` kept groping toward the FULL open-account
+`target_positions`. So a fully-closed account (`capital_control = 1.0`) did NOT reduce to zero capital
+mobility — the FX rate still chased a capital-sustained position the account was forbidden to finance,
+and `capital_control` interpolated inconsistently between its endpoints.
+
+**Fix.** Throttle the grope target by `(1 − capital_control)` too. Verified: `capital_control = 1.0`
+is now **byte-identical** to `capital_mobility = 0` (was [104,83,237] vs [161,299,237]);
+`capital_control = 0` unchanged (bit-identical, 43 FX/capital/policy/BoP tests pass incl.
+`test_capital_controls_save_the_peg`).
+
+**The large closed-account NFA is NOT a bug** (the matrix's first read was wrong). `capital=False`
+(no capital layer at all) shows the SAME large NFA [135,267,165]: with capital immobile, trade
+imbalances can only clear through slow FX adjustment, so positions build up transiently; it is OPEN
+capital (cc=0) that STABILISES the external position to small NFA. Whether the closed-account NFA
+stabilises over a 30-year horizon is a portrait question, not a defect.
+
+### FINDING 2 (null, honest) — a −35% energy capacity shock is absorbed by spare capacity
+
+The `energy_shock` arm was byte-identical to baseline. Not a wiring bug: the shock fires
+(`sum(energy_shock_active) = 146` ticks, `capacity_kappa` 1.0 → 0.65) but never BINDS —
+steady-state energy capacity utilisation is ~49%, so capacity at 65% stays above demand
+(`energy_cap_binding = 0`). Spare capacity fully buffers a moderate supply shock — a realistic null.
+The matrix arm now uses magnitude 0.6 (capacity → 40%, below the ~49% utilisation) so the constraint
+actually bites and the trade/FX transmission channel becomes visible.
+
 ### FINDING 1 (RESOLVED, commit 89d6627) — capital explodes 365× via a DOUBLE annual-clock migration in `dataclasses.replace`
 
 **Root cause (the coupling attribution below was WRONG).** `Config._apply_capital_annual_clock`
