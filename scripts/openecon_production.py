@@ -130,15 +130,15 @@ def validate(years, pop_div):
               f"{r['gdp_cov']:>9}{r['gdp_end']:>9}{flag}")
 
 
-def run_production(years, out, pop_div=1):
+def run_production(years, out, pop_div=1, pop_mult=1.0, base_seed=4242):
     from scripts.openecon_portrait import run_portrait
-    pops = [max(150, p // pop_div) for p in mapped_pops()]
+    pops = [max(150, int(round(p * pop_mult)) // pop_div) for p in mapped_pops()]
     n = len(ARCHETYPES)
     overrides = [cfg_kwargs(a, pops[i]) for i, a in enumerate(ARCHETYPES)]
     # capital_control is a World vector; the rest are per-Config (already in overrides).
     names = [a["name"] for a in ARCHETYPES]
     world_over = dict(
-        base_seed=4242, trade=True, capital=True, migration=True,
+        base_seed=base_seed, trade=True, capital=True, migration=True,
         capital_mobility=1.0, capital_adjust=0.2, migration_rate=0.02,
         fx_friction=0.03,
         capital_control=[a["cc"] for a in ARCHETYPES],
@@ -165,6 +165,8 @@ def main():
     ap.add_argument("--validate", action="store_true")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--pop-div", type=int, default=1, help="divide mapped pops (for fast tests)")
+    ap.add_argument("--pop-mult", type=float, default=1.0, help="multiply mapped pops (2.0 = double scale)")
+    ap.add_argument("--base-seed", type=int, default=4242, help="world base seed (vary for seed replicates)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -177,7 +179,8 @@ def main():
         print(f"\nsmoke DONE wall={s['wall_seconds']}s ident={ident.get('all_checks_passed')}")
         return
     out = args.out or f"artifacts/openecon/prod6_{int(args.years)}y"
-    s = run_production(years=args.years, out=out, pop_div=args.pop_div)
+    s = run_production(years=args.years, out=out, pop_div=args.pop_div,
+                       pop_mult=args.pop_mult, base_seed=args.base_seed)
     ident = s.get("identity") or {}
     print(f"\nDONE wall={s['wall_seconds']}s ticks/s={s['ticks_per_second']} "
           f"identities_all_pass={ident.get('all_checks_passed')} failed={ident.get('failed_checks')}")
