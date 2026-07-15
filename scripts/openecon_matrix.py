@@ -60,9 +60,11 @@ def arms(n: int, years: float):
         # one economy grows faster (allocation puzzle / convergence)
         ("productivity_divergence", dict(base_seed=100),
          [{"tfp_drift_rate": 0.04}] + [None] * (n - 1)),
-        # an energy shock in ONE economy -> trade + FX transmission
+        # an energy shock in ONE economy -> trade + FX transmission. Magnitude 0.6: a 35% cut
+        # is fully absorbed by spare capacity (steady-state energy utilisation ~49%, so capacity
+        # at 65% never binds); cutting to 40% forces the capacity constraint to bite.
         ("energy_shock", dict(base_seed=100),
-         [{"energy_shock_at": shock_at, "energy_shock_magnitude": 0.35,
+         [{"energy_shock_at": shock_at, "energy_shock_magnitude": 0.6,
            "energy_shock_duration": shock_dur}] + [None] * (n - 1)),
         # one economy runs a higher POLICY rate -> trilemma: capital inflow + FX pressure
         ("rate_divergence", dict(base_seed=100),

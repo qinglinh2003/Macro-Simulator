@@ -516,11 +516,21 @@ def capital_financing(world, i, best_price) -> float:
 
 def capital_grope_signal(world, scaled):
     """When capital is on, the rate gropes toward the capital-SUSTAINED position, not zero:
-    signal_i = (inventory_i − target_i)/M_i. At the target the rate is stable and the NFA
-    persists (else a nonzero equilibrium position would depreciate the rate forever).
-    off ⇒ signal unchanged ⇒ v20 mean-to-zero groping ⇒ bit-identical."""
+    signal_i = (inventory_i − throttle·target_i)/M_i. At the target the rate is stable and the
+    NFA persists (else a nonzero equilibrium position would depreciate the rate forever).
+    off ⇒ signal unchanged ⇒ v20 mean-to-zero groping ⇒ bit-identical.
+
+    POLICY: capital controls throttle the grope target by (1 − capital_control), exactly as they
+    throttle the capital FLOW in ``capital_financing``. Without this the rate chased the FULL
+    open-account target while the account was closed, so under a closed account (capital_control
+    → 1) the rate over-shot toward a position capital could not finance and TRADE flows filled the
+    gap — inflating external positions instead of shrinking them (the opposite of the trilemma's
+    third corner). At capital_control = 0 the throttle is 1.0 ⇒ bit-identical to the open account;
+    at 1.0 the target is 0 ⇒ the rate reverts to v20 trade-balance groping, so a closed account +
+    an independent rate no longer manufacture a spurious NFA."""
     if not world.capital or world.capital_mobility == 0.0:
         return scaled
+    throttle = 1.0 - world.capital_control
     target = target_positions(world)
-    return [scaled[i] - target[i] / max(1.0, world.economies[i].ledger.total_money)
+    return [scaled[i] - throttle * target[i] / max(1.0, world.economies[i].ledger.total_money)
             for i in range(world.n)]
