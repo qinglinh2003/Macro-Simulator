@@ -136,6 +136,7 @@ def run_production(years, out, pop_div=1):
     n = len(ARCHETYPES)
     overrides = [cfg_kwargs(a, pops[i]) for i, a in enumerate(ARCHETYPES)]
     # capital_control is a World vector; the rest are per-Config (already in overrides).
+    names = [a["name"] for a in ARCHETYPES]
     world_over = dict(
         base_seed=4242, trade=True, capital=True, migration=True,
         capital_mobility=1.0, capital_adjust=0.2, migration_rate=0.02,
@@ -144,6 +145,9 @@ def run_production(years, out, pop_div=1):
         immigration_cap=[a["imm"] for a in ARCHETYPES],       # per-host: China restrictive, Gulf open door
         guest_worker_return=[a["gwr"] for a in ARCHETYPES],   # per-host: Gulf/Hub temporary labour
         remittance_share=[a["rem"] for a in ARCHETYPES],      # per-origin: India remits most
+        # China manages its FX: pegs to the USD (managed float + capital controls = the trilemma corner)
+        peg=True, peg_economy=names.index("China"), peg_anchor=names.index("USA"),
+        peg_reserves0=8000.0, peg_reserve_scale=5.0e4,
     )
     print("PRODUCTION PORTRAIT (6 real-world archetypes)")
     for a, pop in zip(ARCHETYPES, pops):
