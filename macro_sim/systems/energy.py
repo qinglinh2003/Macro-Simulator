@@ -309,6 +309,25 @@ def run_energy_phase(econ: Any) -> None:
     if ordering is not None:
         orders = ordering(econ, orders)
 
+    # Stable order-book journals for root-cause diagnostics.  ``energy_unfilled``
+    # alone cannot say whether the pressure came from industry, households, or the
+    # strategic reserve, and previously forced the diagnostic layer to guess.
+    # These are observation-only requested quantities after any rationing hook and
+    # before the transactional session mutates offers.
+    econ._energy_orders_total = sum(max(0.0, o.demand) for o in orders)
+    econ._energy_orders_firms = sum(
+        max(0.0, o.demand) for o in orders if isinstance(o.ref, Firm)
+    )
+    econ._energy_orders_households = sum(
+        max(0.0, o.demand) for o in orders if isinstance(o.ref, Household)
+    )
+    econ._energy_orders_public = max(
+        0.0,
+        econ._energy_orders_total
+        - econ._energy_orders_firms
+        - econ._energy_orders_households,
+    )
+
     # v17.4 PRICE CAP: market asks are CLAMPED at the cap (the posted price keeps its
     # own B3 dynamics -- the cap is a market rule, not a repricing). 0 = off.
     cap = econ.policy.energy_price_cap if gov else 0.0
@@ -340,11 +359,17 @@ def run_energy_phase(econ: Any) -> None:
         trades = execute_market(orders, offers, protocol=econ.protocol,
                                 rng=econ._energy_rng, ledger=econ.ledger)
 
+    national_accounts = getattr(econ, "_national_accounts", None)
+    if national_accounts is not None:
+        national_accounts.observe_energy_trades(econ, trades)
+
     bought_q: Dict[str, float] = {}
     bought_v: Dict[str, float] = {}
+    sold_v: Dict[str, float] = {}
     for tr in trades:
         bought_q[tr.buyer] = bought_q.get(tr.buyer, 0.0) + tr.qty
         bought_v[tr.buyer] = bought_v.get(tr.buyer, 0.0) + tr.value
+        sold_v[tr.seller] = sold_v.get(tr.seller, 0.0) + tr.value
     total_q = total_v = 0.0
     for f in energy_using_firms(econ):
         q = bought_q.get(f.id, 0.0)
@@ -406,8 +431,19 @@ def run_energy_phase(econ: Any) -> None:
     # v17.3 SPR settlement: buys enter the reserve stock; a release drains it.
     if gov and (spr_buy > 0.0 or spr_offer is not None):
         q_in = bought_q.get(econ._fiscal, 0.0)
+        purchase_paid = bought_v.get(econ._fiscal, 0.0)
+        sale_revenue = sold_v.get(econ._fiscal, 0.0)
+        # These are cash-flow journals, so use the settled Trade.value rather than
+        # the requested quantity or posted offer.  Partial fills, price caps and
+        # rationing therefore reconcile exactly to the Treasury account.
+        econ._spr_purchase_paid = (
+            getattr(econ, "_spr_purchase_paid", 0.0) + purchase_paid
+        )
+        econ._spr_sale_revenue = (
+            getattr(econ, "_spr_sale_revenue", 0.0) + sale_revenue
+        )
         econ._spr_stock = getattr(econ, "_spr_stock", 0.0) + q_in
-        econ._spr_cost = getattr(econ, "_spr_cost", 0.0) + bought_v.get(econ._fiscal, 0.0)
+        econ._spr_cost = getattr(econ, "_spr_cost", 0.0) + purchase_paid
         if spr_offer is not None and spr_offer.sold > 0.0:
             avg = econ._spr_cost / max(EPS, econ._spr_stock)
             econ._spr_stock = max(0.0, econ._spr_stock - spr_offer.sold)
@@ -442,19 +478,27 @@ def run_energy_phase(econ: Any) -> None:
     # output pinned at 40% of baseline). The market OBSERVED the addressed demand, so
     # E-firm expectations get the B2 correction for the unfilled component, pro-rata to
     # sales (equal split if nothing sold). Zero when the market clears => no-op in slack.
-    unfilled = max(0.0, sum(o.demand for o in orders) - total_q)
+    # ``total_q`` above is deliberately the quantity bought by downstream firms,
+    # because it is used to update their input stocks.  It excludes household and
+    # SPR purchases, however, so it is not the cleared quantity of this market.
+    # Using it here used to report every fulfilled household order as unfilled and
+    # fed that phantom shortage back into E-firm expectations.
+    cleared_q = sum(tr.qty for tr in trades)
+    unfilled = max(0.0, sum(o.demand for o in orders) - cleared_q)
     if unfilled > EPS and econ.e_firms and cfg.capital_enabled:
         # Gated on the K market existing: the correction FEEDS THE ACCELERATOR; without
         # a way to expand capacity it would only inflate expectations the firm cannot
         # act on (the kernel world keeps plain B2-on-sales).
+        private_energy_sales = sum(ef.sales for ef in econ.e_firms)
         for ef in econ.e_firms:
-            share = (ef.sales / total_q) if total_q > EPS else (1.0 / len(econ.e_firms))
+            share = (ef.sales / private_energy_sales) if private_energy_sales > EPS \
+                else (1.0 / len(econ.e_firms))
             ef.demand_expected += ef.lambda_d * unfilled * share
     econ._energy_unfilled = unfilled
 
     # Transaction-weighted price index over ALL session trades (firms + households +
     # SPR), hold-last (burn-in discard is downstream's duty).
-    idx_q = sum(tr.qty for tr in trades)
+    idx_q = cleared_q
     idx_v = sum(tr.value for tr in trades)
     if idx_q > EPS:
         econ._energy_price = idx_v / idx_q

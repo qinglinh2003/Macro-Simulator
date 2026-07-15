@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Any, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 
 # Shared epsilon: below this, a quantity/budget is treated as exhausted. Keeps
@@ -60,8 +60,123 @@ class Trade:
     value: float
 
 
+@dataclass(frozen=True)
+class UnmetDemandVisit:
+    """One protocol-generated, unsuccessful diagnostic seller visit.
+
+    ``qty`` is a physical counterfactual at the selected seller's posted quote:
+    the buyer would have bought at most this quantity had the visited seller had
+    stock.  It is deliberately *not* the buyer's unspent nominal budget.  Keeping
+    the quote makes the nominal/real conversion auditable.
+    """
+
+    buyer: str
+    seller: str
+    qty: float
+    price: float
+    affordable_value: float
+
+
+@dataclass
+class MarketTrace:
+    """Optional attribution trace for supply-constrained demand.
+
+    The normal market API still returns only trades.  Callers that explicitly
+    opt in may pass a trace and receive records of protocol-consistent diagnostic
+    visits after the transactional live set has emptied.  These visits use an
+    isolated random stream; they are not historical transaction-path observations.
+    Buyers for which the matching protocol cannot identify a quoted seller are
+    counted as unattributed rather than being spread across firms by assumption.
+    This object is non-transactional in the current market: it never moves goods
+    or money, although callers may deliberately feed its signal into later plans.
+    """
+
+    visits: List[UnmetDemandVisit] = field(default_factory=list)
+    unattributed_orders: int = 0
+    unattributed_budget: float = 0.0
+    unattributed_finite_demand: float = 0.0
+
+    def record(self, buyer: BuyOrder, seller: SellOffer, *,
+               remaining_budget: float, remaining_demand: float) -> None:
+        affordable = remaining_budget / seller.price
+        qty = min(remaining_demand, affordable)
+        if qty <= EPS:
+            return
+        self.visits.append(UnmetDemandVisit(
+            buyer=buyer.account,
+            seller=seller.account,
+            qty=qty,
+            price=seller.price,
+            affordable_value=qty * seller.price,
+        ))
+
+    def record_unattributed(self, *, remaining_budget: float,
+                            remaining_demand: float) -> None:
+        self.unattributed_orders += 1
+        self.unattributed_budget += max(0.0, remaining_budget)
+        if remaining_demand != float("inf"):
+            self.unattributed_finite_demand += max(0.0, remaining_demand)
+
+    @property
+    def by_seller(self) -> Dict[str, float]:
+        totals: Dict[str, float] = {}
+        for visit in self.visits:
+            totals[visit.seller] = totals.get(visit.seller, 0.0) + visit.qty
+        return totals
+
+    @property
+    def attributable_qty(self) -> float:
+        return sum(visit.qty for visit in self.visits)
+
+
+def _trace_supply_constrained_residual(
+    buyer: BuyOrder,
+    offers: Sequence[SellOffer],
+    protocol: "MatchingProtocol",
+    rng: random.Random,
+    trace: Optional[MarketTrace],
+    *,
+    remaining_budget: float,
+    remaining_demand: float,
+) -> None:
+    """Generate one diagnostic unsuccessful visit after the live set empties.
+
+    This helper is never called unless a trace was requested, preserving both
+    the code path and RNG stream of every legacy configuration.  Its RNG is an
+    isolated fork seeded from the transactional stream after buyer ordering.  It
+    follows the same protocol, but deliberately does not pretend to reproduce the
+    transaction stream's earlier seller draws or an historically observed final
+    attempt.  Unknown protocols may decline to identify a seller, in which case
+    the residual stays aggregate/unattributed.
+    """
+
+    if trace is None or remaining_budget <= EPS or remaining_demand <= EPS:
+        return
+    if any(
+        offer.stock > EPS and offer.price > 0.0 and offer.account != buyer.account
+        for offer in offers
+    ):
+        # The order stopped for a budget/demand/self-trade edge rather than an
+        # economy-wide empty live choice set.  Do not label it a stock-out.
+        return
+    seller = protocol.unavailable_seller_visit(buyer, offers, rng)
+    if seller is None:
+        trace.record_unattributed(
+            remaining_budget=remaining_budget,
+            remaining_demand=remaining_demand,
+        )
+        return
+    trace.record(
+        buyer,
+        seller,
+        remaining_budget=remaining_budget,
+        remaining_demand=remaining_demand,
+    )
+
+
 def execute_market(orders: "List[BuyOrder]", offers: "List[SellOffer]", *,
-                   protocol: "MatchingProtocol", rng: random.Random, ledger) -> "List[Trade]":
+                   protocol: "MatchingProtocol", rng: random.Random, ledger,
+                   unmet_trace: Optional[MarketTrace] = None) -> "List[Trade]":
     """Run one decentralized market to exhaustion (M1). Reused by the consumption
     market (Phase 3) and the capital-goods market (Phase 3.5).
 
@@ -74,6 +189,14 @@ def execute_market(orders: "List[BuyOrder]", offers: "List[SellOffer]", *,
     trades: List[Trade] = []
     buy_order = list(orders)
     rng.shuffle(buy_order)
+    trace_rng: Optional[random.Random] = None
+    if unmet_trace is not None:
+        # The trace must only affect next-period planning.  Forking after the
+        # transactional buyer-order draw makes quote visits reproducible while
+        # leaving this market, later sessions, and the next tick's main RNG
+        # exactly as they would be without observation.
+        trace_rng = random.Random()
+        trace_rng.setstate(rng.getstate())
 
     if isinstance(protocol, PreferentialMatch):
         # v8.1 Gibrat/Zipf path: a buyer picks a live seller with probability ∝ attractiveness^β
@@ -113,6 +236,10 @@ def execute_market(orders: "List[BuyOrder]", offers: "List[SellOffer]", *,
                 if so.stock <= EPS:
                     live[chosen] = live[-1]
                     live.pop()
+            _trace_supply_constrained_residual(
+                bo, offers, protocol, trace_rng, unmet_trace,
+                remaining_budget=rem_budget, remaining_demand=rem_demand,
+            )
         return trades
 
     if isinstance(protocol, SampledCompareMatch):
@@ -165,6 +292,10 @@ def execute_market(orders: "List[BuyOrder]", offers: "List[SellOffer]", *,
                 if so.stock <= EPS:
                     live[chosen] = live[-1]                   # swap-pop the exhausted seller
                     live.pop()
+            _trace_supply_constrained_residual(
+                bo, offers, protocol, trace_rng, unmet_trace,
+                remaining_budget=rem_budget, remaining_demand=rem_demand,
+            )
         return trades
 
     # Generic path (e.g. PriceSortedMatch): consult the protocol's per-buyer ordering.
@@ -186,6 +317,10 @@ def execute_market(orders: "List[BuyOrder]", offers: "List[SellOffer]", *,
             rem_budget -= value
             rem_demand -= qty
             trades.append(Trade(bo.account, so.account, qty, so.price, value))
+        _trace_supply_constrained_residual(
+            bo, offers, protocol, trace_rng, unmet_trace,
+            remaining_budget=rem_budget, remaining_demand=rem_demand,
+        )
     return trades
 
 
@@ -197,6 +332,18 @@ class MatchingProtocol:
     def seller_order(self, buyer: BuyOrder, offers: Sequence[SellOffer],
                      rng: random.Random) -> List[SellOffer]:
         raise NotImplementedError
+
+    def unavailable_seller_visit(self, buyer: BuyOrder,
+                                 offers: Sequence[SellOffer],
+                                 rng: random.Random) -> Optional[SellOffer]:
+        """Select a seller for a protocol-consistent diagnostic failed visit.
+
+        There is intentionally no generic allocation fallback.  A protocol
+        must define how an out-of-stock quote would be discovered; otherwise
+        the residual remains aggregate and cannot enter firm planning.
+        """
+
+        return None
 
 
 class SampledCompareMatch(MatchingProtocol):
@@ -227,6 +374,25 @@ class SampledCompareMatch(MatchingProtocol):
         rng.shuffle(live)
         k = min(self.m, len(live))
         return sorted(live[:k], key=lambda o: o.price) + live[k:]
+
+    def unavailable_seller_visit(self, buyer: BuyOrder,
+                                 offers: Sequence[SellOffer],
+                                 rng: random.Random) -> Optional[SellOffer]:
+        # The diagnostic visitor repeats the protocol's quote-search rule, but the
+        # candidate shelf is now empty.  m=1 uses the same one-seller visit;
+        # m>1 draws a diagnostic sample and visits its cheapest quoted seller.
+        candidates = [
+            offer for offer in offers
+            if offer.price > 0.0 and offer.account != buyer.account
+        ]
+        if not candidates:
+            return None
+        L = len(candidates)
+        if self.m == 1:
+            return candidates[rng.randrange(L)]
+        k = self.m if self.m < L else L
+        idxs = range(L) if k >= L else rng.sample(range(L), k)
+        return min((candidates[j] for j in idxs), key=lambda offer: offer.price)
 
 
 class RandomMatch(SampledCompareMatch):
@@ -259,6 +425,28 @@ class PreferentialMatch(MatchingProtocol):
         rng.shuffle(live)      # fallback; execute_market fast-paths the weighted selection
         return live
 
+    def unavailable_seller_visit(self, buyer: BuyOrder,
+                                 offers: Sequence[SellOffer],
+                                 rng: random.Random) -> Optional[SellOffer]:
+        candidates = [
+            offer for offer in offers
+            if offer.price > 0.0 and offer.account != buyer.account
+        ]
+        if not candidates:
+            return None
+        weights = [
+            max(EPS, getattr(offer.ref, "attractiveness", 1.0)) ** self.beta
+            / offer.price ** self.price_elasticity
+            for offer in candidates
+        ]
+        draw = rng.random() * sum(weights)
+        cumulative = 0.0
+        for offer, weight in zip(candidates, weights):
+            cumulative += weight
+            if draw <= cumulative:
+                return offer
+        return candidates[-1]
+
 
 class PriceSortedMatch(MatchingProtocol):
     """Deferred alternative (spec §5, §7.3): buyers prefer cheaper sellers, which
@@ -274,6 +462,19 @@ class PriceSortedMatch(MatchingProtocol):
         rng.shuffle(live)                     # randomize ties first...
         live.sort(key=lambda o: o.price)      # ...then stable-sort by price
         return live
+
+    def unavailable_seller_visit(self, buyer: BuyOrder,
+                                 offers: Sequence[SellOffer],
+                                 rng: random.Random) -> Optional[SellOffer]:
+        candidates = [
+            offer for offer in offers
+            if offer.price > 0.0 and offer.account != buyer.account
+        ]
+        if not candidates:
+            return None
+        rng.shuffle(candidates)               # seeded random tie break, as above
+        candidates.sort(key=lambda offer: offer.price)
+        return candidates[0]
 
 
 @dataclass

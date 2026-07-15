@@ -44,8 +44,17 @@ def test_builders_created_on_the_firm_rails():
 def test_construction_mints_and_stock_grows():
     econ = make_econ(builder_productivity=0.05)      # hot productivity: mint within weeks
     stock0 = econ.housing.count()
+    land_fee_total = 0.0
     for _ in range(200):
         econ.step()
+        new_total = getattr(econ, "_land_fee_paid", 0.0)
+        assert econ.records[-1]["fiscal_land_fee_revenue"] == pytest.approx(
+            new_total - land_fee_total
+        )
+        assert getattr(econ, "_land_fee_paid_tick", 0.0) == pytest.approx(
+            new_total - land_fee_total
+        )
+        land_fee_total = new_total
     assert econ.housing.count() > stock0             # primary supply exists
     assert getattr(econ, "_dwellings_built", 0) >= 1
     assert getattr(econ, "_land_fee_paid", 0.0) > 0.0

@@ -21,10 +21,14 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from macro_sim.config import Config                # noqa: E402
 from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.reporting.metrics import compute_tick_metrics  # noqa: E402
+from macro_sim.systems.energy import household_energy_need, run_energy_phase  # noqa: E402
 
 NC, NK, NH = 60, 30, 400
 
@@ -218,6 +222,20 @@ def test_hh_energy_share_and_poverty_gradient():
     assert sum(r["energy_hh_spend"] for r in recs) > 0.0
 
 
+def test_fulfilled_household_energy_is_not_reported_as_unfilled():
+    """All genesis energy orders are fitted to available supply.  Household trades
+    therefore belong in the market-wide cleared quantity used by the shortage gauge,
+    even though they do not replenish a downstream firm's input stock."""
+    econ = Economy(Config.v124(
+        n_firms_c=10, n_firms_k=5, n_households=50, n_ticks=1, seed=0,
+        energy_enabled=True, energy_household=True,
+    ))
+    record = econ.step()
+    expected_household_units = household_energy_need(econ.cfg) * len(econ.households)
+    assert record["energy_hh_units"] == pytest.approx(expected_household_units)
+    assert record["energy_unfilled"] == pytest.approx(0.0, abs=1e-10)
+
+
 def test_hh_energy_necessity_inelastic():
     """Necessity on the calibrated world: under a >1.2x energy price rise (mild E TFP
     cut; a 2x cut demand-destroys the stabilizer-free KERNEL permanently — probed,
@@ -363,6 +381,109 @@ def test_spr_builds_and_conserves():
     assert max(abs(r["energy_flow_gap"]) for r in recs[1:]) < 1e-9 * scale, \
         "flow gauge broke with the SPR"
     assert max(r["conservation_drift"] for r in recs) < 1e-6 * max(r["total_money"] for r in recs)
+
+
+def test_spr_actual_build_and_release_cash_reconcile_to_treasury():
+    """SPR cash journals follow settled market value, including a partial fill.
+
+    The same reserve is first built from a deliberately supply-constrained energy
+    session, then released into an otherwise empty market.  This exercises the real
+    matching and ledger paths rather than injecting synthetic fiscal counters.
+    """
+    econ = Economy(Config(
+        n_households=4,
+        n_firms_c=2,
+        n_firms_k=1,
+        n_ticks=1,
+        seed=1801,
+        bank_enabled=True,
+        government=True,
+        energy_enabled=True,
+        n_firms_e=2,
+        spr_target_units=1.0,
+        spr_flow_cap=1.0,
+        national_accounts_metrics=True,
+    ))
+
+    # Isolate the build: downstream users submit no orders and private supply is
+    # only 0.75 units, so the fiscal order for 1.0 is necessarily partially filled.
+    for firm in econ.c_firms + econ.k_firms:
+        firm.energy_intensity = 0.0
+    for producer in econ.e_firms:
+        producer.hired = 0.0
+        producer.inventory = 0.0
+        producer.price = 2.0
+    econ.e_firms[0].inventory = 0.75
+    econ._spr_purchase_paid = 0.0
+    econ._spr_sale_revenue = 0.0
+    econ._fiscal_opening_balance = econ.ledger.balance(econ._fiscal)
+
+    fiscal_before = econ.ledger.balance(econ._fiscal)
+    run_energy_phase(econ)
+    purchase_cash = fiscal_before - econ.ledger.balance(econ._fiscal)
+
+    assert econ._spr_stock == pytest.approx(0.75)
+    assert econ._spr_cost == pytest.approx(purchase_cash)
+    assert econ._spr_purchase_paid == pytest.approx(purchase_cash)
+    assert econ._spr_sale_revenue == pytest.approx(0.0)
+    build = compute_tick_metrics(econ)
+    assert build["fiscal_spr_purchase_paid"] == pytest.approx(purchase_cash)
+    assert build["augmented_gov_spending"] == pytest.approx(purchase_cash)
+    assert build["cash_deficit"] == pytest.approx(purchase_cash)
+    assert build["treasury_account_net_outflow"] == pytest.approx(purchase_cash)
+    assert build["treasury_implied_financing_and_unclassified_inflow"] == pytest.approx(0.0)
+
+    # Isolate the release: one downstream firm wants one unit, private producers
+    # have none, and the 0.75-unit reserve is therefore the only executable offer.
+    buyer = econ.c_firms[0]
+    buyer.energy_intensity = 1.0
+    buyer.production_target = 1.0
+    buyer.demand_expected = 0.0
+    buyer.energy_stock = 0.0
+    buyer.energy_stock_cost = 0.0
+    for producer in econ.e_firms:
+        producer.hired = 0.0
+        producer.inventory = 0.0
+        producer.price = 2.0
+    econ.policy.spr_target_units = 0.0
+    econ._spr_purchase_paid = 0.0
+    econ._spr_sale_revenue = 0.0
+    econ._fiscal_opening_balance = econ.ledger.balance(econ._fiscal)
+
+    fiscal_before = econ.ledger.balance(econ._fiscal)
+    run_energy_phase(econ)
+    sale_cash = econ.ledger.balance(econ._fiscal) - fiscal_before
+
+    assert sale_cash > 0.0
+    assert econ._spr_stock == pytest.approx(0.0)
+    assert econ._spr_cost == pytest.approx(0.0)
+    assert econ._spr_purchase_paid == pytest.approx(0.0)
+    assert econ._spr_sale_revenue == pytest.approx(sale_cash)
+    release = compute_tick_metrics(econ)
+    assert release["fiscal_spr_sale_revenue"] == pytest.approx(sale_cash)
+    assert release["fiscal_non_tax_revenue"] == pytest.approx(sale_cash)
+    assert release["cash_deficit"] == pytest.approx(-sale_cash)
+    assert release["treasury_account_net_outflow"] == pytest.approx(-sale_cash)
+    assert release["treasury_implied_financing_and_unclassified_inflow"] == pytest.approx(0.0)
+
+
+def test_spr_cash_journals_reset_at_tick_open():
+    econ = Economy(Config(
+        n_households=4,
+        n_firms_c=2,
+        n_firms_k=1,
+        n_ticks=1,
+        seed=1802,
+        bank_enabled=True,
+        government=True,
+    ))
+    econ._spr_purchase_paid = 19.0
+    econ._spr_sale_revenue = 23.0
+
+    econ._run_pre_settlement_phases()
+
+    assert econ._spr_purchase_paid == pytest.approx(0.0)
+    assert econ._spr_sale_revenue == pytest.approx(0.0)
 
 
 def test_spr_release_damps_the_shock():

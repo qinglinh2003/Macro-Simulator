@@ -79,6 +79,21 @@ def test_taylor_rule_responds_to_inflation():
     assert r_hi > r_lo, f"rate should rise with inflation: hi={r_hi:.4f} vs lo={r_lo:.4f}"
 
 
+def test_manual_rate_override_does_not_freeze_inflation_sensor():
+    """A hand-set rate replaces the policy decision only; the information state
+    must keep updating so releasing the override does not create a hidden shock."""
+    econ = Economy(Config.v10(n_firms_c=10, n_firms_k=5, n_households=40, n_ticks=1, seed=0))
+    econ._infl_ema = 0.01
+    econ._prev_inflation = 0.03
+    expected = 0.01 + econ.cfg.infl_ema_lambda * (0.03 - 0.01)
+    econ.policy.policy_rate_override = 0.0
+
+    set_policy_rate(econ)
+
+    assert econ._rate == 0.0
+    assert econ._infl_ema == expected
+
+
 def test_rate_is_non_neutral_and_deters_entry():
     """The rate has real effects (money is non-neutral), and the cost-of-capital channel is present: a higher
     rate DETERS FIRM ENTRY (entry hurdle = return − r). We deliberately do NOT assert the sign of the OUTPUT

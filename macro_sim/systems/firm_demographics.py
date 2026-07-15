@@ -6,8 +6,10 @@ from typing import Any
 
 from macro_sim.domain.agents import Firm
 from macro_sim.markets.matching import EPS
-from macro_sim.systems.banking import bank_for
+from macro_sim.systems.banking import bank_for, record_bank_credit_loss
 from macro_sim.systems.energy import seed_entrant_energy
+from macro_sim.systems.firm_accounting import firm_earnings, replacement_capital_price
+from macro_sim.systems.firm_balance_sheet import entrant_equity_book_value, firm_balance_sheet
 
 
 def apply_gibrat_shock(econ: Any) -> None:
@@ -23,7 +25,6 @@ def apply_gibrat_shock(econ: Any) -> None:
 
 def run_firm_demographics_phase(econ: Any) -> None:
     econ._births = econ._deaths = 0
-    econ._writeoffs = 0.0
     cfg = econ.cfg.firm_demographics
     if not cfg.firm_dynamics:
         return
@@ -31,7 +32,16 @@ def run_firm_demographics_phase(econ: Any) -> None:
     dead = []
     idle_exits = []
     for f in econ.c_firms:
-        nw = econ.ledger.balance(f.id) - econ.ledger.debt(f.id)
+        # With priced assets enabled, insolvency is a balance-sheet condition,
+        # not a shortage of transaction deposits.  The historical cash-minus-debt
+        # test could liquidate a firm whose replacement-value capital and inventory
+        # more than covered its liabilities.  Liquidity stress remains observable
+        # through unpaid-interest arrears; it is not silently relabeled insolvency.
+        nw = (
+            firm_balance_sheet(econ, f).book_equity
+            if getattr(econ.cfg, "priced_firm_balance_sheet", False)
+            else econ.ledger.balance(f.id) - econ.ledger.debt(f.id)
+        )
         f.insolvent_ticks = f.insolvent_ticks + 1 if nw < -EPS else 0
         if f.insolvent_ticks >= cfg.bankrupt_persist:
             dead.append(f)
@@ -89,7 +99,9 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
         led.repay(firm.id, pay)
     bad = led.debt(firm.id)
     if bad > EPS:
-        led.write_off(firm.id, bank_for(econ, firm.id).id, bad)
+        bank_id = bank_for(econ, firm.id).id
+        led.write_off(firm.id, bank_id, bad)
+        record_bank_credit_loss(econ, bank_id, bad)
         econ._writeoffs += bad
     residual = led.balance(firm.id)
     if residual > EPS:
@@ -120,6 +132,10 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
             econ.l_firms.remove(firm)
     elif firm in econ.k_firms:              # v16-L6: subscale exit reaches K-firms too
         econ.k_firms.remove(firm)
+    # Bankruptcy/liquidation runs after settlement but before reporting.  Preserve
+    # the closed current-tick P&L after the live-agent removal so counterpart cash
+    # journals and the income-statement perimeter describe the same transactions.
+    econ._exited_firms_tick.append(firm)
     econ.firms.remove(firm)
     if firm in econ.investing_firms:
         econ.investing_firms.remove(firm)
@@ -177,10 +193,17 @@ def enter_consumption_firms(econ: Any) -> None:
         # (2) take the median over ALL capitalized firms, not just the profitable ones --
         # conditioning on profit > 0 is survivor bias, so the median was positive by
         # construction and entry never turned off.
-        p = max(EPS, econ._price_level)
-        rates = sorted(f.profit / (f.capital * p) for f in econ.c_firms if f.capital > EPS)
+        rates = sorted(
+            firm_earnings(econ, f) / _capital_return_denominator(econ, f)
+            for f in econ.c_firms
+            if f.capital > EPS
+        )
     else:
-        rates = sorted(f.profit / f.capital for f in econ.c_firms if f.profit > EPS and f.capital > EPS)
+        rates = sorted(
+            firm_earnings(econ, f) / f.capital
+            for f in econ.c_firms
+            if firm_earnings(econ, f) > EPS and f.capital > EPS
+        )
     if not rates:
         return
     profit_rate = rates[len(rates) // 2]
@@ -297,12 +320,22 @@ def _pick_entry_sector(econ: Any) -> str:
     """v18.1: the higher median profit-RATE sector attracts entry (mirrors the aggregate
     entry signal, per sector). Ties / empty sectors default to necessity."""
     def rate(firms):
-        p = max(EPS, econ._price_level)
-        rates = sorted(f.profit / (f.capital * p) for f in firms if f.capital > EPS)
+        rates = sorted(
+            firm_earnings(econ, f) / _capital_return_denominator(econ, f)
+            for f in firms
+            if f.capital > EPS
+        )
         if not rates:
-            rates = sorted(f.profit for f in firms) or [0.0]   # pre-capital entrants: raw profit
+            rates = sorted(firm_earnings(econ, f) for f in firms) or [0.0]   # pre-capital entrants: raw profit
         return rates[len(rates) // 2]
     return "luxury" if rate(econ.l_firms) > rate(econ.n_firms) else "necessity"
+
+
+def _capital_return_denominator(econ: Any, firm: Firm) -> float:
+    """Nominal opening productive-capital value used by the entry signal."""
+    if getattr(econ.cfg, "priced_firm_balance_sheet", False):
+        return max(EPS, firm_balance_sheet(econ, firm).capital_value)
+    return max(EPS, float(firm.capital) * max(EPS, float(econ._price_level)))
 
 
 def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = None,
@@ -344,10 +377,26 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
             kf.inventory -= take
             kf.sales += take
             kf.revenue += pay
-            kf.profit += pay
+            if econ.cfg.firm_full_pnl:
+                # Entry runs after the domestic accounting cutoff.  Preserve
+                # profit==net-income now and carry this cash revenue into the
+                # next statement, where tax and distributions are applied once.
+                if getattr(econ, "_firm_pnl_closed", False):
+                    kf.pnl_revenue_carry += pay
+            else:
+                kf.profit += pay
             econ.ledger.transfer(firm.id, kf.id, pay)
             firm.capital += take
         firm.capital_prev = firm.capital
+        if (
+            econ.cfg.firm_full_pnl
+            or econ.cfg.capital_service_pricing
+            or econ.cfg.priced_firm_balance_sheet
+        ):
+            # Entry happens after the ordinary settlement cutoff, but these are
+            # real K-good trades.  Recommit their combined unit value for next
+            # tick's pricing, depreciation and balance-sheet measurements.
+            replacement_capital_price(econ)
     bridge = getattr(econ, "demographic_bridge", None)
     econ.c_firms.append(firm)
     econ.firms.append(firm)
@@ -360,7 +409,12 @@ def birth_consumption_firm(econ: Any, funder: Any, startup_deposits: float = Non
         (econ.n_firms if sector == "necessity" else econ.l_firms).append(firm)
     if cfg.per_firm_equity:
         firm.shares_outstanding = cfg.shares_per_firm
-        book = startup_deposits + (capital_cost if capital_lots else cfg.startup_capital)
+        book = entrant_equity_book_value(
+            econ,
+            firm,
+            legacy_startup_deposits=startup_deposits,
+            legacy_capital_value=(capital_cost if capital_lots else cfg.startup_capital),
+        )
         firm.share_price = firm.share_last_price = max(EPS, book / cfg.shares_per_firm)
         firm.equity_fundamental = firm.share_price
         funder.holdings[firm.id] = funder.holdings.get(firm.id, 0.0) + cfg.shares_per_firm

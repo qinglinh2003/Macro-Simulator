@@ -592,8 +592,20 @@ class DemographicEconomicBridge:
             amount = min(amount, max(0.0, float(self.econ.ledger.debt(account_id))))
             if amount <= 0.0:
                 return
+            principal_before = max(0.0, float(self.econ.ledger.debt(account_id)))
             self.econ.ledger.write_off(account_id, creditor_bank_id, amount)
+            from macro_sim.systems.banking import record_bank_credit_loss
+            from macro_sim.systems.credit import (
+                extinguish_household_interest_arrears_for_writeoff,
+            )
+            record_bank_credit_loss(self.econ, creditor_bank_id, amount)
             self._clamp_margin_debt_shadow(account_id)
+            extinguish_household_interest_arrears_for_writeoff(
+                self.econ,
+                account_id,
+                principal_before=principal_before,
+                principal_reduction=amount,
+            )
         else:
             self._bank_capital_adjustment[creditor_bank_id] = (
                 self._bank_capital_adjustment.get(creditor_bank_id, 0.0) - amount
@@ -1980,8 +1992,20 @@ class DemographicEconomicBridge:
                 if residual > 0.0:
                     bank_id = self._creditor_bank_for_person(-1, int(household_id))
                     if bank_id is not None:
+                        principal_before = max(0.0, float(econ.ledger.debt(account_id)))
                         econ.ledger.write_off(account_id, bank_id, residual)
+                        from macro_sim.systems.banking import record_bank_credit_loss
+                        from macro_sim.systems.credit import (
+                            extinguish_household_interest_arrears_for_writeoff,
+                        )
+                        record_bank_credit_loss(econ, bank_id, residual)
                         self._clamp_margin_debt_shadow(account_id)
+                        extinguish_household_interest_arrears_for_writeoff(
+                            econ,
+                            account_id,
+                            principal_before=principal_before,
+                            principal_reduction=residual,
+                        )
             suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(household_id), 0.0)))
             free_cash = max(0.0, float(econ.ledger.balance(account_id)) - suspense)
             if free_cash > 0.0 and fiscal is not None and econ.ledger.has_account(fiscal):

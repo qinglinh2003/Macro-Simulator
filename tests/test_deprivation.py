@@ -60,6 +60,28 @@ def test_gauges_activate_after_burnin():
     assert len(baskets) <= 2, f"real basket not frozen: {sorted(baskets)[:5]}"
 
 
+def test_gauge_schema_is_stable_across_burnin_activation():
+    """The calibration boundary changes values, not the record schema."""
+    sig = DeprivationSignal(subsistence_share=0.5, burnin_years=0)
+    inactive = sig.observe(
+        year=0, price_index=1.0,
+        persons=[(1, 10, 1.0, 0.0, 40, 100.0, 100.0)],
+    )
+    anchor_tick = sig.observe(
+        year=1, price_index=1.0,
+        persons=[(1, 10, 1.0, 10.0, 40, 100.0, 100.0)],
+    )
+    active = sig.observe(
+        year=1, price_index=1.0,
+        persons=[(1, 10, 1.0, 20.0, 40, 100.0, 100.0)],
+    )
+
+    assert inactive["deprivation_active"] == 0.0
+    assert anchor_tick["deprivation_active"] == 0.0
+    assert active["deprivation_active"] == 1.0
+    assert set(inactive) == set(anchor_tick) == set(active)
+
+
 def test_children_not_spuriously_deprived():
     """The household-unit measurement: a healthy baseline must NOT flag ~all children
     (the bug the person-level raw allocation produced — child allocation is ~0)."""
@@ -73,9 +95,8 @@ def test_children_not_spuriously_deprived():
 
 def test_healthy_baseline_deprivation_only_in_genuine_crisis():
     """Pre-registered, REVISED after the 10y portrait (honest finding): the healthy
-    baseline (JG + benefits) produces NO acute deprivation in the normal, full-employment
-    regime, but DOES breach at the trough of the v13 arc's second endogenous downcycle +
-    bank shakeout (~year 8.5, u→20%, banks→0). That breach is genuine recession
+    baseline (JG + benefits) can breach at the trough of an endogenous downcycle plus
+    bank shakeout (high JG utilization, banks→0). That breach is genuine recession
     destitution (the ~24 acute persons survive the resource gate — deposit-poor AND
     flow-poor), not the liquidity artifact the flow-only gauge first showed (wealthy
     frozen households, wealth gradient inverted, excluded by the gate). So the acceptance
@@ -87,17 +108,19 @@ def test_healthy_baseline_deprivation_only_in_genuine_crisis():
     assert active
     destitute = [r["deprivation_destitute_share"] for r in active]
 
-    # (a) the first years after activation (the recovery regime, BEFORE the v13 arc's
-    #     second endogenous downcycle) are quiet: the safety net fully catches even the
-    #     high recovery-era unemployment, so destitution is ~nil. (Robust to world size:
-    #     the second downcycle always comes later in the arc.)
-    early = destitute[: 365 * 3]
-    assert max(early) < 0.01, f"spurious destitution in the recovery regime: {max(early):.3f}"
+    # (a) The public-capital calibration changes the endogenous cycle's timing, so
+    # "the first three active years are quiet" is not a structural invariant.  The
+    # peak must instead coincide with an actual banking/labor crisis, rather than a
+    # wealthy-household deposit freeze misread as deprivation.
+    peak = max(active, key=lambda record: record["deprivation_destitute_share"])
+    assert peak["banks_alive"] <= 0.0
+    assert peak["jg_employment_rate"] > 0.10
+    assert peak["deprivation_boundary"] == 1.0
     # (b) on average the healthy baseline is QUIET -- acute destitution is a brief
     #     recession spike, not a standing feature (mean destitute share small).
     assert sum(destitute) / len(destitute) < 0.03, "healthy baseline not quiet on average"
     # (c) the gauge is not vacuous over 10y -- it DOES fire at the endogenous recession
-    #     (the boundary correctly flagging a genuine crisis, ~year 8, u->20%), and even
+    #     (the boundary correctly flagging a genuine banking/labor crisis), and even
     #     at the trough destitution stays a bounded minority (not a mass collapse).
     assert any(r["deprivation_acute_stock"] > 0 for r in active), "gauge never fired over 10y"
     assert max(destitute) < 0.2, "destitution not bounded at the trough"

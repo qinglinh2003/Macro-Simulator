@@ -105,9 +105,26 @@ def test_learning_law_rises_with_cumulative_output():
     tech.step(_Econ())          # sets the base at 100 => Z stays 1.0
     assert abs(tech.z["c"] - 1.0) < 1e-12
     _Econ._cumulative_output_by_sector = {"c": 400.0, "k": 100.0, "e": 100.0}
-    tech.step(_Econ())          # c quadrupled => Z_c = 4^0.5 = 2.0
-    assert abs(tech.z["c"] - 2.0) < 1e-9
+    tech.step(_Econ())
+    # The initial knowledge stock is one year of the first observed flow, so three
+    # extra flow-days produce gradual learning instead of a second-day doubling.
+    expected = (1.0 + 300.0 / (365.0 * 100.0)) ** 0.5
+    assert abs(tech.z["c"] - expected) < 1e-12
     assert abs(tech.z["k"] - 1.0) < 1e-9
+
+
+def test_dormant_sector_initializes_on_its_own_first_output_without_tfp_explosion():
+    tech = Technology(law="learning", learning_theta=0.1)
+
+    class _Econ:
+        _cumulative_output_by_sector = {"c": 100.0, "k": 0.0, "e": 0.0}
+
+    tech.step(_Econ())
+    _Econ._cumulative_output_by_sector = {"c": 200.0, "k": 1.0, "e": 0.0}
+    tech.step(_Econ())
+
+    assert tech.z["c"] > 1.0
+    assert tech.z["k"] == 1.0
 
 
 # -- end-to-end in a real economy (the seam actually moves output) ----------

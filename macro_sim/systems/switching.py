@@ -18,11 +18,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from macro_sim.systems.firm_accounting import firm_earnings
+
 EPS = 1e-9
 
 
-def _sector_rate(firms, price_level: float) -> float:
-    rates = [f.profit / (f.capital * price_level) for f in firms if f.capital > EPS]
+def _sector_rate(econ: Any, firms, price_level: float) -> float:
+    rates = [firm_earnings(econ, f) / (f.capital * price_level) for f in firms if f.capital > EPS]
     return sum(rates) / len(rates) if rates else 0.0
 
 
@@ -35,8 +37,8 @@ def run_sector_switching_phase(econ: Any) -> None:
     if not (econ.n_firms and econ.l_firms):
         return
     price = max(EPS, float(getattr(econ, "_price_level", 1.0)))
-    r_N = _sector_rate(econ.n_firms, price)
-    r_L = _sector_rate(econ.l_firms, price)
+    r_N = _sector_rate(econ, econ.n_firms, price)
+    r_L = _sector_rate(econ, econ.l_firms, price)
     rng = econ._switch_rng
     gap = cfg.switch_return_gap
 

@@ -15,6 +15,8 @@ macro-demographics-phase0 = "macro_sim.demographics.phase0:main"
 macro-demographics-phase1-acceptance = "macro_sim.demographics.phase1_acceptance:main"
 macro-viz-compare = "macro_sim.visualization.compare_versions:main"
 macro-viz-run = "macro_sim.visualization.compare_versions:main_single"
+macro-diagnostics = "macro_sim.diagnostics.cli:main"
+macro-empirical-diagnostics = "macro_sim.diagnostics.empirical_cli:main"
 
 [dependency-groups]
 dev = [

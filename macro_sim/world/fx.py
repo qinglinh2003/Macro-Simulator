@@ -81,6 +81,7 @@ class FXDealer:
             econ.ledger.allow_negative(DEALER_ID)   # may owe currency i (a foreign claim)
         self.valuation = 0.0          # cumulative revaluation P&L in numéraire
         self._prev_networth = 0.0     # last tick's net worth in numéraire (for revaluation)
+        self.last_gate_inventory: List[float] | None = None
 
     def inventory(self) -> List[float]:
         """Net position in each currency = the dealer's ledger balance in that economy."""
@@ -108,6 +109,7 @@ class FXDealer:
         no revaluation contaminates it.
         """
         inv1 = self.inventory()
+        self.last_gate_inventory = list(inv1)
         flow = sum((inv1[i] - inv0[i]) / e0[i] for i in range(len(inv1)))
         scale = max(1.0, sum(abs(inv1[i]) / e0[i] for i in range(len(inv1))))
         if abs(flow) > tol * scale:

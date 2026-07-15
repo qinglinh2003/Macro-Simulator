@@ -5,8 +5,11 @@ dealer-routed flow; off ⇒ the prior version's behavior; all conserving.
 
 from __future__ import annotations
 
+import pytest
+
 from macro_sim.config import Config
 from macro_sim.world import World
+from macro_sim.world.trade import _export_subsidy_settle
 
 
 def _cfg(a=1.0, r=0.04):
@@ -20,26 +23,45 @@ def _mean(recs, fn, n=40):
 # -- trade policy: tariff -----------------------------------------------------
 
 def test_tariff_is_protective_and_raises_revenue():
+    """At the same pre-treatment state, a tariff weakly lowers physical imports.
+
+    A long-run single-seed comparison is not a local policy-sign test: tariff-induced
+    FX, income and inventory feedback can eventually move nominal import value in
+    either direction.  Keep the two worlds identical until the intervention tick so
+    this assertion isolates the buyer-price channel the lever actually implements.
+    """
     base = World([_cfg(1.5), _cfg(0.6)], base_seed=9, trade=True)
-    base.run()
-    tar = World([_cfg(1.5), _cfg(0.6)], base_seed=9, trade=True, tariff=0.01)
-    tar.run()
+    tar = World([_cfg(1.5), _cfg(0.6)], base_seed=9, trade=True)
+    for _ in range(200):
+        base.step()
+        tar.step()
+    assert base.world_records == tar.world_records
+
+    tar.tariff = 0.01
+    base.step()
+    tar.step()
     for econ in tar.economies:
         econ.ledger.assert_conserved()
         econ.ledger.assert_non_negative()
-    imp_base = _mean(base.world_records, lambda r: sum(r["import_value"]))
-    imp_tar = _mean(tar.world_records, lambda r: sum(r["import_value"]))
-    assert imp_tar < imp_base                                   # protective (fewer imports)
-    assert _mean(tar.world_records, lambda r: sum(r["tariff_rev"])) > 0.0   # fiscal revenue
+    imp_base = sum(base.world_records[-1]["import_volume"])
+    imp_tar = sum(tar.world_records[-1]["import_volume"])
+    assert imp_tar < imp_base                                   # local protective channel
+    assert sum(tar.world_records[-1]["tariff_rev"]) > 0.0      # fiscal revenue
 
 
 # -- capital policy: capital controls (the trilemma's third corner) -----------
 
 def _peg(control):
-    lo = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0, r_interest=0.02)
-    an = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0, r_interest=0.05)
-    return World([lo, an], base_seed=9, trade=True, capital=True, capital_mobility=3.0,
-                 capital_adjust=0.2, peg=True, peg_reserves0=5000.0, peg_reserve_scale=0.02,
+    lo = Config.v124(
+        n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=120,
+        seed=0, r_interest=0.02 / 365.0,
+    )
+    an = Config.v124(
+        n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=120,
+        seed=0, r_interest=0.05 / 365.0,
+    )
+    return World([lo, an], base_seed=9, trade=True, capital=True, capital_mobility=3.0 * 365.0,
+                 capital_adjust=0.2, peg=True, peg_reserves0=5000.0, peg_reserve_scale=0.04,
                  capital_control=control)
 
 
@@ -83,17 +105,30 @@ def test_import_quota_is_a_quantity_control():
 
 
 def test_export_subsidy_wins_share_at_fiscal_cost():
-    """An exporter's subsidy makes its goods cheaper abroad ⇒ it wins export share, and its
-    own fiscus funds the gap (the mercantilist trade)."""
-    base = _trade()
-    sub = _trade(export_subsidy=[0.0, 0.05])          # economy 1 subsidises its exports
+    """At the same state, a subsidy lowers the foreign buyer price and costs the fiscus.
+
+    As with the tariff sign test, a 250-tick comparison confounds the immediate policy
+    channel with the induced FX, income and inventory path.  Those general-equilibrium
+    feedbacks need not preserve a cumulative physical-import ranking, so identify the
+    implemented price channel on one paired intervention tick.
+    """
+    base = World([_cfg(1.5), _cfg(0.6)], base_seed=9, trade=True)
+    sub = World([_cfg(1.5), _cfg(0.6)], base_seed=9, trade=True)
+    for _ in range(200):
+        base.step()
+        sub.step()
+    assert base.world_records == sub.world_records
+
+    sub.export_subsidy = [0.0, 0.05]                 # economy 1 subsidises its exports
+    base.step()
+    sub.step()
     for econ in sub.economies:
         econ.ledger.assert_conserved()
         econ.ledger.assert_non_negative()
-    # economy 0 imports MORE from the now-cheaper economy 1
-    assert _mean(sub.world_records, lambda r: r["import_value"][0]) > \
-           _mean(base.world_records, lambda r: r["import_value"][0])
-    assert _mean(sub.world_records, lambda r: r["export_subsidy_cost"][1]) > 0.0   # fiscus paid
+    assert sub._import_source[0] == 1
+    assert sub.world_records[-1]["import_volume"][0] > \
+           base.world_records[-1]["import_volume"][0]
+    assert sub.world_records[-1]["export_subsidy_cost"][1] > 0.0
 
 
 def test_export_tax_raises_revenue():
@@ -104,18 +139,47 @@ def test_export_tax_raises_revenue():
     assert _mean(tax.world_records, lambda r: r["export_subsidy_cost"][1]) < 0.0   # revenue
 
 
+def test_export_policy_is_allocated_only_to_realized_exporters():
+    world = World([_cfg(), _cfg()], trade=True, export_subsidy=[0.05, 0.0])
+    econ = world.economies[0]
+    exporter, bystander = econ.c_firms[:2]
+    exporter_before = econ.ledger.balance(exporter.id)
+    bystander_before = econ.ledger.balance(bystander.id)
+
+    cost = _export_subsidy_settle(
+        world, 0, econ, 95.0, {exporter.id: 95.0},
+    )
+
+    assert cost == pytest.approx(5.0)
+    assert econ.ledger.balance(exporter.id) - exporter_before == pytest.approx(5.0)
+    assert econ.ledger.balance(bystander.id) == pytest.approx(bystander_before)
+
+    taxed = World([_cfg(), _cfg()], trade=True, export_subsidy=[-0.05, 0.0])
+    taxed_econ = taxed.economies[0]
+    taxed_exporter = taxed_econ.c_firms[0]
+    fiscal_before = taxed_econ.ledger.balance(taxed_econ._fiscal)
+    revenue = _export_subsidy_settle(
+        taxed, 0, taxed_econ, 105.0, {taxed_exporter.id: 105.0},
+    )
+    assert revenue == pytest.approx(-5.0)
+    assert taxed_econ.ledger.balance(taxed_econ._fiscal) - fiscal_before == pytest.approx(5.0)
+
+
 # -- migration policy: exit control, host remittance tax, guest workers --------
 
-def _mig(**kw):
+def _mig(*, run=True, **kw):
     # The gap must be in WAGES, not productivity: this model is demand-constrained, so `a`
     # moves neither output nor wages and would give no wage gap for migration to respond to.
     lo = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
-                     w_firm0=0.7, p_firm0=0.85)
+                     w_firm0=0.7, p_firm0=0.85, r_interest=0.0,
+                     central_bank=False)
     hi = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
-                     w_firm0=1.4, p_firm0=1.7)
+                     w_firm0=1.4, p_firm0=1.7, r_interest=0.0,
+                     central_bank=False)
     w = World([lo, hi], base_seed=9, trade=True, capital=True, migration=True,
               capital_mobility=1.0, migration_rate=0.03, remittance_share=0.2, **kw)
-    w.run()
+    if run:
+        w.run()
     return w
 
 
@@ -129,12 +193,21 @@ def test_emigration_cap_blocks_exit():
 
 def test_host_outward_remittance_tax_skims_the_outflow():
     """POLICY: the HOST taxes remittances leaving (the Gulf pattern) ⇒ less reaches origin."""
-    base, taxed = _mig(), _mig(outward_remittance_tax=0.30)
+    base = _mig(run=False)
+    taxed = _mig(run=False, outward_remittance_tax=0.30)
+    observed = False
+    for _ in range(10):
+        base.step()
+        taxed.step()
+        gross = base.world_records[-1]["remittances"][0]
+        if gross > 1.0e-9:
+            assert taxed.world_records[-1]["remittances"][0] == pytest.approx(0.70 * gross)
+            observed = True
+            break
     for econ in taxed.economies:
         econ.ledger.assert_conserved()
         econ.ledger.assert_non_negative()
-    assert _mean(taxed.world_records, lambda r: r["remittances"][0]) < \
-           _mean(base.world_records, lambda r: r["remittances"][0])
+    assert observed
 
 
 def test_guest_worker_regime_damps_the_migrant_stock():

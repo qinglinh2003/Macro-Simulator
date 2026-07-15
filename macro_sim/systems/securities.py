@@ -138,6 +138,9 @@ def run_bill_maturity_phase(econ: Any) -> None:
             c = cfg.bond_coupon * lot["face"]
             if c > EPS:
                 econ.ledger.transfer(econ._fiscal, lot["holder"], c)
+                if lot["holder"] in econ._bank_ids:
+                    bank = next(bank for bank in econ.banks if bank.id == lot["holder"])
+                    bank.bond_coupon += c
                 if bridge is not None and lot["holder"] in getattr(bridge, "account_to_household", {}):
                     bridge.post_household_cash_delta(lot["holder"], c, reason="capital_income")
                 econ._gov_interest_bill += c

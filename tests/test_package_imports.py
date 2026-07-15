@@ -119,7 +119,9 @@ def test_extracted_system_functions_import():
         loan_rate_for,
         pay_bank_dividends,
         rate_competition,
+        record_bank_credit_loss,
         refresh_loan_books,
+        reset_bank_realized_pnl,
         reserve_position,
         resolve_bank_failures,
         run_bank_entry_phase,
@@ -133,7 +135,7 @@ def test_extracted_system_functions_import():
     )
     from macro_sim.systems.capital_goods import run_capital_goods_phase
     from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
-    from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
+    from macro_sim.systems.credit import finalize_bank_pnl, run_credit_phase, run_debt_service_phase
     from macro_sim.systems.equity import run_equity_phase, run_per_firm_equity_phase
     from macro_sim.systems.firm_demographics import (
         apply_gibrat_shock,
@@ -170,6 +172,7 @@ def test_extracted_system_functions_import():
     assert run_capital_goods_phase is not None
     assert run_settlement_phase is not None
     assert run_debt_service_phase is not None
+    assert finalize_bank_pnl is not None
     assert run_firm_demographics_phase is not None
     assert run_equity_phase is not None
     assert run_per_firm_equity_phase is not None
@@ -199,7 +202,9 @@ def test_extracted_system_functions_import():
     assert loan_rate_for is not None
     assert pay_bank_dividends is not None
     assert rate_competition is not None
+    assert record_bank_credit_loss is not None
     assert refresh_loan_books is not None
+    assert reset_bank_realized_pnl is not None
     assert reserve_position is not None
     assert settlement_node is not None
     assert setup_bank_equity is not None
@@ -225,6 +230,9 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
     from macro_sim.economy import Economy
 
     calls = []
+
+    def fake_reset_bank_pnl(econ):
+        calls.append(("reset_bank_pnl", econ))
 
     def fake_set_policy_rate(econ):
         calls.append(("set_policy_rate", econ))
@@ -268,6 +276,9 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
     def fake_interbank(econ):
         calls.append(("interbank", econ))
 
+    def fake_finalize_bank_pnl(econ):
+        calls.append(("finalize_bank_pnl", econ))
+
     def fake_bank_runs(econ):
         calls.append(("bank_runs", econ))
 
@@ -290,6 +301,7 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
     def fake_commit(econ):
         calls.append(("commit", econ))
 
+    monkeypatch.setattr(economy_module, "reset_bank_realized_pnl", fake_reset_bank_pnl)
     monkeypatch.setattr(economy_module, "set_policy_rate", fake_set_policy_rate)
     monkeypatch.setattr(economy_module, "run_planning_phase", fake_planning)
     monkeypatch.setattr(economy_module, "run_omo_phase", fake_omo)
@@ -304,6 +316,7 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
     monkeypatch.setattr(economy_module, "run_firm_demographics_phase", fake_firm_demographics)
     monkeypatch.setattr(economy_module, "run_equity_phase", fake_equity)
     monkeypatch.setattr(economy_module, "run_interbank_phase", fake_interbank)
+    monkeypatch.setattr(economy_module, "finalize_bank_pnl", fake_finalize_bank_pnl)
     monkeypatch.setattr(economy_module, "run_bank_runs_phase", fake_bank_runs)
     monkeypatch.setattr(economy_module, "resolve_bank_failures", fake_resolve_bank_failures)
     monkeypatch.setattr(economy_module, "run_bank_entry_phase", fake_bank_entry)
@@ -317,6 +330,7 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
     rec = econ.step()
 
     assert calls == [
+        ("reset_bank_pnl", econ),
         ("set_policy_rate", econ),
         ("deposit_competition", econ),
         ("omo", econ),
@@ -334,6 +348,7 @@ def test_economy_step_uses_extracted_system_functions(monkeypatch):
         ("interbank", econ),
         ("bank_runs", econ),
         ("resolve_bank_failures", econ),
+        ("finalize_bank_pnl", econ),
         ("bank_entry", econ),
         ("bill_issuance", econ),
         ("record", econ),
@@ -456,6 +471,7 @@ def test_config_exposes_passive_banking_config_view():
         bank_leverage_disp=0.2,
         bank_assignment="by_size",
         bank_capital_constraint=True,
+        unified_bank_rwa=True,
         bank_migrate_on_failure=False,
         bank_target_capital_ratio=0.18,
         bank_exposure_limit=0.15,
@@ -492,6 +508,9 @@ def test_config_exposes_passive_banking_config_view():
     assert cfg.banking.bank_leverage_disp == cfg.bank_leverage_disp
     assert cfg.banking.bank_assignment == cfg.bank_assignment
     assert cfg.banking.bank_capital_constraint is cfg.bank_capital_constraint
+    assert cfg.banking.unified_bank_rwa is cfg.unified_bank_rwa
+    assert cfg.banking.mortgage_risk_weight == cfg.mortgage_risk_weight
+    assert cfg.banking.mortgage_min_capital_ratio == cfg.mortgage_min_capital_ratio
     assert cfg.banking.bank_migrate_on_failure is cfg.bank_migrate_on_failure
     assert cfg.banking.bank_target_capital_ratio == cfg.bank_target_capital_ratio
     assert cfg.banking.bank_exposure_limit == cfg.bank_exposure_limit
@@ -575,11 +594,12 @@ def test_config_exposes_passive_capital_goods_config_view():
 def test_config_exposes_passive_goods_config_view():
     from macro_sim.config import Config, GoodsConfig
 
-    cfg = Config.v9(government=True, a=1.7)
+    cfg = Config.v9(government=True, a=1.7, household_interest_arrears=True)
 
     assert isinstance(cfg.goods, GoodsConfig)
     assert cfg.goods.government is cfg.government
     assert cfg.goods.a == cfg.a
+    assert cfg.goods.household_interest_arrears is cfg.household_interest_arrears
 
 
 def test_config_exposes_passive_settlement_config_view():
@@ -701,10 +721,12 @@ def test_config_exposes_passive_credit_config_view():
         deposit_rate_disp=0.02,
         bank_equity=True,
         interest_by_deposits=True,
+        household_interest_arrears=True,
     )
 
     assert isinstance(cfg.credit, CreditConfig)
     assert cfg.credit.bank_enabled is cfg.bank_enabled
+    assert cfg.credit.household_interest_arrears is cfg.household_interest_arrears
     assert cfg.credit.household_credit is cfg.household_credit
     assert cfg.credit.hh_subsistence == cfg.hh_subsistence
     assert cfg.credit.amort == cfg.amort

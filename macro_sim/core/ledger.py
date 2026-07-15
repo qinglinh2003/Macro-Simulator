@@ -368,6 +368,49 @@ class Ledger:
         self._loans[borrower] -= amount
         self._bal[bank] -= amount      # bank equity absorbs; may go negative (insolvency)
 
+    def write_off_interbank_claim(
+        self,
+        lender_bank: Hashable,
+        borrower_bank: Hashable,
+        amount: float,
+    ) -> None:
+        """Cancel a defaulted interbank principal without moving reserves.
+
+        Interbank principal is an asset/liability overlay, not a deposit loan.
+        On default, cancelling the lender's asset reduces its equity while
+        cancelling the debtor's liability raises the debtor estate's equity by
+        the same amount.  Thus aggregate deposits and A5 are unchanged, and no
+        fictitious reserve payment is recorded.  Bank accounts are allowed to
+        go negative, so the loss can trigger the normal insolvency cascade.
+        """
+        self.reallocate_bank_capital(lender_bank, borrower_bank, amount)
+
+    def reallocate_bank_capital(
+        self,
+        source_bank: Hashable,
+        destination_bank: Hashable,
+        amount: float,
+    ) -> None:
+        """Move bank equity value without pretending that reserves were paid.
+
+        Used by interbank resolution for two non-cash balance-sheet events:
+        cancelling a defaulted asset against the debtor's liability, and moving
+        a failed bank's surviving interbank asset into a bridge bank. Aggregate
+        ledger money is unchanged and the reserve overlay is deliberately inert.
+        """
+        if amount < 0:
+            raise ValueError(f"bank capital reallocation must be >= 0, got {amount}")
+        if source_bank == destination_bank:
+            raise ValueError("bank capital cannot be reallocated to the same bank")
+        if source_bank not in self._bal:
+            raise KeyError(f"unknown source bank {source_bank!r}")
+        if destination_bank not in self._bal:
+            raise KeyError(f"unknown destination bank {destination_bank!r}")
+        if amount == 0.0:
+            return
+        self._bal[source_bank] -= amount
+        self._bal[destination_bank] += amount
+
     def add_account(self, agent_id: Hashable) -> None:
         """Register a new agent (v4 firm entry) with 0 deposits and 0 debt. Money must
         be funded via a subsequent ``transfer`` from an existing account (never created),

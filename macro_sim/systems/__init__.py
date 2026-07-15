@@ -6,6 +6,8 @@ from macro_sim.systems.banking import (
     bank_constraint,
     bank_fundamental,
     bank_for,
+    bank_rwa_capacity,
+    bank_rwa_exposure,
     bank_stock_market,
     draw_bank_kappas,
     draw_bank_spreads,
@@ -18,7 +20,9 @@ from macro_sim.systems.banking import (
     loan_rate_for,
     pay_bank_dividends,
     rate_competition,
+    record_bank_credit_loss,
     refresh_loan_books,
+    reset_bank_realized_pnl,
     resolve_bank_failures,
     reserve_position,
     run_bank_entry_phase,
@@ -29,10 +33,17 @@ from macro_sim.systems.banking import (
     setup_bank_equity,
     shop_bank,
     update_bank_valuation,
+    unified_bank_rwa_enabled,
 )
 from macro_sim.systems.capital_goods import run_capital_goods_phase
 from macro_sim.systems.central_bank import run_omo_phase, set_policy_rate
-from macro_sim.systems.credit import run_credit_phase, run_debt_service_phase
+from macro_sim.systems.credit import (
+    finalize_bank_pnl,
+    run_credit_phase,
+    run_debt_service_phase,
+    run_firm_debt_service_phase,
+    run_household_debt_service_phase,
+)
 from macro_sim.systems.equity import run_equity_phase, run_per_firm_equity_phase, setup_per_firm_equity
 from macro_sim.systems.firm_demographics import apply_gibrat_shock, run_firm_demographics_phase
 from macro_sim.systems.goods import run_goods_phase
@@ -49,6 +60,8 @@ __all__ = [
     "bank_constraint",
     "bank_fundamental",
     "bank_for",
+    "bank_rwa_capacity",
+    "bank_rwa_exposure",
     "bank_stock_market",
     "draw_bank_kappas",
     "draw_bank_spreads",
@@ -61,7 +74,9 @@ __all__ = [
     "loan_rate_for",
     "pay_bank_dividends",
     "rate_competition",
+    "record_bank_credit_loss",
     "refresh_loan_books",
+    "reset_bank_realized_pnl",
     "resolve_bank_failures",
     "reserve_position",
     "apply_gibrat_shock",
@@ -73,9 +88,12 @@ __all__ = [
     "run_capital_goods_phase",
     "run_credit_phase",
     "run_debt_service_phase",
+    "run_firm_debt_service_phase",
+    "run_household_debt_service_phase",
     "run_deposit_competition",
     "run_equity_phase",
     "run_firm_demographics_phase",
+    "finalize_bank_pnl",
     "run_goods_phase",
     "run_household_fiscal_phase",
     "run_interbank_phase",
@@ -90,4 +108,5 @@ __all__ = [
     "setup_per_firm_equity",
     "shop_bank",
     "update_bank_valuation",
+    "unified_bank_rwa_enabled",
 ]

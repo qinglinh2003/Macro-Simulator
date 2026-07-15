@@ -69,6 +69,17 @@ def test_productivity_channel_raises_output():
     assert y_on > y_off, f"productivity channel should raise output: γ>0={y_on:.0f} vs γ=0={y_off:.0f}"
 
 
+def test_daily_production_preset_reanchors_demonstration_public_capital_parameters():
+    """v13 is a production baseline, while v9.1 remains a historical mechanism demo."""
+    historical = Config.v124()
+    daily = Config.v13()
+
+    assert historical.gov_investment_share == 0.10
+    assert historical.public_capital_gamma == 0.30
+    assert daily.gov_investment_share == 0.04
+    assert daily.public_capital_gamma == 0.10
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     fails = 0

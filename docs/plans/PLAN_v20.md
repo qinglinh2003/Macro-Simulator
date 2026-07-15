@@ -300,6 +300,22 @@ session decision now ranges over foreign options, fed in via the §5 barrier.
 With N economies, each good has a **bilateral flow matrix** (who ships to whom). Friction
 is **CONVERGED (§10): proportional iceberg, uniform across pairs at the base** (N=2 has one
 pair); per-pair (distance ⇒ gravity, near/large partners trade more) is deferred to S3.
+Here “iceberg” is a physical technology, not an unowned price markup: delivering `q` units
+at friction `f` requires the source to reserve, ship, and record sales of `q(1+f)` units;
+`qf` units melt in transit.  The importer pays the transaction value of all shipped units,
+so the exporter receipt and the dealer/BoP cash legs retain that value.  Diagnostics keep
+destination-delivered volume, origin-shipped volume, and iceberg loss as separate journals,
+with the hard physical identity `shipped = delivered + loss`.
+
+The fixed-cadence stale country price is used only to select the foreign source.  Once a
+source is selected, the binding offer is the barrier-price-weighted value of the actual
+firm lots reserved, including the exchange-rate, iceberg, tariff, and export-policy
+wedges.  A partial household-market fill applies one common fraction `α` to every reserved
+lot, preserving that weighted quote; firms' post-policy basic-price receipts therefore
+equal `used lot units × barrier lot price`.  Settlement journals contract-basic,
+barrier-lot, and current-account-lot values separately.  If firms reprice after the
+coupling barrier, `current-account-lot − contract-basic` is an explicit nominal inventory
+withdrawal adjustment—not output—and real exports and real inventory remain unchanged.
 
 **CONVERGED — trade motive: same good, Armington-differentiated by origin.** Not "same vs
 distinct goods" — the resolution is a *single* good whose home and foreign varieties are

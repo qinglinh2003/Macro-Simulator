@@ -212,14 +212,28 @@ def _iter_household_member_pairs(profile: Any, claims: Any) -> Iterable[tuple[in
     raise TypeError("profile must expose members or member_ids")
 
 
-def _need_scale(profile: Any) -> float:
+def _need_adjusted_income(
+    profile: Any, member_pairs: Iterable[tuple[int, int]], income_budget: float,
+) -> float:
+    """Convert aggregate adult income to a composition-adjusted household amount.
+
+    ``income_budget`` has already summed person incomes.  Multiplying that aggregate
+    by household need units again creates an N-squared response to household size.
+    Instead, compute income per working-age adult and apply the household's adult-
+    equivalent need units exactly once.  Profiles without composition data preserve
+    the legacy plain person-sum behavior.
+    """
+
     need_units = getattr(profile, "need_units", None)
     if need_units is None:
-        return 1.0
-    baseline = float(getattr(profile, "adult_equivalent_baseline", 2.0))
-    if baseline <= 0.0:
+        return max(0.0, float(income_budget))
+    adult_count = getattr(profile, "adult_count", None)
+    if adult_count is None:
+        adult_count = sum(18 <= age < 65 for _person_id, age in member_pairs)
+    if float(adult_count) <= 0.0:
         return 0.0
-    return max(0.0, float(need_units) / baseline)
+    income_per_adult = max(0.0, float(income_budget)) / float(adult_count)
+    return income_per_adult * max(0.0, float(need_units))
 
 
 def household_lifecycle_consumption_budget(
@@ -232,8 +246,8 @@ def household_lifecycle_consumption_budget(
 ) -> float:
     """Compute household lifecycle consumption budget from members' incomes/wealth.
 
-    Person-level permanent income and wealth draws are summed, then weighted by
-    a household need scale.
+    Person-level wealth draws are summed.  Permanent income is first expressed per
+    working-age adult, then multiplied by adult-equivalent need units exactly once.
     """
 
     member_pairs = list(_iter_household_member_pairs(profile, claims))
@@ -254,6 +268,6 @@ def household_lifecycle_consumption_budget(
             ticks_per_year=ticks_per_year,
         )
 
-    need_scale = _need_scale(profile)
-    budget = need_scale * alpha_income * income_budget + alpha_wealth_draw * wealth_draw_budget
+    adjusted_income = _need_adjusted_income(profile, member_pairs, income_budget)
+    budget = alpha_income * adjusted_income + alpha_wealth_draw * wealth_draw_budget
     return max(0.0, float(budget))

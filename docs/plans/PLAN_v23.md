@@ -1,10 +1,51 @@
 # V23 Plan — Patch Consolidation
 
-> **STATUS: EMPTY PLAN (2026-07-14).** Branch `feat/patches-v23` forked from dev@417ced3
-> (v19 growth-foundation arc merged). Scope TBD — v23 is the patch-consolidation version:
-> completing what earlier arcs left unfinished, not building new mechanisms.
+> **STATUS: PATCH IMPLEMENTATION IN PROGRESS (2026-07-14).** The dedicated
+> `fix/v23-release-blockers` worktree is based on the latest merged `origin/dev` at
+> `264d1d2`. The table below records the current implementation, while the original
+> diagnosis that follows is retained as the design rationale. This is not a release or
+> calibration claim; final long-horizon diagnostics and regression verification remain
+> part of the worktree handoff.
+
+## Current implementation status
+
+| Original finding | Current implementation | Remaining boundary |
+|---|---|---|
+| #1 price-index coupling | Added an optional chain-linked Laspeyres CPI. The first accepted observation fixes the basket; household quantities accumulate over `cpi_rebase_interval_days` (365 by default), then live products receive new weights and the replacement basket is linked to the accepted boundary level. A separate flag lets the next-tick Taylor sensor consume this CPI. | Product taxes are not yet journaled by product, so the CPI remains pre-product-tax. |
+| #2 nominal anchor | The central bank can consume the fixed-basket CPI through `cb_uses_fixed_basket_cpi`; this removes the unit-value composition coupling without silently changing historical configurations. | No NGDP-level or productivity-adjusted rule has been selected. That decision still depends on the post-patch nominal-anchor diagnostic. |
+| #3 incomplete GDP | Added optional production-, expenditure-, and income-side national accounts with explicit residuals. Real production GDP uses one committed base price for each common physical sector unit (C, K, E, and builder output), so an entrant does not import a later price vintage as real growth. Economy-local trade journals add observed nominal X-M to expenditure GDP; real exports use the common C-sector base price and real imports the `goods:FXDEALER` item base. Fiscal procurement and public investment can consume lagged nominal GDP through a separate flag. Stock/GDP diagnostics use realized trailing 365-day nominal GDP after a full year; before that they are explicitly labelled annualized-daily run rates. | Services, housing imputation, financial intermediation, product-tax allocation, and external products beyond consumption goods remain incomplete; GDP is therefore a `proxy`, not a calibrated SNA level. |
+| #4 missing C-sector unmet demand | Added protocol-attributable C-firm footfall/rationing signals. Demand that was never presented to a seller remains aggregate instead of being assigned by an invented equal-share rule. | The signal measures attributable visits, not a structural estimate of all latent demand. |
+| #5 incomplete P&L | Added a realized firm income statement with intermediate inputs, replacement-cost depreciation, cash interest, taxes, dividends, and arrears; bank profit now closes loan interest, bond coupons, interbank income/expense, and realized credit losses before dividends. | There is no contractual deposit funding cost, and firm production costs are still cash-basis rather than inventory-lot COGS matched to sales. |
+| #6 free capital in pricing | Capital-service pricing values opening capital at the committed capital-goods price and allocates per-tick depreciation plus the live loan/opportunity rate over planned output. The authoritative priced sectors are C, K, **and E**, so energy capacity is no longer quoted as free. | It assumes zero expected capital-goods price inflation and does not post another cash or P&L charge. |
+| #7 cash-only firm net worth | A shared priced balance sheet values capital and conservative inventory, applies haircuts, and exposes an explicitly named borrowing-base proxy used with leverage, DSCR, and bank-capacity constraints. | Default still has no lien priority, seizure/sale, collateral recovery, or residual-loss allocation, so LGD is not interpretable. |
+| #8 weak direct monetary transmission | Added a bounded real-user-cost investment response, a DSCR credit edge, and a household debt-service cash reservation. The household's desired consumption plan is retained; at the goods-order boundary—after wages, credit, family transfers, and other pre-goods cash flows—the order is capped at live deposits less immediately scheduled service. Principal and interest post only once in debt service. | Loans are still one scalar per borrower with no type, vintage, fixed/floating rate, reset date, maturity, or contract-level arrears schedule. |
+
+Two cross-cutting integration corrections are also in this worktree:
+
+- Loan-rate competition may select a bank only for a debt-free borrower's first
+  origination when `bank_relationship_lock_in=True`. Existing debt and mortgage shadows remain with their creditor until a
+  real payoff, refinance, or loan-sale rail exists; a top-up can no longer relabel an
+  outstanding stock by moving a relationship map.
+- Cross-border factor income uses the Treasury/central-bank account, or `EXTISSUER` in a
+  no-government economy, as an explicit aggregate liability counterparty. `FXDEALER`
+  settles its reserve leg at neutral `CLEARING`, so bank ordering or failure cannot choose
+  an arbitrary commercial-bank counterparty. This removes the false bank-P&L coupling but
+  does **not** allocate external assets and liabilities to household, firm, bank, and
+  sovereign owners.
+
+The executable diagnostic layer now includes a ten-worker causal/root-cause runner and a
+provenance-strict observed-data adapter. `macro-empirical-diagnostics` accepts repeated
+`--metric-id` values or, when the option is omitted, processes every unique provenance
+series for the requested geography. It writes schema-v2 per-series results, descriptive
+findings, and probe/ablation routing IDs while preserving the schema-v1 single-metric
+alias. Details and interpretation rules live in
+[`../diagnostics/README.md`](../diagnostics/README.md).
 
 ## Scope
+
+The remainder of this document is the original pre-implementation diagnosis. Its
+present-tense statements describe the legacy/default-off path; use the status table above
+for the gated v23 implementation and its remaining limits.
 
 ### Tier 1 — the price-index / nominal-anchor coupling (highest leverage, do first)
 
@@ -304,15 +345,19 @@ chasing a structurally manufactured disinflation.
   so fix it while the price-index patch is in the same file.
 - **Duplicate key.** `per_capita_real_output` and `real_output_per_capita`
   ([metrics.py:1440,1464](../../macro_sim/reporting/metrics.py)) compute the identical thing.
-- **Two net-worth definitions for the same firm.** The equity market values a firm at
+- **Two net-worth definitions for the same firm (legacy path; addressed by the priced
+  balance-sheet flag).** The equity market values a firm at
   `cash + capital − debt` ([equity.py:20,61,132](../../macro_sim/systems/equity.py)) while the
   bank lends against `cash − debt` ([planning.py:247](../../macro_sim/behavior/planning.py)).
   The capital-inclusive measure ALREADY EXISTS and is simply not used for credit — which makes
   Patch #7 (capital as collateral) a small change, not a new concept. (Same pattern as the GDP
-  finding: the right measure exists, the wrong one is wired in.)
-- **Inventory is not an asset.** It appears in no book value or net worth (grep finds no
-  inventory valuation anywhere), so inventory-heavy firms are undervalued in q and in any
-  collateral base built in Patch #7.
+  finding: the right measure exists, the wrong one is wired in.) The v23 path now routes
+  genesis, equity, entry, and credit through one replacement-cost balance-sheet helper.
+- **Inventory was not an asset (valuation addressed; COGS matching remains).** The v23
+  balance-sheet path now values output inventory conservatively at the lower of posted price
+  and observable replacement cost and applies a collateral haircut. The income statement
+  still expenses current production cash costs instead of capitalizing inventory and matching
+  lot/weighted-average COGS to sales.
 
 ### Tier 2+ — DROPPED
 
