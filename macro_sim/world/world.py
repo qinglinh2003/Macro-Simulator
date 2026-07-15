@@ -211,6 +211,8 @@ class World:
         external_interest_settlement_fraction=1.0,
         periods_per_year: float = 12.0,
         peg: bool = False,
+        peg_economy: int = 0,        # WHICH economy pegs its rate (was hardcoded to 0)
+        peg_anchor: int | None = None,  # the currency it pegs TO (None => default, != pegger)
         peg_reserves0: float = 5000.0,
         peg_reserve_scale: float = 1.0e5,
         migration: bool = False,
@@ -344,10 +346,21 @@ class World:
         self._factor_income_arrears: List[float] = [0.0] * self.n
         self._factor_income_unpaid_tick: List[float] = [0.0] * self.n
         self._factor_income_arrears_cured_tick: List[float] = [0.0] * self.n
-        # v21.2 peg / trilemma: economy 0 pegs its rate; the CB absorbs the imbalance onto
+        # v21.2 peg / trilemma: peg_economy pegs its rate; the CB absorbs the imbalance onto
         # reserves; reserves hitting zero breaks the peg (devaluation = currency crisis).
+        # peg_economy/anchor were hardcoded to 0/1; now settable (e.g. China pegs to the USD).
         self.peg = peg
-        self.peg_anchor = 1 if self.n > 1 else 0   # the currency economy 0 pegs to
+        self.peg_economy = peg_economy
+        if peg_anchor is not None:
+            self.peg_anchor = peg_anchor
+        elif self.n > 1:
+            self.peg_anchor = 1 if peg_economy != 1 else 0   # default anchor (!= pegger; 0-peg => 1)
+        else:
+            self.peg_anchor = 0
+        if peg and self.n > 1:
+            assert 0 <= self.peg_economy < self.n, "peg_economy out of range"
+            assert 0 <= self.peg_anchor < self.n and self.peg_anchor != self.peg_economy, \
+                "peg_anchor must be a valid economy != peg_economy"
         self.peg_reserve_scale = peg_reserve_scale
         self._peg_reserves0 = peg_reserves0
         self._peg_intact = True
@@ -470,7 +483,7 @@ class World:
         if reserve_asset == 0.0:
             return result
         anchor = self.peg_anchor
-        result[0] -= reserve_asset * e[0] / e[anchor]
+        result[self.peg_economy] -= reserve_asset * e[self.peg_economy] / e[anchor]
         result[anchor] += reserve_asset
         return result
 
@@ -643,8 +656,8 @@ class World:
         res = self.reserves()
         if self.n > 1 and res != 0.0:
             a = self.peg_anchor
-            nfa[0] += res / e[a]      # economy 0 HOLDS the anchor's currency (a foreign asset)
-            nfa[a] -= res / e[a]      # ... which is a foreign claim ON the anchor
+            nfa[self.peg_economy] += res / e[a]  # the pegger HOLDS the anchor's currency (a foreign asset)
+            nfa[a] -= res / e[a]                 # ... which is a foreign claim ON the anchor
         # Flows settled at the opening vector e0.  Closing e is reserved for end-of-
         # tick stocks and revaluation; valuing the CA at post-grope rates creates a
         # mechanical world residual.
