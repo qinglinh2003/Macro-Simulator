@@ -166,6 +166,30 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
+### The 10-year audit matrix (bucket=30) — DELIVERED, all identities hold; 3 open research threads
+
+With FINDING 4 fixed, the full causal matrix ran at AUDIT scale (n=3, pop 500, **10 years**, all 10
+arms) in **~29 min wall** (each arm ~14 min; at bucket=1 a single arm ran >56 min without
+finishing). **Every arm passed 24/24 world identities** — the open-economy accounting is sound over a
+decade under every intervention (peg, capital control, tariff, energy shock, rate divergence, size
+asymmetry). Artifacts: `artifacts/openecon/matrix_audit_b30/`.
+
+The decade dynamics (now visible for the first time) surface three threads for the next phase — these
+are ECONOMIC observations to study, NOT identity failures or bugs:
+
+1. **Nominal drift.** CPI drifts UP over the 10 years (baselines ~1.0–2.5; outliers: energy_shock
+   econ1 4.5, size_asymmetry large-econ 7.4) despite 2% TFP drift and an active Taylor CB — 2 years
+   showed CPI ≈ 1.0. Connects to the existing v19 nominal-anchor arc; worth a dedicated look at whether
+   the long-run anchor holds.
+2. **Capital shallowing.** K / annual GDP falls from ~2.2 (2 y) to ~1.0–1.4 (10 y) — capital lags
+   output growth over the decade. Is investment under-responding to the TFP-driven output path?
+3. **Large external positions.** NFA accumulates to the thousands–tens-of-thousands over 10 years;
+   extreme under `peg` (pegged econ0 NFA −92k, hemorrhaging under a persistent deficit) and
+   `capital_control` (+31k) — the FINDING 3 note that a closed/pegged account lets trade-driven NFA
+   grow via slow FX clearing, now visible at decade scale. Whether these stabilise at 20–30 years is
+   the production-stage question.
+
+
 ### FINDING 4 (FIXED, commit 311ca09) — long-horizon cost is O(horizon²): the bond lot book grows without bound
 
 > **RESOLVED.** Flag-gated `bond_maturity_bucket` (default 1 = bit-identical). `issued_maturity()`
