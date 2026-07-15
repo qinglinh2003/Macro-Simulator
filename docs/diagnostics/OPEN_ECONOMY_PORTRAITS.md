@@ -166,7 +166,20 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
-### FINDING 5 (open, Tier-1) — the v23 capital-clock fix left an UNDER-DAMPED investment accelerator → long-horizon macro instability
+### FINDING 5 (FIXED, commit 85af592) — the v23 capital-clock fix left an UNDER-DAMPED investment accelerator → long-horizon macro instability
+
+> **RESOLVED.** The demand-expectation EMA that feeds the now-912×-amplified capital target was too
+> fast for the real-capital regime, so daily demand noise drove the accelerator cycle. Fix: a new
+> `capital_clock_demand_smoothing` (default 0.5) scales `lambda_d` INSIDE the annual-clock migration
+> (applied only when the clock is on, so every clock-off preset stays bit-identical — verified digest
+> 59e954ed unchanged). A 3-seed × 6-factor sweep picked 0.5 as the robust optimum: smoothing the
+> demand SOURCE beats slowing the investment RESPONSE (`lambda_I`, which costs output) or cutting the
+> financial q-channel. Same-seed A/B (pop 500, 10 y, worst seed): **inflation vol 8.68 → 3.01 (−65%),
+> price-level CoV 0.28 → 0.036 (−87%), peak unemployment 37.8% → 28.9%, mean GDP +4%.** Reversible via
+> `capital_clock_demand_smoothing=1.0`. Clock-off bit-identical; 30 clock/config/tech tests + the 10-arm
+> World smoke matrix (24/24 identities) green. Diagnosis preserved below.
+
+
 
 The 10-year audit revealed the economy does NOT settle: over a decade it runs large boom-bust cycles —
 CPI level swinging 1.0↔2.3, CB-measured inflation swinging −5% to +16%/yr, and **unemployment spiking to
