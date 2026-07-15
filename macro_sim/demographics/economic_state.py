@@ -170,6 +170,7 @@ class PersonClaimLedger:
         cash: float,
         debt: float,
         holdings: dict[str, float],
+        reset_bank_equity: bool = True,
     ) -> None:
         """Overwrite stock claims for one demographic household.
 
@@ -178,6 +179,13 @@ class PersonClaimLedger:
         deliberately preserves per-tick income/consumption fields, but resets the
         stock decomposition so person claims sum back to the household ledger and
         portfolio state.
+
+        ``reset_bank_equity=False`` leaves bank-equity claims untouched (neither
+        cleared nor re-seeded from ``holdings``). Bank equity carries its own
+        dust-prune + normalize-to-target machinery that runs every tick in the
+        identity gate, so a periodic full-reconcile must not overwrite it with a
+        raw target the gate would then prune away -- that desyncs the claim from
+        the tolerance the gate expects.
         """
         member_ids = self.members_of_household(household_id)
         if not member_ids:
@@ -191,7 +199,8 @@ class PersonClaimLedger:
             sheet.debt_claim = 0.0
             sheet.equity_claims.clear()
             sheet.bond_face_claim = 0.0
-            sheet.bank_equity_claims.clear()
+            if reset_bank_equity:
+                sheet.bank_equity_claims.clear()
 
         cash_share = float(cash) / len(owners)
         debt_share = float(debt) / len(owners)
@@ -207,6 +216,8 @@ class PersonClaimLedger:
                 if asset_id == "__bond_face__":
                     sheet.bond_face_claim += share
                 elif asset_id.startswith("__bank_equity__:"):
+                    if not reset_bank_equity:
+                        continue
                     bank_id = asset_id.split(":", 1)[1]
                     sheet.bank_equity_claims[bank_id] = sheet.bank_equity_claims.get(bank_id, 0.0) + share
                 else:

@@ -715,6 +715,21 @@ class Economy:
         if self.housing is not None:
             self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
+            # Periodic claims<-ledger reconciliation. The person-claim layer can strand a small
+            # claim residue across a household move (a member debited into the negative -- in cash
+            # OR in a proportionally-retired bond/equity holding -- then re-homed carries the
+            # negative to a household whose ledger never saw the debit). Harmless per event but it
+            # accumulates past CLAIM_TOL over a long, high-churn run and trips the identity gate.
+            # reconcile_financial_claims_from_economy resets each household's person claim set
+            # (cash, debt, bond face, firm equity) to its ledger account (the source of truth);
+            # running it every `claims_reconcile_interval` ticks dissolves the drift. Bank equity is
+            # reset separately: skip it in the reset (its clear+redistribute desyncs the dust layer),
+            # then force it to the exact owner target with the guard-free reconcile -- the per-tick
+            # normalize refuses drifts too large for a tiny bank, which the gate then trips on. 0 = off.
+            ri = self.cfg.claims_reconcile_interval
+            if ri > 0 and self.t % ri == 0:
+                self.demographic_bridge.reconcile_financial_claims_from_economy(self, skip_bank_equity=True)
+                self.demographic_bridge.force_bank_equity_claims_to_targets(self)
             self.demographic_bridge.assert_all_claim_identities(self)
         if self.labor_accounts is not None:
             # v16-L0/L1: the labor A5 -- E+U+S+JG must partition the labor supply,

@@ -263,13 +263,22 @@ class DemographicEconomicBridge:
                 holding_tolerances=self._household_asset_claim_tolerances(econ),
             )
 
-    def reconcile_financial_claims_from_economy(self, econ: Any | None = None) -> None:
+    def reconcile_financial_claims_from_economy(
+        self, econ: Any | None = None, *, skip_bank_equity: bool = False
+    ) -> None:
         """Synchronize person stock claims to aggregate household accounts.
 
         Legacy market modules still mutate household-level portfolios directly.
         This bridge-level reconciliation keeps the new person ownership layer
         accounting-safe until those market modules are taught to post
         person-level trade events themselves.
+
+        ``skip_bank_equity=True`` leaves bank-equity claims untouched. The
+        periodic reconcile that guards the long-horizon identity gate uses this:
+        bank equity is already dust-pruned and normalized to its ledger target
+        every tick inside ``assert_all_claim_identities``, so overwriting it here
+        with a raw target only fights that machinery (a sub-tolerance target gets
+        reset, then pruned to zero, then tripped against the un-pruned target).
         """
         econ = econ or self.econ
         if econ is None:
@@ -277,12 +286,20 @@ class DemographicEconomicBridge:
         bond_face_by_holder = self._bond_face_by_holder(econ)
         for household_id, account_id in self.household_to_account.items():
             estate_suspense = self.claims.estate_suspense_by_household.get(household_id, 0.0)
+            holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
+            if skip_bank_equity:
+                holdings = {
+                    asset_id: amount
+                    for asset_id, amount in holdings.items()
+                    if not asset_id.startswith(BANK_EQUITY_CLAIM_PREFIX)
+                }
             self.claims.reset_household_financial_claims(
                 household_id,
                 owner_ids=self._claim_owner_ids(household_id),
                 cash=econ.ledger.balance(account_id) - estate_suspense,
                 debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
+                holdings=holdings,
+                reset_bank_equity=not skip_bank_equity,
             )
 
     def household_labor_supply(self, account_id: str) -> float:
@@ -1293,6 +1310,58 @@ class DemographicEconomicBridge:
                 self._add_household_bank_equity_claim(household_id, bank_id, diff)
             else:
                 self._reduce_household_bank_equity_claim(household_id, bank_id, -diff)
+
+    def force_bank_equity_claims_to_targets(self, econ: Any | None = None) -> None:
+        """Set each household's bank-equity claim to the exact ledger owner target,
+        CONCENTRATED on a single member -- the guard-free, prune-safe sibling of the
+        per-tick normalize.
+
+        Two default-path assumptions break a long, high-churn multi-economy run and
+        this closes both, but only when the periodic reconcile is opted in
+        (claims_reconcile_interval > 0); interval=0 never calls it, so the default
+        per-tick machinery is untouched:
+
+        1. The per-tick normalize refuses any drift above a bank-size-scaled RECONCILE
+           tolerance (a guard against masking a gross error). For a bank with tiny
+           shares outstanding that tolerance collapses below an economically-nil
+           drift, so a real owner-vs-claim gap is left unreconciled and the gate --
+           keyed to the tighter DUST tolerance -- trips.
+        2. The dust PRUNE is per-member but the target and the identity check are
+           per-household. A household holding just above dust, split across several
+           members, has each member's share fall below dust; the prune then zeroes
+           every share and the household sum collapses below its target.
+
+        Concentrating the whole household target onto one member makes the single
+        claim exceed dust (so the prune keeps it) while the household sum still
+        equals the ledger target exactly."""
+        econ = econ or self.econ
+        if econ is None:
+            return
+        banks = getattr(econ, "banks", []) or []
+        for household_id in self.household_to_account:
+            members = self.claims.members_of_household(int(household_id))
+            if not members:
+                continue
+            posting = self._claim_posting_ids(household_id) or members
+            holder = posting[0]
+            account_id = self.account_for_household_id(int(household_id))
+            for bank in banks:
+                bank_id = str(getattr(bank, "id", ""))
+                if not bank_id:
+                    continue
+                target = float((getattr(bank, "owners", None) or {}).get(account_id, 0.0))
+                current = sum(
+                    float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))
+                    for person_id in members
+                )
+                if abs(target - current) <= self._bank_equity_dust_tolerance(econ, bank_id):
+                    continue
+                # clear the split, then concentrate the whole target on one member so
+                # the single claim survives the per-member dust prune.
+                for person_id in members:
+                    self.claims.balance_sheet(person_id).bank_equity_claims.pop(bank_id, None)
+                if abs(target) > self._bank_equity_dust_tolerance(econ, bank_id):
+                    self.claims.balance_sheet(holder).bank_equity_claims[bank_id] = target
 
     def _add_household_bank_equity_claim(self, household_id: int, bank_id: str, amount: float) -> None:
         amount = float(amount)

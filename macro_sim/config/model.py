@@ -130,6 +130,11 @@ class Config:
     # Defaults exactly match Phase0VitalRates() => a config that leaves them is bit-identical.
     demographics_tfr: float = 2.5             # total fertility rate (children/woman); pyramid youth
     demographics_mortality_scale: float = 1.0  # x on the Gompertz-Makeham hazard (>1 = shorter life)
+    # Reconcile the person-claim layer to the household ledger every N ticks (0 = off = never mid-run
+    # = bit-identical). Long, high-churn runs strand tiny cash-claim residues across household moves
+    # that accumulate past CLAIM_TOL and trip the claims identity gate; periodic reconciliation
+    # dissolves them by resetting each household's claims to its ledger balance (the source of truth).
+    claims_reconcile_interval: int = 0
     # -- v14 Phase 3: rank-gradient strata (individual position -> individual hazard).
     # Bucket multiplier exp(beta*(0.5-rank)), EXPOSURE-weighted mean 1 (Phase 3 moves WHO,
     # Phase 2 moves HOW MANY). 0.0 = off = bit-identical. fertility gradient is SIGNED

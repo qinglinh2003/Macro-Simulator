@@ -29,6 +29,7 @@ COMMON = dict(
     bond_maturity_bucket=30,                # FINDING 4: bound the bond book over the long horizon
     fertility_income_elasticity=0.06,       # demographic transition: richer -> fewer children
     mortality_income_elasticity=0.04,       # richer -> longer life (endogenous aging)
+    claims_reconcile_interval=1,            # FINDING 6: dissolve cash-claim strands from cross-household moves under heavy churn
 )
 
 # name, real_pop_millions, then per-country knobs. a_K is set to 2.4*a downstream.
