@@ -764,6 +764,14 @@ class Config:
     # 2.5). capital_annual_clock re-derives the joint set (v, K_firm0, A) in __post_init__ so
     # genesis output is exactly invariant; default off => every existing preset bit-identical.
     capital_annual_clock: bool = False
+    # Idempotency guard for the in-place annual-clock migration. It mutates v/K_firm0/A in
+    # __post_init__, and dataclasses.replace() re-runs __post_init__ on already-migrated
+    # values -- so without this flag every replace() (World per-economy reseed, the .large()/
+    # .small() presets, experiment overrides) would re-scale by ticks_per_year AGAIN (365x,
+    # compounding). As a real field it is copied by replace(), so a migrated config stays
+    # migrated exactly once. Not user-set; excluded from equality so it never distinguishes
+    # two otherwise-identical configs.
+    _capital_annual_clock_applied: bool = field(default=False, repr=False, compare=False)
     ticks_per_year: float = 365.0   # calendar scale used by the annual-clock derivation
     v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
@@ -986,12 +994,15 @@ class Config:
         """
         if not self.capital_annual_clock:
             return
+        if self._capital_annual_clock_applied:
+            return                      # already migrated (e.g. copied through dataclasses.replace)
         scale = float(self.ticks_per_year)
         if scale <= 1.0:
             return
         self.v *= scale
         self.K_firm0 *= scale
         self.A *= scale ** (-self.alpha)
+        self._capital_annual_clock_applied = True
 
     @property
     def capital_enabled(self) -> bool:

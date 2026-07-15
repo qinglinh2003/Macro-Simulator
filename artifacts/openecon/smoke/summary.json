@@ -1,0 +1,26 @@
+{
+ "n": 2,
+ "pop": 200,
+ "years": 2.0,
+ "ticks": 730,
+ "wall_seconds": 37.3,
+ "ticks_per_second": 19.6,
+ "per_economy": [
+  {
+   "economy": 0,
+   "real_gdp": 158.62365029328572,
+   "cpi": 1.0251682522275574,
+   "K_over_annual_gdp": 2.2442665510055257,
+   "ext_factor_income": NaN,
+   "domestic_interest": 9.534176232080646e-05
+  },
+  {
+   "economy": 1,
+   "real_gdp": 174.85167182804898,
+   "cpi": 0.9646336643939399,
+   "K_over_annual_gdp": 2.1493479766745693,
+   "ext_factor_income": NaN,
+   "domestic_interest": 0.0
+  }
+ ]
+}
