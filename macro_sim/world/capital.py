@@ -111,7 +111,7 @@ def peg_defense(world, scaled):
         M0 = world.economies[0].ledger.total_money
         # POLICY: capital controls throttle the flow that drains reserves — closing the
         # account lets the peg + an independent rate BOTH survive (the trilemma's 3rd corner).
-        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control)
+        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control[0])
         drain_for = pressure * world.peg_reserve_scale        # foreign currency to sell
         _defend_peg(world, drain_for)                          # a REAL, conserving FX swap
         world._pent_up += pressure                             # suppressed depreciation accumulates
@@ -511,7 +511,7 @@ def capital_financing(world, i, best_price) -> float:
     current = world.market_external_positions()[i]
     # POLICY: capital controls throttle the flow (0 = free mobility, 1 = closed account).
     # Closing the account lets a peg keep monetary autonomy — the trilemma's third corner.
-    return world.capital_adjust * (target - current) * (1.0 - world.capital_control)
+    return world.capital_adjust * (target - current) * (1.0 - world.capital_control[i])
 
 
 def capital_grope_signal(world, scaled):
@@ -530,7 +530,7 @@ def capital_grope_signal(world, scaled):
     an independent rate no longer manufacture a spurious NFA."""
     if not world.capital or world.capital_mobility == 0.0:
         return scaled
-    throttle = 1.0 - world.capital_control
     target = target_positions(world)
-    return [scaled[i] - throttle * target[i] / max(1.0, world.economies[i].ledger.total_money)
+    return [scaled[i] - (1.0 - world.capital_control[i]) * target[i]
+            / max(1.0, world.economies[i].ledger.total_money)
             for i in range(world.n)]

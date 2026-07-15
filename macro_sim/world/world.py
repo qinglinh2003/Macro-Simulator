@@ -131,13 +131,20 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         "migration_rate",
         "migration_max_share",
         "remittance_share",
-        "capital_control",
         "remittance_tax",
         "outward_remittance_tax",
         "guest_worker_return",
         "wage_smoothing",
     ):
         _bounded_number(name, values[name], lower=0.0, upper=1.0)
+
+    # capital_control is per-economy (scalar broadcasts): the multi-economy layer stored it as a
+    # single world-wide scalar, so one economy could not close its account while others stayed
+    # open (the real trilemma configuration). Scalar => same value everywhere (bit-identical).
+    for index, item in enumerate(
+        _per_economy_values("capital_control", values["capital_control"], n)
+    ):
+        _bounded_number(f"capital_control[{index}]", item, lower=0.0, upper=1.0)
 
     immigration_cap = values["immigration_cap"]
     if immigration_cap is not None:
@@ -275,7 +282,9 @@ class World:
         self.tariff = tariff                   # trade policy
         self.import_quota = import_quota
         self.export_subsidy = export_subsidy
-        self.capital_control = capital_control  # capital policy (0 = free, 1 = closed)
+        # capital policy per economy (0 = free, 1 = closed). A scalar broadcasts to every
+        # economy (bit-identical); a vector lets one economy shut its account while others stay open.
+        self.capital_control = _per_economy_values("capital_control", capital_control, self.n)
         self.sanctions = sanctions or set()     # strategic: blocked bilateral pairs
         self.emigration_cap = emigration_cap    # migration policy
         self.outward_remittance_tax = outward_remittance_tax
