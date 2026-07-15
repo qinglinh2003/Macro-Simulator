@@ -108,7 +108,15 @@ class Economy:
         self._demographic_household_rng = random.Random(cfg.seed + 13_002)
         household_count = cfg.n_households
         if cfg.demographics_enabled:
-            self.demographic_rates = Phase0VitalRates()
+            # Per-country genesis pyramid + vital dynamics (was a single hardcoded default for all
+            # economies). tfr + a hazard scale on the Gompertz-Makeham mortality; defaults recover
+            # the historical Phase0VitalRates() exactly (bit-identical when the config leaves them).
+            _vr = Phase0VitalRates()
+            self.demographic_rates = Phase0VitalRates(
+                tfr=cfg.demographics_tfr,
+                makeham_a=_vr.makeham_a * cfg.demographics_mortality_scale,
+                gompertz_b=_vr.gompertz_b * cfg.demographics_mortality_scale,
+            )
             population = cfg.demographics_population or cfg.n_households
             self.demographic_state = create_genesis_population(
                 self.demographic_rates,

@@ -121,6 +121,15 @@ class Config:
     mortality_income_elasticity: float = 0.0  # gamma in M = clip(x^-gamma, lo, hi); 0 = off -- FREE
     mortality_mult_lo: float = 0.7
     mortality_mult_hi: float = 1.3
+    # Per-country GENESIS vital rates. The multi-economy World bolted N economies together but
+    # left the demographic kernel on its single hardcoded Phase0VitalRates() default, so every
+    # economy shared ONE age pyramid -- "aging-rich vs young-developing" was inexpressible.
+    # These wire the two rates that shape the pyramid into Config: create_genesis_population
+    # derives the STABLE age distribution from them, so low TFR + low mortality => an OLD pyramid
+    # and high TFR => a YOUNG one, and the same rates drive fertility/mortality over the run.
+    # Defaults exactly match Phase0VitalRates() => a config that leaves them is bit-identical.
+    demographics_tfr: float = 2.5             # total fertility rate (children/woman); pyramid youth
+    demographics_mortality_scale: float = 1.0  # x on the Gompertz-Makeham hazard (>1 = shorter life)
     # -- v14 Phase 3: rank-gradient strata (individual position -> individual hazard).
     # Bucket multiplier exp(beta*(0.5-rank)), EXPOSURE-weighted mean 1 (Phase 3 moves WHO,
     # Phase 2 moves HOW MANY). 0.0 = off = bit-identical. fertility gradient is SIGNED
@@ -1778,6 +1787,8 @@ class Config:
                 and self.cpi_rebase_interval_days >= 1), \
             "fixed-basket CPI rebase interval must be a positive integer number of days"
         assert self.demographics_population >= 0, "demographics_population must be >= 0"
+        assert self.demographics_tfr >= 0.0, "demographics_tfr must be >= 0"
+        assert self.demographics_mortality_scale > 0.0, "demographics_mortality_scale must be > 0"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
         assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
         assert self.demographic_annual_marriage_rate_peak >= 0.0, "demographic marriage rate must be >= 0"
