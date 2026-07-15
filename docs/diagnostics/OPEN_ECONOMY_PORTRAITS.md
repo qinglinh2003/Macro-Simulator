@@ -166,6 +166,39 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
+### FINDING 5 (open, Tier-1) — the v23 capital-clock fix left an UNDER-DAMPED investment accelerator → long-horizon macro instability
+
+The 10-year audit revealed the economy does NOT settle: over a decade it runs large boom-bust cycles —
+CPI level swinging 1.0↔2.3, CB-measured inflation swinging −5% to +16%/yr, and **unemployment spiking to
+26% (coupled) / 38% (closed)**. Invisible at the 2-year smoke horizon (the cycle hadn't developed).
+
+**Root-caused by same-seed attribution (closed economy, pop 500, 10 y, bucket=30):**
+- **Real-side & closed-economy** — a closed baseline reproduces it (max_u 37.8%), so it is NOT
+  open-economy-specific. The CB responds CORRECTLY (rate tracks inflation: ~13%/yr when inflation is
+  16%, floored at 0 when inflation is negative) — so it is NOT a monetary-rule bug. The
+  factor-income≈0 observation was a red herring (the equilibrium nominal rate genuinely sits near 0).
+- **It is the INVESTMENT ACCELERATOR.** Halving `lambda_I` (investment adjustment speed) cuts inflation
+  volatility ~55% and price-level CoV ~76% on the cycling seeds without breaking output. Lowering `v`
+  (capital-output ratio) instead COLLAPSES the economy (99.9% unemployment) — `v` is structural,
+  `lambda_I` is the damping lever. Making `lambda_I` faster (×26) makes it much worse. Classic
+  accelerator-multiplier limit cycle.
+- **It is a direct consequence of FINDING 1.** Turning the annual clock OFF (capital economically
+  absent again, the old broken state) drops peak unemployment 37.8% → 15.6% and halves inflation vol on
+  the same seed. The capital-clock fix correctly made capital REAL (`v = 912.5`), which gave the
+  accelerator teeth — but the daily `lambda_I = 0.0019` was never re-tuned for now-real capital, leaving
+  it under-damped.
+- **Seed-dependent** — baseline inflation vol was 8.48 / 4.26 / 4.83 across 3 seeds, and `lambda_I`
+  damping helps the worst seeds a lot (s1 −56%, s3 −62%) but slightly worsens an already-calm one (s2).
+  So the cure is not simply "halve lambda_I" — it needs a proper multi-seed × multi-horizon calibration.
+
+**Recommended next step (a scoped calibration mini-arc, not a one-line change):** re-tune the investment
+damping for the real-capital regime — search `lambda_I` (and possibly the investment rule's structure /
+a capital-adjustment cost) for a value that damps the cycle across seeds and horizons WITHOUT collapsing
+output. This is the natural sequel to FINDING 1: the clock fix priced capital correctly; the dynamics it
+switched on now need damping. 38% unemployment swings are not a realistic business cycle — they are an
+over-amplified accelerator.
+
+
 ### The 10-year audit matrix (bucket=30) — DELIVERED, all identities hold; 3 open research threads
 
 With FINDING 4 fixed, the full causal matrix ran at AUDIT scale (n=3, pop 500, **10 years**, all 10
