@@ -34,7 +34,7 @@ from macro_sim.world.world import World
 
 
 def build_configs(n: int, pop: int, ticks: int, productivity_spread: float,
-                  overrides_per_country=None):
+                  overrides_per_country=None, bond_maturity_bucket: int = 1):
     """N frontier economies with heterogeneous productivity so trade/capital/migration flows
     are identifiable. Each economy carries the full v23 fixed foundation."""
     configs = []
@@ -53,6 +53,8 @@ def build_configs(n: int, pop: int, ticks: int, productivity_spread: float,
             n_ticks=ticks,
             a=prod,
             a_K=params["a_K"] * prod,
+            # FINDING 4: bucket>1 bounds the bond lot book so long horizons stay O(horizon).
+            bond_maturity_bucket=bond_maturity_bucket,
         )
         if overrides_per_country and i < len(overrides_per_country) and overrides_per_country[i]:
             params.update(overrides_per_country[i])
@@ -73,10 +75,11 @@ def build_world(configs, **world_over):
 
 
 def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=None,
-                 measure_identities=True):
+                 measure_identities=True, bond_maturity_bucket=1):
     ticks = int(round(years * 365))
     configs = build_configs(n, pop, ticks, productivity_spread=0.5,
-                            overrides_per_country=overrides_per_country)
+                            overrides_per_country=overrides_per_country,
+                            bond_maturity_bucket=bond_maturity_bucket)
     world = build_world(configs, **(world_over or {}))
 
     # R2: the identity gates. WorldProbeCollector wraps World.step, snapshots the pre/post

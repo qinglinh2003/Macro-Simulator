@@ -85,7 +85,7 @@ def arms(n: int, years: float):
 
 
 def run_arm(spec):
-    name, n, pop, years, out_root, world_over, opc = spec
+    name, n, pop, years, out_root, world_over, opc, bond_bucket = spec
     # size_asymmetry: economy 0 is 3x population; harness derives agent counts from pop.
     if name == "size_asymmetry":
         opc = [{"demographics_population": pop * 3, "n_households": max(50, (pop * 3) // 10),
@@ -95,7 +95,8 @@ def run_arm(spec):
     t0 = time.perf_counter()
     try:
         summary = run_portrait(n, pop, years, str(out_dir), world_over=world_over,
-                               overrides_per_country=opc, measure_identities=True)
+                               overrides_per_country=opc, measure_identities=True,
+                               bond_maturity_bucket=bond_bucket)
         status = "ok"
         err = None
     except Exception as e:  # noqa: BLE001 -- an arm failure must not sink the matrix
@@ -135,6 +136,9 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", default=None)
     ap.add_argument("--only", default=None, help="comma-separated arm names")
+    ap.add_argument("--bond-bucket", type=int, default=1,
+                    help="bond_maturity_bucket (FINDING 4): 1 = exact daily bills; >1 bounds the "
+                         "bond book so long horizons stay O(horizon). Use 30 for multi-decade runs.")
     args = ap.parse_args()
 
     cfg = STAGES[args.stage]
@@ -144,13 +148,13 @@ def main():
 
     selected = set(args.only.split(",")) if args.only else None
     specs = [
-        (name, n, pop, years, out_root, world_over, opc)
+        (name, n, pop, years, out_root, world_over, opc, args.bond_bucket)
         for (name, world_over, opc) in arms(n, years)
         if selected is None or name in selected
     ]
 
     print(f"matrix stage={args.stage} n={n} pop={pop} years={years} "
-          f"arms={len(specs)} workers={args.workers}")
+          f"arms={len(specs)} workers={args.workers} bond_bucket={args.bond_bucket}")
     t0 = time.perf_counter()
     rows = []
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
