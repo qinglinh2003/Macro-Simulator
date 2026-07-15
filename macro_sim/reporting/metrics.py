@@ -709,6 +709,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 ),
                 "labor_underemployed_heads": float(accounts.underemployed_heads),
                 "labor_underemployment_hours": float(accounts.underemployment_hours),
+                # v23 second contract: heads holding a live extra job + the FTE-hours it sells
+                "labor_second_job_heads": float(getattr(accounts, "second_job_heads", 0.0)),
+                "labor_second_job_hours": float(getattr(accounts, "second_job_hours", 0.0)),
                 "labor_U": float(accounts.unemployed),
                 "labor_S": float(accounts.suspended_memo),
                 "labor_JG": float(accounts.job_guarantee),
@@ -1091,6 +1094,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             ),
             "bank_external_interest_expense": float(
                 np.sum([b.external_interest_expense for b in econ.banks])
+            ),
+            # v23: the bank's cost of funds on DEPOSITS (the missing P&L leg the deposit-rate fix
+            # added). Reduces realized profit before dividends; surfaced so the spread is visible.
+            "bank_deposit_funding_cost": float(
+                np.sum([getattr(b, "deposit_funding_cost", 0.0) for b in econ.banks])
             ),
             "bank_realized_credit_losses": float(
                 np.sum([b.realized_credit_losses for b in econ.banks])
@@ -1813,6 +1821,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         econ_caps = [_bank_economic_capital_snapshot(econ, b, bond_deltas) for b in alive_banks]
         rec.update({
             "bonds_outstanding": float(getattr(econ, "_bonds_outstanding", 0.0)),   # = Σ face
+            # FINDING 4: the LOT COUNT (not face). Daily issuance fragments the book; bounded by
+            # bond_maturity_bucket. Watch it stay flat over long horizons instead of O(ticks).
+            "n_bond_lots": float(len(lots)),
             "bond_book_total": book_total,
             "bond_market_total": market_total,
             "bond_mtm_pnl": market_total - book_total,          # <0 on a rate hike above coupon (duration/SVB)

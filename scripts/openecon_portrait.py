@@ -100,7 +100,7 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # per-economy series
+    # per-economy series (full domestic metric set, one CSV per economy)
     import csv
     for i, recs in enumerate(per_econ):
         if not recs:
@@ -110,6 +110,31 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
             w = csv.DictWriter(fh, fieldnames=cols)
             w.writeheader()
             for r in recs:
+                w.writerow(r)
+
+    # world-level cross-border series (FX, NFA, current account, trade, factor income,
+    # remittances, reserves, ...). Per-economy vectors flatten to <field>_<i> columns; nested
+    # matrices (bilateral) are JSON-stringified so the CSV stays rectangular for analysis.
+    world_recs = getattr(world, "world_records", None) or []
+    if world_recs:
+        def _flatten(row):
+            flat = {}
+            for k, val in row.items():
+                if isinstance(val, list):
+                    if val and isinstance(val[0], list):
+                        flat[k] = json.dumps(val)               # bilateral matrix -> JSON string
+                    else:
+                        for j, v in enumerate(val):
+                            flat[f"{k}_{j}"] = v
+                else:
+                    flat[k] = val
+            return flat
+        flat_rows = [_flatten(r) for r in world_recs]
+        wcols = sorted({k for r in flat_rows for k in r})
+        with (out / "world_series.csv").open("w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=wcols)
+            w.writeheader()
+            for r in flat_rows:
                 w.writerow(r)
 
     # R2 verdict: every identity check must pass; surface any critical/high finding.
