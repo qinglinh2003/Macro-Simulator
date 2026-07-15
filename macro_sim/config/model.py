@@ -75,6 +75,15 @@ class Config:
 
     # -- wages (B4), DNWR floor + raise-on-shortage ------------------------
     delta: float = 0.0              # downward wage flexibility -- FORCED (strict DNWR floor)
+    # v23: B4 was PURELY a labour-tightness rule -- prices appear nowhere in it -- so the nominal
+    # wage was anchored to nothing and the REAL wage was a free-floating residual. `delta` was
+    # added in v13 to stop a DEFLATION ratcheting the real wage up, but that deflation was an
+    # ARTEFACT of the capital-clock bug. With the clock fixed prices RISE, and with labour well
+    # supplied the delta drift now pushes NOMINAL wages DOWN through an inflation (measured:
+    # wage -0.5%/yr against prices +7.4%/yr; real wage -17%; households fall under the
+    # subsistence basket). With indexation the tightness terms apply to the REAL wage and
+    # committed expected inflation is the nominal baseline. 0.0 => bit-identical.
+    wage_indexation: float = 0.0    # 0 = no price feedback (legacy); 1 = full indexation
     omega: float = 0.02             # wage-raise step on labor shortage -- FREE
     theta_wage: float = 0.15        # rewage probability / tick -- anchored (wage-rigidity data)
 
@@ -141,6 +150,19 @@ class Config:
     mortgage_ltv_cap: float = 0.8           # macroprudential handle, live from day one
     mortgage_foreclosure_ltv: float = 1.1   # foreclose when secured balance > this x value
     mortgage_arrears_floor: float = 2.0     # ...AND deposits below this floor
+    # Dedicated mortgage underwriting.  This is deliberately separate from the
+    # corporate-loan gross-exposure cap: housing collateral receives its own risk
+    # weight and competes for a bank-specific mortgage portfolio envelope.
+    mortgage_underwriting: bool = False
+    mortgage_dsti_cap: float = 0.45          # stressed per-tick debt service / qualifying income
+    mortgage_stress_rate_addon: float = 0.02 / 365.0  # per-tick add-on (~2pp annual stress)
+    mortgage_risk_weight: float = 0.35       # residential-mortgage RWA weight
+    mortgage_min_capital_ratio: float = 0.08 # bank capital / mortgage RWA floor
+    # One bank-wide risk-weighted lending envelope.  When enabled, ordinary
+    # firm/consumer credit receives a 100% risk weight and secured mortgages use
+    # ``mortgage_risk_weight``; both draw on the same capital / RWA limit.  The
+    # historical gross-loan kappa and large-exposure gates remain additional caps.
+    unified_bank_rwa: bool = False
     # -- v15.3 rental market: tenancies as persistent flows; rent level is an independent
     # market state (vacancy pressure cuts it, unhoused demand raises it); landlords
     # emerge from yield arbitrage (cash-only buy-to-let; leverage is a later flag).
@@ -186,6 +208,18 @@ class Config:
     # daily market verbatim; "persistent" attaches employment to PERSONS with four
     # separation classes and adjustment dynamics (labor hoarding -> Okun).
     labor_matching: str = "spot"
+    # Optional intensive margin for persistent jobs. A private Job remains a
+    # one-person/one-firm relationship but may carry fractional daily hours; JG and
+    # benefits fill the person's residual labor supply. Off preserves the certified
+    # whole-person path and its random stream exactly.
+    labor_fractional_hours: bool = False
+    # v23 P0: with one Job per person, greedy per-firm allocation leaves a part-time MARGINAL
+    # worker at every firm whose residual hours are UNSELLABLE -- measured 13-24 FTE idle while
+    # firms posted 180-235 vacancies, the residue draining into the job guarantee (fill 85.7%,
+    # JG 11.7%). The resulting production shortfall ratcheted the B3 markup into runaway
+    # inflation. labor_second_job lets a firm buy a part-timer's unsold hours as ONE additional
+    # contract at a DIFFERENT firm, capped so nobody sells more than 1.0 FTE in total.
+    labor_second_job: bool = False
     churn_annual: float = 0.28              # exogenous quits + individual dismissals (~2.4%/mo)
     lambda_fire: float = 0.03               # per-tick closure of the layoff gap (hoarding dial)
     layoff_band: float = 0.05               # hysteresis band as a fraction of target headcount
@@ -210,7 +244,8 @@ class Config:
     # -- v16-L4 person efficiency: the human-capital slot. e_i ~ lognormal MEAN ONE,
     # drawn once at FIRST hire (dedicated substream seed+16_002); earnings = wage x e_i
     # (wage_of is the single authority -- every cash gate prices it); f.hired counts
-    # EFFICIENCY UNITS (feeds production), labor_sold counts HEADS (feeds JG/welfare).
+    # EFFICIENCY UNITS (feeds production); labor_sold counts heads on the legacy
+    # path and FTE hours when labor_fractional_hours is enabled (feeds JG/welfare).
     labor_person_efficiency: bool = False
     efficiency_sigma: float = 0.35
     # -- v16-L5 participation margin: the reservation wage. Outside option = what the
@@ -229,6 +264,12 @@ class Config:
     # (1) footfall -- unmet capital-market buy orders enter sellers' demand
     #     expectations (an order book: demand stays observable at zero inventory);
     capital_rationed_signal: bool = False
+    # v23 C-sector counterpart.  Unlike the historical K-sector equal split,
+    # only residual demand attached to an isolated, protocol-defined diagnostic
+    # seller visit enters that seller's next-period expectation.  This is an
+    # estimator, not a transaction-history observation.  Default off
+    # preserves both behavior and the legacy RNG stream.
+    consumption_rationed_signal: bool = False
     # (2) subscale exit -- a firm whose expected demand stays below the viability
     #     line (in workers) exits by liquidation at a daily HAZARD (staggered, so
     #     survivors inherit the demand share and the consolidation self-terminates).
@@ -259,6 +300,23 @@ class Config:
 
     # -- settlement / dividends (choice 甲) --------------------------------
     rho: float = 0.5                # dividend payout ratio of positive profit -- anchored
+    # Full cash-basis firm income statement.  Off keeps the historical
+    # EBITDA-like ``Firm.profit`` and phase order exactly; the production
+    # diagnostic frontier turns it on to close depreciation, interest, tax,
+    # distribution and retained-earnings bridges explicitly.
+    firm_full_pnl: bool = False
+    # Long-run cost-plus quotes include replacement-cost service of opening
+    # productive capital: P_K * K * (depreciation + marginal financing rate).
+    # This is a pricing recovery term, not an additional accounting expense.
+    capital_service_pricing: bool = False
+    # Nominal firm asset valuation and asset-related credit ceiling.  Physical
+    # capital is priced at committed replacement cost; output inventories use the
+    # lower of posted value and observable unit replacement cost, while purchased
+    # inputs retain carrying cost.  The lending channel is only a borrowing-base proxy:
+    # liens, priority and recovery on default remain outside this flag.
+    priced_firm_balance_sheet: bool = False
+    firm_capital_haircut: float = 0.30
+    firm_inventory_haircut: float = 0.50
 
     # -- genesis endowments (transient: must not affect stationary behavior)
     d_household0: float = 100.0     # each household's tick-0 deposits
@@ -298,6 +356,10 @@ class Config:
     # Money conservation (M0) is superseded by net-worth conservation (A5).
     # ======================================================================
     bank_enabled: bool = False      # v3 master switch (a single bank; loans create deposits)
+    # Explicit realized bank income statement (loan/bond/interbank income less
+    # funding expense and write-offs).  Historical version presets retain their
+    # certified gross-interest payout rule until this v23 migration is enabled.
+    bank_realized_pnl: bool = False
     kappa: float = 3.0              # max leverage multiple L^max = kappa*NW -- FREE (core; Minsky knob)
     r_interest: float = 0.01        # loan interest rate / tick -- anchored/free (exogenous in v3)
     amort: float = 0.1             # principal repaid / tick (fraction of debt) -- FREE
@@ -337,6 +399,10 @@ class Config:
     # no shopping ⇒ bit-identical to v11.2.
     # ======================================================================
     bank_rate_competition: bool = False   # v11.3 master switch (heterogeneous loan-rate spreads + borrower shopping)
+    # Keep an originated loan with its recorded creditor until a modeled payoff,
+    # refinance or loan sale exists. Default off preserves certified v11.x
+    # relationship reassignment; the v23 frontier opts into contract integrity.
+    bank_relationship_lock_in: bool = False
     bank_spread_disp: float = 0.0         # cross-bank SD of the (mean-0) loan-rate spread, per-tick rate units; 0 = uniform
     bank_search_m: int = 2                # # rival banks a borrower samples when shopping for the cheapest (search friction)
 
@@ -493,6 +559,10 @@ class Config:
     # deposits, borrowers hold debt = balance-sheet inequality). household_credit=False => v6.x.
     # ======================================================================
     household_credit: bool = False  # v7 master switch (household borrowing to consume)
+    # Carry unpaid household loan interest as a memo stock.  It is deliberately
+    # outside ledger principal, loan books and RWA; historical presets keep the
+    # old principal-first, no-arrears settlement until this migration is enabled.
+    household_interest_arrears: bool = False
     hh_subsistence: float = 0.0     # consumption floor c_min households borrow to defend (0=off) -- FREE
     hh_credit_limit: float = 2.0    # debt-to-income cap: L_h <= this · Y^e_h -- FREE (the key dial)
     hh_amort: float = 0.1           # household debt amortization fraction / tick -- anchored
@@ -581,6 +651,11 @@ class Config:
     #   so it runs the full deficit under slack (u>=ref) but TAPERS to balance at full employment (u->0),
     #   stopping the injection from becoming pure inflation. Anchored to the natural rate (~0.05). 0=fixed target
     benefit_replacement: float = 0.0      # b: unemployment benefit = b·wage_ref -- anchored (OECD replacement)
+    # v23: a minimum income guarantee, tested on INCOME rather than on unsold hours. The benefit
+    # above is a QUANTITY rule and is blind to a worker who sells ALL their labour and still
+    # earns too little -- which v16-L4's earnings dispersion (pay = wage x e_i) manufactures.
+    # 0.0 => never fires => bit-identical.
+    benefit_income_floor: float = 0.0     # top income up to this x wage_ref x labour supply
     pension_replacement: float = 0.0      # v13: old-age pension per elder person = this · wage_ref (0 = off).
                                           # The only transfer reaching non-workers: without it elder households
                                           # with no savings sit at the consumption floor (audit: elder/adult
@@ -626,10 +701,11 @@ class Config:
     # v10 -- the CENTRAL BANK: an endogenous policy interest rate (DESIGNDOC §33; PLAN_v10). Promotes the frozen
     # r_interest to a per-tick POLICY rate set by a Taylor rule:
     #   r = clip( ρ·r_{-1} + (1-ρ)·[ r* + φ_π·(π̄ - π*) - φ_u·(u - u*) ] , 0, r_max ).
-    # The whole transmission is ALREADY wired to r_interest (investment/entry hurdle, equity valuation, firm +
-    # household debt service), so this only makes the rate MOVE. central_bank=False => r ≡ r_interest =>
-    # bit-identical. Rate-rule params are Policy (the CB's live control surface); the neutral rate, natural u,
-    # EMA smoothing and cap are Config (structural). CB and Treasury stay CONSOLIDATED in v10 (PLAN_v10 §9).
+    # The legacy transmission is wired to debt service, entry and asset valuation; the
+    # direct investment/consumption/credit decisions remain behind the separately
+    # reviewable ``monetary_direct_transmission`` flag below. central_bank=False =>
+    # r ≡ r_interest. Rate-rule params are Policy (the CB's live control surface);
+    # neutral rate, natural u, EMA smoothing and cap are Config (structural).
     # ======================================================================
     central_bank: bool = False            # v10: master switch; off => frozen r_interest => bit-identical
     inflation_target: float = 0.0         # π*: per-tick inflation target (Policy lever)
@@ -641,6 +717,22 @@ class Config:
     infl_ema_lambda: float = 0.02         # λ: EMA smoothing of the noisy per-tick inflation signal (Config)
     r_max: float = 0.10                   # rate sanity cap per tick (Config)
 
+    # Optional direct monetary-demand transmission.  The legacy model has rate-sensitive
+    # debt cash flows and asset prices but no direct user-cost, household debt-budget, or
+    # firm debt-service-capacity decision.  Keeping one master switch off preserves every
+    # historical decision and random draw; the v23 diagnostic frontier enables it.
+    monetary_direct_transmission: bool = False
+    investment_user_cost_elasticity: float = 0.5  # elasticity to the real user-cost ratio
+    investment_user_cost_multiplier_min: float = 0.5
+    investment_user_cost_multiplier_max: float = 1.5
+    investment_user_cost_floor: float = 1.0e-9    # per-tick floor for ZLB/negative-real-rate cases
+    firm_credit_min_dscr: float = 1.25            # expected operating cash flow / contractual service
+    # Unified per-tick required return for direct-mode bank and per-firm equity
+    # valuation.  A risk premium, not an annual-scale magic floor, keeps the ZLB
+    # finite and continuous on the daily v13 clock.
+    valuation_discount_floor: float = 1.0e-9
+    valuation_risk_premium: float = 1.34e-4
+
     # ======================================================================
     # v10.1 -- the bank pays interest BY DEPOSITS, not split equally (DESIGNDOC §33; PLAN_v10.1). The v3 bank
     # split its collected loan interest EQUALLY across all households ("bank dividend", plumbing to close the
@@ -651,6 +743,11 @@ class Config:
     # bit-identical to v10.
     # ======================================================================
     interest_by_deposits: bool = False    # v10.1: distribute bank interest ∝ household deposits (else equal split)
+    # v23: contractual deposit interest -- the bank's COST OF FUNDS. interest_by_deposits above is
+    # a DISTRIBUTION rule (it splits leftover dividends by deposit share); it is not a P&L expense.
+    # This pays deposit_rate x deposit each tick as a real bank->depositor transfer, booked against
+    # bank profit so a net-interest-margin squeeze becomes possible. 0 => bit-identical.
+    deposit_rate: float = 0.0             # per-tick contractual interest paid on household deposits
 
     # ======================================================================
     # v9.2 -- remove the fixed-nominal-startup money NON-NEUTRALITY (DESIGNDOC §30). New firms enter with a
@@ -661,7 +758,14 @@ class Config:
     # ======================================================================
     index_startup: bool = False           # v9.2: price-index the startup endowment (real-invariant entry)
 
-    v: float = 2.5                  # desired capital-output ratio (accelerator) -- FREE (core)
+    # v23 P0 (capital clock): `v` is the ANNUAL capital-output ratio, but plan_investment
+    # multiplies it by a PER-TICK demand flow. On the daily calendar that makes the desired
+    # capital stock ticks_per_year too small (measured K / annual GDP ~0.004 vs the configured
+    # 2.5). capital_annual_clock re-derives the joint set (v, K_firm0, A) in __post_init__ so
+    # genesis output is exactly invariant; default off => every existing preset bit-identical.
+    capital_annual_clock: bool = False
+    ticks_per_year: float = 365.0   # calendar scale used by the annual-clock derivation
+    v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
     delta_K: float = 0.05           # capital depreciation rate -- anchored (+ maint. floor)
     alpha: float = 0.3              # capital share, Cobb-Douglas -- anchored (capital income share)
@@ -795,6 +899,23 @@ class Config:
     deprivation_acute_days: int = 7        # a sub-30% spell this long trips the domain flag
     deprivation_chronic_days: int = 30     # a sub-60% spell this long trips the domain flag
 
+    # -- v23 optional national accounts (OBSERVATION ONLY) --
+    # Adds a fixed-basket CPI and explicit production/expenditure/income GDP
+    # components with reconciliation residuals.  This is deliberately independent
+    # of every fiscal/policy consumer: the legacy price/output sensors remain the
+    # behavioral inputs until a separately reviewed migration enables them.
+    national_accounts_metrics: bool = False
+    # Separately gated consumers of the observation layer.  The fixed-basket CPI
+    # feeds only the next-tick Taylor sensor; fiscal procurement/investment uses
+    # lagged economy-wide nominal GDP.  Both remain off for historical trajectories.
+    cb_uses_fixed_basket_cpi: bool = False
+    fiscal_uses_national_accounts_gdp: bool = False
+    # Refresh expenditure weights periodically while chain-linking the new
+    # Laspeyres basket to the accepted index level on the rebase observation.
+    # A calendar-year default prevents firm entry/exit from leaving permanent
+    # zombie/zero-weight products without turning short-run substitution into CPI.
+    cpi_rebase_interval_days: int = 365
+
     # -- v18.1 sector split & the budget hierarchy (the structural stage) --
     # Consumption goods split into NECESSITY and LUXURY sectors. The household goods
     # phase becomes two sequenced sessions of the existing market protocol: NECESSITY
@@ -836,7 +957,41 @@ class Config:
     switch_hazard: float = 0.01            # daily switch probability once eligible (rare)
 
     def __post_init__(self) -> None:
+        self._apply_capital_annual_clock()
         self._validate()
+
+    def _apply_capital_annual_clock(self) -> None:
+        """v23 P0: the desired-capital rule mixes an ANNUAL ratio with a DAILY flow.
+
+        `plan_investment` computes `K* = v * demand_expected`. On the daily calendar
+        `demand_expected` is a PER-TICK flow, but `v` is the textbook capital-output ratio
+        measured against ANNUAL output. v13's daily migration converted `lambda_I`, `delta_K`,
+        `r_interest`, `amort`, `eta` and the inflation target, but MISSED `v` -- so the desired
+        capital stock is `ticks_per_year` times too small and the measured K / annual GDP lands
+        at ~0.004 instead of ~2.5. Capital then earns the Cobb-Douglas share alpha while costing
+        almost nothing to replace: depreciation, the capital-service price term, collateral value
+        and the P&L depreciation charge are all ~365x too small.
+
+        The migration is JOINT, not a local patch on `v` (which alone would demand a 365x capital
+        stock the economy has to build from a genesis stock sized for the old rule):
+
+            v        -> v * S            desired capital now tracks ANNUAL output
+            K_firm0  -> K_firm0 * S      genesis capital starts at the new scale
+            A        -> A * S**(-alpha)  Cobb-Douglas output is EXACTLY invariant at genesis:
+                                         A' K'^a = (A S^-a)(S K)^a = A K^a
+
+        so genesis output, prices, wages and unit costs are bit-preserved, while the capital
+        STOCK, its depreciation flow, its service cost and its collateral value all become
+        economically meaningful. Default off => every existing preset is bit-identical.
+        """
+        if not self.capital_annual_clock:
+            return
+        scale = float(self.ticks_per_year)
+        if scale <= 1.0:
+            return
+        self.v *= scale
+        self.K_firm0 *= scale
+        self.A *= scale ** (-self.alpha)
 
     @property
     def capital_enabled(self) -> bool:
@@ -850,16 +1005,21 @@ class Config:
 
         return BankingConfig(
             bank_enabled=self.bank_enabled,
+            bank_realized_pnl=self.bank_realized_pnl,
             n_banks=self.n_banks,
             seed=self.seed,
             bank_leverage_mean=self.bank_leverage_mean,
             bank_leverage_disp=self.bank_leverage_disp,
             bank_assignment=self.bank_assignment,
             bank_capital_constraint=self.bank_capital_constraint,
+            unified_bank_rwa=self.unified_bank_rwa,
+            mortgage_risk_weight=self.mortgage_risk_weight,
+            mortgage_min_capital_ratio=self.mortgage_min_capital_ratio,
             bank_migrate_on_failure=self.bank_migrate_on_failure,
             bank_target_capital_ratio=self.bank_target_capital_ratio,
             bank_exposure_limit=self.bank_exposure_limit,
             bank_rate_competition=self.bank_rate_competition,
+            bank_relationship_lock_in=self.bank_relationship_lock_in,
             bank_spread_disp=self.bank_spread_disp,
             bank_search_m=self.bank_search_m,
             interbank=self.interbank,
@@ -936,6 +1096,9 @@ class Config:
             government=self.government,
             a=self.a,
             consumption_strata=self.consumption_strata,
+            rationed_signal=self.consumption_rationed_signal,
+            monetary_direct_transmission=self.monetary_direct_transmission,
+            household_interest_arrears=self.household_interest_arrears,
         )
 
     @_cached_view
@@ -945,6 +1108,9 @@ class Config:
 
         return SettlementConfig(
             government=self.government,
+            firm_full_pnl=self.firm_full_pnl,
+            capital_service_pricing=self.capital_service_pricing,
+            priced_firm_balance_sheet=self.priced_firm_balance_sheet,
             pro_rata_dividends=self.pro_rata_dividends,
             per_firm_equity=self.per_firm_equity,
             gov_investment_share=self.gov_investment_share,
@@ -961,7 +1127,10 @@ class Config:
             theta_wage=self.theta_wage,
             inventory_gap_close=self.inventory_gap_close,
             delta=self.delta,
+            wage_indexation=self.wage_indexation,
             theta_price=self.theta_price,
+            firm_full_pnl=self.firm_full_pnl,
+            capital_service_pricing=self.capital_service_pricing,
             lambda_q=self.lambda_q,
             q_invest_floor=self.q_invest_floor,
             q_invest_cap=self.q_invest_cap,
@@ -974,6 +1143,12 @@ class Config:
             lifecycle_alpha_wealth_draw=self.lifecycle_alpha_wealth_draw,
             housing_wealth_effect=self.housing_wealth_effect,
             alpha2=self.alpha2,
+            monetary_direct_transmission=self.monetary_direct_transmission,
+            investment_user_cost_elasticity=self.investment_user_cost_elasticity,
+            investment_user_cost_multiplier_min=self.investment_user_cost_multiplier_min,
+            investment_user_cost_multiplier_max=self.investment_user_cost_multiplier_max,
+            investment_user_cost_floor=self.investment_user_cost_floor,
+            hh_amort=self.hh_amort,
         )
 
     @_cached_view
@@ -1058,6 +1233,9 @@ class Config:
 
         return CreditConfig(
             bank_enabled=self.bank_enabled,
+            firm_full_pnl=self.firm_full_pnl,
+            bank_realized_pnl=self.bank_realized_pnl,
+            household_interest_arrears=self.household_interest_arrears,
             household_credit=self.household_credit,
             hh_subsistence=self.hh_subsistence,
             amort=self.amort,
@@ -1068,6 +1246,9 @@ class Config:
             deposit_rate_disp=self.deposit_rate_disp,
             bank_equity=self.bank_equity,
             interest_by_deposits=self.interest_by_deposits,
+            deposit_rate=self.deposit_rate,
+            monetary_direct_transmission=self.monetary_direct_transmission,
+            firm_credit_min_dscr=self.firm_credit_min_dscr,
         )
 
     @_cached_view
@@ -1096,6 +1277,7 @@ class Config:
             equity_finance=self.equity_finance,
             lambda_issue=self.lambda_issue,
             household_bankruptcy=self.household_bankruptcy,
+            priced_firm_balance_sheet=self.priced_firm_balance_sheet,
         )
 
     @classmethod
@@ -1313,8 +1495,9 @@ class Config:
     def v10(cls, **overrides) -> "Config":
         """v10: the CENTRAL BANK -- an endogenous policy interest rate (Taylor rule), on the v9.3 stack (§33).
         r_interest becomes a per-tick rate r = ρ·r_{-1} + (1-ρ)·[r* + φ_π·(π̄-π*) - φ_u·(u-u*)], clipped [0,r_max].
-        The transmission (investment/entry hurdle, equity valuation, debt service) already reads the rate, so
-        this only makes it respond to inflation and slack. **STANCE = 'gentle'** (§33 investigation): the target
+        The legacy entry, valuation and debt-service channels already read the rate, so
+        this preset makes that rate respond to inflation and slack; direct demand decisions
+        are enabled separately. **STANCE = 'gentle'** (§33 investigation): the target
         is anchored to the economy's own STRUCTURAL inflation (~0.012/tick, the fiscally-set level -- NOT a §4
         target, §0-ii), with moderate φ_π=1.2, φ_u=1.0. This is the tuned stance: v9.3's inflation is fiscally
         DOMINATED (deficit-driven, flat above zero deficit) so the CB cannot lower the level; its real job is
@@ -1520,6 +1703,15 @@ class Config:
             tax_wealth_rate=5.479452054794521e-6,
         )
         structural = dict(
+            # v9.1 deliberately inherited demonstration-strength public-capital
+            # parameters (10% investment, gamma=0.3).  They are documented there
+            # as 2--3x empirical anchors and are not a defensible daily production
+            # baseline: with the slower daily depreciation they drive the public-
+            # capital multiplier above 3 within two years.  Keep the historical
+            # v9.1--v12 presets intact, but put v13 on the anchors stated by the
+            # original design (roughly 4% public investment and gamma=0.1).
+            gov_investment_share=0.04,
+            public_capital_gamma=0.10,
             pref_price_elasticity=1.0,   # restore the demand-side price brake (R3)
             real_entry_signal=True,      # deflated entry signal + zero entrant inventory (R5/A2)
             shell_exit_ticks=365,        # idle shells liquidate after a year (R5)
@@ -1540,6 +1732,18 @@ class Config:
         assert self.a > 0, "productivity a must be > 0 (spec §8.1 degenerate guard)"
         assert self.w_firm0 > 0, "initial wage must be > 0 before w/a and floor(D/w)"
         assert 0 < self.alpha2 < self.alpha1 < 1, "B1 requires 0 < alpha2 < alpha1 < 1"
+        assert not self.cb_uses_fixed_basket_cpi or self.national_accounts_metrics, \
+            "fixed-basket CPI policy input requires national-accounts metrics"
+        assert not self.cb_uses_fixed_basket_cpi or self.central_bank, \
+            "fixed-basket CPI policy input requires the central bank"
+        assert not self.fiscal_uses_national_accounts_gdp or self.national_accounts_metrics, \
+            "national-accounts fiscal input requires national-accounts metrics"
+        assert not self.fiscal_uses_national_accounts_gdp or self.government, \
+            "national-accounts fiscal input requires government"
+        assert (isinstance(self.cpi_rebase_interval_days, int)
+                and not isinstance(self.cpi_rebase_interval_days, bool)
+                and self.cpi_rebase_interval_days >= 1), \
+            "fixed-basket CPI rebase interval must be a positive integer number of days"
         assert self.demographics_population >= 0, "demographics_population must be >= 0"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
         assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
@@ -1564,6 +1768,16 @@ class Config:
         assert not (self.mortgage_enabled and not self.housing_market_enabled), "mortgages require the resale market"
         assert 0.0 < self.mortgage_ltv_cap < 1.0, "mortgage LTV cap is a fraction of price"
         assert self.mortgage_foreclosure_ltv >= 1.0, "foreclosure triggers only underwater (>= 1x collateral)"
+        assert not self.mortgage_underwriting or self.mortgage_enabled, "mortgage underwriting requires mortgages"
+        assert not self.mortgage_underwriting or self.bank_enabled, "mortgage underwriting requires banks"
+        assert 0.0 < self.mortgage_dsti_cap <= 1.0, "mortgage DSTI cap must be in (0, 1]"
+        assert self.mortgage_stress_rate_addon >= 0.0, "mortgage stress-rate add-on is per-tick and non-negative"
+        assert self.mortgage_risk_weight > 0.0, "mortgage risk weight must be positive"
+        assert self.mortgage_min_capital_ratio > 0.0, "mortgage capital ratio must be positive"
+        assert not self.unified_bank_rwa or self.bank_enabled, "unified bank RWA requires banks"
+        assert not (self.unified_bank_rwa and self.mortgage_enabled) or self.mortgage_underwriting, (
+            "unified bank RWA requires mortgage underwriting when mortgages are enabled"
+        )
         assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
         assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
         assert self.housing_signal_burnin_years >= 1, "housing signal burn-in must be >= 1 year"
@@ -1580,8 +1794,21 @@ class Config:
         assert self.labor_matching in ("spot", "persistent"), "labor_matching must be 'spot' or 'persistent'"
         assert not (self.labor_matching == "persistent" and not self.demographics_enabled), "persistent labor needs persons (demographics)"
         assert not (self.labor_matching == "persistent" and not self.labor_accounting), "persistent labor requires the accounting gate"
+        assert not (self.labor_fractional_hours and self.labor_matching != "persistent"), "fractional hours need persistent jobs"
         assert 0.0 <= self.churn_annual < 1.0 and 0.0 < self.lambda_fire <= 1.0 and self.layoff_band >= 0.0, "labor dynamics params out of range"
         assert not (self.labor_suspension and self.labor_matching != "persistent"), "suspension needs persistent rosters"
+        # v23 P0: under the annual capital clock the K sector must actually SUPPLY the
+        # (now economically real) replacement flow. a_K=1.0 was never calibrated -- with the
+        # broken clock the K sector was inert, so its productivity never bound. At a_K=1.0 a
+        # 2.5x-GDP capital stock needs ~1/3 of the labour force to maintain, which starves the
+        # C sector and drives a cost-push spiral (measured: -15%/yr growth, CPI 4.1x). Capital
+        # and consumption goods carry the SAME genesis price, so they must embody comparable
+        # labour per unit: a_K should track C-sector labour productivity (~2.4 measured).
+        assert not (self.capital_annual_clock and self.a_K <= 1.0), (
+            "capital_annual_clock needs a calibrated capital-goods productivity: a_K<=1.0 makes "
+            "the K sector consume ~1/3 of labour (cost-push spiral). Set a_K ~ C-sector labour "
+            "productivity (~2.4)."
+        )
         assert self.tfp_law in ("exogenous", "learning"), "tfp_law must be 'exogenous' or 'learning'"
         assert self.tfp_drift_sigma >= 0.0, "tfp_drift_sigma is a std, must be >= 0"
         assert self.tfp_learning_theta >= 0.0, "tfp_learning_theta must be >= 0"
@@ -1664,6 +1891,10 @@ class Config:
         assert 0.0 <= self.theta_wage <= 1.0, "theta_wage is a probability"
         assert self.mu_min <= self.mu_max, "markup bounds out of order"
         assert 0.0 <= self.rho <= 1.0, "dividend payout ratio must be in [0,1]"
+        assert 0.0 <= self.firm_capital_haircut <= 1.0, \
+            "firm capital haircut must be in [0,1]"
+        assert 0.0 <= self.firm_inventory_haircut <= 1.0, \
+            "firm inventory haircut must be in [0,1]"
         assert 0.0 <= self.delta < 0.01, "delta is a SLOW downward wage drift (v12 strict DNWR = 0; v13 allows a small positive step)"
         assert self.n_firms > 0 and self.n_households > 0
         # v2 guards (only bite when capital is enabled, but cheap to always check)
@@ -1708,6 +1939,8 @@ class Config:
         assert self.lambda_issue >= 0.0, "issuance intensity must be >= 0"
         # v7 guards
         assert not self.household_credit or self.bank_enabled, "v7 household credit needs the bank"
+        assert not self.household_interest_arrears or self.bank_enabled, \
+            "household interest arrears require banks"
         assert self.hh_subsistence >= 0.0, "subsistence floor must be >= 0"
         assert self.hh_credit_limit >= 0.0, "household debt-to-income cap must be >= 0"
         assert 0.0 <= self.hh_amort <= 1.0, "household amortization fraction in [0,1]"
@@ -1756,6 +1989,8 @@ class Config:
         assert self.bank_bond_duration_limit >= 0.0, "v12.4 bank_bond_duration_limit ≥ 0"
         assert not (self.omo or self.lolr) or self.bonds, "v12.4 OMO/LoLR need the securities layer (bonds)"
         assert not (self.bank_capital_constraint and self.n_banks > 1) or self.bank_enabled, "v11 needs the bank"
+        assert not self.bank_relationship_lock_in or self.bank_enabled, \
+            "bank relationship lock-in requires banks"
         assert 0.0 <= self.gov_consumption_share < 1.0, "gov_consumption_share is a fraction in [0,1)"
         assert 0.0 <= self.benefit_replacement <= 1.0, "benefit_replacement is a fraction in [0,1]"
         assert self.income_allowance >= 0.0 and self.min_wage >= 0.0, "allowance and min_wage must be >= 0"
@@ -1775,6 +2010,21 @@ class Config:
         assert self.r_neutral >= 0.0 and self.r_max > 0.0, "v10 neutral rate >= 0 and r_max > 0"
         assert 0.0 < self.infl_ema_lambda <= 1.0, "v10 inflation-EMA λ in (0,1]"
         assert 0.0 <= self.u_natural <= 1.0, "v10 natural u in [0,1]"
+        assert not self.monetary_direct_transmission or self.bank_enabled, \
+            "direct monetary transmission requires loan contracts"
+        assert self.investment_user_cost_elasticity >= 0.0, \
+            "investment user-cost elasticity must be non-negative"
+        assert 0.0 < self.investment_user_cost_multiplier_min <= 1.0 \
+            <= self.investment_user_cost_multiplier_max, \
+            "investment user-cost multiplier bounds must bracket 1"
+        assert self.investment_user_cost_floor > 0.0, \
+            "investment user-cost floor must be positive"
+        assert self.firm_credit_min_dscr >= 1.0, \
+            "firm credit minimum DSCR must be at least 1"
+        assert self.valuation_discount_floor > 0.0, \
+            "valuation discount floor must be positive per tick"
+        assert self.valuation_risk_premium >= 0.0, \
+            "valuation risk premium must be non-negative per tick"
         assert 0.0 <= self.margin_ltv < 1.0, "margin LTV in [0,1)"
         assert self.margin_max >= 1.0, "margin_max (leverage ceiling) must be >= 1"
         # v8.1 guards

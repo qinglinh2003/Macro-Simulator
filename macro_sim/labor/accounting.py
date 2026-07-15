@@ -26,12 +26,15 @@ _TOL = 1e-6
 class LaborAccounts:
     # stocks (per tick; derived under spot, true stocks from L1 on)
     employed: float = 0.0
+    employed_heads: float = 0.0       # active private Job links (FTE lives in employed)
     unemployed: float = 0.0
     suspended: float = 0.0          # L1b state; identically 0 before it
     job_guarantee: float = 0.0
     out_of_labor_force: float = 0.0
     labor_supply: float = 0.0       # Σ person labor supply (working-age mass)
     vacancies: float = 0.0          # unfilled effective labor demand (real under spot)
+    underemployed_heads: float = 0.0   # active fractional Jobs below one FTE
+    underemployment_hours: float = 0.0 # residual hours trapped behind one-Job links
 
     # cumulative flow counters (all zero under spot; L1 populates them)
     hires_total: float = 0.0
@@ -53,6 +56,12 @@ class LaborAccounts:
     # E-outflow in the gate); voluntary non-search is a memo stock over partition-U.
     welfare_quits_total: float = 0.0
     nonsearching_memo: float = 0.0
+    # Fractional-hours mode keeps the existing named extensive-margin flows in
+    # HEADS and reconciles them to employed_heads.  These two cumulative FTE flows
+    # cover every private-hours stock mutation (hire/recall/expansion and
+    # separation/suspension/reduction respectively), providing a second hard gate.
+    private_fte_inflows_total: float = 0.0
+    private_fte_outflows_total: float = 0.0
 
     def observe_spot(self, econ: Any) -> None:
         """Derive the aggregate stocks from the spot market's household quantities."""
@@ -63,6 +72,7 @@ class LaborAccounts:
             jg += float(getattr(h, "jg_labor", 0.0))
             supply += (bridge.household_labor_supply(h.id) if bridge is not None else 1.0)
         self.employed = employed
+        self.employed_heads = employed       # spot has quantities, not persistent links
         self.job_guarantee = jg
         self.unemployed = max(0.0, supply - employed - jg)
         self.labor_supply = supply
@@ -76,6 +86,8 @@ class LaborAccounts:
         self.vacancies = sum(
             max(0.0, float(f.labor_demand_eff) - float(f.hired)) for f in econ.firms
         )
+        self.underemployed_heads = 0.0
+        self.underemployment_hours = 0.0
 
     def assert_identity(self) -> None:
         lhs = self.employed + self.unemployed + self.suspended + self.job_guarantee
@@ -84,16 +96,25 @@ class LaborAccounts:
                 f"labor stock identity failed: E+U+S+JG={lhs} != supply={self.labor_supply} "
                 f"(E={self.employed} U={self.unemployed} S={self.suspended} JG={self.job_guarantee})"
             )
-        for name in ("employed", "unemployed", "suspended", "job_guarantee",
-                     "out_of_labor_force", "vacancies"):
+        for name in ("employed", "employed_heads", "unemployed", "suspended", "job_guarantee",
+                     "out_of_labor_force", "vacancies", "underemployed_heads",
+                     "underemployment_hours"):
             if getattr(self, name) < -_TOL:
                 raise AssertionError(f"labor stock {name} went negative: {getattr(self, name)}")
+        if self.employed > self.employed_heads + _TOL:
+            raise AssertionError(
+                f"private FTE exceeds active Job heads: FTE={self.employed}, heads={self.employed_heads}"
+            )
 
     # ------------------------------------------------------------------
     # persistent mode (L1+): true stocks from the rosters, flows reconciled
     # ------------------------------------------------------------------
     _prev_employed: float = -1.0
     _prev_flow_balance: float = 0.0
+    _prev_employed_heads: float = -1.0
+    _prev_head_flow_balance: float = 0.0
+    _prev_employed_fte: float = -1.0
+    _prev_fte_flow_balance: float = 0.0
 
     def observe_persistent(self, econ: Any, lm: Any) -> None:
         bridge = econ.demographic_bridge
@@ -110,35 +131,92 @@ class LaborAccounts:
         # E = active jobs; suspended workers hold a recall RIGHT, not employment --
         # they carry no pay/work and are absorbed by U/JG in the partition
         self.suspended_memo = float(len(lm.suspended))
-        self.employed = float(len(lm.jobs)) - self.suspended_memo
+        active_jobs = [job for pid, job in lm.jobs.items() if pid not in lm.suspended]
+        self.employed_heads = float(len(active_jobs))
+        # v23 second contract: a dual job-holder is ONE head but sells the SUM of both
+        # contracts' hours. E in FTE must add the extra contract, and the residual capacity
+        # that underemployment measures is what is left after BOTH -- otherwise the FTE journal
+        # and the labour stock-flow identity would double-count hours the person already sold.
+        second_of = {
+            pid: job for pid, job in lm.second_jobs.items() if pid not in lm.suspended
+        }
+        second_hours = sum(float(job.hours) for job in second_of.values())
+        self.employed = (
+            sum(float(job.hours) for job in active_jobs) + second_hours
+            if lm.fractional_hours else self.employed_heads
+        )
+
+        def _sold(job) -> float:
+            extra = second_of.get(job.person_id)
+            return float(job.hours) + (float(extra.hours) if extra is not None else 0.0)
+
+        self.underemployed_heads = (
+            float(sum(_sold(job) < 1.0 - _TOL for job in active_jobs))
+            if lm.fractional_hours else 0.0
+        )
+        self.underemployment_hours = (
+            sum(max(0.0, 1.0 - _sold(job)) for job in active_jobs)
+            if lm.fractional_hours else 0.0
+        )
         self.job_guarantee = sum(float(getattr(h, "jg_labor", 0.0)) for h in econ.households)
         self.suspended = 0.0                    # partition-S stays 0 (memo carries the stock)
         self.unemployed = max(0.0, supply - self.employed - self.job_guarantee)
         self.out_of_labor_force = max(0.0, persons - supply)
-        self.vacancies = sum(
-            max(0.0, float(f.labor_demand_eff) - len(lm.rosters.get(f.id, ())))
-            for f in econ.firms
-        )
+        if lm.fractional_hours:
+            self.vacancies = sum(
+                max(0.0, float(f.labor_demand_eff) - lm.active_effective(f.id))
+                for f in econ.firms
+            )
+        else:
+            self.vacancies = sum(
+                max(0.0, float(f.labor_demand_eff) - len(lm.rosters.get(f.id, ())))
+                for f in econ.firms
+            )
         # flow reconciliation: the delta of the employment stock must equal the net
         # counted flows since the last observation -- the gate's TEETH (any uncounted
         # roster mutation shows up here within one tick)
         self.nonsearching_memo = float(len(getattr(lm, "nonsearch", ()) or ()))
-        flow_balance = (
+        head_flow_balance = (
             self.hires_total + self.recalls_total
             - self.churn_seps_total - self.layoff_seps_total
             - self.bankruptcy_seps_total - self.death_seps_total
             - self.suspensions_total - self.welfare_quits_total
         )
-        if self._prev_employed >= 0.0:
-            expected = self._prev_employed + (flow_balance - self._prev_flow_balance)
-            if abs(expected - self.employed) > _TOL:
-                raise AssertionError(
-                    f"labor flow reconciliation failed: E={self.employed} but "
-                    f"prev E + net flows = {expected} "
-                    f"(net flow delta {flow_balance - self._prev_flow_balance})"
+        if lm.fractional_hours:
+            if self._prev_employed_heads >= 0.0:
+                expected_heads = self._prev_employed_heads + (
+                    head_flow_balance - self._prev_head_flow_balance
                 )
-        self._prev_employed = self.employed
-        self._prev_flow_balance = flow_balance
+                if abs(expected_heads - self.employed_heads) > _TOL:
+                    raise AssertionError(
+                        f"labor head-flow reconciliation failed: heads={self.employed_heads} "
+                        f"but prev heads + net head flows = {expected_heads}"
+                    )
+            fte_flow_balance = self.private_fte_inflows_total - self.private_fte_outflows_total
+            if self._prev_employed_fte >= 0.0:
+                expected_fte = self._prev_employed_fte + (
+                    fte_flow_balance - self._prev_fte_flow_balance
+                )
+                if abs(expected_fte - self.employed) > _TOL:
+                    raise AssertionError(
+                        f"labor FTE-flow reconciliation failed: FTE={self.employed} "
+                        f"but prev FTE + net FTE flows = {expected_fte}"
+                    )
+            self._prev_employed_heads = self.employed_heads
+            self._prev_head_flow_balance = head_flow_balance
+            self._prev_employed_fte = self.employed
+            self._prev_fte_flow_balance = fte_flow_balance
+        else:
+            if self._prev_employed >= 0.0:
+                expected = self._prev_employed + (head_flow_balance - self._prev_flow_balance)
+                if abs(expected - self.employed) > _TOL:
+                    raise AssertionError(
+                        f"labor flow reconciliation failed: E={self.employed} but "
+                        f"prev E + net flows = {expected} "
+                        f"(net flow delta {head_flow_balance - self._prev_flow_balance})"
+                    )
+            self._prev_employed = self.employed
+            self._prev_flow_balance = head_flow_balance
 
     @property
     def unemployment_rate(self) -> float:

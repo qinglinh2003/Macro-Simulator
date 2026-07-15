@@ -45,6 +45,13 @@ class _ProfileWithMemberIds:
     member_ages: dict[int, int]
 
 
+@dataclass
+class _ProfileWithNeeds:
+    members: list[_StubPerson]
+    need_units: float
+    adult_count: int
+
+
 class _ClaimsStub:
     def __init__(
         self,
@@ -176,6 +183,44 @@ def test_household_budget_works_with_member_id_profiles():
     )
 
     assert budget > 0.0 and math.isfinite(budget)
+
+
+def test_need_scaling_does_not_multiply_already_aggregated_income_by_household_size():
+    budgets = []
+    for size in (1, 2, 4):
+        members = [_StubPerson(person_id, 30) for person_id in range(1, size + 1)]
+        budgets.append(household_lifecycle_consumption_budget(
+            profile=_ProfileWithNeeds(members=members, need_units=float(size), adult_count=size),
+            claims=_ClaimsStub(
+                net_worth={person.id: 0.0 for person in members},
+                income_ema={person.id: 1.0 for person in members},
+            ),
+            rates=Phase0VitalRates(),
+            alpha_income=0.8,
+            alpha_wealth_draw=0.0,
+        ))
+
+    assert budgets == pytest.approx([0.8, 1.6, 3.2])
+    assert budgets[2] / budgets[1] == pytest.approx(2.0)
+
+
+def test_dependent_need_units_apply_to_per_adult_income_once():
+    adult = _StubPerson(1, 35)
+    child = _StubPerson(2, 10)
+    adult_only = household_lifecycle_consumption_budget(
+        profile=_ProfileWithNeeds([adult], need_units=1.0, adult_count=1),
+        claims=_ClaimsStub(net_worth={1: 0.0}, income_ema={1: 1.0}),
+        rates=Phase0VitalRates(), alpha_income=1.0, alpha_wealth_draw=0.0,
+    )
+    with_child = household_lifecycle_consumption_budget(
+        profile=_ProfileWithNeeds([adult, child], need_units=1.65, adult_count=1),
+        claims=_ClaimsStub(
+            net_worth={1: 0.0, 2: 0.0}, income_ema={1: 1.0, 2: 0.0},
+        ),
+        rates=Phase0VitalRates(), alpha_income=1.0, alpha_wealth_draw=0.0,
+    )
+
+    assert with_child == pytest.approx(1.65 * adult_only)
 
 
 @dataclass

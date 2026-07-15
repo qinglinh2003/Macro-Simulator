@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from macro_sim.config import Config
 from macro_sim.world import World
 from macro_sim.world.fx import DEALER_ID, RateVector
+from macro_sim.world.trade import rate_grope_signal
 
 
 def _macro_cfg(seed: int = 0) -> Config:
@@ -45,6 +48,23 @@ def test_grope_with_zero_signal_is_noop():
     r = RateVector(2)
     r.grope([0.0, 0.0], lam=0.5)
     assert r.e == [1.0, 1.0]
+
+
+def test_extreme_external_gap_uses_a_finite_relative_fx_adjustment(monkeypatch):
+    """A crisis-sized stock gap is cleared over time, not in one infinite log step."""
+    world = World([_macro_cfg(), _macro_cfg()], base_seed=5, couple=True)
+    monkeypatch.setattr(
+        world,
+        "market_external_positions",
+        lambda: [1.0e300, -1.0e300],
+    )
+
+    signal = rate_grope_signal(world)
+
+    assert signal == pytest.approx([1.0, -1.0])
+    world.rates.grope(signal, world.fx_lambda)
+    assert all(math.isfinite(value) for value in world.rates.e)
+    assert abs(sum(world.rates.log_e)) < 1.0e-12
 
 
 # -- the FX layer inside the World (zero trade) ----------------------------------

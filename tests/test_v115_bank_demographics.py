@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np                       # noqa: E402
 from macro_sim.config import Config                # noqa: E402
 from macro_sim.economy import Economy              # noqa: E402
+from macro_sim.systems.banking import bank_for, run_bank_runs_phase  # noqa: E402
 
 NC, NK, NH = 60, 30, 400
 
@@ -66,12 +67,17 @@ def test_conservation_full_stack():
 def test_entry_stabilises_the_count():
     """de-novo entry stops the bank count decaying to oligopoly: with entry ON the count is sustained (births ≈
     deaths); with entry OFF it only falls."""
-    # isolate entry from run-noise (runs off), and use a LOW capital gate so entry fires at this small test scale
-    # (the shipped default min_capital=1500 makes de-novo entry realistically RARE -- tested for churn separately).
+    # Isolate entry from run noise and the endogenous Taylor path.  Entry now
+    # compares *net* incumbent ROE with the policy rate; under this preset's live
+    # Taylor path net ROE never clears that outside option, so asserting births there
+    # would test a calibration accident rather than the entry mechanism.  A frozen
+    # per-tick rate gives ON and OFF the same explicit opportunity cost.
     on = Economy(Config.v115(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=600, seed=0,
-                             bank_runs=False, bank_min_capital=80.0))
+                             central_bank=False, r_interest=0.001,
+                             bank_runs=False, bank_min_capital=20.0))
     on.run()
     off = Economy(Config.v115(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=600, seed=0,
+                              central_bank=False, r_interest=0.001,
                               bank_runs=False, bank_dynamics=False))
     off.run()
     assert on._bank_births > 0, "entry should found new banks"
@@ -89,12 +95,56 @@ def test_dividends_reach_owners():
 
 
 def test_runs_produce_flight():
-    """A run produces observable deposit FLIGHT from weak banks; off ⇒ none. (The liquidity-SUSPENSION half is
-    latent under ample reserves -- §38 -- so we assert the active flight half.)"""
-    on = Economy(Config.v115(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=500, seed=0)).run()
-    off = Economy(Config.v115(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=500, seed=0, bank_runs=False)).run()
-    flight_on = sum(r.get("bank_deposit_flight", 0.0) for r in on)
-    flight_off = sum(r.get("bank_deposit_flight", 0.0) for r in off)
+    """A controlled weak bank produces deposit flight; the master switch blocks it.
+
+    The former long-run seed fixture happened to create a weak bank through repeated
+    whole-loan-book shopping.  Existing debts can no longer migrate without a loan
+    sale/refinance, so construct the actual run preconditions explicitly instead of
+    treating that invalid coupling as part of the run mechanism's contract.
+    """
+
+    def forced_flight(*, enabled: bool) -> float:
+        econ = Economy(Config.v115(
+            n_firms_c=8,
+            n_firms_k=4,
+            n_households=40,
+            n_banks=2,
+            n_ticks=1,
+            seed=0,
+            bank_runs=enabled,
+        ))
+        weak, safe = econ.banks
+        depositor = econ.households[0]
+        borrower = econ.firms[0]
+
+        # Put one debt-free depositor and one loan at the weak bank, moving the
+        # existing deposit reserve backing whenever the relationship changes.
+        for account in (depositor, borrower):
+            old = bank_for(econ, account.id)
+            if old is not weak:
+                econ.ledger.move_reserves(
+                    old.id,
+                    weak.id,
+                    econ.ledger.balance(account.id) - econ.ledger.debt(account.id),
+                )
+                econ._bank_of[account.id] = weak
+                econ._node_of.pop(account.id, None)
+        econ.ledger.create_loan(borrower.id, 1_000.0)
+
+        # Capital/book and market signals both identify the same weak franchise;
+        # the rival is the unambiguous safe destination.
+        weak_capital = econ.ledger.balance(weak.id)
+        if weak_capital > 1.0:
+            econ.ledger.transfer(weak.id, econ._fiscal, weak_capital - 1.0)
+        weak.share_price = 0.0
+        weak.share_peak = 1.0
+        safe.share_price = safe.share_peak = 1.0
+
+        run_bank_runs_phase(econ)
+        return econ._run_flight_volume
+
+    flight_on = forced_flight(enabled=True)
+    flight_off = forced_flight(enabled=False)
     assert flight_on > 0.0, "runs should produce deposit flight"
     assert flight_off == 0.0, "no flight without runs"
 

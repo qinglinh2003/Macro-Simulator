@@ -110,6 +110,9 @@ def run_construction_step(econ: Any) -> None:
             if land_fee > EPS:
                 econ.ledger.transfer(firm.id, fiscal, land_fee)
                 econ._land_fee_paid = getattr(econ, "_land_fee_paid", 0.0) + land_fee
+                econ._land_fee_paid_tick = (
+                    getattr(econ, "_land_fee_paid_tick", 0.0) + land_fee
+                )
             firm.wip -= 1.0
             dwelling = housing.mint(firm.id)
             firm.inventory += 1.0

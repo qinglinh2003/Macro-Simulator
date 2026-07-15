@@ -9,8 +9,17 @@ balance (the remittance wedge).
 
 from __future__ import annotations
 
+import pytest
+
 from macro_sim.config import Config
 from macro_sim.world import World
+from macro_sim.world.fx import DEALER_ID
+from macro_sim.world.migration import _collect, _distribute
+
+
+# Explicit zero daily rate isolates migration/remittances from the separate external-
+# interest channel while retaining the per-tick rate contract.
+_PER_TICK_RATE = 0.0
 
 
 def _pair():
@@ -22,9 +31,13 @@ def _pair():
     to wages, so the economies must actually differ in wages (the genesis wage/price anchors).
     """
     lo = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
-                     w_firm0=0.7, p_firm0=0.85)      # low-wage
+                     w_firm0=0.7, p_firm0=0.85,
+                     r_interest=_PER_TICK_RATE,
+                     central_bank=False)             # low-wage; keep the rate truly fixed
     hi = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=300, seed=0,
-                     w_firm0=1.4, p_firm0=1.7)       # high-wage
+                     w_firm0=1.4, p_firm0=1.7,
+                     r_interest=_PER_TICK_RATE,
+                     central_bank=False)             # high-wage; isolate migration from Taylor feedback
     return lo, hi
 
 
@@ -108,3 +121,35 @@ def test_remittance_tax_diverts_to_fiscal_and_conserves():
         econ.ledger.assert_non_negative()
     assert _mean(taxed.world_records, "remittances", 0) < _mean(untaxed.world_records, "remittances", 0)
     assert _mean(taxed.world_records, "remittance_tax_rev", 0) > 0.0    # government collected revenue
+
+
+def test_remittance_cash_rails_skip_empty_demographic_household(monkeypatch):
+    cfg = Config.v13(
+        n_ticks=1,
+        n_households=8,
+        demographics_population=12,
+        n_firms_c=2,
+        n_firms_k=1,
+        n_banks=1,
+    )
+    world = World([cfg, cfg], base_seed=41, couple=True)
+    econ = world.economies[0]
+    empty = econ.households[0]
+    bridge = econ.demographic_bridge
+    original = bridge.household_has_living_members
+    monkeypatch.setattr(
+        bridge,
+        "household_has_living_members",
+        lambda account_id: account_id != empty.id and original(account_id),
+    )
+    empty_opening = econ.ledger.balance(empty.id)
+
+    collected = _collect(econ, 10.0)
+    assert collected == pytest.approx(10.0)
+    assert econ.ledger.balance(empty.id) == pytest.approx(empty_opening)
+    assert econ.ledger.balance(DEALER_ID) == pytest.approx(10.0)
+
+    _distribute(econ, collected)
+    assert econ.ledger.balance(empty.id) == pytest.approx(empty_opening)
+    assert econ.ledger.balance(DEALER_ID) == pytest.approx(0.0)
+    econ.ledger.assert_conserved()

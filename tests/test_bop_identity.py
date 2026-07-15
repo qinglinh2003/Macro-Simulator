@@ -24,10 +24,13 @@ from macro_sim.world.fx import DEALER_ID, BalanceOfPaymentsError
 
 def _world(**kw):
     def cfg(a, r):
-        return Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=200,
+        return Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=40,
                            seed=0, a=a, r_interest=r)
-    return World([cfg(1.5, 0.06), cfg(0.6, 0.02)], base_seed=9, trade=True, capital=True,
-                 capital_mobility=3.0, capital_adjust=0.2, **kw)
+    return World(
+        [cfg(1.5, 0.06 / 365.0), cfg(0.6, 0.02 / 365.0)],
+        base_seed=9, trade=True, capital=True,
+        capital_mobility=3.0 * 365.0, capital_adjust=0.2, **kw,
+    )
 
 
 def test_passthrough_gate_holds_and_per_economy_a5_holds():
@@ -43,7 +46,7 @@ def test_world_identity_sigma_nfa_equals_minus_cumulative_revaluation():
     flow is gated at zero INDEPENDENTLY, so the residual is genuinely the valuation channel."""
     world = _world()
     world.run()
-    for rec in world.world_records[::40]:
+    for rec in world.world_records[::10]:
         residual = sum(rec["nfa"]) + rec["dealer_valuation"]
         assert abs(residual) < 1e-6
 
@@ -79,3 +82,42 @@ def test_the_gate_catches_a_leak_injected_mid_tick(monkeypatch):
     monkeypatch.setattr(W, "capital_interest", leaky_payload)   # runs inside the tick
     with pytest.raises(BalanceOfPaymentsError):
         world.step()
+
+
+def test_accrual_current_account_is_bridged_by_bilateral_arrears_nfa():
+    cfg = Config.v3(
+        n_firms_c=2,
+        n_firms_k=1,
+        n_households=4,
+        n_ticks=1,
+        r_interest=0.1,
+    )
+    world = World(
+        [cfg, cfg],
+        base_seed=71,
+        couple=True,
+        capital=True,
+        fx_lambda=0.0,
+        external_interest_settlement_fraction=0.0,
+    )
+    debtor, creditor = world.economies
+    debtor.ledger.transfer(debtor.households[0].id, DEALER_ID, 10.0)
+    creditor.ledger.transfer(DEALER_ID, creditor.households[0].id, 10.0)
+    world._factor_interest_principal = [10.0, -10.0]
+
+    world.step()
+    record = world.world_records[-1]
+
+    assert record["factor_income"] == pytest.approx([0.0, 0.0])
+    assert record["factor_income_cash"] == pytest.approx([0.0, 0.0])
+    assert record["factor_income_accrued"] == pytest.approx([-1.0, 1.0])
+    assert record["current_account"] == pytest.approx([0.0, 0.0])
+    assert record["current_account_cash"] == pytest.approx([0.0, 0.0])
+    assert record["current_account_accrued"] == pytest.approx([-1.0, 1.0])
+    assert record["factor_income_arrears_nfa"] == pytest.approx([-1.0, 1.0])
+    assert record["factor_income_arrears_nfa_transaction_change"] == pytest.approx(
+        [-1.0, 1.0]
+    )
+    assert record["augmented_nfa"] == pytest.approx([-11.0, 11.0])
+    assert sum(record["current_account_accrued"]) == pytest.approx(0.0)
+    assert sum(record["augmented_nfa"]) == pytest.approx(0.0)

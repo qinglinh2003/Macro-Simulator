@@ -41,6 +41,29 @@ from typing import Dict, List, Sequence, Tuple
 
 _EPS = 1e-12
 
+# Reporting is a table contract: activation after the calibration window changes
+# values, never columns.  Keeping the inactive schema explicit also lets long-run
+# diagnostics distinguish an intentional burn-in zero from missing data.
+_INACTIVE_GAUGES = {
+    "deprivation_active": 0.0,
+    "deprivation_basket_per_unit": 0.0,
+    "deprivation_below100_share": 0.0,
+    "deprivation_below60_share": 0.0,
+    "deprivation_below30_share": 0.0,
+    "deprivation_destitute_share": 0.0,
+    "deprivation_acute_stock": 0.0,
+    "deprivation_chronic_stock": 0.0,
+    "deprivation_acute_persondays": 0.0,
+    "deprivation_chronic_persondays": 0.0,
+    "deprivation_max_spell_days": 0.0,
+    "deprivation_coverage_child": 0.0,
+    "deprivation_coverage_adult": 0.0,
+    "deprivation_coverage_elder": 0.0,
+    "deprivation_below100_share_bottomq": 0.0,
+    "deprivation_below100_share_topq": 0.0,
+    "deprivation_boundary": 0.0,
+}
+
 # One alive person per tick: (person_id, household_id, need_weight, cumulative_consumption,
 # age, net_worth, liquid_deposits). The signal differences the cumulative into a per-tick
 # flow itself. liquid_deposits (the person-claim cash balance) gates the DOMAIN BOUNDARY:
@@ -77,17 +100,42 @@ class DeprivationSignal:
     _spells: Dict[int, List[int]] = field(default_factory=dict)
     boundary_breached: bool = False        # sticky: any acute/chronic spell ever reached
 
+    def preview(self, *, year: int, price_index: float, persons: Sequence[PersonObs]) -> dict:
+        """Return this tick's gauges without advancing any differencing state.
+
+        Reporting may be queried more than once between economic ticks (interactive
+        dashboards and diagnostic probes both do this).  ``preview`` therefore runs the
+        exact same deterministic transition as :meth:`observe`, but leaves the signal
+        untouched.  ``Economy`` calls ``observe`` once, explicitly, after accepting the
+        metric snapshot.
+        """
+        return self._observe(year=year, price_index=price_index, persons=persons, commit=False)
+
     def observe(self, *, year: int, price_index: float, persons: Sequence[PersonObs]) -> dict:
         """One tick. `persons` = iterable of PersonObs for every alive person with a
         claim sheet. Returns gauges to merge into the record; empty (active=0) during
         burn-in before the anchor is set."""
-        if self.year is None:
-            self.year = int(year)
-        elif int(year) != self.year:
-            self.years_completed += 1
-            self.year = int(year)
+        return self._observe(year=year, price_index=price_index, persons=persons, commit=True)
+
+    def _observe(
+        self,
+        *,
+        year: int,
+        price_index: float,
+        persons: Sequence[PersonObs],
+        commit: bool,
+    ) -> dict:
+        """Compute the observation transition, optionally committing its next state."""
+        next_year = self.year
+        next_years_completed = self.years_completed
+        if next_year is None:
+            next_year = int(year)
+        elif int(year) != next_year:
+            next_years_completed += 1
+            next_year = int(year)
 
         # difference cumulative -> per-tick flow, aggregate to households
+        next_prev_cum = dict(self._prev_cum)
         hh_flow: Dict[int, float] = {}
         hh_need: Dict[int, float] = {}
         hh_n: Dict[int, int] = {}
@@ -95,8 +143,8 @@ class DeprivationSignal:
         hh_liquid: Dict[int, float] = {}
         hh_ages: Dict[int, List[int]] = {}
         for pid, hid, weight, cum, age, wealth, liquid in persons:
-            prev = self._prev_cum.get(pid)
-            self._prev_cum[pid] = cum
+            prev = next_prev_cum.get(pid)
+            next_prev_cum[pid] = cum
             flow = 0.0 if prev is None else max(0.0, cum - prev)   # first sight ⇒ 0 (no spike)
             hh_flow[hid] = hh_flow.get(hid, 0.0) + flow
             hh_need[hid] = hh_need.get(hid, 0.0) + max(0.0, float(weight))
@@ -106,23 +154,68 @@ class DeprivationSignal:
             hh_ages.setdefault(hid, []).append(int(age))
 
         if self.basket_cost0 is None:
+            next_per_unit_sum = self._per_unit_sum
+            next_hh_days = self._hh_days
+            next_price_sum = self._price_sum
+            next_price_days = self._price_days
             for hid, need in hh_need.items():
                 if need > _EPS:
-                    self._per_unit_sum += hh_flow.get(hid, 0.0) / need
-                    self._hh_days += 1.0
+                    next_per_unit_sum += hh_flow.get(hid, 0.0) / need
+                    next_hh_days += 1.0
             if price_index > _EPS:
-                self._price_sum += float(price_index)
-                self._price_days += 1.0
-            if self.years_completed >= self.burnin_years and self._hh_days > _EPS:
-                mean_per_unit = self._per_unit_sum / self._hh_days
+                next_price_sum += float(price_index)
+                next_price_days += 1.0
+            next_basket_cost0 = self.basket_cost0
+            next_price_ref = self.price_ref
+            if next_years_completed >= self.burnin_years and next_hh_days > _EPS:
+                mean_per_unit = next_per_unit_sum / next_hh_days
                 if mean_per_unit > _EPS:      # never freeze a degenerate zero basket
-                    self.basket_cost0 = self.subsistence_share * mean_per_unit
-                    self.price_ref = (self._price_sum / self._price_days) if self._price_days > _EPS else 1.0
-            return {"deprivation_active": 0.0}
+                    next_basket_cost0 = self.subsistence_share * mean_per_unit
+                    next_price_ref = (next_price_sum / next_price_days) if next_price_days > _EPS else 1.0
+            if commit:
+                self.year = next_year
+                self.years_completed = next_years_completed
+                self._prev_cum = next_prev_cum
+                self._per_unit_sum = next_per_unit_sum
+                self._hh_days = next_hh_days
+                self._price_sum = next_price_sum
+                self._price_days = next_price_days
+                self.basket_cost0 = next_basket_cost0
+                self.price_ref = next_price_ref
+            return dict(_INACTIVE_GAUGES)
 
-        return self._score(price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_liquid, hh_ages)
+        gauges, next_spells, next_boundary = self._score(
+            price_index,
+            hh_flow,
+            hh_need,
+            hh_n,
+            hh_wealth,
+            hh_liquid,
+            hh_ages,
+            spells=self._spells,
+            boundary_breached=self.boundary_breached,
+        )
+        if commit:
+            self.year = next_year
+            self.years_completed = next_years_completed
+            self._prev_cum = next_prev_cum
+            self._spells = next_spells
+            self.boundary_breached = next_boundary
+        return gauges
 
-    def _score(self, price_index, hh_flow, hh_need, hh_n, hh_wealth, hh_liquid, hh_ages) -> dict:
+    def _score(
+        self,
+        price_index,
+        hh_flow,
+        hh_need,
+        hh_n,
+        hh_wealth,
+        hh_liquid,
+        hh_ages,
+        *,
+        spells: Dict[int, List[int]],
+        boundary_breached: bool,
+    ) -> tuple[dict, Dict[int, List[int]], bool]:
         price_ratio = (price_index / self.price_ref) if (self.price_ref and self.price_ref > _EPS) else 1.0
         persons = 0
         p_below100 = p_below60 = p_below30 = 0     # PERSONS in deprived households (flow only)
@@ -146,7 +239,7 @@ class DeprivationSignal:
             # savings is not destitute even if its consumption FLOW is momentarily low
             # (a bank-freeze artifact). "Deposit-poor" = liquid < one period's basket.
             deposit_poor = hh_liquid.get(hid, 0.0) < basket
-            prior = self._spells.get(hid, [0, 0, 0])
+            prior = spells.get(hid, [0, 0, 0])
             s100 = prior[0] + 1 if coverage < 1.0 else 0
             s60 = prior[1] + 1 if coverage < 0.6 else 0
             # the acute (sub-30%) spell only counts while the household is ALSO deposit-poor
@@ -164,12 +257,11 @@ class DeprivationSignal:
             if s30 >= self.acute_days:
                 acute_persons += n
                 acute_persondays += s30 * n
-                self.boundary_breached = True
+                boundary_breached = True
             if s60 >= self.chronic_days and deposit_poor:
                 chronic_persons += n
                 chronic_persondays += s60 * n
-                self.boundary_breached = True
-        self._spells = new_spells
+                boundary_breached = True
         denom = float(max(1, persons))
 
         # age-band mean coverage (each member inherits its household coverage) + a
@@ -192,7 +284,8 @@ class DeprivationSignal:
             bottomq = sum(1 for c in bot if c < 1.0) / len(bot)
             topq = sum(1 for c in top if c < 1.0) / len(top)
 
-        return {
+        gauges = {
+            **_INACTIVE_GAUGES,
             "deprivation_active": 1.0,
             "deprivation_basket_per_unit": self.basket_cost0 * price_ratio,
             "deprivation_below100_share": p_below100 / denom,
@@ -209,8 +302,9 @@ class DeprivationSignal:
             "deprivation_coverage_elder": _mean(elder_c),
             "deprivation_below100_share_bottomq": bottomq,
             "deprivation_below100_share_topq": topq,
-            "deprivation_boundary": 1.0 if self.boundary_breached else 0.0,
+            "deprivation_boundary": 1.0 if boundary_breached else 0.0,
         }
+        return gauges, new_spells, boundary_breached
 
 
 def _mean(xs: List[float]) -> float:

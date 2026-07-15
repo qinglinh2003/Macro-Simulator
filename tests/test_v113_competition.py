@@ -1,10 +1,11 @@
 """v11.3 acceptance tests (DESIGNDOC §36).
 
 v11.3 adds loan-rate COMPETITION on the v11.2 realistic-bank stack. Each bank posts a mean-preserving loan-rate
-spread over the policy rate (some undercut, some charge more); borrowers SHOP -- they sample bank_search_m rivals
-and switch their whole relationship to the cheapest bank that has capacity to fund it. So market share is won on
-price + capacity (not assigned at genesis): cheap, well-capitalized banks grow their loan book and concentration
-/ too-big-to-fail EMERGES. "Done":
+spread over the policy rate (some undercut, some charge more). The certified v11.3 path can reassign a whole
+relationship when shopping; the v23 ``bank_relationship_lock_in`` migration restricts shopping to debt-free
+borrowers' first origination because there is no loan-sale/refinancing transaction. Under that migration market
+share is won on price + capacity at origination (not assigned at genesis): cheap, well-capitalized banks grow their
+loan book and concentration / too-big-to-fail EMERGES. "Done":
   * competition OFF (or n_banks=1) ⇒ bit-identical to v11.2 (one system rate, no shopping);
   * money (A5) conserves with competition on;
   * the spreads are mean-preserving -- the AVERAGE loan rate is unchanged, only the dispersion is new;

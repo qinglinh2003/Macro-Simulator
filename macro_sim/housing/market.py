@@ -22,10 +22,12 @@ this function, and the registry/claim hard gates assert after the phase.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
 from macro_sim.markets.matching import EPS
+from macro_sim.systems.banking import refresh_loan_books, unified_bank_rwa_enabled
 
 
 @dataclass
@@ -72,11 +74,44 @@ class HousingMarket:
         )
 
 
+def investor_safe_asset_return_annual(econ: Any) -> float:
+    """Annual safe return actually available to a household housing investor.
+
+    Direct-transmission runs never relabel the policy/loan rate as a deposit return:
+    cash has zero contractual nominal yield in this model.  If households can and do
+    access coupon-bearing government bonds, their contractual coupon is compounded
+    from the per-tick clock for the like-for-like annual rental-yield comparison.
+    The legacy branch is retained verbatim behind the default-off master flag.
+    """
+    if not econ.cfg.monetary_direct_transmission:
+        return float(getattr(econ, "_rate", 0.0)) * 365.0
+    securities = econ.cfg.securities
+    bonds_available = (
+        securities.bonds
+        and securities.bond_theta > 0.0
+        and float(getattr(econ, "_bonds_outstanding", 0.0)) > EPS
+        and securities.bond_coupon > 0.0
+    )
+    if not bonds_available:
+        return 0.0
+    return math.expm1(365.0 * math.log1p(float(securities.bond_coupon)))
+
+
 def run_housing_market_phase(econ: Any) -> None:
+    # These are per-tick fiscal flows, not lifetime housing-market counters.
+    # Leaving them cumulative made tax_total and the cash deficit grow solely
+    # because the simulation had run longer.
+    econ._property_tax_paid = 0.0
+    econ._transfer_tax_paid = 0.0
     market = getattr(econ, "housing_market", None)
     housing = getattr(econ, "housing", None)
     if market is None or housing is None:
         return
+    mortgage_book = getattr(econ, "mortgage_book", None)
+    if mortgage_book is not None:
+        # A flow gauge, unlike ``originated_total``.  Reset even on non-session
+        # ticks so credit diagnostics never carry a monthly origination forward.
+        mortgage_book.originated_tick = 0.0
     rental = getattr(econ, "rental_market", None)
     if rental is not None:
         rental.collect_rents(econ)        # v15.3: tenancies pay every tick, not per session
@@ -89,11 +124,16 @@ def run_housing_market_phase(econ: Any) -> None:
 
     _ingest_distress_listings(econ, market, housing)
     _drop_stale_listings(econ, market, housing)
-    mortgage_book = getattr(econ, "mortgage_book", None)
     if mortgage_book is not None:
         # v15.2: reconcile secured balances against the ledger, run foreclosures --
         # seized dwellings join this session's supply as forced bank listings
         mortgage_book.maintain(econ)
+        # Firm/household principal service and foreclosure occur after the credit
+        # phase's cache was opened.  Rebase the shared RWA envelope on live ledger
+        # debt before this session previews any mortgage, then each origination
+        # increments the cache atomically.
+        if unified_bank_rwa_enabled(econ):
+            refresh_loan_books(econ)
 
     # ---- matching session: buyers cheapest-first over the k cheapest listings ----
     led = econ.ledger
@@ -108,10 +148,13 @@ def run_housing_market_phase(econ: Any) -> None:
     econ.rng.shuffle(buyers)
     if rental is not None:
         # v15.3 investment demand: owner households join the buyer pool CASH-ONLY when
-        # the prevailing rental yield beats the deposit rate by the premium -- landlords
-        # emerge from arbitrage, they are never seeded. Need-driven buyers go first.
-        deposit_rate_annual = float(getattr(econ, "_rate", 0.0)) * 365.0
-        if rental.prevailing_yield(econ) > deposit_rate_annual + rental.investor_premium:
+        # the prevailing rental yield beats an actually available safe return by the
+        # premium -- landlords emerge from arbitrage, they are never seeded.
+        # Need-driven buyers go first.
+        safe_return_annual = investor_safe_asset_return_annual(econ)
+        if econ.cfg.monetary_direct_transmission:
+            econ._housing_safe_asset_return_annual = safe_return_annual
+        if rental.prevailing_yield(econ) > safe_return_annual + rental.investor_premium:
             investors = [
                 h for h in econ.households
                 if housing.dwellings_of(h.id)
@@ -135,6 +178,8 @@ def run_housing_market_phase(econ: Any) -> None:
         )
         window = book[: market.search_k]
         pick = None
+        pick_loan = 0.0
+        pick_decision = None
         for listing in window:
             # v15.5: stamp duty is part of the buyer's cash need (tax is never financed)
             tax_cost = transfer_tax_rate * listing.ask
@@ -144,6 +189,22 @@ def run_housing_market_phase(econ: Any) -> None:
             # v15.2 credit unlock: affordable with a mortgage iff the down payment
             # (price minus LTV-capped loan) plus the duty fits in the cash budget
             if can_borrow and listing.ask * (1.0 - mortgage_book.ltv_cap) + tax_cost <= cash_budget:
+                candidate_loan = min(
+                    listing.ask + tax_cost - cash_budget,
+                    mortgage_book.ltv_cap * listing.ask,
+                )
+                if mortgage_book.underwriting_enabled:
+                    decision = mortgage_book.underwrite(
+                        econ,
+                        buyer,
+                        listing.dwelling_id,
+                        listing.ask,
+                        candidate_loan,
+                    )
+                    if not decision.approved:
+                        continue
+                    pick_decision = decision
+                pick_loan = candidate_loan
                 pick = listing
                 break
         if pick is None:
@@ -152,13 +213,27 @@ def run_housing_market_phase(econ: Any) -> None:
         duty = transfer_tax_rate * price
         loan = 0.0
         if price + duty > cash_budget and can_borrow:
-            loan = min(price + duty - cash_budget, mortgage_book.ltv_cap * price)
+            loan = (
+                pick_loan
+                if mortgage_book.underwriting_enabled
+                else min(price + duty - cash_budget, mortgage_book.ltv_cap * price)
+            )
         # ---- atomic sale: ledger + claims + title (+ mortgage) in one place ----
         if loan > EPS:
             # originate posts BOTH sides of loan-creates-deposit to the claims layer
             # (post_household_debt_creation mirrors +cash and +debt), so the sale posting
             # below is the FULL price -- posting loan-price here double-counts the loan
-            mortgage_book.originate(econ, buyer, pick.dwelling_id, loan)
+            originated = mortgage_book.originate(
+                econ,
+                buyer,
+                pick.dwelling_id,
+                loan,
+                price=price,
+                decision=pick_decision,
+            )
+            if not originated:
+                # No money, claim, listing or title mutation has occurred yet.
+                continue
         led.transfer(buyer.id, pick.seller_account, price)
         if duty > EPS and fiscal is not None:
             led.transfer(buyer.id, fiscal, duty)

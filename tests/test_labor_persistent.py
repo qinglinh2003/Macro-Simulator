@@ -98,10 +98,19 @@ def test_demand_collapse_lays_off_gradually_lifo():
     firm = max(econ.c_firms, key=lambda f: len(lm.rosters.get(f.id, ())))
     n0 = len(lm.rosters[firm.id])
     assert n0 >= 2
+    # Accelerate only the firing-target EMA so this unit test observes the
+    # partial-adjustment layoff within its short twenty-day window.
+    lm.target_smooth = 0.2
     firm.demand_expected = 0.0           # kill demand expectations
     firm.sales_prev = 0.0
     sizes = []
     for _ in range(20):
+        # Keep the intervention active.  A one-tick assignment is not a demand
+        # collapse: goods-market sales immediately rebuild the adaptive signal.
+        firm.demand_expected = 0.0
+        firm.sales_prev = 0.0
+        firm.rationed_prev = 0.0
+        firm.inventory = 0.0
         econ.step()
         sizes.append(len(lm.rosters.get(firm.id, ())))
     assert sizes[-1] < n0                # shrinking...

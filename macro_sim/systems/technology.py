@@ -54,9 +54,11 @@ class Technology:
         # per-sector trend override; falls back to the uniform drift_rate when a sector is absent
         self.sector_drift = dict(sector_drift) if sector_drift else {}
         self._rng = rng
-        # learning-by-doing needs a genesis output scale to normalise cumulative output against;
-        # captured lazily on the first step (so Z stays exactly 1.0 until real output exists).
-        self._learning_base: Dict[str, float] | None = None
+        # Learning needs a pre-existing experience stock, not one economy-wide
+        # "first day" denominator.  Each sector initializes independently on its first
+        # positive output; one year of that flow is its initial knowledge stock.
+        self._learning_base: Dict[str, float] = {}
+        self._learning_origin: Dict[str, float] = {}
 
     # -- read side ---------------------------------------------------------
     def factor_for(self, firm: Any) -> float:
@@ -86,22 +88,29 @@ class Technology:
             self.z[sector] *= (1.0 + daily)
 
     def _step_learning(self, econ: Any) -> None:
-        """Endogenous law (2.x seam): Z_s = (cumulative_output_s / base_s) ** theta.
+        """Endogenous law: ``Z_s=(1+Q_since_origin/Q0_s)**theta``.
 
-        Proves an endogenous law plugs into the SAME interface; the engine itself is 2.x.
-        theta=0 keeps Z at 1.0.
+        ``Q0_s`` is one year of the sector's first positive flow.  Sector-specific
+        initialization avoids assigning a near-zero denominator to a dormant sector,
+        and the initial knowledge stock avoids doubling TFP after only a second day.
+        ``theta=0`` keeps Z at 1.0.
         """
         if self.learning_theta == 0.0:
             return
         cum = _cumulative_output_by_sector(econ)
-        if self._learning_base is None:
-            # first non-trivial output sets the base so Z starts at 1.0
-            if all(v <= 0.0 for v in cum.values()):
-                return
-            self._learning_base = {s: max(v, 1e-9) for s, v in cum.items()}
         for sector in self.z:
-            base = self._learning_base.get(sector, 1e-9)
-            ratio = max(cum.get(sector, 0.0), 1e-9) / base
+            cumulative = max(0.0, float(cum.get(sector, 0.0)))
+            if sector not in self._learning_base:
+                if cumulative <= 0.0:
+                    continue
+                self._learning_origin[sector] = cumulative
+                self._learning_base[sector] = max(cumulative * _DAYS_PER_YEAR, 1e-9)
+                self.z[sector] = 1.0
+                continue
+            incremental_experience = max(
+                0.0, cumulative - self._learning_origin[sector]
+            )
+            ratio = 1.0 + incremental_experience / self._learning_base[sector]
             self.z[sector] = ratio ** self.learning_theta
 
 

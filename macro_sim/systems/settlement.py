@@ -6,6 +6,12 @@ from typing import Any
 
 from macro_sim.markets.matching import EPS
 from macro_sim.systems.banking import bank_equity_value
+from macro_sim.systems.firm_accounting import (
+    close_firm_distributions,
+    close_firm_income_statement,
+    prepare_firm_income_statement,
+    replacement_capital_price,
+)
 
 
 def _household_labor_supply(econ: Any, household: Any) -> float:
@@ -30,43 +36,80 @@ def run_settlement_phase(econ: Any) -> None:
     econ._tax_energy_windfall = 0.0      # v17.2 per-tick reset
     econ._soe_dividends = 0.0            # v17.3 per-tick reset
     econ._jg_spending = econ._jg_capital_units = econ._jg_employment = 0.0   # v9.3 job guarantee
+    full_pnl = getattr(cfg, "firm_full_pnl", False)
+    observe_capital_price = (
+        full_pnl
+        or getattr(cfg, "capital_service_pricing", False)
+        or getattr(cfg, "priced_firm_balance_sheet", False)
+    )
+    capital_price = replacement_capital_price(econ) if observe_capital_price else 0.0
+    if full_pnl:
+        econ._firm_dividends_paid = 0.0
+        econ._firm_retained_earnings = 0.0
 
     # (i) firms pay dividends (cash-capped, A4) into the CLEARING account.
     total_div = 0.0
     div_by_firm = {}                               # firm_id -> payable (v8.4 pro-rata payout)
     for f in econ.firms:
-        # investment is NOT a cost (asset swap); energy USED is opex (v17.0; 0 when off,
-        # and x - 0.0 == x exactly, so the pre-energy baseline stays bit-identical)
-        f.profit = f.revenue - f.wagebill - f.energy_cost_used
+        if full_pnl:
+            prepare_firm_income_statement(f, capital_price)
+            tax_base = f.pnl_pre_tax_income
+        else:
+            # investment is NOT a cost (asset swap); energy USED is opex (v17.0; 0 when off,
+            # and x - 0.0 == x exactly, so the pre-energy baseline stays bit-identical)
+            f.profit = f.revenue - f.wagebill - f.energy_cost_used
+            tax_base = f.profit
         f.dividend_shortfall = 0.0
         ptax = 0.0
-        if gov and pol.tax_profit_rate > 0.0 and f.profit > EPS:
-            ptax = min(pol.tax_profit_rate * f.profit, econ.ledger.balance(f.id))
+        if gov and pol.tax_profit_rate > 0.0 and tax_base > EPS:
+            ptax = min(pol.tax_profit_rate * tax_base, econ.ledger.balance(f.id))
             if ptax > EPS:
                 econ.ledger.transfer(f.id, econ._fiscal, ptax)
                 econ._tax_profit += ptax
         wtax = 0.0                                     # v17.2 windfall surtax on E-firms (0.0 => exact no-op)
-        if gov and pol.tax_energy_windfall > 0.0 and f.sells == "energy" and f.profit > EPS:
-            wtax = min(pol.tax_energy_windfall * max(0.0, f.profit - ptax), econ.ledger.balance(f.id))
+        if gov and pol.tax_energy_windfall > 0.0 and f.sells == "energy" and tax_base > EPS:
+            wtax = min(pol.tax_energy_windfall * max(0.0, tax_base - ptax), econ.ledger.balance(f.id))
             if wtax > EPS:
                 econ.ledger.transfer(f.id, econ._fiscal, wtax)
                 econ._tax_energy_windfall = getattr(econ, "_tax_energy_windfall", 0.0) + wtax
-        div_pool = f.rho * max(0.0, f.profit - ptax - wtax)   # only positive after-tax profit pays out
+        if full_pnl:
+            close_firm_income_statement(f, ptax, wtax)
+            distributable_income = f.pnl_net_income
+        else:
+            distributable_income = f.profit - ptax - wtax
+        div_pool = f.rho * max(0.0, distributable_income)   # only positive after-tax profit pays out
         if div_pool <= EPS:
+            if full_pnl:
+                close_firm_distributions(f, 0.0)
+                econ._firm_retained_earnings += f.pnl_retained_earnings
             continue
         payable = min(div_pool, econ.ledger.balance(f.id))
         f.dividend_shortfall = div_pool - payable
         if payable <= EPS:
+            if full_pnl:
+                close_firm_distributions(f, 0.0)
+                econ._firm_retained_earnings += f.pnl_retained_earnings
             continue
         if getattr(f, "state_owned", False) and gov:
             # v17.3 SOE: the state owner collects the dividend (fiscal revenue),
             # households never see it. Guarded: no firm is state_owned unless the flag set it.
             econ.ledger.transfer(f.id, econ._fiscal, payable)
             econ._soe_dividends = getattr(econ, "_soe_dividends", 0.0) + payable
+            if full_pnl:
+                close_firm_distributions(f, payable)
+                econ._firm_dividends_paid += payable
+                econ._firm_retained_earnings += f.pnl_retained_earnings
             continue
         econ.ledger.transfer(f.id, "CLEARING", payable)
         total_div += payable
         div_by_firm[f.id] = payable
+        if full_pnl:
+            close_firm_distributions(f, payable)
+            econ._firm_dividends_paid += payable
+            econ._firm_retained_earnings += f.pnl_retained_earnings
+
+    if full_pnl:
+        econ._firm_pnl_closed = True
 
     # (ii) distribute the CLEARING pool to households. The last recipient absorbs float remainder.
     econ._dividends_paid = total_div
@@ -179,6 +222,30 @@ def run_household_fiscal_phase(econ: Any) -> None:
                     bridge.post_transfer_income(h.id, ben, reason="unemployment_benefit")
                 h.income_realized += ben
                 econ._benefit_paid += ben
+
+    # v23 IN-WORK SUPPORT: a minimum income guarantee, tested on INCOME instead of unsold hours.
+    #
+    # The benefit above is a QUANTITY rule -- it pays for labour a household could NOT sell --
+    # so a worker who sells ALL of their labour and still earns too little receives nothing.
+    # Since v16-L4 made pay = wage x e_i (sigma 0.35), the model MANUFACTURES working poor, and
+    # the household behind the last CRITICAL (welfare.deprivation_domain_boundary) is exactly
+    # that: a 40-year-old working a full 1.0 FTE, earning 56% of median income, holding 0.07 in
+    # deposits against a median of 863 -- and receiving zero support, because they have a job.
+    #
+    # This runs AFTER the unemployment benefit, so it tops up whatever the household actually
+    # ended the tick with (wages + JG + benefit) and can never double-pay.
+    # benefit_income_floor = 0.0 => the branch never fires => bit-identical.
+    if getattr(pol, "benefit_income_floor", 0.0) > 0.0:
+        wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
+        for h in hh:
+            floor = pol.benefit_income_floor * wage_ref * _household_labor_supply(econ, h)
+            topup = max(0.0, floor - h.income_realized)
+            if topup > EPS:
+                led.transfer(econ._fiscal, h.id, topup)
+                if bridge is not None:
+                    bridge.post_transfer_income(h.id, topup, reason="income_floor")
+                h.income_realized += topup
+                econ._benefit_paid += topup
 
     if getattr(pol, "pension_replacement", 0.0) > 0.0 and bridge is not None:
         # v13 old-age pension: the demographic economy's only transfer to non-workers. The JG

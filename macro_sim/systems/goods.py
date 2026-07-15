@@ -4,8 +4,49 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from macro_sim.behavior import planning as B
 from macro_sim.domain.agents import Firm
-from macro_sim.markets.matching import EPS, BuyOrder, SellOffer, execute_market
+from macro_sim.markets.matching import (
+    EPS,
+    BuyOrder,
+    MarketTrace,
+    SellOffer,
+    execute_market,
+)
+from macro_sim.systems.banking import loan_rate_for
+
+
+def household_goods_cash_budget(econ: Any, household: Any) -> float:
+    """Return the live cash available for this household's goods order.
+
+    Direct monetary transmission reserves contractual service only after all
+    pre-goods cash flows have settled.  This preserves desired demand while
+    preventing the goods market from spending cash used by the immediately
+    following household debt-service phase.
+    """
+    desired = max(0.0, float(household.consumption_budget))
+    deposits = max(0.0, float(econ.ledger.balance(household.id)))
+    # This phase owns a typed config view.  Reading the legacy top-level Config
+    # here made even the government-off fast path depend on unrelated config
+    # internals and broke isolated system use.
+    goods_cfg = econ.cfg.goods
+    carry_arrears = getattr(goods_cfg, "household_interest_arrears", False)
+    if not (
+        getattr(goods_cfg, "monetary_direct_transmission", False)
+        or carry_arrears
+    ):
+        return min(desired, deposits)
+    return B.reserve_household_debt_service(
+        desired,
+        deposits=deposits,
+        debt=econ.ledger.debt(household.id),
+        margin_debt=household.margin_debt,
+        loan_rate=loan_rate_for(econ, household.id),
+        amort=econ.cfg.credit.hh_amort,
+        interest_arrears=(
+            household.credit_interest_arrears if carry_arrears else 0.0
+        ),
+    )
 
 
 def _necessity_need_for(econ: Any, h: Any) -> float:
@@ -31,7 +72,7 @@ def _vat_rates(econ: Any, tc: float):
     return (tn if tn is not None else tc), (tl if tl is not None else tc)
 
 
-def _run_split_sessions(econ: Any, tc: float):
+def _run_split_sessions(econ: Any, tc: float, cash_budgets: Dict[str, float]):
     """v18.1: the two-session household goods market. NECESSITY first (quantity-targeted
     at the household's necessity need, over n_firms), then LUXURY (the residual budget,
     demand=inf, over l_firms). Returns (trades, hh_budget_total). Necessity SHARE falls
@@ -43,7 +84,7 @@ def _run_split_sessions(econ: Any, tc: float):
     deposits: Dict[str, float] = {}           # h.id -> A4-capped deposits available for goods
     nec_orders: List[BuyOrder] = []
     for h in econ.households:
-        dep = min(h.consumption_budget, led.balance(h.id))
+        dep = cash_budgets[h.id]
         if dep <= EPS:
             continue
         deposits[h.id] = dep
@@ -53,8 +94,21 @@ def _run_split_sessions(econ: Any, tc: float):
     hh_budget_total = sum(dep / (1.0 + tc) for dep in deposits.values())   # unsat gauge (uniform ref)
 
     n_offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.n_firms]
-    nec_trades = execute_market(nec_orders, n_offers, protocol=econ.protocol, rng=econ.rng, ledger=led)
+    foreign_offer = getattr(econ, "_fx_import_offer", None)
+    if foreign_offer is not None and foreign_offer.stock > EPS and foreign_offer.price > EPS:
+        # A generic imported consumption good may satisfy either stratum.  Offer it
+        # first in necessities, then carry the same live residual stock/sales counter
+        # into luxuries so settlement sees one unduplicated foreign flow.
+        n_offers.append(foreign_offer)
+    trace_enabled = bool(econ.cfg.goods.rationed_signal)
+    nec_trace = MarketTrace() if trace_enabled else None
+    nec_trades = execute_market(
+        nec_orders, n_offers, protocol=econ.protocol, rng=econ.rng, ledger=led,
+        unmet_trace=nec_trace,
+    )
     for off in n_offers:
+        if off.ref is None:
+            continue
         f: Firm = off.ref
         f.inventory = off.stock
         f.sales = off.sold
@@ -73,8 +127,28 @@ def _run_split_sessions(econ: Any, tc: float):
         if resid > EPS:
             lux_orders.append(BuyOrder(account=h.id, demand=float("inf"), budget=resid, ref=h))
     l_offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.l_firms]
-    lux_trades = execute_market(lux_orders, l_offers, protocol=econ.protocol, rng=econ.rng, ledger=led)
+    if foreign_offer is not None and foreign_offer.stock > EPS:
+        l_offers.append(foreign_offer)
+    lux_trace = MarketTrace() if trace_enabled else None
+    lux_trades = execute_market(
+        lux_orders, l_offers, protocol=econ.protocol, rng=econ.rng, ledger=led,
+        unmet_trace=lux_trace,
+    )
+    if nec_trace is not None and lux_trace is not None and nec_trace.visits:
+        # The sessions are sequential claims on one household budget.  If a
+        # protocol has already identified unmet necessity demand for a buyer,
+        # treating that buyer's same residual cash as additional next-period
+        # luxury demand double-counts a conditional budget.  Preserve current
+        # trades, but give the higher-priority necessity signal first claim on
+        # the counterfactual planning observation.
+        necessity_unmet_buyers = {visit.buyer for visit in nec_trace.visits}
+        lux_trace.visits = [
+            visit for visit in lux_trace.visits
+            if visit.buyer not in necessity_unmet_buyers
+        ]
     for off in l_offers:
+        if off.ref is None:
+            continue
         f = off.ref
         f.inventory = off.stock
         f.sales = off.sold
@@ -83,7 +157,8 @@ def _run_split_sessions(econ: Any, tc: float):
     for h in econ.households:                     # record the necessity split for the Engel gauge
         h.necessity_spent = nec_spent.get(h.id, 0.0)
 
-    return nec_trades + lux_trades, hh_budget_total
+    traces = [trace for trace in (nec_trace, lux_trace) if trace is not None]
+    return nec_trades + lux_trades, hh_budget_total, traces
 
 
 def run_goods_phase(econ: Any) -> None:
@@ -94,17 +169,57 @@ def run_goods_phase(econ: Any) -> None:
     econ._tax_consumption = econ._gov_consumption = 0.0
     gov = cfg.government
     tc = econ.policy.tax_consumption_rate if gov else 0.0
+    cash_budgets = {
+        h.id: household_goods_cash_budget(econ, h)
+        for h in econ.households
+    }
+    reserve_service = (
+        getattr(cfg, "monetary_direct_transmission", False)
+        or getattr(cfg, "household_interest_arrears", False)
+    )
+    if reserve_service:
+        # Isolate the service reservation from the ordinary A4 cash cap: a lack
+        # of deposits is not itself a monetary-policy transmission effect.
+        econ._hh_debt_service_reserved = sum(
+            max(
+                0.0,
+                min(
+                    max(0.0, float(h.consumption_budget)),
+                    max(0.0, float(econ.ledger.balance(h.id))),
+                ) - cash_budgets[h.id],
+            )
+            for h in econ.households
+        )
+        econ._hh_contractual_debt_service_due = sum(
+            B.household_contractual_debt_service(
+                debt=econ.ledger.debt(h.id),
+                margin_debt=h.margin_debt,
+                loan_rate=loan_rate_for(econ, h.id),
+                amort=econ.cfg.credit.hh_amort,
+                interest_arrears=(
+                    h.credit_interest_arrears
+                    if getattr(cfg, "household_interest_arrears", False)
+                    else 0.0
+                ),
+            )
+            for h in econ.households
+        )
+        econ._hh_interest_arrears_in_goods_reservation = (
+            sum(max(0.0, float(h.credit_interest_arrears)) for h in econ.households)
+            if getattr(cfg, "household_interest_arrears", False)
+            else 0.0
+        )
     # v18.1: two-session split when consumption strata are on; otherwise the single
     # session below, verbatim (off ⇒ bit-identical). Read via the grouped goods view.
     strata = getattr(cfg, "consumption_strata", False) and econ.n_firms and econ.l_firms
     if strata:
-        trades, hh_budget_total = _run_split_sessions(econ, tc)
-        _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total)
+        trades, hh_budget_total, traces = _run_split_sessions(econ, tc, cash_budgets)
+        _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total, traces)
         return
 
     orders: List[BuyOrder] = []
     for h in econ.households:
-        budget = min(h.consumption_budget, econ.ledger.balance(h.id))
+        budget = cash_budgets[h.id]
         if budget <= EPS:
             continue
         # v9 VAT: the outlay budget buys goods worth budget/(1+tax); the rest is reserved for tax.
@@ -114,7 +229,11 @@ def run_goods_phase(econ: Any) -> None:
     # Sellers are the consumption sector only (K-firms sell in Phase 3.5).
     offers = [SellOffer(account=f.id, stock=f.inventory, price=f.price, ref=f) for f in econ.c_firms]
     _inject_foreign_trade(econ, orders, offers)   # v20.2 open economy; no-op off ⇒ bit-identical
-    trades = execute_market(orders, offers, protocol=econ.protocol, rng=econ.rng, ledger=econ.ledger)
+    unmet_trace = MarketTrace() if getattr(cfg, "rationed_signal", False) else None
+    trades = execute_market(
+        orders, offers, protocol=econ.protocol, rng=econ.rng, ledger=econ.ledger,
+        unmet_trace=unmet_trace,
+    )
     for off in offers:
         f: Firm = off.ref
         if f is None:                        # v20.2: the foreign import offer (seller=dealer), not a domestic firm
@@ -122,7 +241,8 @@ def run_goods_phase(econ: Any) -> None:
         f.inventory = off.stock              # decremented live during trading
         f.sales = off.sold                   # household purchases (government buys separately below)
         f.revenue = off.sold * off.price     # price fixed within the tick
-    _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total)
+    traces = [unmet_trace] if unmet_trace is not None else []
+    _finalize_goods(econ, cfg, gov, tc, trades, hh_budget_total, traces)
 
 
 def _inject_foreign_trade(econ: Any, orders: List, offers: List) -> None:
@@ -144,12 +264,31 @@ def _inject_foreign_trade(econ: Any, orders: List, offers: List) -> None:
         orders.append(order)
 
 
-def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_budget_total: float) -> None:
+def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List,
+                    hh_budget_total: float,
+                    unmet_traces: List[MarketTrace] | None = None) -> None:
     """Shared goods-phase tail: realized spend -> households + person-claim bridge, VAT
     remit, government competitive tender, and the unsatisfied-demand gauge. Both the
     single-session and the v18.1 two-session paths converge here; firm-level results
     (inventory/sales/revenue) are pushed by each path BEFORE this runs (the tender reads
     live inventory)."""
+    national_accounts = getattr(econ, "_national_accounts", None)
+    # Aggregate only records tied to explicit protocol-defined diagnostic visits.  A
+    # foreign offer can legitimately receive such a visit, but it is not a
+    # domestic C-firm planning signal and therefore remains outside this map.
+    footfall_by_firm: Dict[str, float] = {}
+    trace_attributable_total = 0.0
+    trace_unattributed_budget = 0.0
+    if getattr(cfg, "rationed_signal", False):
+        domestic_ids = {firm.id for firm in econ.c_firms}
+        for trace in unmet_traces or []:
+            trace_attributable_total += trace.attributable_qty
+            trace_unattributed_budget += trace.unattributed_budget
+            for seller_id, qty in trace.by_seller.items():
+                if seller_id in domestic_ids:
+                    footfall_by_firm[seller_id] = footfall_by_firm.get(seller_id, 0.0) + qty
+    if national_accounts is not None:
+        national_accounts.observe_goods_trades(econ, trades)
     spent_by: Dict[str, float] = {}
     for tr in trades:
         spent_by[tr.buyer] = spent_by.get(tr.buyer, 0.0) + tr.value
@@ -194,7 +333,11 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_
             gov_budget = max(
                 0.0,
                 getattr(econ, "_prev_tax_total", 0.0)
-                + target * getattr(econ, "_prev_nominal_output", 0.0)
+                + target * getattr(
+                    econ,
+                    "_prev_fiscal_output",
+                    getattr(econ, "_prev_nominal_output", 0.0),
+                )
                 - getattr(econ, "_prev_benefit", 0.0),
             )
         elif pol.gov_consumption_share > 0.0:
@@ -209,6 +352,7 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_
         ranked = sorted((f for f in econ.c_firms if f.inventory > EPS and f.price > EPS),
                         key=lambda f: f.price)
         b, u = gov_budget, gov_units
+        last_contractor = None
         for f in ranked:
             if b <= EPS or u <= EPS:
                 break
@@ -221,8 +365,34 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List, hh_
             f.sales += q
             f.revenue += val
             econ._gov_consumption += val
+            if national_accounts is not None:
+                national_accounts.observe_government_goods(f.id, q, val)
             b -= val
             u -= q
+            last_contractor = f
+
+        # The tender has an observable final accepted bid.  If that contractor
+        # exhausts its shelf while the tender remains open, the affordable
+        # residual is attributable to that firm.  A tender with no accepted bid
+        # remains aggregate: assigning it across unseen firms would recreate the
+        # equal-share coupling this patch removes.
+        if getattr(cfg, "rationed_signal", False) and last_contractor is not None \
+                and last_contractor.inventory <= EPS and b > EPS and u > EPS:
+            qty = min(u, b / last_contractor.price)
+            if qty > EPS:
+                footfall_by_firm[last_contractor.id] = (
+                    footfall_by_firm.get(last_contractor.id, 0.0) + qty
+                )
+                trace_attributable_total += qty
+
+    if getattr(cfg, "rationed_signal", False):
+        for firm in econ.c_firms:
+            firm.rationed_demand = footfall_by_firm.get(firm.id, 0.0)
+        # Runtime audit hooks: total protocol-attributable quantity includes a
+        # possible foreign visit; the firm total contains only domestic signals.
+        econ._c_attributable_footfall = trace_attributable_total
+        econ._c_firm_footfall = sum(footfall_by_firm.values())
+        econ._c_unattributed_footfall_budget = trace_unattributed_budget
 
     hh_spent = sum(h.spent for h in econ.households)
     # Unsatisfied-demand ratio: fraction of intended budget that could not be spent (stockouts).

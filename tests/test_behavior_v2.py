@@ -27,6 +27,29 @@ def test_linear_produce_is_a_times_N():
     assert abs(unit_cost(f) - f.wage / f.a) < TOL  # v1 constant
 
 
+def test_linear_productivity_factor_reduces_planned_unit_cost():
+    f = Firm.create_k_firm(0, Config())
+    f.production_target = 10.0
+    f.labor_demand_notional = labor_demand_notional(
+        f, f.production_target, pubcap_factor=2.0,
+    )
+
+    assert abs(unit_cost(f) - f.wage / (2.0 * f.a)) < TOL
+
+
+def test_legacy_linear_unit_cost_ignores_composite_productivity_factor():
+    """Certified presets retain their old quote until pricing migration is on."""
+    f = Firm.create_k_firm(0, Config())
+    f.production_target = 10.0
+    f.labor_demand_notional = labor_demand_notional(
+        f, f.production_target, pubcap_factor=2.0,
+    )
+
+    assert abs(
+        unit_cost(f, productivity_adjusted=False) - f.wage / f.a
+    ) < TOL
+
+
 def test_cobb_douglas_produce_and_inversion_roundtrip():
     f = Firm.create_c_firm(0, Config())  # K=20, A=1, alpha=0.3
     for N in (0.5, 3.0, 12.7, 50.0):

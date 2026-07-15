@@ -26,7 +26,9 @@ import numpy as np
 
 from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
 from macro_sim.demographics.economic_state import build_household_economic_profiles, need_weight_for_person
-from macro_sim.systems.banking import bank_economic_capital, bank_equity_value, bank_for
+from macro_sim.systems.banking import bank_equity_value, bank_for, bank_rwa_exposure
+from macro_sim.systems.firm_balance_sheet import firm_balance_sheet, firm_return_asset_base
+from macro_sim.systems.planning import CAPITAL_SERVICE_PRICED_SECTORS
 from macro_sim.systems.securities import bond_market_value
 
 
@@ -89,11 +91,48 @@ def _safe_ratio(num: float, den: float) -> float:
 
 
 def _sector_infl(econ, attr: str, price: float) -> float:
-    """v18.2: tick-over-tick sector inflation from a hold-last previous price stashed on
-    econ (0 on the first observation). Observation only; does not feed any decision."""
+    """Tick-over-tick sector inflation against the last committed price.
+
+    The corresponding hold-last value is advanced by :func:`commit_tick_metrics`,
+    never by a reporting query.
+    """
     prev = getattr(econ, attr, None)
-    setattr(econ, attr, price)
     return (price / prev - 1.0) if (prev and prev > 1e-12) else 0.0
+
+
+def _deprivation_person_observations(econ) -> tuple[int, list]:
+    """Build the raw deprivation observation shared by preview and commit."""
+    bridge = getattr(econ, "demographic_bridge", None)
+    state = getattr(econ, "demographic_state", None)
+    if bridge is None or state is None:
+        return 0, []
+    alive_people = [
+        person for person in getattr(state, "people", []) if getattr(person, "alive", True)
+    ]
+    persons = [
+        (
+            int(person.id),
+            int(person.household_id),
+            need_weight_for_person(person),
+            bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick,
+            int(getattr(person, "age", 0)),
+            bridge.claims.balance_sheet(int(person.id)).net_worth,
+            bridge.claims.balance_sheet(int(person.id)).cash_claim,
+        )
+        for person in alive_people
+        if bridge.claims.has_person(int(person.id))
+    ]
+    return int(state.current_date.year), persons
+
+
+def _bank_economic_capital_snapshot(econ, bank) -> float:
+    """Read bank economic capital without populating the behavioral bond cache."""
+    capital = econ.ledger.balance(bank.id)
+    if econ.cfg.bonds:
+        for lot in getattr(econ, "_bonds", ()):
+            if lot["holder"] == bank.id:
+                capital += bond_market_value(econ, lot) - lot["cost"]
+    return capital
 
 
 def _hhi(values: Sequence[float]) -> float:
@@ -217,20 +256,20 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     # Price index: consumption sales-weighted when there were sales, else mean posted.
     price_index = (total_revenue / total_sales_u) if total_sales_u > 1e-12 else _mean(prices)
 
-    # Inflation vs last tick's price index (0 on the first tick).
+    # Inflation vs last COMMITTED tick's price index (0 on the first tick).
     prev_p = getattr(econ, "_prev_price_index", None)
     inflation = (price_index / prev_p - 1.0) if (prev_p and prev_p > 1e-12) else 0.0
-    econ._prev_price_index = price_index
     hist = getattr(econ, "_price_index_history", None)
-    if hist is None:
-        from collections import deque
-        hist = econ._price_index_history = deque(maxlen=365)
-    yoy_base = hist[0] if len(hist) == 365 else (hist[0] if hist else price_index)
+    yoy_base = hist[0] if hist and len(hist) == 365 else (hist[0] if hist else price_index)
     inflation_yoy = (price_index / yoy_base - 1.0) if yoy_base > 1e-12 else 0.0
-    hist.append(price_index)
 
     dividends_paid = float(getattr(econ, "_dividends_paid", 0.0))
-    retained = max(0.0, total_profit) - dividends_paid  # positive profit not paid out
+    # ``retained_total`` is a distributable-income measure, so losses at one firm
+    # must not erase another firm's positive earnings before the latter's dividend
+    # is deducted.  The old aggregate truncation could report a negative retained
+    # amount whenever loss-making firms pulled aggregate profit below dividends.
+    distributable_profit = float(np.sum([max(0.0, f.profit) for f in firms]))
+    retained = max(0.0, distributable_profit - dividends_paid)
 
     rec: Dict[str, float] = {
         "t": econ.t,
@@ -308,24 +347,140 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "n_firms_selling": float(np.sum(np.asarray(sales_all) > 1e-9)),
     }
 
+    # Opt-in full firm income statement.  Named aggregates are exported only
+    # when the mechanism is active, so legacy record schemas and values remain
+    # bit-identical.  ``profit_total`` above is already net income in this mode;
+    # these fields expose every bridge layer and its hard diagnostic residuals.
+    if getattr(econ.cfg, "firm_full_pnl", False):
+        pnl_firms = list(firms) + list(getattr(econ, "_exited_firms_tick", ()))
+        pnl_reported_profit = float(np.sum([f.profit for f in pnl_firms]))
+        pnl_revenue = float(np.sum([f.pnl_revenue for f in pnl_firms]))
+        pnl_intermediate = float(np.sum([f.pnl_intermediate_inputs for f in pnl_firms]))
+        pnl_compensation = float(np.sum([f.pnl_compensation for f in pnl_firms]))
+        pnl_ebitda = float(np.sum([f.pnl_ebitda for f in pnl_firms]))
+        pnl_depreciation = float(np.sum([f.pnl_depreciation for f in pnl_firms]))
+        pnl_ebit = float(np.sum([f.pnl_ebit for f in pnl_firms]))
+        pnl_interest_accrued = float(np.sum([f.pnl_interest_accrued for f in pnl_firms]))
+        pnl_interest_due = float(np.sum([f.pnl_interest_due for f in pnl_firms]))
+        pnl_cash_interest = float(np.sum([f.pnl_interest_expense for f in pnl_firms]))
+        pnl_pre_tax = float(np.sum([f.pnl_pre_tax_income for f in pnl_firms]))
+        pnl_profit_tax = float(np.sum([f.pnl_profit_tax for f in pnl_firms]))
+        pnl_windfall_tax = float(np.sum([f.pnl_windfall_tax for f in pnl_firms]))
+        pnl_net_income = float(np.sum([f.pnl_net_income for f in pnl_firms]))
+        pnl_dividends = float(np.sum([f.pnl_dividends_paid for f in pnl_firms]))
+        pnl_retained = float(np.sum([f.pnl_retained_earnings for f in pnl_firms]))
+        pnl_arrears = float(np.sum([f.pnl_interest_arrears for f in pnl_firms]))
+        pnl_revenue_carry = float(np.sum([f.pnl_revenue_carry for f in pnl_firms]))
+        bridge_residuals = (
+            pnl_ebitda - (pnl_revenue - pnl_intermediate - pnl_compensation),
+            pnl_ebit - (pnl_ebitda - pnl_depreciation),
+            pnl_pre_tax - (pnl_ebit - pnl_cash_interest),
+            pnl_net_income - (pnl_pre_tax - pnl_profit_tax - pnl_windfall_tax),
+            pnl_retained - (pnl_net_income - pnl_dividends),
+            pnl_reported_profit - pnl_net_income,
+        )
+        rec.update({
+            "firm_full_pnl_enabled": 1.0,
+            "firm_pnl_revenue": pnl_revenue,
+            "firm_pnl_intermediate_inputs": pnl_intermediate,
+            "firm_pnl_compensation": pnl_compensation,
+            "firm_pnl_ebitda": pnl_ebitda,
+            "firm_pnl_capital_price": float(getattr(econ, "_firm_pnl_capital_price", 0.0)),
+            "firm_pnl_depreciation": pnl_depreciation,
+            "firm_pnl_ebit": pnl_ebit,
+            "firm_pnl_interest_accrued": pnl_interest_accrued,
+            "firm_pnl_interest_due": pnl_interest_due,
+            "firm_pnl_cash_interest": pnl_cash_interest,
+            "firm_pnl_pre_tax_income": pnl_pre_tax,
+            "firm_pnl_profit_tax": pnl_profit_tax,
+            "firm_pnl_windfall_tax": pnl_windfall_tax,
+            "firm_pnl_tax_total": pnl_profit_tax + pnl_windfall_tax,
+            "firm_pnl_net_income": pnl_net_income,
+            "firm_pnl_dividends_paid": pnl_dividends,
+            "firm_pnl_retained_earnings": pnl_retained,
+            "firm_pnl_interest_arrears": pnl_arrears,
+            "firm_pnl_post_close_revenue_carry": pnl_revenue_carry,
+            "firm_pnl_profit_compatibility_residual": pnl_reported_profit - pnl_net_income,
+            "firm_pnl_bridge_max_abs_residual": max(abs(value) for value in bridge_residuals),
+            "firm_pnl_interest_cash_counter_residual": (
+                pnl_cash_interest - float(getattr(econ, "_interest_paid", 0.0))
+            ),
+            "firm_bank_interest_counterparty_residual": (
+                float(np.sum([bank.loan_interest for bank in econ.banks]))
+                - pnl_cash_interest
+                - float(getattr(econ, "_hh_interest", 0.0))
+            ),
+        })
+
+    if getattr(econ.cfg, "capital_service_pricing", False):
+        priced_firms = [
+            firm for firm in firms
+            if firm.sells in CAPITAL_SERVICE_PRICED_SECTORS
+        ]
+        energy_priced_firms = [firm for firm in priced_firms if firm.sells == "energy"]
+        planned_output = float(np.sum([max(0.0, f.production_target) for f in priced_firms]))
+        allocated_cost = float(np.sum([
+            max(0.0, f.pricing_capital_unit_cost) * max(0.0, f.production_target)
+            for f in priced_firms
+        ]))
+        energy_allocated_cost = float(np.sum([
+            max(0.0, f.pricing_capital_unit_cost) * max(0.0, f.production_target)
+            for f in energy_priced_firms
+        ]))
+        rec.update({
+            "capital_service_pricing_enabled": 1.0,
+            "capital_service_replacement_price": float(
+                _mean([f.pricing_capital_price for f in priced_firms])
+            ),
+            "capital_service_replacement_price_closing": float(
+                getattr(econ, "_firm_pnl_capital_price", 0.0)
+            ),
+            "capital_service_cost_planned": float(np.sum([
+                max(0.0, f.pricing_capital_service_cost) for f in priced_firms
+            ])),
+            "capital_service_cost_allocated": allocated_cost,
+            "capital_service_unit_cost_output_weighted": (
+                allocated_cost / planned_output if planned_output > 1.0e-12 else 0.0
+            ),
+        })
+        if energy_priced_firms:
+            rec.update({
+                "energy_capital_service_cost_planned": float(np.sum([
+                    max(0.0, f.pricing_capital_service_cost) for f in energy_priced_firms
+                ])),
+                "energy_capital_service_cost_allocated": energy_allocated_cost,
+            })
+
     # v18.1 consumption sector split gauges: sector prices (feed the group CPIs in 18.2),
     # the aggregate necessity share (Engel level) + a rank gradient (Engel EMERGENCE),
     # sector markups + time-at-ceiling + HHI (the markup watch), and sector firm counts
     # (the entry-oscillation watch). Only present when the split is on.
-    if getattr(econ.cfg, "consumption_strata", False) and getattr(econ, "n_firms", None):
-        def _sector(firms):
+    if getattr(econ.cfg, "consumption_strata", False):
+        def _sector(firms, previous_price_attr):
             rev = float(sum(f.revenue for f in firms))
             units = float(sum(f.sales for f in firms))
             out = float(sum(f.produced for f in firms))
             cap = float(sum(f.capital for f in firms))          # v18.5: sector capital (reallocation watch)
             sell = [f for f in firms if f.sales > 1e-9] or list(firms)
-            price = rev / units if units > 1e-12 else _mean([f.price for f in sell])
+            # A sector can genuinely lose its last firm.  That is an economic state,
+            # not permission for the reporting schema to disappear.  Hold the last
+            # observed sector price when no seller remains, just as the aggregate
+            # transaction-price indexes do, while the flow/count fields fall to zero.
+            fallback_price = float(getattr(
+                econ, previous_price_attr, getattr(econ.cfg, "p_firm0", 1.0),
+            ))
+            price = (
+                rev / units if units > 1e-12
+                else _mean([f.price for f in sell]) if sell
+                else fallback_price
+            )
             mk = _mean([f.markup for f in sell])
             at_cap = _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in firms])
             hhi = float(sum((f.revenue / rev) ** 2 for f in firms)) if rev > 1e-12 else 0.0
             return dict(rev=rev, units=units, out=out, cap=cap, price=price, mk=mk, at_cap=at_cap,
                         hhi=hhi, n=len(firms))
-        N, L = _sector(econ.n_firms), _sector(econ.l_firms)
+        N = _sector(getattr(econ, "n_firms", ()), "_cpi_prev_nec")
+        L = _sector(getattr(econ, "l_firms", ()), "_cpi_prev_lux")
         tot_cons = N["rev"] + L["rev"]
         # Engel EMERGENCE: necessity share for the bottom vs top quintile of households
         # ranked by expenditure PER NEED-UNIT (affluence per person). The Engel axis must
@@ -337,9 +492,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
 
         def _per_unit(h):
             if bridge_ref is not None:
-                nu = bridge_ref.household_profile(h.id).need_units
-                if nu > 1e-9:
-                    return h.spent / nu
+                household_id = bridge_ref.household_id_for_account(h.id)
+                profile = demographic_profiles.get(household_id)
+                if profile is not None and profile.need_units > 1e-9:
+                    return h.spent / profile.need_units
             return h.spent
         spenders = [(_per_unit(h), h) for h in households if h.spent > 1e-9]
         nec_share_bottomq = nec_share_topq = 0.0
@@ -494,16 +650,8 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         # and all aggregation; metrics just hands it the raw per-person snapshot.
         dep = getattr(econ, "deprivation_signal", None)
         if dep is not None and state is not None:
-            dep_persons = [
-                (int(person.id), int(person.household_id), need_weight_for_person(person),
-                 bridge.claims.balance_sheet(int(person.id)).consumption_allocated_tick,
-                 int(getattr(person, "age", 0)),
-                 bridge.claims.balance_sheet(int(person.id)).net_worth,
-                 bridge.claims.balance_sheet(int(person.id)).cash_claim)
-                for person in alive_people if bridge.claims.has_person(int(person.id))
-            ]
-            rec.update(dep.observe(
-                year=int(state.current_date.year), price_index=price_index, persons=dep_persons))
+            dep_year, dep_persons = _deprivation_person_observations(econ)
+            rec.update(dep.preview(year=dep_year, price_index=price_index, persons=dep_persons))
 
         strat = getattr(bridge, "stratification", None)
         if strat is not None:
@@ -531,6 +679,12 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         rec.update(
             {
                 "labor_E": float(accounts.employed),
+                "labor_employed_heads": float(accounts.employed_heads),
+                "labor_average_private_job_hours": _safe_ratio(
+                    accounts.employed, accounts.employed_heads,
+                ),
+                "labor_underemployed_heads": float(accounts.underemployed_heads),
+                "labor_underemployment_hours": float(accounts.underemployment_hours),
                 "labor_U": float(accounts.unemployed),
                 "labor_S": float(accounts.suspended_memo),
                 "labor_JG": float(accounts.job_guarantee),
@@ -612,6 +766,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 {
                     "mortgage_count": float(len(mortgage_book.loans)),
                     "mortgage_balance_total": float(mortgage_book.balance_total()),
+                    "mortgage_originated_tick": float(mortgage_book.originated_tick),
                     "mortgage_originated_total": float(mortgage_book.originated_total),
                     "foreclosures_total": float(mortgage_book.foreclosures_total),
                 }
@@ -647,6 +802,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     "rental_vacancies": float(len(rental.vacancies(econ))),
                     "rent_level": float(rental.rent_level),
                     "rental_yield": float(rental.rent_level * 365.0 / price),
+                    **({
+                        "housing_safe_asset_return_annual": float(
+                            getattr(econ, "_housing_safe_asset_return_annual", 0.0)
+                        ),
+                    } if getattr(econ.cfg, "monetary_direct_transmission", False) else {}),
                     "rent_paid_total": float(rental.rent_paid_total),
                     "evictions_total": float(rental.evictions_total),
                     "tenant_share": float(len(rental.tenancies)) / max(1, n_live),
@@ -732,11 +892,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         "sector_count_C": float(len(cfirms)),
         "sector_count_K": float(len(kfirms)),
         "profit_rate_mean": _mean([
-            f.profit / max(1e-9, led.balance(f.id) + led.debt(f.id) + f.capital)
+            f.profit / max(1e-9, firm_return_asset_base(econ, f))
             for f in cfirms
         ]),
         "profit_rate_dispersion": _std([
-            f.profit / max(1e-9, led.balance(f.id) + led.debt(f.id) + f.capital)
+            f.profit / max(1e-9, firm_return_asset_base(econ, f))
             for f in cfirms
         ]),
         "investment_target_units": investment_target,
@@ -763,6 +923,33 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             float(np.mean([f.wage <= min_wage + 1e-9 for f in firms])) if min_wage > 0.0 and firms else 0.0
         ),
     })
+
+    if getattr(econ.cfg, "priced_firm_balance_sheet", False):
+        firm_sheets = [firm_balance_sheet(econ, firm) for firm in firms]
+        rec.update({
+            "priced_firm_balance_sheet_enabled": 1.0,
+            "firm_replacement_cost_capital_value": float(np.sum([
+                sheet.capital_value for sheet in firm_sheets
+            ])),
+            "firm_priced_inventory_value": float(np.sum([
+                sheet.inventory_value for sheet in firm_sheets
+            ])),
+            "firm_gross_assets_priced": float(np.sum([
+                sheet.gross_assets for sheet in firm_sheets
+            ])),
+            "firm_book_equity_priced": float(np.sum([
+                sheet.book_equity for sheet in firm_sheets
+            ])),
+            "firm_eligible_collateral_value": float(np.sum([
+                sheet.eligible_collateral_value for sheet in firm_sheets
+            ])),
+            "firm_borrowing_base_proxy": float(np.sum([
+                sheet.borrowing_base_proxy for sheet in firm_sheets
+            ])),
+            "firm_borrowing_base_headroom": float(np.sum([
+                sheet.borrowing_base_headroom for sheet in firm_sheets
+            ])),
+        })
 
     # ----------------------------------------------------------------------
     # v2 block (DESIGNDOC §10). Appended only when a capital sector exists, so
@@ -832,10 +1019,18 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         household_debt = [led.debt(h.id) for h in households]
         total_household_debt = float(np.sum(household_debt))
         new_firm_loans = float(getattr(econ, "_new_loans", 0.0))
-        new_household_loans = float(getattr(econ, "_hh_credit_new", 0.0)) + float(getattr(econ, "_hh_margin_new", 0.0))
+        mortgage_originated = float(
+            getattr(getattr(econ, "mortgage_book", None), "originated_tick", 0.0)
+        )
+        new_household_loans = (
+            float(getattr(econ, "_hh_credit_new", 0.0))
+            + float(getattr(econ, "_hh_margin_new", 0.0))
+            + mortgage_originated
+        )
         total_interest = float(getattr(econ, "_interest_paid", 0.0)) + float(getattr(econ, "_hh_interest", 0.0))
         total_principal = (
             float(getattr(econ, "_principal_repaid", 0.0))
+            + float(getattr(econ, "_hh_principal", 0.0))
             + float(getattr(econ, "_hh_margin_repaid", 0.0))
         )
         rec.update({
@@ -862,7 +1057,95 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "credit_investment_share": _safe_ratio(float(getattr(econ, "_credit_investment", 0.0)), new_firm_loans),
             "total_interest_paid": total_interest,
             "total_principal_repaid": total_principal,
+            "bank_loan_interest_income": float(np.sum([b.loan_interest for b in econ.banks])),
+            "bank_bond_coupon_income": float(np.sum([b.bond_coupon for b in econ.banks])),
+            "bank_interbank_interest_income": float(
+                np.sum([b.interbank_interest_income for b in econ.banks])
+            ),
+            "bank_interbank_interest_expense": float(
+                np.sum([b.interbank_interest_expense for b in econ.banks])
+            ),
+            "bank_external_interest_expense": float(
+                np.sum([b.external_interest_expense for b in econ.banks])
+            ),
+            "bank_realized_credit_losses": float(
+                np.sum([b.realized_credit_losses for b in econ.banks])
+            ),
+            "bank_realized_profit": float(np.sum([b.profit for b in econ.banks])),
+            "bank_dividends_paid": float(np.sum([b.dividends_paid for b in econ.banks])),
         })
+        if getattr(econ.cfg, "monetary_direct_transmission", False):
+            rec.update({
+                "household_debt_service_reserved": float(
+                    getattr(econ, "_hh_debt_service_reserved", 0.0)
+                ),
+                "firm_credit_dscr_allowed": float(
+                    getattr(econ, "_firm_credit_dscr_allowed", 0.0)
+                ),
+                "firm_credit_dscr_shortfall": float(
+                    getattr(econ, "_firm_credit_dscr_shortfall", 0.0)
+                ),
+                "firm_credit_dscr_constrained": float(
+                    getattr(econ, "_firm_credit_dscr_constrained", 0.0)
+                ),
+            })
+        if getattr(econ.cfg, "household_interest_arrears", False):
+            opening = accrued = due = cash = extinguished = 0.0
+            closing = float(np.sum([
+                max(0.0, float(h.credit_interest_arrears)) for h in households
+            ]))
+            for household in households:
+                if household.credit_interest_journal_tick == econ.t:
+                    opening += max(0.0, float(household.credit_interest_arrears_opening))
+                    accrued += max(0.0, float(household.credit_interest_accrued))
+                    due += max(0.0, float(household.credit_interest_due))
+                    cash += max(0.0, float(household.credit_interest_cash_paid))
+                    extinguished += max(
+                        0.0,
+                        float(household.credit_interest_arrears_extinguished),
+                    )
+                else:
+                    # A mid-phase diagnostic snapshot still has a valid bridge:
+                    # no current flows means the persistent stock opens unchanged.
+                    opening += max(0.0, float(household.credit_interest_arrears))
+            rec.update({
+                "household_interest_arrears_opening": opening,
+                "household_interest_accrued": accrued,
+                "household_interest_due": due,
+                "household_interest_cash_paid": cash,
+                "household_interest_arrears_closing": closing,
+                "household_interest_arrears_extinguished": extinguished,
+                "household_interest_arrears_stock_flow_residual": (
+                    opening + accrued - cash - extinguished - closing
+                ),
+                "household_interest_cash_counter_residual": (
+                    cash - float(getattr(econ, "_hh_interest", 0.0))
+                ),
+                "household_contractual_debt_service_due": float(
+                    getattr(econ, "_hh_contractual_debt_service_due", 0.0)
+                ),
+                "household_interest_arrears_in_goods_reservation": float(
+                    getattr(econ, "_hh_interest_arrears_in_goods_reservation", 0.0)
+                ),
+                "household_debt_service_reserved": float(
+                    getattr(econ, "_hh_debt_service_reserved", 0.0)
+                ),
+            })
+        if getattr(econ.cfg, "priced_firm_balance_sheet", False):
+            rec.update({
+                "firm_credit_borrowing_base_proxy": float(
+                    getattr(econ, "_firm_credit_borrowing_base_proxy", 0.0)
+                ),
+                "firm_credit_borrowing_base_headroom": float(
+                    getattr(econ, "_firm_credit_borrowing_base_headroom", 0.0)
+                ),
+                "firm_credit_borrowing_base_shortfall": float(
+                    getattr(econ, "_firm_credit_borrowing_base_shortfall", 0.0)
+                ),
+                "firm_credit_borrowing_base_constrained": float(
+                    getattr(econ, "_firm_credit_borrowing_base_constrained", 0.0)
+                ),
+            })
 
     # ----------------------------------------------------------------------
     # v4 block (DESIGNDOC §13). Firm demographics. Appended when firm_dynamics on.
@@ -1142,16 +1425,88 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         tax_income = float(getattr(econ, "_tax_income", 0.0))
         tax_consumption = float(getattr(econ, "_tax_consumption", 0.0))
         tax_wealth = float(getattr(econ, "_tax_wealth", 0.0))
-        tax_total = tax_profit + tax_income + tax_consumption + tax_wealth
+        tax_energy = float(getattr(econ, "_tax_energy", 0.0))
+        tax_energy_windfall = float(getattr(econ, "_tax_energy_windfall", 0.0))
+        tax_property = float(getattr(econ, "_property_tax_paid", 0.0))
+        tax_transfer = float(getattr(econ, "_transfer_tax_paid", 0.0))
+        tax_tariff = float(getattr(econ, "_tariff_revenue_external", 0.0))
+        tax_remittance = float(
+            getattr(econ, "_remittance_tax_revenue_external", 0.0)
+        )
+        tax_outward_remittance = float(
+            getattr(econ, "_outward_remittance_tax_revenue", 0.0)
+        )
+        export_policy_flow = float(
+            getattr(econ, "_export_subsidy_cost_external", 0.0)
+        )
+        tax_export = max(0.0, -export_policy_flow)
+        tax_total = (
+            tax_profit
+            + tax_income
+            + tax_consumption
+            + tax_wealth
+            + tax_energy
+            + tax_energy_windfall
+            + tax_property
+            + tax_transfer
+            + tax_tariff
+            + tax_remittance
+            + tax_outward_remittance
+            + tax_export
+        )
+        soe_dividends = float(getattr(econ, "_soe_dividends", 0.0))
+        fiscal_land_fee_revenue = float(
+            getattr(econ, "_land_fee_paid_tick", 0.0)
+        )
+        fiscal_escheat_revenue = float(getattr(econ, "_escheat_flow", 0.0))
+        fiscal_spr_sale_revenue = float(
+            getattr(econ, "_spr_sale_revenue", 0.0)
+        )
+        fiscal_non_tax_revenue = (
+            soe_dividends
+            + fiscal_land_fee_revenue
+            + fiscal_escheat_revenue
+            + fiscal_spr_sale_revenue
+        )
+        fiscal_revenue_total = tax_total + fiscal_non_tax_revenue
         benefit_paid = float(getattr(econ, "_benefit_paid", 0.0))
         gov_consumption = float(getattr(econ, "_gov_consumption", 0.0))
         jg_spending = float(getattr(econ, "_jg_spending", 0.0))    # v9.3 job-guarantee wage bill
         public_investment = float(getattr(econ, "_public_investment", 0.0))
         gov_interest_bill = float(getattr(econ, "_gov_interest_bill", 0.0))
+        energy_subsidy = float(getattr(econ, "_energy_subsidy_paid", 0.0))
+        energy_cap_compensation = float(getattr(econ, "_energy_cap_comp", 0.0))
+        export_subsidy = max(0.0, export_policy_flow)
+        external_interest = float(getattr(econ, "_external_interest_fiscal", 0.0))
+        bank_resolution_fund_paid = float(
+            getattr(econ, "_bank_resolution_fund_paid", 0.0)
+        )
+        fiscal_spr_purchase_paid = float(
+            getattr(econ, "_spr_purchase_paid", 0.0)
+        )
         spend_total = benefit_paid + gov_consumption + jg_spending
-        augmented_spending = spend_total + public_investment + gov_interest_bill
-        deficit = spend_total - tax_total                          # >0 = deficit (net outside-money injection)
-        cash_deficit = augmented_spending - tax_total
+        augmented_spending = (
+            spend_total
+            + public_investment
+            + gov_interest_bill
+            + energy_subsidy
+            + energy_cap_compensation
+            + export_subsidy
+            + external_interest
+            + bank_resolution_fund_paid
+            + fiscal_spr_purchase_paid
+        )
+        deficit = spend_total - fiscal_revenue_total               # >0 = deficit (net outside-money injection)
+        cash_deficit = augmented_spending - fiscal_revenue_total
+        fiscal_opening = float(getattr(
+            econ,
+            "_fiscal_opening_balance",
+            econ.ledger.balance(econ._fiscal),
+        ))
+        treasury_account_net_outflow = fiscal_opening - econ.ledger.balance(econ._fiscal)
+        treasury_implied_financing_and_unclassified_inflow = (
+            cash_deficit - treasury_account_net_outflow
+        )
         # v12: gov_debt = the government's total net liability. With bonds OFF this is exactly −TSY deposit balance
         # (bit-identical). With bonds ON: |TSY deposit-debt| + bonds outstanding + CB claim on TSY − TGA (the TSY's
         # cash; ⚠ D_TSY and TGA are the same cash from two sides, so TGA is SUBTRACTED, never double-added).
@@ -1165,13 +1520,46 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         rec.update({
             "tax_profit": tax_profit, "tax_income": tax_income,
             "tax_consumption": tax_consumption, "tax_wealth": tax_wealth,
-            "tax_total": tax_total, "benefit_paid": benefit_paid, "gov_consumption": gov_consumption,
+            "tax_energy": tax_energy,
+            "tax_energy_windfall": tax_energy_windfall,
+            "tax_property": tax_property,
+            "tax_transfer": tax_transfer,
+            "tax_tariff": tax_tariff,
+            "tax_remittance": tax_remittance,
+            "tax_outward_remittance": tax_outward_remittance,
+            "tax_export": tax_export,
+            "tax_total": tax_total,
+            "fiscal_soe_dividends": soe_dividends,
+            "fiscal_land_fee_revenue": fiscal_land_fee_revenue,
+            "fiscal_escheat_revenue": fiscal_escheat_revenue,
+            "fiscal_spr_sale_revenue": fiscal_spr_sale_revenue,
+            "fiscal_non_tax_revenue": fiscal_non_tax_revenue,
+            "fiscal_revenue_total": fiscal_revenue_total,
+            "benefit_paid": benefit_paid, "gov_consumption": gov_consumption,
             "jg_spending": jg_spending, "jg_employment": jg_emp, "jg_employment_rate": jg_emp_rate,
             "effective_unemployment": max(0.0, rec["unemployment_rate"] - jg_emp_rate),
             "gov_spending": spend_total, "gov_deficit": deficit, "gov_debt": gov_debt,
+            "fiscal_uses_national_accounts_gdp": float(
+                bool(getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False))
+            ),
+            "fiscal_output_lag": float(getattr(
+                econ,
+                "_prev_fiscal_output",
+                getattr(econ, "_prev_nominal_output", 0.0),
+            )),
             "augmented_gov_spending": augmented_spending,
+            "bank_resolution_fund_paid": bank_resolution_fund_paid,
+            "fiscal_spr_purchase_paid": fiscal_spr_purchase_paid,
             "cash_deficit": cash_deficit,
-            "gov_deficit_to_revenue": (deficit / tax_total) if tax_total > 1e-9 else 0.0,
+            "fiscal_external_interest_paid": external_interest,
+            "fiscal_export_subsidy_paid": export_subsidy,
+            "treasury_account_net_outflow": treasury_account_net_outflow,
+            "treasury_implied_financing_and_unclassified_inflow": (
+                treasury_implied_financing_and_unclassified_inflow
+            ),
+            "gov_deficit_to_revenue": (
+                deficit / fiscal_revenue_total
+            ) if fiscal_revenue_total > 1e-9 else 0.0,
             "gov_deficit_to_gdp": (deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
             "cash_deficit_to_gdp": (cash_deficit / nominal_output) if nominal_output > 1e-9 else 0.0,
             "gov_debt_to_gdp": (gov_debt / (365.0 * nominal_output)) if nominal_output > 1e-9 else 0.0,  # vs ANNUAL GDP
@@ -1184,10 +1572,6 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 (h.labor_sold + h.jg_labor) <= 1e-9 for h in live_households
             ])) if live_households and benefit_paid > 0.0 else 0.0,
         })
-        econ._prev_tax_total = tax_total          # fed to next tick's deficit-targeting rule
-        econ._prev_benefit = benefit_paid
-        econ._prev_nominal_output = nominal_output
-        econ._prev_u = rec.get("unemployment_rate", 0.0)   # for the state-dependent (countercyclical) deficit
     # v9.1/v9.3 public capital: government investment AND job-guarantee public works build the stock.
     if getattr(econ.cfg, "gov_investment_share", 0.0) > 0.0 or getattr(econ.policy, "job_guarantee", False):
         priv_k = sum(f.capital for f in econ.c_firms)
@@ -1219,6 +1603,10 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         cb_bond_market = float(sum(bond_mv_by_holder.get("CB", ())))
         rec.update({
             "policy_rate": rate,
+            "cb_uses_fixed_basket_cpi": float(
+                bool(getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False))
+            ),
+            "cb_inflation_lag_input": float(getattr(econ, "_prev_inflation", 0.0)),
             "inflation_ema": infl_ema,
             "real_rate": rate - infl_ema,        # ex-ante real policy rate (Taylor principle => rises with π)
             "inflation_target": float(pol.inflation_target),
@@ -1233,6 +1621,27 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "cb_balance_sheet_liabilities": rec.get("cb_reserves", 0.0) + float(getattr(econ, "_tga", 0.0)),
         })
         rec["cb_net_position"] = rec["cb_balance_sheet_assets"] - rec["cb_balance_sheet_liabilities"]
+    # Optional common bank-capital envelope.  Report live ledger exposure rather
+    # than the intra-credit cache so principal service and write-offs later in the
+    # tick are reflected without mutating model state during observation.
+    if getattr(econ.cfg, "unified_bank_rwa", False) and getattr(econ, "banks", None):
+        alive_banks = [bank for bank in econ.banks if bank.alive]
+        exposures = [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
+        capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank)) for bank in alive_banks]
+        ratio = max(1e-12, float(econ.cfg.mortgage_min_capital_ratio))
+        limits = [capital / ratio for capital in capitals]
+        headrooms = [limit - exposure for limit, exposure in zip(limits, exposures)]
+        capital_ratios = [
+            capital / exposure if exposure > 1e-12 else float("inf")
+            for capital, exposure in zip(capitals, exposures)
+        ]
+        finite_ratios = [value for value in capital_ratios if math.isfinite(value)]
+        rec.update({
+            "bank_rwa_total": float(sum(exposures)),
+            "bank_rwa_limit_total": float(sum(limits)),
+            "bank_rwa_headroom_min": float(min(headrooms)) if headrooms else 0.0,
+            "bank_rwa_capital_ratio_min": float(min(finite_ratios)) if finite_ratios else 0.0,
+        })
     # v11 multi-bank: capital, leverage, failures, bank-size concentration (only with >1 bank)
     if getattr(econ, "banks", None) and len(econ.banks) > 1:
         caps = [econ.ledger.balance(b.id) for b in econ.banks]
@@ -1262,7 +1671,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "bank_loanbook_hhi": hhi,
             "bank_rate_spread_sd": float(wvar ** 0.5),
         })
-        econ_caps = [bank_economic_capital(econ, b) for b in econ.banks if b.alive]
+        econ_caps = [_bank_economic_capital_snapshot(econ, b) for b in econ.banks if b.alive]
         rec.update({
             "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
             "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
@@ -1353,7 +1762,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             market_total,
         )
         alive_banks = [b for b in econ.banks if b.alive]
-        econ_caps = [bank_economic_capital(econ, b) for b in alive_banks]
+        econ_caps = [_bank_economic_capital_snapshot(econ, b) for b in alive_banks]
         rec.update({
             "bonds_outstanding": float(getattr(econ, "_bonds_outstanding", 0.0)),   # = Σ face
             "bond_book_total": book_total,
@@ -1502,7 +1911,6 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                        + float(getattr(econ, "_spr_stock", 0.0)))   # v17.3: the SPR is a stock too
         prev_stock = getattr(econ, "_energy_prev_stock_total", None)
         flow_gap = (e_produced - e_used - hh_units - (stock_total - prev_stock)) if prev_stock is not None else 0.0
-        econ._energy_prev_stock_total = stock_total
         # AGGREGATE coverage (stock over sector expected use): per-firm ratios explode
         # when a shell's d^e -> 0 while it still holds stock (the v13 active-seller
         # hygiene lesson); the aggregate is the stable gauge, the min reads ACTIVE firms.
@@ -1557,7 +1965,6 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                         if (total_sales_u + hh_units) > 1e-12 else price_index)
             prev_h = getattr(econ, "_prev_headline_index", None)
             headline_infl = (headline / prev_h - 1.0) if (prev_h and prev_h > 1e-12) else 0.0
-            econ._prev_headline_index = headline
             shares = [h.energy_spent / (h.energy_spent + h.spent)
                       for h in households if (h.energy_spent + h.spent) > 1e-12]
             n_q = max(1, len(households) // 5)
@@ -1577,24 +1984,167 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 "energy_share_q1": q1,                           # poorest deposit quintile
                 "energy_share_q5": q5,                           # richest deposit quintile
             })
-    # v17.1: once households buy energy, the CB reads HEADLINE inflation by default;
-    # `cb_core_inflation` reverts its input to the c-goods core index (the "which index
-    # through a supply shock" experiment). Off (or no household energy) => unchanged.
-    _cb_infl = inflation
-    if (getattr(econ.cfg, "energy_household", False)
-            and not getattr(econ.cfg, "cb_core_inflation", False)):
-        _cb_infl = rec.get("headline_inflation", inflation)
-    if getattr(econ.cfg, "cb_log_inflation", False):
-        # v13: feed the Taylor EMA the LOG price change (ln(P/P_prev) = log1p(inflation)). The
-        # arithmetic per-tick change has a Jensen bias under index noise (the sick 10k run's EMA
-        # read ~7x the true trend), so the CB chased noise. The `inflation` column is unchanged.
-        econ._prev_inflation = math.log1p(_cb_infl) if _cb_infl > -1.0 else 0.0
-    else:
-        econ._prev_inflation = _cb_infl      # v10: last tick's realised inflation feeds the Taylor EMA
-    econ._prev_real_output = total_produced
-    econ._prev_avg_wage = avg_wage
-    econ._price_level = price_index          # v9.2: fed to the price-indexed startup endowment
+    if getattr(econ.cfg, "national_accounts_metrics", False):
+        from macro_sim.reporting.national_accounts import preview as preview_national_accounts
+
+        rec.update(preview_national_accounts(econ))
+
+        # Canonical stock/flow ratios for empirical diagnostics.  The historical
+        # ``*_to_gdp`` fields above intentionally remain untouched: the optional
+        # national-accounts layer is observation-only and promises not to replace
+        # legacy dashboard sensors.  Those old fields divide by the C-sector
+        # ``nominal_output`` compatibility proxy; in particular, ``credit_to_gdp``
+        # divides a stock by one model-day of output and therefore has units of
+        # days.  These explicitly named fields instead use economy-wide value added
+        # and annualise the denominator whenever the numerator is a stock.
+        nominal_gdp = float(rec.get("nominal_gdp", 0.0))
+        annual_nominal_gdp = 365.0 * nominal_gdp
+        prior_nominal_gdp = list(getattr(econ, "_nominal_gdp_history", ()))
+        trailing_nominal_gdp = sum(prior_nominal_gdp[-364:]) + nominal_gdp
+        trailing_gdp_observed = len(prior_nominal_gdp) >= 364
+        best_annual_gdp = (
+            trailing_nominal_gdp if trailing_gdp_observed else annual_nominal_gdp
+        )
+        rec.update({
+            # Explicitly label the short-run run-rate proxy retained for backward
+            # compatibility.  A stock/annual-flow ratio becomes genuinely trailing
+            # only after 365 accepted daily observations.
+            "nominal_gdp_annualized_daily_run_rate": annual_nominal_gdp,
+            "nominal_gdp_trailing_365d": trailing_nominal_gdp,
+            "nominal_gdp_trailing_365d_observed": float(trailing_gdp_observed),
+            "credit_to_annualized_daily_gdp": _safe_ratio(
+                float(rec.get("total_credit", 0.0)), annual_nominal_gdp
+            ),
+            "credit_to_annual_gdp": _safe_ratio(
+                float(rec.get("total_credit", 0.0)), annual_nominal_gdp
+            ),
+            "credit_to_trailing_365d_gdp": (
+                _safe_ratio(float(rec.get("total_credit", 0.0)), trailing_nominal_gdp)
+                if trailing_gdp_observed else 0.0
+            ),
+            "credit_to_best_available_annual_gdp": _safe_ratio(
+                float(rec.get("total_credit", 0.0)), best_annual_gdp
+            ),
+            "annual_gdp_ratio_uses_trailing_observations": float(
+                trailing_gdp_observed
+            ),
+            "debt_service_to_nominal_gdp": _safe_ratio(
+                float(rec.get("interest_paid", 0.0))
+                + float(rec.get("principal_repaid", 0.0)),
+                nominal_gdp,
+            ),
+            "total_debt_service_to_nominal_gdp": _safe_ratio(
+                float(rec.get("total_interest_paid", rec.get("interest_paid", 0.0)))
+                + float(rec.get("total_principal_repaid", rec.get("principal_repaid", 0.0))),
+                nominal_gdp,
+            ),
+        })
+        if getattr(econ.cfg, "government", False):
+            rec.update({
+                "gov_deficit_to_nominal_gdp": _safe_ratio(
+                    float(rec.get("gov_deficit", 0.0)), nominal_gdp
+                ),
+                "cash_deficit_to_nominal_gdp": _safe_ratio(
+                    float(rec.get("cash_deficit", 0.0)), nominal_gdp
+                ),
+                "gov_debt_to_annual_gdp": _safe_ratio(
+                    float(rec.get("gov_debt", 0.0)), annual_nominal_gdp
+                ),
+                "gov_debt_to_trailing_365d_gdp": (
+                    _safe_ratio(float(rec.get("gov_debt", 0.0)), trailing_nominal_gdp)
+                    if trailing_gdp_observed else 0.0
+                ),
+                "gov_debt_to_best_available_annual_gdp": _safe_ratio(
+                    float(rec.get("gov_debt", 0.0)), best_annual_gdp
+                ),
+                "gov_spending_share_of_nominal_gdp": _safe_ratio(
+                    float(rec.get("gov_spending", 0.0)), nominal_gdp
+                ),
+                "augmented_gov_spending_share_of_nominal_gdp": _safe_ratio(
+                    float(rec.get("augmented_gov_spending", 0.0)), nominal_gdp
+                ),
+            })
     return rec
+
+
+def commit_tick_metrics(econ, rec: Dict[str, float]) -> None:
+    """Advance metric-derived cross-tick state exactly once.
+
+    ``compute_tick_metrics`` is intentionally safe for dashboards, diagnostics, and
+    tests to call repeatedly.  The simulation kernel calls this function only after it
+    has accepted the tick snapshot, preserving the historical one-transition-per-tick
+    behavior without hiding behavioral state changes inside reporting.
+    """
+    from collections import deque
+
+    price_index = float(rec.get("price_index", 0.0))
+    econ._prev_price_index = price_index
+    hist = getattr(econ, "_price_index_history", None)
+    if hist is None:
+        hist = deque(maxlen=365)
+        econ._price_index_history = hist
+    hist.append(price_index)
+
+    if (
+        getattr(econ.cfg, "national_accounts_metrics", False)
+        and "nominal_gdp" in rec
+    ):
+        gdp_hist = getattr(econ, "_nominal_gdp_history", None)
+        if gdp_hist is None:
+            gdp_hist = deque(maxlen=365)
+            econ._nominal_gdp_history = gdp_hist
+        gdp_hist.append(float(rec["nominal_gdp"]))
+
+    if getattr(econ.cfg, "consumption_strata", False):
+        if "necessity_price_index" in rec:
+            econ._cpi_prev_nec = float(rec["necessity_price_index"])
+        if "luxury_price_index" in rec:
+            econ._cpi_prev_lux = float(rec["luxury_price_index"])
+
+    dep = getattr(econ, "deprivation_signal", None)
+    if dep is not None and getattr(econ, "demographic_state", None) is not None:
+        dep_year, dep_persons = _deprivation_person_observations(econ)
+        dep.observe(year=dep_year, price_index=price_index, persons=dep_persons)
+
+    if getattr(econ.cfg, "government", False):
+        econ._prev_tax_total = float(rec.get(
+            "fiscal_revenue_total", rec.get("tax_total", 0.0)
+        ))
+        econ._prev_benefit = float(rec.get("benefit_paid", 0.0))
+        econ._prev_nominal_output = float(rec.get("nominal_output", 0.0))
+        econ._prev_fiscal_output = float(rec.get(
+            "nominal_gdp" if getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False)
+            else "nominal_output",
+            0.0,
+        ))
+        econ._prev_u = float(rec.get("unemployment_rate", 0.0))
+
+    if getattr(econ.cfg, "energy_enabled", False) and "energy_stock_total" in rec:
+        econ._energy_prev_stock_total = float(rec["energy_stock_total"])
+    if getattr(econ.cfg, "energy_household", False) and "cpi_headline" in rec:
+        econ._prev_headline_index = float(rec["cpi_headline"])
+
+    if getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False):
+        cb_inflation = float(rec.get("cpi_fixed_basket_inflation", 0.0))
+    else:
+        cb_inflation = float(rec.get("inflation", 0.0))
+    if (not getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False)
+            and getattr(econ.cfg, "energy_household", False)
+            and not getattr(econ.cfg, "cb_core_inflation", False)):
+        cb_inflation = float(rec.get("headline_inflation", cb_inflation))
+    if getattr(econ.cfg, "cb_log_inflation", False):
+        # Feed Taylor's EMA the log price change; the exported inflation field remains
+        # the arithmetic change, exactly as before this state transition was separated.
+        econ._prev_inflation = math.log1p(cb_inflation) if cb_inflation > -1.0 else 0.0
+    else:
+        econ._prev_inflation = cb_inflation
+    econ._prev_real_output = float(rec.get("real_output", 0.0))
+    econ._prev_avg_wage = float(rec.get("avg_wage", 0.0))
+    econ._price_level = price_index
+    if getattr(econ.cfg, "national_accounts_metrics", False):
+        from macro_sim.reporting.national_accounts import commit as commit_national_accounts
+
+        commit_national_accounts(econ, rec)
 
 
 # ---------------------------------------------------------------------------

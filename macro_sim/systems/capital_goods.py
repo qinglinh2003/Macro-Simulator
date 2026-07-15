@@ -51,7 +51,11 @@ def run_capital_goods_phase(econ: Any) -> None:
 
     # v9.1 government investment: buy remaining K-goods cheapest-first, building public capital.
     if cfg.government and cfg.gov_investment_share > 0.0:
-        budget = cfg.gov_investment_share * getattr(econ, "_prev_nominal_output", 0.0)
+        budget = cfg.gov_investment_share * getattr(
+            econ,
+            "_prev_fiscal_output",
+            getattr(econ, "_prev_nominal_output", 0.0),
+        )
         led, b = econ.ledger, budget
         for kf in sorted((k for k in econ.k_firms if k.inventory > EPS and k.price > EPS),
                          key=lambda k: k.price):

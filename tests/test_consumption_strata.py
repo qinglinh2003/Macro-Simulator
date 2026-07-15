@@ -27,6 +27,7 @@ import numpy as np                                       # noqa: E402
 
 from macro_sim.config import Config                      # noqa: E402
 from macro_sim.economy import Economy                    # noqa: E402
+from macro_sim.reporting.metrics import compute_tick_metrics  # noqa: E402
 
 
 def _world(**extra) -> Config:
@@ -84,6 +85,25 @@ def test_sector_entry_bounded():
     l_counts = [r["n_firms_luxury"] for r in active]
     assert min(n_counts) >= 1 and min(l_counts) >= 1, "a sub-sector collapsed to zero"
     assert max(n_counts) < 200 and max(l_counts) < 200, "a sub-sector exploded"
+
+
+def test_sector_extinction_keeps_a_stable_reporting_schema():
+    """A real zero-firm sector remains observable instead of deleting its columns."""
+    econ = Economy(_world(consumption_strata=True, n_ticks=1))
+    first = econ.step()
+    sector_keys = {
+        key for key in first
+        if key.startswith(("necessity_", "luxury_", "cpi_bottomq", "cpi_topq"))
+    }
+
+    econ.n_firms = []
+    econ.c_firms = list(econ.l_firms)
+    after_extinction = compute_tick_metrics(econ)
+
+    assert sector_keys <= set(after_extinction)
+    assert after_extinction["n_firms_necessity"] == 0.0
+    assert after_extinction["necessity_price_index"] == first["necessity_price_index"]
+    assert all(np.isfinite(after_extinction[key]) for key in sector_keys)
 
 
 if __name__ == "__main__":

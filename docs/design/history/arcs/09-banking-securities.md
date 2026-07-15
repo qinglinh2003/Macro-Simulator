@@ -105,12 +105,13 @@ arc, §35.4).
   so the layer isolates the *sorting/competition* mechanism rather than shifting the rate level (§0-ii).
 - **The rate a borrower pays** = `max(0, policy_rate + spread_of_its_bank)` (`_loan_rate_for`), wired into firm
   and household debt service. Competition off ⇒ the plain policy rate ⇒ **bit-identical**.
-- **Borrower shopping** (`_shop_bank`, in `_grant_loan`): when a borrower seeks new credit it samples
-  `bank_search_m` rivals (search friction — imperfect information) and switches its **whole relationship** to
-  the cheapest one **that has leverage capacity to fund it** (existing debt + the new loan ≤ κ·capital). The
-  incumbent is always eligible. The switch moves the borrower's existing debt between loan books (same primitive
-  as failure-migration, A5-neutral). So **cheap, well-capitalized banks win share** — but a cheap bank fills its
-  capacity and spills the marginal borrower to the next-cheapest, so it grows without becoming a trivial monopoly.
+- **Borrower shopping** (`shop_bank`, in `grant_loan`): a **debt-free** borrower seeking its first
+  origination samples `bank_search_m` rivals (search friction — imperfect information) and chooses the cheapest
+  bank with capacity; the assigned incumbent remains eligible. Once ordinary debt or a mortgage balance exists,
+  every top-up remains with that creditor. The earlier implementation moved the borrower's entire relationship
+  map and existing debt between loan books without a payoff, refinance, loan sale, or reserve/cash consideration;
+  the v23 integration patch removes that false asset transfer. Cheap, well-capitalized banks can still win new
+  borrowers, but existing credit stocks are sticky until a real refinancing/secondary-loan rail is modeled.
 
 `Config.v113()` = v11.2 + `bank_rate_competition=True`, `bank_spread_disp=0.003` (~⅓ of the policy rate, anchored
 to real cross-bank loan-rate dispersion), `bank_search_m=2`. Off (or `n_banks=1`) ⇒ v11.2 bit-identical.
@@ -143,6 +144,11 @@ loan-book HHI rises above the 1/n floor. New metrics `bank_loanbook_hhi`, `bank_
 levers `bank_rate_competition`, `bank_spread_disp`, `bank_search_m`. Full **27-suite regression green**; A5 holds.
 **Deferred (still, §35.4):** the deposit-partitioning + reserve tier that unlocks **interbank lending (拆借),
 bank runs, and deposit-side competition** — the next big banking-realism step.
+
+**v23 correction.** The historical concentration estimates above were produced by the earlier
+whole-relationship-switch implementation. They remain historical evidence, not a calibrated result for the
+first-origination-only rule. The current rule has separate regression coverage for debt-free shopping and for
+the invariant that an indebted borrower cannot change creditor through a top-up.
 
 ## §37 v11.4 — the RESERVE tier + intra-tick RTGS + interbank market: correct, and a diagnosis of why it's latent
 
@@ -439,3 +445,64 @@ layer** (an endogenous natural rate ⇒ T4).
 
 ---
 
+## §40 v23 integration patches — creditor ownership, common RWA, and external settlement
+
+The v23 review found several places where an aggregate scalar was correct in isolation but
+attached to the wrong institution when subsystems met. The patch set keeps historical paths
+default-off where behavior changes, while making the diagnostic frontier exercise the corrected
+composition.
+
+### 40.1 A loan stock cannot change owner through a relationship-map write
+
+With `bank_relationship_lock_in=True`, loan-rate competition still lets a debt-free borrower
+compare the assigned incumbent with a search sample before the **first** origination. Once ledger debt or a mortgage balance exists,
+the relationship is sticky: a top-up is funded by the current creditor. This is a deliberate
+contract boundary. Moving the whole outstanding scalar between `_loan_book` entries without a
+payoff, refinance, loan sale, or consideration/reserve leg was not competition; it was an
+unbooked asset transfer. A future refinancing layer must create the new creditor's asset, settle
+the old claim, preserve borrower contract terms, and route the cash/reserve legs explicitly.
+
+Mortgage principal remains a shadow composition inside the borrower's aggregate ledger debt.
+Ordinary principal repayment now reduces that shadow pro rata in the normal path so secured and
+unsecured RWA do not drift merely because a later consumer loan reused the same scalar. This is a
+bridge, not a substitute for typed contracts.
+
+### 40.2 One bank risk budget and a realized income statement
+
+With `unified_bank_rwa`, ordinary firm/consumer exposure receives a 100% risk weight and mortgage
+exposure receives `mortgage_risk_weight`; both consume one capital-based RWA limit. Gross leverage
+and large-exposure caps remain additional constraints. Bank profit closes realized loan interest,
+bond coupons, interbank interest income and expense, and realized credit losses before dividends.
+These corrections stop the mortgage book and credit-loss journal from living outside the bank
+whose capital they consume.
+
+This is still not a complete bank funding model. `interest_by_deposits` distributes payable
+profits according to deposit holdings; it is not contractual deposit interest posted by account
+and bank. There is therefore no deposit funding-cost curve, and the reported bank result must not
+be read as a fully specified net interest margin.
+
+### 40.3 The external sector is not the first commercial bank
+
+Cross-border factor-income service now uses the Treasury/central-bank account when government is
+present and an explicit, negative-capable `EXTISSUER` account otherwise. The aggregate NFA
+liability no longer lands on the first live commercial bank or its P&L. Separately, `FXDEALER`
+always resolves to the neutral `CLEARING` reserve node. A cached resolver therefore stays valid
+through bank failure, and changing bank list order cannot change the dealer's settlement
+counterparty.
+
+These two accounts are intentionally aggregate. They identify a conserving issuer and settlement
+node but do not say which households, firms, banks, or sovereign entities own each external asset
+or owe each liability. External principal still lacks instrument type, maturity, seniority,
+default, restructuring, and owner-level income allocation; the current World diagnostics should
+report that as an aggregate-external-ownership scope limit.
+
+### 40.4 Boundaries carried forward
+
+The banking/finance stack is materially more coherent, but four related layers remain future
+work: typed loan contracts and vintages (including fixed/floating repricing and refinancing),
+contractual deposit funding cost, collateral priority/liquidation/recovery, and inventory-cost
+lots that match COGS to sales. The priced inventory and borrowing-base proxy are decision and
+valuation inputs only; they do not yet create a recovery claim or turn current production cash
+cost into accrual inventory accounting.
+
+---

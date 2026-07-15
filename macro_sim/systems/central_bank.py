@@ -7,9 +7,48 @@ from typing import Any
 from macro_sim.markets.matching import EPS
 
 
+def assert_omo_balance_sheet(econ: Any, tol: float = 1.0e-8) -> None:
+    """Hard gate for the reserve-drain counterasset and CB liability."""
+    claims = getattr(econ, "_cb_omo_claims", {})
+    if any(value < -tol for value in claims.values()):
+        raise AssertionError(f"negative OMO claim: {claims!r}")
+    total = sum(max(0.0, float(value)) for value in claims.values())
+    absorbed = float(getattr(econ, "_cb_absorbed", 0.0))
+    scale = max(1.0, total, abs(absorbed))
+    if abs(total - absorbed) > tol * scale:
+        raise AssertionError(
+            f"OMO balance sheet does not close: bank claims={total}, "
+            f"CB liability={absorbed}"
+        )
+
+
+def _resolve_failed_bank_omo_claims(econ: Any, banks: list[Any]) -> None:
+    """Move a failed bank's risk-free CB claim with its resolved franchise."""
+    claims = econ._cb_omo_claims
+    alive_ids = {bank.id for bank in banks}
+    stranded = sum(
+        max(0.0, amount) for bank_id, amount in claims.items()
+        if bank_id not in alive_ids
+    )
+    if stranded <= EPS or not banks:
+        return
+    for bank_id in list(claims):
+        if bank_id not in alive_ids:
+            claims[bank_id] = 0.0
+    per = stranded / len(banks)
+    for bank in banks:
+        claims[bank.id] = claims.get(bank.id, 0.0) + per
+
+
 def set_policy_rate(econ: Any) -> None:
     cfg = econ.cfg.central_banking
     pol = econ.policy
+    # The inflation sensor is an observation state, not part of the Taylor-rule
+    # decision.  A temporary manual rate setting must not freeze it, otherwise an
+    # experimental rate shock also changes the information state and creates a
+    # second, hidden treatment when the override is released.
+    if cfg.central_bank:
+        econ._infl_ema += cfg.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
     if pol.policy_rate_override is not None:
         # the player hand-sets the rate (a manual hike/cut), bypassing the Taylor rule and the frozen fallback.
         econ._rate = min(cfg.r_max, max(0.0, pol.policy_rate_override))
@@ -17,7 +56,6 @@ def set_policy_rate(econ: Any) -> None:
     if not cfg.central_bank:
         econ._rate = cfg.r_interest
         return
-    econ._infl_ema += cfg.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
     u_prev = getattr(econ, "_prev_u", cfg.u_natural)
     r_target = (
         cfg.r_neutral
@@ -38,6 +76,13 @@ def run_omo_phase(econ: Any) -> None:
     banks = [b for b in econ.banks if b.alive]
     if not banks:
         return
+    claims = getattr(econ, "_cb_omo_claims", None)
+    if claims is None:
+        # Compatibility for narrow test doubles and old serialized states.
+        claims = econ._cb_omo_claims = {bank.id: 0.0 for bank in econ.banks}
+    for bank in econ.banks:
+        claims.setdefault(bank.id, 0.0)
+    _resolve_failed_bank_omo_claims(econ, banks)
     if getattr(cfg, "omo_index_deposits", False):
         # v13: index the reserve target to what the payment system actually needs -- the
         # genesis-anchored nominal target detaches as soon as the price level moves (the sick
@@ -53,15 +98,27 @@ def run_omo_phase(econ: Any) -> None:
         tot = sum(pos.values())
         if tot <= EPS:
             return
-        for bid, r in pos.items():
-            x = move * r / tot
+        drained = 0.0
+        for index, (bid, r) in enumerate(pos.items()):
+            x = move - drained if index == len(pos) - 1 else move * r / tot
+            x = min(x, max(0.0, econ.ledger.reserves(bid)))
             econ.ledger.retire_reserves(bid, x)
-            econ._cb_absorbed += x
-        econ._omo_flow = move
+            claims[bid] += x
+            drained += x
+        econ._cb_absorbed = sum(claims.values())
+        econ._omo_flow = drained
     elif move < -EPS and econ._cb_absorbed > EPS:
-        inject = min(-move, econ._cb_absorbed)
-        per = inject / len(banks)
-        for b in banks:
-            econ.ledger.issue_reserves(b.id, per)
-        econ._cb_absorbed -= inject
-        econ._omo_flow = -inject
+        holders = [(bank, max(0.0, claims.get(bank.id, 0.0))) for bank in banks]
+        outstanding = sum(amount for _bank, amount in holders)
+        inject = min(-move, outstanding)
+        redeemed = 0.0
+        positive = [(bank, amount) for bank, amount in holders if amount > EPS]
+        for index, (bank, amount) in enumerate(positive):
+            x = inject - redeemed if index == len(positive) - 1 else inject * amount / outstanding
+            x = min(x, claims[bank.id])
+            econ.ledger.issue_reserves(bank.id, x)
+            claims[bank.id] -= x
+            redeemed += x
+        econ._cb_absorbed = sum(claims.values())
+        econ._omo_flow = -redeemed
+    assert_omo_balance_sheet(econ)

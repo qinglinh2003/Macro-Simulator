@@ -30,6 +30,9 @@ def _wage(econ) -> float:
 def run_migration(world) -> None:
     econs = world.economies
     n = world.n
+    for econ in world.economies:
+        econ._outward_remittance_tax_revenue = 0.0
+        econ._remittance_tax_revenue_external = 0.0
     # The MIGRANT'S CALCULUS: what I would earn abroad, converted home at the exchange rate,
     # versus what I earn at home. Deliberately NOT wage/own-price-index: remittances raise the
     # ORIGIN's price level, which would depress its measured "real wage" and pull in yet more
@@ -89,8 +92,11 @@ def run_migration(world) -> None:
                     world._migrant_stock[i] *= scale
                 world._immigration_binding[h] = True
 
-    # 3. remittances (net of the remittance tax, a fiscal policy lever).
+    # 3. Remittance receipts and signed current-account transfers.  Household
+    # receipts are net of origin tax for the legacy distribution gauge; the CA uses
+    # the gross cross-border amount and records the host's equal debit.
     remit = [0.0] * n
+    current_transfers = [0.0] * n
     tax_rev = [0.0] * n
     for i in range(n):
         host = host_of[i]
@@ -98,9 +104,18 @@ def run_migration(world) -> None:
         if host < 0 or S <= EPS:
             continue
         remit_host = world.remittance_share * S * _wage(econs[host])   # migrant earnings sent home (curr_host)
-        remit[i], tax_rev[i] = _remit(world, host, i, remit_host)
+        net_origin, origin_tax, host_outflow, gross_origin = _remit(
+            world, host, i, remit_host,
+        )
+        remit[i] += net_origin
+        tax_rev[i] += origin_tax
+        current_transfers[host] -= host_outflow
+        current_transfers[i] += gross_origin
     world._remittances = remit
+    world._current_transfers = current_transfers
     world._remittance_tax_rev = tax_rev
+    for i, econ in enumerate(econs):
+        econ._remittance_tax_revenue_external = tax_rev[i]
 
 
 def _remit(world, host: int, origin: int, amount_host: float):
@@ -108,12 +123,14 @@ def _remit(world, host: int, origin: int, amount_host: float):
     from host households, convert at the rate, then — POLICY — the origin government levies a
     REMITTANCE TAX on the inflow (revenue to its fiscal account); the net reaches origin
     households. Routed through the dealer (net-zero passthrough). Returns (net_remittance,
-    tax_revenue) in curr_origin."""
+    tax_revenue, host outflow, gross origin inflow).  The latter pair is the signed
+    current-transfer bridge and is equal in numeraire at the transaction FX vector.
+    """
     if amount_host <= EPS:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0
     collected = _collect(world.economies[host], amount_host)
     if collected <= EPS:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0
     # POLICY: the HOST may tax OUTWARD remittances (e.g. the Gulf states) — levied before the
     # money leaves, revenue to the host's fiscus.
     he = world.economies[host]
@@ -122,6 +139,7 @@ def _remit(world, host: int, origin: int, amount_host: float):
         out_tax = world.outward_remittance_tax * collected
         if out_tax > EPS:
             he.ledger.transfer(DEALER_ID, h_fiscal, out_tax)   # host taxes the outflow
+            he._outward_remittance_tax_revenue += out_tax
             collected -= out_tax
     amount_origin = collected * world.rates.bilateral(origin, host)   # curr_host → curr_origin
     oe = world.economies[origin]
@@ -131,13 +149,18 @@ def _remit(world, host: int, origin: int, amount_host: float):
         tax = world.remittance_tax * amount_origin
         oe.ledger.transfer(DEALER_ID, fiscal, tax)                   # remittance tax → origin fiscal
     _distribute(oe, amount_origin - tax)                             # net to origin households
-    return amount_origin - tax, tax
+    return amount_origin - tax, tax, collected, amount_origin
 
 
 def _collect(econ, amount: float) -> float:
     """Take ``amount`` from households pro-rata by deposit (capped by cash) into the dealer."""
     led = econ.ledger
-    hh = econ.households
+    bridge = getattr(econ, "demographic_bridge", None)
+    hh = [
+        household
+        for household in econ.households
+        if bridge is None or bridge.household_has_living_members(household.id)
+    ]
     total = sum(led.balance(h.id) for h in hh)
     if total <= EPS:
         return 0.0
@@ -148,16 +171,34 @@ def _collect(econ, amount: float) -> float:
         take = min(bal, amount * bal / total)
         if take > EPS:
             led.transfer(h.id, DEALER_ID, take)
+            if bridge is not None:
+                bridge.post_household_cash_delta(
+                    h.id, -take, reason="outward_remittance",
+                )
             collected += take
     return collected
 
 
 def _distribute(econ, amount: float) -> None:
-    """Pay ``amount`` from the dealer to households, split equally (remittance receipts)."""
+    """Pay remittance receipts and post them to domestic income/claim books."""
     if amount <= EPS:
         return
     led = econ.ledger
-    hh = econ.households
+    bridge = getattr(econ, "demographic_bridge", None)
+    hh = [
+        household
+        for household in econ.households
+        if bridge is None or bridge.household_has_living_members(household.id)
+    ]
+    if not hh:
+        fiscal = getattr(econ, "_fiscal", None)
+        if fiscal is None or not led.has_account(fiscal):
+            raise AssertionError("remittance economy has no live or fiscal recipient")
+        led.transfer(DEALER_ID, fiscal, amount)
+        return
     per = amount / len(hh)
     for h in hh:
         led.transfer(DEALER_ID, h.id, per)
+        if bridge is not None:
+            bridge.post_transfer_income(h.id, per, reason="remittance")
+        h.income_realized += per

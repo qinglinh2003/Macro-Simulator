@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Any
 
-from macro_sim.domain.agents import Bank
+from macro_sim.domain.agents import Bank, InterbankClaim
 from macro_sim.markets.matching import EPS
 
 
@@ -68,8 +69,46 @@ def bank_for(econ: Any, account_id):
     return econ.banks[0]
 
 
+def reset_bank_realized_pnl(econ: Any) -> None:
+    """Open a tick's realized bank P&L journal before any cash flow occurs."""
+    if not getattr(econ.cfg.banking, "bank_realized_pnl", False):
+        return
+    for bank in econ.banks:
+        bank.interest_income = 0.0
+        bank.loan_interest = 0.0
+        bank.bond_coupon = 0.0
+        bank.interbank_interest_income = 0.0
+        bank.interbank_interest_expense = 0.0
+        bank.external_interest_expense = 0.0
+        bank.deposit_funding_cost = 0.0
+        bank.realized_credit_losses = 0.0
+        bank.dividends_paid = 0.0
+        bank.profit = 0.0
+
+
+def record_bank_credit_loss(econ: Any, bank_id: str, amount: float) -> None:
+    """Journal a ledger-backed loan write-off against its creditor bank."""
+    if amount <= 0.0:
+        return
+    banks = getattr(econ, "banks", None)
+    if not banks:
+        # The demographic bridge also supports ledger-only unit/standalone states
+        # with no Bank objects.  The ledger loss remains authoritative there, while
+        # a per-bank P&L journal cannot exist.
+        return
+    bank = next((candidate for candidate in banks if candidate.id == bank_id), None)
+    if bank is None:
+        raise AssertionError(f"credit loss references unknown bank {bank_id!r}")
+    bank.realized_credit_losses += amount
+
+
 def bank_constraint(econ: Any) -> bool:
     return econ.cfg.banking.bank_capital_constraint and len(econ.banks) > 1
+
+
+def unified_bank_rwa_enabled(econ: Any) -> bool:
+    """Whether new credit shares one bank-wide risk-weighted capital envelope."""
+    return bool(getattr(econ.cfg.banking, "unified_bank_rwa", False))
 
 
 def refresh_loan_books(econ: Any) -> None:
@@ -78,6 +117,16 @@ def refresh_loan_books(econ: Any) -> None:
         econ._loan_book[bank_for(econ, firm.id).id] += econ.ledger.debt(firm.id)
     for household in econ.households:
         econ._loan_book[bank_for(econ, household.id).id] += econ.ledger.debt(household.id)
+
+
+def _sync_mortgage_creditor(econ: Any, account_id: str, bank: Bank) -> None:
+    """Keep the secured shadow aligned when relationship lock-in owns migration."""
+    if not getattr(econ.cfg.banking, "bank_relationship_lock_in", False):
+        return
+    mortgage_book = getattr(econ, "mortgage_book", None)
+    mortgage = mortgage_book.loans.get(account_id) if mortgage_book is not None else None
+    if mortgage is not None:
+        mortgage.bank_id = bank.id
 
 
 def reserve_position(econ: Any, bank_id) -> float:
@@ -96,7 +145,17 @@ def reserve_position(econ: Any, bank_id) -> float:
             if bank_for(econ, a.id).id == bank_id
         )
     )
-    return cap + dep - loans
+    bank = next((candidate for candidate in econ.banks if candidate.id == bank_id), None)
+    interbank_assets = (
+        sum(position.principal for position in bank.interbank_assets.values())
+        if bank is not None else 0.0
+    )
+    interbank_liabilities = (
+        sum(position.principal for position in bank.interbank_liabilities.values())
+        if bank is not None else 0.0
+    )
+    # R + loans + interbank assets = capital + deposits + interbank liabilities.
+    return cap + dep + interbank_liabilities - loans - interbank_assets
 
 
 def rate_competition(econ: Any) -> bool:
@@ -122,17 +181,99 @@ def bank_economic_capital(econ: Any, bank: Bank) -> float:
     return cap
 
 
+def _bank_gross_loan_exposure(econ: Any, bank: Bank, *, use_cache: bool = True) -> float:
+    """Read gross principal from the intra-credit cache or live ledger."""
+    cached = getattr(econ, "_loan_book", None)
+    if use_cache and isinstance(cached, dict) and bank.id in cached:
+        return max(0.0, float(cached.get(bank.id, 0.0)))
+    return sum(
+        max(0.0, float(econ.ledger.debt(agent.id)))
+        for agent in list(econ.firms) + list(econ.households)
+        if bank_for(econ, agent.id).id == bank.id
+    )
+
+
+def bank_rwa_exposure(econ: Any, bank: Bank, *, use_cache: bool = True) -> float:
+    """Current bank RWA from ordinary credit and mortgages.
+
+    The ledger's loan book is the principal authority.  The mortgage book is a
+    collateralisation shadow over part of household ledger debt, so subtract that
+    secured slice once before applying its lower risk weight.  A direct scan is used
+    before the credit phase has opened ``_loan_book``; normal sequential grants use
+    the refreshed O(1) cache and update it at each mutation boundary.
+    """
+    gross_loans = _bank_gross_loan_exposure(econ, bank, use_cache=use_cache)
+    mortgage_book = getattr(econ, "mortgage_book", None)
+    secured = (
+        max(0.0, float(mortgage_book.bank_balance_total(bank.id)))
+        if mortgage_book is not None else 0.0
+    )
+    unsecured = max(0.0, gross_loans - secured)
+    risk_weight = max(0.0, float(econ.cfg.banking.mortgage_risk_weight))
+    return unsecured + risk_weight * secured
+
+
+def bank_rwa_capacity(
+    econ: Any,
+    bank: Bank,
+    *,
+    new_loan_risk_weight: float = 1.0,
+    min_capital_ratio: float | None = None,
+    use_cache: bool = True,
+) -> float:
+    """Principal headroom for one new loan inside the common RWA envelope."""
+    if bank is None or not bank.alive:
+        return 0.0
+    weight = max(0.0, float(new_loan_risk_weight))
+    ratio = float(
+        econ.cfg.banking.mortgage_min_capital_ratio
+        if min_capital_ratio is None else min_capital_ratio
+    )
+    # A zero risk weight would make principal capacity unbounded, while a missing
+    # capital ratio cannot define an envelope.  Config validation excludes both on
+    # normal runs; conservative zeros keep standalone/mocked states safe.
+    if weight <= EPS or ratio <= EPS:
+        return 0.0
+    capital = max(0.0, bank_economic_capital(econ, bank))
+    rwa_room = capital / ratio - bank_rwa_exposure(econ, bank, use_cache=use_cache)
+    return max(0.0, rwa_room / weight)
+
+
 def bank_capacity(econ: Any, bank: Bank) -> float:
     if not bank.alive:
         return 0.0
     capital = max(0.0, bank_economic_capital(econ, bank))
-    return bank.kappa_bank * capital - econ._loan_book.get(bank.id, 0.0)
+    # Preserve the historical gross-loan hard gate exactly when the unified
+    # envelope is off.  With both regimes active, the tighter incremental principal
+    # headroom wins; mortgages therefore consume RWA here without being treated as
+    # unsecured principal a second time.
+    if not unified_bank_rwa_enabled(econ):
+        return bank.kappa_bank * capital - econ._loan_book.get(bank.id, 0.0)
+    rwa_headroom = bank_rwa_capacity(econ, bank)
+    if not bank_constraint(econ):
+        return rwa_headroom
+    gross_headroom = bank.kappa_bank * capital - _bank_gross_loan_exposure(econ, bank)
+    return min(gross_headroom, rwa_headroom)
 
 
 def shop_bank(econ: Any, borrower_id, amount: float) -> None:
+    """Choose a relationship bank, optionally locking it after origination.
+
+    Moving an existing borrower would reattribute the ledger's entire debt stock
+    (including any mortgage shadow) without a loan sale, payoff, or refinance cash
+    flow between the two banks.  Until those contract/asset-transfer rails exist,
+    an incumbent relationship bank remains the creditor for every top-up.  A
+    debt-free borrower can still compare banks before the new loan is originated.
+    That safer behavior is opt-in so historical presets retain their trajectories.
+    """
     cfg = econ.cfg.banking
     cur = bank_for(econ, borrower_id)
     debt = econ.ledger.debt(borrower_id)
+    if getattr(cfg, "bank_relationship_lock_in", False):
+        mortgage_book = getattr(econ, "mortgage_book", None)
+        mortgage = mortgage_book.loans.get(borrower_id) if mortgage_book is not None else None
+        if debt > EPS or (mortgage is not None and mortgage.balance > EPS):
+            return
     need = debt + amount
     rate_of = lambda bank: max(0.0, econ._rate + econ._bank_spread.get(bank.id, 0.0))
     best, best_rate = cur, rate_of(cur)
@@ -154,19 +295,24 @@ def shop_bank(econ: Any, borrower_id, amount: float) -> None:
                 econ.ledger.balance(borrower_id) - econ.ledger.debt(borrower_id),
             )
         econ._bank_of[borrower_id] = best
+        _sync_mortgage_creditor(econ, borrower_id, best)
         econ._node_of.pop(borrower_id, None)
 
 
 def grant_loan(econ: Any, borrower_id, amount: float) -> float:
     cfg = econ.cfg.banking
-    if not bank_constraint(econ):
+    has_gross_gate = bank_constraint(econ)
+    has_rwa_gate = unified_bank_rwa_enabled(econ)
+    if not (has_gross_gate or has_rwa_gate):
         econ.ledger.create_loan(borrower_id, amount)
         return amount
+    if not isinstance(getattr(econ, "_loan_book", None), dict):
+        refresh_loan_books(econ)
     if rate_competition(econ):
         shop_bank(econ, borrower_id, amount)
     bank = bank_for(econ, borrower_id)
     headroom = bank_capacity(econ, bank)
-    if cfg.bank_exposure_limit > 0.0:
+    if has_gross_gate and cfg.bank_exposure_limit > 0.0:
         capital = max(0.0, bank_economic_capital(econ, bank))
         concentration_room = cfg.bank_exposure_limit * capital - econ.ledger.debt(borrower_id)
         headroom = min(headroom, concentration_room)
@@ -192,12 +338,13 @@ def setup_bank_equity(econ: Any) -> None:
         bank.earnings_ema = 0.0
 
 
-def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> None:
+def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> float:
     owners = bank.owners or {}
     total = sum(owners.values())
     if total <= 0.0:
-        return
+        return 0.0
     bridge = getattr(econ, "demographic_bridge", None)
+    paid = 0.0
     for household_id, shares in owners.items():
         household = econ._hh_by_id.get(household_id)
         if household is None:
@@ -210,6 +357,8 @@ def pay_bank_dividends(econ: Any, bank: Bank, payable: float) -> None:
             if bridge is not None:
                 bridge.post_capital_income(household.id, amount)
             household.income_realized += amount
+            paid += amount
+    return paid
 
 
 def bank_fundamental(econ: Any, bank: Bank, rate: float) -> float:
@@ -222,7 +371,12 @@ def update_bank_valuation(econ: Any) -> None:
     cfg = econ.cfg.banking
     if not cfg.bank_equity:
         return
-    rate = max(econ._rate, 0.01)
+    if econ.cfg.monetary_direct_transmission:
+        from macro_sim.systems.valuation import valuation_discount_rate
+
+        rate = valuation_discount_rate(econ)
+    else:
+        rate = max(econ._rate, 0.01)
     lam = cfg.bank_equity_lambda
     for bank in econ.banks:
         bank.earnings_ema = (1.0 - lam) * bank.earnings_ema + lam * max(0.0, bank.profit)
@@ -389,9 +543,15 @@ def bank_equity_value(econ: Any, household_id) -> float:
 
 
 def settlement_node(econ: Any, account_id):
-    if account_id == econ._fiscal:
+    if account_id in (econ._fiscal, "EXTISSUER", "CBRES"):
         return "CB"
-    if account_id == "CLEARING" or account_id in econ._bank_ids:
+    # The FX dealer represents the external sector, not an unassigned customer
+    # deposit at whichever commercial bank happens to appear first.  Settle its
+    # currency leg through the neutral clearing node so bank failures and list
+    # order cannot change its reserve counterparty.
+    if account_id in ("CLEARING", "FXDEALER") or account_id in econ._bank_ids:
+        if account_id == "FXDEALER":
+            return "CLEARING"
         return account_id
     return bank_for(econ, account_id).id
 
@@ -421,7 +581,19 @@ def fail_bank(econ: Any, bank: Bank) -> None:
     bank.alive = False
     econ._bank_failures_total += 1
     econ._bank_deaths += 1
-    alive = [candidate for candidate in econ.banks if candidate.alive]
+    alive = sorted(
+        (candidate for candidate in econ.banks if candidate.alive),
+        key=lambda candidate: candidate.id,
+    )
+    if cfg.interbank:
+        # Close the failed bank's wholesale balance sheet before any fiscal or
+        # mutual resolution payment is sized.  Otherwise the fund can fill its
+        # negative ledger capital now and a delayed liability cancellation can
+        # create a positive dead-bank balance next tick.
+        assert_interbank_positions(econ)
+        _default_interbank_liabilities(econ, bank)
+        _transfer_failed_interbank_assets(econ, bank, alive)
+        assert_interbank_positions(econ)
     if cfg.bank_migrate_on_failure and alive:
         movers = [account_id for account_id, assigned_bank in econ._bank_of.items() if assigned_bank is bank]
         for i, account_id in enumerate(movers):
@@ -433,7 +605,20 @@ def fail_bank(econ: Any, bank: Bank) -> None:
                     econ.ledger.balance(account_id) - econ.ledger.debt(account_id),
                 )
             econ._bank_of[account_id] = new_bank
+            _sync_mortgage_creditor(econ, account_id, new_bank)
             econ._node_of.pop(account_id, None)
+
+    # A solvent-but-illiquid failure, or liability forgiveness larger than its
+    # pre-resolution hole, can leave positive estate capital.  The bridge bank
+    # receives it now; no dead settlement account remains able to collect later.
+    if econ.ledger.balance(bank.id) > EPS:
+        if alive:
+            estate_receiver = alive[0].id
+        elif econ.ledger.has_account(econ._fiscal):
+            estate_receiver = econ._fiscal
+        else:
+            estate_receiver = econ.households[0].id
+        econ.ledger.transfer(bank.id, estate_receiver, econ.ledger.balance(bank.id))
     if cfg.bank_resolution_fund:
         # v12.4-fix: a DEPOSIT-INSURANCE / RESOLUTION backstop. The STATE absorbs the failed bank's residual
         # negative capital (transfer fiscal→bank, A5-safe, financed into the deficit) instead of SOCIALISING the
@@ -444,20 +629,32 @@ def fail_bank(econ: Any, bank: Bank) -> None:
         loss = -econ.ledger.balance(bank.id)
         if loss > EPS:
             econ.ledger.transfer(econ._fiscal, bank.id, loss)
+            econ._bank_resolution_fund_paid = (
+                getattr(econ, "_bank_resolution_fund_paid", 0.0) + loss
+            )
     elif cfg.interbank and alive:
-        loss = -econ.ledger.balance(bank.id)
-        lenders = {
+        # Legacy no-fund resolution mutualises the failed deposit franchise's
+        # residual negative equity so its closed settlement node does not carry
+        # a permanent reserve overdraft.  This is a resolution levy, NOT an
+        # interbank-credit loss: `_interbank_contagion_loss` is now reserved for
+        # defaults on the explicit bilateral claims below.
+        loss = max(0.0, -econ.ledger.balance(bank.id))
+        contributors = {
             candidate.id: econ.ledger.reserves(candidate.id)
             for candidate in alive
             if econ.ledger.reserves(candidate.id) > EPS
         }
-        total = sum(lenders.values())
+        total = sum(contributors.values())
         if loss > EPS and total > EPS:
-            for lender_id, lender_reserves in lenders.items():
-                amount = min(loss * lender_reserves / total, max(0.0, -econ.ledger.balance(bank.id)))
+            for contributor_id, contributor_reserves in contributors.items():
+                amount = min(
+                    loss * contributor_reserves / total,
+                    max(0.0, -econ.ledger.balance(bank.id)),
+                )
                 if amount > EPS:
-                    econ.ledger.transfer(lender_id, bank.id, amount)
-            econ._interbank_contagion_loss += loss
+                    econ.ledger.transfer(contributor_id, bank.id, amount)
+    if cfg.interbank:
+        assert_interbank_positions(econ)
 
 
 def run_deposit_competition(econ: Any) -> None:
@@ -501,6 +698,231 @@ def run_deposit_competition(econ: Any) -> None:
             econ._node_of.pop(h.id, None)
 
 
+def _set_interbank_claim(
+    lender: Bank,
+    borrower: Bank,
+    principal: float,
+    rate: float,
+    accrued_interest: float,
+) -> None:
+    """Write one immutable bilateral position to both balance sheets."""
+    principal = max(0.0, principal)
+    accrued_interest = max(0.0, accrued_interest)
+    if principal <= EPS and accrued_interest <= EPS:
+        lender.interbank_assets.pop(borrower.id, None)
+        borrower.interbank_liabilities.pop(lender.id, None)
+        return
+    claim = InterbankClaim(
+        principal=principal,
+        rate=max(0.0, rate) if principal > EPS else 0.0,
+        accrued_interest=accrued_interest,
+    )
+    lender.interbank_assets[borrower.id] = claim
+    borrower.interbank_liabilities[lender.id] = claim
+
+
+def _merge_interbank_claim(
+    lender: Bank,
+    borrower: Bank,
+    incoming: InterbankClaim,
+) -> None:
+    """Merge a claim transferred in resolution without moving new reserves."""
+    old = lender.interbank_assets.get(borrower.id)
+    old_principal = old.principal if old is not None else 0.0
+    principal = old_principal + incoming.principal
+    rate_value = (
+        old_principal * old.rate if old is not None else 0.0
+    ) + incoming.principal * incoming.rate
+    _set_interbank_claim(
+        lender,
+        borrower,
+        principal,
+        rate_value / principal if principal > EPS else 0.0,
+        (old.accrued_interest if old is not None else 0.0) + incoming.accrued_interest,
+    )
+
+
+def _add_interbank_principal(
+    lender: Bank,
+    borrower: Bank,
+    principal: float,
+    rate: float,
+) -> None:
+    """Add newly advanced reserves, preserving rolled arrears and rate value."""
+    if principal <= EPS:
+        return
+    _merge_interbank_claim(
+        lender,
+        borrower,
+        InterbankClaim(principal=principal, rate=rate),
+    )
+
+
+def _default_interbank_liabilities(econ: Any, borrower: Bank) -> None:
+    """Cancel every wholesale liability and charge each contractual creditor once."""
+    by_id = {bank.id: bank for bank in econ.banks}
+    for lender_id, claim in list(sorted(borrower.interbank_liabilities.items())):
+        lender = by_id[lender_id]
+        if claim.principal > EPS:
+            econ.ledger.write_off_interbank_claim(lender.id, borrower.id, claim.principal)
+            lender.realized_credit_losses += claim.principal
+            # Normal tick scheduling resolves failures before final P&L.  Keep
+            # this snapshot adjustment as a defensive guarantee for direct or
+            # externally orchestrated ``fail_bank`` calls; finalization later
+            # recomputes the same net amount from the named loss leg.
+            lender.profit -= claim.principal
+            econ._interbank_contagion_loss += claim.principal
+        _set_interbank_claim(lender, borrower, 0.0, 0.0, 0.0)
+
+
+def _transfer_failed_interbank_assets(
+    econ: Any,
+    failed: Bank,
+    alive: list[Bank],
+) -> None:
+    """Move a failed lender's surviving claims into a deterministic bridge bank.
+
+    Principal book value moves from failed-bank equity to bridge-bank equity
+    without a reserve payment.  If the only bridge is itself the claim debtor,
+    acquisition extinguishes the now-self-held asset and liability immediately.
+    With no surviving bank, the claim is closed against the debtor rather than
+    being left to collect into a dead settlement account.
+    """
+    by_id = {bank.id: bank for bank in econ.banks}
+    for borrower_id, claim in list(sorted(failed.interbank_assets.items())):
+        borrower = by_id[borrower_id]
+        _set_interbank_claim(failed, borrower, 0.0, 0.0, 0.0)
+        if not alive:
+            if claim.principal > EPS:
+                econ.ledger.write_off_interbank_claim(failed.id, borrower.id, claim.principal)
+            continue
+        alternatives = [candidate for candidate in alive if candidate is not borrower]
+        receiver = alternatives[0] if alternatives else alive[0]
+        if claim.principal > EPS:
+            econ.ledger.reallocate_bank_capital(failed.id, receiver.id, claim.principal)
+        if receiver is not borrower:
+            _merge_interbank_claim(receiver, borrower, claim)
+
+
+def _pro_rata_allocations(values: dict[str, float], budget: float) -> dict[str, float]:
+    """Deterministically allocate no more than ``budget`` across positive dues."""
+    positive = [
+        (key, max(0.0, value))
+        for key, value in sorted(values.items())
+        if value > EPS
+    ]
+    total = sum(value for _, value in positive)
+    remaining_budget = min(max(0.0, budget), total)
+    remaining_due = total
+    result = {key: 0.0 for key in values}
+    for key, due in positive:
+        if remaining_budget <= EPS:
+            break
+        amount = (
+            min(due, remaining_budget * due / remaining_due)
+            if remaining_due > EPS else 0.0
+        )
+        result[key] = amount
+        remaining_budget -= amount
+        remaining_due -= due
+    return result
+
+
+def assert_interbank_positions(econ: Any) -> None:
+    """Hard-gate bilateral claims and aggregate interbank assets/liabilities."""
+    by_id = {bank.id: bank for bank in econ.banks}
+    total_assets = 0.0
+    total_liabilities = 0.0
+    for lender in econ.banks:
+        for borrower_id, claim in lender.interbank_assets.items():
+            if borrower_id == lender.id or borrower_id not in by_id:
+                raise AssertionError(f"invalid interbank asset {lender.id!r}->{borrower_id!r}")
+            if not all(math.isfinite(value) and value >= 0.0 for value in (
+                claim.principal, claim.rate, claim.accrued_interest,
+            )):
+                raise AssertionError(f"invalid interbank claim {lender.id!r}->{borrower_id!r}: {claim!r}")
+            mirror = by_id[borrower_id].interbank_liabilities.get(lender.id)
+            if mirror != claim:
+                raise AssertionError(
+                    f"unmirrored interbank claim {lender.id!r}->{borrower_id!r}: "
+                    f"asset={claim!r}, liability={mirror!r}"
+                )
+            total_assets += claim.principal
+        for lender_id, claim in lender.interbank_liabilities.items():
+            if lender_id == lender.id or lender_id not in by_id:
+                raise AssertionError(f"invalid interbank liability {lender_id!r}->{lender.id!r}")
+            mirror = by_id[lender_id].interbank_assets.get(lender.id)
+            if mirror != claim:
+                raise AssertionError(
+                    f"unmirrored interbank liability {lender_id!r}->{lender.id!r}: "
+                    f"asset={mirror!r}, liability={claim!r}"
+                )
+            total_liabilities += claim.principal
+    scale = max(1.0, total_assets, total_liabilities)
+    if abs(total_assets - total_liabilities) > 1e-9 * scale:
+        raise AssertionError(
+            f"interbank assets/liabilities differ: {total_assets!r} vs {total_liabilities!r}"
+        )
+
+
+def _settle_mature_interbank_claims(econ: Any) -> None:
+    """Settle the previous phase's overnight claims or carry them explicitly.
+
+    Cash interest is paid before principal and alone enters realized P&L.  An
+    alive but illiquid borrower rolls unpaid principal/interest.  A failed bank
+    defaults: principal is cancelled against creditor capital without a reserve
+    movement, while never-realized interest is simply removed from the claim.
+    """
+    by_id = {bank.id: bank for bank in econ.banks}
+    for borrower in sorted(econ.banks, key=lambda bank: bank.id):
+        positions = list(sorted(borrower.interbank_liabilities.items()))
+        if not positions:
+            continue
+        if not borrower.alive:
+            # Defensive cleanup for externally constructed/de-serialized states.
+            # Normal failures close these synchronously inside ``fail_bank``.
+            _default_interbank_liabilities(econ, borrower)
+            continue
+
+        interest_due = {
+            lender_id: claim.accrued_interest + claim.principal * claim.rate
+            for lender_id, claim in positions
+        }
+        interest_budget = min(
+            sum(interest_due.values()),
+            max(0.0, econ.ledger.balance(borrower.id)),
+            max(0.0, econ.ledger.reserves(borrower.id)),
+        )
+        interest_paid = _pro_rata_allocations(interest_due, interest_budget)
+        for lender_id, amount in interest_paid.items():
+            if amount <= EPS:
+                continue
+            lender = by_id[lender_id]
+            econ.ledger.transfer(borrower.id, lender.id, amount)
+            borrower.interbank_interest_expense += amount
+            lender.interbank_interest_income += amount
+
+        principal_due = {lender_id: claim.principal for lender_id, claim in positions}
+        principal_budget = min(
+            sum(principal_due.values()),
+            max(0.0, econ.ledger.reserves(borrower.id)),
+        )
+        principal_paid = _pro_rata_allocations(principal_due, principal_budget)
+        for lender_id, amount in principal_paid.items():
+            if amount > EPS:
+                econ.ledger.move_reserves(borrower.id, lender_id, amount)
+
+        for lender_id, claim in positions:
+            lender = by_id[lender_id]
+            _set_interbank_claim(
+                lender,
+                borrower,
+                claim.principal - principal_paid.get(lender_id, 0.0),
+                claim.rate,
+                interest_due[lender_id] - interest_paid.get(lender_id, 0.0),
+            )
+
+
 def run_interbank_phase(econ: Any) -> None:
     cfg = econ.cfg.banking
     econ._interbank_volume = 0.0
@@ -509,7 +931,14 @@ def run_interbank_phase(econ: Any) -> None:
     econ._interbank_contagion_loss = 0.0
     if not (cfg.interbank and len(econ.banks) > 1):
         return
-    alive = [b for b in econ.banks if b.alive]
+    assert_interbank_positions(econ)
+    # Overnight means one money-market phase: mature the old stock before any
+    # new reserves are advanced.  A residual claim is an explicit rollover.
+    _settle_mature_interbank_claims(econ)
+    alive = [
+        bank for bank in econ.banks
+        if bank.alive and bank_economic_capital(econ, bank) >= -EPS
+    ]
     if cfg.reserve_floor_frac > 0.0:
         for bank in alive:
             floor = -cfg.reserve_floor_frac * max(0.0, econ.ledger.balance(bank.id))
@@ -519,19 +948,33 @@ def run_interbank_phase(econ: Any) -> None:
     surplus = {b.id: econ.ledger.reserves(b.id) for b in alive if econ.ledger.reserves(b.id) > EPS}
     total_deficit, total_surplus = sum(deficits.values()), sum(surplus.values())
     if total_deficit <= EPS or total_surplus <= EPS:
+        assert_interbank_positions(econ)
         return
     tightness = min(1.0, total_deficit / total_surplus)
     ib_rate = max(0.0, econ._rate + cfg.interbank_rate_base + cfg.interbank_tightness * tightness)
     econ._interbank_rate = ib_rate
-    econ._interbank_volume = total_deficit
-    for deficit_id, deficit_value in deficits.items():
-        interest = min(ib_rate * deficit_value, max(0.0, econ.ledger.balance(deficit_id)))
-        if interest <= EPS:
+    by_id = {bank.id: bank for bank in econ.banks}
+    actual_volume = 0.0
+    # Ration scarce lender supply across deficit banks pro rata first.  Sorting
+    # remains only a deterministic execution order, never an id-based priority.
+    borrower_funding = _pro_rata_allocations(
+        deficits,
+        min(total_deficit, total_surplus),
+    )
+    for deficit_id, funding in sorted(borrower_funding.items()):
+        if funding <= EPS:
             continue
-        for surplus_id, surplus_value in surplus.items():
-            amount = min(interest * surplus_value / total_surplus, econ.ledger.balance(deficit_id))
-            if amount > EPS:
-                econ.ledger.transfer(deficit_id, surplus_id, amount)
+        available = sum(max(0.0, value) for value in surplus.values())
+        allocations = _pro_rata_allocations(surplus, min(funding, available))
+        for surplus_id, principal in allocations.items():
+            if principal <= EPS:
+                continue
+            econ.ledger.move_reserves(surplus_id, deficit_id, principal)
+            surplus[surplus_id] = max(0.0, surplus[surplus_id] - principal)
+            _add_interbank_principal(by_id[surplus_id], by_id[deficit_id], principal, ib_rate)
+            actual_volume += principal
+    econ._interbank_volume = actual_volume
+    assert_interbank_positions(econ)
 
 
 def run_bank_runs_phase(econ: Any) -> None:
@@ -602,7 +1045,11 @@ def run_bank_runs_phase(econ: Any) -> None:
 
 
 def resolve_bank_failures(econ: Any) -> None:
-    if not bank_constraint(econ):
+    # Both capital regimes can create an economically binding insolvency state.
+    # In particular, the unified RWA envelope is deliberately usable with the
+    # historical gross-loan constraint off, so that configuration must not leave a
+    # negative-equity bank alive merely because the legacy switch is false.
+    if not (bank_constraint(econ) or unified_bank_rwa_enabled(econ)):
         return
     while True:
         newly_failed = [
@@ -621,8 +1068,16 @@ def run_bank_entry_phase(econ: Any) -> None:
     if not (cfg.bank_dynamics and cfg.bank_equity):
         return
     alive = [b for b in econ.banks if b.alive]
-    total_capital = sum(max(0.0, econ.ledger.balance(b.id)) for b in alive)
-    total_income = sum(b.interest_income for b in alive)
+    # A potential entrant observes the return earned by viable incumbent
+    # franchises, not a gross-interest proxy and not the legacy losses of failed
+    # business models it need not acquire. This keeps the entry signal on net
+    # income without letting one loss-making incumbent mask every healthy bank.
+    profitable = [
+        b for b in alive
+        if b.profit > EPS and econ.ledger.balance(b.id) > EPS
+    ]
+    total_capital = sum(max(0.0, econ.ledger.balance(b.id)) for b in profitable)
+    total_income = sum(b.profit for b in profitable)
     if total_capital > EPS:
         roe = total_income / total_capital
         rate = max(econ._rate, 1e-4)
