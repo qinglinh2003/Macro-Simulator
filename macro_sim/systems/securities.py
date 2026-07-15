@@ -46,6 +46,53 @@ def bump_bonds_version(econ: Any) -> None:
     econ._bonds_version = getattr(econ, "_bonds_version", 0) + 1
 
 
+def issued_maturity(econ: Any) -> int:
+    """Maturity tick for a bond issued THIS tick (FINDING 4). ``bond_maturity_bucket`` snaps it
+    UP to a grid of that width so a holder's daily buys within a bucket window share a maturity
+    and can merge (see :func:`consolidate_bonds`). bucket == 1 ⇒ exact ``t + bond_maturity`` ⇒
+    no quantisation ⇒ bit-identical to the historical daily book."""
+    cfg = econ.cfg.securities
+    m = econ.t + cfg.bond_maturity
+    bucket = getattr(cfg, "bond_maturity_bucket", 1)
+    if bucket <= 1:
+        return m
+    return ((m + bucket - 1) // bucket) * bucket
+
+
+def consolidate_bonds(econ: Any) -> None:
+    """Merge bond lots sharing (holder, matures_at) into one (FINDING 4 perf).
+
+    Bonds are issued at par (cost == face) with a common coupon, so two lots with the same holder
+    AND the same maturity tick are economically fungible: merging sums face and cost and preserves
+    holder + maturity. Therefore market value (linear in face), the v12 face identity
+    (Σ held face == outstanding), per-holder holdings and the master NFA are ALL invariant under a
+    merge — it only compacts the book, touching no money. With ``bond_maturity_bucket`` > 1 the
+    daily issuances a holder makes inside a bucket window carry the SAME snapped maturity, so this
+    collapses the book from ~n_holders x bond_maturity lots to ~n_holders x (bond_maturity/bucket).
+
+    Skipped (and never reorders the list) when the bucket is 1: without maturity snapping no two
+    lots share a maturity, so there is nothing to merge and the historical list order — hence every
+    downstream valuation sum — is preserved exactly (bit-identical)."""
+    if getattr(econ.cfg.securities, "bond_maturity_bucket", 1) <= 1 or not econ._bonds:
+        return
+    merged: Dict = {}
+    order: list = []
+    for lot in econ._bonds:
+        key = (lot["holder"], lot["matures_at"])
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = dict(lot)
+            order.append(key)
+        else:
+            existing["face"] += lot["face"]
+            existing["cost"] += lot["cost"]
+    if len(order) == len(econ._bonds):
+        return                                   # already one lot per (holder, maturity)
+    econ._bonds = [merged[key] for key in order]
+    bump_bonds_version(econ)
+    reindex_bonds(econ)                          # per-holder face unchanged; rebuild to be safe
+
+
 def _bond_valuations(econ: Any):
     """One pass over the lots per (tick, lots-version): per-holder market-value lists and
     per-holder (market - cost) delta lists, in lot order.
@@ -132,6 +179,10 @@ def run_bill_maturity_phase(econ: Any) -> None:
     econ._gov_interest_bill = 0.0
     if not (cfg.bonds and cfg.government) or not econ._bonds:
         return
+    # Compact the book once per tick (before this tick's coupon/redemption and the downstream
+    # planning + metrics valuations) so every bond pass runs over the merged lot count. No-op at
+    # bond_maturity_bucket == 1 (bit-identical).
+    consolidate_bonds(econ)
     bridge = getattr(econ, "demographic_bridge", None)
     if cfg.bond_coupon > 0.0:
         for lot in econ._bonds:
@@ -201,7 +252,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "holder": h.id,
                     "face": buy,
                     "cost": buy,
-                    "matures_at": econ.t + cfg.bond_maturity,
+                    "matures_at": issued_maturity(econ),
                 })
                 bump_bonds_version(econ)
                 econ._bonds_outstanding += buy
@@ -228,7 +279,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "holder": bk.id,
                     "face": want,
                     "cost": want,
-                    "matures_at": econ.t + cfg.bond_maturity,
+                    "matures_at": issued_maturity(econ),
                 })
                 bump_bonds_version(econ)
                 econ._bonds_outstanding += want

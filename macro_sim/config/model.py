@@ -457,6 +457,13 @@ class Config:
     bond_theta: float = 0.0               # households' target share of wealth held in bonds (v12.3)
     # v12.3: multi-period bonds → the three values DIVERGE (duration/SVB). maturity 1 + coupon 0 ⇒ v12.1 PAR bill.
     bond_maturity: int = 1                # periods to maturity (1 = one-period bill; >1 ⇒ market≠face on a rate move)
+    # v23 perf (FINDING 4): daily issuance of long bills fragments the book into ~n_holders x
+    # bond_maturity tiny lots, and every tick re-values all of them ⇒ O(horizon^2). Snapping the
+    # maturity of newly issued lots to a bucket grid of this width lets same-bucket daily buys by a
+    # holder MERGE, cutting the live lot count (and every bond pass) by ~this factor. 1 = one lot per
+    # issuance day = exact (t + bond_maturity), NO merging ⇒ bit-identical. >1 shifts maturity onto
+    # the grid (a real, flagged economic change) and re-bases the golden digests for that path.
+    bond_maturity_bucket: int = 1
     bank_bond_appetite: float = 0.0       # bank's target share of EXCESS reserves put into bonds (money-creating drain)
     # v12.4: the CB's quantity tools. Off ⇒ bit-identical to v12.3 (the CB never creates/destroys base money).
     omo: bool = False                     # open-market ops: drain reserves toward a target ⇒ interbank market binds
@@ -1202,6 +1209,7 @@ class Config:
             bonds=self.bonds,
             government=self.government,
             bond_maturity=self.bond_maturity,
+            bond_maturity_bucket=self.bond_maturity_bucket,
             bond_coupon=self.bond_coupon,
             bond_finance_frac=self.bond_finance_frac,
             p_firm0=self.p_firm0,
@@ -1995,6 +2003,7 @@ class Config:
         assert 0.0 <= self.bond_finance_frac <= 1.0, "v12 bond_finance_frac in [0,1]"
         assert self.bond_coupon >= 0.0 and 0.0 <= self.bond_theta <= 1.0, "v12 bond coupon/theta ranges"
         assert self.bond_maturity >= 1, "v12.3 bond_maturity ≥ 1 (1 = one-period bill)"
+        assert self.bond_maturity_bucket >= 1, "bond_maturity_bucket ≥ 1 (1 = exact daily maturity, bit-identical)"
         assert 0.0 <= self.bank_bond_appetite <= 1.0, "v12.3 bank_bond_appetite in [0,1]"
         assert 0.0 <= self.omo_reserve_target and 0.0 < self.omo_drain_frac <= 1.0, "v12.4 OMO target≥0, drain∈(0,1]"
         assert self.bank_bond_duration_limit >= 0.0, "v12.4 bank_bond_duration_limit ≥ 0"
