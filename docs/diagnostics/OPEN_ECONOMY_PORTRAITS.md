@@ -166,6 +166,50 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
+### FINDING 4 (open, scoped) — long-horizon cost is O(horizon²): the bond lot book grows without bound
+
+The audit stage (n=3, pop 500, 10 y) was impractically slow — a single arm ran >56 min without
+finishing. Root-caused it is NOT the obvious suspects:
+- **Per-tick cost is LINEAR in population** (pop 200→500 = 15→37 ms/tick ≈ 2.5×). The per-firm equity
+  market's watchlist is capped (`watchlist_size = 15`), so it is O(n_households), not O(pop²).
+- **The WorldProbeCollector adds ~0% overhead** (measured 1.00×) — the identity gates are cheap.
+- **Nothing else accumulates**: over 1400 ticks, ledger accounts (~385), claims persons (~510),
+  loans (~385) and households (~300) are all FLAT.
+
+The sole unbounded accumulator is the **government bond lot book**. Per-tick cost grows 124 → 629
+ms/tick over 1400 ticks (5×) with flat population and FEWER firms, tracking `len(econ._bonds)`:
+
+| tick | n_bond_lots | bond_holders | outstanding face |
+|---|---|---|---|
+| 200 | 4,739 | 49 | ~5,400 |
+| 600 | 13,260 | 146 | ~14,300 |
+| 1000 | 42,267 | 198 | ~16,200 |
+| 1400 | 55,951 | 241 | (stable) |
+
+`run_bill_issuance_phase` appends ONE lot per buying household EVERY tick (daily issuance), each a
+1-year bill (`bond_maturity = 365`). Matured lots ARE pruned, but the live book saturates at
+~`n_bond_holders × 365` ≈ 100k+ lots at pop 500 — the SAME ~16k of outstanding debt fragmented into
+~100k tiny rolling lots (avg face ~0.3). Every tick re-values the whole book (in `_bond_valuations`,
+in the metrics totals, and in the per-bank snapshots), so per-tick cost grows linearly with elapsed
+ticks → **total simulation cost is O(horizon²)**. This is the blocker for 10–30 year portraits;
+per-tick population scaling is fine.
+
+**No bit-identical O() fix exists.** `bond_market_value(lot) = face · unit_price(matures_at − t)` is
+linear in face, so aggregate valuations COULD be O(distinct-maturities ≤ 365) instead of O(n_lots) —
+but grouping lots by maturity changes the floating-point summation order and breaks the golden
+digests. Memoising `unit_price(n)` within the existing per-lot pass IS bit-identical but only saves
+the `bond_price` arithmetic (~10-15% of the bond cost), not the O(n_lots) iteration itself.
+
+**Recommended fix (scoped follow-up, not attempted here):** a FLAG-GATED maturity-aggregated bond
+valuation — default off ⇒ bit-identical; on ⇒ group faces by maturity bucket and value in O(365),
+with the golden digests re-baselined for the flag-on path. This is a careful change to core
+securities with strict conservation invariants (the P&L bridge identity, the v12 bond identity, the
+master NFA identity), so it wants its own change + test pass rather than a rushed edit mid-session.
+
+**Practical mitigation for portraits now:** the smoke matrix (2 y) is fast and clean (all 10 arms,
+24/24 identities). Long-horizon portraits are gated on the bond fix; until then, run at reduced
+horizon or with less granular bond issuance.
+
 ### FINDING 3 (FIXED, commit a97b902) — `capital_control` was an INCONSISTENT throttle
 
 Surfaced by the smoke causal matrix: the `capital_control` arm produced LARGER external positions
