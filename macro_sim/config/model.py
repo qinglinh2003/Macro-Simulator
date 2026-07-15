@@ -780,6 +780,16 @@ class Config:
     # two otherwise-identical configs.
     _capital_annual_clock_applied: bool = field(default=False, repr=False, compare=False)
     ticks_per_year: float = 365.0   # calendar scale used by the annual-clock derivation
+    # v23 FINDING 5: the annual clock makes capital REAL (v -> v*S=912.5), and the desired-capital
+    # rule K* = v * demand_expected then AMPLIFIES the demand-expectation EMA ~912x into the capital
+    # stock. With the daily demand memory (lambda_d) unchanged, firms size a ~12-year capital stock
+    # off a ~130-day demand estimate, so daily demand noise drives a large boom-bust accelerator
+    # cycle (unemployment spiking to ~38% over a decade). Smoothing the demand expectation at the
+    # SOURCE damps the cycle far better than slowing the investment RESPONSE (which costs output): a
+    # 3-seed x 6-factor sweep found lambda_d *= 0.5 the robust optimum -- it minimises inflation
+    # volatility AND peak unemployment AND raises output, non-monotonically (0.75 and 0.15 are both
+    # worse). Applied ONLY when the clock is on, so every clock-off preset stays bit-identical.
+    capital_clock_demand_smoothing: float = 0.5
     v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
     delta_K: float = 0.05           # capital depreciation rate -- anchored (+ maint. floor)
@@ -1009,6 +1019,10 @@ class Config:
         self.v *= scale
         self.K_firm0 *= scale
         self.A *= scale ** (-self.alpha)
+        # FINDING 5: damp the demand-expectation EMA that the now-912x-amplified capital target
+        # reads, so the real-capital accelerator does not cycle on daily demand noise. Factor 1.0
+        # leaves it unchanged (recovers the pre-fix clock behaviour for A/B comparison).
+        self.lambda_d *= self.capital_clock_demand_smoothing
         self._capital_annual_clock_applied = True
 
     @property
@@ -2004,6 +2018,7 @@ class Config:
         assert self.bond_coupon >= 0.0 and 0.0 <= self.bond_theta <= 1.0, "v12 bond coupon/theta ranges"
         assert self.bond_maturity >= 1, "v12.3 bond_maturity ≥ 1 (1 = one-period bill)"
         assert self.bond_maturity_bucket >= 1, "bond_maturity_bucket ≥ 1 (1 = exact daily maturity, bit-identical)"
+        assert 0.0 < self.capital_clock_demand_smoothing <= 1.0, "capital_clock_demand_smoothing in (0,1] (1 = no damping)"
         assert 0.0 <= self.bank_bond_appetite <= 1.0, "v12.3 bank_bond_appetite in [0,1]"
         assert 0.0 <= self.omo_reserve_target and 0.0 < self.omo_drain_frac <= 1.0, "v12.4 OMO target≥0, drain∈(0,1]"
         assert self.bank_bond_duration_limit >= 0.0, "v12.4 bank_bond_duration_limit ≥ 0"
