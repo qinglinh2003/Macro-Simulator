@@ -120,6 +120,31 @@ more than it saves; the GIL blocks pure-Python threads. The real levers are ther
 
 Do NOT promise an N× intra-run speedup that the per-tick coupling makes impossible.
 
+### Runtime findings (this branch) — status: MEASURED
+
+**Intra-run parallelism is confirmed NOT tractable (read `_dealer_update`).** The coupling phase
+does not merely *read* cross-border summaries — `settle_trade`, `capital_interest` and
+`run_migration` reach directly into each economy's ledger and demographic bridge every tick
+(`econ.ledger.transfer(funder, DEALER_ID, …)`, `_pay_households` posting into household accounts +
+`bridge.post_capital_income`). So economies are NOT state-isolated: a process split would need every
+cross-border money movement re-expressed as a returnable per-economy delta and replayed in the
+worker, a large invasive refactor with high regression risk against the conservation/identity gates.
+Plus the GIL blocks pure-Python threads. Not a quick win — deferred, documented, not attempted.
+
+**Across-run parallelism VERIFIED as the lever.** 8 independent full-frontier runs, BLAS pinned to
+1 thread/process: sequential 50.7s → parallel(8) **11.5s = 4.4×** on a 10-core box. Sub-linear only
+because per-process import (~2s) is a large fraction of these short (~6s) runs; for the hours-long
+production arms that fixed cost amortises to near-linear. `openecon_matrix.py` is the parallel driver.
+
+**Single-economy hot-spot wins landed (bit-identical, help every run, closed or open):**
+- The 365× capital-clock double-migration fix (FINDING 1) alone gave **2.3×** (8.5 → 20 ticks/s) by
+  removing the phantom investment/depreciation flows the runaway ×365 capital generated.
+- `economic_bridge`: per-tick claim-posting-id cache — kills ~6.6M redundant owner-list rebuilds
+  (matters most at production pop; wash at pop 200).
+- `reporting/metrics`: one bond-lot pass for the market-value totals + a shared per-bank delta map
+  for the capital snapshots (was ~28M `bond_market_value` calls); ~5% on a bond-heavy run, scales
+  with bond-book size over long horizons. Stays pure (does not populate the behavioural bond cache).
+
 ## Pre-registered risk R1 — status: LEAD, not yet confirmed
 
 `self.periods_per_year` (default 12) is READ only once, into a domain-validation dict
