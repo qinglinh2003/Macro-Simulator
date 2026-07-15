@@ -235,7 +235,7 @@ def run_household_fiscal_phase(econ: Any) -> None:
     # This runs AFTER the unemployment benefit, so it tops up whatever the household actually
     # ended the tick with (wages + JG + benefit) and can never double-pay.
     # benefit_income_floor = 0.0 => the branch never fires => bit-identical.
-    if pol.benefit_income_floor > 0.0:
+    if getattr(pol, "benefit_income_floor", 0.0) > 0.0:
         wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))
         for h in hh:
             floor = pol.benefit_income_floor * wage_ref * _household_labor_supply(econ, h)
