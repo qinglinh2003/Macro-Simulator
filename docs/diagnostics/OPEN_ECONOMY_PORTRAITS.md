@@ -166,7 +166,20 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
-### FINDING 4 (open, scoped) — long-horizon cost is O(horizon²): the bond lot book grows without bound
+### FINDING 4 (FIXED, commit 311ca09) — long-horizon cost is O(horizon²): the bond lot book grows without bound
+
+> **RESOLVED.** Flag-gated `bond_maturity_bucket` (default 1 = bit-identical). `issued_maturity()`
+> snaps a newly issued lot's maturity UP to a grid of that width so a holder's daily buys inside a
+> bucket window share a maturity; `consolidate_bonds()` then merges lots sharing `(holder,
+> matures_at)` — a par-issued, common-coupon merge that preserves face, cost, holder and maturity, so
+> market value, the v12 face identity, per-holder holdings and the master NFA are ALL invariant.
+> **Measured (pop 500):** per-tick cost went from 39→233 ms/tick over 1600 ticks at bucket=1 (book
+> 4.6k→56k lots) to a **FLAT ~40 ms/tick at bucket=30** (book bounded ~2.4k) — O(horizon²) → O(horizon).
+> A 10-year arm drops from ~40-56 min to ~5 min, so multi-decade portraits are now feasible
+> (`openecon_matrix --bond-bucket 30`). bucket=1 is bit-identical (digest dcb359c6; 83 tests green).
+> The diagnosis that led here is preserved below.
+
+
 
 The audit stage (n=3, pop 500, 10 y) was impractically slow — a single arm ran >56 min without
 finishing. Root-caused it is NOT the obvious suspects:
