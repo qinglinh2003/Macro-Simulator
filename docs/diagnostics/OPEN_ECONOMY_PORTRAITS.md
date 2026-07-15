@@ -97,6 +97,37 @@ coupling/policy knobs → long run → write per-economy `series.csv` + `diagnos
 identity report + per-arm attribution. Reuse `world_probes.diagnose_world`; do not rebuild
 the identity gates. Every run writes to a NEW artifact directory (evidence discipline).
 
+## Runtime optimisation (a co-goal of this branch)
+
+**World.step() structure (read from `world/world.py`):** every tick is
+`_coupling_barrier()` [joint] → `for econ: _run_pre_settlement_phases()` [N independent] →
+`_dealer_update()` [joint] → `[econ._run_settlement_and_commit_phases() ...]` [N independent].
+The two N-loops are the domestic economy steps (the bulk of the compute), split by the FX
+dealer coupling in the MIDDLE of the tick.
+
+**Honest parallelism assessment:** the coupling is EVERY TICK, so intra-run parallelism
+across economies is not tractable — a multiprocessing split would have to serialise the full
+per-economy state twice per tick, and a single economy tick is milliseconds, so IPC would cost
+more than it saves; the GIL blocks pure-Python threads. The real levers are therefore:
+
+1. **Across-run parallelism** — 10 workers = 10 independent Worlds. Already free; the dominant
+   lever. Verify it scales cleanly (BLAS pinned to 1 thread/process).
+2. **Single-economy step profiling** — cProfile the domestic tick, optimise the pure-Python hot
+   spots. This speeds up EVERY economy in EVERY run (closed and open), so it is the highest-value
+   tractable win.
+3. **Coupling-barrier overhead** — the barrier resets ~15 journal fields per economy per tick and
+   does cross-border reductions; check for O(N²) bilateral loops or redundant recomputation.
+
+Do NOT promise an N× intra-run speedup that the per-tick coupling makes impossible.
+
+## Pre-registered risk R1 — status: LEAD, not yet confirmed
+
+`self.periods_per_year` (default 12) is READ only once, into a domain-validation dict
+(`world.py:400`). No interest / FX / carry computation reads it. So either it is vestigial and
+cross-border flows correctly use the daily domestic rates, or something that SHOULD convert an
+annual rate to per-tick does not — a flow on the wrong clock. Resolve empirically: at smoke,
+compare the cross-border interest / carry magnitudes against the daily domestic flows.
+
 ## Discipline (inherited)
 
 Freeze source during any diagnostic run (a mid-run edit invalidates it or crashes the
@@ -110,5 +141,32 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
-### (pending) Smoke — R1 clock + R2 identities
-Not yet run. First gate before any long horizon.
+### FINDING 1 (open) — capital explodes 365× under CAPITAL-FLOW COUPLING, not at genesis
+
+Smoke (n=2, pop=200, 2y, FULL_FRONTIER_FLAGS, trade+capital+migration on) is UNHEALTHY:
+aggregate_capital ≈ **53.3 MILLION** at the first recorded tick, CPI ≈ 261 (hyperinflation),
+K / annual GDP ≈ 652-806 (the fixed single economy is ~1.6).
+
+**53,280,126 / (n_firms_c × K_firm0 = 20 × 7300 = 146,000) = exactly 365.** Capital is 365× too
+large — the `ticks_per_year` scale applied an extra time.
+
+Double-migration hypothesis REFUTED: a standalone `Config.v13(**FRONTIER)`, a closed `Economy`,
+AND `World[econ].c_firms` genesis capital are ALL 146,000 (correct, single migration). The
+construction path is fine. The 365× appears only once the smoke world RUNS with `capital=True`
+(capital mobility on) — the explosion is injected by the **cross-border CAPITAL-FLOW coupling
+(v21)**, built on the OLD clock and not reconciled with the v23 annual capital clock. The CPI
+hyperinflation is downstream: 365× capital → 365× capital-service pricing cost → cost-push.
+
+Next: instrument the first coupled tick — which capital-flow leg multiplies K by ~365 (capital
+mobility revaluation? capital-account settlement? a per-period vs per-tick rate in
+`world/capital.py`?). This is the R1 clock risk, now CONFIRMED as a real coupling-layer bug.
+
+### Runtime profile (smoke) — the optimisation target
+730 ticks × 2 economies × pop 200 = 85.8s (8.5 ticks/s). Top hot spots (cumulative), all in the
+per-economy domestic step (so optimising them helps every run, closed or open):
+- `run_per_firm_equity_phase` 20.6s (24% of the whole run) — the single biggest cost
+- `post_household_equity_trade` 11.6s / 2.15M calls; `_claim_owner_ids` + `_claim_posting_ids`
+  6.6M calls each (each equity trade rebuilds the household owner list — redundant recomputation)
+- `dict.get` 127M calls; `builtins.sum` 12.5M calls
+The per-firm equity market's claim-posting into the demographic bridge is the target. NOT
+open-economy-specific.
