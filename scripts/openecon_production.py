@@ -168,7 +168,25 @@ def main():
     ap.add_argument("--pop-mult", type=float, default=1.0, help="multiply mapped pops (2.0 = double scale)")
     ap.add_argument("--base-seed", type=int, default=4242, help="world base seed (vary for seed replicates)")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--daemon", default=None,
+                    help="fully detach (double-fork + setsid) and log to this path -- survives a "
+                         "parent/harness teardown for multi-hour runs")
     args = ap.parse_args()
+
+    if args.daemon:
+        # daemonize so a teardown of the launching shell's process group cannot reap the run.
+        if os.fork() > 0:
+            os._exit(0)
+        os.setsid()
+        if os.fork() > 0:
+            os._exit(0)
+        sys.stdout.flush(); sys.stderr.flush()
+        Path(args.daemon).parent.mkdir(parents=True, exist_ok=True)
+        f = open(args.daemon, "a", buffering=1)
+        os.dup2(f.fileno(), 1)
+        os.dup2(f.fileno(), 2)
+        devnull = open(os.devnull, "r")
+        os.dup2(devnull.fileno(), 0)
 
     if args.validate:
         validate(years=8.0, pop_div=max(args.pop_div, 3))
