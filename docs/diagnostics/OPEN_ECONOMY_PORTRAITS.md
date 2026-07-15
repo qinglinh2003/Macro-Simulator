@@ -141,7 +141,40 @@ nulls and refutations, not just confirmations.
 
 _(appended as they land — newest first)_
 
-### FINDING 1 (open) — capital explodes 365× under CAPITAL-FLOW COUPLING, not at genesis
+### FINDING 1 (RESOLVED, commit 89d6627) — capital explodes 365× via a DOUBLE annual-clock migration in `dataclasses.replace`
+
+**Root cause (the coupling attribution below was WRONG).** `Config._apply_capital_annual_clock`
+mutates `v`, `K_firm0`, `A` **in place** inside `__post_init__`. `dataclasses.replace()` copies the
+already-migrated field values and **re-runs `__post_init__`**, so the ×365 (`ticks_per_year`)
+migration is applied a SECOND time — and it compounds (`replace²` = ×365²). The World applies
+`replace(cfg, seed=base_seed + i·stride)` to every economy (`world.py:250`), so every open economy
+got genesis firm capital `7300 → 2,664,500` (×365), `aggregate_capital 53.3M`, `CPI 261`,
+`K/annual-GDP 652–806`. It is NOT the v21 capital-flow coupling: `capital=False` shows the identical
+53.3M, and a standalone `Economy(cfg)` from the SAME cfg object is correct at 146k — the divergence is
+purely the World's `replace`. The `.large()/.small()` presets (`model.py:2047-2055`) and experiment
+overrides (`runlog.py:216`) were silently double-migrating too.
+
+**Fix.** A `_capital_annual_clock_applied` guard field (default False, `compare=False`). It is a real
+dataclass field, so `replace()` copies its `True` value and the second `__post_init__` skips —
+migrated exactly once, from any construction path. `capital_annual_clock=False` unchanged.
+
+**Verified.** Smoke n=2/pop200/2y now healthy: `CPI ≈ 1.0` (was 261), `K/annual-GDP ≈ 2.2` (target
+~2.5, was 652–806), and **2.3× faster** (8.5 → 20 ticks/s — the runaway ×365 capital was generating
+phantom investment + depreciation flows). `replace^k` is now idempotent. 88 capital+world tests green.
+
+**Both pre-registered risks CLEARED on the fixed foundation** (harness now measures them — the earlier
+`ext_factor_income` field name and `_world_probe_rows` identity path were both broken; fixed to read
+`world.world_records` and to drive `WorldProbeCollector`):
+- **R2 (identities):** all **24** `diagnose_world` checks PASS, zero findings. The world identities
+  hold with the full v23 frontier flags on.
+- **R1 (clock):** cross-border factor income (±1.45e-5, econ0/econ1 mirror to ~zero → passthrough
+  conserved) is the **same order** as domestic daily interest (9.5e-5), NOT 365× off. Cross-border
+  flows are on the correct daily calendar. NFA small but nonzero (−3.05 / +3.60), current accounts
+  mirror (+0.026 / −0.026).
+
+---
+
+### FINDING 1 — ORIGINAL (SUPERSEDED) attribution to capital-flow coupling
 
 Smoke (n=2, pop=200, 2y, FULL_FRONTIER_FLAGS, trade+capital+migration on) is UNHEALTHY:
 aggregate_capital ≈ **53.3 MILLION** at the first recorded tick, CPI ≈ 261 (hyperinflation),

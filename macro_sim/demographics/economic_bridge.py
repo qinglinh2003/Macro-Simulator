@@ -67,11 +67,20 @@ class DemographicEconomicBridge:
         self._person_by_id_index: dict[int, Any] | None = None
         self._household_profiles_cache: dict[int, Any] | None = None
         self._household_agent_by_account: dict[str, Any] = {}
+        # Claim-posting-id cache. The per-firm equity market posts millions of tiny household
+        # claim deltas per tick, and each recomputed the household's adult owner list (age>=18 +
+        # has_person filter over _people_by_household) -- ~6.6M redundant rebuilds in a smoke run.
+        # The owner list only changes when person membership changes, and EVERY such mutation
+        # invalidates the people index; so this cache shares that lifecycle exactly: it is live
+        # (a dict) only in the frozen window after refresh_people_index, and None (live compute)
+        # during the demographic transition. Cleared on invalidate, so it can never go stale.
+        self._claim_posting_ids_cache: dict[int, list[int]] | None = None
 
     def invalidate_people_index(self) -> None:
         self._people_by_household_index = None
         self._person_by_id_index = None
         self._household_profiles_cache = None
+        self._claim_posting_ids_cache = None
 
     def refresh_people_index(self) -> None:
         """Rebuild person indexes from the live demographic state.
@@ -82,6 +91,7 @@ class DemographicEconomicBridge:
         """
         state = self._demographic_state_ref()
         self._household_profiles_cache = None
+        self._claim_posting_ids_cache = None
         if state is None:
             self._people_by_household_index = None
             self._person_by_id_index = None
@@ -96,6 +106,8 @@ class DemographicEconomicBridge:
                     by_household.setdefault(int(household_id), []).append(person)
         self._people_by_household_index = by_household
         self._person_by_id_index = by_id
+        # The people state is now frozen for the rest of the tick; arm the posting-id cache.
+        self._claim_posting_ids_cache = {}
 
     def _demographic_state_ref(self) -> Any | None:
         state = getattr(self, "demographic_state", None)
@@ -1080,10 +1092,16 @@ class DemographicEconomicBridge:
         return self.claims.members_of_household(household_id)
 
     def _claim_posting_ids(self, household_id: int) -> list[int]:
+        cache = self._claim_posting_ids_cache
+        if cache is not None:
+            cached = cache.get(household_id)
+            if cached is not None:
+                return cached
         owners = [person_id for person_id in self._claim_owner_ids(household_id) if self.claims.has_person(person_id)]
-        if owners:
-            return owners
-        return self.claims.members_of_household(household_id)
+        result = owners if owners else self.claims.members_of_household(household_id)
+        if cache is not None:
+            cache[household_id] = result
+        return result
 
     def _post_household_cash_delta(self, household_id: int, amount: float, *, reason: str) -> None:
         amount = float(amount)

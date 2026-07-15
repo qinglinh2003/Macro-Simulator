@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from macro_sim.config import Config
 from macro_sim.diagnostics.scenarios import FULL_FRONTIER_FLAGS
-from macro_sim.diagnostics.world_probes import diagnose_world
+from macro_sim.diagnostics.world_probes import WorldProbeCollector
 from macro_sim.world.world import World
 
 
@@ -72,14 +72,27 @@ def build_world(configs, **world_over):
     return World(configs, **kw)
 
 
-def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=None):
+def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=None,
+                 measure_identities=True):
     ticks = int(round(years * 365))
     configs = build_configs(n, pop, ticks, productivity_spread=0.5,
                             overrides_per_country=overrides_per_country)
     world = build_world(configs, **(world_over or {}))
+
+    # R2: the identity gates. WorldProbeCollector wraps World.step, snapshots the pre/post
+    # external state each tick, and feeds diagnose_world -- the canonical identity path (the
+    # earlier _world_probe_rows guess did not exist, so R2 silently went unmeasured). The
+    # collector adds per-tick snapshot overhead, so the runtime profile (--profile) drives the
+    # raw world.run instead; the identity report is a correctness gate, not a speed measurement.
+    identity = None
     t0 = time.perf_counter()
-    per_econ = world.run(ticks)
+    if measure_identities:
+        collector = WorldProbeCollector(world)
+        identity = collector.run(ticks)          # domestic records still accrue on economies
+    else:
+        world.run(ticks)
     elapsed = time.perf_counter() - t0
+    per_econ = [econ.records for econ in world.economies]
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -96,26 +109,41 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
             for r in recs:
                 w.writerow(r)
 
-    # R2: world identities
-    world_recs = world.records_world() if hasattr(world, "records_world") else None
-    identity = None
-    try:
-        # diagnose_world consumes the WorldProbeCollector-style rows; if the world exposes them
-        result = diagnose_world(world, world._world_probe_rows) if hasattr(world, "_world_probe_rows") else None
-        identity = result
-    except Exception as e:  # noqa: BLE001
-        identity = f"diagnose_world unavailable via this path: {e!r}"
+    # R2 verdict: every identity check must pass; surface any critical/high finding.
+    identity_report = None
+    if identity is not None:
+        checks = identity.checks
+        failed = sorted(name for name, c in checks.items() if not c.get("passed", False))
+        sev = {}
+        for f in identity.findings:
+            sev[f.severity] = sev.get(f.severity, 0) + 1
+        identity_report = {
+            "all_checks_passed": not failed,
+            "n_checks": len(checks),
+            "failed_checks": failed,
+            "findings_by_severity": sev,
+            "findings": [f.issue_id for f in identity.findings],
+        }
 
-    # R1: cross-border factor income vs domestic interest magnitude
+    # R1: cross-border factor income (world-level, per-economy vector) vs domestic interest.
+    # A mis-annualised cross-border rate would make factor income dwarf/vanish vs domestic.
     def tail_mean(recs, key):
         v = [float(r.get(key, float("nan"))) for r in recs[-min(365, len(recs)):]]
         v = [x for x in v if x == x]
+        return st.mean(v) if v else float("nan")
+
+    world_recs = getattr(world, "world_records", [])
+    tail_wr = world_recs[-min(365, len(world_recs)):]
+
+    def tail_mean_vec(key, i):
+        v = [float(r[key][i]) for r in tail_wr if key in r and i < len(r[key])]
         return st.mean(v) if v else float("nan")
 
     summary = {
         "n": n, "pop": pop, "years": years, "ticks": ticks,
         "wall_seconds": round(elapsed, 1),
         "ticks_per_second": round(ticks / elapsed, 1) if elapsed > 0 else None,
+        "identity": identity_report,
         "per_economy": [],
     }
     for i, recs in enumerate(per_econ):
@@ -128,16 +156,19 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
             "K_over_annual_gdp": (tail_mean(recs, "aggregate_capital")
                                   / (tail_mean(recs, "real_gdp") * 365)
                                   if tail_mean(recs, "real_gdp") > 0 else None),
-            # R1 probe: any external factor-income / interest field the record exposes
-            "ext_factor_income": tail_mean(recs, "external_factor_income"),
+            # R1: external factor income (GNP-GDP wedge) vs domestic interest, same units
+            "ext_factor_income": tail_mean_vec("factor_income", i),
+            "nfa": tail_mean_vec("nfa", i),
+            "current_account": tail_mean_vec("current_account", i),
             "domestic_interest": tail_mean(recs, "interest_paid"),
         })
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
     print(json.dumps(summary, indent=1, default=str))
-    if isinstance(identity, str):
-        print("IDENTITY:", identity)
-    elif identity is not None:
-        print("IDENTITY passed:", getattr(identity, "passed", "?"))
+    if identity_report is not None:
+        verdict = "PASS" if identity_report["all_checks_passed"] else "FAIL"
+        print(f"IDENTITY: {verdict}  ({identity_report['n_checks']} checks, "
+              f"failed={identity_report['failed_checks']}, "
+              f"findings={identity_report['findings_by_severity']})")
     return summary
 
 
@@ -153,7 +184,8 @@ def main():
     if args.profile:
         pr = cProfile.Profile()
         pr.enable()
-        run_portrait(args.n, args.pop, args.years, args.out)
+        # raw world.run (no probe overhead) so the profile reflects the DOMESTIC step cost
+        run_portrait(args.n, args.pop, args.years, args.out, measure_identities=False)
         pr.disable()
         s = io.StringIO()
         pstats.Stats(pr, stream=s).sort_stats("cumulative").print_stats(30)
