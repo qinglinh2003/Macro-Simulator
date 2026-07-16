@@ -160,7 +160,8 @@ def run_production(years, out, pop_div=1, pop_mult=1.0, base_seed=4242,
     return run_portrait(n=n, pop=1000, years=years, out_dir=out, world_over=world_over,
                         overrides_per_country=overrides, measure_identities=True,
                         bond_maturity_bucket=30,
-                        checkpoint_every=checkpoint_every, resume=resume)
+                        checkpoint_every=checkpoint_every, resume=resume,
+                        ledger_rel_tol=COMMON.get("ledger_rel_tol"))
 
 
 def main():

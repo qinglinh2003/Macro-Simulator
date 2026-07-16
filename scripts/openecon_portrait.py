@@ -76,7 +76,7 @@ def build_world(configs, **world_over):
 
 def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=None,
                  measure_identities=True, bond_maturity_bucket=1,
-                 checkpoint_every=0, resume=None):
+                 checkpoint_every=0, resume=None, ledger_rel_tol=None):
     ticks = int(round(years * 365))
     start_tick = 0
     if resume:
@@ -89,6 +89,14 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
         start_tick = int(hdr["tick"])
         print(f"RESUME from {resume} at tick {start_tick} "
               f"(written at commit {(hdr.get('git_commit') or '?')[:12]})", flush=True)
+        if ledger_rel_tol is not None:
+            # Gate tolerances are POLICY, not state: the pickled Ledger carries the
+            # rel_tol it was constructed with, so a tolerance widened after the
+            # checkpoint was written must be re-applied on resume or the old alarm
+            # threshold rides along and re-trips (seed 4242, t=8036).
+            for _econ in world.economies:
+                _econ.ledger._rel_tol = float(ledger_rel_tol)
+            print(f"  ledger_rel_tol re-applied on resume: {ledger_rel_tol}", flush=True)
     else:
         configs = build_configs(n, pop, ticks, productivity_spread=0.5,
                                 overrides_per_country=overrides_per_country,
