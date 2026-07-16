@@ -126,10 +126,12 @@ def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=
             if checkpoint_every and (t + 1) % checkpoint_every == 0 and (t + 1) < ticks:
                 ckpt_dir.mkdir(parents=True, exist_ok=True)
                 _save(ckpt_dir / "checkpoint.msim", t + 1)
-    except AssertionError:
+    except Exception:
         # Crash forensics: freeze the exact pre-mortem state so the failure can be
         # loaded and interrogated in minutes instead of re-simulated for hours.
-        # The dump is best-effort and must never mask the original assertion.
+        # Catches ALL exceptions (identity AssertionErrors, ledger ConservationError,
+        # anything unexpected); the dump is best-effort inside its own guard and the
+        # original exception ALWAYS re-raises unchanged.
         crash_tick = locals().get("t", start_tick)
         try:
             ckpt_dir.mkdir(parents=True, exist_ok=True)

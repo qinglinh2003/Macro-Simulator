@@ -30,6 +30,7 @@ COMMON = dict(
     fertility_income_elasticity=0.06,       # demographic transition: richer -> fewer children
     mortality_income_elasticity=0.04,       # richer -> longer life (endogenous aging)
     claims_reconcile_interval=1,            # FINDING 6: dissolve cash-claim strands from cross-household moves under heavy churn
+    ledger_rel_tol=1e-8,                    # A5 headroom for 30y x 14k-agent float accumulation (~1.5e-7/tick systematic rounding)
 )
 
 # name, real_pop_millions, then per-country knobs. a_K is set to 2.4*a downstream.

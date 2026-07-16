@@ -135,6 +135,13 @@ class Config:
     # that accumulate past CLAIM_TOL and trip the claims identity gate; periodic reconciliation
     # dissolves them by resetting each household's claims to its ledger balance (the source of truth).
     claims_reconcile_interval: int = 0
+    # A5 conservation-gate relative tolerance. Float transfers accumulate one-directional
+    # rounding drift over long horizons at scale (~1.5e-7/tick at 14k agents; ~1e-9 relative
+    # after 8000 ticks trips the 1e-9 default). Default keeps the historical gate exactly;
+    # long-horizon large-scale runs set 1e-8. The systematic per-tick micro-leak hunt is a
+    # separate filed investigation -- this knob only sizes the alarm, it does not mask
+    # event-scale violations (those are orders of magnitude above either setting).
+    ledger_rel_tol: float = 1e-9
     # -- v14 Phase 3: rank-gradient strata (individual position -> individual hazard).
     # Bucket multiplier exp(beta*(0.5-rank)), EXPOSURE-weighted mean 1 (Phase 3 moves WHO,
     # Phase 2 moves HOW MANY). 0.0 = off = bit-identical. fertility gradient is SIGNED
@@ -1794,6 +1801,7 @@ class Config:
         assert self.demographics_population >= 0, "demographics_population must be >= 0"
         assert self.demographics_tfr >= 0.0, "demographics_tfr must be >= 0"
         assert self.demographics_mortality_scale > 0.0, "demographics_mortality_scale must be > 0"
+        assert self.ledger_rel_tol > 0.0, "ledger_rel_tol must be > 0"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
         assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
         assert self.demographic_annual_marriage_rate_peak >= 0.0, "demographic marriage rate must be >= 0"

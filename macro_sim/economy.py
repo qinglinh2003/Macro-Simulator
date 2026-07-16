@@ -267,7 +267,7 @@ class Economy:
         if cfg.government:
             balances[self._fiscal] = 0.0
 
-        self.ledger = Ledger(balances)
+        self.ledger = Ledger(balances, rel_tol=self.cfg.ledger_rel_tol)
         for bk in self.banks:
             bk.reserves = self.ledger.genesis_money          # = M (label)
             self.ledger.allow_negative(bk.id)                # equity may go negative (insolvency)

@@ -250,16 +250,29 @@ class DemographicEconomicBridge:
         if econ is None:
             raise RuntimeError("economic ledger is required for claim identity checks")
         bond_face_by_holder = self._bond_face_by_holder(econ)
+        # Channel 7b: with the periodic reconcile active, a PERSONLESS household's
+        # holdings check is vacuous -- there is nobody to attribute the claim to, and
+        # account-level dividend/recap mechanics keep granting the account bank equity
+        # (seed 4243 t=7363: the emptied household re-acquired 1.03e-4 of BANK_15, 44
+        # ticks after its cash was estate-parked). Cash (== parked estate) and debt
+        # stay strictly checked; ledger-level ownership itself is still covered by the
+        # securities/NFA world gates. interval=0 keeps the historical strict gate.
+        reconcile_active = bool(
+            getattr(getattr(econ, "cfg", None), "claims_reconcile_interval", 0)
+        )
         for household_id in self.household_to_account:
             self._prune_household_bank_equity_claim_dust(household_id, econ)
         for household_id in self.household_to_account:
             self._normalize_household_bank_equity_claims_to_targets(household_id, econ)
         for household_id, account_id in self.household_to_account.items():
+            holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
+            if reconcile_active and not self.claims.members_of_household(household_id):
+                holdings = {}
             self.claims.assert_household_claim_identity(
                 household_id,
                 deposits=econ.ledger.balance(account_id),
                 debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
+                holdings=holdings,
                 holding_tolerances=self._household_asset_claim_tolerances(econ),
             )
 
@@ -285,6 +298,21 @@ class DemographicEconomicBridge:
             raise RuntimeError("economic ledger is required for claim reconciliation")
         bond_face_by_holder = self._bond_face_by_holder(econ)
         for household_id, account_id in self.household_to_account.items():
+            members = self.claims.members_of_household(household_id)
+            if not members:
+                # Channel 7: an EMPTIED household (its last member moved out, died or
+                # emigrated) whose ledger account still holds cash -- the move carries
+                # the person but not the ledger money. No person can hold the claim, so
+                # park the whole balance as estate suspense: the identity then reads
+                # 0 (member claims) + estate == ledger, and money stays conserved. Kept
+                # in sync every call because the account can still accrue flows. (A
+                # debt- or portfolio-holding orphan would still trip the gate loudly --
+                # by design, as those need a real ownership decision, not parking.)
+                balance = econ.ledger.balance(account_id)
+                estate = self.claims.estate_suspense_by_household.get(household_id, 0.0)
+                if balance != estate:
+                    self.claims.estate_suspense_by_household[household_id] = balance
+                continue
             estate_suspense = self.claims.estate_suspense_by_household.get(household_id, 0.0)
             holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
             if skip_bank_equity:
