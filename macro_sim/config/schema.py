@@ -166,6 +166,7 @@ class SecuritiesConfig:
     bonds: bool
     government: bool
     bond_maturity: int
+    bond_maturity_bucket: int
     bond_coupon: float
     bond_finance_frac: float
     p_firm0: float

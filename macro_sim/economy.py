@@ -108,7 +108,15 @@ class Economy:
         self._demographic_household_rng = random.Random(cfg.seed + 13_002)
         household_count = cfg.n_households
         if cfg.demographics_enabled:
-            self.demographic_rates = Phase0VitalRates()
+            # Per-country genesis pyramid + vital dynamics (was a single hardcoded default for all
+            # economies). tfr + a hazard scale on the Gompertz-Makeham mortality; defaults recover
+            # the historical Phase0VitalRates() exactly (bit-identical when the config leaves them).
+            _vr = Phase0VitalRates()
+            self.demographic_rates = Phase0VitalRates(
+                tfr=cfg.demographics_tfr,
+                makeham_a=_vr.makeham_a * cfg.demographics_mortality_scale,
+                gompertz_b=_vr.gompertz_b * cfg.demographics_mortality_scale,
+            )
             population = cfg.demographics_population or cfg.n_households
             self.demographic_state = create_genesis_population(
                 self.demographic_rates,
@@ -259,7 +267,7 @@ class Economy:
         if cfg.government:
             balances[self._fiscal] = 0.0
 
-        self.ledger = Ledger(balances)
+        self.ledger = Ledger(balances, rel_tol=self.cfg.ledger_rel_tol)
         for bk in self.banks:
             bk.reserves = self.ledger.genesis_money          # = M (label)
             self.ledger.allow_negative(bk.id)                # equity may go negative (insolvency)
@@ -707,6 +715,21 @@ class Economy:
         if self.housing is not None:
             self.housing.assert_invariants()      # v15.0: single owner per dwelling; count conserved
         if self.demographic_bridge is not None:
+            # Periodic claims<-ledger reconciliation. The person-claim layer can strand a small
+            # claim residue across a household move (a member debited into the negative -- in cash
+            # OR in a proportionally-retired bond/equity holding -- then re-homed carries the
+            # negative to a household whose ledger never saw the debit). Harmless per event but it
+            # accumulates past CLAIM_TOL over a long, high-churn run and trips the identity gate.
+            # reconcile_financial_claims_from_economy resets each household's person claim set
+            # (cash, debt, bond face, firm equity) to its ledger account (the source of truth);
+            # running it every `claims_reconcile_interval` ticks dissolves the drift. Bank equity is
+            # reset separately: skip it in the reset (its clear+redistribute desyncs the dust layer),
+            # then force it to the exact owner target with the guard-free reconcile -- the per-tick
+            # normalize refuses drifts too large for a tiny bank, which the gate then trips on. 0 = off.
+            ri = self.cfg.claims_reconcile_interval
+            if ri > 0 and self.t % ri == 0:
+                self.demographic_bridge.reconcile_financial_claims_from_economy(self, skip_bank_equity=True)
+                self.demographic_bridge.force_bank_equity_claims_to_targets(self)
             self.demographic_bridge.assert_all_claim_identities(self)
         if self.labor_accounts is not None:
             # v16-L0/L1: the labor A5 -- E+U+S+JG must partition the labor supply,

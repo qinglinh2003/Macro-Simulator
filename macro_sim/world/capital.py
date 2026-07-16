@@ -63,12 +63,12 @@ def seed_reserves(world, amount_foreign: float) -> None:
     reserve account (the government borrowed at home to buy foreign assets, as CBs do).
     Numéraire-equal on both legs ⇒ a passthrough ⇒ the BoP gate holds from tick 0."""
     anchor = world.peg_anchor
-    home, host = world.economies[0], world.economies[anchor]
+    home, host = world.economies[world.peg_economy], world.economies[anchor]
     host.ledger.add_account(CBRES_ID)
     fiscal = getattr(home, "_fiscal", None)
     if fiscal is None or not home.ledger.has_account(fiscal) or amount_foreign <= EPS:
         return
-    amount_dom = amount_foreign * world.rates.bilateral(0, anchor)
+    amount_dom = amount_foreign * world.rates.bilateral(world.peg_economy, anchor)
     home.ledger.transfer(fiscal, DEALER_ID, amount_dom)     # fiscus pays domestic (goes into debt)
     host.ledger.transfer(DEALER_ID, CBRES_ID, amount_foreign)   # dealer delivers the foreign asset
 
@@ -105,20 +105,21 @@ def peg_defense(world, scaled):
         # CB must keep offsetting from reserves. A LOWER rate ⇒ capital flees ⇒ the CB sells
         # FX reserves to defend. The POLICY rate (cfg.r_interest) — the deliberate choice,
         # not the endogenous Taylor path — is what defines "independent policy".
+        p = world.peg_economy
         rates = [float(e.cfg.r_interest) for e in world.economies]
         r_mean = sum(rates) / world.n
-        mismatch = r_mean - rates[0]                  # >0 ⇒ econ0 rate too LOW ⇒ outflow ⇒ drain
-        M0 = world.economies[0].ledger.total_money
+        mismatch = r_mean - rates[p]                  # >0 ⇒ pegger's rate too LOW ⇒ outflow ⇒ drain
+        M0 = world.economies[p].ledger.total_money
         # POLICY: capital controls throttle the flow that drains reserves — closing the
         # account lets the peg + an independent rate BOTH survive (the trilemma's 3rd corner).
-        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control)
+        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control[p])
         drain_for = pressure * world.peg_reserve_scale        # foreign currency to sell
         _defend_peg(world, drain_for)                          # a REAL, conserving FX swap
         world._pent_up += pressure                             # suppressed depreciation accumulates
         if world.reserves() <= EPS:
             world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
             release = [0.0] * world.n                 # release pent-up pressure = DEVALUATION
-            release[0] = max(0.0, world._pent_up / max(1.0, M0))
+            release[p] = max(0.0, world._pent_up / max(1.0, M0))
             return release
         return [0.0] * world.n                        # rate frozen — the peg holds
     return scaled                                     # peg already broken ⇒ free float
@@ -133,7 +134,7 @@ def _defend_peg(world, drain_for: float) -> None:
     Numéraire-equal on both legs ⇒ a passthrough ⇒ the multilateral BoP gate holds.
     """
     anchor = world.peg_anchor
-    home, host = world.economies[0], world.economies[anchor]
+    home, host = world.economies[world.peg_economy], world.economies[anchor]
     fiscal = getattr(home, "_fiscal", None)
     if fiscal is None or not home.ledger.has_account(fiscal):
         return
@@ -142,12 +143,12 @@ def _defend_peg(world, drain_for: float) -> None:
         drain_for = min(drain_for, host.ledger.balance(CBRES_ID))   # cannot sell what it lacks
         if drain_for <= EPS:
             return
-        drain_dom = drain_for * world.rates.bilateral(0, anchor)    # curr_anchor → curr_0
+        drain_dom = drain_for * world.rates.bilateral(world.peg_economy, anchor)  # curr_anchor → curr_pegger
         host.ledger.transfer(CBRES_ID, DEALER_ID, drain_for)        # CB → dealer (foreign)
         home.ledger.transfer(DEALER_ID, fiscal, drain_dom)          # dealer → CB (domestic)
     elif drain_for < -EPS:                             # BUY reserves (resist appreciation)
         buy_for = -drain_for
-        buy_dom = buy_for * world.rates.bilateral(0, anchor)
+        buy_dom = buy_for * world.rates.bilateral(world.peg_economy, anchor)
         home.ledger.transfer(fiscal, DEALER_ID, buy_dom)            # CB pays domestic
         host.ledger.transfer(DEALER_ID, CBRES_ID, buy_for)          # dealer → CB (foreign)
 
@@ -511,16 +512,26 @@ def capital_financing(world, i, best_price) -> float:
     current = world.market_external_positions()[i]
     # POLICY: capital controls throttle the flow (0 = free mobility, 1 = closed account).
     # Closing the account lets a peg keep monetary autonomy — the trilemma's third corner.
-    return world.capital_adjust * (target - current) * (1.0 - world.capital_control)
+    return world.capital_adjust * (target - current) * (1.0 - world.capital_control[i])
 
 
 def capital_grope_signal(world, scaled):
     """When capital is on, the rate gropes toward the capital-SUSTAINED position, not zero:
-    signal_i = (inventory_i − target_i)/M_i. At the target the rate is stable and the NFA
-    persists (else a nonzero equilibrium position would depreciate the rate forever).
-    off ⇒ signal unchanged ⇒ v20 mean-to-zero groping ⇒ bit-identical."""
+    signal_i = (inventory_i − throttle·target_i)/M_i. At the target the rate is stable and the
+    NFA persists (else a nonzero equilibrium position would depreciate the rate forever).
+    off ⇒ signal unchanged ⇒ v20 mean-to-zero groping ⇒ bit-identical.
+
+    POLICY: capital controls throttle the grope target by (1 − capital_control), exactly as they
+    throttle the capital FLOW in ``capital_financing``. Without this the rate chased the FULL
+    open-account target while the account was closed, so under a closed account (capital_control
+    → 1) the rate over-shot toward a position capital could not finance and TRADE flows filled the
+    gap — inflating external positions instead of shrinking them (the opposite of the trilemma's
+    third corner). At capital_control = 0 the throttle is 1.0 ⇒ bit-identical to the open account;
+    at 1.0 the target is 0 ⇒ the rate reverts to v20 trade-balance groping, so a closed account +
+    an independent rate no longer manufacture a spurious NFA."""
     if not world.capital or world.capital_mobility == 0.0:
         return scaled
     target = target_positions(world)
-    return [scaled[i] - target[i] / max(1.0, world.economies[i].ledger.total_money)
+    return [scaled[i] - (1.0 - world.capital_control[i]) * target[i]
+            / max(1.0, world.economies[i].ledger.total_money)
             for i in range(world.n)]

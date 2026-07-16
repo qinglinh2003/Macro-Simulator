@@ -67,11 +67,20 @@ class DemographicEconomicBridge:
         self._person_by_id_index: dict[int, Any] | None = None
         self._household_profiles_cache: dict[int, Any] | None = None
         self._household_agent_by_account: dict[str, Any] = {}
+        # Claim-posting-id cache. The per-firm equity market posts millions of tiny household
+        # claim deltas per tick, and each recomputed the household's adult owner list (age>=18 +
+        # has_person filter over _people_by_household) -- ~6.6M redundant rebuilds in a smoke run.
+        # The owner list only changes when person membership changes, and EVERY such mutation
+        # invalidates the people index; so this cache shares that lifecycle exactly: it is live
+        # (a dict) only in the frozen window after refresh_people_index, and None (live compute)
+        # during the demographic transition. Cleared on invalidate, so it can never go stale.
+        self._claim_posting_ids_cache: dict[int, list[int]] | None = None
 
     def invalidate_people_index(self) -> None:
         self._people_by_household_index = None
         self._person_by_id_index = None
         self._household_profiles_cache = None
+        self._claim_posting_ids_cache = None
 
     def refresh_people_index(self) -> None:
         """Rebuild person indexes from the live demographic state.
@@ -82,6 +91,7 @@ class DemographicEconomicBridge:
         """
         state = self._demographic_state_ref()
         self._household_profiles_cache = None
+        self._claim_posting_ids_cache = None
         if state is None:
             self._people_by_household_index = None
             self._person_by_id_index = None
@@ -96,6 +106,8 @@ class DemographicEconomicBridge:
                     by_household.setdefault(int(household_id), []).append(person)
         self._people_by_household_index = by_household
         self._person_by_id_index = by_id
+        # The people state is now frozen for the rest of the tick; arm the posting-id cache.
+        self._claim_posting_ids_cache = {}
 
     def _demographic_state_ref(self) -> Any | None:
         state = getattr(self, "demographic_state", None)
@@ -238,39 +250,90 @@ class DemographicEconomicBridge:
         if econ is None:
             raise RuntimeError("economic ledger is required for claim identity checks")
         bond_face_by_holder = self._bond_face_by_holder(econ)
+        # Channel 7b: with the periodic reconcile active, a PERSONLESS household's
+        # holdings check is vacuous -- there is nobody to attribute the claim to, and
+        # account-level dividend/recap mechanics keep granting the account bank equity
+        # (seed 4243 t=7363: the emptied household re-acquired 1.03e-4 of BANK_15, 44
+        # ticks after its cash was estate-parked). Cash (== parked estate) and debt
+        # stay strictly checked; ledger-level ownership itself is still covered by the
+        # securities/NFA world gates. interval=0 keeps the historical strict gate.
+        reconcile_active = bool(
+            getattr(getattr(econ, "cfg", None), "claims_reconcile_interval", 0)
+        )
         for household_id in self.household_to_account:
             self._prune_household_bank_equity_claim_dust(household_id, econ)
         for household_id in self.household_to_account:
             self._normalize_household_bank_equity_claims_to_targets(household_id, econ)
         for household_id, account_id in self.household_to_account.items():
+            holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
+            debt = econ.ledger.debt(account_id)
+            if reconcile_active and not self.claims.members_of_household(household_id):
+                # personless household: holdings AND debt attribution are both vacuous
+                # (channel 8, seed 4242 t=10170: a mover left a 0.64 loan behind; the
+                # banking layer still services/defaults it at account level). Cash stays
+                # strictly checked against the parked estate.
+                holdings = {}
+                debt = 0.0
             self.claims.assert_household_claim_identity(
                 household_id,
                 deposits=econ.ledger.balance(account_id),
-                debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
+                debt=debt,
+                holdings=holdings,
                 holding_tolerances=self._household_asset_claim_tolerances(econ),
             )
 
-    def reconcile_financial_claims_from_economy(self, econ: Any | None = None) -> None:
+    def reconcile_financial_claims_from_economy(
+        self, econ: Any | None = None, *, skip_bank_equity: bool = False
+    ) -> None:
         """Synchronize person stock claims to aggregate household accounts.
 
         Legacy market modules still mutate household-level portfolios directly.
         This bridge-level reconciliation keeps the new person ownership layer
         accounting-safe until those market modules are taught to post
         person-level trade events themselves.
+
+        ``skip_bank_equity=True`` leaves bank-equity claims untouched. The
+        periodic reconcile that guards the long-horizon identity gate uses this:
+        bank equity is already dust-pruned and normalized to its ledger target
+        every tick inside ``assert_all_claim_identities``, so overwriting it here
+        with a raw target only fights that machinery (a sub-tolerance target gets
+        reset, then pruned to zero, then tripped against the un-pruned target).
         """
         econ = econ or self.econ
         if econ is None:
             raise RuntimeError("economic ledger is required for claim reconciliation")
         bond_face_by_holder = self._bond_face_by_holder(econ)
         for household_id, account_id in self.household_to_account.items():
+            members = self.claims.members_of_household(household_id)
+            if not members:
+                # Channel 7: an EMPTIED household (its last member moved out, died or
+                # emigrated) whose ledger account still holds cash -- the move carries
+                # the person but not the ledger money. No person can hold the claim, so
+                # park the whole balance as estate suspense: the identity then reads
+                # 0 (member claims) + estate == ledger, and money stays conserved. Kept
+                # in sync every call because the account can still accrue flows. (A
+                # debt- or portfolio-holding orphan would still trip the gate loudly --
+                # by design, as those need a real ownership decision, not parking.)
+                balance = econ.ledger.balance(account_id)
+                estate = self.claims.estate_suspense_by_household.get(household_id, 0.0)
+                if balance != estate:
+                    self.claims.estate_suspense_by_household[household_id] = balance
+                continue
             estate_suspense = self.claims.estate_suspense_by_household.get(household_id, 0.0)
+            holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
+            if skip_bank_equity:
+                holdings = {
+                    asset_id: amount
+                    for asset_id, amount in holdings.items()
+                    if not asset_id.startswith(BANK_EQUITY_CLAIM_PREFIX)
+                }
             self.claims.reset_household_financial_claims(
                 household_id,
                 owner_ids=self._claim_owner_ids(household_id),
                 cash=econ.ledger.balance(account_id) - estate_suspense,
                 debt=econ.ledger.debt(account_id),
-                holdings=self._household_asset_claim_targets(econ, account_id, bond_face_by_holder),
+                holdings=holdings,
+                reset_bank_equity=not skip_bank_equity,
             )
 
     def household_labor_supply(self, account_id: str) -> float:
@@ -1080,10 +1143,16 @@ class DemographicEconomicBridge:
         return self.claims.members_of_household(household_id)
 
     def _claim_posting_ids(self, household_id: int) -> list[int]:
+        cache = self._claim_posting_ids_cache
+        if cache is not None:
+            cached = cache.get(household_id)
+            if cached is not None:
+                return cached
         owners = [person_id for person_id in self._claim_owner_ids(household_id) if self.claims.has_person(person_id)]
-        if owners:
-            return owners
-        return self.claims.members_of_household(household_id)
+        result = owners if owners else self.claims.members_of_household(household_id)
+        if cache is not None:
+            cache[household_id] = result
+        return result
 
     def _post_household_cash_delta(self, household_id: int, amount: float, *, reason: str) -> None:
         amount = float(amount)
@@ -1276,6 +1345,69 @@ class DemographicEconomicBridge:
             else:
                 self._reduce_household_bank_equity_claim(household_id, bank_id, -diff)
 
+    def force_bank_equity_claims_to_targets(self, econ: Any | None = None) -> None:
+        """Set each household's bank-equity claim to the exact ledger owner target,
+        CONCENTRATED on a single member -- the guard-free, prune-safe sibling of the
+        per-tick normalize.
+
+        Three default-path assumptions break a long, high-churn multi-economy run and
+        this closes all of them, but only when the periodic reconcile is opted in
+        (claims_reconcile_interval > 0); interval=0 never calls it, so the default
+        per-tick machinery is untouched:
+
+        1. The per-tick normalize refuses any drift above a bank-size-scaled RECONCILE
+           tolerance (a guard against masking a gross error). For a bank with tiny
+           shares outstanding that tolerance collapses below an economically-nil
+           drift, so a real owner-vs-claim gap is left unreconciled and the gate --
+           keyed to the tighter DUST tolerance -- trips.
+        2. The dust PRUNE is per-member but the target and the identity check are
+           per-household. A household holding just above dust, split across several
+           members, has each member's share fall below dust; the prune then zeroes
+           every share and the household sum collapses below its target.
+        3. The prune/resurrect DOOMSDAY CLOCK (the seed-4243 t=2510 crash). The
+           per-tick trade/normalize paths SPLIT a household's claim equally across
+           members, each share below dust. Inside every gate call the prune zeroes
+           them, then the normalize resurrects the full (split) claim -- as long as
+           the drift stays under the reconcile tolerance. The household therefore
+           shows ZERO drift at force time (a drift-triggered force never fires),
+           and the tick its slowly-growing target crosses the bank's reconcile
+           tolerance the resurrection is refused and the gate trips.
+
+        The cure for all three is the same and needs no drift trigger: make the
+        force IDEMPOTENT. Every call clears each household's per-bank member shares
+        and re-concentrates the exact ledger target onto one member. Concentrated,
+        the single claim exceeds dust (the prune keeps it), the normalize sees zero
+        drift (no resurrection needed), and the identity holds by construction."""
+        econ = econ or self.econ
+        if econ is None:
+            return
+        banks = getattr(econ, "banks", []) or []
+        for household_id in self.household_to_account:
+            members = self.claims.members_of_household(int(household_id))
+            if not members:
+                continue
+            # the holder must be a CURRENT member: posting ids are designated owners
+            # and go stale across household splits (channel 6) -- concentrating the
+            # claim on a moved-out owner would strand it in their new household.
+            member_set = set(members)
+            holder = next((p for p in self._claim_posting_ids(household_id) if p in member_set),
+                          members[0])
+            account_id = self.account_for_household_id(int(household_id))
+            for bank in banks:
+                bank_id = str(getattr(bank, "id", ""))
+                if not bank_id:
+                    continue
+                target = float((getattr(bank, "owners", None) or {}).get(account_id, 0.0))
+                dust = self._bank_equity_dust_tolerance(econ, bank_id)
+                # unconditional: clear any (possibly fragmented) member shares ...
+                for person_id in members:
+                    self.claims.balance_sheet(person_id).bank_equity_claims.pop(bank_id, None)
+                # ... and concentrate the whole target on one member so it survives
+                # the per-member dust prune. Sub-dust targets stay cleared -- the
+                # gate's expected-holdings filter drops those too, so both sides agree.
+                if abs(target) > dust:
+                    self.claims.balance_sheet(holder).bank_equity_claims[bank_id] = target
+
     def _add_household_bank_equity_claim(self, household_id: int, bank_id: str, amount: float) -> None:
         amount = float(amount)
         if amount <= 0.0:
@@ -1303,7 +1435,15 @@ class DemographicEconomicBridge:
                 self.claims.balance_sheet(last_id).bank_equity_claims.get(bank_id, 0.0) + (amount - allocated)
             )
             return
-        person_ids = self._claim_posting_ids(household_id)
+        # Posting ids are the household's DESIGNATED owners, and that designation can
+        # go stale across a household split: an owner who moved out would receive
+        # their share in their NEW household, stranding it there (this household then
+        # under-counts, the other over-counts -- both trip the identity gate; seed
+        # 4242, household 3553 -> 3554, t=4161). Restrict to current members.
+        member_set = set(members)
+        person_ids = [p for p in self._claim_posting_ids(household_id) if p in member_set]
+        if not person_ids:
+            person_ids = list(members)
         if not person_ids:
             return
         share = amount / len(person_ids)

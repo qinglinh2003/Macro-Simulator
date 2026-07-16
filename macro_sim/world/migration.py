@@ -73,8 +73,9 @@ def run_migration(world) -> None:
             world._migrant_stock[i] = max(0.0, world._migrant_stock[i] * (1.0 - world.migration_rate))
         # POLICY: a GUEST-WORKER regime — migrants are temporary and return home at a rate
         # (permanent settlement ⇒ 0). Applied after the pull, so it damps the steady state.
-        if world.guest_worker_return > 0.0:
-            world._migrant_stock[i] *= (1.0 - world.guest_worker_return)
+        gw = lever(world.guest_worker_return, host)   # the HOST's temporary-migration return rate
+        if gw > 0.0:
+            world._migrant_stock[i] *= (1.0 - gw)
 
     # 2. POLICY — the immigration cap/quota (a run-time government lever): each host admits
     #    at most `immigration_cap × its population` immigrants in total. When it binds, the
@@ -85,7 +86,7 @@ def run_migration(world) -> None:
         for h in range(n):
             incoming = [i for i in range(n) if host_of[i] == h]
             total = sum(world._migrant_stock[i] for i in incoming)
-            ceiling = world.immigration_cap * len(econs[h].households)
+            ceiling = lever(world.immigration_cap, h) * len(econs[h].households)   # per-HOST cap
             if total > ceiling + EPS and total > 0.0:
                 scale = ceiling / total
                 for i in incoming:
@@ -103,7 +104,7 @@ def run_migration(world) -> None:
         S = world._migrant_stock[i]
         if host < 0 or S <= EPS:
             continue
-        remit_host = world.remittance_share * S * _wage(econs[host])   # migrant earnings sent home (curr_host)
+        remit_host = lever(world.remittance_share, i) * S * _wage(econs[host])   # origin i's diaspora send-home rate
         net_origin, origin_tax, host_outflow, gross_origin = _remit(
             world, host, i, remit_host,
         )

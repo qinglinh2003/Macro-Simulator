@@ -125,14 +125,38 @@ def _deprivation_person_observations(econ) -> tuple[int, list]:
     return int(state.current_date.year), persons
 
 
-def _bank_economic_capital_snapshot(econ, bank) -> float:
-    """Read bank economic capital without populating the behavioral bond cache."""
+def _bank_economic_capital_snapshot(econ, bank, bond_deltas_by_holder=None) -> float:
+    """Read bank economic capital WITHOUT populating the behavioral bond cache (metrics must
+    leave econ untouched -- test_metrics_purity).
+
+    ``bond_deltas_by_holder`` is an optional pre-computed {holder: [market-cost per lot in lot
+    order]} map, built ONCE by a pure local pass in _compute_tick_metrics (no econ mutation). When
+    supplied it replaces the former per-bank full-lot re-scan (O(n_banks x n_lots) per call). The
+    ``+=`` accumulation from the ledger balance over the same lot-ordered deltas is byte-for-byte
+    the old sequence, so the snapshot stays bit-identical."""
     capital = econ.ledger.balance(bank.id)
     if econ.cfg.bonds:
-        for lot in getattr(econ, "_bonds", ()):
-            if lot["holder"] == bank.id:
-                capital += bond_market_value(econ, lot) - lot["cost"]
+        if bond_deltas_by_holder is not None:
+            for delta in bond_deltas_by_holder.get(bank.id, ()):  # lot order preserved
+                capital += delta
+        else:
+            for lot in getattr(econ, "_bonds", ()):
+                if lot["holder"] == bank.id:
+                    capital += bond_market_value(econ, lot) - lot["cost"]
     return capital
+
+
+def _bond_deltas_by_holder(econ) -> dict:
+    """Pure local {holder: [market-cost per lot in lot order]} for the bank-capital snapshots.
+
+    ONE pass over the lots, mirroring the per-holder ``+=`` order the snapshot used to rebuild
+    per bank -- so it is bit-identical -- but shared across every bank and every snapshot call
+    site instead of re-scanning all lots per bank (was O(n_call_sites x n_banks x n_lots)). This
+    does NOT touch econ._bond_valuation_cache, so metrics stay pure (test_metrics_purity)."""
+    deltas: dict = {}
+    for lot in getattr(econ, "_bonds", ()):
+        deltas.setdefault(lot["holder"], []).append(bond_market_value(econ, lot) - lot["cost"])
+    return deltas
 
 
 def _hhi(values: Sequence[float]) -> float:
@@ -685,6 +709,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                 ),
                 "labor_underemployed_heads": float(accounts.underemployed_heads),
                 "labor_underemployment_hours": float(accounts.underemployment_hours),
+                # v23 second contract: heads holding a live extra job + the FTE-hours it sells
+                "labor_second_job_heads": float(getattr(accounts, "second_job_heads", 0.0)),
+                "labor_second_job_hours": float(getattr(accounts, "second_job_hours", 0.0)),
                 "labor_U": float(accounts.unemployed),
                 "labor_S": float(accounts.suspended_memo),
                 "labor_JG": float(accounts.job_guarantee),
@@ -1067,6 +1094,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             ),
             "bank_external_interest_expense": float(
                 np.sum([b.external_interest_expense for b in econ.banks])
+            ),
+            # v23: the bank's cost of funds on DEPOSITS (the missing P&L leg the deposit-rate fix
+            # added). Reduces realized profit before dividends; surfaced so the spread is visible.
+            "bank_deposit_funding_cost": float(
+                np.sum([getattr(b, "deposit_funding_cost", 0.0) for b in econ.banks])
             ),
             "bank_realized_credit_losses": float(
                 np.sum([b.realized_credit_losses for b in econ.banks])
@@ -1621,13 +1653,16 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "cb_balance_sheet_liabilities": rec.get("cb_reserves", 0.0) + float(getattr(econ, "_tga", 0.0)),
         })
         rec["cb_net_position"] = rec["cb_balance_sheet_assets"] - rec["cb_balance_sheet_liabilities"]
+    # One pure local pass over the bond lots, shared by every bank-capital snapshot below
+    # (else each snapshot re-scanned all lots per bank). None when bonds are off.
+    bond_deltas = _bond_deltas_by_holder(econ) if getattr(econ.cfg, "bonds", False) else None
     # Optional common bank-capital envelope.  Report live ledger exposure rather
     # than the intra-credit cache so principal service and write-offs later in the
     # tick are reflected without mutating model state during observation.
     if getattr(econ.cfg, "unified_bank_rwa", False) and getattr(econ, "banks", None):
         alive_banks = [bank for bank in econ.banks if bank.alive]
         exposures = [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
-        capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank)) for bank in alive_banks]
+        capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank, bond_deltas)) for bank in alive_banks]
         ratio = max(1e-12, float(econ.cfg.mortgage_min_capital_ratio))
         limits = [capital / ratio for capital in capitals]
         headrooms = [limit - exposure for limit, exposure in zip(limits, exposures)]
@@ -1671,7 +1706,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "bank_loanbook_hhi": hhi,
             "bank_rate_spread_sd": float(wvar ** 0.5),
         })
-        econ_caps = [_bank_economic_capital_snapshot(econ, b) for b in econ.banks if b.alive]
+        econ_caps = [_bank_economic_capital_snapshot(econ, b, bond_deltas) for b in econ.banks if b.alive]
         rec.update({
             "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
             "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
@@ -1744,27 +1779,51 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         bank_ids = getattr(econ, "_bank_ids", set())
         lots = getattr(econ, "_bonds", []) or []
         # v12.3 THREE VALUES: face (bond identity) / book (cost, bank-money invariant) / market (MTM, wealth).
-        market_total = float(sum(bond_market_value(econ, l) for l in lots)) if lots else 0.0
+        # ONE pass computes each lot's market value once (was ~6 full-lot scans per tick, each
+        # recomputing bond_market_value). Every list is built in lot order, so each sum below is
+        # byte-for-byte the former generator sum over the same order -- bit-identical.
+        coupon_bearing = getattr(econ.cfg, "bond_coupon", 0.0) > 0.0
+        all_mv: list = []
+        hh_mv: list = []
+        bank_mv: list = []
+        cb_mv: list = []
+        dur_mv_num: list = []
+        for l in lots:
+            mv = bond_market_value(econ, l)
+            holder = l["holder"]
+            all_mv.append(mv)
+            if holder in hh_ids:
+                hh_mv.append(mv)
+            if holder in bank_ids:
+                bank_mv.append(mv)
+            if holder == "CB":
+                cb_mv.append(mv)
+            if coupon_bearing:
+                dur_mv_num.append(mv * max(0.0, l["matures_at"] - econ.t))
+        market_total = float(sum(all_mv)) if lots else 0.0
         book_total = float(sum(l["cost"] for l in lots)) if lots else 0.0
         bank_bond_face = float(sum(l["face"] for l in lots if l["holder"] in bank_ids)) if lots else 0.0
         hh_bond_face = float(sum(l["face"] for l in lots if l["holder"] in hh_ids)) if lots else 0.0
         cb_bond_face = float(sum(l["face"] for l in lots if l["holder"] == "CB")) if lots else 0.0
-        hh_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] in hh_ids)) if lots else 0.0
-        bank_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] in bank_ids)) if lots else 0.0
-        cb_bond_market = float(sum(bond_market_value(econ, l) for l in lots if l["holder"] == "CB")) if lots else 0.0
+        hh_bond_market = float(sum(hh_mv)) if lots else 0.0
+        bank_bond_market = float(sum(bank_mv)) if lots else 0.0
+        cb_bond_market = float(sum(cb_mv)) if lots else 0.0
         bond_face_total = float(sum(l["face"] for l in lots)) if lots else 0.0
         maturity_weighted = _safe_ratio(
             float(sum(l["face"] * max(0.0, l["matures_at"] - econ.t) for l in lots)),
             bond_face_total,
         )
-        duration_weighted = maturity_weighted if getattr(econ.cfg, "bond_coupon", 0.0) <= 0.0 else _safe_ratio(
-            float(sum(bond_market_value(econ, l) * max(0.0, l["matures_at"] - econ.t) for l in lots)),
+        duration_weighted = maturity_weighted if not coupon_bearing else _safe_ratio(
+            float(sum(dur_mv_num)),
             market_total,
         )
         alive_banks = [b for b in econ.banks if b.alive]
-        econ_caps = [_bank_economic_capital_snapshot(econ, b) for b in alive_banks]
+        econ_caps = [_bank_economic_capital_snapshot(econ, b, bond_deltas) for b in alive_banks]
         rec.update({
             "bonds_outstanding": float(getattr(econ, "_bonds_outstanding", 0.0)),   # = Σ face
+            # FINDING 4: the LOT COUNT (not face). Daily issuance fragments the book; bounded by
+            # bond_maturity_bucket. Watch it stay flat over long horizons instead of O(ticks).
+            "n_bond_lots": float(len(lots)),
             "bond_book_total": book_total,
             "bond_market_total": market_total,
             "bond_mtm_pnl": market_total - book_total,          # <0 on a rate hike above coupon (duration/SVB)

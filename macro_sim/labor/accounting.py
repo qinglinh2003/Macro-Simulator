@@ -141,6 +141,11 @@ class LaborAccounts:
             pid: job for pid, job in lm.second_jobs.items() if pid not in lm.suspended
         }
         second_hours = sum(float(job.hours) for job in second_of.values())
+        # v23 second contract observability: how many heads hold a live extra contract, and
+        # how many FTE-hours those extra contracts sell (folded into `employed` below, surfaced
+        # separately so the intensive-margin cure is visible in the metrics).
+        self.second_job_heads = float(len(second_of))
+        self.second_job_hours = float(second_hours)
         self.employed = (
             sum(float(job.hours) for job in active_jobs) + second_hours
             if lm.fractional_hours else self.employed_heads

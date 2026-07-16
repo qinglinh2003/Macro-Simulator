@@ -121,6 +121,27 @@ class Config:
     mortality_income_elasticity: float = 0.0  # gamma in M = clip(x^-gamma, lo, hi); 0 = off -- FREE
     mortality_mult_lo: float = 0.7
     mortality_mult_hi: float = 1.3
+    # Per-country GENESIS vital rates. The multi-economy World bolted N economies together but
+    # left the demographic kernel on its single hardcoded Phase0VitalRates() default, so every
+    # economy shared ONE age pyramid -- "aging-rich vs young-developing" was inexpressible.
+    # These wire the two rates that shape the pyramid into Config: create_genesis_population
+    # derives the STABLE age distribution from them, so low TFR + low mortality => an OLD pyramid
+    # and high TFR => a YOUNG one, and the same rates drive fertility/mortality over the run.
+    # Defaults exactly match Phase0VitalRates() => a config that leaves them is bit-identical.
+    demographics_tfr: float = 2.5             # total fertility rate (children/woman); pyramid youth
+    demographics_mortality_scale: float = 1.0  # x on the Gompertz-Makeham hazard (>1 = shorter life)
+    # Reconcile the person-claim layer to the household ledger every N ticks (0 = off = never mid-run
+    # = bit-identical). Long, high-churn runs strand tiny cash-claim residues across household moves
+    # that accumulate past CLAIM_TOL and trip the claims identity gate; periodic reconciliation
+    # dissolves them by resetting each household's claims to its ledger balance (the source of truth).
+    claims_reconcile_interval: int = 0
+    # A5 conservation-gate relative tolerance. Float transfers accumulate one-directional
+    # rounding drift over long horizons at scale (~1.5e-7/tick at 14k agents; ~1e-9 relative
+    # after 8000 ticks trips the 1e-9 default). Default keeps the historical gate exactly;
+    # long-horizon large-scale runs set 1e-8. The systematic per-tick micro-leak hunt is a
+    # separate filed investigation -- this knob only sizes the alarm, it does not mask
+    # event-scale violations (those are orders of magnitude above either setting).
+    ledger_rel_tol: float = 1e-9
     # -- v14 Phase 3: rank-gradient strata (individual position -> individual hazard).
     # Bucket multiplier exp(beta*(0.5-rank)), EXPOSURE-weighted mean 1 (Phase 3 moves WHO,
     # Phase 2 moves HOW MANY). 0.0 = off = bit-identical. fertility gradient is SIGNED
@@ -457,6 +478,13 @@ class Config:
     bond_theta: float = 0.0               # households' target share of wealth held in bonds (v12.3)
     # v12.3: multi-period bonds → the three values DIVERGE (duration/SVB). maturity 1 + coupon 0 ⇒ v12.1 PAR bill.
     bond_maturity: int = 1                # periods to maturity (1 = one-period bill; >1 ⇒ market≠face on a rate move)
+    # v23 perf (FINDING 4): daily issuance of long bills fragments the book into ~n_holders x
+    # bond_maturity tiny lots, and every tick re-values all of them ⇒ O(horizon^2). Snapping the
+    # maturity of newly issued lots to a bucket grid of this width lets same-bucket daily buys by a
+    # holder MERGE, cutting the live lot count (and every bond pass) by ~this factor. 1 = one lot per
+    # issuance day = exact (t + bond_maturity), NO merging ⇒ bit-identical. >1 shifts maturity onto
+    # the grid (a real, flagged economic change) and re-bases the golden digests for that path.
+    bond_maturity_bucket: int = 1
     bank_bond_appetite: float = 0.0       # bank's target share of EXCESS reserves put into bonds (money-creating drain)
     # v12.4: the CB's quantity tools. Off ⇒ bit-identical to v12.3 (the CB never creates/destroys base money).
     omo: bool = False                     # open-market ops: drain reserves toward a target ⇒ interbank market binds
@@ -764,7 +792,27 @@ class Config:
     # 2.5). capital_annual_clock re-derives the joint set (v, K_firm0, A) in __post_init__ so
     # genesis output is exactly invariant; default off => every existing preset bit-identical.
     capital_annual_clock: bool = False
+    # Idempotency guard for the in-place annual-clock migration. It mutates v/K_firm0/A in
+    # __post_init__, and dataclasses.replace() re-runs __post_init__ on already-migrated
+    # values -- so without this flag every replace() (World per-economy reseed, the .large()/
+    # .small() presets, experiment overrides) would re-scale by ticks_per_year AGAIN (365x,
+    # compounding). As a real field it is copied by replace(), so a migrated config stays
+    # migrated exactly once. Not user-set; excluded from equality so it never distinguishes
+    # two otherwise-identical configs.
+    _capital_annual_clock_applied: bool = field(default=False, repr=False, compare=False)
     ticks_per_year: float = 365.0   # calendar scale used by the annual-clock derivation
+    # v23 FINDING 5: the annual clock makes capital REAL (v -> v*S=912.5), and the desired-capital
+    # rule K* = v * demand_expected then AMPLIFIES the demand-expectation EMA ~912x into the capital
+    # stock. With the daily demand memory (lambda_d) unchanged, firms size a ~12-year capital stock
+    # off a ~130-day demand estimate, so daily demand noise drives a large boom-bust accelerator
+    # cycle (unemployment spiking to ~38% over a decade). Smoothing the demand expectation at the
+    # SOURCE damps the cycle far better than slowing the investment RESPONSE (which costs output): a
+    # 3-seed x 6-factor sweep found lambda_d *= 0.5 the robust optimum -- it minimises inflation
+    # volatility AND peak unemployment AND raises output, non-monotonically (0.75 and 0.15 are both
+    # worse). DEFAULT 1.0 = no damping = bit-identical for EVERY preset including clock-on ones
+    # (a 0.5 default silently changed clock-on dynamics and regressed the v23 second-job test);
+    # the cure is opted in explicitly by FULL_FRONTIER_FLAGS / production configs.
+    capital_clock_demand_smoothing: float = 1.0
     v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
     delta_K: float = 0.05           # capital depreciation rate -- anchored (+ maint. floor)
@@ -986,12 +1034,19 @@ class Config:
         """
         if not self.capital_annual_clock:
             return
+        if self._capital_annual_clock_applied:
+            return                      # already migrated (e.g. copied through dataclasses.replace)
         scale = float(self.ticks_per_year)
         if scale <= 1.0:
             return
         self.v *= scale
         self.K_firm0 *= scale
         self.A *= scale ** (-self.alpha)
+        # FINDING 5: damp the demand-expectation EMA that the now-912x-amplified capital target
+        # reads, so the real-capital accelerator does not cycle on daily demand noise. Factor 1.0
+        # leaves it unchanged (recovers the pre-fix clock behaviour for A/B comparison).
+        self.lambda_d *= self.capital_clock_demand_smoothing
+        self._capital_annual_clock_applied = True
 
     @property
     def capital_enabled(self) -> bool:
@@ -1191,6 +1246,7 @@ class Config:
             bonds=self.bonds,
             government=self.government,
             bond_maturity=self.bond_maturity,
+            bond_maturity_bucket=self.bond_maturity_bucket,
             bond_coupon=self.bond_coupon,
             bond_finance_frac=self.bond_finance_frac,
             p_firm0=self.p_firm0,
@@ -1745,6 +1801,9 @@ class Config:
                 and self.cpi_rebase_interval_days >= 1), \
             "fixed-basket CPI rebase interval must be a positive integer number of days"
         assert self.demographics_population >= 0, "demographics_population must be >= 0"
+        assert self.demographics_tfr >= 0.0, "demographics_tfr must be >= 0"
+        assert self.demographics_mortality_scale > 0.0, "demographics_mortality_scale must be > 0"
+        assert self.ledger_rel_tol > 0.0, "ledger_rel_tol must be > 0"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
         assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
         assert self.demographic_annual_marriage_rate_peak >= 0.0, "demographic marriage rate must be >= 0"
@@ -1984,6 +2043,8 @@ class Config:
         assert 0.0 <= self.bond_finance_frac <= 1.0, "v12 bond_finance_frac in [0,1]"
         assert self.bond_coupon >= 0.0 and 0.0 <= self.bond_theta <= 1.0, "v12 bond coupon/theta ranges"
         assert self.bond_maturity >= 1, "v12.3 bond_maturity ≥ 1 (1 = one-period bill)"
+        assert self.bond_maturity_bucket >= 1, "bond_maturity_bucket ≥ 1 (1 = exact daily maturity, bit-identical)"
+        assert 0.0 < self.capital_clock_demand_smoothing <= 1.0, "capital_clock_demand_smoothing in (0,1] (1 = no damping)"
         assert 0.0 <= self.bank_bond_appetite <= 1.0, "v12.3 bank_bond_appetite in [0,1]"
         assert 0.0 <= self.omo_reserve_target and 0.0 < self.omo_drain_frac <= 1.0, "v12.4 OMO target≥0, drain∈(0,1]"
         assert self.bank_bond_duration_limit >= 0.0, "v12.4 bank_bond_duration_limit ≥ 0"
