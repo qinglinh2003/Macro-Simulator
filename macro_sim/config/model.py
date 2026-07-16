@@ -809,8 +809,10 @@ class Config:
     # SOURCE damps the cycle far better than slowing the investment RESPONSE (which costs output): a
     # 3-seed x 6-factor sweep found lambda_d *= 0.5 the robust optimum -- it minimises inflation
     # volatility AND peak unemployment AND raises output, non-monotonically (0.75 and 0.15 are both
-    # worse). Applied ONLY when the clock is on, so every clock-off preset stays bit-identical.
-    capital_clock_demand_smoothing: float = 0.5
+    # worse). DEFAULT 1.0 = no damping = bit-identical for EVERY preset including clock-on ones
+    # (a 0.5 default silently changed clock-on dynamics and regressed the v23 second-job test);
+    # the cure is opted in explicitly by FULL_FRONTIER_FLAGS / production configs.
+    capital_clock_demand_smoothing: float = 1.0
     v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
     delta_K: float = 0.05           # capital depreciation rate -- anchored (+ maint. floor)

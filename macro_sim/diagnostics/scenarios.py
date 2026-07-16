@@ -22,6 +22,10 @@ FULL_FRONTIER_FLAGS: dict[str, Any] = {
     "national_accounts_metrics": True,
     "cb_uses_fixed_basket_cpi": True,
     "fiscal_uses_national_accounts_gdp": True,
+    # FINDING 5 accelerator cure: damp the demand EMA under the annual capital clock.
+    # Opted in HERE (not via the Config default) so plain configs stay bit-identical;
+    # this keeps the frontier digest and the 30y portrait semantics unchanged.
+    "capital_clock_demand_smoothing": 0.5,
     "housing_enabled": True,
     "housing_market_enabled": True,
     "mortgage_enabled": True,
