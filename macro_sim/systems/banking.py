@@ -556,23 +556,34 @@ def settlement_node(econ: Any, account_id):
     return bank_for(econ, account_id).id
 
 
+class _ReserveResolver:
+    """account -> settlement-node resolver for the RTGS overlay.
+
+    A module-level class instance (not a closure) so the ledger -- and therefore
+    the whole engine object graph -- stays picklable for checkpoints. Behaviour is
+    identical to the previous closure: memoised via ``econ._node_of`` (resolution
+    is stable between ``_bank_of`` writes, and every write site drops its key, so
+    a hit == a fresh resolve)."""
+
+    def __init__(self, econ: Any) -> None:
+        self.econ = econ
+
+    def __call__(self, account_id):
+        node_of = self.econ._node_of
+        node = node_of.get(account_id)
+        if node is None:
+            node = settlement_node(self.econ, account_id)
+            node_of[account_id] = node
+        return node
+
+
 def enable_reserves(econ: Any) -> None:
     reserves = {bank.id: econ.ledger.balance(bank.id) for bank in econ.banks}
     for account in list(econ.firms) + list(econ.households):
         reserves[bank_for(econ, account.id).id] += econ.ledger.balance(account.id)
     reserves["CLEARING"] = 0.0
     reserves["CB"] = 0.0
-    node_of = econ._node_of              # memo: resolution is stable between `_bank_of` writes, and
-    #                                      every write site drops its key, so a hit == a fresh resolve.
-
-    def resolver(account_id):
-        node = node_of.get(account_id)
-        if node is None:
-            node = settlement_node(econ, account_id)
-            node_of[account_id] = node
-        return node
-
-    econ.ledger.enable_reserves(resolver, reserves)
+    econ.ledger.enable_reserves(_ReserveResolver(econ), reserves)
     econ._reserve_M0 = econ.ledger.total_reserves
 
 

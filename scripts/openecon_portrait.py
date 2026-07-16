@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from macro_sim.config import Config
 from macro_sim.diagnostics.scenarios import FULL_FRONTIER_FLAGS
-from macro_sim.diagnostics.world_probes import WorldProbeCollector
+from macro_sim.diagnostics.world_probes import WorldProbeCollector, diagnose_world
 from macro_sim.world.world import World
 
 
@@ -75,25 +75,72 @@ def build_world(configs, **world_over):
 
 
 def run_portrait(n, pop, years, out_dir, world_over=None, overrides_per_country=None,
-                 measure_identities=True, bond_maturity_bucket=1):
+                 measure_identities=True, bond_maturity_bucket=1,
+                 checkpoint_every=0, resume=None):
     ticks = int(round(years * 365))
-    configs = build_configs(n, pop, ticks, productivity_spread=0.5,
-                            overrides_per_country=overrides_per_country,
-                            bond_maturity_bucket=bond_maturity_bucket)
-    world = build_world(configs, **(world_over or {}))
+    start_tick = 0
+    if resume:
+        # Resume from a checkpoint container (docs/checkpoint_design.md): the pickled
+        # World carries every piece of live state (RNG streams, ledgers, agents, EMAs,
+        # records-so-far); the sidecar carries the probe collector's rows. Bit-identical
+        # continuation is the tested contract (tests/test_checkpoint.py).
+        from macro_sim.checkpoint import load_checkpoint
+        world, sidecar, hdr = load_checkpoint(resume)
+        start_tick = int(hdr["tick"])
+        print(f"RESUME from {resume} at tick {start_tick} "
+              f"(written at commit {(hdr.get('git_commit') or '?')[:12]})", flush=True)
+    else:
+        configs = build_configs(n, pop, ticks, productivity_spread=0.5,
+                                overrides_per_country=overrides_per_country,
+                                bond_maturity_bucket=bond_maturity_bucket)
+        world = build_world(configs, **(world_over or {}))
+        sidecar = {}
 
     # R2: the identity gates. WorldProbeCollector wraps World.step, snapshots the pre/post
     # external state each tick, and feeds diagnose_world -- the canonical identity path (the
     # earlier _world_probe_rows guess did not exist, so R2 silently went unmeasured). The
     # collector adds per-tick snapshot overhead, so the runtime profile (--profile) drives the
     # raw world.run instead; the identity report is a correctness gate, not a speed measurement.
+    # collector.run(ticks) is unrolled into an explicit per-tick loop below -- the SAME call
+    # sequence (run = N x step + diagnose_world), so the default path stays bit-identical;
+    # the loop is what gives checkpointing and crash forensics their hook points.
     identity = None
-    t0 = time.perf_counter()
+    collector = None
     if measure_identities:
         collector = WorldProbeCollector(world)
-        identity = collector.run(ticks)          # domestic records still accrue on economies
-    else:
-        world.run(ticks)
+        collector.records = sidecar.get("probe_records", collector.records)
+
+    def _save(path, tick):
+        from macro_sim.checkpoint import save_checkpoint
+        save_checkpoint(str(path), world, tick=tick,
+                        sidecar={"probe_records": collector.records} if collector else {})
+
+    ckpt_dir = Path(out_dir)
+    t0 = time.perf_counter()
+    try:
+        for t in range(start_tick, ticks):
+            if collector is not None:
+                collector.step()                 # domestic records still accrue on economies
+            else:
+                world.step()
+            if checkpoint_every and (t + 1) % checkpoint_every == 0 and (t + 1) < ticks:
+                ckpt_dir.mkdir(parents=True, exist_ok=True)
+                _save(ckpt_dir / "checkpoint.msim", t + 1)
+    except AssertionError:
+        # Crash forensics: freeze the exact pre-mortem state so the failure can be
+        # loaded and interrogated in minutes instead of re-simulated for hours.
+        # The dump is best-effort and must never mask the original assertion.
+        crash_tick = locals().get("t", start_tick)
+        try:
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            _save(ckpt_dir / "crash_state.msim", crash_tick)
+            print(f"CRASH state saved to {ckpt_dir / 'crash_state.msim'} (tick {crash_tick})",
+                  flush=True)
+        except Exception as save_err:
+            print(f"CRASH state save failed: {save_err}", flush=True)
+        raise
+    if collector is not None:
+        identity = diagnose_world(world, collector.records)
     elapsed = time.perf_counter() - t0
     per_econ = [econ.records for econ in world.economies]
 

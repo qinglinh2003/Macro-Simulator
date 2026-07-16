@@ -131,7 +131,8 @@ def validate(years, pop_div):
               f"{r['gdp_cov']:>9}{r['gdp_end']:>9}{flag}")
 
 
-def run_production(years, out, pop_div=1, pop_mult=1.0, base_seed=4242):
+def run_production(years, out, pop_div=1, pop_mult=1.0, base_seed=4242,
+                   checkpoint_every=0, resume=None):
     from scripts.openecon_portrait import run_portrait
     pops = [max(150, int(round(p * pop_mult)) // pop_div) for p in mapped_pops()]
     n = len(ARCHETYPES)
@@ -157,7 +158,8 @@ def run_production(years, out, pop_div=1, pop_mult=1.0, base_seed=4242):
     print(f"  horizon {years}y ({int(round(years*365))} ticks)  out={out}", flush=True)
     return run_portrait(n=n, pop=1000, years=years, out_dir=out, world_over=world_over,
                         overrides_per_country=overrides, measure_identities=True,
-                        bond_maturity_bucket=30)
+                        bond_maturity_bucket=30,
+                        checkpoint_every=checkpoint_every, resume=resume)
 
 
 def main():
@@ -169,6 +171,11 @@ def main():
     ap.add_argument("--pop-mult", type=float, default=1.0, help="multiply mapped pops (2.0 = double scale)")
     ap.add_argument("--base-seed", type=int, default=4242, help="world base seed (vary for seed replicates)")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--checkpoint", type=int, default=0, metavar="N",
+                    help="save a rolling checkpoint.msim into --out every N ticks (0 = off); "
+                         "a claims/identity crash also dumps crash_state.msim for forensics")
+    ap.add_argument("--resume", default=None, metavar="PATH",
+                    help="resume from a checkpoint container written by --checkpoint")
     ap.add_argument("--daemon", default=None,
                     help="fully detach (double-fork + setsid) and log to this path -- survives a "
                          "parent/harness teardown for multi-hour runs")
@@ -199,7 +206,8 @@ def main():
         return
     out = args.out or f"artifacts/openecon/prod6_{int(args.years)}y"
     s = run_production(years=args.years, out=out, pop_div=args.pop_div,
-                       pop_mult=args.pop_mult, base_seed=args.base_seed)
+                       pop_mult=args.pop_mult, base_seed=args.base_seed,
+                       checkpoint_every=args.checkpoint, resume=args.resume)
     ident = s.get("identity") or {}
     print(f"\nDONE wall={s['wall_seconds']}s ticks/s={s['ticks_per_second']} "
           f"identities_all_pass={ident.get('all_checks_passed')} failed={ident.get('failed_checks')}")
