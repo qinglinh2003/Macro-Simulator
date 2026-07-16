@@ -123,10 +123,13 @@ def mean_sd(xs):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv = sys.argv[1:]
     out_path = None
-    if "--out" in sys.argv:
-        out_path = sys.argv[sys.argv.index("--out") + 1]
+    if "--out" in argv:
+        i = argv.index("--out")
+        out_path = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
+    args = [a for a in argv if not a.startswith("--")]
     if not args:
         print("usage: openecon_analyze.py DIR1 [DIR2 ...] [--out report.md]")
         return
