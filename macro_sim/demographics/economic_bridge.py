@@ -266,12 +266,18 @@ class DemographicEconomicBridge:
             self._normalize_household_bank_equity_claims_to_targets(household_id, econ)
         for household_id, account_id in self.household_to_account.items():
             holdings = self._household_asset_claim_targets(econ, account_id, bond_face_by_holder)
+            debt = econ.ledger.debt(account_id)
             if reconcile_active and not self.claims.members_of_household(household_id):
+                # personless household: holdings AND debt attribution are both vacuous
+                # (channel 8, seed 4242 t=10170: a mover left a 0.64 loan behind; the
+                # banking layer still services/defaults it at account level). Cash stays
+                # strictly checked against the parked estate.
                 holdings = {}
+                debt = 0.0
             self.claims.assert_household_claim_identity(
                 household_id,
                 deposits=econ.ledger.balance(account_id),
-                debt=econ.ledger.debt(account_id),
+                debt=debt,
                 holdings=holdings,
                 holding_tolerances=self._household_asset_claim_tolerances(econ),
             )
