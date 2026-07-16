@@ -1352,8 +1352,12 @@ class DemographicEconomicBridge:
             members = self.claims.members_of_household(int(household_id))
             if not members:
                 continue
-            posting = self._claim_posting_ids(household_id) or members
-            holder = posting[0]
+            # the holder must be a CURRENT member: posting ids are designated owners
+            # and go stale across household splits (channel 6) -- concentrating the
+            # claim on a moved-out owner would strand it in their new household.
+            member_set = set(members)
+            holder = next((p for p in self._claim_posting_ids(household_id) if p in member_set),
+                          members[0])
             account_id = self.account_for_household_id(int(household_id))
             for bank in banks:
                 bank_id = str(getattr(bank, "id", ""))
@@ -1397,7 +1401,15 @@ class DemographicEconomicBridge:
                 self.claims.balance_sheet(last_id).bank_equity_claims.get(bank_id, 0.0) + (amount - allocated)
             )
             return
-        person_ids = self._claim_posting_ids(household_id)
+        # Posting ids are the household's DESIGNATED owners, and that designation can
+        # go stale across a household split: an owner who moved out would receive
+        # their share in their NEW household, stranding it there (this household then
+        # under-counts, the other over-counts -- both trip the identity gate; seed
+        # 4242, household 3553 -> 3554, t=4161). Restrict to current members.
+        member_set = set(members)
+        person_ids = [p for p in self._claim_posting_ids(household_id) if p in member_set]
+        if not person_ids:
+            person_ids = list(members)
         if not person_ids:
             return
         share = amount / len(person_ids)
