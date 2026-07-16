@@ -1316,8 +1316,8 @@ class DemographicEconomicBridge:
         CONCENTRATED on a single member -- the guard-free, prune-safe sibling of the
         per-tick normalize.
 
-        Two default-path assumptions break a long, high-churn multi-economy run and
-        this closes both, but only when the periodic reconcile is opted in
+        Three default-path assumptions break a long, high-churn multi-economy run and
+        this closes all of them, but only when the periodic reconcile is opted in
         (claims_reconcile_interval > 0); interval=0 never calls it, so the default
         per-tick machinery is untouched:
 
@@ -1330,10 +1330,20 @@ class DemographicEconomicBridge:
            per-household. A household holding just above dust, split across several
            members, has each member's share fall below dust; the prune then zeroes
            every share and the household sum collapses below its target.
+        3. The prune/resurrect DOOMSDAY CLOCK (the seed-4243 t=2510 crash). The
+           per-tick trade/normalize paths SPLIT a household's claim equally across
+           members, each share below dust. Inside every gate call the prune zeroes
+           them, then the normalize resurrects the full (split) claim -- as long as
+           the drift stays under the reconcile tolerance. The household therefore
+           shows ZERO drift at force time (a drift-triggered force never fires),
+           and the tick its slowly-growing target crosses the bank's reconcile
+           tolerance the resurrection is refused and the gate trips.
 
-        Concentrating the whole household target onto one member makes the single
-        claim exceed dust (so the prune keeps it) while the household sum still
-        equals the ledger target exactly."""
+        The cure for all three is the same and needs no drift trigger: make the
+        force IDEMPOTENT. Every call clears each household's per-bank member shares
+        and re-concentrates the exact ledger target onto one member. Concentrated,
+        the single claim exceeds dust (the prune keeps it), the normalize sees zero
+        drift (no resurrection needed), and the identity holds by construction."""
         econ = econ or self.econ
         if econ is None:
             return
@@ -1350,17 +1360,14 @@ class DemographicEconomicBridge:
                 if not bank_id:
                     continue
                 target = float((getattr(bank, "owners", None) or {}).get(account_id, 0.0))
-                current = sum(
-                    float(self.claims.balance_sheet(person_id).bank_equity_claims.get(bank_id, 0.0))
-                    for person_id in members
-                )
-                if abs(target - current) <= self._bank_equity_dust_tolerance(econ, bank_id):
-                    continue
-                # clear the split, then concentrate the whole target on one member so
-                # the single claim survives the per-member dust prune.
+                dust = self._bank_equity_dust_tolerance(econ, bank_id)
+                # unconditional: clear any (possibly fragmented) member shares ...
                 for person_id in members:
                     self.claims.balance_sheet(person_id).bank_equity_claims.pop(bank_id, None)
-                if abs(target) > self._bank_equity_dust_tolerance(econ, bank_id):
+                # ... and concentrate the whole target on one member so it survives
+                # the per-member dust prune. Sub-dust targets stay cleared -- the
+                # gate's expected-holdings filter drops those too, so both sides agree.
+                if abs(target) > dust:
                     self.claims.balance_sheet(holder).bank_equity_claims[bank_id] = target
 
     def _add_household_bank_equity_claim(self, household_id: int, bank_id: str, amount: float) -> None:
