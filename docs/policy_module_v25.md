@@ -27,7 +27,8 @@ save-container `events.log` and, later, the frontend network protocol.
 > bucket) + the hardcoded-institution sweep + per-lever effectiveness tests.
 
 Sources actually swept so far: 364 root-Config fields, 31 World keyword tunables (32 user
-params incl. `configs`; peg_economy recorded for deletion-into-ExternalPolicy), the existing
+params incl. `configs`; peg_economy: migration into ExternalPolicy PENDING the §5.1
+multi-pegger ruling), the existing
 Policy class (46 levers). **STILL-UNSWEPT sources — explicit machine-sweep manifest (P0):**
 `SocialDynamicsConfig` (35 fields, demographics/social.py) · `RelationshipConfig` (12
 fields, demographics/relationships.py) · `LifecycleHouseholdConfig` · the derived snapshots
@@ -65,8 +66,9 @@ housing_property_tax, housing_in_wealth_tax
 (jg_productivity moved to PENDING_RULING — technology vs programme design)
 
 **Monetary — rate rule** (8): [N] monetary_regime (SPLIT of the old central_bank flag:
-`central_bank_enabled` stays a Config CAPABILITY; the live regime choice is Policy — this
-also resolves the master-switch contradiction and the §1.7 dead-field) · [P]
+planned `central_bank_enabled` as the Config capability, PENDING the §5.1 semantic ruling;
+the live regime choice is Policy — this resolves the master-switch contradiction and the
+§1.7 dead-field) · [P]
 inflation_target, taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override ·
 [C] r_interest (the
 baseline/exogenous rate), r_max (the cap that disarmed CBs in the v1 portrait)
@@ -113,7 +115,7 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 - external_interest_settlement_fraction [W] — source calls it external CONTRACT POLICY;
   tests mutate it mid-run to cure arrears (test_capital.py:326)
 - land_fee_share [C] — the developers' land fee to the fiscus (land INSTITUTION, not physics);
-  land_convexity NEEDS A SEMANTIC SPLIT (fee-curve shape = policy; physical scarcity = config)
+  land_convexity: see PENDING_RULING
 - rental_eviction_arrears [C] — eviction law (same family as foreclosure/bankruptcy timelines)
 - unified_bank_rwa [C] — the unified regulatory-capital REGIME switch (its own sub-params are
   already policy)
@@ -305,9 +307,11 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **bond_coupon is not stored per lot**: runtime change would retroactively re-coupon the
   whole stock. Correct semantics: new-issue-only (or declare floating-rate explicitly)
 - **jg_productivity / deposit_rate**: see PENDING_RULING (semantic splits before promotion)
-- **Policy.from_config cannot seed every lever**: tax_necessity_rate, tax_luxury_rate,
-  policy_rate_override have NO Config counterparts (policy.py:97). **DECIDED (round 3)
-  seed architecture**: the run spec carries a full `initial_policy` (PolicySeed);
+- **Legacy Config cannot CONFIGURE three Policy initial values** (precision fix, round 5:
+  `from_config` does construct a complete Policy — via dataclass defaults — but
+  tax_necessity_rate, tax_luxury_rate, policy_rate_override have no Config counterparts to
+  set them from; policy.py:97). **DECIDED (round 3) seed architecture** (PolicySeed carries
+  a `policy_schema_version`): the run spec carries a full `initial_policy` (PolicySeed);
   `from_legacy_config` remains ONLY as old-YAML compatibility; a checkpoint stores the
   full Policy snapshot; `events.log` stores only post-genesis deltas. (All body text now
   states this directly; no superseded phrasing remains.)
@@ -321,13 +325,17 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   the shock-module cousin) · `Random` (bounded walk, own RNG stream) · `Heuristic` ·
   `RLAdapter` (gym-style) · later `Frontend`.
 - **PolicyState**: per-economy registry. Each lever declares (user-audit-extended schema):
-  `(min, max, max_step_per_tick)` · **owner/scope** (single economy | bilateral | world) ·
-  **type/choices/nullability/shape** (bool, enum, int, nullable, vector, sanction-pair set) ·
-  **effective_semantics** (immediate | new-contracts-only | restates-stock | state-transition)
-  · **capability dependency** (e.g. OMO requires bonds+banking) · **the unique runtime
-  read-point** (metrics must read the same source). One declaration = validation + random
-  domain + RL action space + frontend form. World-level policies are OWNED by each economy's
-  PolicyState; World reads them per tick.
+  a PER-TYPE **validation union** (numeric: min/max/max_step · bool/enum: choices · set &
+  bilateral: membership + pair rules) · **owner/scope** (single economy | bilateral | world)
+  · **type/choices/nullability/shape** · **effective_semantics** (immediate |
+  new-contracts-only | restates-stock | state-transition) **each binding a concrete
+  `handler_id`/`transition_spec` — an enum tag with no handler is invalid; filled
+  per-lever** · **capability dependency** (e.g. OMO requires bonds+banking) · **the unique
+  runtime read-point** (metrics must read the same source). One declaration = validation +
+  random domain + RL action space + frontend form. World-level policies are OWNED by each
+  economy's PolicyState; the World applies them via the NORMATIVE execution order:
+  **collect from all economies → validate jointly → commit atomically at the coupling
+  barrier** (no one-tick skew from per-economy ordering).
 - **Read-point migration**: modules read `econ.policy.X`, never `cfg.X`. Initial values
   come from the run spec's `initial_policy` (PolicySeed); legacy YAML passes through
   `from_legacy_config`.
@@ -339,10 +347,12 @@ Real-world-changeable rules living as literals in code — each needs a ruling
    Decision point fixed at top-of-tick; controller uses an isolated RNG stream.
 2. Checkpoint-able: controller state pickles; **policy is STATE and must resume exactly**
    (the inverse of the "tolerances are policy, not state" lesson).
-3. Actions are events: every change logged with the FULL schema
+3. Actions are events: every change logged with the PROVISIONAL ENVELOPE
    `(tick, actor_economy, lever, old, new, actor, target, direction, scope, sequence,
-   schema_version)` (bilateral fields null for domestic levers) → `.msim` events.log slot →
-   replay / audit / frontend protocol in one schema.
+   schema_version)` (bilateral fields null for domestic levers; the bilateral
+   initiator/direction/consent semantics are pending the §5.1 ruling, so the envelope is
+   not yet frozen) → `.msim` events.log slot → replay / audit / frontend protocol in one
+   schema.
 4. Explicit observation contract: `observe()` returns a curated snapshot — the RL observation
    space and the frontend UI data contract.
 
