@@ -36,16 +36,18 @@ default.
 
 ### 1.1 The surprise: Policy already exists and is half-built
 
-`core/policy.py` already holds ~45 live levers with read-points wired (all fiscal
-spending/taxes incl. v18 differential VAT, all v17 energy policy, labour floors + JG,
-the full Taylor rule + `policy_rate_override` (a hand-set player rate!), OMO/LoLR,
-4 macropru handles, 5 housing handles). **P0 = close the gaps below, not build from zero.**
+`core/policy.py` currently DECLARES 46 fields (all fiscal spending/taxes incl. v18
+differential VAT, all v17 energy policy, labour floors + JG, the Taylor rule +
+`policy_rate_override` (a hand-set player rate!), OMO/LoLR, 4 macropru handles, 5 housing
+handles). **Most are behaviour-live, but known dead / init-snapshot / metrics read-point
+defects remain — see §1.7.** P0 = close the gaps below, not build from zero.
 
-### 1.2 POLICY levers — WORKING CANDIDATE LIST (92 original + 8 reclassified = 100; 5 in
-PENDING_RULING; hard-coded institutions NOT yet counted), by domain
+### 1.2 POLICY levers — WORKING CANDIDATE LIST (98 classified Policy candidates + 5
+pending = 103; hard-coded institutions not yet counted), by domain
 
 Location key: **[P]** already in Policy · **[C]** in Config, must migrate · **[W]** World
-constructor param, needs a per-economy home.
+constructor param, needs a per-economy home · **[N]** NEW target lever (exists in no
+source today).
 
 **Fiscal — spending & transfers** (8): [P] gov_consumption_share, gov_deficit_target,
 deficit_u_ref, benefit_replacement, benefit_income_floor, pension_replacement ·
@@ -59,7 +61,7 @@ housing_property_tax, housing_in_wealth_tax
 **Labour institutions** (3): [P] min_wage, job_guarantee, jg_wage_ratio
 (jg_productivity moved to PENDING_RULING — technology vs programme design)
 
-**Monetary — rate rule** (8): [P] monetary_regime (SPLIT of the old central_bank flag:
+**Monetary — rate rule** (8): [N] monetary_regime (SPLIT of the old central_bank flag:
 `central_bank_enabled` stays a Config CAPABILITY; the live regime choice is Policy — this
 also resolves the master-switch contradiction and the §1.7 dead-field), inflation_target,
 taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override · [C] r_interest (the
@@ -75,9 +77,8 @@ lesson: the target-index choice is itself policy), cb_log_inflation
 
 **Treasury debt management** (3): [C] bond_finance_frac, bond_coupon, bond_maturity
 
-**Macroprudential — banks** (9): [C] bank_capital_constraint(regime), **bank_leverage_cap
-(NEW lever — bank_leverage_mean itself STAYS Config as the genesis risk-appetite draw,
-per §1.7)**, bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
+**Macroprudential — banks** (9): [C] bank_capital_constraint(regime), **[N] bank_leverage_cap
+(bank_leverage_mean itself STAYS Config as the genesis risk-appetite draw, per §1.7)**, bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
 bank_bond_duration_limit, bank_resolution_fund(regime), reserve_floor_frac · [P] kappa
 
 **Macroprudential — households & mortgages** (11): [P] margin_ltv, margin_max,
@@ -144,7 +145,15 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 | migration_rate / migration_max_share | config | behavioural propensity, not a cap |
 | energy_shock_at/magnitude/duration | **shock module** | exogenous events, not policy |
 
-### 1.4 NON-policy fields — complete residual classification (nothing omitted)
+### 1.4 Root-Config/World working residual — nested-source verification pending
+
+(Previously titled "complete"; renamed — unswept nested configs make completeness a P0
+machine-inventory deliverable, not a claim. The machine registry must use
+SOURCE-QUALIFIED ids (`Config.omo` vs `Policy.omo`): Config and Policy share **43
+same-name fields**, so bare names cannot prove one-bucket-per-source-field.)
+
+Formally placed here (audit round 3): `Config.bank_leverage_mean` (genesis risk-appetite
+draw, physics), `Config.central_bank_enabled` (planned capability flag, mechanism).
 
 **Previously UNCLASSIFIED (user audit; now placed)**: demographics_population (structure),
 public_capital_gamma, public_capital_depreciation (physics — public-capital technology),
@@ -231,8 +240,9 @@ energy_shock_duration.
 
 ### 1.5 P0 gap analysis (the actual work)
 
-1. **~38 [C] levers migrate into Policy** (banking macropru block incl. the NEW
-   bank_leverage_cap, mortgage regulation block, monetary beliefs/measurement incl.
+1. **37 existing [C] fields migrate into Policy + 1 [N] bank_leverage_cap is created;
+   [N] monetary_regime replaces the dead `Policy.central_bank`** (banking macropru block,
+   mortgage regulation block, monetary beliefs/measurement incl.
    infl_ema_lambda + fiscal_uses_national_accounts_gdp, Treasury debt management,
    insolvency law + eviction law, land fee, DSCR, unified_bank_rwa,
    bank_migrate_on_failure, deficit_u_cap, gov_investment_share, soe_efirm,
@@ -257,10 +267,12 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   split out labor_min_age / statutory_retirement_age / pension_eligibility_age
 - **Family & inheritance law**: estate tax fixed 0; intestate succession fixed
   spouse/children 50/50; probate window fixed 365d (inheritance.py:49) — TRUE literals.
-  CORRECTION (audit round 2): marriage min-age, remarriage cooling period, consanguinity
-  ban, same-sex restriction, marital property split are NOT literals — they are
-  `SocialDynamicsConfig` / `RelationshipConfig` FIELDS (an unswept nested-config source,
-  see Sources note); they enter the machine inventory as policy candidates there
+  CORRECTION (audit round 3, fact-checked): marriage min-age, remarriage cooling period,
+  consanguinity ban ARE `SocialDynamicsConfig`/`RelationshipConfig` FIELDS (unswept nested
+  source; enter the machine inventory as policy candidates there). The same-sex restriction
+  (`a.sex == b.sex`, social.py:401) and the 50/50 marital-gain split
+  (`target_gain = .../2.0`, marriage_economics.py:49) ARE true hard-coded literals and stay
+  in this section
 - **Financial regulation literals**: ordinary-credit RWA fixed 100%; resolution fund covers
   100% of residual; LoLR funds the FULL gap; mortgages fixed non-recourse; household
   bankruptcy = full discharge of residual margin debt
@@ -282,9 +294,11 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   whole stock. Correct semantics: new-issue-only (or declare floating-rate explicitly)
 - **jg_productivity / deposit_rate**: see PENDING_RULING (semantic splits before promotion)
 - **Policy.from_config cannot seed every lever**: tax_necessity_rate, tax_luxury_rate,
-  policy_rate_override have NO Config counterparts (policy.py:97). Ruling needed: a
-  standalone `PolicySeed` (with YAML / save-container / replay representation) or an
-  explicit initial-PolicyState section in the run spec
+  policy_rate_override have NO Config counterparts (policy.py:97). **DECIDED (round 3)
+  seed architecture**: the run spec carries a full `initial_policy` (PolicySeed);
+  `from_legacy_config` remains ONLY as old-YAML compatibility; a checkpoint stores the
+  full Policy snapshot; `events.log` stores only post-genesis deltas. ("policy ← cfg"
+  phrasing elsewhere is superseded by this.)
 - **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
   still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
   observation; per-lever effectiveness tests must cover the METRIC path too
@@ -333,6 +347,24 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   need initiator/direction/consent semantics — e.g. sanctions are imposed unilaterally by
   i against j (does j auto-reciprocate?); a peg is the pegger's choice (does the anchor
   consent?).
+
+### 5.1 Pre-freeze implementation closure (audit round 3 — must land before P0 code)
+
+1. `monetary_regime`: define the concrete choices + the legacy-config mapping (whether
+   `central_bank` is truly an institutional capability is itself unverified).
+2. **Full metrics/diagnostics read-point sweep** — the split-brain is not just OMO:
+   r_neutral, u_natural, mortgage capital ratios, bank capital/exposure/reserve params all
+   have Config-reading metric paths.
+3. World-level policies: collect → validate → **atomically commit at the coupling barrier**
+   (no one-tick skew from per-economy ordering).
+4. peg_economy deletion: specify multi-pegger support or its rejection, cyclic-peg
+   detection, reserve-account ownership, anchor switching.
+5. Bilateral event-log schema: `target / direction / scope / sequence / schema_version`.
+6. Typed validation: `(min,max,max_step)` fits numerics only; bool / enum / set /
+   bilateral actions get per-type validation rules.
+7. `effective_semantics` must BIND actual transition/cohort handlers (SOE ownership
+   transition, peg break/switch, bond new-issue cohorts, mortgage stock restatement) —
+   an enum tag with no handler is a dead promise.
 - [ ] Lever set for P0: full sweep vs start with fiscal+monetary only?
 - [ ] Action cadence: every tick vs policy-meeting interval (e.g. every 30 ticks)?
 
