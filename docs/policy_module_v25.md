@@ -25,8 +25,14 @@ save-container `events.log` and, later, the frontend network protocol.
 > P0: a MACHINE-VERIFIED classification (script asserts every field appears in exactly one
 > bucket) + the hardcoded-institution sweep + per-lever effectiveness tests.
 
-Sources: 364 Config fields, ~33 World constructor params (incl. peg_economy), the existing
-Policy class (46 levers).
+Sources actually swept so far: 364 root-Config fields, 31 World keyword tunables (32 user
+params incl. `configs`; peg_economy recorded for deletion-into-ExternalPolicy), the existing
+Policy class (46 levers). **STILL-UNSWEPT sources (P0 machine inventory must cover them):**
+`SocialDynamicsConfig` (35 fields, demographics/social.py), `RelationshipConfig` (12 fields,
+demographics/relationships.py), other nested/derived configs, and function-signature defaults.
+The machine inventory classifies every entry as one of: live parameter | genesis-only |
+derived-from-root-Config | declared-but-unused | policy candidate | true literal/function
+default.
 
 ### 1.1 The surprise: Policy already exists and is half-built
 
@@ -35,26 +41,30 @@ spending/taxes incl. v18 differential VAT, all v17 energy policy, labour floors 
 the full Taylor rule + `policy_rate_override` (a hand-set player rate!), OMO/LoLR,
 4 macropru handles, 5 housing handles). **P0 = close the gaps below, not build from zero.**
 
-### 1.2 POLICY levers — complete list (≈86), by domain
+### 1.2 POLICY levers — WORKING CANDIDATE LIST (92 original + 8 reclassified = 100; 5 in
+PENDING_RULING; hard-coded institutions NOT yet counted), by domain
 
 Location key: **[P]** already in Policy · **[C]** in Config, must migrate · **[W]** World
 constructor param, needs a per-economy home.
 
-**Fiscal — spending & transfers** (7): [P] gov_consumption_share, gov_deficit_target,
+**Fiscal — spending & transfers** (8): [P] gov_consumption_share, gov_deficit_target,
 deficit_u_ref, benefit_replacement, benefit_income_floor, pension_replacement ·
 [C] deficit_u_cap, gov_investment_share
 
-**Fiscal — taxes** (12): [P] tax_profit_rate, tax_income_rate, income_allowance,
+**Fiscal — taxes** (13): [P] tax_profit_rate, tax_income_rate, income_allowance,
 tax_consumption_rate, tax_necessity_rate, tax_luxury_rate, tax_wealth_rate,
 wealth_allowance, tax_energy_rate, tax_energy_windfall · [P] housing_transfer_tax,
 housing_property_tax, housing_in_wealth_tax
 
-**Labour institutions** (4): [P] min_wage, job_guarantee, jg_wage_ratio · [C] jg_productivity
-(programme design)
+**Labour institutions** (3): [P] min_wage, job_guarantee, jg_wage_ratio
+(jg_productivity moved to PENDING_RULING — technology vs programme design)
 
-**Monetary — rate rule** (9): [P] central_bank(regime), inflation_target, taylor_phi_pi,
-taylor_phi_u, rate_inertia, policy_rate_override · [C] r_interest (the baseline/exogenous
-rate), r_max (the cap that disarmed CBs in the v1 portrait), deposit_rate
+**Monetary — rate rule** (8): [P] monetary_regime (SPLIT of the old central_bank flag:
+`central_bank_enabled` stays a Config CAPABILITY; the live regime choice is Policy — this
+also resolves the master-switch contradiction and the §1.7 dead-field), inflation_target,
+taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override · [C] r_interest (the
+baseline/exogenous rate), r_max (the cap that disarmed CBs in the v1 portrait)
+(deposit_rate moved to PENDING_RULING — currently a commercial-bank contract cost)
 
 **Monetary — beliefs & measurement** (5): [C] r_neutral, u_natural (the CB's structural
 ESTIMATES — the CB chooses them), cb_core_inflation, cb_uses_fixed_basket_cpi (the Germany
@@ -65,11 +75,12 @@ lesson: the target-index choice is itself policy), cb_log_inflation
 
 **Treasury debt management** (3): [C] bond_finance_frac, bond_coupon, bond_maturity
 
-**Macroprudential — banks** (9): [C] bank_capital_constraint(regime), bank_leverage_mean
-(the κ_bank cap), bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
+**Macroprudential — banks** (9): [C] bank_capital_constraint(regime), **bank_leverage_cap
+(NEW lever — bank_leverage_mean itself STAYS Config as the genesis risk-appetite draw,
+per §1.7)**, bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
 bank_bond_duration_limit, bank_resolution_fund(regime), reserve_floor_frac · [P] kappa
 
-**Macroprudential — households & mortgages** (10): [P] margin_ltv, margin_max,
+**Macroprudential — households & mortgages** (11): [P] margin_ltv, margin_max,
 hh_credit_limit, mortgage_ltv_cap · [C] mortgage_underwriting(regime), mortgage_dsti_cap,
 mortgage_stress_rate_addon, mortgage_risk_weight, mortgage_min_capital_ratio,
 mortgage_foreclosure_ltv, mortgage_arrears_floor
@@ -100,8 +111,7 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
   already policy)
 - firm_credit_min_dscr [C] — economy-wide corporate underwriting floor, isomorphic to
   mortgage_dsti_cap
-- firm_capital_haircut / firm_inventory_haircut [C] — collateral haircuts; RULING NEEDED:
-  regulatory policy vs per-bank behaviour (if private underwriting, refactor to bank-level)
+
 - infl_ema_lambda [C] — the CB's inflation-signal smoothing (consistency with r*/u*/index
   choice: the CB's measurement apparatus is policy)
 - fiscal_uses_national_accounts_gdp [C] — the FISCAL RULE's GDP-measure choice (not shared
@@ -109,19 +119,28 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 - bank_migrate_on_failure [C] — REVERSED ruling: purchase-&-assumption vs stranding is bank
   RESOLUTION REGIME, not plumbing
 
+**PENDING_RULING bucket (5 — in NO other bucket until ruled):**
+- firm_capital_haircut / firm_inventory_haircut — regulatory collateral policy vs per-bank
+  behaviour (if private underwriting: refactor to bank-level attribute)
+- land_convexity — semantic split required: fee-curve shape (policy) vs physical scarcity
+  (config)
+- jg_productivity — technology parameter vs programme design
+- deposit_rate — currently a commercial-bank CONTRACT cost, not an administered rate;
+  promotion requires a semantic split (e.g. a regulated floor lever)
+
 ### 1.3 Ambiguous — rulings taken (flag any objection)
 
 | Field | Ruling | Reason |
 |---|---|---|
 | r_neutral / u_natural | policy | the CB's own estimates, revisable at a meeting |
 | cb_log_inflation | policy | the CB's measurement method choice |
-| bank_leverage_mean | policy | documented as the κ_bank CAP (regulation), dispersion stays physics |
+| bank_leverage_mean | config (REVISED) | genesis risk-appetite draw; the live cap is the NEW bank_leverage_cap lever |
 | bankrupt_persist / foreclosure params | policy | insolvency/foreclosure law |
 | soe_efirm | policy | runtime flip = nationalisation/privatisation event |
-| jg_productivity | policy | programme design choice |
+| jg_productivity | PENDING_RULING | technology vs programme design (see 1.2) |
 | bank_migrate_on_failure | ~~config~~ → **policy** | user audit: resolution regime (P&A vs stranding) |
 | fiscal_uses_national_accounts_gdp | ~~config~~ → **policy** | user audit: the fiscal rule's own measure choice |
-| master switches (government, bonds, capital_market, …) | config | constitutional/model composition; regime FLAGS listed above (job_guarantee, lolr, peg, …) stay policy |
+| master switches | config, via the CAPABILITY/REGIME split | `X_enabled` = Config capability; the live regime choice (monetary_regime, job_guarantee, lolr, peg, …) = Policy. Resolves the central_bank contradiction |
 | migration_rate / migration_max_share | config | behavioural propensity, not a cap |
 | energy_shock_at/magnitude/duration | **shock module** | exogenous events, not policy |
 
@@ -149,9 +168,8 @@ rho, search_m, alpha, v, dis_slope, gibrat_sigma, pref_attach_beta, pref_price_e
 gibrat_entry_a0, portfolio_adjust, q_invest_smooth, lambda_p, w_chartist, w_fundamental,
 theta_equity, trend_lambda, wealth_effect, equity_ema_lambda, resid_income_lambda, lambda_q,
 q_invest_floor, q_invest_cap, lambda_issue, hh_subsistence, hh_amort, amort,
-investment_user_cost_elasticity/_min/_max/_floor, firm_credit_min_dscr,
-valuation_discount_floor, valuation_risk_premium, firm_capital_haircut,
-firm_inventory_haircut, energy_intensity, energy_coverage_ticks, energy_gap_close,
+investment_user_cost_elasticity/_min/_max/_floor,
+valuation_discount_floor, valuation_risk_premium, energy_intensity, energy_coverage_ticks, energy_gap_close,
 energy_hoarding_beta, energy_hh_share, energy_mortality_gamma, energy_mortality_mult_hi,
 welfare_quit_hazard, reservation_markup, efficiency_sigma, job_search_intensity,
 ladder_search_intensity, ladder_premium, churn_annual, lambda_fire, layoff_band,
@@ -162,16 +180,15 @@ capital_clock_demand_smoothing, bank_leverage_disp, bank_spread_disp, bank_searc
 deposit_rate_disp, deposit_search_m, bank_equity_lambda, bank_theta_equity, bank_entry_beta,
 bank_entry_max, run_sensitivity, run_health_ref, run_market_weight, run_fear_persistence,
 interbank_rate_base, interbank_tightness, bond_theta, bank_bond_appetite, rent_yield0,
-rent_adjust, rent_burden_cap, rental_eviction_arrears, rental_investor_premium,
+rent_adjust, rent_burden_cap, rental_investor_premium,
 housing_ask_markup, housing_forced_discount, housing_ask_decay, housing_search_k,
 housing_buyer_buffer, housing_distress_floor, housing_session_interval,
-builder_productivity, builder_demand_seed, land_fee_share, land_convexity,
+builder_productivity, builder_demand_seed,
 housing_wealth_effect, family_transfer_buffer, switch_retool_loss, switch_return_gap,
 switch_pressure_days, switch_hazard, necessity_share0, n_firm_share, subsistence_share,
 tfp_drift_rate, tfp_drift_sigma, tfp_law, tfp_learning_theta, tfp_drift_c/_k/_e,
 [W] fx_lambda, fx_friction, fx_trade_cap, capital_mobility, capital_adjust,
-migration_rate, migration_max_share, remittance_share, wage_smoothing,
-external_interest_settlement_fraction.
+migration_rate, migration_max_share, remittance_share, wage_smoothing.
 
 **Physics — demography**: demographics_tfr, demographics_mortality_scale,
 demographic_marriage_enabled, demographic_divorce_enabled,
@@ -185,18 +202,18 @@ housing_leave_elasticity + bounds, housing_fertility_elasticity + bounds.
 
 **Mechanism flags (model composition — Config)**: demographics_enabled,
 demographic_lifecycle_consumption, housing_enabled, housing_market_enabled,
-mortgage_enabled, unified_bank_rwa, housing_rental_enabled, housing_construction_enabled,
+mortgage_enabled, housing_rental_enabled, housing_construction_enabled,
 labor_accounting, labor_matching, labor_fractional_hours, labor_second_job,
 labor_suspension, labor_matching_friction, labor_relationship_wages, labor_job_ladder,
 labor_person_efficiency, labor_participation, capital_rationed_signal,
 consumption_rationed_signal, firm_subscale_exit, capital_firm_entry, firm_full_pnl,
 capital_service_pricing, priced_firm_balance_sheet, bank_enabled, bank_realized_pnl,
-bank_assignment, bank_migrate_on_failure, bank_rate_competition, bank_relationship_lock_in,
+bank_assignment, bank_rate_competition, bank_relationship_lock_in,
 interbank, bank_equity, bank_equity_trading, bank_dynamics, bank_runs, bonds, government,
 capital_market, per_firm_equity, equity_finance, household_credit,
 household_interest_arrears, margin_credit, gibrat_growth, firm_dynamics, symmetric_k,
 k_replacement_floor, energy_enabled, energy_household, deprivation_gauges,
-national_accounts_metrics, fiscal_uses_national_accounts_gdp, consumption_strata,
+national_accounts_metrics, consumption_strata,
 family_transfers, sector_switching, monetary_direct_transmission, interest_by_deposits,
 index_startup, capital_annual_clock, pro_rata_dividends, demo feedback/burnin flags,
 [W] couple, trade, capital, migration.
@@ -204,7 +221,7 @@ index_startup, capital_annual_clock, pro_rata_dividends, demo feedback/burnin fl
 **Infra / numerics / diagnostics**: claims_reconcile_interval, ledger_rel_tol,
 bond_maturity_bucket, capital_service_min_utilization, rental_vacancy_deadband,
 rental_rent_floor_wage_share, housing_demand_step, cpi_item_link_cap,
-cpi_rebase_interval_days, infl_ema_lambda, demo_feedback_burnin_years,
+cpi_rebase_interval_days, demo_feedback_burnin_years,
 demo_signal_halflife_years, housing_signal_burnin_years, energy_signal_burnin_years,
 deprivation_burnin_years, deprivation_acute_days, deprivation_chronic_days,
 _capital_annual_clock_applied.
@@ -214,11 +231,15 @@ energy_shock_duration.
 
 ### 1.5 P0 gap analysis (the actual work)
 
-1. **~30 [C] levers migrate into Policy** (banking macropru block, mortgage regulation
-   block, monetary beliefs/measurement, Treasury debt management, insolvency law,
-   deficit_u_cap, gov_investment_share, jg_productivity, soe_efirm, r_interest/r_max/
-   deposit_rate, omo_index_deposits) + their read-point rewires.
-2. **The external domain needs a per-economy owner**: 13 [W] levers live as World
+1. **~38 [C] levers migrate into Policy** (banking macropru block incl. the NEW
+   bank_leverage_cap, mortgage regulation block, monetary beliefs/measurement incl.
+   infl_ema_lambda + fiscal_uses_national_accounts_gdp, Treasury debt management,
+   insolvency law + eviction law, land fee, DSCR, unified_bank_rwa,
+   bank_migrate_on_failure, deficit_u_cap, gov_investment_share, soe_efirm,
+   r_interest/r_max, omo_index_deposits) + their read-point rewires. PENDING_RULING
+   items (5) migrate only after their splits are ruled.
+2. **The external domain needs a per-economy owner**: 14 [W] levers (incl.
+   external_interest_settlement_fraction) live as World
    constructor vectors with no Policy home. Create `ExternalPolicy` inside each economy's
    PolicyState; World reads per tick (peg regime: pegger's own choice + anchor consent
    question deferred).
@@ -234,10 +255,12 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **Monetary**: policy-rate FLOOR hard-coded 0 (r_max exists, r_min does not) — central_bank.py:54
 - **Labour/pension law**: working age 18–64, pension eligibility 65 — economic_state.py:389;
   split out labor_min_age / statutory_retirement_age / pension_eligibility_age
-- **Family & inheritance law** (demographics modules): estate tax fixed 0; intestate
-  succession fixed spouse/children 50/50; probate window fixed 365d; marriage min-age,
-  remarriage cooling period, consanguinity ban, same-sex restriction, 50/50 marital
-  property split — inheritance.py:49, social.py:31
+- **Family & inheritance law**: estate tax fixed 0; intestate succession fixed
+  spouse/children 50/50; probate window fixed 365d (inheritance.py:49) — TRUE literals.
+  CORRECTION (audit round 2): marriage min-age, remarriage cooling period, consanguinity
+  ban, same-sex restriction, marital property split are NOT literals — they are
+  `SocialDynamicsConfig` / `RelationshipConfig` FIELDS (an unswept nested-config source,
+  see Sources note); they enter the machine inventory as policy candidates there
 - **Financial regulation literals**: ordinary-credit RWA fixed 100%; resolution fund covers
   100% of residual; LoLR funds the FULL gap; mortgages fixed non-recourse; household
   bankruptcy = full discharge of residual margin debt
@@ -257,8 +280,14 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   policy lever
 - **bond_coupon is not stored per lot**: runtime change would retroactively re-coupon the
   whole stock. Correct semantics: new-issue-only (or declare floating-rate explicitly)
-- **jg_productivity** is closer to a technology parameter; **deposit_rate** is currently a
-  commercial-bank contract cost — both need semantic splits before promotion
+- **jg_productivity / deposit_rate**: see PENDING_RULING (semantic splits before promotion)
+- **Policy.from_config cannot seed every lever**: tax_necessity_rate, tax_luxury_rate,
+  policy_rate_override have NO Config counterparts (policy.py:97). Ruling needed: a
+  standalone `PolicySeed` (with YAML / save-container / replay representation) or an
+  explicit initial-PolicyState section in the run spec
+- **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
+  still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
+  observation; per-lever effectiveness tests must cover the METRIC path too
 
 ## 2. Architecture (three layers)
 
@@ -299,7 +328,11 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 ## 5. Open questions (rulings pending)
 
 - [ ] Reward left as injectable callable in P3 (research question, not module scope)?
-- [ ] World-level policy ownership: per-economy PolicyState (proposed) vs World-held vectors?
+- [x] World-level policy ownership: **DECIDED — per-economy PolicyState** (architecture
+  section is normative). Remaining sub-questions: bilateral levers (sanctions, peg anchor)
+  need initiator/direction/consent semantics — e.g. sanctions are imposed unilaterally by
+  i against j (does j auto-reciprocate?); a peg is the pegger's choice (does the anchor
+  consent?).
 - [ ] Lever set for P0: full sweep vs start with fiscal+monetary only?
 - [ ] Action cadence: every tick vs policy-meeting interval (e.g. every 30 ticks)?
 
