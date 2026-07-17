@@ -826,6 +826,16 @@ class Config:
     # FULL_FRONTIER_FLAGS opts into 0.15 / 0.02.
     rental_vacancy_deadband: float = 0.0
     rental_rent_floor_wage_share: float = 0.0
+    # v24 A1b (sale-market one-way ratchet): a session that clears the whole book with
+    # buyers still queuing lifts the reference house price by this step (the symmetric
+    # branch to housing_ask_decay). 0.0 = legacy = bit-identical; frontier opts into 0.03.
+    housing_demand_step: float = 0.0
+    # v24 A2-index (chained fixed-basket instability): clamp each basket item's price to
+    # [base/cap, base*cap] WITHIN one chain window when computing the fixed-basket level.
+    # A single pathological item otherwise enters the chain permanently at every rebase.
+    # Broad-based inflation (all items moving together) passes through untouched. 0.0 = off
+    # = bit-identical; frontier opts into 5.0 (item relative prices rarely move 5x/window).
+    cpi_item_link_cap: float = 0.0
     v: float = 2.5                  # desired capital-output ratio vs ANNUAL output -- FREE (core)
     lambda_I: float = 0.25          # investment adjustment / damping speed -- FREE (stability)
     delta_K: float = 0.05           # capital depreciation rate -- anchored (+ maint. floor)
@@ -1820,6 +1830,9 @@ class Config:
         assert self.capital_service_min_utilization >= 0.0, "capital_service_min_utilization must be >= 0"
         assert 0.0 <= self.rental_vacancy_deadband < 1.0, "rental_vacancy_deadband must be in [0, 1)"
         assert self.rental_rent_floor_wage_share >= 0.0, "rental_rent_floor_wage_share must be >= 0"
+        assert self.housing_demand_step >= 0.0, "housing_demand_step must be >= 0"
+        assert self.cpi_item_link_cap == 0.0 or self.cpi_item_link_cap > 1.0, \
+            "cpi_item_link_cap must be 0 (off) or > 1"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"
         assert self.demographic_marriage_market_interval_days >= 1, "demographic marriage interval must be >= 1 day"
         assert self.demographic_annual_marriage_rate_peak >= 0.0, "demographic marriage rate must be >= 0"

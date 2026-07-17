@@ -31,6 +31,8 @@ FULL_FRONTIER_FLAGS: dict[str, Any] = {
     # v24 A1: stop the rental one-way ratchet (see Config.rental_vacancy_deadband)
     "rental_vacancy_deadband": 0.15,
     "rental_rent_floor_wage_share": 0.02,
+    "housing_demand_step": 0.03,
+    "cpi_item_link_cap": 5.0,
     "housing_enabled": True,
     "housing_market_enabled": True,
     "mortgage_enabled": True,

@@ -361,6 +361,7 @@ class Economy:
                     search_k=cfg.housing_search_k,
                     buyer_buffer=cfg.housing_buyer_buffer,
                     distress_floor=cfg.housing_distress_floor,
+                    demand_step=cfg.housing_demand_step,   # v24 A1b upward price channel
                 )
             if cfg.mortgage_enabled:
                 # v15.2: collateralization book over the existing household credit rails

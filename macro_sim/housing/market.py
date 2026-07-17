@@ -48,6 +48,14 @@ class HousingMarket:
     search_k: int = 5               # buyer sees only the k cheapest listings
     buyer_buffer: float = 0.25      # deposits share a buyer will not spend
     distress_floor: float = 5.0     # deposits below this list the home for liquidity
+    # v24 portrait finding A1b: the sale market had NO upward price channel -- asks start
+    # at the reference and only DECAY (unsold -3%/session, forced listings discounted), and
+    # a cleared book raises nothing, so the transaction-mean index ratchets one-way down
+    # (prices /750 across the 30y portraits even at 320%/yr rental yields with investors
+    # queuing). demand_step is the symmetric branch: a session that CLEARS the whole book
+    # with buyers still queuing lifts the reference price one step (mirror of ask_decay).
+    # 0.0 = legacy ratchet, bit-identical.
+    demand_step: float = 0.0
 
     listings: dict[int, Listing] = field(default_factory=dict)   # dwelling_id -> Listing
     sales_total: int = 0
@@ -164,10 +172,12 @@ def run_housing_market_phase(econ: Any) -> None:
             buyers.extend(investors)
 
     sold: list[tuple[Listing, float]] = []
+    unserved_buyers = 0
     transfer_tax_rate = float(getattr(econ.policy, "housing_transfer_tax", 0.0))
     for buyer in buyers:
         if not book:
-            break
+            unserved_buyers += 1          # demand left standing after the book cleared
+            continue
         cash_budget = led.balance(buyer.id) * (1.0 - market.buyer_buffer)
         # mortgages are owner-occupier credit: investors (already housed) buy CASH-ONLY
         # in v15.3 -- buy-to-let leverage is a later, separately-gated flag
@@ -272,6 +282,14 @@ def run_housing_market_phase(econ: Any) -> None:
         econ._house_price = sum(p for _, p in sold) / len(sold)
         market.sales_total += len(sold)
         market.last_session_tom = sum(econ.t - l.listed_tick for l, _ in sold) / len(sold)
+    if (
+        market.demand_step > 0.0
+        and sold
+        and not market.listings
+        and unserved_buyers > 0
+    ):
+        # v24 A1b: excess demand at a cleared book is a PRICE signal, not a no-op.
+        econ._house_price *= 1.0 + market.demand_step
     market.last_session_sales = len(sold)
     market.last_session_volume = sum(p for _, p in sold)
     for listing in market.listings.values():
