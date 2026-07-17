@@ -43,6 +43,16 @@ class RentalMarket:
     rent_burden_cap: float = 0.40      # tenant accepts rent <= cap x realized income
     eviction_arrears: int = 30         # consecutive shortfall ticks before eviction
     investor_premium: float = 0.02     # landlords buy when yield > deposit rate + premium
+    # v24 portrait finding A1 (rent ratchet): the legacy rule cuts the rent whenever ANY
+    # vacancy is left unfilled -- a one-way multiplicative decay to zero under any structural
+    # surplus (heirs accumulate extras faster than new households form), which then kills the
+    # rental yield and takes the investors' house-price anchor down with it (house prices
+    # /750 across all six 30y-portrait economies). vacancy_deadband treats up to that SHARE
+    # of the rentable stock as frictional (no cut); rent_floor is an absolute per-tick floor
+    # wired from the average wage (housing services are never literally free). Both default
+    # 0.0 = legacy behaviour, bit-identical.
+    vacancy_deadband: float = 0.0
+    rent_floor: float = 0.0
 
     # rent level is an independent MARKET STATE (per unit, per tick): vacancy pressure
     # cuts it, unhoused excess demand raises it -- so rent-to-price and the rental
@@ -159,7 +169,17 @@ class RentalMarket:
         # rent level moves with the imbalance: unfilled vacancies cut it, unhoused
         # affordable demand (seekers left with no stock) raises it
         unhoused_excess = max(0, len(seekers) - matched - priced_out - len(vacant))
-        if vacant:
+        if self.vacancy_deadband > 0.0:
+            # v24 A1 fix: only an unfilled-vacancy SHARE beyond the frictional deadband
+            # cuts the rent, and never below the wage-anchored floor.
+            stock = len(self.tenancies) + len(vacant)
+            vacancy_rate = len(vacant) / stock if stock else 0.0
+            if vacancy_rate > self.vacancy_deadband:
+                self.rent_level = max(self.rent_floor,
+                                      self.rent_level * (1.0 - self.rent_adjust))
+            elif unhoused_excess > 0:
+                self.rent_level *= 1.0 + self.rent_adjust
+        elif vacant:
             self.rent_level *= 1.0 - self.rent_adjust
         elif unhoused_excess > 0:
             self.rent_level *= 1.0 + self.rent_adjust

@@ -128,6 +128,7 @@ def capital_service_unit_cost(
     *,
     replacement_price: float,
     opportunity_rate: float,
+    min_output: float = 0.0,
 ) -> float:
     """Allocate nominal capital service over planned physical output.
 
@@ -135,14 +136,23 @@ def capital_service_unit_cost(
     allocated.  Returning zero keeps the quote finite and leaves the existing
     zero-plan fallback in charge; the fixed service cost remains observable in
     ``capital_service_cost`` rather than being hidden behind an EPS divisor.
-    """
-    if firm.production_target <= EPS:
+
+    ``min_output`` (v24 portrait finding A2-root) floors the allocation base: a
+    shrinking firm with a large legacy capital stock otherwise spreads a FIXED
+    stock-scaled cost over a vanishing flow -- average-fixed-cost death-spiral
+    pricing (price up -> demand down -> AFC up), observed as zombie C-firms
+    posting ~270x the median price into deprivation-floor (captive) demand and
+    blowing up the chained fixed-basket CPI. Callers pass a utilization floor
+    (a share of the output the capital was SIZED for, K/v); 0.0 = historical
+    behaviour, bit-identical."""
+    y = max(float(firm.production_target), float(min_output))
+    if y <= EPS:
         return 0.0
     return capital_service_cost(
         firm,
         replacement_price=replacement_price,
         opportunity_rate=opportunity_rate,
-    ) / float(firm.production_target)
+    ) / y
 
 
 def unit_cost(

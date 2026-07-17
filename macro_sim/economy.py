@@ -385,6 +385,10 @@ class Economy:
                     eviction_arrears=cfg.rental_eviction_arrears,
                     investor_premium=cfg.rental_investor_premium,
                     rent_level=cfg.rent_yield0 * self._house_price / 365.0,
+                    # v24 A1: frictional-vacancy deadband + wage-anchored rent floor
+                    # (0.0/0.0 = legacy ratchet, bit-identical)
+                    vacancy_deadband=cfg.rental_vacancy_deadband,
+                    rent_floor=cfg.rental_rent_floor_wage_share * cfg.w_firm0,
                 )
             if cfg.housing_construction_enabled:
                 # v15.4: builder firms on the native grammar; land fee + permits anchor
