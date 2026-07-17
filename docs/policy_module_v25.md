@@ -13,11 +13,20 @@ save-container `events.log` and, later, the frontend network protocol.
 > Policy = what an authority (government / central bank / immigration office) can decide at
 > runtime. Config = the physics of the world (preferences, technology, demography).
 
-## 1. Lever inventory (P0 deliverable — COMPLETE SWEEP, 2026-07-18)
+## 1. Lever inventory (P0 deliverable — REVISED after user audit 2026-07-18; NOT yet complete)
 
-Sources swept exhaustively: **357 Config fields** (`macro_sim/config/model.py`), **~32 World
-constructor params** (`world/world.py`), the **existing Policy class** (`core/policy.py`, ~45
-levers already live). Every field is classified below; nothing is omitted.
+> **Status: the original "COMPLETE SWEEP" claim was WRONG and is retracted.** User audit
+> (read-only, against 4c0637e) found: Config has **364** dataclass fields (my regex dump
+> caught 357 — missed `lambda_I, delta_K, A, a_K, K_firm0, kappa_E, a_E`); 10 fields were
+> dumped but never classified; `peg_economy` was omitted from the World list; several
+> high-confidence policy items were misclassified as physics/infra; and — the two deeper
+> classes — (a) **hard-coded institutions** invisible to any field scan (§1.6), and
+> (b) **levers that are listed but not runtime-effective** (§1.7). Completeness gate for
+> P0: a MACHINE-VERIFIED classification (script asserts every field appears in exactly one
+> bucket) + the hardcoded-institution sweep + per-lever effectiveness tests.
+
+Sources: 364 Config fields, ~33 World constructor params (incl. peg_economy), the existing
+Policy class (46 levers).
 
 ### 1.1 The surprise: Policy already exists and is half-built
 
@@ -81,6 +90,25 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 
 **Migration** (3): [W] immigration_cap, emigration_cap, guest_worker_return
 
+**Reclassified INTO policy by the user audit** (were physics/infra in the first cut):
+- external_interest_settlement_fraction [W] — source calls it external CONTRACT POLICY;
+  tests mutate it mid-run to cure arrears (test_capital.py:326)
+- land_fee_share [C] — the developers' land fee to the fiscus (land INSTITUTION, not physics);
+  land_convexity NEEDS A SEMANTIC SPLIT (fee-curve shape = policy; physical scarcity = config)
+- rental_eviction_arrears [C] — eviction law (same family as foreclosure/bankruptcy timelines)
+- unified_bank_rwa [C] — the unified regulatory-capital REGIME switch (its own sub-params are
+  already policy)
+- firm_credit_min_dscr [C] — economy-wide corporate underwriting floor, isomorphic to
+  mortgage_dsti_cap
+- firm_capital_haircut / firm_inventory_haircut [C] — collateral haircuts; RULING NEEDED:
+  regulatory policy vs per-bank behaviour (if private underwriting, refactor to bank-level)
+- infl_ema_lambda [C] — the CB's inflation-signal smoothing (consistency with r*/u*/index
+  choice: the CB's measurement apparatus is policy)
+- fiscal_uses_national_accounts_gdp [C] — the FISCAL RULE's GDP-measure choice (not shared
+  reporting infra)
+- bank_migrate_on_failure [C] — REVERSED ruling: purchase-&-assumption vs stranding is bank
+  RESOLUTION REGIME, not plumbing
+
 ### 1.3 Ambiguous — rulings taken (flag any objection)
 
 | Field | Ruling | Reason |
@@ -91,13 +119,20 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 | bankrupt_persist / foreclosure params | policy | insolvency/foreclosure law |
 | soe_efirm | policy | runtime flip = nationalisation/privatisation event |
 | jg_productivity | policy | programme design choice |
-| bank_migrate_on_failure | config | resolution PLUMBING, not a stance |
-| fiscal_uses_national_accounts_gdp | config | measurement infra shared beyond fiscal |
+| bank_migrate_on_failure | ~~config~~ → **policy** | user audit: resolution regime (P&A vs stranding) |
+| fiscal_uses_national_accounts_gdp | ~~config~~ → **policy** | user audit: the fiscal rule's own measure choice |
 | master switches (government, bonds, capital_market, …) | config | constitutional/model composition; regime FLAGS listed above (job_guarantee, lolr, peg, …) stay policy |
 | migration_rate / migration_max_share | config | behavioural propensity, not a cap |
 | energy_shock_at/magnitude/duration | **shock module** | exogenous events, not policy |
 
 ### 1.4 NON-policy fields — complete residual classification (nothing omitted)
+
+**Previously UNCLASSIFIED (user audit; now placed)**: demographics_population (structure),
+public_capital_gamma, public_capital_depreciation (physics — public-capital technology),
+lambda_I, delta_K, A, a_K, K_firm0, kappa_E, a_E (physics/genesis — capital & energy
+technology; missed by the regex dump). [W] peg_economy: recorded — the new architecture
+DELETES it in favour of each economy's own peg choice in ExternalPolicy; migration note
+mandatory.
 
 **Structure / genesis / scale** (immutable by nature): n_households, n_firms, n_ticks, seed,
 a, n_firms_c, n_firms_k, n_firms_e, n_banks, n_builders, d_household0, d_firm0, d_cfirm0,
@@ -191,14 +226,53 @@ energy_shock_duration.
    declaration = validation + random-controller domain + RL action space.
 4. `Policy.from_config` grows accordingly; NullController = freeze-at-seed = bit-identical.
 
+### 1.6 Hard-coded institutions a field scan CANNOT see (user audit; sweep = P0 work item)
+
+Real-world-changeable rules living as literals in code — each needs a ruling
+(promote to lever | document as model simplification):
+
+- **Monetary**: policy-rate FLOOR hard-coded 0 (r_max exists, r_min does not) — central_bank.py:54
+- **Labour/pension law**: working age 18–64, pension eligibility 65 — economic_state.py:389;
+  split out labor_min_age / statutory_retirement_age / pension_eligibility_age
+- **Family & inheritance law** (demographics modules): estate tax fixed 0; intestate
+  succession fixed spouse/children 50/50; probate window fixed 365d; marriage min-age,
+  remarriage cooling period, consanguinity ban, same-sex restriction, 50/50 marital
+  property split — inheritance.py:49, social.py:31
+- **Financial regulation literals**: ordinary-credit RWA fixed 100%; resolution fund covers
+  100% of residual; LoLR funds the FULL gap; mortgages fixed non-recourse; household
+  bankruptcy = full discharge of residual margin debt
+- **Second-tier**: SPR sells at 99.9% of market; energy price-cap compensation fixed at
+  100% of the gap; government procurement sector composition non-adjustable
+
+### 1.7 Listed-but-NOT-runtime-effective (the dangerous class; per-lever tests will gate)
+
+- **Policy.central_bank is a DEAD FIELD**: the rate path checks cfg.central_bank
+  (central_bank.py:43); mutating econ.policy.central_bank does nothing
+- **MortgageBook snapshots policy at Economy init** (economy.py:366): only LTV re-syncs at
+  runtime; DSTI / risk-weight / foreclosure params are stale copies
+- **soe_efirm only writes Firm.state_owned at creation** (energy.py:171): runtime flip does
+  not (de)nationalise existing firms; ownership/payment transition semantics missing
+- **bank_leverage_mean is a GENESIS DRAW parameter** (per-bank risk appetite), not a live
+  cap. Ruling: keep appetite distribution in Config; create a separate bank_leverage_cap
+  policy lever
+- **bond_coupon is not stored per lot**: runtime change would retroactively re-coupon the
+  whole stock. Correct semantics: new-issue-only (or declare floating-rate explicitly)
+- **jg_productivity** is closer to a technology parameter; **deposit_rate** is currently a
+  commercial-bank contract cost — both need semantic splits before promotion
+
 ## 2. Architecture (three layers)
 
 - **Controller** (pluggable): `Null` (constant, bit-identical) · `Scheduled` (tick→value script;
   the shock-module cousin) · `Random` (bounded walk, own RNG stream) · `Heuristic` ·
   `RLAdapter` (gym-style) · later `Frontend`.
-- **PolicyState**: per-economy; each lever carries `(min, max, max_step_per_tick)` — the single
-  declaration that is also the RL action space. World-level policies (capital_control, peg,
-  migration) are OWNED by each economy's PolicyState; World reads them per tick.
+- **PolicyState**: per-economy registry. Each lever declares (user-audit-extended schema):
+  `(min, max, max_step_per_tick)` · **owner/scope** (single economy | bilateral | world) ·
+  **type/choices/nullability/shape** (bool, enum, int, nullable, vector, sanction-pair set) ·
+  **effective_semantics** (immediate | new-contracts-only | restates-stock | state-transition)
+  · **capability dependency** (e.g. OMO requires bonds+banking) · **the unique runtime
+  read-point** (metrics must read the same source). One declaration = validation + random
+  domain + RL action space + frontend form. World-level policies are OWNED by each economy's
+  PolicyState; World reads them per tick.
 - **Read-point migration**: modules read `econ.policy.X`, never `cfg.X`; genesis seeds
   policy ← cfg.
 
@@ -217,7 +291,7 @@ energy_shock_duration.
 
 | Phase | Content | Acceptance |
 |---|---|---|
-| P0 | Inventory + PolicyState extension + read-point migration | digest bit-identical; full suite green |
+| P0 | Machine-verified inventory + hardcoded-institution sweep + PolicyState extension + read-point migration | digest bit-identical; full suite green; **per-lever effectiveness test: mutate ONLY policy mid-run, assert behaviour responds** (a digest gate alone cannot catch dead fields like Policy.central_bank) |
 | P1 | Null/Scheduled/Random controllers + action log + checkpoint integration | Scheduled replay bit-identical; boundedness tests |
 | P2 | observe() contract + demo heuristic (counter-cyclical fiscal) | 30y portrait A/B: heuristic vs Null |
 | P3 | gym env adapter (step = N ticks; reward = injectable callable) | RL interface smoke with random policy |
