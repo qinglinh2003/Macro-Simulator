@@ -11,7 +11,8 @@ save-container `events.log` and, later, the frontend network protocol.
 ## 0. Boundary principle
 
 > Policy = what an authority (government / central bank / immigration office) can decide at
-> runtime. Config = the physics of the world (preferences, technology, demography).
+> runtime. Config = the immutable rest: structure, CAPABILITIES, physics, preferences,
+> technology, demography.
 
 ## 1. Lever inventory (P0 deliverable — REVISED after user audit 2026-07-18; NOT yet complete)
 
@@ -27,9 +28,11 @@ save-container `events.log` and, later, the frontend network protocol.
 
 Sources actually swept so far: 364 root-Config fields, 31 World keyword tunables (32 user
 params incl. `configs`; peg_economy recorded for deletion-into-ExternalPolicy), the existing
-Policy class (46 levers). **STILL-UNSWEPT sources (P0 machine inventory must cover them):**
-`SocialDynamicsConfig` (35 fields, demographics/social.py), `RelationshipConfig` (12 fields,
-demographics/relationships.py), other nested/derived configs, and function-signature defaults.
+Policy class (46 levers). **STILL-UNSWEPT sources — explicit machine-sweep manifest (P0):**
+`SocialDynamicsConfig` (35 fields, demographics/social.py) · `RelationshipConfig` (12
+fields, demographics/relationships.py) · `LifecycleHouseholdConfig` · the derived snapshots
+in `config/schema.py` · function-signature defaults / literal scan of production modules.
+EXCLUDED as test harness: `Phase1AcceptanceConfig`.
 The machine inventory classifies every entry as one of: live parameter | genesis-only |
 derived-from-root-Config | declared-but-unused | policy candidate | true literal/function
 default.
@@ -63,8 +66,9 @@ housing_property_tax, housing_in_wealth_tax
 
 **Monetary — rate rule** (8): [N] monetary_regime (SPLIT of the old central_bank flag:
 `central_bank_enabled` stays a Config CAPABILITY; the live regime choice is Policy — this
-also resolves the master-switch contradiction and the §1.7 dead-field), inflation_target,
-taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override · [C] r_interest (the
+also resolves the master-switch contradiction and the §1.7 dead-field) · [P]
+inflation_target, taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override ·
+[C] r_interest (the
 baseline/exogenous rate), r_max (the cap that disarmed CBs in the v1 portrait)
 (deposit_rate moved to PENDING_RULING — currently a commercial-bank contract cost)
 
@@ -77,9 +81,12 @@ lesson: the target-index choice is itself policy), cb_log_inflation
 
 **Treasury debt management** (3): [C] bond_finance_frac, bond_coupon, bond_maturity
 
-**Macroprudential — banks** (9): [C] bank_capital_constraint(regime), **[N] bank_leverage_cap
-(bank_leverage_mean itself STAYS Config as the genesis risk-appetite draw, per §1.7)**, bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
+**Macroprudential — banks** (9): [C] bank_capital_constraint(regime) · **[N]
+bank_leverage_cap** (bank_leverage_mean itself STAYS Config as the genesis risk-appetite
+draw, per §1.7) · [C] bank_target_capital_ratio, bank_exposure_limit, bank_min_capital,
 bank_bond_duration_limit, bank_resolution_fund(regime), reserve_floor_frac · [P] kappa
+
+(Tagging rule, machine-parse friendly: a tag is re-stated at EVERY source change.)
 
 **Macroprudential — households & mortgages** (11): [P] margin_ltv, margin_max,
 hh_credit_limit, mortgage_ltv_cap · [C] mortgage_underwriting(regime), mortgage_dsti_cap,
@@ -152,15 +159,17 @@ machine-inventory deliverable, not a claim. The machine registry must use
 SOURCE-QUALIFIED ids (`Config.omo` vs `Policy.omo`): Config and Policy share **43
 same-name fields**, so bare names cannot prove one-bucket-per-source-field.)
 
-Formally placed here (audit round 3): `Config.bank_leverage_mean` (genesis risk-appetite
-draw, physics), `Config.central_bank_enabled` (planned capability flag, mechanism).
+Formally placed here (audit round 3/4): `Config.bank_leverage_mean` (genesis risk-appetite
+draw, physics); `Config.central_bank` → pending semantic split / planned RENAME to
+`central_bank_enabled` (capability flag, mechanism) — the target name does not exist as a
+source field today.
 
 **Previously UNCLASSIFIED (user audit; now placed)**: demographics_population (structure),
 public_capital_gamma, public_capital_depreciation (physics — public-capital technology),
 lambda_I, delta_K, A, a_K, K_firm0, kappa_E, a_E (physics/genesis — capital & energy
-technology; missed by the regex dump). [W] peg_economy: recorded — the new architecture
-DELETES it in favour of each economy's own peg choice in ExternalPolicy; migration note
-mandatory.
+technology; missed by the regex dump). [W] peg_economy: recorded — **PROPOSED (not
+frozen)**: delete in favour of each economy's own peg choice in ExternalPolicy; blocked on
+the §5.1 multi-pegger / cyclic-peg / anchor-switch ruling; migration note mandatory.
 
 **Structure / genesis / scale** (immutable by nature): n_households, n_firms, n_ticks, seed,
 a, n_firms_c, n_firms_k, n_firms_e, n_banks, n_builders, d_household0, d_firm0, d_cfirm0,
@@ -253,9 +262,12 @@ energy_shock_duration.
    constructor vectors with no Policy home. Create `ExternalPolicy` inside each economy's
    PolicyState; World reads per tick (peg regime: pegger's own choice + anchor consent
    question deferred).
-3. **Bounds table**: every policy lever gains (min, max, max_step_per_tick) — one
-   declaration = validation + random-controller domain + RL action space.
-4. `Policy.from_config` grows accordingly; NullController = freeze-at-seed = bit-identical.
+3. **Registry validation**: every lever declares a PER-TYPE validation rule (numeric:
+   min/max/max_step; bool/enum: choices; set & bilateral actions: membership + pair rules)
+   — one declaration = validation + random-controller domain + RL action space.
+4. The run spec provides a full `initial_policy` (PolicySeed); `from_legacy_config` exists
+   only as the versioned compatibility converter for old YAML; NullController = freeze
+   `initial_policy` = bit-identical; checkpoints store the full Policy snapshot.
 
 ### 1.6 Hard-coded institutions a field scan CANNOT see (user audit; sweep = P0 work item)
 
@@ -266,13 +278,13 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **Labour/pension law**: working age 18–64, pension eligibility 65 — economic_state.py:389;
   split out labor_min_age / statutory_retirement_age / pension_eligibility_age
 - **Family & inheritance law**: estate tax fixed 0; intestate succession fixed
-  spouse/children 50/50; probate window fixed 365d (inheritance.py:49) — TRUE literals.
-  CORRECTION (audit round 3, fact-checked): marriage min-age, remarriage cooling period,
-  consanguinity ban ARE `SocialDynamicsConfig`/`RelationshipConfig` FIELDS (unswept nested
-  source; enter the machine inventory as policy candidates there). The same-sex restriction
-  (`a.sex == b.sex`, social.py:401) and the 50/50 marital-gain split
-  (`target_gain = .../2.0`, marriage_economics.py:49) ARE true hard-coded literals and stay
-  in this section
+  spouse/children 50/50 (inheritance.py:49); probate window fixed 365d (economic_bridge.py:2065) — TRUE literals.
+  CORRECTION (audit round 4, fact-checked): marriage min-age, remarriage cooldown and the
+  close-kin flag are ALL `SocialDynamicsConfig` fields (not RelationshipConfig; unswept
+  nested source; enter the machine inventory as policy candidates there). The same-sex
+  restriction (`a.sex == b.sex`, social.py:402) and the 50/50 marital-gain split
+  (`target_gain = .../2.0`, marriage_economics.py:61) ARE true hard-coded literals and stay
+  in this section; probate window literal at economic_bridge.py:2065
 - **Financial regulation literals**: ordinary-credit RWA fixed 100%; resolution fund covers
   100% of residual; LoLR funds the FULL gap; mortgages fixed non-recourse; household
   bankruptcy = full discharge of residual margin debt
@@ -297,8 +309,8 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   policy_rate_override have NO Config counterparts (policy.py:97). **DECIDED (round 3)
   seed architecture**: the run spec carries a full `initial_policy` (PolicySeed);
   `from_legacy_config` remains ONLY as old-YAML compatibility; a checkpoint stores the
-  full Policy snapshot; `events.log` stores only post-genesis deltas. ("policy ← cfg"
-  phrasing elsewhere is superseded by this.)
+  full Policy snapshot; `events.log` stores only post-genesis deltas. (All body text now
+  states this directly; no superseded phrasing remains.)
 - **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
   still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
   observation; per-lever effectiveness tests must cover the METRIC path too
@@ -316,17 +328,21 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   read-point** (metrics must read the same source). One declaration = validation + random
   domain + RL action space + frontend form. World-level policies are OWNED by each economy's
   PolicyState; World reads them per tick.
-- **Read-point migration**: modules read `econ.policy.X`, never `cfg.X`; genesis seeds
-  policy ← cfg.
+- **Read-point migration**: modules read `econ.policy.X`, never `cfg.X`. Initial values
+  come from the run spec's `initial_policy` (PolicySeed); legacy YAML passes through
+  `from_legacy_config`.
 
 ## 3. Disciplines (inherited from v24 lessons)
 
-1. Bit-identity: NullController seeded from cfg == today's behavior; digest-gated.
+1. Bit-identity: NullController freezing `initial_policy` (legacy runs: the
+   `from_legacy_config` conversion of today's Config) == today's behaviour; digest-gated.
    Decision point fixed at top-of-tick; controller uses an isolated RNG stream.
 2. Checkpoint-able: controller state pickles; **policy is STATE and must resume exactly**
    (the inverse of the "tolerances are policy, not state" lesson).
-3. Actions are events: every change logged `(tick, economy, lever, old, new, actor)` →
-   `.msim` events.log slot → replay / audit / frontend protocol in one schema.
+3. Actions are events: every change logged with the FULL schema
+   `(tick, actor_economy, lever, old, new, actor, target, direction, scope, sequence,
+   schema_version)` (bilateral fields null for domestic levers) → `.msim` events.log slot →
+   replay / audit / frontend protocol in one schema.
 4. Explicit observation contract: `observe()` returns a curated snapshot — the RL observation
    space and the frontend UI data contract.
 
