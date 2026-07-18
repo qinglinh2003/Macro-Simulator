@@ -127,14 +127,13 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         strict_lower=True,
     )
 
-    for name in (
-        "migration_rate",
-        "migration_max_share",
-        "remittance_tax",
-        "outward_remittance_tax",
-        "wage_smoothing",
-    ):
+    for name in ("migration_rate", "migration_max_share", "wage_smoothing"):
         _bounded_number(name, values[name], lower=0.0, upper=1.0)
+
+    # B5a: the remittance taxes are per-economy levers now (scalar broadcasts)
+    for name in ("remittance_tax", "outward_remittance_tax"):
+        for index, item in enumerate(_per_economy_values(name, values[name], n)):
+            _bounded_number(f"{name}[{index}]", item, lower=0.0, upper=1.0)
 
     # per-economy migration policy (scalar broadcasts => bit-identical). remittance_share is the
     # origin diaspora's send-home rate; guest_worker_return is the HOST's temporary-migration return
@@ -300,6 +299,59 @@ class World:
         self.outward_remittance_tax = outward_remittance_tax
         self.guest_worker_return = guest_worker_return
         self.wage_smoothing = wage_smoothing
+
+        # B5a: every cross-border lever now has a per-economy OWNER. Legacy ctor
+        # vectors SEED each economy's ExternalPolicy; from then on the world's
+        # coupling vectors are re-derived at the coupling barrier (one atomic
+        # commit point -- no per-economy ordering skew). Legacy sanction pairs
+        # seed BOTH sides (unilateral ownership, symmetric effect, A6).
+        from macro_sim.core.external_policy import ExternalPolicy
+        from macro_sim.world.trade import lever as _lv
+
+        def _capv(v, i):
+            if v is None:
+                return None
+            if isinstance(v, (list, tuple)):
+                return None if v[i] is None else float(v[i])
+            return float(v)
+
+        def _lvchk(name, v, i):
+            # fail-fast at construction with the LEGACY trade-time message
+            if isinstance(v, (list, tuple)) and len(v) != self.n:
+                raise ValueError(
+                    f"{name} must be a scalar or have one value per economy ({self.n})"
+                )
+            return _lv(v, i)
+
+        legacy_pairs = sanctions or set()
+        # resolve the legacy anchor default HERE (the peg block below runs later):
+        # explicit anchor wins; else the first economy that isn't the pegger
+        if peg:
+            _anchor_resolved = peg_anchor if peg_anchor is not None \
+                else (1 if peg_economy != 1 else 0)
+        else:
+            _anchor_resolved = None
+        for i, econ in enumerate(self.economies):
+            econ.external_policy = ExternalPolicy(
+                tariff=_lvchk("tariff", tariff, i),
+                import_quota=_capv(import_quota, i),
+                export_subsidy=_lvchk("export_subsidy", export_subsidy, i),
+                capital_control=float(self.capital_control[i]),
+                external_interest_settlement_fraction=_lv(
+                    external_interest_settlement_fraction, i
+                ),
+                sanctions_imposed_on=frozenset(
+                    j for pair in legacy_pairs for j in pair if i in pair and j != i
+                ),
+                immigration_cap=_capv(immigration_cap, i),
+                emigration_cap=_capv(emigration_cap, i),
+                remittance_tax=_lv(remittance_tax, i),
+                outward_remittance_tax=_lv(outward_remittance_tax, i),
+                guest_worker_return=_lv(guest_worker_return, i),
+                fx_regime=("peg" if peg and i == peg_economy else "float"),
+                peg_anchor=(_anchor_resolved if peg and i == peg_economy else None),
+                peg_reserve_scale=float(peg_reserve_scale),
+            )
         self._rw_ema = None
         self._tariff_rev: List[float] = [0.0] * self.n
         self._export_subsidy_cost: List[float] = [0.0] * self.n
@@ -413,6 +465,7 @@ class World:
             # capital position on which the coarse factor-income layer should
             # recursively accrue interest.
             self._factor_interest_principal = self.market_external_positions()
+        self._commit_external_policies()   # B5a: normalize the coupling vectors from day one
 
     def _validate_domains(self) -> None:
         """Revalidate mutable World levers before any per-tick state change."""
@@ -523,6 +576,40 @@ class World:
         self.t += 1
         return recs
 
+    def _commit_external_policies(self) -> None:
+        """Atomically re-derive the world coupling vectors from each economy's
+        ExternalPolicy (B5a). Runs at construction and at the top of every
+        coupling barrier: mutations to econ.external_policy anywhere in a tick
+        all take effect together at the next barrier."""
+        eps = [e.external_policy for e in self.economies]
+        self.tariff = [p.tariff for p in eps]
+        self.import_quota = (
+            None if all(p.import_quota is None for p in eps)
+            else [p.import_quota for p in eps]
+        )
+        self.export_subsidy = [p.export_subsidy for p in eps]
+        self.capital_control = [float(p.capital_control) for p in eps]
+        self.external_interest_settlement_fraction = [
+            float(p.external_interest_settlement_fraction) for p in eps
+        ]
+        self.immigration_cap = (
+            None if all(p.immigration_cap is None for p in eps)
+            else [p.immigration_cap for p in eps]
+        )
+        self.emigration_cap = (
+            None if all(p.emigration_cap is None for p in eps)
+            else [p.emigration_cap for p in eps]
+        )
+        self.remittance_tax = [p.remittance_tax for p in eps]
+        self.outward_remittance_tax = [p.outward_remittance_tax for p in eps]
+        self.guest_worker_return = [p.guest_worker_return for p in eps]
+        # sanctions: the pair-set becomes a DERIVED cache of the unilateral stances
+        # (never authoritative; symmetric effect by construction)
+        self.sanctions = {
+            frozenset({i, j})
+            for i, p in enumerate(eps) for j in p.sanctions_imposed_on if j != i
+        }
+
     def _coupling_barrier(self) -> None:
         """The thin central barrier: compute cross-border export demand / import supply
         on last tick's prices + the current rate vector, and grope the rate.
@@ -531,6 +618,7 @@ class World:
         is all-zero ⇒ rates stay flat. Trade injection into the goods sessions lands in
         v20.2. Reductions across economies use fixed economy-id order (§9).
         """
+        self._commit_external_policies()   # B5a: the atomic policy commit point
         # Tick journals are observations, never carry-forward stocks.  Reset them
         # even when trade is disabled at run time; successful settlement below
         # overwrites them with this tick's realized values and physical volumes.

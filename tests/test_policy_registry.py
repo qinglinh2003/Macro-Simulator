@@ -15,9 +15,17 @@ from macro_sim.economy import Economy
 
 
 def test_registry_covers_every_policy_field_exactly():
+    from macro_sim.core.external_policy import ExternalPolicy
     policy_fields = {f.name for f in dataclasses.fields(Policy)}
-    assert set(REGISTRY) == policy_fields, (
-        f"missing={policy_fields - set(REGISTRY)} stale={set(REGISTRY) - policy_fields}")
+    econ_levers = {n for n, lv in REGISTRY.items() if lv.scope != "external"}
+    assert econ_levers == policy_fields, (
+        f"missing={policy_fields - econ_levers} stale={econ_levers - policy_fields}")
+    # external-scope levers must each be an ExternalPolicy field (peg family joins in B5b)
+    ext_fields = {f.name for f in dataclasses.fields(ExternalPolicy)}
+    ext_levers = {n for n, lv in REGISTRY.items() if lv.scope == "external"}
+    assert ext_levers <= ext_fields, f"unknown external levers: {ext_levers - ext_fields}"
+    assert ext_fields - ext_levers == {"fx_regime", "peg_anchor", "peg_reserve_scale"}, (
+        "only the B5b peg family may be unregistered")
 
 
 def test_registry_capabilities_exist_in_config():

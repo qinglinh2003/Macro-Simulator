@@ -53,6 +53,17 @@ class Bool:
         return None if isinstance(new, bool) else f"not a bool: {new!r}"
 
 
+class EconomySet:
+    """Validation for frozenset-of-economy-id levers (sanctions)."""
+    def check(self, old: Any, new: Any) -> str | None:
+        if not isinstance(new, frozenset):
+            return f"expected a frozenset of economy ids, got {type(new).__name__}"
+        for j in new:
+            if isinstance(j, bool) or not isinstance(j, int) or j < 0:
+                return f"economy ids must be non-negative ints, got {j!r}"
+        return None
+
+
 @dataclass(frozen=True)
 class Choices:
     values: tuple[str, ...]
@@ -328,6 +339,33 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="genesis flag -> firm.state_owned; runtime flips via the handler",
        state_notes="the transition handler mutates e_firms[0].state_owned directly; "
                    "dividend routing reads the FIRM state, not the lever"),
+    # -- external (B5a): per-economy owners of the World coupling vectors; all
+    #    mutations take effect ATOMICALLY at the next coupling barrier --
+    _L("tariff", Range(0.0, 5.0), scope="external",
+       read_point="world/trade.py::_tariff_rate (importer's own rate)"),
+    _L("import_quota", NullableRange(0.0, 100.0), scope="external",
+       read_point="world/trade.py::import volume cap (None = open)"),
+    _L("export_subsidy", Range(-0.99, 0.99), scope="external",
+       read_point="world/trade.py::exporter subsidy (<0 = export tax)"),
+    _L("capital_control", Range(0.0, 1.0), scope="external",
+       read_point="world/capital.py::flow throttle (1 = closed account)"),
+    _L("external_interest_settlement_fraction", Range(0.0, 1.0), scope="external",
+       read_point="world/capital.py::external interest cash settlement"),
+    _L("sanctions_imposed_on", EconomySet(), scope="external",
+       read_point="world/world.py::sanctioned(i,j) OR-derived cache",
+       state_notes="A6: unilateral ownership, symmetric effect; an imposer can lift "
+                   "only its own stance; scope TODAY = trade partner choice + "
+                   "migration destinations (capital flows do NOT consult it)"),
+    _L("immigration_cap", NullableRange(0.0, 10.0), scope="external",
+       read_point="world/migration.py::per-host admission ceiling (None = open)"),
+    _L("emigration_cap", NullableRange(0.0, 10.0), scope="external",
+       read_point="world/migration.py::origin exit cap (None = open)"),
+    _L("remittance_tax", Range(0.0, 0.9), scope="external",
+       read_point="world/migration.py::origin taxes the inflow"),
+    _L("outward_remittance_tax", Range(0.0, 0.9), scope="external",
+       read_point="world/migration.py::host taxes the outflow"),
+    _L("guest_worker_return", Range(0.0, 1.0), scope="external",
+       read_point="world/migration.py::host's temporary-migration return rate"),
 ]}
 
 # renamed levers keep their legacy config names callable (deprecation path)
@@ -375,7 +413,8 @@ def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
     for cap in lever.requires:
         if not getattr(econ.cfg, cap, False):
             raise ValueError(f"{name}: missing capability {cap}")
-    old = getattr(econ.policy, name, None)
+    holder = econ.external_policy if lever.scope == "external" else econ.policy
+    old = getattr(holder, name, None)
     err = lever.validation.check(old, value)
     if err:
         raise ValueError(f"{name}: {err}")
@@ -384,7 +423,7 @@ def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
         # transition leaves the policy untouched; it sees (old, new) and may
         # adjust companion state (SOE flags, staged rates) atomically
         HANDLERS[lever.handler_id](econ, old, value)
-    setattr(econ.policy, name, value)
+    setattr(holder, name, value)
     log = getattr(econ, "_policy_action_log", None)
     if log is None:
         log = econ._policy_action_log = []
