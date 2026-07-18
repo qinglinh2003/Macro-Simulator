@@ -100,12 +100,16 @@ def test_central_bank_system_reads_grouped_config_view_for_policy_rate():
     assert econ._rate == pytest.approx(0.037)
 
 
-def test_banking_system_reads_grouped_config_view_for_capital_constraint():
+def test_banking_system_reads_policy_for_capital_constraint():
+    """B4a migration: the capital-constraint REGIME is a live policy dial. The cfg
+    trap now proves the legacy view is NOT consulted (contract inverted on purpose)."""
     from macro_sim.systems.banking import bank_constraint
 
-    view = SimpleNamespace(bank_capital_constraint=True)
-    econ = SimpleNamespace(cfg=BankingCfgTrap(view), banks=[object(), object()])
-
+    econ = SimpleNamespace(
+        cfg=BankingCfgTrap(SimpleNamespace()),          # any cfg read -> loud failure
+        policy=SimpleNamespace(bank_capital_constraint=True),
+        banks=[object(), object()],
+    )
     assert bank_constraint(econ) is True
 
 

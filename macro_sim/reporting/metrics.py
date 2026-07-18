@@ -1667,7 +1667,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         alive_banks = [bank for bank in econ.banks if bank.alive]
         exposures = [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
         capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank, bond_deltas)) for bank in alive_banks]
-        ratio = max(1e-12, float(econ.cfg.mortgage_min_capital_ratio))
+        ratio = max(1e-12, float(econ.policy.mortgage_min_capital_ratio))
         limits = [capital / ratio for capital in capitals]
         headrooms = [limit - exposure for limit, exposure in zip(limits, exposures)]
         capital_ratios = [
@@ -1715,14 +1715,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
             "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
             "negative_capital_bank_count": float(sum(1 for c in caps if c < -1e-9)),
-            "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.cfg.bank_min_capital)),
+            "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.policy.bank_min_capital)),
         })
-        if getattr(econ.cfg, "bank_exposure_limit", 0.0) > 0.0:
+        if getattr(econ.policy, "bank_exposure_limit", 0.0) > 0.0:
             usage = []
             for a in list(econ.firms) + list(econ.households):
                 bid = bank_for(econ, a.id).id
-                cap = max(1e-9, float(getattr(econ.cfg, "bank_min_capital", 0.0)), led.balance(bid))
-                usage.append(led.debt(a.id) / (econ.cfg.bank_exposure_limit * cap))
+                cap = max(1e-9, float(getattr(econ.policy, "bank_min_capital", 0.0)), led.balance(bid))
+                usage.append(led.debt(a.id) / (econ.policy.bank_exposure_limit * cap))
             rec["large_exposure_usage_max"] = float(max(usage)) if usage else 0.0
         else:
             rec["large_exposure_usage_max"] = 0.0
@@ -1737,7 +1737,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             peak_od = -min([econ.ledger.reserve_min(b.id) for b in econ.banks] + [0.0])
             bank_reserves = [econ.ledger.reserves(b.id) for b in econ.banks]
             reserve_floor = {
-                b.id: econ.cfg.reserve_floor_frac * dep.get(b.id, 0.0)
+                b.id: econ.policy.reserve_floor_frac * dep.get(b.id, 0.0)
                 for b in econ.banks
             }
             reserve_breaches = [

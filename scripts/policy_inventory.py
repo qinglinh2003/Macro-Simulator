@@ -17,8 +17,8 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (54 [P], 31 [C], 14 [W], 0 PENDING,
-     4 [N]; candidate arithmetic 54+31+14+4-1(dead central_bank replaced) = 102;
+  3. count identities from the design doc hold (69 [P], 17 [C], 14 [W], 0 PENDING,
+     3 [N]; candidate arithmetic 69+17+14+3-1(dead central_bank replaced) = 102;
      plus r_interest seed-promoted to PolicySeed.initial_policy_rate)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
@@ -58,7 +58,8 @@ DEFECTS = {  # §1.7 — listed-but-not-runtime-effective (per-lever tests will 
 
 # ---- [N] new target levers (exist in NO source today) ----
 POLICY_NEW = {
-    "monetary_regime", "bank_leverage_cap",
+    "monetary_regime",
+    # bank_leverage_cap: IMPLEMENTED in B4a (now a Policy field; left the [N] set)
     # A3/A4 rulings (2026-07-18): the two NEW levers that carry the government's
     # actual choices, cleanly split from the technology/pricing bases kept in Config
     "jg_public_works_share",   # default 1.0 = today's implicit share (bit-identical)
@@ -79,14 +80,8 @@ CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
     "omo_index_deposits",
     # treasury debt management
     "bond_finance_frac", "bond_coupon", "bond_maturity",
-    # bank macroprudential
-    "bank_capital_constraint", "bank_target_capital_ratio", "bank_exposure_limit",
-    "bank_min_capital", "bank_bond_duration_limit", "bank_resolution_fund",
-    "reserve_floor_frac",
-    # mortgage regulation
-    "mortgage_underwriting", "mortgage_dsti_cap", "mortgage_stress_rate_addon",
-    "mortgage_risk_weight", "mortgage_min_capital_ratio", "mortgage_foreclosure_ltv",
-    "mortgage_arrears_floor",
+    # bank macroprudential: MIGRATED (B4a) -- now Policy fields (auto-join seed-legacy)
+    # mortgage regulation: MIGRATED (B4b) via the _sync_policy channel
     # insolvency & eviction law
     "bankrupt_persist", "household_bankruptcy",
     # energy regime
@@ -108,9 +103,13 @@ CONFIG_POLICYSEED_PROMOTED = {"r_interest"}   # -> PolicySeed.initial_policy_rat
 CONFIG_SHOCK_MODULE = {"energy_shock_at", "energy_shock_magnitude", "energy_shock_duration"}
 
 # Config.X that seed Policy.X via from_legacy_config (the 43 same-name collisions)
+# Policy fields WITHOUT a Config counterpart (no legacy seed): the 3 originals +
+# every [N] lever implemented into Policy (they seed from PolicySeed, not Config)
+_NO_CONFIG_COUNTERPART = {"tax_necessity_rate", "tax_luxury_rate", "policy_rate_override",
+                          "bank_leverage_cap"}
 CONFIG_POLICY_SEED_LEGACY = {
     f.name for f in dataclasses.fields(Policy)
-} - {"tax_necessity_rate", "tax_luxury_rate", "policy_rate_override"}
+} - _NO_CONFIG_COUNTERPART
 
 CONFIG_STRUCTURE = {
     "n_households", "n_firms", "n_ticks", "seed", "a", "n_firms_c", "n_firms_k",
@@ -353,7 +352,7 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 54, "C": 31, "W": 14, "PENDING": 0, "N": 4}   # B4c: 8 migrated [C]->[P]
+    expect = {"P": 69, "C": 17, "W": 14, "PENDING": 0, "N": 3}   # +B4b: 7 mortgage regs migrated
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
@@ -378,7 +377,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 54[P] + 31[C] + 14[W] + 4[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
+    print(f"policy candidates: 69[P] + 17[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")

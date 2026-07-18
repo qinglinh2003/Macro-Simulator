@@ -452,7 +452,7 @@ def _finalize_bank_pnl_legacy(econ: Any, cfg: Any) -> None:
     It is a compatibility surface, not the economically preferred accounting
     model; production diagnostics enable ``bank_realized_pnl`` below.
     """
-    ratio = cfg.bank_target_capital_ratio
+    ratio = econ.policy.bank_target_capital_ratio   # B4a
     if ratio > 0.0 and len(econ.banks) > 1:
         refresh_loan_books(econ)
     comp = cfg.interbank and cfg.deposit_rate_disp > 0.0 and len(econ.banks) > 1
@@ -558,7 +558,7 @@ def finalize_bank_pnl(econ: Any) -> None:
         # position in ``run_debt_service_phase``.
         return
 
-    ratio = cfg.bank_target_capital_ratio
+    ratio = econ.policy.bank_target_capital_ratio   # B4a
     if ratio > 0.0 and len(econ.banks) > 1:
         refresh_loan_books(econ)
     # v23 COST OF FUNDS: pay contractual interest to depositors BEFORE forming profit. Until now

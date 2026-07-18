@@ -89,7 +89,7 @@ def run_omo_phase(econ: Any) -> None:
         # v13: index the reserve target to what the payment system actually needs -- the
         # genesis-anchored nominal target detaches as soon as the price level moves (the sick
         # 10k run drained 135M against a fixed 868k target and ran on LOLR for ten years)
-        target = pol.omo_reserve_target * cfg.reserve_floor_frac * econ.ledger.total_money
+        target = pol.omo_reserve_target * pol.reserve_floor_frac * econ.ledger.total_money   # B4a
     else:
         target = pol.omo_reserve_target * econ._reserve_M0
     econ._omo_target_value = target   # metrics: reserve_gap reads the SAME target the OMO acts on

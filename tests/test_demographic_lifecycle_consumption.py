@@ -384,7 +384,9 @@ def test_household_credit_skips_empty_demographic_household_accounts():
         _bank_of={"H0": SimpleNamespace(id="BANK_0", alive=True), "H1": SimpleNamespace(id="BANK_0", alive=True)},
         _loan_book={"BANK_0": 0.0},
         ledger=Ledger({"H0": 0.0, "H1": 0.0, "BANK_0": 0.0}),
-        policy=SimpleNamespace(kappa=10.0, hh_credit_limit=10.0),
+        policy=SimpleNamespace(kappa=10.0, hh_credit_limit=10.0,
+                               bank_capital_constraint=False,      # B4a: regime read moved to policy
+                               bank_exposure_limit=0.0, bank_leverage_cap=0.0),
         cfg=SimpleNamespace(
             credit=SimpleNamespace(
                 bank_enabled=True,

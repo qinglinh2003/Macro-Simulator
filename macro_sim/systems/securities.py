@@ -266,12 +266,12 @@ def run_bill_issuance_phase(econ: Any) -> None:
         for bk in [b for b in econ.banks if b.alive]:
             if remaining <= EPS:
                 break
-            required = cfg.reserve_floor_frac * dep_by_bank.get(bk.id, 0.0)
+            required = econ.policy.reserve_floor_frac * dep_by_bank.get(bk.id, 0.0)
             excess = max(0.0, econ.ledger.reserves(bk.id) - required)
             want = min(cfg.bank_bond_appetite * excess, remaining)
-            if cfg.bank_bond_duration_limit > 0.0:
+            if econ.policy.bank_bond_duration_limit > 0.0:
                 cur = sum(l["face"] for l in econ._bonds if l["holder"] == bk.id)
-                room = cfg.bank_bond_duration_limit * max(0.0, bank_economic_capital(econ, bk)) - cur
+                room = econ.policy.bank_bond_duration_limit * max(0.0, bank_economic_capital(econ, bk)) - cur
                 want = min(want, max(0.0, room))
             if want > EPS:
                 econ.ledger.bank_buy_bond_with_reserves(bk.id, econ._fiscal, want)

@@ -92,11 +92,31 @@ class Policy:
     omo_drain_frac: float = 0.1          # per-tick fraction of the gap to the target moved (drain/inject speed)
     lolr: bool = False                   # lender of last resort on/off (fund an illiquid-but-solvent bank in a run)
 
+    # -- macroprudential: banks (B4a migration) --
+    bank_capital_constraint: bool = False   # enforce the per-bank leverage gate (regime)
+    bank_leverage_cap: float = 0.0          # [N] regulatory ceiling on kappa_bank (0 = off)
+    bank_target_capital_ratio: float = 0.0  # payout above ratio*loan_book
+    bank_exposure_limit: float = 0.0        # single borrower <= limit*capital
+    bank_min_capital: float = 0.0           # charter gate for de-novo entry
+    bank_bond_duration_limit: float = 0.0   # bond book <= k*economic_capital (SVB floor)
+    bank_resolution_fund: bool = False      # state absorbs failed-bank residual (regime)
+    reserve_floor_frac: float = 0.0         # intraday reserve floor vs deposits
+
     # -- macroprudential (reclassified from Config; defaults preserve v8.5) --
     margin_ltv: float = 0.5              # household margin loan-to-value cap
     margin_max: float = 2.0              # household equity-leverage ceiling
     kappa: float = 3.0                   # firm credit leverage multiple L^max = κ·NW
     hh_credit_limit: float = 2.0         # household debt-to-income (DTI) cap
+
+    # -- macroprudential: mortgage regulation (B4b migration; all flow through
+    #    MortgageBook._sync_policy each session -- the B2 anti-snapshot channel) --
+    mortgage_underwriting: bool = False
+    mortgage_dsti_cap: float = 0.45
+    mortgage_stress_rate_addon: float = 0.02 / 365.0
+    mortgage_risk_weight: float = 0.35
+    mortgage_min_capital_ratio: float = 0.08
+    mortgage_foreclosure_ltv: float = 1.1
+    mortgage_arrears_floor: float = 2.0
 
     # -- v15.5 housing handles (live levers; seeded from Config) --
     mortgage_ltv_cap: float = 0.8        # owner-occupier mortgage LTV (macroprudential)
@@ -152,11 +172,26 @@ class Policy:
             omo_reserve_target=cfg.omo_reserve_target,
             omo_drain_frac=cfg.omo_drain_frac,
             lolr=cfg.lolr,
+            bank_capital_constraint=getattr(cfg, "bank_capital_constraint", False),
+            bank_target_capital_ratio=getattr(cfg, "bank_target_capital_ratio", 0.0),
+            bank_exposure_limit=getattr(cfg, "bank_exposure_limit", 0.0),
+            bank_min_capital=getattr(cfg, "bank_min_capital", 0.0),
+            bank_bond_duration_limit=getattr(cfg, "bank_bond_duration_limit", 0.0),
+            bank_resolution_fund=getattr(cfg, "bank_resolution_fund", False),
+            reserve_floor_frac=getattr(cfg, "reserve_floor_frac", 0.0),
+            # bank_leverage_cap is [N]: no legacy Config source, seeds 0.0 (off)
             margin_ltv=cfg.margin_ltv,
             margin_max=cfg.margin_max,
             kappa=cfg.kappa,
             hh_credit_limit=cfg.hh_credit_limit,
             mortgage_ltv_cap=getattr(cfg, "mortgage_ltv_cap", 0.8),
+            mortgage_underwriting=getattr(cfg, "mortgage_underwriting", False),
+            mortgage_dsti_cap=getattr(cfg, "mortgage_dsti_cap", 0.45),
+            mortgage_stress_rate_addon=getattr(cfg, "mortgage_stress_rate_addon", 0.02 / 365.0),
+            mortgage_risk_weight=getattr(cfg, "mortgage_risk_weight", 0.35),
+            mortgage_min_capital_ratio=getattr(cfg, "mortgage_min_capital_ratio", 0.08),
+            mortgage_foreclosure_ltv=getattr(cfg, "mortgage_foreclosure_ltv", 1.1),
+            mortgage_arrears_floor=getattr(cfg, "mortgage_arrears_floor", 2.0),
             housing_permits=getattr(cfg, "housing_permits", 50),
             housing_transfer_tax=getattr(cfg, "housing_transfer_tax", 0.0),
             housing_property_tax=getattr(cfg, "housing_property_tax", 0.0),

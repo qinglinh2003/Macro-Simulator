@@ -103,7 +103,7 @@ def record_bank_credit_loss(econ: Any, bank_id: str, amount: float) -> None:
 
 
 def bank_constraint(econ: Any) -> bool:
-    return econ.cfg.banking.bank_capital_constraint and len(econ.banks) > 1
+    return econ.policy.bank_capital_constraint and len(econ.banks) > 1   # B4a: regime is policy
 
 
 def unified_bank_rwa_enabled(econ: Any) -> bool:
@@ -209,7 +209,7 @@ def bank_rwa_exposure(econ: Any, bank: Bank, *, use_cache: bool = True) -> float
         if mortgage_book is not None else 0.0
     )
     unsecured = max(0.0, gross_loans - secured)
-    risk_weight = max(0.0, float(econ.cfg.banking.mortgage_risk_weight))
+    risk_weight = max(0.0, float(econ.policy.mortgage_risk_weight))   # B4b
     return unsecured + risk_weight * secured
 
 
@@ -226,7 +226,7 @@ def bank_rwa_capacity(
         return 0.0
     weight = max(0.0, float(new_loan_risk_weight))
     ratio = float(
-        econ.cfg.banking.mortgage_min_capital_ratio
+        econ.policy.mortgage_min_capital_ratio
         if min_capital_ratio is None else min_capital_ratio
     )
     # A zero risk weight would make principal capacity unbounded, while a missing
@@ -248,11 +248,17 @@ def bank_capacity(econ: Any, bank: Bank) -> float:
     # headroom wins; mortgages therefore consume RWA here without being treated as
     # unsecured principal a second time.
     if not unified_bank_rwa_enabled(econ):
-        return bank.kappa_bank * capital - econ._loan_book.get(bank.id, 0.0)
+        kb = bank.kappa_bank
+        if econ.policy.bank_leverage_cap > 0.0:      # B4a [N]: regulatory ceiling over the appetite draw
+            kb = min(kb, econ.policy.bank_leverage_cap)
+        return kb * capital - econ._loan_book.get(bank.id, 0.0)
     rwa_headroom = bank_rwa_capacity(econ, bank)
     if not bank_constraint(econ):
         return rwa_headroom
-    gross_headroom = bank.kappa_bank * capital - _bank_gross_loan_exposure(econ, bank)
+    kb_g = bank.kappa_bank
+    if econ.policy.bank_leverage_cap > 0.0:
+        kb_g = min(kb_g, econ.policy.bank_leverage_cap)
+    gross_headroom = kb_g * capital - _bank_gross_loan_exposure(econ, bank)
     return min(gross_headroom, rwa_headroom)
 
 
@@ -312,9 +318,9 @@ def grant_loan(econ: Any, borrower_id, amount: float) -> float:
         shop_bank(econ, borrower_id, amount)
     bank = bank_for(econ, borrower_id)
     headroom = bank_capacity(econ, bank)
-    if has_gross_gate and cfg.bank_exposure_limit > 0.0:
+    if has_gross_gate and econ.policy.bank_exposure_limit > 0.0:
         capital = max(0.0, bank_economic_capital(econ, bank))
-        concentration_room = cfg.bank_exposure_limit * capital - econ.ledger.debt(borrower_id)
+        concentration_room = econ.policy.bank_exposure_limit * capital - econ.ledger.debt(borrower_id)
         headroom = min(headroom, concentration_room)
     granted = min(amount, max(0.0, headroom))
     if granted > EPS:
@@ -630,7 +636,7 @@ def fail_bank(econ: Any, bank: Bank) -> None:
         else:
             estate_receiver = econ.households[0].id
         econ.ledger.transfer(bank.id, estate_receiver, econ.ledger.balance(bank.id))
-    if cfg.bank_resolution_fund:
+    if econ.policy.bank_resolution_fund:
         # v12.4-fix: a DEPOSIT-INSURANCE / RESOLUTION backstop. The STATE absorbs the failed bank's residual
         # negative capital (transfer fiscal→bank, A5-safe, financed into the deficit) instead of SOCIALISING the
         # loss onto surviving banks' capital. The legacy pro-rata socialisation (the `elif` below) dumped one deep
@@ -950,9 +956,9 @@ def run_interbank_phase(econ: Any) -> None:
         bank for bank in econ.banks
         if bank.alive and bank_economic_capital(econ, bank) >= -EPS
     ]
-    if cfg.reserve_floor_frac > 0.0:
+    if econ.policy.reserve_floor_frac > 0.0:
         for bank in alive:
-            floor = -cfg.reserve_floor_frac * max(0.0, econ.ledger.balance(bank.id))
+            floor = -econ.policy.reserve_floor_frac * max(0.0, econ.ledger.balance(bank.id))
             if econ.ledger.reserve_min(bank.id) < floor - EPS:
                 econ._payments_blocked += 1.0
     deficits = {b.id: -econ.ledger.reserves(b.id) for b in alive if econ.ledger.reserves(b.id) < -EPS}
@@ -1094,7 +1100,7 @@ def run_bank_entry_phase(econ: Any) -> None:
         rate = max(econ._rate, 1e-4)
         probability = max(0.0, min(1.0, cfg.bank_entry_beta * (roe / rate - 1.0)))
         probability *= max(0.0, 1.0 - len(alive) / (2.0 * max(1, cfg.n_banks)))
-    elif not alive and cfg.bank_resolution_fund:
+    elif not alive and econ.policy.bank_resolution_fund:
         # v12.4-fix: BOOTSTRAP a fully WIPED-OUT sector (no alive banks at all). Banking is maximally profitable
         # then (all credit demand is unmet), so a founder should be able to charter one -- else a total wipeout is
         # IRREVERSIBLE (the ROE gate returned early, so births froze forever). Enter at a modest fixed rate
@@ -1107,7 +1113,7 @@ def run_bank_entry_phase(econ: Any) -> None:
     for _ in range(cfg.bank_entry_max):
         if econ._bank_entry_rng.random() >= probability:
             continue
-        founder = find_bank_founder(econ, cfg.bank_min_capital)
+        founder = find_bank_founder(econ, econ.policy.bank_min_capital)
         if founder is None:
             break
-        found_bank(econ, founder, cfg.bank_min_capital)
+        found_bank(econ, founder, econ.policy.bank_min_capital)

@@ -83,7 +83,16 @@ class MortgageBook:
         stress_rate_addon, risk_weight, min_capital_ratio, foreclosure_ltv,
         arrears_floor) JOIN THIS METHOD at their B4 migration -- one sync channel,
         no second snapshot ever."""
-        self.ltv_cap = float(getattr(econ.policy, "mortgage_ltv_cap", self.ltv_cap))
+        pol = econ.policy
+        self.ltv_cap = float(getattr(pol, "mortgage_ltv_cap", self.ltv_cap))
+        # B4b: the whole regulation block is policy-owned now
+        self.underwriting_enabled = bool(getattr(pol, "mortgage_underwriting", self.underwriting_enabled))
+        self.dsti_cap = float(getattr(pol, "mortgage_dsti_cap", self.dsti_cap))
+        self.stress_rate_addon = float(getattr(pol, "mortgage_stress_rate_addon", self.stress_rate_addon))
+        self.risk_weight = float(getattr(pol, "mortgage_risk_weight", self.risk_weight))
+        self.min_capital_ratio = float(getattr(pol, "mortgage_min_capital_ratio", self.min_capital_ratio))
+        self.foreclosure_ltv = float(getattr(pol, "mortgage_foreclosure_ltv", self.foreclosure_ltv))
+        self.arrears_floor = float(getattr(pol, "mortgage_arrears_floor", self.arrears_floor))
 
     def balance_total(self) -> float:
         return sum(loan.balance for loan in self.loans.values())
