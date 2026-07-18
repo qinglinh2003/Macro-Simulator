@@ -318,6 +318,12 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
   still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
   observation; per-lever effectiveness tests must cover the METRIC path too
+- **PRECEDENCE SHADOWING (found by the P0 scaffold, first hour)**: gov_consumption_share
+  is a NO-OP while gov_deficit_target>0 (goods.py branch order), and `Config.v13()`
+  presets gov_deficit_target=0.03 — the share lever was silently inert in every
+  v13-family config INCLUDING the 30y portraits (defc>0 archetypes China/India/USA;
+  the defc=0 archetypes Germany/Gulf/Hub had it live). Registry consequence: levers
+  declare `shadowed_by` (executable via the paired effectiveness tests)
 
 ## 2. Architecture (three layers)
 
