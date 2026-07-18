@@ -52,18 +52,22 @@ def test_set_lever_validates_and_logs():
         set_lever(e, "no_such_lever", 1)
 
 
-def test_max_step_enforced_when_declared():
+def test_max_step_metadata_is_separate_from_absolute_policy_domain_validation():
     e = Economy(Config.v13(seed=42, n_households=20, n_firms_c=15, n_firms_k=8, n_banks=2,
                            demographics_population=120, n_ticks=20, government=True))
     for _ in range(3):
         e.step()
-    stepped = dataclasses.replace(REGISTRY["tax_income_rate"],
+    original = REGISTRY["tax_income_rate"]
+    stepped = dataclasses.replace(original,
                                   validation=Range(0.0, 0.8, max_step=0.05))
     REGISTRY["tax_income_rate"] = stepped
     try:
         base = e.policy.tax_income_rate          # preset-seeded (0.2 in v13)
-        with pytest.raises(ValueError, match="max_step"):
-            set_lever(e, "tax_income_rate", base + 0.3)
-        set_lever(e, "tax_income_rate", base + 0.04)   # within the step cap
+        assert stepped.validation.check_step(base, base + 0.3) is not None
+        assert stepped.validation.check_step(base, base + 0.04) is None
+        # set_lever is also used for bootstrap/migration/diagnostics and therefore
+        # validates the absolute Policy domain only.  The Controller Coordinator
+        # enforces check_step against its projected effective timeline.
+        set_lever(e, "tax_income_rate", base + 0.3)
     finally:
-        REGISTRY["tax_income_rate"] = dataclasses.replace(stepped, validation=Range(0.0, 0.8))
+        REGISTRY["tax_income_rate"] = original

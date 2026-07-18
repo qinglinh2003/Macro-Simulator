@@ -246,19 +246,24 @@ def test_monetary_regime_replaces_dead_flag():
 
 def test_monetary_regime_switch_atomicity():
     """The A5 handler contract: manual <=> manual_policy_rate set."""
-    from macro_sim.core.policy_registry import set_lever
+    from macro_sim.core.policy_registry import apply_action_batch, set_lever
     e = _econ("monetary")
     for _ in range(5):
         e.step()
     with pytest.raises(ValueError):
-        set_lever(e, "monetary_regime", "manual", actor="test")   # nothing staged
+        set_lever(e, "monetary_regime", "manual", actor="test")   # missing companion
     assert e.policy.monetary_regime == "taylor", "a vetoed switch must not mutate"
-    set_lever(e, "manual_policy_rate", 3.0e-4, actor="test")      # stage
-    set_lever(e, "monetary_regime", "manual", actor="test")       # switch
+    with pytest.raises(ValueError):
+        set_lever(e, "manual_policy_rate", 3.0e-4, actor="test")
+    apply_action_batch(
+        e,
+        (("manual_policy_rate", 3.0e-4), ("monetary_regime", "manual")),
+        actor="test",
+    )
     e.step()
     assert e._rate == pytest.approx(3.0e-4)
     set_lever(e, "monetary_regime", "taylor", actor="test")       # leave
-    assert e.policy.manual_policy_rate is None, "leaving manual must clear the staged rate"
+    assert e.policy.manual_policy_rate is None, "leaving manual must clear the companion rate"
 
 
 # ================= section 4: MONETARY batch 2 (Taylor + quantity tools) =================

@@ -15,7 +15,7 @@ envelope; .msim events.log integration lands with the P1 controllers).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 # ---------------------------------------------------------------- validation types
@@ -33,6 +33,14 @@ class Range:
     max_step: float | None = None       # per-action step cap (None = unbounded)
 
     def check(self, old: Any, new: Any) -> str | None:
+        """Validate the stored value's type and absolute domain.
+
+        ``max_step`` is controller governance metadata, not an invariant of a
+        Policy value.  Legacy/bootstrap/diagnostic callers of ``set_lever`` may
+        legitimately restore or seed an arbitrary in-range value.  The
+        Controller coordinator calls :meth:`check_step` against its projected
+        effective timeline before accepting a proposal.
+        """
         if isinstance(new, bool) or not isinstance(new, (int, float)):
             return f"not a number: {new!r} ({type(new).__name__})"
         v = float(new)
@@ -40,9 +48,15 @@ class Range:
             return f"not finite: {new!r}"
         if not (self.lo <= v <= self.hi):
             return f"{v} outside [{self.lo}, {self.hi}]"
-        if self.max_step is not None and old is not None:
-            if abs(v - float(old)) > self.max_step + 1e-15:
-                return f"step {abs(v - float(old)):.4g} exceeds max_step {self.max_step}"
+        return None
+
+    def check_step(self, old: Any, new: Any) -> str | None:
+        """Validate the Controller-only per-decision movement constraint."""
+        if self.max_step is None or old is None or new is None:
+            return None
+        distance = abs(float(new) - float(old))
+        if distance > self.max_step + 1e-15:
+            return f"step {distance:.4g} exceeds max_step {self.max_step}"
         return None
 
 
@@ -124,10 +138,31 @@ class Lever:
     shadowed_by: tuple[str, ...] = ()    # levers/states that render this one inert
     read_point: str = ""
     state_notes: str = ""                # B1 coverage-matrix observations
+    # v26 controller contract.  These defaults keep third-party/diagnostic Lever
+    # construction source-compatible; the canonical REGISTRY is enriched from
+    # policy_control_specs below and is required to have concrete values.
+    owner_role: str = ""
+    decision_group: str = ""
+    implementation_lag: int = 0
+    emergency_implementation_lag: int | None = None
+    min_hold_ticks: int = 0
+    emergency: bool = False
+    control_scale: float | None = None
+    admin_weight: float = 1.0
+    cost_class: str = "ordinary"
 
     def __post_init__(self):
         if self.semantics == STATE_TRANSITION and not self.handler_id:
             raise ValueError(f"{self.name}: state-transition semantics with no handler_id")
+        if self.implementation_lag < 0 or self.min_hold_ticks < 0:
+            raise ValueError(f"{self.name}: controller lags/holds must be non-negative")
+        if self.emergency_implementation_lag is not None \
+                and self.emergency_implementation_lag < 0:
+            raise ValueError(f"{self.name}: emergency lag must be non-negative")
+        if self.control_scale is not None and self.control_scale <= 0:
+            raise ValueError(f"{self.name}: control_scale must be positive")
+        if self.admin_weight < 0:
+            raise ValueError(f"{self.name}: admin_weight must be non-negative")
 
 
 def _L(name, validation, **kw):
@@ -221,15 +256,17 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     _L("rate_inertia", Range(0.0, 0.9999), requires=frozenset(),
        read_point="systems/central_bank.py", shadowed_by=("ZLB/r_max clamp",)),
     _L("manual_policy_rate", NullableRange(0.0, 0.01), requires=frozenset(),
+       semantics=STATE_TRANSITION, handler_id="manual_policy_rate_guard",
        read_point="systems/central_bank.py::manual branch",
        state_notes="renamed from policy_rate_override; applies ONLY in regime=manual "
-                   "(may be staged in any regime; the switch handler checks it)"),
+                   "and must be batched when switching into manual; leaving manual "
+                   "clears it as a companion transition"),
     _L("monetary_regime", Choices(("exogenous", "taylor", "manual")),
        semantics=STATE_TRANSITION, handler_id="monetary_regime_switch",
        read_point="systems/central_bank.py::set_policy_rate (the whole rate path)",
        state_notes="A5: three-state regime replacing the dead central_bank flag; "
-                   "switch INTO manual requires manual_policy_rate staged; leaving "
-                   "manual clears it (manual <=> rate set); the sensor runs in "
+                   "switch INTO manual must be batched with manual_policy_rate; leaving "
+                   "manual clears its companion (manual <=> rate set); the sensor runs in "
                    "taylor AND manual, off in exogenous"),
     # -- monetary: beliefs & measurement (B4c migration) --
     _L("r_neutral", Range(0.0, 0.05), read_point="systems/central_bank.py::r_target",
@@ -418,6 +455,34 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="world/capital.py::peg_defense drain scaling (live sync)"),
 ]}
 
+# C1: enrich every canonical Lever from the separately reviewable 102-row table.
+# Numeric max-step is installed in the Registry validator as shared Controller
+# governance metadata.  Absolute Policy-domain validation remains usable by
+# bootstrap, checkpoint migration and diagnostic mutation paths; the Coordinator
+# is the authority that enforces movement relative to its projected timeline.
+from macro_sim.core.policy_control_specs import CONTROL_SPECS
+
+REGISTRY = {
+    name: replace(
+        lever,
+        validation=(
+            replace(lever.validation, max_step=CONTROL_SPECS[name].max_step)
+            if isinstance(lever.validation, Range)
+            else lever.validation
+        ),
+        owner_role=CONTROL_SPECS[name].owner_role,
+        decision_group=CONTROL_SPECS[name].decision_group,
+        implementation_lag=CONTROL_SPECS[name].implementation_lag,
+        emergency_implementation_lag=CONTROL_SPECS[name].emergency_implementation_lag,
+        min_hold_ticks=CONTROL_SPECS[name].min_hold_ticks,
+        emergency=CONTROL_SPECS[name].emergency,
+        control_scale=CONTROL_SPECS[name].control_scale,
+        admin_weight=CONTROL_SPECS[name].admin_weight,
+        cost_class=CONTROL_SPECS[name].cost_class,
+    )
+    for name, lever in REGISTRY.items()
+}
+
 # renamed levers keep their legacy config names callable (deprecation path)
 LEGACY_ALIASES = {
     "firm_capital_haircut": "regulatory_firm_capital_haircut",
@@ -434,15 +499,29 @@ LEGACY_ALIASES = {
 def _validate_monetary_regime(view, old, new):
     # A5 atomicity: manual <=> manual_policy_rate set -- checked against the VIEW,
     # so {manual_policy_rate: x, monetary_regime: manual} in ONE batch is legal
-    # in any order, while entering manual with nothing staged anywhere is vetoed.
+    # in any order, while entering manual without its companion is vetoed.
     if new == "manual" and view.get("manual_policy_rate") is None:
-        raise ValueError("monetary_regime=manual requires manual_policy_rate (stage it "
-                         "first or include it in the same batch)")
+        raise ValueError(
+            "monetary_regime=manual requires manual_policy_rate in the same batch"
+        )
+
+
+def _validate_manual_policy_rate(view, old, new):
+    regime = view.get("monetary_regime")
+    if regime == "manual" and new is None:
+        raise ValueError(
+            "monetary_regime=manual requires a non-null manual_policy_rate"
+        )
+    if regime != "manual" and new is not None:
+        raise ValueError(
+            "manual_policy_rate must be null unless monetary_regime=manual "
+            "(include the regime switch in the same batch)"
+        )
 
 
 def _commit_monetary_regime(econ, old, new):
     if old == "manual" and new != "manual":
-        econ.policy.manual_policy_rate = None   # leaving manual clears the staged rate
+        econ.policy.manual_policy_rate = None   # leaving manual clears the companion rate
 
 
 def _commit_soe_transition(econ, old, new):
@@ -470,6 +549,7 @@ def _validate_peg_anchor(view, old, new):
 
 HANDLERS = {                     # handler_id -> (validator | None, committer | None)
     "soe_transition": (None, _commit_soe_transition),
+    "manual_policy_rate_guard": (_validate_manual_policy_rate, None),
     "monetary_regime_switch": (_validate_monetary_regime, _commit_monetary_regime),
     "fx_regime_switch": (_validate_fx_regime, None),
     "peg_anchor_change": (_validate_peg_anchor, None),
@@ -501,6 +581,31 @@ class _PendingView:
         return getattr(holder, name, None)
 
 
+@dataclass(frozen=True)
+class PreparedPolicyEntry:
+    """One canonical, validated mutation with its pre-commit value."""
+
+    name: str
+    lever: Lever
+    old: Any
+    new: Any
+
+
+@dataclass(frozen=True)
+class PreparedPolicyBatch:
+    """Pure result of :func:`prepare_action_batch`.
+
+    Holding the economy reference is intentional: the low-level executor is scoped
+    to one economy.  The v26 World transaction prepares these batches on a projected
+    copy and only publishes that copy after every joint check has passed.
+    """
+
+    econ: Any
+    entries: tuple[PreparedPolicyEntry, ...]
+    actor: str = "controller"
+    target: Any = None
+
+
 def _resolve(name):
     if name in LEGACY_ALIASES:
         import warnings
@@ -513,22 +618,25 @@ def _resolve(name):
     return name, lever
 
 
-def apply_action_batch(econ: Any, actions, *, actor: str = "controller",
-                       target: Any = None) -> None:
-    """THE sanctioned mutation path (audit fix #3): validate the WHOLE batch
-    against a pending view, then commit every field at once, run side-effect
-    committers, and write ONE log event. Either everything lands or nothing
-    does -- there is no observable intermediate state and no partial log.
+def prepare_action_batch(
+    econ: Any,
+    actions,
+    *,
+    actor: str = "controller",
+    target: Any = None,
+) -> PreparedPolicyBatch:
+    """Resolve and validate a single-economy batch without mutating live state.
 
-    An atomic policy decision is one call:
-        apply_action_batch(econ, [("manual_policy_rate", 3e-4),
-                                  ("monetary_regime", "manual")])
+    Alias resolution precedes duplicate detection.  Thus a proposal containing
+    both a legacy alias and its canonical name is rejected instead of depending on
+    display order.  This is the reusable validation seam required by v26.
     """
-    # -- resolve + order-preserving stage (later duplicates win) --
     resolved = []                                  # [(name, lever, value)]
     staged: dict = {}
-    for name, value in actions:
-        name, lever = _resolve(name)
+    for raw_name, value in actions:
+        name, lever = _resolve(raw_name)
+        if name in staged:
+            raise ValueError(f"duplicate canonical policy lever: {name}")
         resolved.append((name, lever, value))
         staged[name] = value
 
@@ -554,23 +662,59 @@ def apply_action_batch(econ: Any, actions, *, actor: str = "controller",
                 holder = econ.external_policy if lever.scope == "external" else econ.policy
                 validator(view, getattr(holder, name, None), value)
 
-    # -- phase 2: commit (plain setattrs -- cannot fail) --
-    entries = []
-    for name, lever, value in resolved:
-        holder = econ.external_policy if lever.scope == "external" else econ.policy
-        old = getattr(holder, name, None)
-        setattr(holder, name, value)
-        entries.append({"lever": name, "old": old, "new": value, "scope": lever.scope})
+    entries = tuple(
+        PreparedPolicyEntry(
+            name=name,
+            lever=lever,
+            old=getattr(
+                econ.external_policy if lever.scope == "external" else econ.policy,
+                name,
+                None,
+            ),
+            new=value,
+        )
+        for name, lever, value in resolved
+    )
+    return PreparedPolicyBatch(econ=econ, entries=entries, actor=actor, target=target)
 
-    # -- phase 3: side effects, on the fully-committed state --
-    for name, lever, value in resolved:
+
+def commit_prepared_action_batch(
+    prepared: PreparedPolicyBatch,
+    *,
+    log_event: bool = True,
+) -> tuple[dict[str, Any], ...]:
+    """Commit an already validated single-economy batch.
+
+    The function performs no validation and therefore must only receive an object
+    returned by :func:`prepare_action_batch`.  World-level atomicity is supplied by
+    ``controllers.transaction`` publishing a fully prepared projected World.
+    """
+    econ = prepared.econ
+
+    entries = []
+    for entry in prepared.entries:
+        name, lever, value = entry.name, entry.lever, entry.new
+        holder = econ.external_policy if lever.scope == "external" else econ.policy
+        setattr(holder, name, value)
+        entries.append({"lever": name, "old": entry.old, "new": value, "scope": lever.scope})
+
+    for entry in prepared.entries:
+        name, lever, value = entry.name, entry.lever, entry.new
         if lever.semantics == STATE_TRANSITION:
             committer = HANDLERS[lever.handler_id][1]
             if committer is not None:
-                committer(econ, next(e["old"] for e in entries if e["lever"] == name), value)
+                committer(econ, entry.old, value)
 
-    # -- phase 4: ONE event for the whole decision --
-    _log_policy_event(econ, entries, actor=actor, target=target)
+    if log_event:
+        _log_policy_event(econ, entries, actor=prepared.actor, target=prepared.target)
+    return tuple(entries)
+
+
+def apply_action_batch(econ: Any, actions, *, actor: str = "controller",
+                       target: Any = None) -> None:
+    """Validate then atomically apply one single-economy policy decision."""
+    prepared = prepare_action_batch(econ, actions, actor=actor, target=target)
+    commit_prepared_action_batch(prepared)
 
 
 def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
