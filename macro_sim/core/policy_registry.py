@@ -194,6 +194,17 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     _L("cb_log_inflation", Bool(), read_point="reporting/metrics.py::CB input transform"),
     _L("fiscal_uses_national_accounts_gdp", Bool(), requires=frozenset({"government"}),
        read_point="reporting/metrics.py::fiscal GDP basis"),
+    # -- Treasury debt management (B4d) --
+    _L("bond_finance_frac", Range(0.0, 1.0), requires=frozenset({"bonds", "government"}),
+       read_point="systems/securities.py::issuance gate + gap"),
+    _L("bond_coupon", Range(0.0, 0.01), requires=frozenset({"bonds"}),
+       semantics=NEW_CONTRACTS, handler_id="bond_coupon_cohort",
+       read_point="systems/securities.py::lot stamp at issuance; pay/price/merge per lot",
+       state_notes="the first real NEW_CONTRACTS cohort: stock is never re-couponed; "
+                   "consolidation key includes the coupon so cohorts cannot corrupt"),
+    _L("bond_maturity", Range(1, 36500), requires=frozenset({"bonds"}),
+       semantics=NEW_CONTRACTS, handler_id="bond_tenor_at_issuance",
+       read_point="systems/securities.py::issued_maturity"),
     # -- monetary: quantity tools --
     _L("omo", Bool(), requires=frozenset({"bonds", "interbank"}),
        read_point="systems/central_bank.py::OMO + reporting/metrics.py (B2 fixed)"),

@@ -559,3 +559,41 @@ def test_fiscal_uses_national_accounts_gdp_live():
                          "fixture combined; deferred (registry requires energy_enabled).")
 def test_cb_core_inflation_live():
     pass
+
+
+# ================= section 10: B4d debt management (the coupon cohort) =================
+
+def test_bond_finance_frac_live():
+    # UPWARD moves are demand-shadowed (issuance gap is a supply CAP; buyers already
+    # absorb less than the 0.5 offer, so 0.9 changes nothing -- state-dependent
+    # shadowing, recorded in the matrix). Liveness is tested DOWNWARD: stop issuing
+    # and the stock must roll off as lots mature.
+    a = _baseline("monetary")
+    b = run_b(lambda p: setattr(p, "bond_finance_frac", 0.0), fixture="monetary")
+    fa = float(a.records[-1].get("bonds_outstanding", 0.0))
+    fb = float(b.records[-1].get("bonds_outstanding", 0.0))
+    assert fb < fa * 0.7, f"halting issuance must shrink the book: {fa:.0f} -> {fb:.0f}"
+
+
+def test_bond_maturity_new_issues_only():
+    b = run_b(lambda p: setattr(p, "bond_maturity", 300), fixture="monetary")
+    tenors = [lot["matures_at"] for lot in b._bonds]
+    assert tenors, "fixture must carry a bond book"
+    assert max(tenors) > b.t + 100, "new issues must carry the long tenor"
+
+
+def test_bond_coupon_cohort_never_recoupons_stock():
+    """THE cohort semantics test: raising the coupon mid-run creates HIGHER-coupon new
+    lots while every pre-change lot keeps its issued coupon (stock never restated)."""
+    b = _econ("monetary")
+    c0 = None
+    for t in range(TICKS):
+        if t == SPLIT:
+            c0 = b.policy.bond_coupon          # the ISSUED coupon of the legacy stock
+            b.policy.bond_coupon = 5.0e-4
+        b.step()
+    assert c0 is not None and abs(c0 - 5.0e-4) > 1e-9
+    coupons = sorted({round(lot.get("coupon", -1.0), 9) for lot in b._bonds})
+    assert round(5.0e-4, 9) in coupons, "post-change issues must carry the new coupon"
+    assert round(c0, 9) in coupons, (
+        f"pre-change lots must KEEP their issued coupon {c0}: {coupons}")

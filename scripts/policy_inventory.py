@@ -17,8 +17,8 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (69 [P], 17 [C], 14 [W], 0 PENDING,
-     3 [N]; candidate arithmetic 69+17+14+3-1(dead central_bank replaced) = 102;
+  3. count identities from the design doc hold (72 [P], 14 [C], 14 [W], 0 PENDING,
+     3 [N]; candidate arithmetic 72+14+14+3-1(dead central_bank replaced) = 102;
      plus r_interest seed-promoted to PolicySeed.initial_policy_rate)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
@@ -78,8 +78,7 @@ CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
     # auto-join POLICY_SEED_LEGACY via the derived set
     # monetary quantity
     "omo_index_deposits",
-    # treasury debt management
-    "bond_finance_frac", "bond_coupon", "bond_maturity",
+    # treasury debt management: MIGRATED (B4d, coupon as a per-lot cohort)
     # bank macroprudential: MIGRATED (B4a) -- now Policy fields (auto-join seed-legacy)
     # mortgage regulation: MIGRATED (B4b) via the _sync_policy channel
     # insolvency & eviction law
@@ -352,7 +351,7 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 69, "C": 17, "W": 14, "PENDING": 0, "N": 3}   # +B4b: 7 mortgage regs migrated
+    expect = {"P": 72, "C": 14, "W": 14, "PENDING": 0, "N": 3}   # +B4d: debt mgmt migrated
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
@@ -377,7 +376,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 69[P] + 17[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
+    print(f"policy candidates: 72[P] + 14[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")

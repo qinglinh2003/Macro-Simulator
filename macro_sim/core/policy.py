@@ -87,6 +87,11 @@ class Policy:
     cb_log_inflation: bool = False       # ln(P/P') instead of P/P'-1
     fiscal_uses_national_accounts_gdp: bool = False  # the FISCAL RULE's GDP-measure choice
 
+    # -- Treasury debt management (B4d) --
+    bond_finance_frac: float = 0.0       # share of the deficit financed by issuance
+    bond_coupon: float = 0.0             # coupon for NEW issues (per-lot cohort; stock never re-couponed)
+    bond_maturity: int = 1               # tenor for NEW issues
+
     omo: bool = False                    # open-market operations on/off (the CB steers reserves)
     omo_reserve_target: float = 0.0      # QE/QT stance: target Σ bank reserves as a FRACTION of genesis reserves
     omo_drain_frac: float = 0.1          # per-tick fraction of the gap to the target moved (drain/inject speed)
@@ -168,6 +173,9 @@ class Policy:
             cb_uses_fixed_basket_cpi=getattr(cfg, "cb_uses_fixed_basket_cpi", False),
             cb_log_inflation=getattr(cfg, "cb_log_inflation", False),
             fiscal_uses_national_accounts_gdp=getattr(cfg, "fiscal_uses_national_accounts_gdp", False),
+            bond_finance_frac=getattr(cfg, "bond_finance_frac", 0.0),
+            bond_coupon=getattr(cfg, "bond_coupon", 0.0),
+            bond_maturity=getattr(cfg, "bond_maturity", 1),
             omo=cfg.omo,
             omo_reserve_target=cfg.omo_reserve_target,
             omo_drain_frac=cfg.omo_drain_frac,
