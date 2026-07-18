@@ -236,3 +236,132 @@ def test_policy_central_bank_flag_live():
     a = _baseline("fiscal")
     b = run_b(lambda p: setattr(p, "central_bank", False))
     assert b.records[-1].get("policy_rate") != a.records[-1].get("policy_rate")
+
+
+# ================= section 4: MONETARY batch 2 (Taylor + quantity tools) =================
+
+FIXTURES["monetary"] = dict(
+    seed=21, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=3,
+    demographics_population=260, n_ticks=400, government=True, central_bank=True,
+    bonds=True, bond_finance_frac=0.5, interbank=True, omo=True,
+    omo_reserve_target=1.0, omo_drain_frac=0.1,
+)
+
+
+def _rate_tail(e):
+    return [float(r.get("policy_rate", 0.0)) for r in e.records[-TAIL:]]
+
+
+# STATE-DEPENDENT SHADOWING (B1 finding, filed): the v13 world sits at the ZLB (the v19
+# deflation engine) -- the policy rate is clipped at the hard-coded 0 floor, so the WHOLE
+# Taylor family is inert in ordinary fixtures (both arms read 0.0 identically). Liveness
+# is therefore tested via LIFTOFF: cutting pi* BELOW realized inflation turns the gap
+# positive and the rate leaves the floor -- the lever itself creates the observable state.
+# Registry note: effectiveness can be STATE-dependent; the matrix records the state used.
+
+_LIFT = -2.0e-3   # tuned INTERIOR liftoff: mean rate ~3.7e-4, sd ~1.1e-4, between the
+#                   floor 0 and r_max 5e-4 (a stronger lift ceilings BOTH arms at r_max --
+#                   the upper-bound twin of the ZLB shadowing)
+
+
+def _lifted(mutate_extra=None, fixture="fiscal"):
+    def m(p):
+        p.inflation_target = _LIFT
+        if mutate_extra:
+            mutate_extra(p)
+    return run_b(m, fixture)
+
+
+def test_inflation_target_live_via_liftoff():
+    a = _baseline("fiscal")                      # ZLB-pinned: tail rate == 0
+    b = _lifted()
+    ra, rb = sum(_rate_tail(a)), sum(_rate_tail(b))
+    assert ra == pytest.approx(0.0) and rb > 0.0,         f"cutting pi* below realized inflation must lift the rate: {ra:.4f} -> {rb:.4f}"
+
+
+def test_taylor_phi_pi_live():
+    b1 = _lifted(lambda p: setattr(p, "taylor_phi_pi", 1.5))
+    b2 = _lifted(lambda p: setattr(p, "taylor_phi_pi", 4.0))
+    r1, r2 = sum(_rate_tail(b1)), sum(_rate_tail(b2))
+    assert r2 > r1 * 1.05, f"bigger phi_pi must amplify the positive gap: {r1:.4f} vs {r2:.4f}"
+
+
+def test_taylor_phi_u_live():
+    b1 = _lifted(lambda p: setattr(p, "taylor_phi_u", 0.0))
+    b2 = _lifted(lambda p: setattr(p, "taylor_phi_u", 3.0))
+    r1, r2 = sum(_rate_tail(b1)), sum(_rate_tail(b2))
+    assert r2 < r1, f"bigger phi_u must drag the rate down via the u-gap: {r1:.4f} vs {r2:.4f}"
+
+
+def test_rate_inertia_live():
+    import statistics as st
+    def smooth(e):
+        r = _rate_tail(e)
+        return st.pstdev([r[i+1] - r[i] for i in range(len(r)-1)])
+    b1 = _lifted(lambda p: setattr(p, "rate_inertia", 0.5))
+    b2 = _lifted(lambda p: setattr(p, "rate_inertia", 0.995))
+    assert smooth(b2) < smooth(b1),         f"inertia must smooth the lifted path: {smooth(b1):.3g} -> {smooth(b2):.3g}"
+
+
+def test_omo_toggle_live():
+    a = _baseline("monetary")
+    b = run_b(lambda p: setattr(p, "omo", False), fixture="monetary")
+    assert _tail(a, "omo_flow") != 0.0, "baseline OMO must be flowing"
+    assert abs(_tail(b, "omo_flow")) < abs(_tail(a, "omo_flow")) * 0.1, \
+        "OMO off must kill the flow"
+
+
+def test_omo_reserve_target_live():
+    a = _baseline("monetary")
+    b = run_b(lambda p: setattr(p, "omo_reserve_target", 0.3), fixture="monetary")
+    ra = float(a.records[-1].get("reserve_M", 0.0))
+    rb = float(b.records[-1].get("reserve_M", 0.0))
+    assert rb < ra * 0.9, f"QT target must drain reserves: {ra:.0f} -> {rb:.0f}"
+
+
+def test_omo_drain_frac_live():
+    # same target, different speeds: the fast drainer is further along shortly after the split
+    def arm(frac):
+        def m(p):
+            p.omo_reserve_target = 0.3
+            p.omo_drain_frac = frac
+        e = _econ("monetary")
+        for t in range(SPLIT + 40):
+            if t == SPLIT:
+                m(e.policy)
+            e.step()
+        return float(e.records[-1].get("reserve_M", 0.0))
+    slow, fast = arm(0.02), arm(0.5)
+    assert fast < slow * 0.95, f"faster drain must be further along: slow={slow:.0f} fast={fast:.0f}"
+
+
+@pytest.mark.skip(reason="LOLR is only observable in a bank-run crisis; calm fixtures leave "
+                         "lolr_advances==0. Covered by the X2 extreme world; a run-crisis "
+                         "fixture is a deferred B1 item.")
+def test_lolr_toggle_live():
+    pass
+
+
+# ================= section 5: MACROPRUDENTIAL (deferred: credit-dormant fixtures) =========
+
+_CREDIT_DORMANT = ("v13 small stable economies are credit-dormant (firms self-finance; "
+                   "total_credit==0 for 150+ ticks even with thin firms + hh_subsistence) -- "
+                   "the cap levers multiply a zero base. Needs a stressed/credit-hungry "
+                   "fixture (deferred B1 item); the X2 extreme world (leverage 24x, "
+                   "hh_credit_limit 4.0) exercises the caps at 14k scale.")
+
+@pytest.mark.skip(reason=_CREDIT_DORMANT)
+def test_kappa_live():
+    pass
+
+@pytest.mark.skip(reason=_CREDIT_DORMANT)
+def test_hh_credit_limit_live():
+    pass
+
+@pytest.mark.skip(reason=_CREDIT_DORMANT)
+def test_margin_ltv_live():
+    pass
+
+@pytest.mark.skip(reason=_CREDIT_DORMANT)
+def test_margin_max_live():
+    pass

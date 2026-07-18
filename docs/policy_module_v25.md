@@ -344,6 +344,19 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
   still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
   observation; per-lever effectiveness tests must cover the METRIC path too
+- **STATE-DEPENDENT CLAMP SHADOWING (B1 batch-2 catch)**: the ENTIRE Taylor family
+  (inflation_target, φπ, φu, rate_inertia) is inert at the ZLB — the v13 world's
+  deflationary rate path is clipped at the hard-coded 0 floor, so both A/B arms read
+  0.0 identically; an over-strong liftoff pins BOTH arms at r_max instead (the ceiling
+  twin). Liveness is only observable in the INTERIOR (tuned liftoff: π* = −2e-3 →
+  mean rate ~3.7e-4 between 0 and r_max 5e-4). Registry/matrix consequence: lever
+  effectiveness can be STATE-dependent; the coverage matrix records the state
+  constructed for each test.
+- **FIXTURE GAPS (documented skips)**: LOLR needs a bank-run crisis fixture (calm
+  fixtures leave lolr_advances ≡ 0); macroprudential caps (kappa, hh_credit_limit,
+  margin_ltv, margin_max) multiply a ZERO base in small stable v13 economies
+  (credit-dormant: firms self-finance, total_credit == 0 for 150+ ticks even with thin
+  firms) — stressed fixtures deferred; the X2 extreme world exercises both at scale.
 - **SHADOWED_BY: benefit_replacement ⟂ job_guarantee (B1 catch)**: the uncapped JG
   absorbs ALL unsold labour, so the unemployment-benefit base is identically zero while
   job_guarantee=True — the rate lever is inert (economically correct; must be a declared
