@@ -226,16 +226,39 @@ def test_tax_luxury_rate_live():
 
 # ================= section 3: MONETARY exemplars =================
 
-def test_policy_rate_override_live():
-    b = run_b(lambda p: setattr(p, "policy_rate_override", 0.0005))
+def _go_manual(p, rate):
+    p.manual_policy_rate = rate
+    p.monetary_regime = "manual"
+
+def test_manual_policy_rate_live():
+    b = run_b(lambda p: _go_manual(p, 0.0005))
     assert b.records[-1].get("policy_rate", 0.0) == pytest.approx(0.0005)
 
-@pytest.mark.xfail(reason="1.7: Policy.central_bank is a DEAD FIELD (rate path reads cfg); "
-                          "deleted at migration, replaced by monetary_regime", strict=True)
-def test_policy_central_bank_flag_live():
-    a = _baseline("fiscal")
-    b = run_b(lambda p: setattr(p, "central_bank", False))
-    assert b.records[-1].get("policy_rate") != a.records[-1].get("policy_rate")
+def test_monetary_regime_replaces_dead_flag():
+    """A5: Policy.central_bank is DELETED; the regime IS the rate path now.
+    Switching taylor -> exogenous mid-run pins the rate at the config seed."""
+    import dataclasses
+    from macro_sim.core.policy import Policy
+    assert "central_bank" not in {f.name for f in dataclasses.fields(Policy)}
+    b = run_b(lambda p: setattr(p, "monetary_regime", "exogenous"), fixture="monetary")
+    assert b.policy.monetary_regime == "exogenous"
+    assert b.records[-1].get("policy_rate", -1.0) == pytest.approx(b.cfg.r_interest)
+
+def test_monetary_regime_switch_atomicity():
+    """The A5 handler contract: manual <=> manual_policy_rate set."""
+    from macro_sim.core.policy_registry import set_lever
+    e = _econ("monetary")
+    for _ in range(5):
+        e.step()
+    with pytest.raises(ValueError):
+        set_lever(e, "monetary_regime", "manual", actor="test")   # nothing staged
+    assert e.policy.monetary_regime == "taylor", "a vetoed switch must not mutate"
+    set_lever(e, "manual_policy_rate", 3.0e-4, actor="test")      # stage
+    set_lever(e, "monetary_regime", "manual", actor="test")       # switch
+    e.step()
+    assert e._rate == pytest.approx(3.0e-4)
+    set_lever(e, "monetary_regime", "taylor", actor="test")       # leave
+    assert e.policy.manual_policy_rate is None, "leaving manual must clear the staged rate"
 
 
 # ================= section 4: MONETARY batch 2 (Taylor + quantity tools) =================
@@ -473,6 +496,12 @@ FIXTURES["rental"] = dict(
     housing_rental_enabled=True, n_builders=3,
 )
 
+FIXTURES["banking_pnl"] = dict(
+    seed=37, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=3,
+    demographics_population=260, n_ticks=400, government=True,
+    interbank=True, bank_realized_pnl=True,
+)
+
 FIXTURES["housing"] = dict(
     seed=33, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
     demographics_population=260, n_ticks=400, government=True, tax_wealth_rate=0.001,
@@ -676,3 +705,26 @@ def test_legacy_alias_warns_and_applies():
         set_lever(e, "land_convexity", 2.5, actor="test")
     assert any(issubclass(x.category, DeprecationWarning) for x in w)
     assert e.policy.land_fee_stock_elasticity == 2.5
+
+
+# ================= section 12: the [N] levers =================
+
+def test_jg_public_works_share_live():
+    """Default 1.0 = the legacy implicit share; zeroing it turns JG into pure
+    make-work: employment continues but no public capital is built."""
+    a = _baseline("fiscal")
+    b = run_b(lambda p: setattr(p, "jg_public_works_share", 0.0), fixture="fiscal")
+    ua = float(getattr(a, "_jg_capital_units", 0.0))
+    ub = float(getattr(b, "_jg_capital_units", 0.0))
+    assert ua > 0.0, "fixture JG must produce capital units at baseline"
+    assert ub == 0.0, "share=0 must stop JG capital formation"
+    assert float(getattr(b, "_jg_employment", 0.0)) > 0.0, "JG employment itself must continue"
+
+
+def test_deposit_rate_floor_live():
+    """CAPABILITY finding (filed in registry): the deposit-interest leg exists only
+    inside finalize_bank_pnl (bank_realized_pnl=True); in every other config the
+    config deposit rate AND this floor are dead. Tested in a realized-P&L world."""
+    b = run_b(lambda p: setattr(p, "deposit_rate_floor", 5.0e-4), fixture="banking_pnl")
+    paid = sum(float(getattr(bk, "deposit_funding_cost", 0.0)) for bk in b.banks)
+    assert paid > 0.0, "the floor must force deposit interest to be paid"

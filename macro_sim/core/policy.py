@@ -67,13 +67,18 @@ class Policy:
     jg_wage_ratio: float = 0.0           # JG wage = this · mean private wage (transitional floor wage)
 
     # -- monetary (v10 central bank; the rate-rule dials, off => frozen r_interest) --
-    central_bank: bool = False           # v10: master switch (rate becomes endogenous)
+    # A5 ruling: the THREE-STATE monetary regime replaces the dead central_bank flag.
+    # "exogenous": no CB -- the rate stays at its seed; the inflation sensor is off.
+    # "taylor":    the active rule (sensor on).
+    # "manual":    the player/AI hand-sets the rate; the sensor KEEPS running so a
+    #              later switch back to taylor resumes from an honest info state.
+    monetary_regime: str = "exogenous"   # {"exogenous", "taylor", "manual"}
     inflation_target: float = 0.0        # π*: per-tick inflation target
     taylor_phi_pi: float = 1.5           # φ_π: inflation response (>1 = Taylor principle)
     taylor_phi_u: float = 0.5            # φ_u: unemployment-gap response (0 = pure inflation targeter)
     rate_inertia: float = 0.8            # ρ: rate smoothing / gradualism
-    policy_rate_override: "float | None" = None  # if set, the CB uses THIS rate directly (a hand-set hike/cut by
-    #                                              the player), bypassing the Taylor rule; None ⇒ the rule decides
+    manual_policy_rate: "float | None" = None    # the hand-set rate; applies ONLY in monetary_regime="manual"
+    #                                              (renamed from policy_rate_override; A5: manual <=> rate set)
 
     # -- monetary: quantity tools (v12.4 CB; the OMO/QE + LoLR live control surface) --
     # -- monetary: the CB's beliefs & measurement apparatus (B4c migration; the CB
@@ -91,6 +96,10 @@ class Policy:
     bond_finance_frac: float = 0.0       # share of the deficit financed by issuance
     bond_coupon: float = 0.0             # coupon for NEW issues (per-lot cohort; stock never re-couponed)
     bond_maturity: int = 1               # tenor for NEW issues
+
+    # -- [N] levers (no config counterpart; defaults are bit-identical no-ops) --
+    jg_public_works_share: float = 1.0   # share of JG labor doing public works (1.0 = today's implicit)
+    deposit_rate_floor: float = 0.0      # regulatory floor under the config deposit rate (0 = never binds)
 
     # -- misc regulation & law (B4e; defaults = legacy config defaults) --
     deficit_u_cap: float = 1.0           # max multiple of the deficit target under slack
@@ -176,12 +185,12 @@ class Policy:
             min_wage=cfg.min_wage,
             job_guarantee=cfg.job_guarantee,
             jg_wage_ratio=cfg.jg_wage_ratio,
-            central_bank=cfg.central_bank,
+            monetary_regime=("taylor" if cfg.central_bank else "exogenous"),
             inflation_target=cfg.inflation_target,
             taylor_phi_pi=cfg.taylor_phi_pi,
             taylor_phi_u=cfg.taylor_phi_u,
             rate_inertia=cfg.rate_inertia,
-            # policy_rate_override stays None at t=0 (no hand-set rate until the player sets one)
+            # manual_policy_rate stays None at t=0 (no hand-set rate until the player sets one)
             r_neutral=getattr(cfg, "r_neutral", 0.01),
             u_natural=getattr(cfg, "u_natural", 0.05),
             r_max=getattr(cfg, "r_max", 0.10),

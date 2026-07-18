@@ -341,8 +341,10 @@ def _apply_intervention(econ: Economy, spec: RunSpec, tick: int, original: dict[
         return
     if tick == intervention.start_tick:
         if intervention.kind == "policy_rate":
-            original["policy_rate_override"] = econ.policy.policy_rate_override
-            econ.policy.policy_rate_override = intervention.value
+            original["monetary_regime"] = econ.policy.monetary_regime
+            original["manual_policy_rate"] = econ.policy.manual_policy_rate
+            econ.policy.manual_policy_rate = intervention.value
+            econ.policy.monetary_regime = "manual"
         elif intervention.kind == "kappa_multiplier":
             original["kappa"] = econ.policy.kappa
             econ.policy.kappa = econ.policy.kappa * float(intervention.value)
@@ -353,7 +355,8 @@ def _apply_intervention(econ: Economy, spec: RunSpec, tick: int, original: dict[
             raise ValueError(f"unsupported intervention kind {intervention.kind!r}")
     if intervention.end_tick is not None and tick == intervention.end_tick:
         if intervention.kind == "policy_rate":
-            econ.policy.policy_rate_override = original.get("policy_rate_override")
+            econ.policy.monetary_regime = original.get("monetary_regime", "taylor")
+            econ.policy.manual_policy_rate = original.get("manual_policy_rate")
         elif intervention.kind == "kappa_multiplier":
             econ.policy.kappa = float(original["kappa"])
         elif intervention.kind == "deficit_target":

@@ -91,7 +91,7 @@ def test_central_bank_system_reads_grouped_config_view_for_policy_rate():
     # no hand-set rate here, so the frozen-config fallback path must be taken.
     econ = SimpleNamespace(
         cfg=CentralBankCfgTrap(view),
-        policy=SimpleNamespace(policy_rate_override=None),
+        policy=SimpleNamespace(monetary_regime="exogenous", manual_policy_rate=None),
         _rate=0.0,
     )
 

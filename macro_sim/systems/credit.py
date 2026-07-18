@@ -520,7 +520,8 @@ def _pay_deposit_funding_cost(econ: Any, cfg: Any) -> None:
     squeeze, and a higher policy rate only ever raises bank profit. deposit_rate = 0 => no
     transfer => bit-identical.
     """
-    rate = float(getattr(cfg, "deposit_rate", 0.0))
+    # [N] deposit_rate_floor: a regulatory floor over the config (technology) rate
+    rate = max(float(getattr(cfg, "deposit_rate", 0.0)), econ.policy.deposit_rate_floor)
     if rate <= 0.0:
         return
     bridge = getattr(econ, "demographic_bridge", None)

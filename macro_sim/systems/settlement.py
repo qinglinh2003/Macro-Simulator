@@ -207,7 +207,11 @@ def run_household_fiscal_phase(econ: Any) -> None:
                 h.jg_labor = resid
                 econ._jg_spending += pay
                 econ._jg_employment += resid
-        econ._jg_capital_units = cfg.jg_productivity * econ._jg_employment
+        # [N] jg_public_works_share: the government CHOOSES how much JG labor does
+        # public works vs. pure make-work (1.0 = the legacy implicit share)
+        econ._jg_capital_units = (
+            cfg.jg_productivity * pol.jg_public_works_share * econ._jg_employment
+        )
 
     if pol.benefit_replacement > 0.0:
         wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))

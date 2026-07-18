@@ -47,15 +47,18 @@ def set_policy_rate(econ: Any) -> None:
     # decision.  A temporary manual rate setting must not freeze it, otherwise an
     # experimental rate shock also changes the information state and creates a
     # second, hidden treatment when the override is released.
-    if cfg.central_bank:
+    # A5: the regime decides the rate path. The sensor runs in taylor AND manual
+    # (an observation state -- a manual spell must not blind a later taylor resume);
+    # exogenous has no CB, hence no sensor.
+    if pol.monetary_regime != "exogenous":
         # B4c: the sensor smoothing is the CB's OWN measurement choice (policy)
         econ._infl_ema += pol.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
-    if pol.policy_rate_override is not None:
-        # the player hand-sets the rate (a manual hike/cut), bypassing the Taylor rule and the frozen fallback.
-        econ._rate = min(pol.r_max, max(0.0, pol.policy_rate_override))
+    if pol.monetary_regime == "manual":
+        if pol.manual_policy_rate is not None:
+            econ._rate = min(pol.r_max, max(0.0, pol.manual_policy_rate))
         return
-    if not cfg.central_bank:
-        econ._rate = cfg.r_interest
+    if pol.monetary_regime == "exogenous":
+        econ._rate = cfg.r_interest   # B6 will re-source this from PolicySeed.initial_policy_rate
         return
     # B4c: r*, u* are the CB's revisable ESTIMATES; r_max is its (policy) ceiling
     u_prev = getattr(econ, "_prev_u", pol.u_natural)

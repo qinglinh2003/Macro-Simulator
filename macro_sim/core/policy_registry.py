@@ -163,9 +163,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     _L("jg_wage_ratio", Range(0.0, 1.5), requires=frozenset({"government"}),
        read_point="systems/settlement.py::JG wage"),
     # -- monetary: rate rule --
-    _L("central_bank", Bool(), requires=frozenset(),
-       read_point="DEAD (systems/central_bank.py reads cfg) -- deleted at migration",
-       state_notes="strict-xfail; replaced by monetary_regime [N]"),
+    # (the dead central_bank flag is DELETED; monetary_regime is the rate path now)
     _L("inflation_target", Range(-0.02, 0.02), requires=frozenset(),
        read_point="systems/central_bank.py::Taylor gap",
        state_notes="Taylor family inert at the ZLB AND at r_max (two-sided clamp); "
@@ -176,9 +174,17 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="systems/central_bank.py", shadowed_by=("ZLB/r_max clamp",)),
     _L("rate_inertia", Range(0.0, 0.9999), requires=frozenset(),
        read_point="systems/central_bank.py", shadowed_by=("ZLB/r_max clamp",)),
-    _L("policy_rate_override", NullableRange(0.0, 0.01), requires=frozenset(),
-       read_point="systems/central_bank.py::override (precedes the cfg gate)",
-       state_notes="renamed manual_policy_rate at migration; regime==manual <=> set"),
+    _L("manual_policy_rate", NullableRange(0.0, 0.01), requires=frozenset(),
+       read_point="systems/central_bank.py::manual branch",
+       state_notes="renamed from policy_rate_override; applies ONLY in regime=manual "
+                   "(may be staged in any regime; the switch handler checks it)"),
+    _L("monetary_regime", Choices(("exogenous", "taylor", "manual")),
+       semantics=STATE_TRANSITION, handler_id="monetary_regime_switch",
+       read_point="systems/central_bank.py::set_policy_rate (the whole rate path)",
+       state_notes="A5: three-state regime replacing the dead central_bank flag; "
+                   "switch INTO manual requires manual_policy_rate staged; leaving "
+                   "manual clears it (manual <=> rate set); the sensor runs in "
+                   "taylor AND manual, off in exogenous"),
     # -- monetary: beliefs & measurement (B4c migration) --
     _L("r_neutral", Range(0.0, 0.05), read_point="systems/central_bank.py::r_target",
        state_notes="the CB's revisable neutral-rate estimate"),
@@ -269,6 +275,15 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="housing/market.py::_collect_property_tax"),
     _L("housing_in_wealth_tax", Bool(), requires=frozenset({"housing_enabled"}),
        read_point="systems/settlement.py::wealth-tax base"),
+    # -- [N] levers --
+    _L("jg_public_works_share", Range(0.0, 1.0), requires=frozenset({"government"}),
+       read_point="systems/settlement.py::JG capital units"),
+    _L("deposit_rate_floor", Range(0.0, 0.01),
+       requires=frozenset({"bank_enabled", "bank_realized_pnl"}),
+       read_point="systems/credit.py::deposit funding cost floor",
+       state_notes="the WHOLE deposit-interest leg lives inside finalize_bank_pnl, "
+                   "gated on bank_realized_pnl -- without it deposit_rate AND the "
+                   "floor are dead (found by the effectiveness scaffold)"),
     # -- fiscal structure (B4e) --
     _L("deficit_u_cap", Range(0.0, 10.0), requires=frozenset({"government"}),
        read_point="systems/goods.py::slack-scaled deficit cap"),
@@ -320,6 +335,7 @@ LEGACY_ALIASES = {
     "firm_capital_haircut": "regulatory_firm_capital_haircut",
     "firm_inventory_haircut": "regulatory_firm_inventory_haircut",
     "land_convexity": "land_fee_stock_elasticity",
+    "policy_rate_override": "manual_policy_rate",
 }
 
 # STATE_TRANSITION handlers: applied by set_lever AFTER the Policy field mutation
@@ -327,8 +343,19 @@ def _handler_soe_transition(econ, old, new):
     if getattr(econ, "e_firms", None):
         econ.e_firms[0].state_owned = bool(new)
 
+def _handler_monetary_regime_switch(econ, old, new):
+    # A5 atomicity: manual <=> manual_policy_rate set. Entering manual requires the
+    # rate to be STAGED already (stage first, then switch -- one observable step);
+    # leaving manual clears it so a stale rate can never silently re-apply later.
+    if new == "manual" and econ.policy.manual_policy_rate is None:
+        raise ValueError("monetary_regime=manual requires manual_policy_rate staged first")
+    if old == "manual" and new != "manual":
+        econ.policy.manual_policy_rate = None
+
+
 HANDLERS = {
     "soe_transition": _handler_soe_transition,
+    "monetary_regime_switch": _handler_monetary_regime_switch,
 }
 
 
@@ -352,9 +379,12 @@ def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
     err = lever.validation.check(old, value)
     if err:
         raise ValueError(f"{name}: {err}")
-    setattr(econ.policy, name, value)
     if lever.semantics == STATE_TRANSITION:
+        # handler may VETO (raise) -- run it before the mutation so a rejected
+        # transition leaves the policy untouched; it sees (old, new) and may
+        # adjust companion state (SOE flags, staged rates) atomically
         HANDLERS[lever.handler_id](econ, old, value)
+    setattr(econ.policy, name, value)
     log = getattr(econ, "_policy_action_log", None)
     if log is None:
         log = econ._policy_action_log = []

@@ -17,8 +17,8 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (86 [P], 0 [C], 14 [W], 0 PENDING,
-     3 [N]; candidate arithmetic 86+0+14+3-1(dead central_bank replaced) = 102;
+  3. count identities from the design doc hold (88 [P], 0 [C], 14 [W], 0 PENDING,
+     0 [N]; candidate arithmetic 88+0+14 = 102 (dead central_bank deleted, [N] absorbed);
      plus r_interest seed-promoted to PolicySeed.initial_policy_rate)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
@@ -57,14 +57,12 @@ DEFECTS = {  # §1.7 — listed-but-not-runtime-effective (per-lever tests will 
 }
 
 # ---- [N] new target levers (exist in NO source today) ----
-POLICY_NEW = {
-    "monetary_regime",
-    # bank_leverage_cap: IMPLEMENTED in B4a (now a Policy field; left the [N] set)
-    # A3/A4 rulings (2026-07-18): the two NEW levers that carry the government's
-    # actual choices, cleanly split from the technology/pricing bases kept in Config
-    "jg_public_works_share",   # default 1.0 = today's implicit share (bit-identical)
-    "deposit_rate_floor",      # default 0.0 = never binds (bit-identical)
-}
+POLICY_NEW: set[str] = set()   # ALL [N] IMPLEMENTED (now Policy fields):
+# - monetary_regime: A5 three-state, replaced the dead central_bank flag
+#   (policy_rate_override renamed manual_policy_rate, alias kept)
+# - jg_public_works_share: default 1.0 = today's implicit share (bit-identical)
+# - deposit_rate_floor: default 0.0 = never binds (bit-identical)
+# - bank_leverage_cap: implemented in B4a
 
 # ---- Config source ----
 CONFIG_POLICY_MIGRATE: set[str] = set()   # B4 COMPLETE: all 39 [C] migrated
@@ -85,13 +83,14 @@ CONFIG_SHOCK_MODULE = {"energy_shock_at", "energy_shock_magnitude", "energy_shoc
 # Config.X that seed Policy.X via from_legacy_config (the 43 same-name collisions)
 # Policy fields WITHOUT a Config counterpart (no legacy seed): the 3 originals +
 # every [N] lever implemented into Policy (they seed from PolicySeed, not Config)
-_NO_CONFIG_COUNTERPART = {"tax_necessity_rate", "tax_luxury_rate", "policy_rate_override",
-                          "bank_leverage_cap"}
+_NO_CONFIG_COUNTERPART = {"tax_necessity_rate", "tax_luxury_rate", "manual_policy_rate",
+                          "bank_leverage_cap", "jg_public_works_share", "deposit_rate_floor"}
 # Policy fields renamed at migration: Policy new name -> Config legacy seed name
 POLICY_RENAMED_FROM = {
     "regulatory_firm_capital_haircut": "firm_capital_haircut",
     "regulatory_firm_inventory_haircut": "firm_inventory_haircut",
     "land_fee_stock_elasticity": "land_convexity",
+    "monetary_regime": "central_bank",   # A5: the flag SEEDS the regime (semantic transform)
 }
 CONFIG_POLICY_SEED_LEGACY = ({
     f.name for f in dataclasses.fields(Policy)
@@ -338,13 +337,13 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 86, "C": 0, "W": 14, "PENDING": 0, "N": 3}   # B4 COMPLETE: all [C] migrated
+    expect = {"P": 88, "C": 0, "W": 14, "PENDING": 0, "N": 0}   # [C] done AND all [N] implemented
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
-    candidates = c["P"] + c["C"] + c["W"] + c["N"] - 1   # −1: dead Policy.central_bank replaced by monetary_regime
+    candidates = c["P"] + c["C"] + c["W"] + c["N"]   # dead flag DELETED; every [N] absorbed into P
     if candidates != 102:
-        errors.append(f"COUNT candidates: {candidates} != 102 (A5/A6 closed: 46+39+14+4-1)")
+        errors.append(f"COUNT candidates: {candidates} != 102 (88+0+14+0; ledger closed)")
 
     # hardcoded registry verification
     for hid, fname, pattern, _note in HARDCODED:
@@ -363,7 +362,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 86[P] + 0[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
+    print(f"policy candidates: 88[P] + 0[C] + 14[W] + 0[N] = 102 (the dead flag is DELETED) ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")

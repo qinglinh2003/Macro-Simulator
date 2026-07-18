@@ -18,7 +18,7 @@ def test_every_source_field_classified_exactly_once():
 def test_source_counts_documented():
     fields = discover()
     assert len(fields["Config"]) == 364
-    assert len(fields["Policy"]) == 86   # +14 B4e: the [C] book is CLOSED
+    assert len(fields["Policy"]) == 88   # 86 - central_bank(deleted) + monetary_regime + jg_share + deposit_floor
     assert len(fields["World"]) == 31
     assert len(fields["Social"]) == 35
     assert len(fields["Relationship"]) == 12
