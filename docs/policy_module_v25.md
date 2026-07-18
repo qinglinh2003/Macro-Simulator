@@ -357,6 +357,10 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   margin_ltv, margin_max) multiply a ZERO base in small stable v13 economies
   (credit-dormant: firms self-finance, total_credit == 0 for 150+ ticks even with thin
   firms) — stressed fixtures deferred; the X2 extreme world exercises both at scale.
+- **DIRECTION ANOMALY (B1 batch-3, filed to investigate)**: soe_price_at_cost RAISES the
+  market average energy price ~3% in the small fixture — cost ≤ markup price should pull
+  the ask average down. Suspects: price-metric weighting (transaction/composition) or SOE
+  unit cost exceeding its markup-discounted ask. Lever proven live; direction unasserted.
 - **SHADOWED_BY: benefit_replacement ⟂ job_guarantee (B1 catch)**: the uncapped JG
   absorbs ALL unsold labour, so the unemployment-benefit base is identically zero while
   job_guarantee=True — the rate lever is inert (economically correct; must be a declared

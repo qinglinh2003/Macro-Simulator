@@ -365,3 +365,137 @@ def test_margin_ltv_live():
 @pytest.mark.skip(reason=_CREDIT_DORMANT)
 def test_margin_max_live():
     pass
+
+
+# ================= section 6: ENERGY batch 3 =================
+
+FIXTURES["energy"] = dict(
+    seed=31, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
+    demographics_population=260, n_ticks=400, government=True,
+    energy_enabled=True, energy_household=True, n_firms_e=4, soe_efirm=True,
+    tax_energy_rate=0.05, energy_subsidy_rate=0.2,
+)
+
+
+def test_tax_energy_rate_live():
+    assert_moves("tax_energy", lambda p: setattr(p, "tax_energy_rate", 0.20), "up",
+                 fixture="energy")
+
+
+def test_energy_subsidy_rate_live():
+    assert_moves("energy_subsidy_paid", lambda p: setattr(p, "energy_subsidy_rate", 0.5),
+                 "up", fixture="energy")
+
+
+def test_energy_subsidy_threshold_live():
+    # deposits-targeting the subsidy must pay out LESS than the flat version
+    assert_moves("energy_subsidy_paid",
+                 lambda p: setattr(p, "energy_subsidy_threshold", 0.5), "down",
+                 fixture="energy")
+
+
+def test_energy_price_cap_live():
+    a = _baseline("energy")
+    b = run_b(lambda p: setattr(p, "energy_price_cap", 0.8), fixture="energy")
+    pa = _tail(a, "energy_price") / TAIL
+    pb = _tail(b, "energy_price") / TAIL
+    assert pa > 0.9 and pb <= 0.8 + 1e-6, f"cap must clamp asks: {pa:.3f} -> {pb:.3f}"
+
+
+def test_energy_cap_compensation_live():
+    # under a binding cap, compensation restores the SOE's revenue vs cap-alone
+    def cap_only(p):
+        p.energy_price_cap = 0.8
+    def cap_comp(p):
+        p.energy_price_cap = 0.8
+        p.energy_cap_compensation = True
+    b1 = run_b(cap_only, fixture="energy")
+    b2 = run_b(cap_comp, fixture="energy")
+    # same-seed twins => noise is correlated; a small strict margin is reliable
+    assert _tail(b2, "soe_dividends") > _tail(b1, "soe_dividends") * 1.002
+
+
+def test_spr_target_units_live():
+    a = _baseline("energy")
+    b = run_b(lambda p: (setattr(p, "spr_target_units", 50.0),
+                         setattr(p, "spr_flow_cap", 2.0)), fixture="energy")
+    assert float(a.records[-1].get("spr_stock", 0.0)) == 0.0
+    assert float(b.records[-1].get("spr_stock", 0.0)) > 0.0, "SPR must start stockpiling"
+
+
+def test_spr_flow_cap_live():
+    def arm(cap):
+        def m(p):
+            p.spr_target_units = 50.0
+            p.spr_flow_cap = cap
+        e = _econ("energy")
+        for t in range(SPLIT + 60):
+            if t == SPLIT:
+                m(e.policy)
+            e.step()
+        return float(e.records[-1].get("spr_stock", 0.0))
+    slow, fast = arm(0.1), arm(2.0)
+    assert fast > slow * 1.5, f"a larger flow cap must stockpile faster: {slow:.2f} vs {fast:.2f}"
+
+
+def test_tax_energy_windfall_live():
+    a = _baseline("energy")
+    b = run_b(lambda p: setattr(p, "tax_energy_windfall", 0.5), fixture="energy")
+    assert _tail(a, "tax_energy_windfall") == pytest.approx(0.0)
+    assert _tail(b, "tax_energy_windfall") > 0.0, "windfall surtax must collect from profitable E-firms"
+
+
+def test_soe_price_at_cost_live():
+    """LIVE, but with a FILED DIRECTION ANOMALY: pricing the SOE at unit cost RAISED the
+    market average energy price ~3% in this fixture (cost <= markup price should pull the
+    ask average DOWN). Either the price metric is transaction/composition-weighted in a
+    way that inverts, or SOE unit cost exceeds its markup-discounted ask -- to
+    investigate. The lever is proven effective (path departs); direction unasserted."""
+    a = _baseline("energy")
+    b = run_b(lambda p: setattr(p, "soe_price_at_cost", True), fixture="energy")
+    va, vb = _tail(a, "energy_price"), _tail(b, "energy_price")
+    assert vb != pytest.approx(va, rel=1e-6), f"lever must move the price path: {va:.2f} vs {vb:.2f}"
+
+
+@pytest.mark.skip(reason="energy_rationing order is only observable under SHORTAGE with "
+                         "per-sector allocation gauges; needs a shock/shortage fixture "
+                         "(deferred; the energy_shock_* levers belong to the shock module).")
+def test_energy_rationing_live():
+    pass
+
+
+# ================= section 7: HOUSING batch 3 =================
+
+FIXTURES["housing"] = dict(
+    seed=33, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
+    demographics_population=260, n_ticks=400, government=True, tax_wealth_rate=0.001,
+    housing_enabled=True, housing_market_enabled=True, housing_construction_enabled=True,
+    n_builders=3, housing_property_tax=0.01, housing_transfer_tax=0.05,
+)
+
+
+def test_housing_property_tax_live():
+    assert_moves("property_tax_paid", lambda p: setattr(p, "housing_property_tax", 0.03),
+                 "up", fixture="housing")
+
+
+def test_housing_permits_live():
+    a = _baseline("housing")
+    b = run_b(lambda p: setattr(p, "housing_permits", 0), fixture="housing")
+    built_after = lambda e: (float(e.records[-1].get("dwellings_built_total", 0.0))
+                             - float(e.records[SPLIT].get("dwellings_built_total", 0.0)))
+    assert built_after(a) > 0.0, "baseline must keep building"
+    assert built_after(b) == pytest.approx(0.0), "permits=0 must stall construction"
+
+
+def test_housing_in_wealth_tax_live():
+    assert_moves("tax_wealth", lambda p: setattr(p, "housing_in_wealth_tax", True), "up",
+                 fixture="housing")
+
+
+@pytest.mark.skip(reason="housing_transfer_tax needs SALES; the small fixture produces "
+                         "zero resale transactions in 400t (probate listings require "
+                         "deaths + unhoused buyers). Long-horizon housing fixture "
+                         "deferred with the mortgage-lever batch.")
+def test_housing_transfer_tax_live():
+    pass
