@@ -1,14 +1,11 @@
-"""v25 P0 scaffold: per-lever effectiveness tests.
+"""v25 P0: per-lever effectiveness tests (B1 coverage matrix).
 
-The pattern the audits demanded: mutate ONLY econ.policy mid-run (never Config)
-and assert behaviour responds. A digest gate cannot catch dead fields; this can.
+Pattern: same-seed twin; arm B mutates ONLY econ.policy mid-run; assert the
+observable responds (or, for shadowed/dead levers, assert the documented
+non-response). A digest gate cannot catch dead fields; this can.
 
-Scaffold contents:
-- helper `run_ab(lever_mutation, ticks, observe)` — same-seed twin economies,
-  policy mutated on one arm at mid-run
-- LIVE levers: proven effective here (first exemplars; grows per migration)
-- KNOWN DEFECTS (design doc section 1.7): encoded as xfail — they FLIP to green
-  when the defect is fixed, keeping the defect list executable."""
+Batch 1 = fiscal domain (this file section 2) + monetary exemplars (section 3).
+Baseline arm is computed once per fixture and cached module-wide."""
 from __future__ import annotations
 
 import sys
@@ -21,72 +18,221 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from macro_sim.config import Config
 from macro_sim.economy import Economy
 
+TICKS, SPLIT, TAIL = 240, 120, 100
 
-def _econ():
-    return Economy(Config.v13(
+FIXTURES = {
+    # one rich fiscal fixture serves most levers; NOTE Config.v13 presets
+    # gov_deficit_target=0.03 (the deficit branch is ACTIVE -- shadowing tests rely on it)
+    "fiscal": dict(
         seed=17, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
         demographics_population=260, n_ticks=400,
-        government=True, gov_consumption_share=0.10, tax_income_rate=0.10,
-        tax_consumption_rate=0.10, central_bank=True, inflation_target=5.4e-5,
-        # NOTE: Config.v13 presets gov_deficit_target=0.03 -- the deficit branch is
-        # ACTIVE here, which the shadowing tests below rely on.
-    ))
+        government=True, tax_income_rate=0.10, tax_consumption_rate=0.10,
+        tax_profit_rate=0.15, tax_wealth_rate=0.001,
+        benefit_replacement=0.3, pension_replacement=0.3,
+        job_guarantee=True, jg_wage_ratio=0.6,
+        central_bank=True, inflation_target=5.4e-5,
+    ),
+    "fiscal_nojg": dict(
+        seed=17, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
+        demographics_population=260, n_ticks=400,
+        government=True, tax_income_rate=0.10, tax_consumption_rate=0.10,
+        benefit_replacement=0.3, job_guarantee=False,
+    ),
+    "strata": dict(
+        seed=19, n_households=40, n_firms_c=24, n_firms_k=12, n_banks=2,
+        demographics_population=260, n_ticks=400,
+        government=True, tax_consumption_rate=0.15, consumption_strata=True,
+    ),
+}
+
+_BASELINE: dict[str, Economy] = {}
 
 
-def run_ab(mutate, ticks=240, split=120, observe=lambda e: None):
-    """Same-seed twin: arm B gets `mutate(policy)` at `split`. Returns (obs_a, obs_b)."""
-    a, b = _econ(), _econ()
-    for t in range(ticks):
-        if t == split:
+def _econ(fixture):
+    return Economy(Config.v13(**FIXTURES[fixture]))
+
+
+def _baseline(fixture):
+    if fixture not in _BASELINE:
+        e = _econ(fixture)
+        for _ in range(TICKS):
+            e.step()
+        _BASELINE[fixture] = e
+    return _BASELINE[fixture]
+
+
+def _tail(econ, key):
+    return sum(float(r.get(key, 0.0)) for r in econ.records[-TAIL:])
+
+
+def run_b(mutate, fixture="fiscal"):
+    b = _econ(fixture)
+    for t in range(TICKS):
+        if t == SPLIT:
+            mutate(b.policy)
+        b.step()
+    return b
+
+
+def assert_moves(key, mutate, direction, fixture="fiscal", min_rel=0.02):
+    a = _baseline(fixture)
+    b = run_b(mutate, fixture)
+    va, vb = _tail(a, key), _tail(b, key)
+    if direction == "up":
+        assert vb > va * (1 + min_rel), f"{key}: {va:.3f} -> {vb:.3f} (expected up)"
+    elif direction == "down":
+        assert vb < va * (1 - min_rel), f"{key}: {va:.3f} -> {vb:.3f} (expected down)"
+    else:  # "same"
+        assert vb == pytest.approx(va), f"{key}: {va:.6f} -> {vb:.6f} (expected inert)"
+    return va, vb
+
+
+# ================= section 2: FISCAL batch =================
+
+def test_tax_income_rate_live():
+    assert_moves("tax_income", lambda p: setattr(p, "tax_income_rate", 0.30), "up")
+
+def test_income_allowance_live():
+    assert_moves("tax_income", lambda p: setattr(p, "income_allowance", 1.0), "down")
+
+def test_tax_consumption_rate_live():
+    assert_moves("tax_consumption", lambda p: setattr(p, "tax_consumption_rate", 0.25), "up")
+
+def test_tax_profit_rate_live():
+    assert_moves("tax_profit", lambda p: setattr(p, "tax_profit_rate", 0.40), "up")
+
+def test_tax_wealth_rate_live():
+    assert_moves("tax_wealth", lambda p: setattr(p, "tax_wealth_rate", 0.01), "up")
+
+def test_wealth_allowance_live():
+    def m(p):
+        p.tax_wealth_rate = 0.01          # make the base visible first
+        p.wealth_allowance = 0.0
+    def m2(p):
+        p.tax_wealth_rate = 0.01
+        p.wealth_allowance = 3.0
+    b_flat = run_b(m); b_allow = run_b(m2)
+    assert _tail(b_allow, "tax_wealth") < _tail(b_flat, "tax_wealth") * 0.98
+
+def _slack_pure_benefit(fixture, mutate):
+    a = _econ(fixture)
+    b = _econ(fixture)
+    for t in range(150):
+        if t == 30:
             mutate(b.policy)
         a.step()
         b.step()
-    return observe(a), observe(b)
+    win = slice(30, 150)
+    pure = lambda e: sum(float(r.get("benefit_paid", 0.0)) - float(r.get("pension_paid", 0.0))
+                         for r in e.records[win])
+    return pure(a), pure(b)
 
 
-# ---------------- live levers (exemplars; list grows with each migration) --------------
+def test_benefit_replacement_live_without_jg():
+    """THREE observable subtleties (all filed):
+    1. benefit_paid INCLUDES pensions (settlement.py:265 double-posts) -- observe the
+       pure component.
+    2. the benefit pays for UNSOLD labour -> only a SLACK window (genesis clearing,
+       early u ~40%) can observe the rate.
+    3. SHADOWED BY job_guarantee=True: an UNCAPPED JG absorbs all unsold labour, so
+       the benefit base is identically zero -- registry `shadowed_by` relationship."""
+    pa, pb = _slack_pure_benefit("fiscal_nojg",
+                                 lambda p: setattr(p, "benefit_replacement", 0.7))
+    assert pa > 0.0, "JG-off fixture must pay real unemployment benefits in the slack window"
+    assert pb > pa * 1.10, f"{pa:.2f} -> {pb:.2f}"
 
-def test_tax_income_rate_is_runtime_effective():
-    tax_a, tax_b = run_ab(lambda p: setattr(p, "tax_income_rate", 0.30),
-                          observe=lambda e: sum(r.get("tax_total", 0.0) for r in e.records[-100:]))
-    assert tax_b > tax_a * 1.05, "raising income tax mid-run must raise revenue"
 
+def test_benefit_replacement_shadowed_by_job_guarantee():
+    """With the uncapped JG on, the unemployment-benefit base is identically zero and
+    the rate lever is inert -- the executable form of `shadowed_by: job_guarantee`."""
+    pa, pb = _slack_pure_benefit("fiscal",
+                                 lambda p: setattr(p, "benefit_replacement", 0.7))
+    assert pa == pytest.approx(0.0) and pb == pytest.approx(0.0)
 
-def test_gov_consumption_share_is_runtime_effective_when_not_shadowed():
-    # PRECEDENCE TRAP (found by this scaffold, first hour of P0): the deficit-target
-    # branch shadows the share branch, and Config.v13() presets gov_deficit_target=0.03,
-    # so the share lever is silently inert in every v13-family config -- including the
-    # 30y portraits (defc>0 archetypes: China/India/USA). The registry gains a
-    # `shadowed_by` declaration; this test exercises the UNSHADOWED path.
-    def mutate(p):
-        p.gov_deficit_target = 0.0        # un-shadow
+def test_benefit_income_floor_live():
+    assert_moves("benefit_paid", lambda p: setattr(p, "benefit_income_floor", 0.8), "up")
+
+def test_pension_replacement_live():
+    assert_moves("pension_paid", lambda p: setattr(p, "pension_replacement", 0.7), "up")
+
+def test_gov_deficit_target_live():
+    assert_moves("gov_consumption", lambda p: setattr(p, "gov_deficit_target", 0.10), "up")
+
+def test_deficit_u_ref_live():
+    # raising u_ref shrinks the state-dependent multiplier min(cap, u/u_ref)
+    assert_moves("gov_consumption", lambda p: setattr(p, "deficit_u_ref", 0.60), "down")
+
+def test_min_wage_live():
+    a = _baseline("fiscal")
+    b = run_b(lambda p: setattr(p, "min_wage", 1.3))
+    assert _tail(b, "min_wage_binding_firm_share") > _tail(a, "min_wage_binding_firm_share"), \
+        "a binding minimum wage must bind somewhere"
+
+def test_jg_wage_ratio_live():
+    assert_moves("job_guarantee_wage", lambda p: setattr(p, "jg_wage_ratio", 0.95), "up",
+                 min_rel=0.01)
+
+def test_job_guarantee_toggle_live():
+    """OBSERVABLE NOTE: the job_guarantee_wage METRIC is a passive posted-wage gauge
+    (jg_wage_ratio x mean wage, metrics.py:948) computed regardless of the flag; the
+    activity gauge is jg_employment, and JG is dormant at low u -- so the toggle is
+    only observable in a SLACK window. Genesis clearing provides one (early u ~40%):
+    toggle OFF at t=30 and compare jg_employment over the genesis-slack window."""
+    a = _econ("fiscal")
+    b = _econ("fiscal")
+    for t in range(150):
+        if t == 30:
+            b.policy.job_guarantee = False
+        a.step()
+        b.step()
+    win = slice(30, 150)
+    jg_a = sum(float(r.get("jg_employment", 0.0)) for r in a.records[win])
+    jg_b = sum(float(r.get("jg_employment", 0.0)) for r in b.records[win])
+    assert jg_a > 0.0, "fixture must exercise JG in the genesis-slack window"
+    assert jg_b < jg_a * 0.5, f"JG off must collapse jg employment: {jg_a:.1f} -> {jg_b:.1f}"
+
+def test_gov_consumption_share_shadowed_by_deficit_target():
+    """PRECEDENCE TRAP (registry `shadowed_by`, executable): while gov_deficit_target>0
+    the share lever is a documented NO-OP."""
+    assert_moves("gov_consumption",
+                 lambda p: setattr(p, "gov_consumption_share", 0.25), "same")
+
+def test_gov_consumption_share_live_when_unshadowed():
+    def m(p):
+        p.gov_deficit_target = 0.0
         p.gov_consumption_share = 0.25
-    g_a, g_b = run_ab(mutate,
-                      observe=lambda e: sum(r.get("gov_consumption", 0.0) for r in e.records[-100:]))
-    assert g_b != pytest.approx(g_a), "un-shadowed share change must alter gov consumption"
+    a = _baseline("fiscal")
+    b = run_b(m)
+    assert _tail(b, "gov_consumption") != pytest.approx(_tail(a, "gov_consumption"))
+
+# --- differential VAT (strata fixture) ---
+
+def test_tax_necessity_rate_live():
+    def m(p):
+        p.tax_necessity_rate = 0.0        # zero-rate necessities
+        p.tax_luxury_rate = 0.15
+    a = _baseline("strata")
+    b = run_b(m, "strata")
+    assert _tail(b, "tax_consumption") < _tail(a, "tax_consumption") * 0.98
+
+def test_tax_luxury_rate_live():
+    def m(p):
+        p.tax_necessity_rate = 0.15
+        p.tax_luxury_rate = 0.40
+    a = _baseline("strata")
+    b = run_b(m, "strata")
+    assert _tail(b, "tax_consumption") > _tail(a, "tax_consumption") * 1.02
 
 
-def test_gov_consumption_share_is_shadowed_by_deficit_target():
-    """Documents the precedence: while gov_deficit_target>0 the share lever is a NO-OP.
-    This is the registry's `shadowed_by` semantics made executable."""
-    g_a, g_b = run_ab(lambda p: setattr(p, "gov_consumption_share", 0.25),
-                      observe=lambda e: sum(r.get("gov_consumption", 0.0) for r in e.records[-100:]))
-    assert g_b == pytest.approx(g_a), "share mutation must be inert under an active deficit target"
+# ================= section 3: MONETARY exemplars =================
 
-
-def test_policy_rate_override_is_runtime_effective():
-    r_a, r_b = run_ab(lambda p: setattr(p, "policy_rate_override", 0.0005),
-                      observe=lambda e: e.records[-1].get("policy_rate", 0.0))
-    assert r_b == pytest.approx(0.0005), "the override must pin the policy rate"
-    assert r_b != r_a
-
-
-# ---------------- KNOWN DEFECTS (design doc 1.7) — xfail until fixed -------------------
+def test_policy_rate_override_live():
+    b = run_b(lambda p: setattr(p, "policy_rate_override", 0.0005))
+    assert b.records[-1].get("policy_rate", 0.0) == pytest.approx(0.0005)
 
 @pytest.mark.xfail(reason="1.7: Policy.central_bank is a DEAD FIELD (rate path reads cfg); "
-                          "flips green when monetary_regime lands", strict=True)
-def test_policy_central_bank_flag_is_runtime_effective():
-    # turning the CB OFF mid-run should freeze the rate at r_interest; today it does nothing
-    r_a, r_b = run_ab(lambda p: setattr(p, "central_bank", False),
-                      observe=lambda e: e.records[-1].get("policy_rate", 0.0))
-    assert r_b != r_a
+                          "deleted at migration, replaced by monetary_regime", strict=True)
+def test_policy_central_bank_flag_live():
+    a = _baseline("fiscal")
+    b = run_b(lambda p: setattr(p, "central_bank", False))
+    assert b.records[-1].get("policy_rate") != a.records[-1].get("policy_rate")

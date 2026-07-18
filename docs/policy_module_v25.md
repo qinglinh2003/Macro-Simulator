@@ -344,6 +344,14 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 - **OMO split-brain**: behaviour reads Policy but the metrics enable-check and fallback
   still read Config (metrics.py:1629) — mutating Policy desynchronises behaviour from
   observation; per-lever effectiveness tests must cover the METRIC path too
+- **SHADOWED_BY: benefit_replacement ⟂ job_guarantee (B1 catch)**: the uncapped JG
+  absorbs ALL unsold labour, so the unemployment-benefit base is identically zero while
+  job_guarantee=True — the rate lever is inert (economically correct; must be a declared
+  registry relationship). Companion metric note: `benefit_paid` INCLUDES pensions
+  (settlement.py:265 double-posts) — misleading name, observe benefit−pension for the
+  pure component. `job_guarantee_wage` is a PASSIVE posted-wage gauge (ratio × mean wage,
+  regardless of the flag); the activity gauge is jg_employment, observable only in slack
+  windows (genesis clearing works).
 - **PRECEDENCE SHADOWING (found by the P0 scaffold, first hour)**: gov_consumption_share
   is a NO-OP while gov_deficit_target>0 (goods.py branch order), and `Config.v13()`
   presets gov_deficit_target=0.03 — the share lever was silently inert in every
