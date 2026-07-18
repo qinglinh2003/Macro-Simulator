@@ -48,22 +48,24 @@ def set_policy_rate(econ: Any) -> None:
     # experimental rate shock also changes the information state and creates a
     # second, hidden treatment when the override is released.
     if cfg.central_bank:
-        econ._infl_ema += cfg.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
+        # B4c: the sensor smoothing is the CB's OWN measurement choice (policy)
+        econ._infl_ema += pol.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
     if pol.policy_rate_override is not None:
         # the player hand-sets the rate (a manual hike/cut), bypassing the Taylor rule and the frozen fallback.
-        econ._rate = min(cfg.r_max, max(0.0, pol.policy_rate_override))
+        econ._rate = min(pol.r_max, max(0.0, pol.policy_rate_override))
         return
     if not cfg.central_bank:
         econ._rate = cfg.r_interest
         return
-    u_prev = getattr(econ, "_prev_u", cfg.u_natural)
+    # B4c: r*, u* are the CB's revisable ESTIMATES; r_max is its (policy) ceiling
+    u_prev = getattr(econ, "_prev_u", pol.u_natural)
     r_target = (
-        cfg.r_neutral
+        pol.r_neutral
         + pol.taylor_phi_pi * (econ._infl_ema - pol.inflation_target)
-        - pol.taylor_phi_u * (u_prev - cfg.u_natural)
+        - pol.taylor_phi_u * (u_prev - pol.u_natural)
     )
     r_new = pol.rate_inertia * econ._rate + (1.0 - pol.rate_inertia) * r_target
-    econ._rate = min(cfg.r_max, max(0.0, r_new))
+    econ._rate = min(pol.r_max, max(0.0, r_new))
 
 
 def run_omo_phase(econ: Any) -> None:

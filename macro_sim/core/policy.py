@@ -76,6 +76,17 @@ class Policy:
     #                                              the player), bypassing the Taylor rule; None ⇒ the rule decides
 
     # -- monetary: quantity tools (v12.4 CB; the OMO/QE + LoLR live control surface) --
+    # -- monetary: the CB's beliefs & measurement apparatus (B4c migration; the CB
+    #    chooses its estimates and its index -- the Germany lesson made this policy) --
+    r_neutral: float = 0.01              # r*: the CB's neutral-rate estimate
+    u_natural: float = 0.05              # u*: the CB's natural-rate estimate
+    r_max: float = 0.10                  # rate ceiling (the cap that disarmed CBs in the v1 portrait)
+    infl_ema_lambda: float = 0.02        # the CB's inflation-sensor smoothing
+    cb_core_inflation: bool = False      # Taylor input reads CORE (ex-energy)
+    cb_uses_fixed_basket_cpi: bool = False  # the CB's target-index choice
+    cb_log_inflation: bool = False       # ln(P/P') instead of P/P'-1
+    fiscal_uses_national_accounts_gdp: bool = False  # the FISCAL RULE's GDP-measure choice
+
     omo: bool = False                    # open-market operations on/off (the CB steers reserves)
     omo_reserve_target: float = 0.0      # QE/QT stance: target Σ bank reserves as a FRACTION of genesis reserves
     omo_drain_frac: float = 0.1          # per-tick fraction of the gap to the target moved (drain/inject speed)
@@ -129,6 +140,14 @@ class Policy:
             taylor_phi_u=cfg.taylor_phi_u,
             rate_inertia=cfg.rate_inertia,
             # policy_rate_override stays None at t=0 (no hand-set rate until the player sets one)
+            r_neutral=getattr(cfg, "r_neutral", 0.01),
+            u_natural=getattr(cfg, "u_natural", 0.05),
+            r_max=getattr(cfg, "r_max", 0.10),
+            infl_ema_lambda=getattr(cfg, "infl_ema_lambda", 0.02),
+            cb_core_inflation=getattr(cfg, "cb_core_inflation", False),
+            cb_uses_fixed_basket_cpi=getattr(cfg, "cb_uses_fixed_basket_cpi", False),
+            cb_log_inflation=getattr(cfg, "cb_log_inflation", False),
+            fiscal_uses_national_accounts_gdp=getattr(cfg, "fiscal_uses_national_accounts_gdp", False),
             omo=cfg.omo,
             omo_reserve_target=cfg.omo_reserve_target,
             omo_drain_frac=cfg.omo_drain_frac,

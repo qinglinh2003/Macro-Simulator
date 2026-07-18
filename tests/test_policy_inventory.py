@@ -18,7 +18,7 @@ def test_every_source_field_classified_exactly_once():
 def test_source_counts_documented():
     fields = discover()
     assert len(fields["Config"]) == 364
-    assert len(fields["Policy"]) == 46
+    assert len(fields["Policy"]) == 54   # 46 + 8 B4c migrations
     assert len(fields["World"]) == 31
     assert len(fields["Social"]) == 35
     assert len(fields["Relationship"]) == 12

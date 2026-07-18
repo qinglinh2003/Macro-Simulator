@@ -510,3 +510,52 @@ def test_omo_metrics_follow_policy_not_config():
     tail_target = [float(r.get("omo_reserve_target_value", 0.0)) for r in b.records[-TAIL:]]
     assert max(tail_target) == pytest.approx(0.0), \
         "metrics must report a zero OMO target once policy turns OMO off"
+
+
+# ================= section 9: B4c migrations (CB beliefs & measurement) =================
+
+def test_r_neutral_live():
+    b1 = _lifted(lambda p: setattr(p, "r_neutral", 1.0e-4))
+    b2 = _lifted(lambda p: setattr(p, "r_neutral", 3.0e-4))
+    assert sum(_rate_tail(b2)) > sum(_rate_tail(b1)), "a higher r* estimate must lift the rule"
+
+
+def test_u_natural_live():
+    b1 = _lifted(lambda p: setattr(p, "u_natural", 0.02))
+    b2 = _lifted(lambda p: setattr(p, "u_natural", 0.30))
+    # a higher u* estimate makes the gap MORE negative => rate pushed UP via -phi_u*(u-u*)
+    assert sum(_rate_tail(b2)) > sum(_rate_tail(b1))
+
+
+def test_r_max_live():
+    b1 = _lifted(lambda p: setattr(p, "r_max", 5.0e-4))
+    b2 = _lifted(lambda p: setattr(p, "r_max", 2.0e-4))
+    assert max(_rate_tail(b2)) <= 2.0e-4 + 1e-12, "a lowered ceiling must clamp the lifted path"
+    assert max(_rate_tail(b1)) > 2.0e-4
+
+
+def test_infl_ema_lambda_live():
+    b1 = _lifted(lambda p: setattr(p, "infl_ema_lambda", 0.005))
+    b2 = _lifted(lambda p: setattr(p, "infl_ema_lambda", 0.5))
+    assert _rate_tail(b1) != pytest.approx(_rate_tail(b2)), \
+        "sensor smoothing must change the rate path"
+
+
+def test_cb_uses_fixed_basket_cpi_live():
+    b1 = _lifted()
+    b2 = _lifted(lambda p: setattr(p, "cb_uses_fixed_basket_cpi", True))
+    assert _rate_tail(b1) != pytest.approx(_rate_tail(b2)), \
+        "switching the CB's target index must change the rate path"
+
+
+def test_fiscal_uses_national_accounts_gdp_live():
+    a = _baseline("fiscal")
+    b = run_b(lambda p: setattr(p, "fiscal_uses_national_accounts_gdp", True))
+    assert _tail(b, "gov_consumption") != pytest.approx(_tail(a, "gov_consumption")), \
+        "switching the deficit rule's GDP basis must change the spending path"
+
+
+@pytest.mark.skip(reason="cb_core_inflation needs energy_enabled + an interior-liftoff CB "
+                         "fixture combined; deferred (registry requires energy_enabled).")
+def test_cb_core_inflation_live():
+    pass

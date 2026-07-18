@@ -1572,7 +1572,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "effective_unemployment": max(0.0, rec["unemployment_rate"] - jg_emp_rate),
             "gov_spending": spend_total, "gov_deficit": deficit, "gov_debt": gov_debt,
             "fiscal_uses_national_accounts_gdp": float(
-                bool(getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False))
+                bool(getattr(econ.policy, "fiscal_uses_national_accounts_gdp", False))
             ),
             "fiscal_output_lag": float(getattr(
                 econ,
@@ -1620,9 +1620,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         cb_cfg = econ.cfg.central_banking
         pol = econ.policy
         inflation_gap = infl_ema - pol.inflation_target
-        unemployment_gap = rec.get("unemployment_rate", 0.0) - cb_cfg.u_natural
+        unemployment_gap = rec.get("unemployment_rate", 0.0) - pol.u_natural
         taylor_target = (
-            cb_cfg.r_neutral
+            pol.r_neutral
             + pol.taylor_phi_pi * inflation_gap
             - pol.taylor_phi_u * unemployment_gap
         )
@@ -1640,14 +1640,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         rec.update({
             "policy_rate": rate,
             "cb_uses_fixed_basket_cpi": float(
-                bool(getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False))
+                bool(getattr(econ.policy, "cb_uses_fixed_basket_cpi", False))
             ),
             "cb_inflation_lag_input": float(getattr(econ, "_prev_inflation", 0.0)),
             "inflation_ema": infl_ema,
             "real_rate": rate - infl_ema,        # ex-ante real policy rate (Taylor principle => rises with π)
             "inflation_target": float(pol.inflation_target),
             "inflation_gap_to_target": inflation_gap,
-            "u_natural": float(cb_cfg.u_natural),
+            "u_natural": float(pol.u_natural),
             "unemployment_gap": unemployment_gap,
             "taylor_rate_target": taylor_target,
             "policy_rate_gap": rate - taylor_target,
@@ -2176,7 +2176,7 @@ def commit_tick_metrics(econ, rec: Dict[str, float]) -> None:
         econ._prev_benefit = float(rec.get("benefit_paid", 0.0))
         econ._prev_nominal_output = float(rec.get("nominal_output", 0.0))
         econ._prev_fiscal_output = float(rec.get(
-            "nominal_gdp" if getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False)
+            "nominal_gdp" if getattr(econ.policy, "fiscal_uses_national_accounts_gdp", False)
             else "nominal_output",
             0.0,
         ))
@@ -2187,15 +2187,15 @@ def commit_tick_metrics(econ, rec: Dict[str, float]) -> None:
     if getattr(econ.cfg, "energy_household", False) and "cpi_headline" in rec:
         econ._prev_headline_index = float(rec["cpi_headline"])
 
-    if getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False):
+    if getattr(econ.policy, "cb_uses_fixed_basket_cpi", False):
         cb_inflation = float(rec.get("cpi_fixed_basket_inflation", 0.0))
     else:
         cb_inflation = float(rec.get("inflation", 0.0))
-    if (not getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False)
+    if (not getattr(econ.policy, "cb_uses_fixed_basket_cpi", False)
             and getattr(econ.cfg, "energy_household", False)
-            and not getattr(econ.cfg, "cb_core_inflation", False)):
+            and not getattr(econ.policy, "cb_core_inflation", False)):
         cb_inflation = float(rec.get("headline_inflation", cb_inflation))
-    if getattr(econ.cfg, "cb_log_inflation", False):
+    if getattr(econ.policy, "cb_log_inflation", False):
         # Feed Taylor's EMA the log price change; the exported inflation field remains
         # the arithmetic change, exactly as before this state transition was separated.
         econ._prev_inflation = math.log1p(cb_inflation) if cb_inflation > -1.0 else 0.0
