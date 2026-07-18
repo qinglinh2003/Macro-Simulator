@@ -17,8 +17,8 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (46 [P], 37 [C], 14 [W], 5 PENDING,
-     2 [N]; candidate arithmetic 46+37+14+2-1(dead central_bank replaced) = 98)
+  3. count identities from the design doc hold (46 [P], 40 [C], 14 [W], 0 PENDING,
+     4 [N]; candidate arithmetic 46+40+14+4-1(dead central_bank replaced) = 103)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
 from __future__ import annotations
@@ -55,7 +55,13 @@ DEFECTS = {  # §1.7 — listed-but-not-runtime-effective (per-lever tests will 
 }
 
 # ---- [N] new target levers (exist in NO source today) ----
-POLICY_NEW = {"monetary_regime", "bank_leverage_cap"}
+POLICY_NEW = {
+    "monetary_regime", "bank_leverage_cap",
+    # A3/A4 rulings (2026-07-18): the two NEW levers that carry the government's
+    # actual choices, cleanly split from the technology/pricing bases kept in Config
+    "jg_public_works_share",   # default 1.0 = today's implicit share (bit-identical)
+    "deposit_rate_floor",      # default 0.0 = never binds (bit-identical)
+}
 
 # ---- Config source ----
 CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
@@ -85,12 +91,13 @@ CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
     # audit-round reclassifications
     "land_fee_share", "rental_eviction_arrears", "unified_bank_rwa",
     "firm_credit_min_dscr", "bank_migrate_on_failure",
+    # PENDING rulings closed 2026-07-18 (renames carry legacy aliases at migration):
+    "firm_capital_haircut",     # -> regulatory_firm_capital_haircut, new-credit-only
+    "firm_inventory_haircut",   # -> regulatory_firm_inventory_haircut, new-credit-only
+    "land_convexity",           # -> land_fee_stock_elasticity, new-construction-only
 }
 
-CONFIG_PENDING_RULING = {
-    "firm_capital_haircut", "firm_inventory_haircut", "land_convexity",
-    "jg_productivity", "deposit_rate",
-}
+CONFIG_PENDING_RULING: set[str] = set()   # all five closed 2026-07-18
 
 CONFIG_SHOCK_MODULE = {"energy_shock_at", "energy_shock_magnitude", "energy_shock_duration"}
 
@@ -147,6 +154,9 @@ CONFIG_PHYSICS = {
     "tfp_law", "tfp_learning_theta", "tfp_drift_c", "tfp_drift_k", "tfp_drift_e",
     "public_capital_gamma", "public_capital_depreciation", "lambda_I", "delta_K",
     "A", "a_K", "kappa_E", "a_E",
+    # A3/A4 rulings: technology & private-pricing bases stay Config
+    "jg_productivity",          # public-works TECHNOLOGY; the government's lever is [N] jg_public_works_share
+    "deposit_rate",             # -> deposit_rate_base at migration (private bank pricing base)
     # demography physics
     "demographics_tfr", "demographics_mortality_scale",
     "demographic_marriage_market_interval_days",
@@ -336,13 +346,13 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 46, "C": 37, "W": 14, "PENDING": 5, "N": 2}
+    expect = {"P": 46, "C": 40, "W": 14, "PENDING": 0, "N": 4}
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
     candidates = c["P"] + c["C"] + c["W"] + c["N"] - 1   # −1: dead Policy.central_bank replaced by monetary_regime
-    if candidates != 98:
-        errors.append(f"COUNT candidates: {candidates} != 98")
+    if candidates != 103:
+        errors.append(f"COUNT candidates: {candidates} != 103 (rulings closed: 46+40+14+4-1)")
 
     # hardcoded registry verification
     for hid, fname, pattern, _note in HARDCODED:
@@ -361,7 +371,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 46[P] + 37[C] + 14[W] + 2[N] - 1(dead) = 98 ; PENDING_RULING = 5")
+    print(f"policy candidates: 46[P] + 40[C] + 14[W] + 4[N] - 1(dead) = 103 ; PENDING_RULING = 0 (all closed)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")

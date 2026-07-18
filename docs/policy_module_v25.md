@@ -46,8 +46,9 @@ differential VAT, all v17 energy policy, labour floors + JG, the Taylor rule +
 handles). **Most are behaviour-live, but known dead / init-snapshot / metrics read-point
 defects remain — see §1.7.** P0 = close the gaps below, not build from zero.
 
-### 1.2 POLICY levers — WORKING CANDIDATE LIST (98 classified Policy candidates + 5
-pending = 103; hard-coded institutions not yet counted), by domain
+### 1.2 POLICY levers — CANDIDATE LIST (103 classified: 46[P] + 40[C] + 14[W] + 4[N] − 1
+dead; PENDING = 0, all rulings closed 2026-07-18; hard-coded institutions not yet counted),
+by domain
 
 Location key: **[P]** already in Policy · **[C]** in Config, must migrate · **[W]** World
 constructor param, needs a per-economy home · **[N]** NEW target lever (exists in no
@@ -129,14 +130,30 @@ tariff, import_quota, export_subsidy, sanctions, remittance_tax, outward_remitta
 - bank_migrate_on_failure [C] — REVERSED ruling: purchase-&-assumption vs stranding is bank
   RESOLUTION REGIME, not plumbing
 
-**PENDING_RULING bucket (5 — in NO other bucket until ruled):**
-- firm_capital_haircut / firm_inventory_haircut — regulatory collateral policy vs per-bank
-  behaviour (if private underwriting: refactor to bank-level attribute)
-- land_convexity — semantic split required: fee-curve shape (policy) vs physical scarcity
-  (config)
-- jg_productivity — technology parameter vs programme design
-- deposit_rate — currently a commercial-bank CONTRACT cost, not an administered rate;
-  promotion requires a semantic split (e.g. a regulated floor lever)
+**PENDING_RULING: ALL FIVE CLOSED (user rulings, 2026-07-18):**
+- firm_capital_haircut / firm_inventory_haircut → **[C] Policy** as
+  `regulatory_firm_capital_haircut` / `regulatory_firm_inventory_haircut`
+  (uniform macroprudential haircuts; effective_semantics = **new-credit-only** — a raised
+  haircut shrinks NEW lending capacity, never restates existing loans). Future private
+  underwriting: `effective = max(regulatory, bank.private_haircut)` with the bank side as
+  agent behaviour.
+- land_convexity → **[C] Policy** as `land_fee_stock_elasticity`, in the land-fiscal block
+  with land_fee_share; effective_semantics = **new-construction-only**. DOCTRINE: physical
+  land scarcity, if ever modelled, gets its own Config (`land_scarcity_cost_elasticity`)
+  and must be a REAL resource cost — never a fiscal transfer sharing a parameter with the
+  fee schedule.
+- jg_productivity → **stays Config** (public-works TECHNOLOGY; a government cannot vote
+  engineering efficiency). NEW **[N] `jg_public_works_share` ∈ [0,1]**: the government's
+  programme-composition choice; `jg_capital = cfg.jg_productivity × policy.share × jg_emp`.
+  DEFAULT 1.0 = today's implicit share (bit-identical; 0 would silently gut legacy JG).
+- deposit_rate → **stays Config**, renamed `deposit_rate_base` at migration (private bank
+  pricing base — NOT a central-bank rate). Three-layer target:
+  `bank_rate = max(base + bank.spread, policy.deposit_rate_floor)`; NEW **[N]
+  `deposit_rate_floor`** (default 0.0 = never binds = bit-identical); full administered
+  regime (`deposit_rate_regime`) deferred until deposit competition is genuinely active.
+  FILED DEFECT: deposit_rate_disp drives depositor shopping while actual interest uses the
+  global rate — benchmark and quote are conflated.
+- ALL renames carry legacy-name aliases + deprecation warnings in from_legacy_config.
 
 ### 1.3 Ambiguous — rulings taken (flag any objection)
 
@@ -251,14 +268,15 @@ energy_shock_duration.
 
 ### 1.5 P0 gap analysis (the actual work)
 
-1. **37 existing [C] fields migrate into Policy + 1 [N] bank_leverage_cap is created;
-   [N] monetary_regime replaces the dead `Policy.central_bank`** (banking macropru block,
-   mortgage regulation block, monetary beliefs/measurement incl.
+1. **40 existing [C] fields migrate into Policy (3 with renames + legacy aliases:
+   regulatory haircuts, land_fee_stock_elasticity) + [N] bank_leverage_cap /
+   jg_public_works_share / deposit_rate_floor are created; [N] monetary_regime replaces
+   the dead `Policy.central_bank`** (banking macropru block, mortgage regulation block, monetary beliefs/measurement incl.
    infl_ema_lambda + fiscal_uses_national_accounts_gdp, Treasury debt management,
    insolvency law + eviction law, land fee, DSCR, unified_bank_rwa,
    bank_migrate_on_failure, deficit_u_cap, gov_investment_share, soe_efirm,
-   r_interest/r_max, omo_index_deposits) + their read-point rewires. PENDING_RULING
-   items (5) migrate only after their splits are ruled.
+   r_interest/r_max, omo_index_deposits) + their read-point rewires. All five former
+   PENDING_RULING items are closed (see 1.2).
 2. **The external domain needs a per-economy owner**: 14 [W] levers (incl.
    external_interest_settlement_fraction) live as World
    constructor vectors with no Policy home. Create `ExternalPolicy` inside each economy's
