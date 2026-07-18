@@ -366,6 +366,21 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="world/migration.py::host taxes the outflow"),
     _L("guest_worker_return", Range(0.0, 1.0), scope="external",
        read_point="world/migration.py::host's temporary-migration return rate"),
+    # -- FX regime (B5b): fx_regime is the AUTHORITY; peg_economy is derived --
+    _L("fx_regime", Choices(("float", "peg")), scope="external",
+       semantics=STATE_TRANSITION, handler_id="fx_regime_switch",
+       read_point="world/world.py::_reconcile_peg_states (barrier authority)",
+       state_notes="A6: no anchor consent; entering peg requires peg_anchor staged; "
+                   "adoption acquires reserves at the next barrier; voluntary exit "
+                   "releases pent-up pressure ONCE (orderly float still faces it); "
+                   "P0: <=1 pegger, anchor never itself pegs"),
+    _L("peg_anchor", NullableRange(0, 4096), scope="external",
+       semantics=STATE_TRANSITION, handler_id="peg_anchor_change",
+       read_point="world/world.py::_reconcile_peg_states",
+       state_notes="A6 anchor change: liquidate old-anchor reserves -> convert at "
+                   "the current cross -> acquire new -> reset pent_up"),
+    _L("peg_reserve_scale", Range(1.0, 1.0e9), scope="external",
+       read_point="world/capital.py::peg_defense drain scaling (live sync)"),
 ]}
 
 # renamed levers keep their legacy config names callable (deprecation path)
@@ -391,9 +406,28 @@ def _handler_monetary_regime_switch(econ, old, new):
         econ.policy.manual_policy_rate = None
 
 
+def _handler_fx_regime_switch(econ, old, new):
+    # staging validation only -- the mechanics run at the next coupling barrier
+    if new == "peg":
+        a = econ.external_policy.peg_anchor
+        me = getattr(econ, "economy_id", None)
+        if a is None:
+            raise ValueError("fx_regime=peg requires peg_anchor staged first")
+        if me is not None and a == me:
+            raise ValueError("an economy cannot peg to itself")
+
+
+def _handler_peg_anchor_change(econ, old, new):
+    me = getattr(econ, "economy_id", None)
+    if new is not None and me is not None and new == me:
+        raise ValueError("an economy cannot anchor to itself")
+
+
 HANDLERS = {
     "soe_transition": _handler_soe_transition,
     "monetary_regime_switch": _handler_monetary_regime_switch,
+    "fx_regime_switch": _handler_fx_regime_switch,
+    "peg_anchor_change": _handler_peg_anchor_change,
 }
 
 

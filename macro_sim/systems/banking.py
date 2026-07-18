@@ -549,8 +549,9 @@ def bank_equity_value(econ: Any, household_id) -> float:
 
 
 def settlement_node(econ: Any, account_id):
-    if account_id in (econ._fiscal, "EXTISSUER", "CBRES"):
-        return "CB"
+    if account_id == econ._fiscal or account_id == "EXTISSUER" \
+            or (isinstance(account_id, str) and account_id.startswith("CBRES")):
+        return "CB"   # B5b: reserve accounts are keyed CBRES:{pegger_id}
     # The FX dealer represents the external sector, not an unassigned customer
     # deposit at whichever commercial bank happens to appear first.  Settle its
     # currency leg through the neutral clearing node so bank failures and list

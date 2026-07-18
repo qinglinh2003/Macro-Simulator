@@ -240,20 +240,22 @@ def test_peg_reserve_account_settles_at_cb_independent_of_bank_failure():
         [cfg, cfg], base_seed=31, couple=True, capital=True, peg=True,
         peg_reserves0=10.0,
     )
-    # CBRES is a real account in the anchor-currency ledger.
+    # B5b: reserve accounts are keyed CBRES:{pegger_id} in the anchor ledger.
+    acct = world.peg_states[world.peg_economy].reserve_account_id
+    assert acct == "CBRES:0"
     econ = world.economies[world.peg_anchor]
     failed = econ.banks[0]
 
-    assert settlement_node(econ, "CBRES") == "CB"
+    assert settlement_node(econ, acct) == "CB"
     # Force the ledger resolver to memoize the account before the failure; the
     # regression was specifically a stale commercial-bank cache entry.
-    econ.ledger.transfer("CBRES", DEALER_ID, 0.1)
-    assert econ._node_of["CBRES"] == "CB"
+    econ.ledger.transfer(acct, DEALER_ID, 0.1)
+    assert econ._node_of[acct] == "CB"
     fail_bank(econ, failed)
     dead_reserves = econ.ledger.reserves(failed.id)
-    econ.ledger.transfer("CBRES", DEALER_ID, 1.0)
+    econ.ledger.transfer(acct, DEALER_ID, 1.0)
 
-    assert settlement_node(econ, "CBRES") == "CB"
+    assert settlement_node(econ, acct) == "CB"
     assert econ.ledger.reserves(failed.id) == pytest.approx(dead_reserves)
 
 

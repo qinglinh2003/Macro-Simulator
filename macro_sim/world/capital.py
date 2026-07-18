@@ -19,7 +19,24 @@ from macro_sim.world.fx import DEALER_ID
 # The pegging CB's FX reserves: an account holding the ANCHOR's currency, inside the anchor
 # economy's ledger (a real foreign asset, not a scalar). Reserves cannot go negative — that
 # is the crisis.
-CBRES_ID = "CBRES"
+CBRES_ID = "CBRES"          # legacy single-pegger account name (pre-B5b checkpoints)
+
+
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass
+class PegState:
+    """Per-pegger peg state (A6: the data model is MULTI from P0; the P0 runtime
+    constraint is <=1 pegger, anchor != pegger, the anchor must not itself peg).
+    Reserve accounts are keyed CBRES:{pegger_id} -- a shared account would corrupt
+    multi-pegger reserves."""
+    anchor: int
+    intact: bool = True
+    pent_up: float = 0.0                 # suppressed depreciation (released on break/exit)
+    reserve_account_id: str = CBRES_ID
+    reserve_scale: float = 1.0e5
+    exit_pending: bool = False           # voluntary float: release pent-up ONCE, then free
 EXTERNAL_ISSUER_ID = "EXTISSUER"
 
 
@@ -62,15 +79,18 @@ def seed_reserves(world, amount_foreign: float) -> None:
     fiscus pays domestic currency to the dealer, which delivers foreign currency into the
     reserve account (the government borrowed at home to buy foreign assets, as CBs do).
     Numéraire-equal on both legs ⇒ a passthrough ⇒ the BoP gate holds from tick 0."""
-    anchor = world.peg_anchor
-    home, host = world.economies[world.peg_economy], world.economies[anchor]
-    host.ledger.add_account(CBRES_ID)
+    pegger = world.peg_economy
+    st = world.peg_states[pegger]
+    anchor = st.anchor
+    home, host = world.economies[pegger], world.economies[anchor]
+    if not host.ledger.has_account(st.reserve_account_id):
+        host.ledger.add_account(st.reserve_account_id)
     fiscal = getattr(home, "_fiscal", None)
     if fiscal is None or not home.ledger.has_account(fiscal) or amount_foreign <= EPS:
         return
-    amount_dom = amount_foreign * world.rates.bilateral(world.peg_economy, anchor)
+    amount_dom = amount_foreign * world.rates.bilateral(pegger, anchor)
     home.ledger.transfer(fiscal, DEALER_ID, amount_dom)     # fiscus pays domestic (goes into debt)
-    host.ledger.transfer(DEALER_ID, CBRES_ID, amount_foreign)   # dealer delivers the foreign asset
+    host.ledger.transfer(DEALER_ID, st.reserve_account_id, amount_foreign)   # dealer delivers
 
 
 def _funder(econ):
@@ -99,16 +119,30 @@ def peg_defense(world, scaled):
     run). Returns the (frozen while the peg holds) grope signal. peg off ⇒ unchanged."""
     if not world.peg:
         return scaled
+    p = world.peg_economy
+    st = world.peg_states[p]
+    if st.exit_pending:
+        # A6 voluntary exit: an ORDERLY float still faces the suppressed pressure --
+        # release pent-up ONCE exactly like a break, then the currency floats free.
+        st.exit_pending = False
+        st.intact = False
+        a = st.anchor
+        M0 = world.economies[p].ledger.total_money
+        release = list(scaled)
+        release[p] = scaled[a] + max(0.0, st.pent_up / max(1.0, M0))
+        return release
     if world._peg_intact:
-        # The trilemma proper: the pegged economy (0) runs an interest rate that differs
-        # from the anchor. With open capital that mismatch is a CONTINUOUS one-way flow the
-        # CB must keep offsetting from reserves. A LOWER rate ⇒ capital flees ⇒ the CB sells
-        # FX reserves to defend. The POLICY rate (cfg.r_interest) — the deliberate choice,
-        # not the endogenous Taylor path — is what defines "independent policy".
-        p = world.peg_economy
-        rates = [float(e.cfg.r_interest) for e in world.economies]
-        r_mean = sum(rates) / world.n
-        mismatch = r_mean - rates[p]                  # >0 ⇒ pegger's rate too LOW ⇒ outflow ⇒ drain
+        # The trilemma proper: the pegged economy runs an interest rate that differs
+        # from the ANCHOR. With open capital that mismatch is a CONTINUOUS one-way flow
+        # the CB must keep offsetting from reserves. A LOWER rate => capital flees =>
+        # the CB sells FX reserves to defend.
+        # B5b FIX (A6-filed defect): pressure reads the LIVE rates (econ._rate -- the
+        # Taylor/manual path) against the OWN ANCHOR. The old code read STATIC
+        # cfg.r_interest against the WORLD MEAN: rate moves never affected reserve
+        # pressure in any run to date.
+        mismatch = (
+            float(world.economies[st.anchor]._rate) - float(world.economies[p]._rate)
+        )                                             # >0 => pegger's rate too LOW => outflow => drain
         M0 = world.economies[p].ledger.total_money
         # POLICY: capital controls throttle the flow that drains reserves — closing the
         # account lets the peg + an independent rate BOTH survive (the trilemma's 3rd corner).
@@ -119,6 +153,10 @@ def peg_defense(world, scaled):
         a = world.peg_anchor
         if world.reserves() <= EPS:
             world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
+            # B5b: the AUTHORITY reflects reality -- a broken peg forces the regime
+            # to float (re-pegging is an explicit new policy act, never automatic)
+            world.economies[p].external_policy.fx_regime = "float"
+            world.economies[p].external_policy.peg_anchor = None
             # Release pent-up pressure = DEVALUATION of the pegger, ON TOP of the anchor's
             # own motion; the rest of the world keeps floating through the crisis tick.
             release = list(scaled)
@@ -146,24 +184,26 @@ def _defend_peg(world, drain_for: float) -> None:
     it is buying up its own currency to hold the peg. Buying reserves (< 0) is the reverse.
     Numéraire-equal on both legs ⇒ a passthrough ⇒ the multilateral BoP gate holds.
     """
-    anchor = world.peg_anchor
-    home, host = world.economies[world.peg_economy], world.economies[anchor]
+    pegger = world.peg_economy
+    st = world.peg_states[pegger]
+    anchor = st.anchor
+    home, host = world.economies[pegger], world.economies[anchor]
     fiscal = getattr(home, "_fiscal", None)
     if fiscal is None or not home.ledger.has_account(fiscal):
         return
     e = world.rates.e
     if drain_for > EPS:                                # SELL reserves (defend a weak currency)
-        drain_for = min(drain_for, host.ledger.balance(CBRES_ID))   # cannot sell what it lacks
+        drain_for = min(drain_for, host.ledger.balance(st.reserve_account_id))   # cannot sell what it lacks
         if drain_for <= EPS:
             return
-        drain_dom = drain_for * world.rates.bilateral(world.peg_economy, anchor)  # curr_anchor → curr_pegger
-        host.ledger.transfer(CBRES_ID, DEALER_ID, drain_for)        # CB → dealer (foreign)
+        drain_dom = drain_for * world.rates.bilateral(pegger, anchor)  # curr_anchor → curr_pegger
+        host.ledger.transfer(st.reserve_account_id, DEALER_ID, drain_for)   # CB → dealer (foreign)
         home.ledger.transfer(DEALER_ID, fiscal, drain_dom)          # dealer → CB (domestic)
     elif drain_for < -EPS:                             # BUY reserves (resist appreciation)
         buy_for = -drain_for
-        buy_dom = buy_for * world.rates.bilateral(world.peg_economy, anchor)
+        buy_dom = buy_for * world.rates.bilateral(pegger, anchor)
         home.ledger.transfer(fiscal, DEALER_ID, buy_dom)            # CB pays domestic
-        host.ledger.transfer(DEALER_ID, CBRES_ID, buy_for)          # dealer → CB (foreign)
+        host.ledger.transfer(DEALER_ID, st.reserve_account_id, buy_for)   # dealer → CB (foreign)
 
 
 def _pay_households(econ, amount: float) -> None:

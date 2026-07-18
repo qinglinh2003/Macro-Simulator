@@ -398,25 +398,29 @@ class World:
         self._factor_income_arrears: List[float] = [0.0] * self.n
         self._factor_income_unpaid_tick: List[float] = [0.0] * self.n
         self._factor_income_arrears_cured_tick: List[float] = [0.0] * self.n
-        # v21.2 peg / trilemma: peg_economy pegs its rate; the CB absorbs the imbalance onto
-        # reserves; reserves hitting zero breaks the peg (devaluation = currency crisis).
-        # peg_economy/anchor were hardcoded to 0/1; now settable (e.g. China pegs to the USD).
-        self.peg = peg
-        self.peg_economy = peg_economy
-        if peg_anchor is not None:
-            self.peg_anchor = peg_anchor
-        elif self.n > 1:
-            self.peg_anchor = 1 if peg_economy != 1 else 0   # default anchor (!= pegger; 0-peg => 1)
-        else:
-            self.peg_anchor = 0
+        # v21.2 peg / trilemma, B5b multi-pegger DATA MODEL (A6): per-pegger PegState
+        # keyed by economy id; the legacy world.peg/peg_economy/peg_anchor/_peg_intact/
+        # _pent_up surface survives as property shims over the (P0: single) state.
+        # peg_economy as AUTHORITY is deleted -- it derives from fx_regime.
+        from macro_sim.world.capital import PegState
+        self._legacy_peg_economy = peg_economy
+        self._legacy_peg_anchor = (
+            _anchor_resolved if _anchor_resolved is not None
+            else (1 if self.n > 1 and peg_economy != 1 else 0)
+        )
+        self._legacy_peg_reserve_scale = peg_reserve_scale
+        self.peg_states: dict[int, PegState] = {}
         if peg and self.n > 1:
-            assert 0 <= self.peg_economy < self.n, "peg_economy out of range"
-            assert 0 <= self.peg_anchor < self.n and self.peg_anchor != self.peg_economy, \
+            assert 0 <= peg_economy < self.n, "peg_economy out of range"
+            assert 0 <= self._legacy_peg_anchor < self.n \
+                and self._legacy_peg_anchor != peg_economy, \
                 "peg_anchor must be a valid economy != peg_economy"
-        self.peg_reserve_scale = peg_reserve_scale
+            self.peg_states[peg_economy] = PegState(
+                anchor=self._legacy_peg_anchor,
+                reserve_account_id=f"CBRES:{peg_economy}",
+                reserve_scale=peg_reserve_scale,
+            )
         self._peg_reserves0 = peg_reserves0
-        self._peg_intact = True
-        self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
         self._migrant_stock: List[float] = [0.0] * self.n   # v22: emigrants from i, working abroad
         self._remittances: List[float] = [0.0] * self.n     # v22: remittances received by i (curr_i)
         self._current_transfers: List[float] = [0.0] * self.n  # signed gross CA transfers (curr_i)
@@ -498,6 +502,70 @@ class World:
             },
         )
 
+    # ---- B5b legacy peg surface: property shims over peg_states (P0: <=1) ----
+    def _single_peg(self):
+        states = self.__dict__.get("peg_states")
+        if states is None:
+            return None                       # pre-B5b pickle: no states restored
+        return next(iter(states.values()), None)
+
+    @property
+    def peg(self) -> bool:
+        states = self.__dict__.get("peg_states")
+        if states is None:
+            return bool(self.__dict__.get("peg", False))
+        return bool(states)
+
+    @property
+    def peg_economy(self) -> int:
+        states = self.__dict__.get("peg_states")
+        if states:
+            return next(iter(states))
+        return int(self.__dict__.get("_legacy_peg_economy",
+                                     self.__dict__.get("peg_economy", 0)))
+
+    @property
+    def peg_anchor(self) -> int:
+        st = self._single_peg()
+        if st is not None:
+            return st.anchor
+        return int(self.__dict__.get("_legacy_peg_anchor",
+                                     self.__dict__.get("peg_anchor", 0)))
+
+    @property
+    def peg_reserve_scale(self) -> float:
+        st = self._single_peg()
+        if st is not None:
+            return st.reserve_scale
+        return float(self.__dict__.get("_legacy_peg_reserve_scale",
+                                       self.__dict__.get("peg_reserve_scale", 1.0e5)))
+
+    @property
+    def _peg_intact(self) -> bool:
+        st = self._single_peg()
+        return st.intact if st is not None else bool(self.__dict__.get("_peg_intact", True))
+
+    @_peg_intact.setter
+    def _peg_intact(self, value: bool) -> None:
+        st = self._single_peg()
+        if st is not None:
+            st.intact = bool(value)
+        else:
+            self.__dict__["_peg_intact"] = bool(value)
+
+    @property
+    def _pent_up(self) -> float:
+        st = self._single_peg()
+        return st.pent_up if st is not None else float(self.__dict__.get("_pent_up", 0.0))
+
+    @_pent_up.setter
+    def _pent_up(self, value: float) -> None:
+        st = self._single_peg()
+        if st is not None:
+            st.pent_up = float(value)
+        else:
+            self.__dict__["_pent_up"] = float(value)
+
     def reserves(self) -> float:
         """The pegging CB's FX reserves — a REAL balance (the anchor currency it holds),
         not a scalar. Zero ⇒ the peg cannot be defended.
@@ -509,8 +577,13 @@ class World:
         """
         if self.n < 2:
             return 0.0
-        led = self.economies[self.peg_anchor].ledger
-        return led.balance(CBRES_ID) if led.has_account(CBRES_ID) else 0.0
+        st = self._single_peg()
+        if st is None:
+            led = self.economies[self.peg_anchor].ledger   # pre-B5b pickle fallback
+            return led.balance(CBRES_ID) if led.has_account(CBRES_ID) else 0.0
+        led = self.economies[st.anchor].ledger
+        acct = st.reserve_account_id
+        return led.balance(acct) if led.has_account(acct) else 0.0
 
     def market_external_positions(
         self,
@@ -609,6 +682,67 @@ class World:
             frozenset({i, j})
             for i, p in enumerate(eps) for j in p.sanctions_imposed_on if j != i
         }
+        self._reconcile_peg_states(eps)
+
+    def _reconcile_peg_states(self, eps) -> None:
+        """B5b: fx_regime is the AUTHORITY (A6; peg_economy is derived). At each
+        barrier: validate the P0 constraints, adopt new pegs (reserve acquisition
+        swap), apply anchor changes (liquidate -> convert -> reset pent_up),
+        stage voluntary exits (pent-up released ONCE by peg_defense), and sync
+        the live reserve scale."""
+        from macro_sim.world.capital import PegState, seed_reserves
+        desired = {
+            i: p for i, p in enumerate(eps)
+            if p.fx_regime == "peg" and self.n > 1
+        }
+        if len(desired) > 1:
+            raise ValueError("P0 runtime constraint: at most ONE pegger")
+        for i, p in desired.items():
+            a = p.peg_anchor
+            if a is None or not (0 <= a < self.n) or a == i:
+                raise ValueError(f"economy {i}: peg requires a valid anchor != self, got {a!r}")
+            if eps[a].fx_regime == "peg":
+                raise ValueError(f"economy {i}: anchor {a} must not itself peg (no chains/cycles)")
+
+        # voluntary exits: regime flipped to float while an INTACT peg stands
+        for i in list(self.peg_states):
+            st = self.peg_states[i]
+            if i not in desired:
+                if st.intact and not st.exit_pending:
+                    st.exit_pending = True   # released once by peg_defense, then free float
+                continue
+            # a re-peg over a BROKEN/EXITED state is a fresh adoption below
+
+            # anchor change (A6): liquidate old-anchor reserves, convert at the
+            # current cross, acquire in the new anchor's ledger, reset pent_up
+            new_anchor = desired[i].peg_anchor
+            if new_anchor != st.anchor and st.intact:
+                old_led = self.economies[st.anchor].ledger
+                bal = old_led.balance(st.reserve_account_id) \
+                    if old_led.has_account(st.reserve_account_id) else 0.0
+                if bal > 0.0 and self.rates is not None:
+                    from macro_sim.world.fx import DEALER_ID
+                    old_led.transfer(st.reserve_account_id, DEALER_ID, bal)
+                    converted = bal * self.rates.bilateral(new_anchor, st.anchor)
+                    new_led = self.economies[new_anchor].ledger
+                    new_led.add_account(st.reserve_account_id)
+                    new_led.transfer(DEALER_ID, st.reserve_account_id, converted)
+                st.anchor = new_anchor
+                st.pent_up = 0.0
+            st.reserve_scale = float(desired[i].peg_reserve_scale)
+
+        # adoptions: a NEW pegger (or a re-peg after a break/exit)
+        for i, p in desired.items():
+            st = self.peg_states.get(i)
+            if st is not None and st.intact and not st.exit_pending:
+                continue                       # already pegging
+            self.peg_states[i] = PegState(
+                anchor=p.peg_anchor,
+                reserve_account_id=f"CBRES:{i}",
+                reserve_scale=float(p.peg_reserve_scale),
+            )
+            if self.rates is not None and self.t > 0:
+                seed_reserves(self, self._peg_reserves0)   # runtime war-chest acquisition
 
     def _coupling_barrier(self) -> None:
         """The thin central barrier: compute cross-border export demand / import supply

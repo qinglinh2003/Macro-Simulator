@@ -24,8 +24,8 @@ def test_registry_covers_every_policy_field_exactly():
     ext_fields = {f.name for f in dataclasses.fields(ExternalPolicy)}
     ext_levers = {n for n, lv in REGISTRY.items() if lv.scope == "external"}
     assert ext_levers <= ext_fields, f"unknown external levers: {ext_levers - ext_fields}"
-    assert ext_fields - ext_levers == {"fx_regime", "peg_anchor", "peg_reserve_scale"}, (
-        "only the B5b peg family may be unregistered")
+    assert ext_fields == ext_levers, (
+        f"every ExternalPolicy field must be registered: {ext_fields ^ ext_levers}")
 
 
 def test_registry_capabilities_exist_in_config():
