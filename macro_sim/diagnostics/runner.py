@@ -340,27 +340,36 @@ def _apply_intervention(econ: Economy, spec: RunSpec, tick: int, original: dict[
     if intervention is None or spec.scenario == "energy_shock":
         return
     if tick == intervention.start_tick:
+        from macro_sim.core.policy_registry import apply_action_batch
         if intervention.kind == "policy_rate":
             original["monetary_regime"] = econ.policy.monetary_regime
             original["manual_policy_rate"] = econ.policy.manual_policy_rate
-            econ.policy.manual_policy_rate = intervention.value
-            econ.policy.monetary_regime = "manual"
+            apply_action_batch(econ, [("manual_policy_rate", intervention.value),
+                                      ("monetary_regime", "manual")], actor="diagnostics")
         elif intervention.kind == "kappa_multiplier":
             original["kappa"] = econ.policy.kappa
-            econ.policy.kappa = econ.policy.kappa * float(intervention.value)
+            apply_action_batch(econ, [("kappa", econ.policy.kappa * float(intervention.value))],
+                               actor="diagnostics")
         elif intervention.kind == "deficit_target":
             original["gov_deficit_target"] = econ.policy.gov_deficit_target
-            econ.policy.gov_deficit_target = float(intervention.value)
+            apply_action_batch(econ, [("gov_deficit_target", float(intervention.value))],
+                               actor="diagnostics")
         else:
             raise ValueError(f"unsupported intervention kind {intervention.kind!r}")
     if intervention.end_tick is not None and tick == intervention.end_tick:
+        from macro_sim.core.policy_registry import apply_action_batch
         if intervention.kind == "policy_rate":
-            econ.policy.monetary_regime = original.get("monetary_regime", "taylor")
-            econ.policy.manual_policy_rate = original.get("manual_policy_rate")
+            restore = [("monetary_regime", original.get("monetary_regime", "taylor"))]
+            prev = original.get("manual_policy_rate")
+            if prev is not None:
+                restore.insert(0, ("manual_policy_rate", prev))
+            apply_action_batch(econ, restore, actor="diagnostics:restore")
         elif intervention.kind == "kappa_multiplier":
-            econ.policy.kappa = float(original["kappa"])
+            apply_action_batch(econ, [("kappa", float(original["kappa"]))],
+                               actor="diagnostics:restore")
         elif intervention.kind == "deficit_target":
-            econ.policy.gov_deficit_target = float(original["gov_deficit_target"])
+            apply_action_batch(econ, [("gov_deficit_target", float(original["gov_deficit_target"]))],
+                               actor="diagnostics:restore")
 
 
 def _run_one(spec: RunSpec, output_root: str) -> RunOutcome:

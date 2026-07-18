@@ -247,15 +247,30 @@ class Policy:
             housing_in_wealth_tax=getattr(cfg, "housing_in_wealth_tax", False),
         )
 
+POLICY_SCHEMA_VERSION = 1     # bumped when Policy/ExternalPolicy fields change shape
+
+
 @dataclass
 class PolicySeed:
     """A5: initial STANCES, not levers. The seed is applied once at genesis and
     never re-read as a live dial -- runtime rate changes go through
-    monetary_regime=manual (or the Taylor path). r_interest demotes here from
-    the Config policy surface: it is where the rate STARTS, and (in the
-    exogenous regime) where it stays."""
+    monetary_regime=manual (or the Taylor path).
+
+    Audit fix #6: the seed carries the FULL initial policy (the doc's
+    `initial_policy` + `policy_schema_version` contract), so a controller
+    run-spec can pin the entire opening stance, replays can start from an
+    explicit snapshot, and version migrations have a number to key on.
+    from_config remains the versioned converter for legacy YAML configs."""
     initial_policy_rate: float = 0.0
+    initial_policy: "Policy | None" = None          # full opening stance (None = derive from config)
+    policy_schema_version: int = POLICY_SCHEMA_VERSION
 
     @classmethod
     def from_config(cls, cfg) -> "PolicySeed":
-        return cls(initial_policy_rate=float(cfg.r_interest))
+        return cls(initial_policy_rate=float(cfg.r_interest),
+                   initial_policy=Policy.from_config(cfg))
+
+    def spawn_policy(self) -> "Policy":
+        """A fresh live Policy from the seed (never hand out the stored one)."""
+        import copy
+        return copy.copy(self.initial_policy)

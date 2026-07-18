@@ -93,8 +93,8 @@ class Economy:
         self.cfg = cfg
         # v9: the government's LIVE levers (the only mutable-during-run state). Seeded from cfg, so
         # government=False keeps the macroprudential caps at their v8.5 defaults => bit-identical.
-        self.policy = Policy.from_config(cfg)
-        self.policy_seed = PolicySeed.from_config(cfg)   # B6/A5: initial stances
+        self.policy_seed = PolicySeed.from_config(cfg)   # B6/A5: the full opening stance
+        self.policy = self.policy_seed.spawn_policy()    # the live surface starts AT the seed
         self.rng = random.Random(cfg.seed)          # single seeded generator (§7.6)
         # v8.1: size-biased (preferential) demand when Gibrat growth is on; else transparency dial.
         self.protocol = protocol or (PreferentialMatch(cfg.pref_attach_beta, cfg.pref_price_elasticity)

@@ -20,17 +20,24 @@ from typing import Any
 
 # ---------------------------------------------------------------- validation types
 
+import math
+
+
 @dataclass(frozen=True)
 class Range:
+    """STRICT float range: rejects bool, str, non-finite. The value stored is
+    the value checked -- no silent coercion (a "0.2" string would otherwise be
+    SAVED as a string and poison arithmetic downstream)."""
     lo: float
     hi: float
     max_step: float | None = None       # per-action step cap (None = unbounded)
 
     def check(self, old: Any, new: Any) -> str | None:
-        try:
-            v = float(new)
-        except (TypeError, ValueError):
-            return f"not a number: {new!r}"
+        if isinstance(new, bool) or not isinstance(new, (int, float)):
+            return f"not a number: {new!r} ({type(new).__name__})"
+        v = float(new)
+        if not math.isfinite(v):
+            return f"not finite: {new!r}"
         if not (self.lo <= v <= self.hi):
             return f"{v} outside [{self.lo}, {self.hi}]"
         if self.max_step is not None and old is not None:
@@ -40,11 +47,35 @@ class Range:
 
 
 @dataclass(frozen=True)
+class IntRange(Range):
+    """STRICT integer range: rejects bool, str, floats with fractional part."""
+    def check(self, old: Any, new: Any) -> str | None:
+        if isinstance(new, bool) or not isinstance(new, int):
+            return f"not an integer: {new!r} ({type(new).__name__})"
+        return super().check(old, new)
+
+
+@dataclass(frozen=True)
 class NullableRange(Range):
     def check(self, old: Any, new: Any) -> str | None:
         if new is None:
             return None
         return super().check(old if old is not None else None, new)
+
+
+@dataclass(frozen=True)
+class EconomyId:
+    """A nullable economy-id reference: strictly int (or None), non-negative.
+    World-range and joint constraints (anchor != self, anchor not pegging) are
+    checked by the staging handler + the barrier commit."""
+    def check(self, old: Any, new: Any) -> str | None:
+        if new is None:
+            return None
+        if isinstance(new, bool) or not isinstance(new, int):
+            return f"not an economy id: {new!r} ({type(new).__name__})"
+        if new < 0:
+            return f"economy id must be >= 0, got {new}"
+        return None
 
 
 @dataclass(frozen=True)
@@ -86,6 +117,9 @@ class Lever:
     scope: str = "economy"               # economy | bilateral | world  (all [P] today: economy)
     semantics: str = IMMEDIATE
     handler_id: str | None = None        # REQUIRED when semantics != immediate/new-contracts
+    enabled_if: frozenset = frozenset()  # CURRENT-POLICY prerequisites (mutable at runtime,
+                                         # unlike `requires` capabilities); checked against the
+                                         # pending view so a batch can switch both together
     requires: frozenset[str] = frozenset()   # Config capability flags
     shadowed_by: tuple[str, ...] = ()    # levers/states that render this one inert
     read_point: str = ""
@@ -148,7 +182,8 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="systems/energy.py::SPR"),
     _L("spr_flow_cap", Range(0.0, 1.0e4), requires=frozenset({"government", "energy_enabled"}),
        read_point="systems/energy.py::SPR flow"),
-    _L("soe_price_at_cost", Bool(), requires=frozenset({"government", "energy_enabled", "soe_efirm"}),
+    _L("soe_price_at_cost", Bool(), requires=frozenset({"government", "energy_enabled"}),
+       enabled_if=frozenset({"soe_efirm"}),
        read_point="systems/energy.py:251",
        state_notes="FILED direction anomaly: at-cost pricing RAISED market avg ~3%"),
     _L("energy_price_cap", Range(0.0, 1.0e3), requires=frozenset({"government", "energy_enabled"}),
@@ -219,7 +254,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="systems/securities.py::lot stamp at issuance; pay/price/merge per lot",
        state_notes="the first real NEW_CONTRACTS cohort: stock is never re-couponed; "
                    "consolidation key includes the coupon so cohorts cannot corrupt"),
-    _L("bond_maturity", Range(1, 36500), requires=frozenset({"bonds"}),
+    _L("bond_maturity", IntRange(1, 36500), requires=frozenset({"bonds"}),
        semantics=NEW_CONTRACTS, handler_id="bond_tenor_at_issuance",
        read_point="systems/securities.py::issued_maturity"),
     # -- monetary: quantity tools --
@@ -301,13 +336,13 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     _L("gov_investment_share", Range(0.0, 0.2), requires=frozenset({"government"}),
        read_point="systems/capital_goods.py::public K budget + settlement accumulation"),
     # -- monetary plumbing (B4e) --
-    _L("omo_index_deposits", Bool(), requires=frozenset({"omo"}),
+    _L("omo_index_deposits", Bool(), enabled_if=frozenset({"omo"}),
        read_point="systems/central_bank.py::reserve-target indexing"),
     # -- insolvency & eviction law (B4e) --
-    _L("bankrupt_persist", Range(1, 3650), read_point="systems/firm_demographics.py::death gate"),
+    _L("bankrupt_persist", IntRange(1, 3650), read_point="systems/firm_demographics.py::death gate"),
     _L("household_bankruptcy", Bool(), requires=frozenset({"margin_credit"}),
        read_point="systems/equity.py::margin-debt discharge"),
-    _L("rental_eviction_arrears", Range(1, 3650),
+    _L("rental_eviction_arrears", IntRange(1, 3650),
        read_point="housing/market.py::per-tick sync -> RentalMarket.eviction_arrears"),
     _L("bank_migrate_on_failure", Bool(), requires=frozenset({"bank_enabled"}),
        read_point="systems/banking.py::resolution borrower migration"),
@@ -358,7 +393,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
                    "migration destinations (capital flows do NOT consult it)"),
     _L("immigration_cap", NullableRange(0.0, 10.0), scope="external",
        read_point="world/migration.py::per-host admission ceiling (None = open)"),
-    _L("emigration_cap", NullableRange(0.0, 10.0), scope="external",
+    _L("emigration_cap", NullableRange(0.0, 1.0), scope="external",   # World bound: share of pop
        read_point="world/migration.py::origin exit cap (None = open)"),
     _L("remittance_tax", Range(0.0, 0.9), scope="external",
        read_point="world/migration.py::origin taxes the inflow"),
@@ -374,7 +409,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
                    "adoption acquires reserves at the next barrier; voluntary exit "
                    "releases pent-up pressure ONCE (orderly float still faces it); "
                    "P0: <=1 pegger, anchor never itself pegs"),
-    _L("peg_anchor", NullableRange(0, 4096), scope="external",
+    _L("peg_anchor", EconomyId(), scope="external",
        semantics=STATE_TRANSITION, handler_id="peg_anchor_change",
        read_point="world/world.py::_reconcile_peg_states",
        state_notes="A6 anchor change: liquidate old-anchor reserves -> convert at "
@@ -391,79 +426,175 @@ LEGACY_ALIASES = {
     "policy_rate_override": "manual_policy_rate",
 }
 
-# STATE_TRANSITION handlers: applied by set_lever AFTER the Policy field mutation
-def _handler_soe_transition(econ, old, new):
+# STATE_TRANSITION handlers, SPLIT (audit fix #3): a VALIDATOR runs against the
+# pending view (so a batch can stage companions in any order) and may veto by
+# raising; a COMMITTER runs after the whole batch is written and performs the
+# real side effects. Neither ever sees a half-applied state.
+
+def _validate_monetary_regime(view, old, new):
+    # A5 atomicity: manual <=> manual_policy_rate set -- checked against the VIEW,
+    # so {manual_policy_rate: x, monetary_regime: manual} in ONE batch is legal
+    # in any order, while entering manual with nothing staged anywhere is vetoed.
+    if new == "manual" and view.get("manual_policy_rate") is None:
+        raise ValueError("monetary_regime=manual requires manual_policy_rate (stage it "
+                         "first or include it in the same batch)")
+
+
+def _commit_monetary_regime(econ, old, new):
+    if old == "manual" and new != "manual":
+        econ.policy.manual_policy_rate = None   # leaving manual clears the staged rate
+
+
+def _commit_soe_transition(econ, old, new):
     if getattr(econ, "e_firms", None):
         econ.e_firms[0].state_owned = bool(new)
 
-def _handler_monetary_regime_switch(econ, old, new):
-    # A5 atomicity: manual <=> manual_policy_rate set. Entering manual requires the
-    # rate to be STAGED already (stage first, then switch -- one observable step);
-    # leaving manual clears it so a stale rate can never silently re-apply later.
-    if new == "manual" and econ.policy.manual_policy_rate is None:
-        raise ValueError("monetary_regime=manual requires manual_policy_rate staged first")
-    if old == "manual" and new != "manual":
-        econ.policy.manual_policy_rate = None
 
-
-def _handler_fx_regime_switch(econ, old, new):
+def _validate_fx_regime(view, old, new):
     # staging validation only -- the mechanics run at the next coupling barrier
     if new == "peg":
-        a = econ.external_policy.peg_anchor
-        me = getattr(econ, "economy_id", None)
+        a = view.get("peg_anchor")
+        me = view.economy_id
         if a is None:
-            raise ValueError("fx_regime=peg requires peg_anchor staged first")
+            raise ValueError("fx_regime=peg requires peg_anchor (stage it first or "
+                             "include it in the same batch)")
         if me is not None and a == me:
             raise ValueError("an economy cannot peg to itself")
 
 
-def _handler_peg_anchor_change(econ, old, new):
-    me = getattr(econ, "economy_id", None)
+def _validate_peg_anchor(view, old, new):
+    me = view.economy_id
     if new is not None and me is not None and new == me:
         raise ValueError("an economy cannot anchor to itself")
 
 
-HANDLERS = {
-    "soe_transition": _handler_soe_transition,
-    "monetary_regime_switch": _handler_monetary_regime_switch,
-    "fx_regime_switch": _handler_fx_regime_switch,
-    "peg_anchor_change": _handler_peg_anchor_change,
+HANDLERS = {                     # handler_id -> (validator | None, committer | None)
+    "soe_transition": (None, _commit_soe_transition),
+    "monetary_regime_switch": (_validate_monetary_regime, _commit_monetary_regime),
+    "fx_regime_switch": (_validate_fx_regime, None),
+    "peg_anchor_change": (_validate_peg_anchor, None),
+    # documented-elsewhere semantics (no runtime hook needed):
+    "bond_coupon_cohort": (None, None),
+    "bond_tenor_at_issuance": (None, None),
+    "underwriting_read_at_origination": (None, None),
+    "land_fee_at_construction_start": (None, None),
 }
 
 
 # ---------------------------------------------------------------- mutation API
 
-def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
-              target: Any = None) -> None:
-    """The sanctioned mutation path: validate -> apply -> log (provisional envelope)."""
+class _PendingView:
+    """Pending-aware read surface for joint validation: staged values first,
+    then the live holders. Handlers and enabled_if checks read THIS, never the
+    half-real state."""
+    def __init__(self, econ, staged):
+        self._econ = econ
+        self._staged = staged                     # name -> value
+        self.economy_id = getattr(econ, "economy_id", None)
+
+    def get(self, name):
+        if name in self._staged:
+            return self._staged[name]
+        lever = REGISTRY.get(name)
+        holder = (self._econ.external_policy if lever is not None and lever.scope == "external"
+                  else self._econ.policy)
+        return getattr(holder, name, None)
+
+
+def _resolve(name):
     if name in LEGACY_ALIASES:
         import warnings
         warnings.warn(f"policy lever '{name}' was renamed '{LEGACY_ALIASES[name]}'",
-                      DeprecationWarning, stacklevel=2)
+                      DeprecationWarning, stacklevel=3)
         name = LEGACY_ALIASES[name]
     lever = REGISTRY.get(name)
     if lever is None:
         raise KeyError(f"unknown policy lever: {name}")
-    for cap in lever.requires:
-        if not getattr(econ.cfg, cap, False):
-            raise ValueError(f"{name}: missing capability {cap}")
-    holder = econ.external_policy if lever.scope == "external" else econ.policy
-    old = getattr(holder, name, None)
-    err = lever.validation.check(old, value)
-    if err:
-        raise ValueError(f"{name}: {err}")
-    if lever.semantics == STATE_TRANSITION:
-        # handler may VETO (raise) -- run it before the mutation so a rejected
-        # transition leaves the policy untouched; it sees (old, new) and may
-        # adjust companion state (SOE flags, staged rates) atomically
-        HANDLERS[lever.handler_id](econ, old, value)
-    setattr(holder, name, value)
+    return name, lever
+
+
+def apply_action_batch(econ: Any, actions, *, actor: str = "controller",
+                       target: Any = None) -> None:
+    """THE sanctioned mutation path (audit fix #3): validate the WHOLE batch
+    against a pending view, then commit every field at once, run side-effect
+    committers, and write ONE log event. Either everything lands or nothing
+    does -- there is no observable intermediate state and no partial log.
+
+    An atomic policy decision is one call:
+        apply_action_batch(econ, [("manual_policy_rate", 3e-4),
+                                  ("monetary_regime", "manual")])
+    """
+    # -- resolve + order-preserving stage (later duplicates win) --
+    resolved = []                                  # [(name, lever, value)]
+    staged: dict = {}
+    for name, value in actions:
+        name, lever = _resolve(name)
+        resolved.append((name, lever, value))
+        staged[name] = value
+
+    view = _PendingView(econ, staged)
+
+    # -- phase 1: full joint validation, NOTHING mutated yet --
+    for name, lever, value in resolved:
+        for cap in lever.requires:
+            if not getattr(econ.cfg, cap, False):
+                raise ValueError(f"{name}: missing capability {cap}")
+        for pre in lever.enabled_if:
+            if not view.get(pre):                  # pending-aware: batch may enable both
+                raise ValueError(f"{name}: requires policy {pre} enabled "
+                                 f"(enable it in the same batch or before)")
+        holder = econ.external_policy if lever.scope == "external" else econ.policy
+        err = lever.validation.check(getattr(holder, name, None), value)
+        if err:
+            raise ValueError(f"{name}: {err}")
+    for name, lever, value in resolved:
+        if lever.semantics == STATE_TRANSITION:
+            validator = HANDLERS[lever.handler_id][0]
+            if validator is not None:
+                holder = econ.external_policy if lever.scope == "external" else econ.policy
+                validator(view, getattr(holder, name, None), value)
+
+    # -- phase 2: commit (plain setattrs -- cannot fail) --
+    entries = []
+    for name, lever, value in resolved:
+        holder = econ.external_policy if lever.scope == "external" else econ.policy
+        old = getattr(holder, name, None)
+        setattr(holder, name, value)
+        entries.append({"lever": name, "old": old, "new": value, "scope": lever.scope})
+
+    # -- phase 3: side effects, on the fully-committed state --
+    for name, lever, value in resolved:
+        if lever.semantics == STATE_TRANSITION:
+            committer = HANDLERS[lever.handler_id][1]
+            if committer is not None:
+                committer(econ, next(e["old"] for e in entries if e["lever"] == name), value)
+
+    # -- phase 4: ONE event for the whole decision --
+    _log_policy_event(econ, entries, actor=actor, target=target)
+
+
+def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
+              target: Any = None) -> None:
+    """A batch of one. Kept as the ergonomic single-lever path."""
+    apply_action_batch(econ, [(name, value)], actor=actor, target=target)
+
+
+def _log_policy_event(econ: Any, entries, *, actor: str, target: Any = None) -> None:
+    """The ONLY writer of the policy action log. World-forced transitions (peg
+    break) and diagnostics interventions route through here too, so replay,
+    training audits and post-checkpoint behavior all see every mutation."""
     log = getattr(econ, "_policy_action_log", None)
     if log is None:
         log = econ._policy_action_log = []
-    log.append({
-        "tick": getattr(econ, "t", -1), "actor_economy": getattr(econ, "world_index", 0),
-        "lever": name, "old": old, "new": value, "actor": actor,
-        "target": target, "direction": None, "scope": lever.scope,
-        "sequence": len(log), "schema_version": 0,   # provisional envelope (A6 pending freeze)
-    })
+    event = {
+        "tick": getattr(econ, "t", -1),
+        # audit fix #4: World stamps economy_id (world_index never existed)
+        "actor_economy": getattr(econ, "economy_id", 0),
+        "actor": actor, "target": target, "direction": None,
+        "actions": entries,
+        "sequence": len(log), "schema_version": 1,
+    }
+    if len(entries) == 1:                          # ergonomic mirror for single-lever events
+        event.update(lever=entries[0]["lever"], old=entries[0]["old"],
+                     new=entries[0]["new"], scope=entries[0]["scope"])
+    log.append(event)

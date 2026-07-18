@@ -162,13 +162,16 @@ def _state_before_step(world: World) -> dict:
 @pytest.mark.parametrize(
     ("name", "value"),
     [
+        # world PHYSICS knobs: still direct attributes
         ("fx_lambda", -0.1),
         ("fx_lambda", 1.1),
         ("capital_adjust", 1.1),
         ("migration_rate", 1.1),
-        ("import_quota", [0.0, -0.1]),
-        ("sanctions", {frozenset({0, 2})}),
         ("_peg_reserves0", -1.0),
+        # B5a-DERIVED vectors: the malformed value goes in at the AUTHORITY (an
+        # economy's own stance); the commit derives it, validation rejects it.
+        ("external:1:import_quota", -0.1),
+        ("external:0:sanctions_imposed_on", frozenset({2})),   # id out of range (n=2)
     ],
 )
 def test_runtime_mutation_fails_before_any_coupled_step_state_change(name, value):
@@ -191,7 +194,11 @@ def test_runtime_mutation_fails_before_any_coupled_step_state_change(name, value
         econ._fx_export_barrier_lot_contract_gap_external = 1.0 * i
         econ._fx_export_lot_repricing_gap_external = 2.0 * i
         econ._fx_export_inventory_withdrawal_price_adjustment_external = 3.0 * i
-    setattr(world, name, value)
+    if name.startswith("external:"):
+        _, idx, field = name.split(":")
+        setattr(world.economies[int(idx)].external_policy, field, value)
+    else:
+        setattr(world, name, value)
     before = _state_before_step(world)
 
     with pytest.raises(ValueError):
@@ -203,15 +210,9 @@ def test_runtime_mutation_fails_before_any_coupled_step_state_change(name, value
 def test_invalid_guest_worker_return_cannot_create_negative_migrant_stock():
     world = _world()
     world._migrant_stock[0] = 2.0
-    world.guest_worker_return = 1.1
-    # With equal genesis wages, the old unchecked path first applied ordinary
-    # return migration and then multiplied by this negative guest-worker factor.
-    assert (
-        world._migrant_stock[0]
-        * (1.0 - world.migration_rate)
-        * (1.0 - world.guest_worker_return)
-        < 0.0
-    )
+    # B5a: guest_worker_return is a HOST stance now -- the malformed value enters
+    # at the authority and must be rejected when the commit derives the vector.
+    world.economies[0].external_policy.guest_worker_return = 1.1
     before = _state_before_step(world)
 
     with pytest.raises(ValueError, match="guest_worker_return"):

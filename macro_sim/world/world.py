@@ -155,6 +155,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
     immigration_cap = values["immigration_cap"]
     if immigration_cap is not None:
         for index, item in enumerate(_per_economy_values("immigration_cap", immigration_cap, n)):
+            if item is None:
+                continue      # B5a: per-economy None = that host is open (legal mix)
             _bounded_number(f"immigration_cap[{index}]", item, lower=0.0)
 
     emigration_cap = values["emigration_cap"]
@@ -162,6 +164,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         for index, item in enumerate(
             _per_economy_values("emigration_cap", emigration_cap, n)
         ):
+            if item is None:
+                continue      # B5a: per-economy None = that origin is open (legal mix)
             _bounded_number(
                 f"emigration_cap[{index}]", item, lower=0.0, upper=1.0
             )
@@ -171,6 +175,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         for index, item in enumerate(
             _per_economy_values("import_quota", import_quota, n)
         ):
+            if item is None:
+                continue      # B5a: per-economy None = that importer is open (legal mix)
             _bounded_number(f"import_quota[{index}]", item, lower=0.0)
 
     _validate_sanctions(values["sanctions"], n)
@@ -621,6 +627,10 @@ class World:
         # Runtime policy experiments mutate World attributes directly.  This must
         # precede even the coupling barrier's journal resets so a rejected policy
         # leaves ticks, records, inventories, ledgers and observability untouched.
+        # audit fix: COMMIT the per-economy policies FIRST, so domain validation
+        # sees this tick's stances -- a bad value surfaces on the tick it is set,
+        # never one tick late against stale vectors.
+        self._commit_external_policies()
         self._validate_domains()
         self._coupling_barrier()                              # thin central barrier (moves no money)
         if not self.couple:
@@ -655,6 +665,8 @@ class World:
         coupling barrier: mutations to econ.external_policy anywhere in a tick
         all take effect together at the next barrier."""
         eps = [e.external_policy for e in self.economies]
+        # ATOMICITY: every check that can raise runs BEFORE the first write.
+        self._validate_peg_constraints(eps)
         self.tariff = [p.tariff for p in eps]
         self.import_quota = (
             None if all(p.import_quota is None for p in eps)
@@ -684,6 +696,19 @@ class World:
         }
         self._reconcile_peg_states(eps)
 
+    def _validate_peg_constraints(self, eps) -> None:
+        """P0 joint peg constraints -- PURE checks, called before any commit write
+        so a violation leaves the world untouched (audit fix: true atomicity)."""
+        desired = [(i, p) for i, p in enumerate(eps) if p.fx_regime == "peg" and self.n > 1]
+        if len(desired) > 1:
+            raise ValueError("P0 runtime constraint: at most ONE pegger")
+        for i, p in desired:
+            a = p.peg_anchor
+            if a is None or not (0 <= a < self.n) or a == i:
+                raise ValueError(f"economy {i}: peg requires a valid anchor != self, got {a!r}")
+            if eps[a].fx_regime == "peg":
+                raise ValueError(f"economy {i}: anchor {a} must not itself peg (no chains/cycles)")
+
     def _reconcile_peg_states(self, eps) -> None:
         """B5b: fx_regime is the AUTHORITY (A6; peg_economy is derived). At each
         barrier: validate the P0 constraints, adopt new pegs (reserve acquisition
@@ -695,15 +720,6 @@ class World:
             i: p for i, p in enumerate(eps)
             if p.fx_regime == "peg" and self.n > 1
         }
-        if len(desired) > 1:
-            raise ValueError("P0 runtime constraint: at most ONE pegger")
-        for i, p in desired.items():
-            a = p.peg_anchor
-            if a is None or not (0 <= a < self.n) or a == i:
-                raise ValueError(f"economy {i}: peg requires a valid anchor != self, got {a!r}")
-            if eps[a].fx_regime == "peg":
-                raise ValueError(f"economy {i}: anchor {a} must not itself peg (no chains/cycles)")
-
         # voluntary exits: regime flipped to float while an INTACT peg stands
         for i in list(self.peg_states):
             st = self.peg_states[i]
@@ -752,7 +768,6 @@ class World:
         is all-zero ⇒ rates stay flat. Trade injection into the goods sessions lands in
         v20.2. Reductions across economies use fixed economy-id order (§9).
         """
-        self._commit_external_policies()   # B5a: the atomic policy commit point
         # Tick journals are observations, never carry-forward stocks.  Reset them
         # even when trade is disabled at run time; successful settlement below
         # overwrites them with this tick's realized values and physical volumes.

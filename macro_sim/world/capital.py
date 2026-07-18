@@ -154,9 +154,17 @@ def peg_defense(world, scaled):
         if world.reserves() <= EPS:
             world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
             # B5b: the AUTHORITY reflects reality -- a broken peg forces the regime
-            # to float (re-pegging is an explicit new policy act, never automatic)
-            world.economies[p].external_policy.fx_regime = "float"
-            world.economies[p].external_policy.peg_anchor = None
+            # to float (re-pegging is an explicit new policy act, never automatic).
+            # Audit fix: the forced transition is LOGGED like any policy event, so
+            # replay and training audits see it.
+            from macro_sim.core.policy_registry import _log_policy_event
+            pe = world.economies[p].external_policy
+            _log_policy_event(world.economies[p], [
+                {"lever": "fx_regime", "old": pe.fx_regime, "new": "float", "scope": "external"},
+                {"lever": "peg_anchor", "old": pe.peg_anchor, "new": None, "scope": "external"},
+            ], actor="world:peg_break")
+            pe.fx_regime = "float"
+            pe.peg_anchor = None
             # Release pent-up pressure = DEVALUATION of the pegger, ON TOP of the anchor's
             # own motion; the rest of the world keeps floating through the crisis tick.
             release = list(scaled)
