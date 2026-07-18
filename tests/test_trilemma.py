@@ -112,3 +112,30 @@ def test_factor_income_cash_does_not_recursively_become_new_principal():
     assert sum(world.world_records[-1]["factor_income"]) == pytest.approx(0.0)
     assert world._factor_interest_principal == pytest.approx([principal, -principal])
     assert world.dealer.inventory()[0] == pytest.approx(12.0)
+
+
+def test_peg_freezes_only_the_cross_rate_v24():
+    """v24 portrait finding A4: a bilateral peg fixes e_pegger/e_anchor -- the REST of the
+    world must keep floating. (The v21 implementation returned [0.0]*n while the peg held,
+    silently freezing every currency: one intact peg turned the whole simulation into a
+    fixed-exchange-rate regime.)"""
+    cfgs = [
+        # ledger_rel_tol 1e-8: three coupled economies at 300 ticks accumulate reserve-overlay
+        # float rounding just past the 1e-9 default (the A8/A5 micro-drift class) -- the knob
+        # exists precisely for high-volume multi-economy horizons.
+        Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=i,
+                    r_interest=r, ledger_rel_tol=1e-8)
+        for i, r in enumerate((0.02, 0.05, 0.08))
+    ]
+    world = World(cfgs, base_seed=9, trade=True, capital=True, capital_mobility=1.0,
+                  capital_adjust=0.2, peg=True, peg_economy=0, peg_anchor=1,
+                  peg_reserves0=1.0e9, peg_reserve_scale=0.02)   # reserves >> drain: peg survives
+    world.run(300)
+    wr = world.world_records
+    assert all(r["peg_intact"] for r in wr), "peg must survive this test"
+    cross = [r["e"][0] / r["e"][1] for r in wr]
+    assert max(cross) == pytest.approx(min(cross), rel=1e-9), \
+        "the pegged CROSS rate must stay exactly fixed"
+    third = [r["e"][2] for r in wr]
+    assert max(third) / min(third) > 1.0 + 1e-6, \
+        "the third currency must keep floating while the peg holds"

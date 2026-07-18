@@ -88,10 +88,19 @@ def run_planning_phase(econ: Any) -> None:
                 replacement_price=capital_price,
                 opportunity_rate=opportunity_rate,
             )
+            # v24 A2-root: floor the allocation base at a share of the output this
+            # firm's capital was sized for (K* = v * demand => y_ref = K / v), so a
+            # dying firm cannot price its idle capital stock into the posted quote.
+            _util_floor = float(getattr(cfg, "capital_service_min_utilization", 0.0))
+            _min_output = (
+                _util_floor * float(f.capital) / max(float(cfg.v), 1e-12)
+                if _util_floor > 0.0 else 0.0
+            )
             f.pricing_capital_unit_cost = B.capital_service_unit_cost(
                 f,
                 replacement_price=capital_price,
                 opportunity_rate=opportunity_rate,
+                min_output=_min_output,
             )
             B.plan_price(
                 f,

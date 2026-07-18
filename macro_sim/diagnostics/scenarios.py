@@ -26,6 +26,13 @@ FULL_FRONTIER_FLAGS: dict[str, Any] = {
     # Opted in HERE (not via the Config default) so plain configs stay bit-identical;
     # this keeps the frontier digest and the 30y portrait semantics unchanged.
     "capital_clock_demand_smoothing": 0.5,
+    # v24 A2-root: cap zombie AFC pass-through (see Config.capital_service_min_utilization)
+    "capital_service_min_utilization": 0.1,
+    # v24 A1: stop the rental one-way ratchet (see Config.rental_vacancy_deadband)
+    "rental_vacancy_deadband": 0.15,
+    "rental_rent_floor_wage_share": 0.02,
+    "housing_demand_step": 0.03,
+    "cpi_item_link_cap": 5.0,
     "housing_enabled": True,
     "housing_market_enabled": True,
     "mortgage_enabled": True,

@@ -489,6 +489,14 @@ def _cpi_preview(
 
     base_cost = sum(quantities[key] * base_prices[key] for key in quantities)
     current_cost = 0.0
+    # v24 portrait finding A2-index: a chained fixed basket is unstable against a single
+    # pathological item -- one runaway (or collapsed) price enters the window's ratio and
+    # the rebase chain records it PERMANENTLY (Germany x3041 while headline stayed x1.19;
+    # residual x70 even after the zombie-pricing root fix). The cap clamps each item's
+    # price RELATIVE TO ITS OWN BASE within one chain window; broad-based inflation moves
+    # every item together and passes through untouched, repeated genuine trends compound
+    # across windows. 0.0 = off = bit-identical.
+    link_cap = float(getattr(econ.cfg, "cpi_item_link_cap", 0.0))
     if base_cost > EPS:
         for key, quantity in quantities.items():
             price = _current_item_price(
@@ -496,6 +504,10 @@ def _cpi_preview(
             )
             if price is None or price <= EPS:
                 price = base_prices[key]
+            if link_cap > 0.0:
+                base_price = base_prices[key]
+                if base_price > EPS:
+                    price = min(max(price, base_price / link_cap), base_price * link_cap)
             current_cost += quantity * price
         level = tracker.cpi_chain_anchor * current_cost / base_cost
     else:

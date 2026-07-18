@@ -1985,6 +1985,12 @@ class DemographicEconomicBridge:
                 dst_sheet.cash_claim += cash
 
         debt = float(package["debt"]) * fraction
+        if abs(debt) <= 1.0e-12:
+            # channel 9 (v3 seed 4242, t=10529): fractional splits of a claim package can
+            # leave a +/-1e-16 float residue; `if debt:` passed it to transfer_debt whose
+            # >=0 guard (correctly) refuses negatives. Below every gate tolerance this is
+            # noise, not a debt -- drop it instead of crashing 421 ticks from the finish.
+            debt = 0.0
         if debt:
             src_sheet.debt_claim -= debt
             dst_sheet.debt_claim += debt

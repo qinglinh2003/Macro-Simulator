@@ -116,12 +116,25 @@ def peg_defense(world, scaled):
         drain_for = pressure * world.peg_reserve_scale        # foreign currency to sell
         _defend_peg(world, drain_for)                          # a REAL, conserving FX swap
         world._pent_up += pressure                             # suppressed depreciation accumulates
+        a = world.peg_anchor
         if world.reserves() <= EPS:
             world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
-            release = [0.0] * world.n                 # release pent-up pressure = DEVALUATION
-            release[p] = max(0.0, world._pent_up / max(1.0, M0))
+            # Release pent-up pressure = DEVALUATION of the pegger, ON TOP of the anchor's
+            # own motion; the rest of the world keeps floating through the crisis tick.
+            release = list(scaled)
+            release[p] = scaled[a] + max(0.0, world._pent_up / max(1.0, M0))
             return release
-        return [0.0] * world.n                        # rate frozen — the peg holds
+        # v24 FIX (portrait finding A4): a bilateral peg fixes the CROSS rate e_p/e_a,
+        # not the world. The old `[0.0]*n` froze EVERY currency for as long as the peg
+        # held -- one intact peg silently turned the whole simulation into a fixed-
+        # exchange-rate regime (the 30y portrait ran that way). The pegger now INHERITS
+        # the anchor's grope signal: log_e[p] and log_e[a] receive identical increments,
+        # so e_p/e_a is invariant by construction (the gauge renormalization shifts all
+        # log-rates equally and cannot move a cross rate) while every other currency
+        # floats on its own dealer-inventory signal.
+        out = list(scaled)
+        out[p] = scaled[a]
+        return out
     return scaled                                     # peg already broken ⇒ free float
 
 

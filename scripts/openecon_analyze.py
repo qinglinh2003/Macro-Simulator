@@ -84,6 +84,11 @@ def read_world_end(path):
     for name in ("peg_intact",):
         if name in last:
             scalars[name] = last[name]
+    # B1 lesson: SUM(NFA) is NOT zero by design -- its counterpart is the (unowned)
+    # FX dealer's net worth. Surface both so the reader never mistakes the dealer's
+    # cumulative revaluation losses for phantom private wealth.
+    if "bop_numeraire" in last:
+        scalars["dealer_net_worth"] = _f(last["bop_numeraire"])
     return per, scalars
 
 
@@ -196,6 +201,11 @@ def main():
     pegs = [s["world_scal"].get("peg_intact") for s in seeds]
     if any(p is not None for p in pegs):
         L.append(f"- peg_intact (China→USD) per seed: {pegs}\n")
+    dnw = [s["world_scal"].get("dealer_net_worth") for s in seeds]
+    if any(v is not None for v in dnw):
+        L.append("- FX-dealer net worth per seed (the counterpart of SUM(NFA); "
+                 "large negative = the unowned dealer subsidising private external wealth): "
+                 + ", ".join("--" if v is None else f"{v:+.3g}" for v in dnw) + "\n")
 
     text = "\n".join(L)
     if out_path:
