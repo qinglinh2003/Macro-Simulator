@@ -66,14 +66,22 @@ housing_property_tax, housing_in_wealth_tax
 **Labour institutions** (3): [P] min_wage, job_guarantee, jg_wage_ratio
 (jg_productivity moved to PENDING_RULING — technology vs programme design)
 
-**Monetary — rate rule** (8): [N] monetary_regime (SPLIT of the old central_bank flag:
-planned `central_bank_enabled` as the Config capability, PENDING the §5.1 semantic ruling;
-the live regime choice is Policy — this resolves the master-switch contradiction and the
-§1.7 dead-field) · [P]
-inflation_target, taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override ·
-[C] r_interest (the
-baseline/exogenous rate), r_max (the cap that disarmed CBs in the v1 portrait)
-(deposit_rate moved to PENDING_RULING — currently a commercial-bank contract cost)
+**Monetary — rate rule** (7) — **A5 RULED (2026-07-18)**:
+[N] `monetary_regime ∈ {"exogenous","taylor","manual"}` with the invariant
+`regime == manual ⇔ manual_policy_rate != None` (code fact verified: override already
+precedes the central_bank check in set_policy_rate, so manual works with CB "off") ·
+[P] inflation_target, taylor_phi_pi, taylor_phi_u, rate_inertia, policy_rate_override
+(RENAMED `manual_policy_rate` at migration) · [C] r_max.
+**`central_bank_enabled` is DROPPED** (verified: OMO/LoLR read policy.omo/lolr +
+structural capabilities bonds/interbank — cfg.central_bank never gated an institution,
+only the rule/frozen switch); `Policy.central_bank` is DELETED at migration;
+`Config.central_bank` consumed only by from_legacy_config.
+**`r_interest` demotes to `PolicySeed.initial_policy_rate`** (seeds `_rate`, provides the
+exogenous fixed rate, legacy compat) — NOT a runtime lever, so there is exactly ONE manual
+rate path (regime=manual); ScheduledController hikes go through manual, never the seed.
+Sensor rule: inflation EMA updates under taylor AND manual (exogenous stays frozen for
+legacy trajectories) — no hidden jump on manual→taylor. Regime switches are ATOMIC action
+batches; manual→taylor re-enters inertia from the CURRENT `_rate`.
 
 **Monetary — beliefs & measurement** (5): [C] r_neutral, u_natural (the CB's structural
 ESTIMATES — the CB chooses them), cb_core_inflation, cb_uses_fixed_basket_cpi (the Germany
@@ -392,11 +400,34 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 ## 5. Open questions (rulings pending)
 
 - [ ] Reward left as injectable callable in P3 (research question, not module scope)?
-- [x] World-level policy ownership: **DECIDED — per-economy PolicyState** (architecture
-  section is normative). Remaining sub-questions: bilateral levers (sanctions, peg anchor)
-  need initiator/direction/consent semantics — e.g. sanctions are imposed unilaterally by
-  i against j (does j auto-reciprocate?); a peg is the pegger's choice (does the anchor
-  consent?).
+- [x] World-level policy ownership: **DECIDED — per-economy PolicyState**.
+- [x] **A6 RULED (2026-07-18) — bilateral semantics**:
+  - **Sanctions**: unilateral OWNERSHIP, symmetric EFFECT. Each economy's PolicyState
+    holds `sanctions_imposed_on: frozenset[EconomyId]`; the world derives
+    `sanctioned(i,j) = j in imposed[i] or i in imposed[j]` (the old global pair-set
+    becomes a derived cache, never authoritative). An imposer can lift only its own
+    stance; the block persists while ANY stance stands. Events:
+    `actor_economy=i, target=j, operation=add/remove, effect=symmetric_block`.
+    **SCOPE (code fact)**: sanctions currently gate TRADE partner choice and MIGRATION
+    only — capital flows do not call sanctioned(); P0 documents this exact scope, no
+    silent "all cross-border flows" claim.
+  - **Peg**: NO anchor consent (the anchor is a referenced currency; all defence costs
+    and break risk are the pegger's). Anchor CHANGE is a transition handler: liquidate/
+    convert old-anchor reserves → acquire new-anchor reserves → reset pent_up →
+    re-anchor at the current cross rate → full event.
+  - **Multi-pegger**: data model is multi from P0 — per-pegger
+    `PegState{anchor, intact, pent_up, reserve_account_id, reserve_scale}` in
+    `world.peg_states: dict[EconomyId, PegState]`, reserve accounts keyed
+    `CBRES:{pegger_id}` (a shared account would corrupt multi-pegger reserves).
+    P0 runtime constraint: ≤1 pegger, anchor ≠ pegger, anchor must not itself peg.
+    P1 relaxes to many peggers; anchor-not-pegger stays (kills chains and cycles:
+    A→USD, B→USD, C→EUR legal; A→B→USD and A↔B illegal). `peg_economy` DELETED —
+    derived from `[e for e in economies if e.policy.fx_regime == "peg"]`; legacy World
+    configs map through the converter.
+  - **CROSS-ISSUE = FILED CURRENT DEFECT**: peg_defense computes pressure from STATIC
+    `cfg.r_interest` and the WORLD MEAN — live Taylor/manual rate moves never affected
+    reserve pressure in ANY run to date (including all three portraits). Must become
+    `mismatch = anchor._rate − pegger._rate` (live rates, own anchor).
 
 ### 5.1 Pre-freeze implementation closure (audit round 3 — must land before P0 code)
 

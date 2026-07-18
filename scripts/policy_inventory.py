@@ -17,8 +17,9 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (46 [P], 40 [C], 14 [W], 0 PENDING,
-     4 [N]; candidate arithmetic 46+40+14+4-1(dead central_bank replaced) = 103)
+  3. count identities from the design doc hold (46 [P], 39 [C], 14 [W], 0 PENDING,
+     4 [N]; candidate arithmetic 46+39+14+4-1(dead central_bank replaced) = 102;
+     plus r_interest seed-promoted to PolicySeed.initial_policy_rate)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
 from __future__ import annotations
@@ -49,7 +50,8 @@ import macro_sim.config.schema as _schema                            # noqa: E40
 POLICY_LIVE_EXPECTED = 46
 
 DEFECTS = {  # §1.7 — listed-but-not-runtime-effective (per-lever tests will gate)
-    "Policy.central_bank": "DEAD FIELD (rate path reads cfg.central_bank); replaced by [N] monetary_regime",
+    "Policy.central_bank": "DEAD FIELD (rate path reads cfg.central_bank); DELETED at migration, replaced by [N] monetary_regime",
+    "World.peg_pressure": "CURRENT DEFECT (A5/A6 cross-issue): peg_defense reads STATIC cfg.r_interest + world MEAN -- Taylor/manual rate moves never affected reserve pressure in any run incl. the portraits; must read live anchor._rate - pegger._rate",
     "Policy.mortgage_dsti_cap": "MortgageBook init snapshot (only LTV re-syncs)",
     "Policy.omo": "metrics enable-check/fallback still read Config (split-brain)",
 }
@@ -67,8 +69,10 @@ POLICY_NEW = {
 CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
     # fiscal
     "deficit_u_cap", "gov_investment_share",
-    # monetary rate
-    "r_interest", "r_max",
+    # monetary rate (A5 ruling: r_interest is NOT here -- it demotes to the
+    # PolicySeed as initial_policy_rate; runtime rate changes go through
+    # monetary_regime=manual + manual_policy_rate)
+    "r_max",
     # monetary beliefs & measurement
     "r_neutral", "u_natural", "cb_core_inflation", "cb_uses_fixed_basket_cpi",
     "cb_log_inflation", "infl_ema_lambda", "fiscal_uses_national_accounts_gdp",
@@ -98,6 +102,9 @@ CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
 }
 
 CONFIG_PENDING_RULING: set[str] = set()   # all five closed 2026-07-18
+
+# A5 ruling: Config fields that demote into the PolicySeed (initial stances, not levers)
+CONFIG_POLICYSEED_PROMOTED = {"r_interest"}   # -> PolicySeed.initial_policy_rate
 
 CONFIG_SHOCK_MODULE = {"energy_shock_at", "energy_shock_magnitude", "energy_shock_duration"}
 
@@ -281,6 +288,7 @@ def classification() -> dict[str, dict[str, set[str]]]:
             "PENDING_RULING": CONFIG_PENDING_RULING,
             "SHOCK_MODULE": CONFIG_SHOCK_MODULE,
             "POLICY_SEED_LEGACY": CONFIG_POLICY_SEED_LEGACY,
+            "POLICYSEED_PROMOTED": CONFIG_POLICYSEED_PROMOTED,
             "STRUCTURE": CONFIG_STRUCTURE,
             "PHYSICS": CONFIG_PHYSICS,
             "MECHANISM": CONFIG_MECHANISM,
@@ -346,13 +354,13 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 46, "C": 40, "W": 14, "PENDING": 0, "N": 4}
+    expect = {"P": 46, "C": 39, "W": 14, "PENDING": 0, "N": 4}
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
     candidates = c["P"] + c["C"] + c["W"] + c["N"] - 1   # −1: dead Policy.central_bank replaced by monetary_regime
-    if candidates != 103:
-        errors.append(f"COUNT candidates: {candidates} != 103 (rulings closed: 46+40+14+4-1)")
+    if candidates != 102:
+        errors.append(f"COUNT candidates: {candidates} != 102 (A5/A6 closed: 46+39+14+4-1)")
 
     # hardcoded registry verification
     for hid, fname, pattern, _note in HARDCODED:
@@ -371,7 +379,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 46[P] + 40[C] + 14[W] + 4[N] - 1(dead) = 103 ; PENDING_RULING = 0 (all closed)")
+    print(f"policy candidates: 46[P] + 39[C] + 14[W] + 4[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")
