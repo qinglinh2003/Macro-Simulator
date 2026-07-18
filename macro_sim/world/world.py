@@ -808,7 +808,10 @@ class World:
                 reserve_scale=float(p.peg_reserve_scale),
             )
             if self.rates is not None and self.t > 0:
-                seed_reserves(self, self._peg_reserves0)   # runtime war-chest acquisition
+                # A same-barrier handover temporarily has the old peg's orderly-exit
+                # state and the new active state side by side.  Do not let the legacy
+                # single-peg accessor send the new war chest to the old CBRES account.
+                seed_reserves(self, self._peg_reserves0, pegger=i)
 
     def _coupling_barrier(self) -> None:
         """The thin central barrier: compute cross-border export demand / import supply

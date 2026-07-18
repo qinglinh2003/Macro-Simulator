@@ -212,6 +212,7 @@ def test_peg_handover_selects_active_state():
     w = World([cfgp, cfgp, cfgp], base_seed=7, trade=True, capital=True,
               peg=True, peg_economy=0, peg_anchor=2, peg_reserves0=100.0)
     w.run(3)
+    old_reserves = w.economies[2].ledger.balance("CBRES:0")
     w.economies[0].external_policy.fx_regime = "float"
     w.economies[1].external_policy.peg_anchor = 2
     w.economies[1].external_policy.fx_regime = "peg"
@@ -220,6 +221,13 @@ def test_peg_handover_selects_active_state():
     assert w.peg_economy == 1, "accessors must select the ACTIVE pegger, not insertion order"
     assert w.peg_anchor == 2
     assert w.peg_states[1].reserve_account_id == "CBRES:1"
+    anchor_ledger = w.economies[2].ledger
+    assert anchor_ledger.has_account("CBRES:1")
+    assert anchor_ledger.balance("CBRES:1") == pytest.approx(100.0)
+    assert anchor_ledger.balance("CBRES:0") == pytest.approx(old_reserves), (
+        "the new pegger's war chest must not be credited to the exiting pegger")
     w.run(3)
+    assert w.peg_states[1].intact
+    assert w.economies[1].external_policy.fx_regime == "peg"
     for econ in w.economies:
         econ.ledger.assert_conserved()

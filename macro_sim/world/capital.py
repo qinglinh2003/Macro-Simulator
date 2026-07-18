@@ -74,12 +74,23 @@ def settlement_fractions(value, n: int) -> list[float]:
     return result
 
 
-def seed_reserves(world, amount_foreign: float) -> None:
+def seed_reserves(
+    world,
+    amount_foreign: float,
+    *,
+    pegger: int | None = None,
+) -> None:
     """Genesis: the pegging CB ACQUIRES its FX reserves through a conserving swap — its
     fiscus pays domestic currency to the dealer, which delivers foreign currency into the
     reserve account (the government borrowed at home to buy foreign assets, as CBs do).
-    Numéraire-equal on both legs ⇒ a passthrough ⇒ the BoP gate holds from tick 0."""
-    pegger = world.peg_economy
+    Numéraire-equal on both legs ⇒ a passthrough ⇒ the BoP gate holds from tick 0.
+
+    ``pegger`` is explicit for a same-barrier handover: while the old peg is awaiting
+    its one-off exit release, the legacy single-peg accessor still points at that old
+    state.  Adoption must seed the newly created state instead.  Omitting it preserves
+    the historical genesis/single-peg call surface.
+    """
+    pegger = world.peg_economy if pegger is None else pegger
     st = world.peg_states[pegger]
     anchor = st.anchor
     home, host = world.economies[pegger], world.economies[anchor]
