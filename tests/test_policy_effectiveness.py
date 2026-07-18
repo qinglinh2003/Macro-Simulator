@@ -499,3 +499,14 @@ def test_housing_in_wealth_tax_live():
                          "deferred with the mortgage-lever batch.")
 def test_housing_transfer_tax_live():
     pass
+
+
+# ================= section 8: B2 defect-fix verifications =================
+
+def test_omo_metrics_follow_policy_not_config():
+    """B2(b): the metrics' OMO gate reads POLICY (split-brain fixed): toggling
+    policy.omo off must zero the REPORTED target, not just the behaviour."""
+    b = run_b(lambda p: setattr(p, "omo", False), fixture="monetary")
+    tail_target = [float(r.get("omo_reserve_target_value", 0.0)) for r in b.records[-TAIL:]]
+    assert max(tail_target) == pytest.approx(0.0), \
+        "metrics must report a zero OMO target once policy turns OMO off"

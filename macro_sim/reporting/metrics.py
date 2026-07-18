@@ -1626,10 +1626,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             + pol.taylor_phi_pi * inflation_gap
             - pol.taylor_phi_u * unemployment_gap
         )
+        # v25 B2(b): the OMO STANCE (on/off + target) is POLICY; the metrics gate must
+        # read the same source as behaviour or a runtime policy change desynchronises
+        # observation from action (the split-brain defect). bonds/interbank stay cfg:
+        # they are structural capabilities, not stances.
         omo_target = (
             float(getattr(econ, "_omo_target_value",
-                          cb_cfg.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))))
-            if cb_cfg.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
+                          pol.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))))
+            if pol.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
         )
         bank_reserves_total = rec.get("bank_reserves_total", 0.0)
         cb_bond_market = float(sum(bond_mv_by_holder.get("CB", ())))
