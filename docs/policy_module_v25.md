@@ -479,3 +479,44 @@ Real-world-changeable rules living as literals in code — each needs a ruling
 ScheduledController already covers POLICY shocks. The exogenous-shock module (crises:
 disasters, pandemics, embargoes, productivity/energy shocks) is a separate module hitting
 PHYSICS levers — designed after this one; shares the events.log schema.
+
+---
+
+## 6. Implementation close-out (2026-07-18, B-track COMPLETE)
+
+The ledger closed at **102 candidates, every one with an owner**:
+`88 [P] (Policy) + 14 [W] (ExternalPolicy) + 0 [C] + 0 [N] + 0 PENDING`
+(dead `Policy.central_bank` deleted; every [N] absorbed into [P]).
+Frontier digest `43ed38f7` bit-exact through every batch.
+
+| Batch | Commit | Content |
+|---|---|---|
+| B1-B3 | 87d6ab0..b69a8e2 | effectiveness scaffold (40+ A/B tests), B2 defect fixes, registry + set_lever |
+| B4c | cd2c6cc | monetary beliefs & measurement (8) |
+| B4a+b | f96a67f | bank macroprudential (8) + mortgage regulation via `_sync_policy` (7) |
+| B4d | 001f662 | Treasury debt mgmt; **bond_coupon = first real NEW_CONTRACTS cohort** (per-lot coupon; merge key includes it) |
+| B4e | b066259 | final 14 [C]; 3 renames w/ legacy aliases; RentalMarket anti-snapshot sync; **soe_efirm = first STATE_TRANSITION handler** |
+| [N] | 4262b07 | **monetary_regime** (A5 three-state; manual<=>staged-rate atomicity; sensor runs in manual), jg_public_works_share, deposit_rate_floor |
+| B5a | de7fc0a | **ExternalPolicy**: per-economy ownership of 11 unilateral [W] levers; atomic barrier commit; A6 sanctions (unilateral ownership / symmetric OR effect) |
+| B5b | d986255 | **PegState multi-pegger data model**; CBRES:{pegger_id}; fx_regime authority (peg_economy deleted); runtime adoption / anchor change / voluntary exit; **the live-rate pressure defect FIXED** |
+| B6 | (this) | **PolicySeed** (r_interest -> initial_policy_rate; genesis rate + Gordon anchor + exogenous pin); metrics split-brain swept |
+
+### Findings the effectiveness scaffold produced (beyond dead levers)
+1. Taylor family two-sided clamp shadowing (ZLB AND r_max) -> interior-liftoff technique.
+2. gov_consumption_share precedence-shadowed by gov_deficit_target in ALL v13 presets.
+3. bond issuance is demand-constrained: finance_frac upward moves are supply-cap-shadowed.
+4. deposit_rate AND deposit_rate_floor are DEAD outside bank_realized_pnl (the whole
+   deposit-interest leg lives in finalize_bank_pnl) -- capability requirement filed.
+5. Stable v13 fixtures produce ZERO firm insolvencies in 240 ticks (bankrupt_persist
+   unobservable at any legal value; boundary-proof technique).
+6. Public investment is leftover-constrained in a cleared K market (stock gauge useless).
+7. The trilemma tests' "independence" was an artifact of the static-rate defect: under
+   live rates an active Taylor pair CONVERGES -- pinning requires regime=exogenous.
+
+### Still open (design threads, not levers)
+- Shock module (deferred by user ruling)
+- Random/heuristic/RL controllers on top of set_lever + the action log (the interface
+  contract -- typed validation domains -- is in place)
+- P1 multi-pegger runtime (data model ready), sanctions scope extension to capital flows
+- §1.6 hardcoded institutions promoted piecemeal (estate tax, probate window, working-age
+  bounds remain documented literals)

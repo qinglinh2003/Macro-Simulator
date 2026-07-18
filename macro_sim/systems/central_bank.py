@@ -58,7 +58,7 @@ def set_policy_rate(econ: Any) -> None:
             econ._rate = min(pol.r_max, max(0.0, pol.manual_policy_rate))
         return
     if pol.monetary_regime == "exogenous":
-        econ._rate = cfg.r_interest   # B6 will re-source this from PolicySeed.initial_policy_rate
+        econ._rate = econ.policy_seed.initial_policy_rate   # A5: pinned at the SEED
         return
     # B4c: r*, u* are the CB's revisable ESTIMATES; r_max is its (policy) ceiling
     u_prev = getattr(econ, "_prev_u", pol.u_natural)

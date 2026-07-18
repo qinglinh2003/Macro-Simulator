@@ -86,12 +86,13 @@ class EquityCfgTrap:
 def test_central_bank_system_reads_grouped_config_view_for_policy_rate():
     from macro_sim.systems.central_bank import set_policy_rate
 
-    view = SimpleNamespace(central_bank=False, r_interest=0.037)
-    # the CB reads its live dials from econ.policy (the player's control surface);
-    # no hand-set rate here, so the frozen-config fallback path must be taken.
+    view = SimpleNamespace(central_bank=False)
+    # B6/A5: the exogenous regime pins the rate at the SEED (PolicySeed), not a
+    # live config read -- the stub carries the seed the way Economy does.
     econ = SimpleNamespace(
         cfg=CentralBankCfgTrap(view),
         policy=SimpleNamespace(monetary_regime="exogenous", manual_policy_rate=None),
+        policy_seed=SimpleNamespace(initial_policy_rate=0.037),
         _rate=0.0,
     )
 

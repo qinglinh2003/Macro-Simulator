@@ -1605,7 +1605,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             ])) if live_households and benefit_paid > 0.0 else 0.0,
         })
     # v9.1/v9.3 public capital: government investment AND job-guarantee public works build the stock.
-    if getattr(econ.cfg, "gov_investment_share", 0.0) > 0.0 or getattr(econ.policy, "job_guarantee", False):
+    if getattr(econ.policy, "gov_investment_share", 0.0) > 0.0 or getattr(econ.policy, "job_guarantee", False):
         priv_k = sum(f.capital for f in econ.c_firms)
         rec.update({
             "public_capital": float(econ.public_capital),
@@ -1786,7 +1786,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         # ONE pass computes each lot's market value once (was ~6 full-lot scans per tick, each
         # recomputing bond_market_value). Every list is built in lot order, so each sum below is
         # byte-for-byte the former generator sum over the same order -- bit-identical.
-        coupon_bearing = getattr(econ.cfg, "bond_coupon", 0.0) > 0.0
+        # B6: coupons are PER-LOT cohorts; the gauge is honest only over the lots
+        cfg_cpn = getattr(econ.cfg, "bond_coupon", 0.0)
+        coupon_bearing = any(lot.get("coupon", cfg_cpn) > 0.0 for lot in lots)
         all_mv: list = []
         hh_mv: list = []
         bank_mv: list = []

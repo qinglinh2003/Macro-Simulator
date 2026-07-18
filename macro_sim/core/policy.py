@@ -246,3 +246,16 @@ class Policy:
             housing_property_tax=getattr(cfg, "housing_property_tax", 0.0),
             housing_in_wealth_tax=getattr(cfg, "housing_in_wealth_tax", False),
         )
+
+@dataclass
+class PolicySeed:
+    """A5: initial STANCES, not levers. The seed is applied once at genesis and
+    never re-read as a live dial -- runtime rate changes go through
+    monetary_regime=manual (or the Taylor path). r_interest demotes here from
+    the Config policy surface: it is where the rate STARTS, and (in the
+    exogenous regime) where it stays."""
+    initial_policy_rate: float = 0.0
+
+    @classmethod
+    def from_config(cls, cfg) -> "PolicySeed":
+        return cls(initial_policy_rate=float(cfg.r_interest))

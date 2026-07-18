@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 from macro_sim.behavior.planning import diversify_mpc
 from macro_sim.config import Config
 from macro_sim.core.ledger import Ledger
-from macro_sim.core.policy import Policy
+from macro_sim.core.policy import Policy, PolicySeed
 from macro_sim.core.state import SimulationState
 from macro_sim.demographics import Phase0VitalRates, create_genesis_population
 from macro_sim.demographics.economic_bridge import initialize_person_claims_from_households
@@ -94,6 +94,7 @@ class Economy:
         # v9: the government's LIVE levers (the only mutable-during-run state). Seeded from cfg, so
         # government=False keeps the macroprudential caps at their v8.5 defaults => bit-identical.
         self.policy = Policy.from_config(cfg)
+        self.policy_seed = PolicySeed.from_config(cfg)   # B6/A5: initial stances
         self.rng = random.Random(cfg.seed)          # single seeded generator (§7.6)
         # v8.1: size-biased (preferential) demand when Gibrat growth is on; else transparency dial.
         self.protocol = protocol or (PreferentialMatch(cfg.pref_attach_beta, cfg.pref_price_elasticity)
@@ -471,7 +472,7 @@ class Economy:
             self.equity.book_value = book0
             self.equity.price = self.equity.last_price = max(EPS, book0 / cfg.float_shares)
             self.equity.fundamental = self.equity.price
-            self.equity.dividend_ema = cfg.r_interest * book0    # Gordon anchor starts at book
+            self.equity.dividend_ema = self.policy_seed.initial_policy_rate * book0   # Gordon anchor starts at book
             per_hh = cfg.float_shares / len(self.households)
             for h in self.households:
                 h.shares = per_hh
@@ -504,7 +505,7 @@ class Economy:
         self._interest_paid = self._principal_repaid = 0.0
         self._new_loans = 0.0
         # v10 central bank: the live policy rate + smoothed inflation signal. off ⇒ _rate ≡ r_interest.
-        self._rate = cfg.r_interest
+        self._rate = self.policy_seed.initial_policy_rate   # B6/A5: the seed, not a live dial
         self._infl_ema = cfg.inflation_target       # neutral start (deviation 0 ⇒ r starts at r_neutral)
         self._prev_inflation = cfg.inflation_target
         self.state = SimulationState(

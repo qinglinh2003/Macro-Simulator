@@ -353,6 +353,7 @@ def test_equal_dividends_skip_empty_demographic_household_accounts():
         policy=SimpleNamespace(
             tax_profit_rate=0.0,
             job_guarantee=False,
+            gov_investment_share=0.0,   # B4e: settlement reads Policy now
         ),
         public_capital=0.0,
     )
