@@ -130,72 +130,72 @@ def peg_defense(world, scaled):
     run). Returns the (frozen while the peg holds) grope signal. peg off ⇒ unchanged."""
     if not world.peg:
         return scaled
-    p = world.peg_economy
-    st = world.peg_states[p]
-    if st.exit_pending:
-        # A6 voluntary exit: an ORDERLY float still faces the suppressed pressure --
-        # release pent-up ONCE exactly like a break, then the currency floats free.
-        st.exit_pending = False
-        st.intact = False
-        a = st.anchor
-        M0 = world.economies[p].ledger.total_money
-        release = list(scaled)
-        release[p] = scaled[a] + max(0.0, st.pent_up / max(1.0, M0))
-        return release
-    if world._peg_intact:
-        # The trilemma proper: the pegged economy runs an interest rate that differs
-        # from the ANCHOR. With open capital that mismatch is a CONTINUOUS one-way flow
-        # the CB must keep offsetting from reserves. A LOWER rate => capital flees =>
-        # the CB sells FX reserves to defend.
-        # B5b FIX (A6-filed defect): pressure reads the LIVE rates (econ._rate -- the
-        # Taylor/manual path) against the OWN ANCHOR. The old code read STATIC
-        # cfg.r_interest against the WORLD MEAN: rate moves never affected reserve
-        # pressure in any run to date.
-        mismatch = (
-            float(world.economies[st.anchor]._rate) - float(world.economies[p]._rate)
-        )                                             # >0 => pegger's rate too LOW => outflow => drain
-        M0 = world.economies[p].ledger.total_money
-        # POLICY: capital controls throttle the flow that drains reserves — closing the
-        # account lets the peg + an independent rate BOTH survive (the trilemma's 3rd corner).
-        pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control[p])
-        drain_for = pressure * world.peg_reserve_scale        # foreign currency to sell
-        _defend_peg(world, drain_for)                          # a REAL, conserving FX swap
-        world._pent_up += pressure                             # suppressed depreciation accumulates
-        a = world.peg_anchor
-        if world.reserves() <= EPS:
-            world._peg_intact = False                 # reserves exhausted ⇒ peg breaks
-            # B5b: the AUTHORITY reflects reality -- a broken peg forces the regime
-            # to float (re-pegging is an explicit new policy act, never automatic).
-            # Audit fix: the forced transition is LOGGED like any policy event, so
-            # replay and training audits see it.
-            from macro_sim.core.policy_registry import _log_policy_event
-            pe = world.economies[p].external_policy
-            _log_policy_event(world.economies[p], [
-                {"lever": "fx_regime", "old": pe.fx_regime, "new": "float", "scope": "external"},
-                {"lever": "peg_anchor", "old": pe.peg_anchor, "new": None, "scope": "external"},
-            ], actor="world:peg_break")
-            pe.fx_regime = "float"
-            pe.peg_anchor = None
-            # Release pent-up pressure = DEVALUATION of the pegger, ON TOP of the anchor's
-            # own motion; the rest of the world keeps floating through the crisis tick.
-            release = list(scaled)
-            release[p] = scaled[a] + max(0.0, world._pent_up / max(1.0, M0))
-            return release
-        # v24 FIX (portrait finding A4): a bilateral peg fixes the CROSS rate e_p/e_a,
-        # not the world. The old `[0.0]*n` froze EVERY currency for as long as the peg
-        # held -- one intact peg silently turned the whole simulation into a fixed-
-        # exchange-rate regime (the 30y portrait ran that way). The pegger now INHERITS
-        # the anchor's grope signal: log_e[p] and log_e[a] receive identical increments,
-        # so e_p/e_a is invariant by construction (the gauge renormalization shifts all
-        # log-rates equally and cannot move a cross rate) while every other currency
-        # floats on its own dealer-inventory signal.
-        out = list(scaled)
-        out[p] = scaled[a]
+    out = list(scaled)
+
+    # A6 voluntary exits are lifecycle work, not the active-peg selector.  A same-tick
+    # handoff may contain both an old ``exit_pending`` state and a new intact state.
+    # Release every exiter's pent-up pressure once, then continue below and defend the
+    # newly active peg in this very tick.
+    for exiter, exiting in sorted(world.peg_states.items()):
+        if not exiting.exit_pending:
+            continue
+        exiting.exit_pending = False
+        exiting.intact = False
+        anchor = exiting.anchor
+        money = world.economies[exiter].ledger.total_money
+        out[exiter] = out[anchor] + max(0.0, exiting.pent_up / max(1.0, money))
+
+    active = [
+        (pegger, state)
+        for pegger, state in sorted(world.peg_states.items())
+        if state.intact and not state.exit_pending
+    ]
+    if not active:
         return out
-    return scaled                                     # peg already broken ⇒ free float
+    if len(active) > 1:  # the World validator should make this unreachable
+        raise AssertionError("P0 peg defense received more than one active pegger")
+    p, st = active[0]
+
+    # The trilemma proper: the pegged economy runs an interest rate that differs
+    # from the ANCHOR. With open capital that mismatch is a CONTINUOUS one-way flow
+    # the CB must keep offsetting from reserves. A LOWER rate => capital flees =>
+    # the CB sells FX reserves to defend.
+    mismatch = (
+        float(world.economies[st.anchor]._rate) - float(world.economies[p]._rate)
+    )                                             # >0 => pegger's rate too LOW => outflow => drain
+    M0 = world.economies[p].ledger.total_money
+    pressure = world.capital_mobility * mismatch * M0 * (1.0 - world.capital_control[p])
+    drain_for = pressure * st.reserve_scale
+    # ``world.peg_economy`` already selects the active non-exiting state after a
+    # same-tick handoff.  Keep the historical two-argument helper call surface so
+    # diagnostics and application instrumentation can wrap peg defence safely.
+    _defend_peg(world, drain_for)
+    st.pent_up += pressure
+    a = st.anchor
+    if world.reserves() <= EPS:
+        st.intact = False                         # reserves exhausted ⇒ peg breaks
+        # B5b: the AUTHORITY reflects reality -- a broken peg forces the regime
+        # to float (re-pegging is an explicit new policy act, never automatic).
+        from macro_sim.core.policy_registry import _log_policy_event
+        pe = world.economies[p].external_policy
+        _log_policy_event(world.economies[p], [
+            {"lever": "fx_regime", "old": pe.fx_regime, "new": "float", "scope": "external"},
+            {"lever": "peg_anchor", "old": pe.peg_anchor, "new": None, "scope": "external"},
+        ], actor="world:peg_break")
+        pe.fx_regime = "float"
+        pe.peg_anchor = None
+        # Release pent-up pressure = DEVALUATION of the pegger, ON TOP of the
+        # anchor's own motion; the rest of the world keeps floating.
+        out[p] = out[a] + max(0.0, st.pent_up / max(1.0, M0))
+        return out
+
+    # A bilateral peg fixes the CROSS rate e_p/e_a.  If the anchor itself has just
+    # exited an old peg, inherit its already-adjusted signal from ``out``.
+    out[p] = out[a]
+    return out
 
 
-def _defend_peg(world, drain_for: float) -> None:
+def _defend_peg(world, drain_for: float, *, pegger: int | None = None) -> None:
     """The CB defends the peg with a REAL foreign-exchange swap, routed through the dealer.
 
     Selling reserves (``drain_for`` > 0): the CB hands FOREIGN currency to the dealer (from
@@ -203,7 +203,7 @@ def _defend_peg(world, drain_for: float) -> None:
     it is buying up its own currency to hold the peg. Buying reserves (< 0) is the reverse.
     Numéraire-equal on both legs ⇒ a passthrough ⇒ the multilateral BoP gate holds.
     """
-    pegger = world.peg_economy
+    pegger = world.peg_economy if pegger is None else pegger
     st = world.peg_states[pegger]
     anchor = st.anchor
     home, host = world.economies[pegger], world.economies[anchor]

@@ -14,6 +14,7 @@ here (it is not conserved; production creates it, consumption destroys it).
 
 from __future__ import annotations
 
+import math
 from typing import Dict, Hashable, Mapping
 
 
@@ -63,7 +64,7 @@ class Ledger:
         # Loans (v3): debt owed by each agent (>= 0). Zero for everyone at genesis,
         # so A5 (ΣD − ΣL = M) reduces to M0 (ΣD = M) until the first loan is made.
         self._loans: Dict[Hashable, float] = {aid: 0.0 for aid in initial_balances}
-        self._M: float = sum(initial_balances.values())   # base money (conserved net worth)
+        self._M: float = math.fsum(initial_balances.values())   # base money (conserved net worth)
         # v12.3: Σ book value of bonds a BANK bought with reserves (money-creating: the Treasury is credited spendable
         # funds while the bank swaps reserves for a bond asset). Like a loan, this raises ΣD without a matching ΣL,
         # so the A5 gate becomes ΣD − ΣL − _bank_securities = M. 0 unless a bank buys a bond ⇒ bit-identical.
@@ -80,6 +81,14 @@ class Ledger:
         self._resolver = None                 # account_id -> settlement node (bank / CLEARING / CB)
         self._reserve_M: float = 0.0          # conserved reserve total (base money)
         self._rel_tol = rel_tol
+        # Every conserved double-entry operation updates two independently rounded
+        # floats.  When (for example) a deficit account has grown very large, adding
+        # a small payment can lose several decimal digits even though both legs are
+        # structurally present.  Track the actual signed rounding residual of writes
+        # performed through this ledger.  Direct/rogue writes do not alter it, so the
+        # hard gate can distinguish representation error from missing accounting legs.
+        self._a5_roundoff_drift = 0.0
+        self._reserve_roundoff_drift = 0.0
         # Absolute tolerance scaled to the money stock; floored so an all-zero or
         # tiny economy still has a sane epsilon.
         self._abs_tol = max(self._rel_tol * abs(self._M), 1e-9)
@@ -103,12 +112,12 @@ class Ledger:
     def total_money(self) -> float:
         """Live sum of deposits = broad money. Constant (=M) until credit exists;
         an *endogenous* series once loans are made (spec A5, §12)."""
-        return sum(self._bal.values())
+        return math.fsum(self._bal.values())
 
     @property
     def total_credit(self) -> float:
         """Live sum of loan debt = outstanding credit (v3)."""
-        return sum(self._loans.values())
+        return math.fsum(self._loans.values())
 
     @property
     def bank_securities(self) -> float:
@@ -119,7 +128,14 @@ class Ledger:
     def net_worth(self) -> float:
         """System net financial worth = broad money − credit − bank securities. Must equal M (A5). The
         `_bank_securities` term is 0 until a bank buys a bond with reserves (money creation) ⇒ bit-identical."""
-        return self.total_money - self.total_credit - self._bank_securities
+        # Sum the signed legs together instead of subtracting already-rounded
+        # aggregates.  This matters in long runs where deposits and credit may
+        # both be much larger than the conserved net position.
+        return math.fsum((
+            *self._bal.values(),
+            *(-amount for amount in self._loans.values()),
+            -self._bank_securities,
+        ))
 
     @property
     def genesis_money(self) -> float:
@@ -129,6 +145,51 @@ class Ledger:
     def snapshot(self) -> Dict[Hashable, float]:
         """Copy of all balances, e.g. for logging the money distribution (§6.5)."""
         return dict(self._bal)
+
+    @staticmethod
+    def _add_with_roundoff(old: float, delta: float) -> tuple[float, float]:
+        """Return the rounded sum and its signed error versus exact float inputs."""
+        new = old + delta
+        if not math.isfinite(new):
+            return new, 0.0
+        # fsum recovers the low-order part discarded by ``old + delta``.
+        # correction = exact(old + delta) - new, hence error = -correction.
+        error = -math.fsum((old, delta, -new))
+        return new, error
+
+    def _record_a5_roundoff(self, contribution: float) -> None:
+        previous = getattr(self, "_a5_roundoff_drift", 0.0)
+        self._a5_roundoff_drift = math.fsum((previous, contribution))
+
+    def _record_reserve_roundoff(self, contribution: float) -> None:
+        previous = getattr(self, "_reserve_roundoff_drift", 0.0)
+        self._reserve_roundoff_drift = math.fsum((previous, contribution))
+
+    def _add_balance(self, agent_id: Hashable, delta: float) -> None:
+        new, error = self._add_with_roundoff(self._bal[agent_id], delta)
+        self._bal[agent_id] = new
+        self._record_a5_roundoff(error)
+
+    def _add_loan(self, agent_id: Hashable, delta: float) -> None:
+        new, error = self._add_with_roundoff(self._loans[agent_id], delta)
+        self._loans[agent_id] = new
+        self._record_a5_roundoff(-error)
+
+    def _add_bank_securities(self, delta: float) -> None:
+        new, error = self._add_with_roundoff(self._bank_securities, delta)
+        self._bank_securities = new
+        self._record_a5_roundoff(-error)
+
+    def _add_reserve(self, node: Hashable, delta: float) -> None:
+        assert self._reserves is not None
+        new, error = self._add_with_roundoff(self._reserves.get(node, 0.0), delta)
+        self._reserves[node] = new
+        self._record_reserve_roundoff(error)
+
+    def _add_reserve_stock(self, delta: float) -> None:
+        new, error = self._add_with_roundoff(self._reserve_M, delta)
+        self._reserve_M = new
+        self._record_reserve_roundoff(-error)
 
     # -- the one and only mutator ------------------------------------------
 
@@ -160,8 +221,8 @@ class Ledger:
             raise OverdraftError(
                 f"{src!r} cannot transfer {amount}; balance is {self._bal[src]} (A4 / no credit in kernel)"
             )
-        self._bal[src] -= amount
-        self._bal[dst] += amount
+        self._add_balance(src, -amount)
+        self._add_balance(dst, amount)
         if self._reserves is not None:            # v11.4 RTGS overlay: settle reserves between the two nodes
             self._settle_reserves(src, dst, amount)
 
@@ -177,15 +238,15 @@ class Ledger:
         node (a bank, CLEARING, or the CB); `initial_reserves` seeds node -> reserves (Σ = base money M)."""
         self._resolver = resolver
         self._reserves = dict(initial_reserves)
-        self._reserve_M = sum(initial_reserves.values())
+        self._reserve_M = math.fsum(initial_reserves.values())
 
     def _settle_reserves(self, src: Hashable, dst: Hashable, amount: float) -> None:
         ns, nd = self._resolver(src), self._resolver(dst)
         if ns == nd:                              # same bank ⇒ an internal book entry, no reserves move
             return
-        rs = self._reserves.get(ns, 0.0) - amount
-        self._reserves[ns] = rs
-        self._reserves[nd] = self._reserves.get(nd, 0.0) + amount
+        self._add_reserve(ns, -amount)
+        rs = self._reserves[ns]
+        self._add_reserve(nd, amount)
         if self._reserve_min is not None and rs < self._reserve_min.get(ns, 0.0):
             self._reserve_min[ns] = rs            # v11.4: track each node's INTRADAY minimum (peak overdraft)
 
@@ -206,8 +267,8 @@ class Ledger:
         `amount` may be negative (reverses direction). Conserves Σ reserves by construction."""
         if self._reserves is None or amount == 0.0:
             return
-        self._reserves[src_node] = self._reserves.get(src_node, 0.0) - amount
-        self._reserves[dst_node] = self._reserves.get(dst_node, 0.0) + amount
+        self._add_reserve(src_node, -amount)
+        self._add_reserve(dst_node, amount)
 
     def issue_reserves(self, node: Hashable, amount: float) -> None:
         """v12.4: the CENTRAL BANK CREATES base money -- credit `node`'s reserves AND raise the conserved total
@@ -217,8 +278,8 @@ class Ledger:
         (= retire). Off (overlay disabled) ⇒ no-op ⇒ bit-identical."""
         if self._reserves is None or amount == 0.0:
             return
-        self._reserves[node] = self._reserves.get(node, 0.0) + amount
-        self._reserve_M += amount
+        self._add_reserve(node, amount)
+        self._add_reserve_stock(amount)
 
     def retire_reserves(self, node: Hashable, amount: float) -> None:
         """v12.4: the CB DESTROYS base money -- the inverse of `issue_reserves` (drains `node`'s reserves and lowers
@@ -231,7 +292,7 @@ class Ledger:
 
     @property
     def total_reserves(self) -> float:
-        return 0.0 if self._reserves is None else sum(self._reserves.values())
+        return 0.0 if self._reserves is None else math.fsum(self._reserves.values())
 
     def assert_reserves_conserved(self) -> None:
         """Halt if the reserve total drifts from its base-money value `_reserve_M` (a second hard gate; v11.4).
@@ -244,11 +305,14 @@ class Ledger:
             return
         scale = max(abs(self._reserve_M), abs(self._M), self.total_money, 1.0)
         tol = max(self._rel_tol * scale, 1e-9)
-        drift = abs(self.total_reserves - self._reserve_M)
+        raw_drift = self.total_reserves - self._reserve_M
+        tracked_roundoff = getattr(self, "_reserve_roundoff_drift", 0.0)
+        drift = abs(raw_drift - tracked_roundoff)
         if drift > tol:
             raise ConservationError(
                 f"reserves not conserved (v11.4): Σreserves={self.total_reserves!r} vs M={self._reserve_M!r} "
-                f"(drift={drift:.3e} > tol={tol:.3e})"
+                f"(raw drift={raw_drift:.3e}, tracked roundoff={tracked_roundoff:.3e}, "
+                f"unexplained drift={drift:.3e} > tol={tol:.3e})"
             )
 
     # -- money creation / destruction (v3, M2) -----------------------------
@@ -271,8 +335,8 @@ class Ledger:
             raise KeyError(f"unknown borrower account {borrower!r}")
         if amount == 0.0:
             return
-        self._bal[borrower] += amount
-        self._loans[borrower] += amount
+        self._add_balance(borrower, amount)
+        self._add_loan(borrower, amount)
 
     def bank_buy_bond_with_reserves(self, bank_id: Hashable, fiscal_id: Hashable, amount: float) -> None:
         """v12.3: a BANK buys `amount` of newly-issued government bonds with RESERVES (the strong-sterilisation
@@ -288,8 +352,8 @@ class Ledger:
         if amount <= 0.0:
             return
         self.move_reserves(bank_id, "CB", amount)     # (1) reserves bank → CB (sterilise)
-        self._bal[fiscal_id] += amount                # (2) Treasury financed (money created)
-        self._bank_securities += amount               # (3) offset ⇒ ΣD − ΣL − _bank_securities invariant
+        self._add_balance(fiscal_id, amount)           # (2) Treasury financed (money created)
+        self._add_bank_securities(amount)              # (3) offset ⇒ ΣD − ΣL − securities invariant
 
     def bank_redeem_bond(self, bank_id: Hashable, fiscal_id: Hashable, amount: float) -> None:
         """v12.3: a bank-held bond MATURES (or is sold back to the Treasury). Reverses
@@ -298,8 +362,8 @@ class Ledger:
         and reserves flow CB → bank (`move_reserves` back). A5-safe (both ΣD and _bank_securities fall by amount)."""
         if amount <= 0.0:
             return
-        self._bal[fiscal_id] -= amount
-        self._bank_securities -= amount
+        self._add_balance(fiscal_id, -amount)
+        self._add_bank_securities(-amount)
         self.move_reserves("CB", bank_id, amount)     # reserves CB → bank (un-sterilise on redemption)
 
     def repay(self, borrower: Hashable, amount: float) -> None:
@@ -320,8 +384,8 @@ class Ledger:
             raise OverdraftError(
                 f"{borrower!r} cannot repay {amount} from deposits {self._bal[borrower]} (A4)"
             )
-        self._bal[borrower] -= amount
-        self._loans[borrower] -= amount
+        self._add_balance(borrower, -amount)
+        self._add_loan(borrower, -amount)
 
     def transfer_debt(self, src_borrower: Hashable, dst_borrower: Hashable, amount: float) -> None:
         """Move an existing loan obligation from one account to another.
@@ -344,8 +408,8 @@ class Ledger:
             raise ValueError(
                 f"{src_borrower!r} cannot transfer {amount}; debt is {self._loans[src_borrower]}"
             )
-        self._loans[src_borrower] -= amount
-        self._loans[dst_borrower] += amount
+        self._add_loan(src_borrower, -amount)
+        self._add_loan(dst_borrower, amount)
 
     # -- bad-debt writeoff & agent lifecycle (v4, firm entry/exit) ----------
 
@@ -365,8 +429,8 @@ class Ledger:
             return
         if amount > self._loans[borrower] + self._abs_tol:
             raise ValueError(f"cannot write off {amount}; {borrower!r} debt is {self._loans[borrower]}")
-        self._loans[borrower] -= amount
-        self._bal[bank] -= amount      # bank equity absorbs; may go negative (insolvency)
+        self._add_loan(borrower, -amount)
+        self._add_balance(bank, -amount)  # bank equity absorbs; may go negative (insolvency)
 
     def write_off_interbank_claim(
         self,
@@ -408,8 +472,8 @@ class Ledger:
             raise KeyError(f"unknown destination bank {destination_bank!r}")
         if amount == 0.0:
             return
-        self._bal[source_bank] -= amount
-        self._bal[destination_bank] += amount
+        self._add_balance(source_bank, -amount)
+        self._add_balance(destination_bank, amount)
 
     def add_account(self, agent_id: Hashable) -> None:
         """Register a new agent (v4 firm entry) with 0 deposits and 0 debt. Money must
@@ -421,11 +485,17 @@ class Ledger:
         self._loans[agent_id] = 0.0
 
     def remove_account(self, agent_id: Hashable) -> None:
-        """Remove a dead agent's account (v4 firm exit). Must be 0 deposits and 0 debt so
-        removal changes no sum (A5 intact)."""
-        if abs(self._bal.get(agent_id, 0.0)) > self._abs_tol:
+        """Remove a dead agent's account only after both legs are exactly zero.
+
+        The usual numerical tolerance is intentionally *not* used here.  Deleting
+        a tiny deposit destroys money and deleting a tiny debt creates net worth;
+        repeated firm turnover can therefore turn individually harmless dust into
+        a material A5 drift.  Lifecycle code must settle the complete residual
+        before removing the account.
+        """
+        if self._bal.get(agent_id, 0.0) != 0.0:
             raise ValueError(f"cannot remove {agent_id!r}: nonzero deposits {self._bal[agent_id]}")
-        if abs(self._loans.get(agent_id, 0.0)) > self._abs_tol:
+        if self._loans.get(agent_id, 0.0) != 0.0:
             raise ValueError(f"cannot remove {agent_id!r}: nonzero debt {self._loans[agent_id]}")
         self._bal.pop(agent_id, None)
         self._loans.pop(agent_id, None)
@@ -447,12 +517,15 @@ class Ledger:
         credit inflates ΣD. Raises ConservationError on drift.
         """
         tol = max(self._rel_tol * max(abs(self._M), self.total_money), 1e-9)
-        drift = abs(self.net_worth - self._M)
+        raw_drift = self.net_worth - self._M
+        tracked_roundoff = getattr(self, "_a5_roundoff_drift", 0.0)
+        drift = abs(raw_drift - tracked_roundoff)
         if drift > tol:
             raise ConservationError(
                 f"net worth not conserved (A5): ΣD−ΣL={self.net_worth!r} vs M={self._M!r} "
                 f"(broad money ΣD={self.total_money!r}, credit ΣL={self.total_credit!r}; "
-                f"drift={drift:.3e} > tol={tol:.3e})"
+                f"raw drift={raw_drift:.3e}, tracked roundoff={tracked_roundoff:.3e}, "
+                f"unexplained drift={drift:.3e} > tol={tol:.3e})"
             )
 
     def assert_non_negative(self) -> None:

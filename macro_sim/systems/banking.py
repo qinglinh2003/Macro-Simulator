@@ -8,6 +8,7 @@ from typing import Any
 
 from macro_sim.domain.agents import Bank, InterbankClaim
 from macro_sim.markets.matching import EPS
+from macro_sim.systems.valuation import floor_safe_price_return
 
 
 def draw_bank_kappas(cfg: Any, n: int) -> list:
@@ -475,7 +476,8 @@ def bank_stock_market(econ: Any, rate: float) -> None:
             turnover += executed
         excess = (buy - sell) / bank.shares_outstanding if bank.shares_outstanding > EPS else 0.0
         new_price = max(EPS, price * (1.0 + cfg.lambda_p * max(-0.5, min(0.5, excess))))
-        bank.share_trend += cfg.trend_lambda * ((new_price - price) / price - bank.share_trend)
+        price_return = floor_safe_price_return(price, new_price)
+        bank.share_trend += cfg.trend_lambda * (price_return - bank.share_trend)
         bank.share_last_price, bank.share_price = price, new_price
         bank.share_peak = max(bank.share_peak * 0.999, bank.share_price)
     econ._bank_equity_turnover = turnover / max(EPS, sum(bank.shares_outstanding for bank in banks))

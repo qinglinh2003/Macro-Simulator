@@ -7,6 +7,21 @@ from typing import Any
 from macro_sim.markets.matching import EPS
 
 
+def floor_safe_price_return(old_price: float, new_price: float) -> float:
+    """Return a finite market return when a quote restarts at the price floor.
+
+    A zero/sub-floor quote is a numerical boundary, not an economically meaningful
+    transaction price.  Treating the move from that boundary to ``EPS`` as a 100%
+    (or infinite) return would inject an artificial chartist signal.  The correct
+    no-information update is therefore zero, which lets the existing trend EMA
+    decay naturally.
+    """
+    old = float(old_price)
+    if old <= EPS:
+        return 0.0
+    return (float(new_price) - old) / old
+
+
 def valuation_discount_rate(econ: Any) -> float:
     """Return the positive per-tick required return used by equity valuations.
 

@@ -10,6 +10,7 @@ as N independent closed economies, so `World([cfg])` ≡ `Economy(cfg)` byte-for
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import List
 
@@ -283,7 +284,10 @@ class World:
         # v20.1 FX layer. couple=False ⇒ no FX objects, no dealer accounts ⇒ the World is
         # exactly v20.0 (bit-identical). couple=True installs the rate vector + the dealer
         # (one account per economy); with zero trade it is INERT (rates flat, inventory 0).
-        self.couple = couple or trade or capital or migration   # any cross-border flow needs the FX layer
+        self.couple = couple or trade or capital or migration or peg
+        # Any cross-border flow or a legacy constructor-time peg needs the FX layer.
+        # A later runtime peg policy cannot manufacture this structural mechanism;
+        # Controller capability checks reject it when the World started uncoupled.
         self.trade = trade
         self.capital = capital                 # v21: persistent cross-border positions
         self.migration = migration             # v22: labor flow + remittances
@@ -518,7 +522,10 @@ class World:
         # insertion order. Dead states are kept for history (legacy broken-peg
         # record semantics), but they no longer answer for the world.
         for st in states.values():
-            if st.intact or st.exit_pending:
+            if st.intact and not st.exit_pending:
+                return st
+        for st in states.values():
+            if st.exit_pending:
                 return st
         return next(iter(states.values()), None)
 
@@ -527,14 +534,17 @@ class World:
         states = self.__dict__.get("peg_states")
         if states is None:
             return bool(self.__dict__.get("peg", False))
-        return bool(states)
+        return any(st.intact or st.exit_pending for st in states.values())
 
     @property
     def peg_economy(self) -> int:
         states = self.__dict__.get("peg_states")
         if states:
             for i, st in states.items():      # the ACTIVE pegger answers (v26 §1.2)
-                if st.intact or st.exit_pending:
+                if st.intact and not st.exit_pending:
+                    return i
+            for i, st in states.items():
+                if st.exit_pending:
                     return i
             return next(iter(states))
         return int(self.__dict__.get("_legacy_peg_economy",
@@ -601,13 +611,33 @@ class World:
         acct = st.reserve_account_id
         return led.balance(acct) if led.has_account(acct) else 0.0
 
+    def _peg_reserve_balances(self) -> dict[int, float]:
+        """Return every pegger's official reserve balance, including old states.
+
+        ``peg_states`` deliberately retains broken and voluntarily exited pegs.  Their
+        reserve assets remain live balance-sheet items until an explicit liquidation;
+        selecting only the currently active state therefore turns the settlement legs
+        of an earlier peg into a spurious private external position after a handoff.
+        """
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            return {self.peg_economy: self.reserves()}
+        balances: dict[int, float] = {}
+        for pegger, state in states.items():
+            ledger = self.economies[state.anchor].ledger
+            account = state.reserve_account_id
+            balances[pegger] = (
+                float(ledger.balance(account)) if ledger.has_account(account) else 0.0
+            )
+        return balances
+
     def market_external_positions(
         self,
         positions: List[float] | None = None,
         rates: List[float] | None = None,
-        reserves: float | None = None,
+        reserves: Mapping[int, float] | float | None = None,
     ) -> List[float]:
-        """Dealer positions net of the CB's explicitly owned reserve asset.
+        """Dealer positions net of every CB's explicitly owned reserve asset.
 
         Values remain in each economy's local currency and retain the dealer sign
         convention (positive = net external liability).  The reserve swap creates
@@ -621,12 +651,37 @@ class World:
         if self.n < 2:
             return result
         e = list(self.rates.e if rates is None else rates)
-        reserve_asset = self.reserves() if reserves is None else float(reserves)
-        if reserve_asset == 0.0:
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            pegger = self.peg_economy
+            if reserves is None:
+                reserve_asset = self.reserves()
+            elif isinstance(reserves, Mapping):
+                reserve_asset = float(reserves.get(pegger, 0.0))
+            else:
+                reserve_asset = float(reserves)
+            if reserve_asset != 0.0:
+                anchor = self.peg_anchor
+                result[pegger] -= reserve_asset * e[pegger] / e[anchor]
+                result[anchor] += reserve_asset
             return result
-        anchor = self.peg_anchor
-        result[self.peg_economy] -= reserve_asset * e[self.peg_economy] / e[anchor]
-        result[anchor] += reserve_asset
+
+        if reserves is None:
+            reserve_balances = self._peg_reserve_balances()
+        elif isinstance(reserves, Mapping):
+            reserve_balances = reserves
+        else:
+            # Retain the historical scalar call surface for external callers.  New
+            # World snapshots use a per-pegger mapping so old retained assets cannot
+            # disappear when the active-peg selector changes.
+            reserve_balances = {self.peg_economy: float(reserves)}
+        for pegger, state in sorted(states.items()):
+            reserve_asset = float(reserve_balances.get(pegger, 0.0))
+            if reserve_asset == 0.0:
+                continue
+            anchor = state.anchor
+            result[pegger] -= reserve_asset * e[pegger] / e[anchor]
+            result[anchor] += reserve_asset
         return result
 
     # ======================================================================
@@ -656,7 +711,7 @@ class World:
         # the export leg.
         self._inv0 = self.dealer.inventory()
         self._e0 = self.rates.e
-        self._res0 = self.reserves()
+        self._res0 = self._peg_reserve_balances()
 
         # Every country first clears its domestic goods/capital-goods markets.  Imports
         # are now realized, but P&L, fiscal settlement, metrics, behavioral lags, and
@@ -750,6 +805,8 @@ class World:
         """P0 joint peg constraints -- PURE checks, called before any commit write
         so a violation leaves the world untouched (audit fix: true atomicity)."""
         desired = [(i, p) for i, p in enumerate(eps) if p.fx_regime == "peg" and self.n > 1]
+        if desired and (not self.couple or self.rates is None):
+            raise ValueError("P0 runtime constraint: peg requires the coupled FX layer")
         if len(desired) > 1:
             raise ValueError("P0 runtime constraint: at most ONE pegger")
         for i, p in desired:
@@ -779,10 +836,17 @@ class World:
                 continue
             # a re-peg over a BROKEN/EXITED state is a fresh adoption below
 
-            # anchor change (A6): liquidate old-anchor reserves, convert at the
-            # current cross, acquire in the new anchor's ledger, reset pent_up
+            # Anchor change (A6): liquidate old-anchor reserves, convert at the
+            # current cross, acquire in the new anchor's ledger, reset pent_up.
+            #
+            # This also applies when the retained state is no longer intact.  An
+            # exited/broken peg may still own a positive reserve asset.  Replacing
+            # that state during a later re-adoption without first moving the asset
+            # would orphan the old CBRES account: the balance would remain in the
+            # old anchor's ledger but disappear from reserve ownership, NFA, and
+            # observation records.
             new_anchor = desired[i].peg_anchor
-            if new_anchor != st.anchor and st.intact:
+            if new_anchor != st.anchor:
                 old_led = self.economies[st.anchor].ledger
                 bal = old_led.balance(st.reserve_account_id) \
                     if old_led.has_account(st.reserve_account_id) else 0.0
@@ -791,7 +855,8 @@ class World:
                     old_led.transfer(st.reserve_account_id, DEALER_ID, bal)
                     converted = bal * self.rates.bilateral(new_anchor, st.anchor)
                     new_led = self.economies[new_anchor].ledger
-                    new_led.add_account(st.reserve_account_id)
+                    if not new_led.has_account(st.reserve_account_id):
+                        new_led.add_account(st.reserve_account_id)
                     new_led.transfer(DEALER_ID, st.reserve_account_id, converted)
                 st.anchor = new_anchor
                 st.pent_up = 0.0
@@ -914,7 +979,7 @@ class World:
             # reserve movement makes that official swap neutral here.
             opening_market = self.market_external_positions(inv0, e0, self._res0)
             closing_market = self.market_external_positions(
-                self.dealer.inventory(), e0, self.reserves(),
+                self.dealer.inventory(), e0, self._peg_reserve_balances(),
             )
             principal = list(getattr(
                 self, "_factor_interest_principal", opening_market,
@@ -939,15 +1004,30 @@ class World:
         # positive dealer position is a foreign CLAIM on economy i ⇒ i's net foreign
         # LIABILITY); factor income_i (received) = −(i's interest outflow)/e_i.
         # NFA_i = (i's foreign ASSETS) − (foreigners' CLAIMS on i), in the numéraire.
-        # The dealer's position is the claims; the pegging CB's FX reserves are a real
-        # foreign asset of economy 0 AND a foreign claim on the anchor — the two cancel in
-        # the world sum, so Σ_i NFA_i = −(cumulative revaluation) still closes exactly.
+        # The dealer's position is the claims; every current or former pegging CB's
+        # retained FX reserves are a real foreign asset and a matching claim on its
+        # anchor.  Each pair cancels in the world sum, so Σ_i NFA_i still equals the
+        # negative cumulative dealer revaluation.
         nfa = [-inv[i] / e[i] for i in range(self.n)]
-        res = self.reserves()
-        if self.n > 1 and res != 0.0:
-            a = self.peg_anchor
-            nfa[self.peg_economy] += res / e[a]  # the pegger HOLDS the anchor's currency (a foreign asset)
-            nfa[a] -= res / e[a]                 # ... which is a foreign claim ON the anchor
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            res = self.reserves()
+            if self.n > 1 and res != 0.0:
+                anchor = self.peg_anchor
+                value = res / e[anchor]
+                nfa[self.peg_economy] += value
+                nfa[anchor] -= value
+        else:
+            for pegger, st in sorted(states.items()):
+                ledger = self.economies[st.anchor].ledger
+                if not ledger.has_account(st.reserve_account_id):
+                    continue
+                res = ledger.balance(st.reserve_account_id)
+                if res == 0.0:
+                    continue
+                value = res / e[st.anchor]
+                nfa[pegger] += value       # the pegger HOLDS the anchor's currency
+                nfa[st.anchor] -= value    # ... which is a foreign claim ON the anchor
         # Flows settled at the opening vector e0.  Closing e is reserved for end-of-
         # tick stocks and revaluation; valuing the CA at post-grope rates creates a
         # mechanical world residual.
@@ -1026,6 +1106,11 @@ class World:
             ]
             for i in range(self.n)
         ]
+        reserve_balances = self._peg_reserve_balances()
+        reserves_by_economy = {
+            economy_id: float(reserve_balances.get(economy_id, 0.0))
+            for economy_id in range(self.n)
+        }
         self.world_records.append(
             {
                 "t": self.t,
@@ -1084,6 +1169,7 @@ class World:
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
                 "reserves": self.reserves(),
+                "reserves_by_economy": reserves_by_economy,
                 "peg_intact": self._peg_intact,
                 "migrant_stock": list(self._migrant_stock),
                 "remittances": remit,
