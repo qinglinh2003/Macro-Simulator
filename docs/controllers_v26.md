@@ -1,7 +1,9 @@
 # v26 — Policy Controllers: institutions, not functions
 
-**Status**: DRAFT — architecture revised after code audit; freeze requires the C1
-lever table and C3 observation table to pass user review.
+**Status**: IMPLEMENTED AND LOCALLY ACCEPTED — C1–C5 engineering and the complete
+repository regression suite passed on 2026-07-18. The C1 lever and C3 observation
+tables are the frozen P0 contracts for this implementation and may be reopened by a
+later economic ruling.
 **Branch**: `feat/controllers-v26` (off `feat/policy-module`; requires the v25
 registry and batch mutation API).
 **Design rule**: engine facts outrank prose. Any later implementation finding that
@@ -82,6 +84,14 @@ ExternalPolicy, World vectors/caches, PegState, ledgers, cost budgets, versions,
 pending status, and effective-event output untouched. Sequentially calling a mutating
 per-economy API is not a World transaction.
 
+This transaction API is an internal synchronous kernel primitive. For an interactive
+server, one per-session mutex must remain held continuously from `prepare` through
+`commit`; a prepared transaction must never be returned to a client, retained across
+an `await`, or passed to another request/thread. Its `base_fingerprint` detects changes
+to the policy/control projection used by this protocol. It is deliberately **not** a
+general concurrency fingerprint for every mutable object in `World`, so it cannot
+replace transport-level serialization.
+
 Nothing outside the PolicyCoordinator/Executor path may make a discretionary policy
 change. Engine-forced transitions (for example, a broken peg) use an internal system
 transaction and the same version/event machinery. Genesis and executor-managed
@@ -134,12 +144,24 @@ same tick.
 Occupant types:
 
 - `NullOccupant`: submits explicit no-action decisions; bit-identity baseline;
-- `RuleOccupant`: a meeting-time proposal strategy, not an engine mechanism;
 - `ScheduledOccupant`: deterministic scripted proposals;
-- `HeuristicOccupant`: observation-based policy rules at decision boundaries;
+- `HeuristicOccupant`: a meeting-time, observation-based proposal rule, not an
+  engine mechanism;
 - `RandomFuzzOccupant`: legal-state exploration, clearly not a realism baseline;
 - `HumanQueueOccupant`: proposals supplied by the frontend;
 - `RLOccupant`: trained policy using the same DecisionContext.
+
+The built-in occupants have canonical event-replay construction specs. A logged
+`initialization="fresh"` accepts only an exact built-in instance in the same initial
+state produced by its construction spec: pre-consumed random RNGs and preloaded
+human/RL replay queues are rejected. One live/archive occupant object cannot occupy two
+seats; archive restoration preserves that identity explicitly. An application-supplied
+heuristic callable or RL model remains part of the pickled session
+checkpoint when it is pickle-safe, but arbitrary executable/model bytes are never put
+into the JSON event stream. P0 has no arbitrary-code replay factory: an application must
+reconstruct a trusted custom occupant in the replay genesis outside the event tape, or
+use the recorded-proposal trajectory mode described in section 11. Canonically logged
+hot-swaps are therefore limited to occupants with built-in construction specs.
 
 A human may hold several seats, and a world may mix occupants. One proposal belongs to
 one seat/context; cross-seat coordination produces separate proposals collected at the
@@ -151,9 +173,9 @@ Taylor rate setting, an already-enabled LoLR, automatic benefits/JG, OMO rules, 
 SPR rules execute every tick from effective policy state. They are standing
 mechanisms; no occupant is invoked to re-approve them daily.
 
-`monetary_regime="taylor"` is policy state, not a `RuleOccupant`.
+`monetary_regime="taylor"` is policy state, not a `HeuristicOccupant`.
 `monetary_regime="manual"` is also policy state, not evidence that a human holds the
-seat. A human can retain Taylor and change its parameters; a RuleOccupant can propose
+seat. A human can retain Taylor and change its parameters; a `HeuristicOccupant` can propose
 a manual regime. Hot-swapping either occupant leaves the current regime unchanged.
 
 ## 3. Four clocks and the normative tick boundary
@@ -216,6 +238,9 @@ trigger. Emergency contexts bypass the regular calendar only. A lever's
 `emergency=True` flag authorizes its use; it does not silently remove max-step,
 implementation lag, cost, or dynamic validation. A separate
 `emergency_implementation_lag` may be declared when reality justifies faster execution.
+If several distinct triggers authorize the same seat and decision group at one boundary,
+each trigger receives its own context and bulletin; their administrative capacity still
+comes from the same institutional calendar-cycle budget.
 
 ## 4. Decision and policy lifecycle
 
@@ -303,14 +328,15 @@ Existing Registry fields remain authoritative for strict types, range/nullabilit
 choices, capabilities, current-policy prerequisites, semantics, handlers, and
 read-points.
 
-The v25 Registry contains 102 levers and currently declares no non-null `max_step`.
-C1 must give every numeric lever a reviewed `control_scale` and either a finite
-`max_step` or an explicit documented reason for being unbounded. Frontend and RL
-adapters must not invent step sizes from raw min/max ranges.
+The v25 baseline Registry contained 102 levers and declared no non-null `max_step`.
+C1 now gives all 79 numeric levers a reviewed finite `control_scale` and `max_step`,
+and installs the latter in the Registry validator as Controller governance metadata.
+Frontend and RL adapters do not invent step sizes from raw min/max ranges.
 
-The complete 102-row C1 table is a user-review gate. `ramp_ticks` remains P1 because a
-true phased implementation changes executor and observation semantics; it must not be
-faked by repeated controller actions.
+The complete, implementation-aligned
+[102-row C1 lever table](controller_levers_v26.md) is the frozen P0 review surface.
+`ramp_ticks` remains P1 because a true phased implementation changes executor and
+observation semantics; it must not be faked by repeated controller actions.
 
 ## 6. Wire protocol: absolute, canonical, and idempotent
 
@@ -339,8 +365,8 @@ Canonical wire values are JSON-safe:
 - economy sets are sorted integer arrays on the wire and immutable sets in the engine;
 - aliases resolve before duplicate detection; duplicate canonical levers reject the
   whole proposal rather than "later value wins";
-- actions are canonically sorted for hashing/logging while preserving proposal display
-  order separately;
+- actions are canonically sorted for hashing/logging; any UI display order is
+  presentation-only and is not persisted in the executable proposal;
 - a target equal to the projected canonical value normalizes to `accepted_noop`;
 - no NaN, Infinity, Python repr, or unversioned frozenset enters the protocol.
 
@@ -352,10 +378,16 @@ machine-readable conflict response rather than silently rebasing an action.
 The kernel never waits on stdin. `HumanQueueOccupant` consumes proposals associated
 with an open DecisionContext; the orchestrator, not the engine kernel, controls pause:
 
-- **Interactive**: pause at meetings/emergencies until an explicit proposal or
-  no-action decision;
-- **Real-time**: close at a deadline; timeout is an explicit logged no-action input;
-- **Batch/replay**: inject recorded input events deterministically.
+- **Interactive**: a `HumanQueueOccupant` pauses at meetings/emergencies until an
+  explicit proposal or no-action decision;
+- **Real-time**: the transport/server owns the wall-clock deadline and calls the same
+  deterministic timeout operation; no wall clock enters the simulation state;
+- **Batch**: automated occupants answer contexts synchronously;
+- **Replay**: the replay adapter injects recorded input events deterministically.
+
+`run_mode` is therefore an audited execution-surface declaration, not four divergent
+economic kernels. Occupant assignment and server timeout calls determine the actual
+pause behavior.
 
 Minimum server API shape (transport details belong to the server arc):
 
@@ -368,10 +400,22 @@ DELETE /runs/{run}/policy/pending/{decision_id}
 POST   /runs/{run}/seat-assignments
 ```
 
+The implemented `ControllerService` is a **privileged in-process kernel façade**, not
+an authentication or authorization boundary. It intentionally accepts kernel IDs and
+an already-derived actor. A future HTTP/WebSocket transport must authenticate the
+principal, map that principal to allowed run/economy/seat scopes, derive `actor`
+server-side, and filter schema, context, observation, and pending-decision reads to
+those scopes. Client-supplied actor, economy, seat, context, or decision identifiers
+are never proof of authority.
+
 Submission uses an idempotency key. Authentication/seat assignment determines actor
 and authority. The client cannot create an emergency context or choose its own role.
 The server re-runs every validation; the frontend is never a trust boundary. A stale
-page receives a conflict containing the latest context/policy versions.
+page receives a conflict containing the latest context/policy versions. The transport
+also owns a per-session mutex and serializes every proposal submission, cancellation,
+seat assignment, timeout, and `advance` call. It must not expose a prepared policy
+transaction across an `await` or thread boundary; `prepare` and `commit` run together
+inside that same synchronous critical section.
 
 Occupant hot-swap creates a `SeatAssignmentEvent`, is checkpointed and replayed, and
 does not mutate policy. The assignment specifies how the new occupant's private state
@@ -401,8 +445,12 @@ quarter through a rolling window.
 Each DecisionContext includes:
 
 - released observations and missing/warm-up masks (never sentinel NaNs);
-- current and pending policy plus per-lever versions;
-- time since last effective change and projected next eligibility;
+- a deeply immutable `current_policy` snapshot for every lever owned by this seat in
+  this economy, plus `policy_versions` for those levers and their declared
+  prerequisites;
+- pending targets and their `pending_effective_ticks` for the seat;
+- `last_effective_ticks` and projected `next_eligibility_ticks` for every lever owned
+  by the seat, including levers whose decision group is not open at this boundary;
 - remaining/reserved admin capacity and visible cost estimates;
 - permitted actions with stable, machine-readable forbidden reasons;
 - a server-generated emergency bulletin when applicable;
@@ -413,7 +461,8 @@ regulator per-bank stress, external trade/capital/FX data, and energy operationa
 stocks/shortages. `OracleObservation` exists only for debugging and explicitly labeled
 oracle research. It cannot enter a human-comparable RL feature or normalization path.
 
-C3 must ship a user-reviewed observation table:
+C3 ships a user-reviewed
+[observation table](controller_observations_v26.md):
 
 | field | engine source | unit | reference/aggregation | release rule + lag | access/roles | warm-up/missing rule | normalization |
 |---|---|---|---|---|---|---|---|
@@ -479,36 +528,80 @@ ObjectiveTerm(
 )
 ```
 
-It also defines control-cost weight, discount/time normalization, and whether the
-profile is `human_comparable` or explicitly `oracle_research`. Default templates may
-represent central-bank inflation/employment/stability, Treasury activity/fiscal
-sustainability/welfare, regulator stability/credit access, external balance/reserves,
-and energy shortage/affordability/fiscal cost. All weights remain run-spec choices.
+It also defines control-cost weight, reward time normalization (`per_tick` or `sum`),
+and whether the profile is `human_comparable` or explicitly `oracle_research`.
+Default templates may represent central-bank inflation/employment/stability, Treasury
+activity/fiscal sustainability/welfare, regulator stability/credit access, external
+balance/reserves, and energy shortage/affordability/fiscal cost. All weights remain
+run-spec choices.
 
 Human players see the same mandate dashboard and score components available to a
 human-comparable RL occupant. A reward must not leak an unpublished target variable;
 oracle social-welfare rewards are permitted only under the oracle label.
 
-The Gym adapter maps exactly the serialized DecisionContext used by the frontend into
-vectors, and maps actions back into PolicyProposal. It is a semi-Markov decision
-interface: one `env.step` advances to the next context for that seat, which may be a
-regular or emergency interval. Reward accumulates over intervening simulation ticks,
-is time-normalized according to ObjectiveSpec, and returns `elapsed_ticks`.
+The Gym adapter exposes a **context base vector plus server-advisory action-mask/cost
+metadata** and maps actions back into `PolicyProposal`. The base vector reads policy
+values, versions, pending targets/timing, and admin balances exclusively from the
+serialized `DecisionContext`; it never fills missing fields from live `World` or
+`PolicyCoordinator` state. A synthetic horizon context is a newly refreshed immutable
+snapshot, not a stale context combined with live reads.
 
-Action masking is advisory ergonomics, not authority. Stale or adversarial actions may
-still reach the Coordinator and must be rejected safely. A trained occupant can replace
-a human seat or coexist with humans under the same protocol.
+For every action lever, the base vector contains the effective value/null mask, pending
+target/null/presence mask, policy version, time since last effectiveness plus a
+`never_effective` mask, delta to next eligibility, and pending-effective delta (masked
+by pending presence). Thus two otherwise equal states with different implementation
+lags or minimum-hold history remain distinguishable to a Markov policy.
+
+This is a semi-Markov decision interface: one `env.step` advances to the next context
+for that seat, which may be a regular or emergency interval. Reward accumulates over
+intervening simulation ticks, is time-normalized according to `ObjectiveSpec`, and
+returns `elapsed_ticks`. Discounting is not an `ObjectiveSpec` field: an SMDP trainer
+applies `gamma ** elapsed_ticks` when bootstrapping. Any shared discount convention
+belongs in an explicit, versioned training/run profile (a P1 contract), rather than
+being silently imposed by the P0 environment. Vector action ingress validates the
+original one-dimensional numeric representation before integer conversion: booleans,
+fractional/non-finite values, strings, object arrays, wrong shapes, and codes outside
+`0/1/2` are rejected without changing session state.
+
+Action masks and directional cost estimates may consult current server-side
+Coordinator/World metadata because they are explicitly advisory ergonomics, not part
+of the Markov context snapshot and not authority. Stale or adversarial actions may still
+reach the Coordinator and must be rejected safely. A trained occupant can replace a
+human seat or coexist with humans under the same protocol.
 
 ## 11. Event log, replay, and checkpoint root
 
-The canonical event stream distinguishes:
+The canonical event stream distinguishes replayable ingress from transitions derived
+from that ingress. `seat_assignment`, direct/automatic `proposal_submitted`,
+`human_proposal_queued`, `timeout`, and cancel requests are `input` events. Context
+opening, `human_proposal_collected`, accepted/rejected decisions, effective
+transactions, triggers, and forced system transitions are `derived` events.
 
-- `input`: proposal, explicit no-action, timeout, cancel/supersede, occupant swap;
-- `derived`: trigger, accepted/rejected decision, effective transaction, forced system
-  transition.
+Successful frontend ingress appends `human_proposal_queued` immediately and atomically
+with the mailbox write; an exact idempotent retry appends nothing. Likewise,
+`timeout_context` appends `timeout` when the deadline decision is recorded. Polling a
+mailbox later appends `human_proposal_collected`. Coordinator submission does not append
+a second proposal/timeout input for either path. Automatic occupants still produce
+`proposal_submitted` during boundary advancement and mark their input origin so replay
+can regenerate them. A caller that bypasses session ingress with a direct mailbox write
+may be backfilled only while that context is already `awaiting_human`; a proposal
+preloaded before context opening is rejected with complete boundary rollback because no
+canonical input position exists inside the atomic opening operation.
 
-Replay injects only `input` events. Derived events are regenerated and compared; replay
-must not execute a forced peg break twice.
+These human/timeout event payloads contain the canonical proposal and identifiers, never
+the `DecisionContext` or its observation. Confidential/operational releases therefore do
+not leak into the event tape. The checkpoint root retains and validates an explicit set
+of open contexts whose human ingress is already recorded; replay semantics do not infer
+this fact from the current occupant type.
+
+Replay injects only `input` events in global-sequence order. Derived events are
+regenerated and compared, so replay must not execute a forced peg break twice. An inert
+RL replay occupant is privately seeded from the recorded automatic proposal; normal
+poll/commit then regenerates `proposal_submitted` at its original sequence without a
+synthetic human queue event. At an `until_tick` that ends inside a human decision window,
+replay first advances a pickled probe. It opens or polls the live terminal boundary only
+when the probe remains paused, and never crosses the requested simulation tick merely to
+reproduce a terminal suffix.
 
 Every event contains at least:
 
@@ -541,7 +634,17 @@ snapshot and event prefix agree.
 
 Replay acceptance compares engine records, final Policy/ExternalPolicy, active
 PegState/World coupling state, pending queue, coordinator/controller state, and the
-canonical event hash. The historical records-only digest is insufficient.
+canonical event hash. The historical records-only digest is insufficient. This full
+continuation-state comparison applies to canonically constructible built-in occupants.
+
+For an application-supplied `RLOccupant`, `replay_mode="recorded_proposals"` has a
+narrower, explicit contract: it reproduces the source proposal/decision/event and engine
+trajectory through the end of the tape using an inert RL placeholder, without
+deserializing arbitrary model bytes. It does **not** reconstruct model/private training
+state and cannot continue autonomous decisions after the tape ends. A normal session
+checkpoint does retain a pickle-safe live model and is the supported bit-identical
+continuation mechanism; continuing an event-only RL replay requires an explicit trusted
+model reassignment/factory.
 
 ## 12. Frozen rulings and explicit non-goals
 
@@ -573,9 +676,24 @@ Explicit v1 non-goals:
 | C1 | full 102-lever authority/time/control/cost table; Proposal/Decision types; `ControlledSimulationSession` root; pure Registry projection; atomic WorldPolicyTransaction; dynamic-reference and peg-state fixes; minimal global version/event core | no-controller frontier digest exact; every numeric lever has reviewed scale and explicit max-step ruling; cross-economy failure leaves no partial Policy/World/PegState/ledger/cost/version/event; sanctions bounds and same-tick peg handoff pass; effective_tick domestic/external first-read tests; pending/version/event state survives a checkpoint round trip |
 | C2 | five seats; decision-group calendars; pending timeline; CostSpec; trigger state machines; Null/Scheduled/Heuristic/RandomFuzz occupants | Null-attached and no-controller **engine/frontier** digests are identical (their session-event streams intentionally differ); pause consumes no tick/RNG; trigger hysteresis/cooldown prevents repeated sessions; 30y legal fuzz runs x3 seeds conserve and never crash; emergency peg drill succeeds only when causally early enough |
 | C3 | InstitutionObservation, Release calendar/access control, permitted-action reasons, full observation table, ObjectiveSpec/score components | at boundary t only releases with released_at<=t are visible; rolling values use released vintages; role/access and missing-reason tests; human and Gym serializers receive byte-equivalent contexts; oracle data/reward cannot enter human-comparable profile |
-| C4 | HumanQueueOccupant, three run modes, hot-swap, server API types, full session checkpoint coverage, canonical input/derived replay | idempotent retries do not double-charge/log; stale and forged emergency submissions reject; timeout/no-action/swap replay; checkpoint with pending action or open human context resumes bit-identically; full session/event digest matches |
+| C4 | HumanQueueOccupant, four execution-surface modes, hot-swap, server API types, full session checkpoint coverage, canonical input/derived replay | idempotent retries do not double-charge/log; stale and forged emergency submissions reject; timeout/no-action/swap replay; checkpoint with pending action or open human context resumes bit-identically; full session/event digest matches for canonical built-in occupants; opaque RL event replay obeys the recorded-proposal contract above |
 | C5 | Gym semi-Markov adapter, action normalization/masking, checkpoint reset | a fixed canonical proposal trace through Gym and direct Coordinator paths is bit-identical; elapsed-tick reward normalization is correct; masked agent emits legal proposals while adversarial/stale actions are still safely rejected by Coordinator |
 
-The C1 lever table and C3 observation table are separate user-review gates. The design
-returns to `FROZEN` only after both tables exist, all factual contradictions above are
-closed, and their economic judgments have been accepted.
+### 13.1 Local acceptance record — 2026-07-18
+
+- machine contract audit: Registry = control specs = lever table = **102** exact
+  names; default observation spec = observation table = **29** exact names; all
+  **79** numeric levers have finite positive control scales and max steps;
+- Controller suite: **260 passed, 3 skipped** (the three opt-in long runs);
+- 30-year legal random-controller conservation runs: **3 passed** with the long-run
+  gate enabled;
+- policy/open-economy/peg/ledger regression slice: **155 passed, 8 skipped**;
+- complete repository suite with the RL extra: **1329 passed, 11 conditionally
+  skipped, 0 failed** in 1:20:38;
+- `compileall` and `git diff --check` passed. The only test warnings are four
+  Gymnasium advisories about intentionally unbounded `Box` observation limits.
+
+The C1 lever table and C3 observation table remain separate economic review surfaces.
+This branch's P0 implementation treats their current no-`TODO` contents as frozen; a
+later change to ownership, timing, visibility, or normalization is a new economic ruling,
+not an incidental refactor.

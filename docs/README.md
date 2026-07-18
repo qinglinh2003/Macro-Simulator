@@ -5,6 +5,11 @@ This directory keeps long-form project documentation out of the repository root.
 - [`design/`](design/README.md) — development-first design docs: current brief, durable core rules, and archived research history.
 - [`diagnostics/`](diagnostics/README.md) — runtime probes, causal/root-cause matrices, and observed-data contracts.
 - [`plans/`](plans/README.md) — version-specific implementation plans.
+- [`policy_module_v25.md`](policy_module_v25.md) — canonical Policy module design.
+- [`controllers_v26.md`](controllers_v26.md) — institutional Controller design and
+  acceptance contract, with the current
+  [lever](controller_levers_v26.md) and
+  [observation](controller_observations_v26.md) review tables.
 - [`../archive/`](../archive/README.md) — archived scripts and other pre-refactor reference material.
 - [`../artifacts/`](../artifacts/README.md) — generated/reference images and small experiment artifacts.
 

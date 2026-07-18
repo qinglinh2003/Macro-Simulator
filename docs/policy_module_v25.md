@@ -496,7 +496,7 @@ Frontier digest `43ed38f7` bit-exact through every batch.
 | B4a+b | f96a67f | bank macroprudential (8) + mortgage regulation via `_sync_policy` (7) |
 | B4d | 001f662 | Treasury debt mgmt; **bond_coupon = first real NEW_CONTRACTS cohort** (per-lot coupon; merge key includes it) |
 | B4e | b066259 | final 14 [C]; 3 renames w/ legacy aliases; RentalMarket anti-snapshot sync; **soe_efirm = first STATE_TRANSITION handler** |
-| [N] | 4262b07 | **monetary_regime** (A5 three-state; manual<=>staged-rate atomicity; sensor runs in manual), jg_public_works_share, deposit_rate_floor |
+| [N] | 4262b07 | **monetary_regime** (A5 three-state; manual<=>batched-rate atomicity; sensor runs in manual), jg_public_works_share, deposit_rate_floor |
 | B5a | de7fc0a | **ExternalPolicy**: per-economy ownership of 11 unilateral [W] levers; atomic barrier commit; A6 sanctions (unilateral ownership / symmetric OR effect) |
 | B5b | d986255 | **PegState multi-pegger data model**; CBRES:{pegger_id}; fx_regime authority (peg_economy deleted); runtime adoption / anchor change / voluntary exit; **the live-rate pressure defect FIXED** |
 | B6 | (this) | **PolicySeed** (r_interest -> initial_policy_rate; genesis rate + Gordon anchor + exogenous pin); metrics split-brain swept |
@@ -513,10 +513,11 @@ Frontier digest `43ed38f7` bit-exact through every batch.
 7. The trilemma tests' "independence" was an artifact of the static-rate defect: under
    live rates an active Taylor pair CONVERGES -- pinning requires regime=exogenous.
 
-### Still open (design threads, not levers)
+### Follow-on design threads (not levers)
 - Shock module (deferred by user ruling)
-- Random/heuristic/RL controllers on top of set_lever + the action log (the interface
-  contract -- typed validation domains -- is in place)
+- Random/heuristic/RL controllers are implemented and locally accepted in
+  [`controllers_v26.md`](controllers_v26.md); the future frontend/transport remains
+  outside that engine contract.
 - P1 multi-pegger runtime (data model ready), sanctions scope extension to capital flows
 - §1.6 hardcoded institutions promoted piecemeal (estate tax, probate window, working-age
   bounds remain documented literals)
