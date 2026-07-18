@@ -115,7 +115,7 @@ def run_credit_phase(econ: Any) -> None:
                     expected_operating_cash_flow=expected_operating_cash_flow,
                     loan_rate=loan_rate_for(econ, f.id),
                     amort=cfg.amort,
-                    min_dscr=cfg.firm_credit_min_dscr,
+                    min_dscr=econ.policy.firm_credit_min_dscr,
                 )
                 econ._firm_credit_dscr_allowed += granted
                 dscr_shortfall = max(0.0, leverage_allowed - granted)

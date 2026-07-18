@@ -17,8 +17,8 @@ Sources (the executable manifest):
 Checks (all must pass; tests/test_policy_inventory.py enforces in CI):
   1. every discovered source field appears in exactly one bucket
   2. no stale entries (classified name that no longer exists in the source)
-  3. count identities from the design doc hold (72 [P], 14 [C], 14 [W], 0 PENDING,
-     3 [N]; candidate arithmetic 72+14+14+3-1(dead central_bank replaced) = 102;
+  3. count identities from the design doc hold (86 [P], 0 [C], 14 [W], 0 PENDING,
+     3 [N]; candidate arithmetic 86+0+14+3-1(dead central_bank replaced) = 102;
      plus r_interest seed-promoted to PolicySeed.initial_policy_rate)
   4. every hardcoded-registry entry with a pattern is found in its file
 """
@@ -67,32 +67,13 @@ POLICY_NEW = {
 }
 
 # ---- Config source ----
-CONFIG_POLICY_MIGRATE = {  # the 37 [C] fields that migrate into Policy
-    # fiscal
-    "deficit_u_cap", "gov_investment_share",
-    # monetary rate (A5 ruling: r_interest is NOT here -- it demotes to the
-    # PolicySeed as initial_policy_rate; runtime rate changes go through
-    # monetary_regime=manual + manual_policy_rate)
-
-    # monetary beliefs & measurement: MIGRATED (B4c) -- now Policy fields, so they
-    # auto-join POLICY_SEED_LEGACY via the derived set
-    # monetary quantity
-    "omo_index_deposits",
-    # treasury debt management: MIGRATED (B4d, coupon as a per-lot cohort)
-    # bank macroprudential: MIGRATED (B4a) -- now Policy fields (auto-join seed-legacy)
-    # mortgage regulation: MIGRATED (B4b) via the _sync_policy channel
-    # insolvency & eviction law
-    "bankrupt_persist", "household_bankruptcy",
-    # energy regime
-    "soe_efirm",
-    # audit-round reclassifications
-    "land_fee_share", "rental_eviction_arrears", "unified_bank_rwa",
-    "firm_credit_min_dscr", "bank_migrate_on_failure",
-    # PENDING rulings closed 2026-07-18 (renames carry legacy aliases at migration):
-    "firm_capital_haircut",     # -> regulatory_firm_capital_haircut, new-credit-only
-    "firm_inventory_haircut",   # -> regulatory_firm_inventory_haircut, new-credit-only
-    "land_convexity",           # -> land_fee_stock_elasticity, new-construction-only
-}
+CONFIG_POLICY_MIGRATE: set[str] = set()   # B4 COMPLETE: all 39 [C] migrated
+# (fiscal B4e; monetary beliefs B4c; quantity B4e; debt mgmt B4d cohort; bank
+# macroprudential B4a; mortgage regulation B4b; insolvency/eviction law, energy
+# regime, land block and audit reclassifications B4e. The three renames --
+# firm_capital_haircut/firm_inventory_haircut -> regulatory_*, land_convexity ->
+# land_fee_stock_elasticity -- carry legacy aliases in the registry and appear
+# in POLICY_RENAMED_FROM below so their config names stay classified.)
 
 CONFIG_PENDING_RULING: set[str] = set()   # all five closed 2026-07-18
 
@@ -106,9 +87,15 @@ CONFIG_SHOCK_MODULE = {"energy_shock_at", "energy_shock_magnitude", "energy_shoc
 # every [N] lever implemented into Policy (they seed from PolicySeed, not Config)
 _NO_CONFIG_COUNTERPART = {"tax_necessity_rate", "tax_luxury_rate", "policy_rate_override",
                           "bank_leverage_cap"}
-CONFIG_POLICY_SEED_LEGACY = {
+# Policy fields renamed at migration: Policy new name -> Config legacy seed name
+POLICY_RENAMED_FROM = {
+    "regulatory_firm_capital_haircut": "firm_capital_haircut",
+    "regulatory_firm_inventory_haircut": "firm_inventory_haircut",
+    "land_fee_stock_elasticity": "land_convexity",
+}
+CONFIG_POLICY_SEED_LEGACY = ({
     f.name for f in dataclasses.fields(Policy)
-} - _NO_CONFIG_COUNTERPART
+} - _NO_CONFIG_COUNTERPART - set(POLICY_RENAMED_FROM)) | set(POLICY_RENAMED_FROM.values())
 
 CONFIG_STRUCTURE = {
     "n_households", "n_firms", "n_ticks", "seed", "a", "n_firms_c", "n_firms_k",
@@ -351,7 +338,7 @@ def verify() -> list[str]:
         "PENDING": len(CONFIG_PENDING_RULING),
         "N": len(POLICY_NEW),
     }
-    expect = {"P": 72, "C": 14, "W": 14, "PENDING": 0, "N": 3}   # +B4d: debt mgmt migrated
+    expect = {"P": 86, "C": 0, "W": 14, "PENDING": 0, "N": 3}   # B4 COMPLETE: all [C] migrated
     for k, v in expect.items():
         if c[k] != v:
             errors.append(f"COUNT {k}: {c[k]} != {v}")
@@ -376,7 +363,7 @@ def main() -> int:
     fields = discover()
     total = sum(len(v) for v in fields.values())
     print(f"sources: " + ", ".join(f"{k}={len(v)}" for k, v in fields.items()) + f"  (total {total})")
-    print(f"policy candidates: 72[P] + 14[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
+    print(f"policy candidates: 86[P] + 0[C] + 14[W] + 3[N] - 1(dead) = 102 ; PENDING = 0 ; +1 seed-promoted (r_interest -> initial_policy_rate)")
     print(f"hardcoded registry: {len(HARDCODED)} entries "
           f"({sum(1 for h in HARDCODED if h[1] is not None)} file-verified, rest curated)")
     print("NOTE: function-default/literal scan beyond the curated registry is a staged follow-up.")

@@ -43,7 +43,7 @@ def run_firm_demographics_phase(econ: Any) -> None:
             else econ.ledger.balance(f.id) - econ.ledger.debt(f.id)
         )
         f.insolvent_ticks = f.insolvent_ticks + 1 if nw < -EPS else 0
-        if f.insolvent_ticks >= cfg.bankrupt_persist:
+        if f.insolvent_ticks >= econ.policy.bankrupt_persist:
             dead.append(f)
             continue
         if cfg.shell_exit_ticks > 0:

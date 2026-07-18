@@ -269,7 +269,67 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        read_point="housing/market.py::_collect_property_tax"),
     _L("housing_in_wealth_tax", Bool(), requires=frozenset({"housing_enabled"}),
        read_point="systems/settlement.py::wealth-tax base"),
+    # -- fiscal structure (B4e) --
+    _L("deficit_u_cap", Range(0.0, 10.0), requires=frozenset({"government"}),
+       read_point="systems/goods.py::slack-scaled deficit cap"),
+    _L("gov_investment_share", Range(0.0, 0.2), requires=frozenset({"government"}),
+       read_point="systems/capital_goods.py::public K budget + settlement accumulation"),
+    # -- monetary plumbing (B4e) --
+    _L("omo_index_deposits", Bool(), requires=frozenset({"omo"}),
+       read_point="systems/central_bank.py::reserve-target indexing"),
+    # -- insolvency & eviction law (B4e) --
+    _L("bankrupt_persist", Range(1, 3650), read_point="systems/firm_demographics.py::death gate"),
+    _L("household_bankruptcy", Bool(), requires=frozenset({"margin_credit"}),
+       read_point="systems/equity.py::margin-debt discharge"),
+    _L("rental_eviction_arrears", Range(1, 3650),
+       read_point="housing/market.py::per-tick sync -> RentalMarket.eviction_arrears"),
+    _L("bank_migrate_on_failure", Bool(), requires=frozenset({"bank_enabled"}),
+       read_point="systems/banking.py::resolution borrower migration"),
+    # -- regulatory (B4e; the haircut pair RENAMED regulatory_*) --
+    _L("unified_bank_rwa", Bool(), requires=frozenset({"bank_enabled"}),
+       read_point="systems/banking.py::unified_bank_rwa_enabled (helper reads Policy)"),
+    _L("firm_credit_min_dscr", Range(0.0, 5.0), requires=frozenset({"bank_enabled"}),
+       semantics=NEW_CONTRACTS, handler_id="underwriting_read_at_origination",
+       read_point="systems/credit.py::DSCR floor (new loans only by construction)"),
+    _L("regulatory_firm_capital_haircut", Range(0.0, 1.0), requires=frozenset({"bank_enabled"}),
+       semantics=NEW_CONTRACTS, handler_id="underwriting_read_at_origination",
+       read_point="systems/firm_balance_sheet.py::borrowing base",
+       state_notes="renamed from firm_capital_haircut (legacy alias)"),
+    _L("regulatory_firm_inventory_haircut", Range(0.0, 1.0), requires=frozenset({"bank_enabled"}),
+       semantics=NEW_CONTRACTS, handler_id="underwriting_read_at_origination",
+       read_point="systems/firm_balance_sheet.py::borrowing base",
+       state_notes="renamed from firm_inventory_haircut (legacy alias)"),
+    # -- land policy (B4e; elasticity RENAMED) --
+    _L("land_fee_share", Range(0.0, 1.0), requires=frozenset({"housing_construction_enabled"}),
+       semantics=NEW_CONTRACTS, handler_id="land_fee_at_construction_start",
+       read_point="housing/construction.py::land fee at start (new units only)"),
+    _L("land_fee_stock_elasticity", Range(0.0, 10.0),
+       requires=frozenset({"housing_construction_enabled"}),
+       semantics=NEW_CONTRACTS, handler_id="land_fee_at_construction_start",
+       read_point="housing/construction.py::land fee convexity",
+       state_notes="renamed from land_convexity (legacy alias)"),
+    # -- ownership regime (B4e) --
+    _L("soe_efirm", Bool(), semantics=STATE_TRANSITION, handler_id="soe_transition",
+       read_point="genesis flag -> firm.state_owned; runtime flips via the handler",
+       state_notes="the transition handler mutates e_firms[0].state_owned directly; "
+                   "dividend routing reads the FIRM state, not the lever"),
 ]}
+
+# renamed levers keep their legacy config names callable (deprecation path)
+LEGACY_ALIASES = {
+    "firm_capital_haircut": "regulatory_firm_capital_haircut",
+    "firm_inventory_haircut": "regulatory_firm_inventory_haircut",
+    "land_convexity": "land_fee_stock_elasticity",
+}
+
+# STATE_TRANSITION handlers: applied by set_lever AFTER the Policy field mutation
+def _handler_soe_transition(econ, old, new):
+    if getattr(econ, "e_firms", None):
+        econ.e_firms[0].state_owned = bool(new)
+
+HANDLERS = {
+    "soe_transition": _handler_soe_transition,
+}
 
 
 # ---------------------------------------------------------------- mutation API
@@ -277,6 +337,11 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
 def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
               target: Any = None) -> None:
     """The sanctioned mutation path: validate -> apply -> log (provisional envelope)."""
+    if name in LEGACY_ALIASES:
+        import warnings
+        warnings.warn(f"policy lever '{name}' was renamed '{LEGACY_ALIASES[name]}'",
+                      DeprecationWarning, stacklevel=2)
+        name = LEGACY_ALIASES[name]
     lever = REGISTRY.get(name)
     if lever is None:
         raise KeyError(f"unknown policy lever: {name}")
@@ -288,6 +353,8 @@ def set_lever(econ: Any, name: str, value: Any, *, actor: str = "controller",
     if err:
         raise ValueError(f"{name}: {err}")
     setattr(econ.policy, name, value)
+    if lever.semantics == STATE_TRANSITION:
+        HANDLERS[lever.handler_id](econ, old, value)
     log = getattr(econ, "_policy_action_log", None)
     if log is None:
         log = econ._policy_action_log = []

@@ -1663,7 +1663,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     # Optional common bank-capital envelope.  Report live ledger exposure rather
     # than the intra-credit cache so principal service and write-offs later in the
     # tick are reflected without mutating model state during observation.
-    if getattr(econ.cfg, "unified_bank_rwa", False) and getattr(econ, "banks", None):
+    if getattr(econ.policy, "unified_bank_rwa", False) and getattr(econ, "banks", None):
         alive_banks = [bank for bank in econ.banks if bank.alive]
         exposures = [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
         capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank, bond_deltas)) for bank in alive_banks]

@@ -166,7 +166,7 @@ def run_settlement_phase(econ: Any) -> None:
     for f in econ.investing_firms:
         f.capital_prev = f.capital
         f.capital = (1.0 - f.delta_K) * f.capital + f.investment
-    if cfg.gov_investment_share > 0.0 or econ.policy.job_guarantee:
+    if econ.policy.gov_investment_share > 0.0 or econ.policy.job_guarantee:
         econ.public_capital = (
             (1.0 - cfg.public_capital_depreciation) * econ.public_capital
             + getattr(econ, "_gov_capital_units", 0.0)

@@ -108,7 +108,7 @@ def bank_constraint(econ: Any) -> bool:
 
 def unified_bank_rwa_enabled(econ: Any) -> bool:
     """Whether new credit shares one bank-wide risk-weighted capital envelope."""
-    return bool(getattr(econ.cfg.banking, "unified_bank_rwa", False))
+    return bool(getattr(econ.policy, "unified_bank_rwa", False))   # B4e: live lever
 
 
 def refresh_loan_books(econ: Any) -> None:
@@ -611,7 +611,7 @@ def fail_bank(econ: Any, bank: Bank) -> None:
         _default_interbank_liabilities(econ, bank)
         _transfer_failed_interbank_assets(econ, bank, alive)
         assert_interbank_positions(econ)
-    if cfg.bank_migrate_on_failure and alive:
+    if econ.policy.bank_migrate_on_failure and alive:
         movers = [account_id for account_id, assigned_bank in econ._bank_of.items() if assigned_bank is bank]
         for i, account_id in enumerate(movers):
             new_bank = alive[i % len(alive)]

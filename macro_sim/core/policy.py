@@ -92,6 +92,23 @@ class Policy:
     bond_coupon: float = 0.0             # coupon for NEW issues (per-lot cohort; stock never re-couponed)
     bond_maturity: int = 1               # tenor for NEW issues
 
+    # -- misc regulation & law (B4e; defaults = legacy config defaults) --
+    deficit_u_cap: float = 1.0           # max multiple of the deficit target under slack
+    gov_investment_share: float = 0.0    # g_I: public investment share of potential output
+    omo_index_deposits: bool = False     # reserve target follows deposits, not genesis
+    bankrupt_persist: int = 10           # insolvency law: ticks insolvent before death
+    household_bankruptcy: bool = False   # margin-debt discharge valve
+    rental_eviction_arrears: int = 30    # eviction law (per-tick sync channel, anti-snapshot)
+    bank_migrate_on_failure: bool = True # resolution: move borrowers to alive banks
+    unified_bank_rwa: bool = False       # unified RWA capital gate
+    firm_credit_min_dscr: float = 1.25   # underwriting DSCR floor (new credit only)
+    soe_efirm: bool = False              # E0 state-owned (runtime flip = transition handler)
+    land_fee_share: float = 0.2          # land fee share of house price (at construction start)
+    # renamed at migration (legacy aliases live in the registry):
+    land_fee_stock_elasticity: float = 1.0    # was land_convexity; new construction only
+    regulatory_firm_capital_haircut: float = 0.30    # was firm_capital_haircut; new credit only
+    regulatory_firm_inventory_haircut: float = 0.50  # was firm_inventory_haircut; new credit only
+
     omo: bool = False                    # open-market operations on/off (the CB steers reserves)
     omo_reserve_target: float = 0.0      # QE/QT stance: target Σ bank reserves as a FRACTION of genesis reserves
     omo_drain_frac: float = 0.1          # per-tick fraction of the gap to the target moved (drain/inject speed)
@@ -176,6 +193,21 @@ class Policy:
             bond_finance_frac=getattr(cfg, "bond_finance_frac", 0.0),
             bond_coupon=getattr(cfg, "bond_coupon", 0.0),
             bond_maturity=getattr(cfg, "bond_maturity", 1),
+            deficit_u_cap=getattr(cfg, "deficit_u_cap", 1.0),
+            gov_investment_share=getattr(cfg, "gov_investment_share", 0.0),
+            omo_index_deposits=getattr(cfg, "omo_index_deposits", False),
+            bankrupt_persist=getattr(cfg, "bankrupt_persist", 10),
+            household_bankruptcy=getattr(cfg, "household_bankruptcy", False),
+            rental_eviction_arrears=getattr(cfg, "rental_eviction_arrears", 30),
+            bank_migrate_on_failure=getattr(cfg, "bank_migrate_on_failure", True),
+            unified_bank_rwa=getattr(cfg, "unified_bank_rwa", False),
+            firm_credit_min_dscr=getattr(cfg, "firm_credit_min_dscr", 1.25),
+            soe_efirm=getattr(cfg, "soe_efirm", False),
+            land_fee_share=getattr(cfg, "land_fee_share", 0.2),
+            # renamed fields seed from their LEGACY config names:
+            land_fee_stock_elasticity=getattr(cfg, "land_convexity", 1.0),
+            regulatory_firm_capital_haircut=getattr(cfg, "firm_capital_haircut", 0.30),
+            regulatory_firm_inventory_haircut=getattr(cfg, "firm_inventory_haircut", 0.50),
             omo=cfg.omo,
             omo_reserve_target=cfg.omo_reserve_target,
             omo_drain_frac=cfg.omo_drain_frac,

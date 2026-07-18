@@ -85,7 +85,7 @@ def run_omo_phase(econ: Any) -> None:
     for bank in econ.banks:
         claims.setdefault(bank.id, 0.0)
     _resolve_failed_bank_omo_claims(econ, banks)
-    if getattr(cfg, "omo_index_deposits", False):
+    if pol.omo_index_deposits:   # B4e: live lever
         # v13: index the reserve target to what the payment system actually needs -- the
         # genesis-anchored nominal target detaches as soon as the price level moves (the sick
         # 10k run drained 135M against a fixed 868k target and ran on LOLR for ten years)

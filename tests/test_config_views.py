@@ -172,13 +172,14 @@ def test_settlement_system_reads_grouped_config_view_for_government_gate():
         government=False,
         pro_rata_dividends=False,
         per_firm_equity=False,
-        gov_investment_share=0.0,
         public_capital_depreciation=0.05,
         jg_productivity=0.0,
     )
     econ = SimpleNamespace(
         cfg=SettlementCfgTrap(view),
-        policy=SimpleNamespace(tax_profit_rate=0.0, job_guarantee=False),
+        # B4e: gov_investment_share is Policy now -- the cfg view no longer carries it
+        policy=SimpleNamespace(tax_profit_rate=0.0, job_guarantee=False,
+                               gov_investment_share=0.0),
         households=[],
         firms=[],
         investing_firms=[],
@@ -243,7 +244,11 @@ def test_securities_system_reads_grouped_config_view_for_bond_market_value():
     view = SimpleNamespace(bond_maturity=1, bond_coupon=0.0)
     econ = SimpleNamespace(cfg=SecuritiesCfgTrap(view), t=0, _rate=0.05)
 
-    assert bond_market_value(econ, {"face": 100.0, "matures_at": 3}) == pytest.approx(100.0)
+    # B4d: the par-bill fast path is PER-LOT now. A one-period zero-coupon lot is
+    # par; a 3-period lot is DISCOUNTED even when the config regime says "bills"
+    # (the old global gate mispriced mixed books -- that contract was the bug).
+    assert bond_market_value(econ, {"face": 100.0, "matures_at": 1}) == pytest.approx(100.0)
+    assert bond_market_value(econ, {"face": 100.0, "matures_at": 3}) < 100.0
 
 
 def test_firm_demographics_system_reads_grouped_config_view_for_startup_cash():

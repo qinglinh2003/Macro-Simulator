@@ -342,7 +342,7 @@ def run_per_firm_equity_phase(econ: Any) -> None:
                     econ._hh_margin_repaid += pay
 
     econ._hh_bankruptcies = 0
-    if cfg.household_bankruptcy and cfg.margin_credit:
+    if econ.policy.household_bankruptcy and cfg.margin_credit:
         for h in econ.households:
             if h.margin_debt <= EPS:
                 continue

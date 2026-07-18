@@ -466,6 +466,13 @@ def test_energy_rationing_live():
 
 # ================= section 7: HOUSING batch 3 =================
 
+FIXTURES["rental"] = dict(
+    seed=33, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
+    demographics_population=260, n_ticks=400, government=True,
+    housing_enabled=True, housing_market_enabled=True, housing_construction_enabled=True,
+    housing_rental_enabled=True, n_builders=3,
+)
+
 FIXTURES["housing"] = dict(
     seed=33, n_households=40, n_firms_c=25, n_firms_k=12, n_banks=2,
     demographics_population=260, n_ticks=400, government=True, tax_wealth_rate=0.001,
@@ -597,3 +604,75 @@ def test_bond_coupon_cohort_never_recoupons_stock():
     assert round(5.0e-4, 9) in coupons, "post-change issues must carry the new coupon"
     assert round(c0, 9) in coupons, (
         f"pre-change lots must KEEP their issued coupon {c0}: {coupons}")
+
+
+# ================= section 11: B4e misc regulation & law =================
+
+def test_gov_investment_share_live():
+    # STOCK is shadowed (the K market clears; government buys leftovers cheapest-first,
+    # so realized public investment is tiny in a cleared market -- filed in the matrix).
+    # The FLOW gauge is the honest observable: zero without the lever, positive with it.
+    # (the v13 preset already invests: baseline flow > 0). DOWNWARD is the clean
+    # direction: zeroing the share must kill the per-tick flow gauge exactly.
+    a = _baseline("fiscal")
+    b = run_b(lambda p: setattr(p, "gov_investment_share", 0.0), fixture="fiscal")
+    fa = float(getattr(a, "_public_investment", 0.0))
+    fb = float(getattr(b, "_public_investment", 0.0))
+    assert fa > 0.0, "fixture must invest at baseline"
+    assert fb == 0.0, "zeroing the share must stop public investment"
+
+
+def test_land_fee_share_live():
+    a = _baseline("housing")
+    b = run_b(lambda p: setattr(p, "land_fee_share", 0.8), fixture="housing")
+    fa = float(getattr(a, "_land_fee_paid", 0.0))
+    fb = float(getattr(b, "_land_fee_paid", 0.0))
+    assert abs(fb - fa) > 1.0, f"land fee revenue must respond: {fa:.1f} vs {fb:.1f}"
+
+
+def test_bankrupt_persist_live():
+    """STATE-DEPENDENT SHADOWING (filed): the stable fiscal fixture produces ZERO
+    insolvencies in 240 ticks, so any persist >= 1 is unobservable. Liveness is
+    proven at the boundary: persist=0 makes the gate (insolvent_ticks >= 0) true
+    for EVERY firm -- the read is live iff firms start dying."""
+    e = _econ("fiscal")
+    for _ in range(30):
+        e.step()
+    n0 = len(e.c_firms)
+    e.policy.bankrupt_persist = 0        # boundary value (registry floor is 1; direct set)
+    for _ in range(3):
+        e.step()
+    assert len(e.c_firms) < n0, "persist=0 must kill firms -- proves the gate reads Policy"
+
+
+def test_rental_eviction_arrears_sync_channel():
+    """Anti-snapshot: the market object snapshots eviction law at construction;
+    the per-tick sync must overwrite it from Policy."""
+    b = run_b(lambda p: setattr(p, "rental_eviction_arrears", 1), fixture="rental")
+    assert b.rental_market is not None
+    assert b.rental_market.eviction_arrears == 1
+
+
+def test_soe_transition_handler():
+    """STATE_TRANSITION: set_lever must mutate the FIRM state, not just the field."""
+    from macro_sim.core.policy_registry import set_lever
+    e = _econ("energy")
+    for _ in range(40):
+        e.step()
+    assert e.e_firms[0].state_owned is True          # genesis flag (fixture soe on)
+    set_lever(e, "soe_efirm", False, actor="test")
+    assert e.policy.soe_efirm is False
+    assert e.e_firms[0].state_owned is False, "the handler must flip the firm state"
+
+
+def test_legacy_alias_warns_and_applies():
+    import warnings
+    from macro_sim.core.policy_registry import set_lever
+    e = _econ("housing")
+    for _ in range(5):
+        e.step()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        set_lever(e, "land_convexity", 2.5, actor="test")
+    assert any(issubclass(x.category, DeprecationWarning) for x in w)
+    assert e.policy.land_fee_stock_elasticity == 2.5
