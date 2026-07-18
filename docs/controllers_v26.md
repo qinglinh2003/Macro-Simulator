@@ -1,264 +1,581 @@
 # v26 — Policy Controllers: institutions, not functions
 
-**Status**: design FROZEN pending user review of the C1 per-lever table.
-**Branch**: `feat/controllers-v26` (off `feat/policy-module`; requires the v25 registry).
-**Joint design**: user architecture proposal (2026-07-18) merged with the seat/occupant
-draft; disagreement resolutions recorded in §11.
+**Status**: DRAFT — architecture revised after code audit; freeze requires the C1
+lever table and C3 observation table to pass user review.
+**Branch**: `feat/controllers-v26` (off `feat/policy-module`; requires the v25
+registry and batch mutation API).
+**Design rule**: engine facts outrank prose. Any later implementation finding that
+contradicts this document reopens the affected ruling instead of being hidden behind
+compatibility code.
 
 ## 0. The one-sentence design
 
-> A Controller does not "control the economy" — it **plays a policy-making
-> institution** constrained by information, mandate, cost, and time.
-> Controllers only PROPOSE; the PolicyCoordinator owns permission, schedule,
-> cost, joint validation, and execution. Humans, heuristics, and RL all go
-> through the same channel — same observations, same costs, same rules.
+> A Controller does not "control the economy" — it occupies a policy-making seat
+> constrained by information, authority, objective, cost, and time. Controllers only
+> PROPOSE. A world-aware PolicyCoordinator owns scheduling, permission, approval,
+> joint validation, pending state, and execution. Humans, heuristics, and RL use the
+> same observations, costs, and proposal protocol.
 
-## 1. Pipeline
+The v26 boundary is deliberately institutional:
 
-```
+- `Policy` / `ExternalPolicy` are effective state;
+- occupants decide, but never mutate that state;
+- standing mechanisms execute effective policy every tick;
+- the Coordinator is the single external gateway for humans, scripts, and AI;
+- frontend vocabulary and Gym encodings are presentation adapters, not engine APIs.
+
+## 1. Pipeline and execution authority
+
+```text
 Economy/World state
     ↓
-ObservationService     — what THIS institution is allowed to see, when
+ReleaseService          — publishes only information available by this boundary
     ↓
-DecisionScheduler      — is there a regular meeting / emergency session now?
+DecisionScheduler       — opens a regular or server-authorized emergency context
     ↓
-Controller (occupant)  — human queue | rule | heuristic | random | RL
-    │                    emits PolicyProposal(actor_role, actions, reason)
+ObservationService      — builds THIS seat's versioned DecisionContext
     ↓
-PolicyCoordinator      — mandate check, cost check, cooldown/min-hold,
-    │                    joint validation, approval; REJECTS or ACCEPTS whole
+Controller occupant     — human queue | scheduled | heuristic | fuzz | RL
+    │                     emits a PolicyProposal against that context
     ↓
-PendingPolicyQueue     — accepted proposals wait for effective_tick
+PolicyCoordinator       — authority, procedure, cost, pending conflicts,
+    │                     projected timeline, and joint World validation
     ↓
-PolicyExecutor         — at effective_tick: apply_action_batch(...) (v25 API,
-    │                    UNCHANGED — the only execution primitive in the system)
+PolicyDecision          — rejected | accepted_pending | accepted_noop
     ↓
-Policy / ExternalPolicy
+PendingPolicyQueue      — accepted decisions wait for effective_tick
+    ↓
+WorldPolicyTransaction  — prepare ALL due decisions without mutating live state
+    ↓
+PolicyExecutor          — atomically commits the prepared World transaction
+    ↓
+Policy / ExternalPolicy + World derived state + versions + canonical events
 ```
 
-Nothing writes policy state except `apply_action_batch`. The frontend, RL,
-and every controller in this document sit ABOVE the Coordinator. Direct field
-assignment (`econ.policy.x = v`) remains for tests only.
+### 1.1 One validation truth, two execution scopes
 
-## 2. Institutions (seats) and occupants
+The v25 `apply_action_batch(econ, ...)` is the low-level, single-economy batch
+primitive. It cannot by itself make a multi-economy decision atomic. v26 therefore
+adds a world-level transaction boundary:
 
-A **seat** is a mandate + calendar + information scope, per economy. An
-**occupant** is whoever currently makes that seat's decisions. Occupants are
-hot-swappable mid-run (a player takes over the central bank; hands it back to
-the Taylor rule) — this IS the frontend contract.
+```python
+prepared = prepare_world_policy_transaction(session, due_decisions)
+commit_world_policy_transaction(session, prepared)
+```
 
-P0 seats (per economy):
+`prepare` is pure. It reuses Registry validators and transition specifications; it
+does not duplicate field validation in the Coordinator. It must construct projected
+Policy and ExternalPolicy views for every affected economy and validate:
 
-| seat (`owner_role`) | mandate (lever families) | regular cadence |
+1. canonical names, strict types, ranges, capabilities, `enabled_if`, and handlers;
+2. authority, decision context, cooldown, min-hold, max-step, and admin capacity;
+3. pending conflicts and the projected effective timeline;
+4. dynamic references such as sanctions targets;
+5. joint World constraints such as peg count, anchor validity, and cycles;
+6. all transition side effects and World cache changes required at commit.
+
+`prepare` first classifies individually stale/invalid decisions and minimal joint
+conflict sets without mutating live state. Those decisions become
+`failed_at_execution`; unrelated due decisions are prepared together. `commit` is
+all-or-none across that prepared transaction. A commit failure must leave Policy,
+ExternalPolicy, World vectors/caches, PegState, ledgers, cost budgets, versions,
+pending status, and effective-event output untouched. Sequentially calling a mutating
+per-economy API is not a World transaction.
+
+Nothing outside the PolicyCoordinator/Executor path may make a discretionary policy
+change. Engine-forced transitions (for example, a broken peg) use an internal system
+transaction and the same version/event machinery. Genesis and executor-managed
+transition committers are not frontend/controller mutation paths.
+
+### 1.2 Known v25 integration blockers for C1
+
+The code audit found two concrete cases that v26 must close before controllers can be
+enabled:
+
+- an out-of-range sanctions target can be copied into the World sanctions cache before
+  the later domain check raises;
+- handing a peg from economy 0 to economy 1 can retain the old PegState, while legacy
+  single-peg accessors continue selecting economy 0.
+
+C1 owns the pure dynamic-reference validator, atomic World cache commit, active
+PegState selection/removal, and regression tests for both cases. These are not
+document-only caveats: random and human controllers will reach these states quickly.
+
+## 2. Seats, authority, and occupants
+
+A **seat** is a reduced-form ultimate policy authority with a calendar and an
+information scope, per economy. It is not a claim that every jurisdiction uses the
+same ministry boundary. P0 assigns exactly one owner to every lever; joint approvals
+and jurisdiction-specific institutional maps are P1 extensions.
+
+An **occupant** is the decision strategy currently assigned to a seat. Occupant
+assignment is hot-swappable and logged, but swapping occupants never changes effective
+policy by itself.
+
+P0 seats:
+
+| seat (`owner_role`) | reduced-form authority | regular decision groups |
 |---|---|---|
-| `central_bank` | monetary_regime, manual_policy_rate, Taylor params, sensor params, OMO family, reserve/duration rules | 45 ticks |
-| `treasury` | tax family, benefits/JG, deficit & investment, debt management (bond_*), land fees | 91 ticks (rate-like) / 365 (structural tax regime) |
-| `regulator` | bank capital/exposure/resolution, mortgage regulation, haircuts, DSCR, insolvency & eviction law, unified RWA | 91 ticks |
-| `external` | capital_control, tariffs/quotas/subsidies, sanctions, migration & remittance policy, fx_regime/peg family, settlement fraction | 91 ticks + event-driven |
+| `central_bank` | monetary regime/manual rate, Taylor and sensor parameters, OMO/LoLR/reserve tools; P0 also owns peg/FX operational tools where joint approval is not yet modeled | monetary ~45 ticks; liquidity is standing/event-driven |
+| `treasury` | general taxes, benefits/JG, deficit/investment, debt management and land fees; energy taxes, subsidy budgets, and cap compensation | fiscal stance ~91; structural tax/law ~365 |
+| `regulator` | bank capital/exposure/resolution, bond-duration limits, deposit rules, mortgages, credit haircuts/DSCR, insolvency and eviction law | macroprudential ~91; structural law ~365 |
+| `external_affairs` | tariff/quota/export subsidy, sanctions, migration and remittance policy | trade/migration ~91 + event-driven |
+| `energy` | SPR target/flow, energy price cap, rationing, SOE ownership and operating-price rule | energy ~91 + event-driven |
 
-`owner_role="energy"` is RESERVED in the enum (SPR/rationing/price caps are
-not engine mechanisms yet — the shock arc will create them); until then the
-few live energy levers (soe_efirm, soe_price_at_cost, energy taxes/subsidies)
-sit under `treasury`/`external` per the C1 table.
+The final owner of every lever is the C1 table's user-review surface. In particular,
+capital controls, external settlement, FX regime, energy compensation, and SOE policy
+must be reviewed explicitly rather than inferred from source-file location.
 
-Occupant types: `NullOccupant` (do nothing — bit-identity contract),
-`RuleOccupant` (the built-in automatic institution, see §3),
-`ScheduledOccupant` (scripted timeline), `HeuristicOccupant`,
-`RandomOccupant` (test/fuzz), `HumanQueueOccupant` (§7), `RLOccupant` (§8).
-A human player may hold several seats at once; seats in one world may be held
-by a mix (human treasury + RL central bank + heuristic external).
+Meeting cadence belongs to `(seat, decision_group)`, not just the seat. The numbers
+above are configurable model defaults, not universal facts about real institutions.
+Calendar phase/offset is part of the run spec so every economy need not meet on the
+same tick.
 
-## 3. Three layers of time
+Occupant types:
 
-1. **Automatic institutions (every tick, no controller involved)** — laws
-   already passed: the Taylor rule, LoLR, automatic benefits, OMO rules,
-   JG. Occupants CHANGE these regimes at meetings; they do not re-approve
-   them daily. (Engine reality already matches: `monetary_regime="taylor"`
-   is the rule-occupant; `"manual"` is the seat deciding directly.)
-2. **Regular meetings** — the DecisionScheduler wakes a seat only on its
-   calendar ticks. Decisions hold until the next meeting (min_hold enforces
-   this even across occupants).
-3. **Emergency sessions** — trigger predicates (bank failure, reserve drain
-   rate, inflation breach, peg pressure) fire between tick t and t+1: the
-   orchestrator pauses, wakes the relevant seat(s) with an emergency
-   DecisionContext, applies accepted emergency proposals, resumes. Emergency
-   actions are restricted to the per-lever `emergency=True` whitelist and may
-   carry a cost premium. Within-tick crises are still handled by layer-1
-   standing facilities (LoLR exists BEFORE the run starts — realism note:
-   central banks do not invent LoLR after the bank has died).
+- `NullOccupant`: submits explicit no-action decisions; bit-identity baseline;
+- `RuleOccupant`: a meeting-time proposal strategy, not an engine mechanism;
+- `ScheduledOccupant`: deterministic scripted proposals;
+- `HeuristicOccupant`: observation-based policy rules at decision boundaries;
+- `RandomFuzzOccupant`: legal-state exploration, clearly not a realism baseline;
+- `HumanQueueOccupant`: proposals supplied by the frontend;
+- `RLOccupant`: trained policy using the same DecisionContext.
 
-## 4. Policy state lifecycle
+A human may hold several seats, and a world may mix occupants. One proposal belongs to
+one seat/context; cross-seat coordination produces separate proposals collected at the
+same boundary, not an unauthorized cross-mandate action batch.
 
+### 2.1 Standing mechanism is not an occupant
+
+Taylor rate setting, an already-enabled LoLR, automatic benefits/JG, OMO rules, and
+SPR rules execute every tick from effective policy state. They are standing
+mechanisms; no occupant is invoked to re-approve them daily.
+
+`monetary_regime="taylor"` is policy state, not a `RuleOccupant`.
+`monetary_regime="manual"` is also policy state, not evidence that a human holds the
+seat. A human can retain Taylor and change its parameters; a RuleOccupant can propose
+a manual regime. Hot-swapping either occupant leaves the current regime unchanged.
+
+## 3. Four clocks and the normative tick boundary
+
+v26 distinguishes four clocks:
+
+1. **simulation clock** — market/accounting mechanisms run each tick;
+2. **release clock** — data become observable according to publication rules;
+3. **decision clock** — decision groups meet on regular or emergency calendars;
+4. **effective clock** — approved actions land after their implementation lag.
+
+Define `world.t` as the next tick not yet executed. The normative boundary is:
+
+```text
+BOUNDARY(t)
+1. Publish releases due at t and evaluate triggers from state completed through t-1.
+2. Open regular/emergency DecisionContexts for boundary t and build their
+   role-scoped observations.
+3. Collect proposals from ALL due seats/economies without mutating simulation state.
+4. Jointly approve/reject proposals; enqueue decisions.
+5. Prepare and atomically execute every decision with effective_tick == t,
+   including newly approved implementation_lag == 0 decisions. The transaction
+   includes transition side effects and the ExternalPolicy-derived World view.
+6. Run and record simulation tick t; advance world.t to t+1.
 ```
-proposed → (approved) → pending → effective
-              ↓ rejected (logged with reason)
-```
 
-- `announced` exists in the enum and the event log **as a display state
-  only**. P0 agents have no forward-looking expectations, so announcement
-  cannot move behavior; implementing it would be a lie. Documented
-  simplification; revisit with an expectations mechanism.
-- `approval_state` field exists on Proposal from day one (always
-  `auto_approved` in P0) so a future parliament/voting arc extends the
-  protocol instead of rewriting it.
+Therefore `effective_tick=t` means the policy affects the first applicable read in
+tick `t`, for domestic and external levers alike. There is no undocumented extra tick
+for ExternalPolicy. Interactive pause occurs inside `BOUNDARY(t)` before step 5; while
+paused, ticks, records, RNGs, pending effective state, and event cursors do not advance.
 
-Frontend rendering enabled by this lifecycle:
+An event arising inside tick `t` can first open a discretionary human/AI emergency
+session at `BOUNDARY(t+1)`. Same-tick protection must come from standing facilities
+already in force. This is intentional: the model must not let a policymaker observe a
+failure and travel backward within the same tick to prevent it.
 
-```
-Income tax:  current 20% | passed 25% (effective tick 180)
-Next adjustment allowed: tick 240   |   admin capacity left this quarter: 2
-```
+### 3.1 Emergency trigger state machine
 
-## 5. Registry schema extensions (C1)
-
-Five new per-lever columns (the C1 deliverable is the full 102-row table for
-user review — the largest economic-judgment surface in this arc):
+An emergency is server-issued, never client-declared. Each `TriggerSpec` defines:
 
 ```python
-owner_role: str            # central_bank | treasury | regulator | external | (energy reserved)
-decision_group: str        # monetary | fiscal | macroprudential | trade | migration | fx | ...
-implementation_lag: int    # ticks from approval to effective (0 = immediate)
-min_hold_ticks: int        # cooldown after an effective change
-emergency: bool            # allowed in emergency sessions
+enter_threshold
+exit_threshold          # hysteresis
+min_persist_ticks
+cooldown_ticks
+context_expiry_tick
+authorized_seats
 ```
 
-Existing columns keep their meaning (`max_step` = gradualism bound;
-`enabled_if`/`requires`; `effective_semantics` — note bond_coupon stays
-NEW_CONTRACTS: the POLICY changes immediately, the stock never restates).
-`ramp_ticks` (gradual phase-in, e.g. public investment) is P1 — only a few
-levers need it and it adds executor complexity.
+Triggers fire on a threshold transition/re-arm, not every tick while a condition stays
+true. Leading stress signals are preferred:
 
-## 6. Wire protocol: absolute values + max_step
+- bank liquidity/withdrawal coverage and capital stress;
+- peg reserve coverage and prospective drain;
+- energy stock coverage, unfilled demand, or a supply shock;
+- persistent inflation/financial instability breaches where explicitly configured.
 
-Proposals carry **absolute target values**, never deltas:
+`bank_failure` may trigger an aftermath context, but it is too late to be the rescue
+trigger. Emergency contexts bypass the regular calendar only. A lever's
+`emergency=True` flag authorizes its use; it does not silently remove max-step,
+implementation lag, cost, or dynamic validation. A separate
+`emergency_implementation_lag` may be declared when reality justifies faster execution.
+
+## 4. Decision and policy lifecycle
+
+Approval belongs to a Coordinator decision, never to the client proposal:
+
+```text
+submitted
+ ├─ rejected
+ ├─ accepted_noop
+ └─ accepted_pending
+      ├─ effective
+      ├─ failed_at_execution
+      ├─ cancelled
+      └─ superseded
+```
+
+An action whose canonical target equals the projected effective value becomes
+`accepted_noop`: it does not change a policy version, start a cooldown, reserve admin
+capacity, consume adjustment cost, or create an effective action event. The explicit
+no-action/timeout input is still logged for audit/replay.
+
+`announced` is an event/display attribute, not a mutually exclusive lifecycle state.
+P0 agents have no forward-looking expectations, so an announcement does not affect
+behavior. This limitation remains visible rather than pretending that a UI label has
+economic semantics.
+
+Minimum protocol objects:
 
 ```python
+DecisionContext(
+    context_id, decision_window_id, economy_id, seat, decision_group,
+    boundary_tick, expires_at_tick, policy_versions, observation,
+)
+
 PolicyProposal(
-    actor_role="treasury", actor="human:player1",
-    actions=[PolicyAction("tax_income_rate", 0.25),
-             PolicyAction("gov_deficit_target", 0.05)],
-    reason="recession_response",
-    emergency=False,
+    proposal_id, idempotency_key, context_id, actions, reason,
+    based_on_policy_versions, supersedes_proposal_id=None,
+)
+
+PolicyDecision(
+    decision_id, proposal_id, status, reason_code, accepted_tick,
+    effective_tick, accepted_sequence, reserved_admin_cost,
 )
 ```
 
-Rationale (resolution of the earlier direction×step draft): absolute values
-are idempotent and replayable (no base ambiguity); gradualism is enforced by
-`max_step` validation; the coarse "one notch up/down" EXPERIENCE lives in the
-presentation layers — frontend ± buttons compute target values, the RL
-adapter discretizes to {−step, 0, +step} and converts back. The protocol
-stores values; vocabularies are surfaces.
+Economy, seat, role, emergency authority, and authenticated actor are derived from the
+server-issued DecisionContext. They are not trusted client claims.
 
-## 7. Human control: queue, never blocking
+### 4.1 Pending, concurrency, and revalidation
 
-The kernel never waits on stdin. `HumanQueueOccupant` drains a ProposalQueue
-that the frontend fills; the ORCHESTRATOR (not the engine) decides pausing:
+- One seat may have at most one active proposal per DecisionContext; replacing it
+  before the window closes is idempotent and explicit.
+- A pending action on the same canonical lever blocks another by default. Replacement
+  requires `supersedes_proposal_id` and creates a lifecycle event.
+- `max_step` and `min_hold_ticks` are checked against the projected value/timeline at
+  the proposed `effective_tick`, not merely today's live value.
+- Each lever has a version. Unrelated policy changes do not stale a pending decision;
+  changes to touched levers or declared prerequisites do.
+- The due set is revalidated jointly at execution. Failure produces
+  `failed_at_execution` with no partial state change.
+- If independently valid simultaneous proposals violate a joint World constraint, all
+  proposals in the minimal conflicting set are rejected; unrelated proposals may
+  proceed in the same prepared transaction.
+- P0 supports cancellation before effectiveness. `supersedes_proposal_id` performs an
+  atomic cancel-and-replace rather than exposing a race between two requests; refund
+  policy is part of the CostSpec.
 
-- **Interactive**: auto-pause at this seat's meetings and emergencies; resume
-  on decision (or explicit "no action").
-- **Real-time**: decision deadline; timeout = policy unchanged.
-- **Batch/replay**: proposals replayed from an event log, deterministic.
+## 5. Registry extensions and review gates
 
-Frontend API contract (server arc implements; engine side ships the types):
+C1 adds these per-lever fields:
 
-```
-GET  /policy/schema           — registry + costs + permissions (form autogen)
-GET  /observation             — role-scoped PublicObservation
-GET  /decisions/current       — pending DecisionContext(s) for my seats
-GET  /policy/pending          — queue with effective ticks
-POST /policy/proposals
-POST /policy/emergency-proposals
-```
-
-All validation re-runs server-side in the Coordinator; the frontend is a
-convenience, never a trust boundary.
-
-## 8. Observation: what a policymaker is allowed to know
-
-`ObservationService` produces role-scoped `PublicObservation`, never the
-Economy object:
-
-- published macro series with **publication calendars and lags** (GDP
-  quarterly & late, CPI/unemployment monthly), rolling 30/91/365 windows,
-  warm-up flags;
-- current + pending policy, time since last change, remaining admin capacity;
-- `permitted_actions` with machine-readable reasons for the forbidden ones
-  (missing capability, cooldown, not your mandate, out of range);
-- emergency bulletin when in an emergency session.
-
-Information privileges by role: the central bank sees reserves and system
-liquidity; the regulator sees per-bank stress; external sees trade/capital
-flows and FX reserves; the public (and default observers) see aggregates
-only. `OracleObservation` (engine truth) exists for debugging ONLY — RL and
-humans both train/play on `PublicObservation`, or the trained policy holds an
-information advantage no human can have.
-
-Revision noise (first print vs revised) is P1; the Release type carries a
-`revision` field from day one.
-
-## 9. Costs: symmetric for humans and RL
-
-Costs are Coordinator-enforced quantities, visible in the frontend and
-identical in the RL observation/reward — never a reward-only fiction:
-
-- **admin capacity** budget per quarter (K major actions);
-- min-hold / cooldown (per-lever);
-- per-action adjustment costs (institutional friction);
-- real implementation costs where the engine has them (they already exist as
-  economics, e.g. fiscal cost of subsidies);
-- P1: credibility cost for regime flips (peg churn, regime whiplash).
-
-Emergency sessions bypass the calendar but pay a premium and only touch the
-emergency whitelist.
-
-## 10. RL is a seat occupant, nothing more
-
-```
-HumanQueueOccupant ─┐
-HeuristicOccupant   ├─→ PolicyProposal → PolicyCoordinator → ... → apply_action_batch
-RLOccupant ─────────┘
+```python
+owner_role: str
+decision_group: str
+implementation_lag: int
+emergency_implementation_lag: int | None
+min_hold_ticks: int
+emergency: bool
+control_scale: float | None   # frontend step, RL normalization, cost distance
+admin_weight: float
+cost_class: str               # ordinary | major | regime_switch | operational
 ```
 
-The Gym adapter maps `DecisionContext` → vectors and RL actions →
-`PolicyProposal`. A trained policy can replace a human seat, or co-govern a
-world with humans. Episode reset uses the v24 checkpoint system (fixed .msim
-snapshots as initial states). Action masking = `permitted_actions`.
+Existing Registry fields remain authoritative for strict types, range/nullability,
+choices, capabilities, current-policy prerequisites, semantics, handlers, and
+read-points.
 
-## 11. Resolved disagreements (record)
+The v25 Registry contains 102 levers and currently declares no non-null `max_step`.
+C1 must give every numeric lever a reviewed `control_scale` and either a finite
+`max_step` or an explicit documented reason for being unbounded. Frontend and RL
+adapters must not invent step sizes from raw min/max ranges.
 
-1. Coordinator **layers on top of** `apply_action_batch` — one execution
-   primitive, no second validation truth. (draft merged)
-2. `announced` demoted to display-only in P0 — no expectations mechanism, no
-   fake semantics. (user plan amended)
-3. Absolute-value protocol beats direction×step encoding; coarse vocabulary
-   is presentation-layer. (draft superseded by user plan)
-4. EnergyController deferred: enum reserved, levers seated under
-   treasury/external until the shock arc creates real energy mechanisms.
-   (user plan amended)
-5. External-policy timing: effective_tick releases the stance; the WORLD
-   effect lands at the next coupling barrier (B5a atomic derivation) — up to
-   one extra tick, shown honestly in the frontend as part of the effective
-   date. (clarified)
-6. Emergency whitelist is a registry column, not a separate list. (clarified)
+The complete 102-row C1 table is a user-review gate. `ramp_ticks` remains P1 because a
+true phased implementation changes executor and observation semantics; it must not be
+faked by repeated controller actions.
 
-## 12. Explicit non-goals for v1
+## 6. Wire protocol: absolute, canonical, and idempotent
 
-- Parliament, elections, parties, approval votes (protocol placeholder only).
-- Announcement/expectation effects (§4).
-- Revision noise; ramp_ticks (P1).
-- The frontend itself (server/UI arc) — v26 ships the engine-side contract.
-- Multi-seat bargaining/games between institutions.
+Proposals carry absolute targets, never deltas:
 
-## 13. Batches & acceptance
+```python
+PolicyProposal(
+    context_id="ctx:0:central_bank:180",
+    proposal_id="client-uuid",
+    idempotency_key="client-uuid",
+    actions=[
+        PolicyAction("manual_policy_rate", 0.0003),
+        PolicyAction("monetary_regime", "manual"),
+    ],
+    reason="liquidity_stabilization",
+)
+```
+
+Absolute targets are idempotent and replayable. Frontend +/- controls and RL
+`{-step, 0, +step}` vocabularies calculate absolute values against the context's
+versioned base state.
+
+Canonical wire values are JSON-safe:
+
+- finite JSON numbers, booleans, strings, integers, and null;
+- economy sets are sorted integer arrays on the wire and immutable sets in the engine;
+- aliases resolve before duplicate detection; duplicate canonical levers reject the
+  whole proposal rather than "later value wins";
+- actions are canonically sorted for hashing/logging while preserving proposal display
+  order separately;
+- a target equal to the projected canonical value normalizes to `accepted_noop`;
+- no NaN, Infinity, Python repr, or unversioned frozenset enters the protocol.
+
+Every request carries `schema_version`; stale contexts or policy versions receive a
+machine-readable conflict response rather than silently rebasing an action.
+
+## 7. Human control and frontend contract
+
+The kernel never waits on stdin. `HumanQueueOccupant` consumes proposals associated
+with an open DecisionContext; the orchestrator, not the engine kernel, controls pause:
+
+- **Interactive**: pause at meetings/emergencies until an explicit proposal or
+  no-action decision;
+- **Real-time**: close at a deadline; timeout is an explicit logged no-action input;
+- **Batch/replay**: inject recorded input events deterministically.
+
+Minimum server API shape (transport details belong to the server arc):
+
+```text
+GET    /runs/{run}/policy/schema?economy={id}&seat={seat}
+GET    /runs/{run}/decision-contexts/{context_id}
+GET    /runs/{run}/policy/pending?economy={id}
+POST   /runs/{run}/decision-contexts/{context_id}/proposals
+DELETE /runs/{run}/policy/pending/{decision_id}
+POST   /runs/{run}/seat-assignments
+```
+
+Submission uses an idempotency key. Authentication/seat assignment determines actor
+and authority. The client cannot create an emergency context or choose its own role.
+The server re-runs every validation; the frontend is never a trust boundary. A stale
+page receives a conflict containing the latest context/policy versions.
+
+Occupant hot-swap creates a `SeatAssignmentEvent`, is checkpointed and replayed, and
+does not mutate policy. The assignment specifies how the new occupant's private state
+is initialized or restored; the outgoing occupant state remains serializable if the
+seat may later be handed back.
+
+## 8. Observation contract: released information, not engine truth
+
+The general object is `InstitutionObservation`, because regulator/central-bank data
+may be confidential or operational. `PublicObservation` is its public subset.
+
+Each release contains at least:
+
+```python
+Release(
+    series_id, value, reference_start_tick, reference_end_tick,
+    released_at_tick, vintage, revision, access_class, missing_reason,
+)
+```
+
+`access_class` is `public`, `confidential`, or `operational`. Role authorization is
+server-side. At boundary `t`, an occupant can receive only releases with
+`released_at_tick <= t`. Rolling indicators are built from released vintages, not from
+hidden daily engine truth; otherwise a quarterly GDP series would leak the unfinished
+quarter through a rolling window.
+
+Each DecisionContext includes:
+
+- released observations and missing/warm-up masks (never sentinel NaNs);
+- current and pending policy plus per-lever versions;
+- time since last effective change and projected next eligibility;
+- remaining/reserved admin capacity and visible cost estimates;
+- permitted actions with stable, machine-readable forbidden reasons;
+- a server-generated emergency bulletin when applicable;
+- `observation_schema_version` and the elapsed ticks since the previous context.
+
+Information scopes include public aggregates, central-bank system liquidity,
+regulator per-bank stress, external trade/capital/FX data, and energy operational
+stocks/shortages. `OracleObservation` exists only for debugging and explicitly labeled
+oracle research. It cannot enter a human-comparable RL feature or normalization path.
+
+C3 must ship a user-reviewed observation table:
+
+| field | engine source | unit | reference/aggregation | release rule + lag | access/roles | warm-up/missing rule | normalization |
+|---|---|---|---|---|---|---|---|
+
+Publication frequencies and lags are configurable run-spec defaults, not claims that
+all real jurisdictions publish on the same calendar. Revision noise is P1, but the
+release type is revision-ready from day one.
+
+## 9. Procedure, adjustment cost, and economic effects
+
+Three layers must not be conflated:
+
+1. **feasibility/procedure** — authority, meeting, lag, min-hold, cooldown, max-step,
+   emergency whitelist, and admin capacity;
+2. **decision friction** — explicit adjustment/credibility cost used by the seat's
+   objective and human-visible score/cost ledger;
+3. **endogenous economic effects** — fiscal spending, subsidy payments, market
+   repricing, and other consequences already produced by the engine.
+
+An engine subsidy payment is not a cost of changing the subsidy rule and must not be
+charged twice. P0 does not invent a generic fiscal cash sink for all policy changes.
+Real implementation costs are added lever-by-lever only when their accounting and
+resource counterpart are modeled.
+
+Run-level `AdjustmentCostSpec` supplies weights over Registry `control_scale` and
+`cost_class`. Administrative capacity and decision friction are separate ledgers:
+
+```text
+A = proposal_admin_overhead + sum(admin_weight_i)
+
+C_adjustment = sum(fixed_i * changed_i
+                   + l1_i * abs((new_i-old_i)/control_scale_i)
+                   + l2_i * ((new_i-old_i)/control_scale_i)^2)
+```
+
+L2 alone is forbidden as the only anti-churn device because splitting one large change
+into many small changes makes squared cost cheaper. Fixed/L1 cost, min-hold, and admin
+budgets address frequency directly.
+
+Admin capacity is keyed by `(economy, seat, decision_group)` and replenished on its
+configured institutional calendar. It is reserved when a decision is accepted so
+pending reforms cannot overbook it, and settled when effective. Rejection costs
+nothing. Cancellation, supersede, expiry, and failed execution refund rules are
+explicit CostSpec fields and events. Emergency actions pay the configured premium but
+cannot self-authorize.
+
+"Symmetric for humans and RL" means the same Coordinator constraints, admin ledger,
+realized engine effects, and visible objective accounting. It does not mean every
+research reward term is silently imposed on a human player.
+
+## 10. Institutional objectives and RL
+
+Authority answers **what may this seat change**. A mandate/objective answers **what is
+this seat trying to achieve**. They are separate.
+
+P0 adds an injectable, versioned `ObjectiveSpec` rather than declaring one universal
+welfare function:
+
+```python
+ObjectiveTerm(
+    series_id, objective_kind, target_or_bounds, weight,
+    normalization_scale, evaluation_window, reward_release_rule,
+)
+```
+
+It also defines control-cost weight, discount/time normalization, and whether the
+profile is `human_comparable` or explicitly `oracle_research`. Default templates may
+represent central-bank inflation/employment/stability, Treasury activity/fiscal
+sustainability/welfare, regulator stability/credit access, external balance/reserves,
+and energy shortage/affordability/fiscal cost. All weights remain run-spec choices.
+
+Human players see the same mandate dashboard and score components available to a
+human-comparable RL occupant. A reward must not leak an unpublished target variable;
+oracle social-welfare rewards are permitted only under the oracle label.
+
+The Gym adapter maps exactly the serialized DecisionContext used by the frontend into
+vectors, and maps actions back into PolicyProposal. It is a semi-Markov decision
+interface: one `env.step` advances to the next context for that seat, which may be a
+regular or emergency interval. Reward accumulates over intervening simulation ticks,
+is time-normalized according to ObjectiveSpec, and returns `elapsed_ticks`.
+
+Action masking is advisory ergonomics, not authority. Stale or adversarial actions may
+still reach the Coordinator and must be rejected safely. A trained occupant can replace
+a human seat or coexist with humans under the same protocol.
+
+## 11. Event log, replay, and checkpoint root
+
+The canonical event stream distinguishes:
+
+- `input`: proposal, explicit no-action, timeout, cancel/supersede, occupant swap;
+- `derived`: trigger, accepted/rejected decision, effective transaction, forced system
+  transition.
+
+Replay injects only `input` events. Derived events are regenerated and compared; replay
+must not execute a forced peg break twice.
+
+Every event contains at least:
+
+```text
+schema_version, global_sequence, event_id, transaction_id, event_type,
+replay_class, boundary_tick, phase, economy_id, seat, actor,
+context/proposal/decision ids, status/reason, requested_actions,
+effective_changes, policy_versions_before/after
+```
+
+A single Coordinator assigns `global_sequence`. Sets use canonical sorted-array JSON;
+transition-handler companion changes appear in `effective_changes`. System transitions
+also advance the relevant policy version.
+
+Controller-enabled runs checkpoint a picklable `ControlledSimulationSession` root:
+
+```text
+ControlledSimulationSession
+├── World
+├── PolicyCoordinator + global versions/idempotency/event cursor
+├── DecisionScheduler + trigger latches + open context/window
+├── PendingPolicyQueue + admin/cooldown state
+└── seats + occupant state/RNG
+```
+
+Legacy uncontrolled runs may continue checkpointing a bare World. Session checkpoints
+are taken only at a named boundary/awaiting-decision phase. The header records session
+phase, world policy version, event count, and event head hash. Load verifies that the
+snapshot and event prefix agree.
+
+Replay acceptance compares engine records, final Policy/ExternalPolicy, active
+PegState/World coupling state, pending queue, coordinator/controller state, and the
+canonical event hash. The historical records-only digest is insufficient.
+
+## 12. Frozen rulings and explicit non-goals
+
+Rulings retained by this revision:
+
+1. absolute target values are the canonical protocol; directional controls are adapters;
+2. announcement has no behavioral effect before an expectations mechanism exists;
+3. emergency authorization is Registry metadata plus a server-issued context;
+4. standing engine rules are independent from occupant type;
+5. effective tick means the first actually affected simulation tick;
+6. the energy seat is P0 because its mechanisms already exist;
+7. Registry/World pure validators are the validation truth; a per-economy mutator is
+   not the top-level World transaction boundary.
+
+Explicit v1 non-goals:
+
+- parliament, elections, parties, and multi-seat bargaining;
+- jurisdiction-specific joint-approval maps;
+- announcement/expectation effects;
+- data revision noise and gradual `ramp_ticks` implementation;
+- discretionary human intervention in the middle of an already-running tick;
+- the frontend implementation itself (v26 ships engine/server contracts);
+- a universal normative reward or political-preference model.
+
+## 13. Batches and acceptance
 
 | batch | content | acceptance |
 |---|---|---|
-| C1 | registry +5 columns, **full 102-lever table** (user review gate); Proposal/Coordinator/PendingQueue/Executor on top of batch API | frontier digest EXACT with no controllers attached; coordinator rejection matrix tests (mandate/cooldown/capacity/emergency); replay: same proposal log → bit-identical run |
-| C2 | 4 seats + DecisionScheduler (calendars, emergency triggers + pause orchestration); Null/Scheduled/Heuristic/Random occupants | NullOccupant world = digest exact; 30y RandomOccupant wasteland ×3 seeds: zero crashes, conservation holds, all actions legal; emergency drill: reserve-drain trigger wakes external seat, orderly peg exit executes |
-| C3 | ObservationService: PublicObservation v1 (publication calendar, lags, warm-up, role scoping), DecisionContext (permitted + reasons + costs) | policymaker at tick t sees only data published ≤ t; role-scope tests; forbidden-action reasons complete |
-| C4 | HumanQueueOccupant + 3 run modes + Proposal API types (engine side) + full event-log replay | replay a recorded human session → bit-identical; real-time timeout = no-op; interactive pause/resume determinism |
-| C5 | Gym adapter (DecisionContext↔vector, action↔Proposal, masking, checkpoint reset) | random agent via gym == RandomOccupant trajectories (same seed); masked illegal actions never reach the Coordinator |
+| C1 | full 102-lever authority/time/control/cost table; Proposal/Decision types; `ControlledSimulationSession` root; pure Registry projection; atomic WorldPolicyTransaction; dynamic-reference and peg-state fixes; minimal global version/event core | no-controller frontier digest exact; every numeric lever has reviewed scale and explicit max-step ruling; cross-economy failure leaves no partial Policy/World/PegState/ledger/cost/version/event; sanctions bounds and same-tick peg handoff pass; effective_tick domestic/external first-read tests; pending/version/event state survives a checkpoint round trip |
+| C2 | five seats; decision-group calendars; pending timeline; CostSpec; trigger state machines; Null/Scheduled/Heuristic/RandomFuzz occupants | Null-attached and no-controller **engine/frontier** digests are identical (their session-event streams intentionally differ); pause consumes no tick/RNG; trigger hysteresis/cooldown prevents repeated sessions; 30y legal fuzz runs x3 seeds conserve and never crash; emergency peg drill succeeds only when causally early enough |
+| C3 | InstitutionObservation, Release calendar/access control, permitted-action reasons, full observation table, ObjectiveSpec/score components | at boundary t only releases with released_at<=t are visible; rolling values use released vintages; role/access and missing-reason tests; human and Gym serializers receive byte-equivalent contexts; oracle data/reward cannot enter human-comparable profile |
+| C4 | HumanQueueOccupant, three run modes, hot-swap, server API types, full session checkpoint coverage, canonical input/derived replay | idempotent retries do not double-charge/log; stale and forged emergency submissions reject; timeout/no-action/swap replay; checkpoint with pending action or open human context resumes bit-identically; full session/event digest matches |
+| C5 | Gym semi-Markov adapter, action normalization/masking, checkpoint reset | a fixed canonical proposal trace through Gym and direct Coordinator paths is bit-identical; elapsed-tick reward normalization is correct; masked agent emits legal proposals while adversarial/stale actions are still safely rejected by Coordinator |
 
-Wasteland portraits (C2 acceptance) feed the standing 30y bug-hunting loop
-immediately — random-but-legal policy sequences reach states no hand-written
-scenario does.
+The C1 lever table and C3 observation table are separate user-review gates. The design
+returns to `FROZEN` only after both tables exist, all factual contradictions above are
+closed, and their economic judgments have been accepted.
