@@ -188,3 +188,38 @@ def test_policy_seed_full_snapshot_and_version():
     set_lever(e, "tax_income_rate", 0.31)
     assert e.policy_seed.initial_policy.tax_income_rate != 0.31, (
         "mutating the live policy must never touch the seed snapshot")
+
+
+# ---- audit round 2 (v26 doc S1.2): the two integration blockers ----
+
+def test_vetoed_commit_leaves_sanctions_cache_clean():
+    """Out-of-range sanctions target: the step must raise AND the derived cache
+    must stay untouched (prepare -> validate -> commit; no partial state)."""
+    w = _world()
+    w.run(2)
+    w.economies[0].external_policy.sanctions_imposed_on = frozenset({7})
+    with pytest.raises(ValueError, match="sanctions"):
+        w.step()
+    assert w.sanctions == set(), "a vetoed commit must not pollute the derived cache"
+
+
+def test_peg_handover_selects_active_state():
+    """0 exits, 1 adopts: the dead state stays for history, but every legacy
+    accessor (and therefore peg_defense) must answer for the ACTIVE pegger."""
+    cfgp = Config.v13(seed=0, n_households=20, n_firms_c=15, n_firms_k=8, n_banks=2,
+                      demographics_population=120, n_ticks=200, government=True,
+                      central_bank=False)
+    w = World([cfgp, cfgp, cfgp], base_seed=7, trade=True, capital=True,
+              peg=True, peg_economy=0, peg_anchor=2, peg_reserves0=100.0)
+    w.run(3)
+    w.economies[0].external_policy.fx_regime = "float"
+    w.economies[1].external_policy.peg_anchor = 2
+    w.economies[1].external_policy.fx_regime = "peg"
+    w.step()
+    assert w.peg_states[1].intact and not w.peg_states[0].intact
+    assert w.peg_economy == 1, "accessors must select the ACTIVE pegger, not insertion order"
+    assert w.peg_anchor == 2
+    assert w.peg_states[1].reserve_account_id == "CBRES:1"
+    w.run(3)
+    for econ in w.economies:
+        econ.ledger.assert_conserved()

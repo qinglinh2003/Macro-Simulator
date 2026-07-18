@@ -513,6 +513,13 @@ class World:
         states = self.__dict__.get("peg_states")
         if states is None:
             return None                       # pre-B5b pickle: no states restored
+        # v26 §1.2 fix: a peg HANDOVER (0 exits, 1 adopts) leaves a dead state
+        # beside the live one -- accessors must select the ACTIVE peg, never
+        # insertion order. Dead states are kept for history (legacy broken-peg
+        # record semantics), but they no longer answer for the world.
+        for st in states.values():
+            if st.intact or st.exit_pending:
+                return st
         return next(iter(states.values()), None)
 
     @property
@@ -526,6 +533,9 @@ class World:
     def peg_economy(self) -> int:
         states = self.__dict__.get("peg_states")
         if states:
+            for i, st in states.items():      # the ACTIVE pegger answers (v26 §1.2)
+                if st.intact or st.exit_pending:
+                    return i
             return next(iter(states))
         return int(self.__dict__.get("_legacy_peg_economy",
                                      self.__dict__.get("peg_economy", 0)))
@@ -665,35 +675,75 @@ class World:
         coupling barrier: mutations to econ.external_policy anywhere in a tick
         all take effect together at the next barrier."""
         eps = [e.external_policy for e in self.economies]
-        # ATOMICITY: every check that can raise runs BEFORE the first write.
-        self._validate_peg_constraints(eps)
-        self.tariff = [p.tariff for p in eps]
-        self.import_quota = (
+
+        # ---- PREPARE (pure): build every derived value into locals ----
+        tariff = [p.tariff for p in eps]
+        import_quota = (
             None if all(p.import_quota is None for p in eps)
             else [p.import_quota for p in eps]
         )
-        self.export_subsidy = [p.export_subsidy for p in eps]
-        self.capital_control = [float(p.capital_control) for p in eps]
-        self.external_interest_settlement_fraction = [
+        export_subsidy = [p.export_subsidy for p in eps]
+        capital_control = [float(p.capital_control) for p in eps]
+        settlement_fraction = [
             float(p.external_interest_settlement_fraction) for p in eps
         ]
-        self.immigration_cap = (
+        immigration_cap = (
             None if all(p.immigration_cap is None for p in eps)
             else [p.immigration_cap for p in eps]
         )
-        self.emigration_cap = (
+        emigration_cap = (
             None if all(p.emigration_cap is None for p in eps)
             else [p.emigration_cap for p in eps]
         )
-        self.remittance_tax = [p.remittance_tax for p in eps]
-        self.outward_remittance_tax = [p.outward_remittance_tax for p in eps]
-        self.guest_worker_return = [p.guest_worker_return for p in eps]
-        # sanctions: the pair-set becomes a DERIVED cache of the unilateral stances
-        # (never authoritative; symmetric effect by construction)
-        self.sanctions = {
+        remittance_tax = [p.remittance_tax for p in eps]
+        outward_remittance_tax = [p.outward_remittance_tax for p in eps]
+        guest_worker_return = [p.guest_worker_return for p in eps]
+        # sanctions: a DERIVED cache of the unilateral stances (never authoritative)
+        sanctions = {
             frozenset({i, j})
             for i, p in enumerate(eps) for j in p.sanctions_imposed_on if j != i
         }
+
+        # ---- VALIDATE (pure): every raisable check runs BEFORE the first write.
+        # v26 §1.1/§1.2: an out-of-range sanctions target must never reach the
+        # cache; a vetoed commit leaves NO partial state anywhere. ----
+        self._validate_peg_constraints(eps)
+        _validate_sanctions(sanctions, self.n)
+        _validate_world_domains(self.n, {
+            "fx_lambda": self.fx_lambda, "fx_friction": self.fx_friction,
+            "fx_trade_cap": self.fx_trade_cap,
+            "capital_mobility": self.capital_mobility,
+            "capital_adjust": self.capital_adjust,
+            "external_interest_settlement_fraction": settlement_fraction,
+            "periods_per_year": self.periods_per_year,
+            "peg_reserves0": self._peg_reserves0,
+            "peg_reserve_scale": self.peg_reserve_scale,
+            "migration_rate": self.migration_rate,
+            "migration_max_share": self.migration_max_share,
+            "remittance_share": self.remittance_share,
+            "immigration_cap": immigration_cap,
+            "remittance_tax": remittance_tax,
+            "import_quota": import_quota,
+            "capital_control": capital_control,
+            "sanctions": sanctions,
+            "emigration_cap": emigration_cap,
+            "outward_remittance_tax": outward_remittance_tax,
+            "guest_worker_return": guest_worker_return,
+            "wage_smoothing": self.wage_smoothing,
+        })
+
+        # ---- COMMIT: infallible assignments only ----
+        self.tariff = tariff
+        self.import_quota = import_quota
+        self.export_subsidy = export_subsidy
+        self.capital_control = capital_control
+        self.external_interest_settlement_fraction = settlement_fraction
+        self.immigration_cap = immigration_cap
+        self.emigration_cap = emigration_cap
+        self.remittance_tax = remittance_tax
+        self.outward_remittance_tax = outward_remittance_tax
+        self.guest_worker_return = guest_worker_return
+        self.sanctions = sanctions
         self._reconcile_peg_states(eps)
 
     def _validate_peg_constraints(self, eps) -> None:
