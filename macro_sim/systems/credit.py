@@ -522,10 +522,18 @@ def _pay_deposit_funding_cost(econ: Any, cfg: Any) -> None:
     """
     # [N] deposit_rate_floor: a regulatory floor over the config (technology) rate
     rate = max(float(getattr(cfg, "deposit_rate", 0.0)), econ.policy.deposit_rate_floor)
-    if rate <= 0.0:
+    track_arrears = bool(getattr(econ.cfg, "deposit_interest_arrears", False))
+    if rate <= 0.0 and not track_arrears:
         return
     bridge = getattr(econ, "demographic_bridge", None)
     led = econ.ledger
+
+    # -- pass 1: CURRENT interest, cash-capped; any shortfall becomes an IOU --
+    # CAMPAIGN FIX (X8 silent default): the cash cap used to make unpaid interest
+    # VANISH -- a cash-starved bank stiffed depositors with no record (owed ~167/tick,
+    # paid 0.23, zero liability anywhere). With deposit_interest_arrears=True the
+    # shortfall accrues on the bank as a pooled arrears stock. Flag off = bit-identical.
+    holders: dict = {}
     for h in _flow_households(econ):
         dep = led.balance(h.id)
         if dep <= EPS:
@@ -533,14 +541,48 @@ def _pay_deposit_funding_cost(econ: Any, cfg: Any) -> None:
         bk = bank_for(econ, h.id)
         if bk is None:
             continue
-        interest = min(rate * dep, max(0.0, led.balance(bk.id)))
-        if interest <= EPS:
-            continue
-        led.transfer(bk.id, h.id, interest)
-        bk.deposit_funding_cost += interest
-        if bridge is not None:
-            bridge.post_capital_income(h.id, interest)
-        h.income_realized += interest
+        owed = rate * dep
+        interest = min(owed, max(0.0, led.balance(bk.id)))
+        if track_arrears and owed - interest > EPS:
+            bk.deposit_interest_arrears = (
+                getattr(bk, "deposit_interest_arrears", 0.0) + (owed - interest)
+            )
+        if interest > EPS:
+            led.transfer(bk.id, h.id, interest)
+            bk.deposit_funding_cost += interest
+            if bridge is not None:
+                bridge.post_capital_income(h.id, interest)
+            h.income_realized += interest
+        holders.setdefault(bk.id, []).append((h, dep))
+
+    # -- pass 2: arrears repayment, PRIORITY over dividends (runs before P&L close),
+    # pro-rata by current deposits (the pooled-IOU approximation; per-creditor
+    # ledgers are a later refinement, documented) --
+    if track_arrears:
+        for bk in econ.banks:
+            arrears = getattr(bk, "deposit_interest_arrears", 0.0)
+            if arrears <= EPS:
+                continue
+            cash = max(0.0, led.balance(bk.id))
+            pay_total = min(arrears, cash)
+            if pay_total <= EPS:
+                continue
+            entries = holders.get(bk.id, ())
+            dep_sum = sum(d for _, d in entries)
+            if dep_sum <= EPS:
+                continue
+            paid = 0.0
+            for h, dep in entries:
+                share = pay_total * (dep / dep_sum)
+                if share <= EPS:
+                    continue
+                led.transfer(bk.id, h.id, share)
+                bk.deposit_funding_cost += share
+                if bridge is not None:
+                    bridge.post_capital_income(h.id, share)
+                h.income_realized += share
+                paid += share
+            bk.deposit_interest_arrears = max(0.0, arrears - paid)
 
 
 def finalize_bank_pnl(econ: Any) -> None:

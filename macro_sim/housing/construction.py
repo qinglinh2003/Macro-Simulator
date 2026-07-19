@@ -100,13 +100,33 @@ def run_construction_step(econ: Any) -> None:
         )
         unit_cost = firm.wage / max(firm.a, EPS) + land_fee
         if econ._house_price > unit_cost:
-            firm.demand_expected = max(firm.demand_expected, cfg.builder_demand_seed)
+            floor = cfg.builder_demand_seed
+            gain = cfg.builder_demand_price_gain
+            if gain > 0.0:
+                # CAMPAIGN FIX: supply finally SEES the price signal -- the floor
+                # scales with the profit margin, so a shortage (price >> cost)
+                # raises construction instead of being invisible to builders.
+                floor *= 1.0 + gain * (econ._house_price / unit_cost - 1.0)
+            firm.demand_expected = max(firm.demand_expected, floor)
         while firm.wip >= 1.0:
             permits = int(getattr(econ.policy, "housing_permits", cfg.housing_permits))
             if econ._permits_used >= permits:
                 break                            # the zoning quota binds this year (live Policy lever)
-            if fiscal is None or econ.ledger.balance(firm.id) < land_fee:
-                break                            # cannot pay for land: unit stays as WIP
+            if fiscal is None:
+                break
+            if econ.ledger.balance(firm.id) < land_fee:
+                # CAMPAIGN FIX leg 3: wage credit funds labor but completion needs the
+                # land fee IN CASH at the moment of minting -- the wage loan is spent,
+                # so WIP piles up >= 1.0 forever. With the flag on, the builder draws
+                # a development loan for the shortfall (bank-capacity constrained,
+                # conserving); off = legacy cash-only gate, bit-identical.
+                borrowed = 0.0
+                if cfg.builder_land_fee_credit:
+                    from macro_sim.systems.credit import grant_loan
+                    shortfall = land_fee - econ.ledger.balance(firm.id)
+                    borrowed = grant_loan(econ, firm.id, shortfall)
+                if econ.ledger.balance(firm.id) < land_fee:
+                    break                        # cannot pay for land: unit stays as WIP
             if land_fee > EPS:
                 econ.ledger.transfer(firm.id, fiscal, land_fee)
                 econ._land_fee_paid = getattr(econ, "_land_fee_paid", 0.0) + land_fee

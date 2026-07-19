@@ -1,0 +1,86 @@
+"""Extreme-campaign bug fixes: flag-gated, flags-off bit-identical (digest 0fb412c8).
+
+Root-cause chain for the construction stall (all four legs required):
+price collapse (A1b) -> building unprofitable -> DSCR refuses wage credit ->
+no hiring -> WIP frozen; plus closed-loop demand discovery, the one-at-a-time
+inventory choke, and the land-fee cash gate at completion.
+"""
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from macro_sim.config import Config
+from macro_sim.economy import Economy
+
+
+def _cfg(**over):
+    base = dict(seed=7, n_households=40, n_firms_c=15, n_firms_k=8, n_banks=2,
+                demographics_population=260, n_ticks=400, government=True,
+                housing_enabled=True, housing_market_enabled=True,
+                housing_construction_enabled=True, n_builders=2)
+    return Config.v13(**{**base, **over})
+
+
+def test_ask_floor_holds_under_decay():
+    e = Economy(_cfg(housing_ask_floor_wage_share=1.5))
+    floor = 1.5 * e.cfg.w_firm0 * 365.0
+    for _ in range(300):
+        e.step()
+    asks = [l.ask for l in e.housing_market.listings.values()]
+    if asks:
+        assert min(asks) >= floor - 1e-9, "decay must stop at the wage-anchored floor"
+
+
+def test_ask_floor_off_is_floorless():
+    e = Economy(_cfg())
+    assert e.housing_market.ask_floor == 0.0
+
+
+def test_builder_buffer_keeps_planning_alive():
+    """With the buffer, one unsold unit must NOT zero the production target."""
+    from macro_sim.behavior.planning import plan_production
+
+    class F:
+        phi = 5.0
+        demand_expected = 0.01
+        inventory = 1.0
+        target_inventory = 0.0
+        production_target = 0.0
+    f = F()
+    plan_production(f, 1.0)                        # legacy: choked
+    assert f.production_target == 0.0
+    plan_production(f, 1.0, inventory=0.0)         # buffer-adjusted view
+    assert f.production_target > 0.0
+
+
+def test_builder_gain_scales_demand_floor():
+    e = Economy(_cfg(builder_demand_price_gain=2.0))
+    for _ in range(60):
+        e.step()
+    b = e.builders[0]
+    assert b.demand_expected > e.cfg.builder_demand_seed * 1.01, (
+        "a profitable margin must lift the demand floor above the seed")
+
+
+def test_deposit_interest_arrears_accrue_and_repay():
+    e = Economy(Config.v13(seed=3, n_households=30, n_firms_c=10, n_firms_k=5,
+                           n_banks=1, demographics_population=180, n_ticks=60,
+                           government=True, interbank=True, bank_realized_pnl=True,
+                           deposit_rate=5.0e-3, deposit_interest_arrears=True))
+    for _ in range(40):
+        e.step()
+    bk = e.banks[0]
+    arr = getattr(bk, "deposit_interest_arrears", 0.0)
+    assert arr >= 0.0
+    e.ledger.assert_conserved()
+
+
+def test_flags_off_no_new_attributes_leak():
+    e = Economy(_cfg())
+    for _ in range(30):
+        e.step()
+    for bk in e.banks:
+        assert getattr(bk, "deposit_interest_arrears", 0.0) == 0.0

@@ -61,7 +61,18 @@ def run_planning_phase(econ: Any) -> None:
         else 0.0
     )
     for f in econ.firms:
-        B.plan_production(f, cfg.inventory_gap_close)
+        # CAMPAIGN FIX (construction stall, leg 2): builders are a ONE-AT-A-TIME
+        # pipeline -- a single unsold dwelling zeroes the production target until it
+        # sells, which in cash-only markets is never. The buffer lets a builder keep
+        # up to k finished-unsold units WORKING like a real developer's pipeline.
+        # 0.0 = off = bit-identical.
+        if getattr(f, "sells", None) == "housing" and cfg.builder_inventory_buffer > 0.0:
+            B.plan_production(
+                f, cfg.inventory_gap_close,
+                inventory=max(0.0, f.inventory - cfg.builder_inventory_buffer),
+            )
+        else:
+            B.plan_production(f, cfg.inventory_gap_close)
         if f.capacity_kappa > 0.0:
             # v17.0 capacity edge (E-firms): never plan past kappa*K, so labor demand is
             # capped at the capacity-implied headcount (short-run supply inelasticity).

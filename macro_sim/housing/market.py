@@ -56,6 +56,7 @@ class HousingMarket:
     # with buyers still queuing lifts the reference price one step (mirror of ask_decay).
     # 0.0 = legacy ratchet, bit-identical.
     demand_step: float = 0.0
+    ask_floor: float = 0.0          # absolute price floor under ask decay (0 = legacy EPS)
 
     listings: dict[int, Listing] = field(default_factory=dict)   # dwelling_id -> Listing
     sales_total: int = 0
@@ -295,8 +296,9 @@ def run_housing_market_phase(econ: Any) -> None:
         econ._house_price *= 1.0 + market.demand_step
     market.last_session_sales = len(sold)
     market.last_session_volume = sum(p for _, p in sold)
+    floor = max(EPS, market.ask_floor)
     for listing in market.listings.values():
-        listing.ask = max(EPS, listing.ask * (1.0 - market.ask_decay))
+        listing.ask = max(floor, listing.ask * (1.0 - market.ask_decay))
     n_listed = len(market.listings)
     market.forced_share = (
         sum(1 for l in market.listings.values() if l.forced) / n_listed if n_listed else 0.0

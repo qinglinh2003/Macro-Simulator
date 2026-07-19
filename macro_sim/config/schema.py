@@ -109,6 +109,7 @@ class SettlementConfig:
 class PlanningConfig:
     theta_wage: float
     inventory_gap_close: float
+    builder_inventory_buffer: float   # campaign fix: builder pipeline buffer
     delta: float
     wage_indexation: float   # v23: price feedback in B4 (0 = the legacy tightness-only rule)
     theta_price: float
