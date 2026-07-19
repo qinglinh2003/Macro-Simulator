@@ -8,6 +8,7 @@ from typing import Any
 
 from macro_sim.domain.agents import Bank, InterbankClaim
 from macro_sim.markets.matching import EPS
+from macro_sim.shocks.engine import read_shock_factor
 from macro_sim.systems.valuation import floor_safe_price_return
 
 
@@ -310,9 +311,12 @@ def grant_loan(econ: Any, borrower_id, amount: float) -> float:
     cfg = econ.cfg.banking
     has_gross_gate = bank_constraint(econ)
     has_rwa_gate = unified_bank_rwa_enabled(econ)
+    supply_factor = read_shock_factor(econ, "credit_supply")
     if not (has_gross_gate or has_rwa_gate):
-        econ.ledger.create_loan(borrower_id, amount)
-        return amount
+        granted = amount if supply_factor == 1.0 else min(amount, amount * supply_factor)
+        if granted > EPS:
+            econ.ledger.create_loan(borrower_id, granted)
+        return granted
     if not isinstance(getattr(econ, "_loan_book", None), dict):
         refresh_loan_books(econ)
     if rate_competition(econ):
@@ -323,6 +327,8 @@ def grant_loan(econ: Any, borrower_id, amount: float) -> float:
         capital = max(0.0, bank_economic_capital(econ, bank))
         concentration_room = econ.policy.bank_exposure_limit * capital - econ.ledger.debt(borrower_id)
         headroom = min(headroom, concentration_room)
+    if supply_factor != 1.0:
+        headroom *= supply_factor
     granted = min(amount, max(0.0, headroom))
     if granted > EPS:
         econ.ledger.create_loan(borrower_id, granted)

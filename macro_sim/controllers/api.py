@@ -153,6 +153,24 @@ class ControllerService:
             raise KeyError(context_id)
         return context.to_dict()
 
+    def shock_bulletins(self, *, economy_id: int, seat: str) -> dict[str, Any]:
+        """Read the same disclosed shock bulletin available to this policy seat."""
+        economy_id = self._economy_id(economy_id)
+        seat = self._seat(seat)
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(self.session.world)
+        rows = () if shock_engine is None else shock_engine.bulletins(
+            economy_id, self.session.boundary_tick, role=seat,
+        )
+        return canonical_value({
+            "schema_version": CONTROLLER_SCHEMA_VERSION,
+            "boundary_tick": self.session.boundary_tick,
+            "economy_id": economy_id,
+            "seat": seat,
+            "shock_bulletins": list(rows),
+        })
+
     def pending(self, *, economy_id: int | None = None) -> list[dict[str, Any]]:
         if economy_id is not None:
             economy_id = self._economy_id(economy_id)

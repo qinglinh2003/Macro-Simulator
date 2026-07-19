@@ -127,6 +127,36 @@ DEFAULT_TRIGGERS: tuple[TriggerSpec, ...] = (
         min_persist_ticks=2, cooldown_ticks=14,
         authorized_seats=("energy", "treasury"),
     ),
+    TriggerSpec(
+        "exogenous_supply_crisis", "shock_supply_severity",
+        enter_threshold=0.20, exit_threshold=0.05,
+        min_persist_ticks=1, cooldown_ticks=30,
+        authorized_seats=("central_bank", "treasury"),
+    ),
+    TriggerSpec(
+        "exogenous_energy_crisis", "shock_energy_severity",
+        enter_threshold=0.20, exit_threshold=0.05,
+        min_persist_ticks=1, cooldown_ticks=14,
+        authorized_seats=("energy", "treasury"),
+    ),
+    TriggerSpec(
+        "exogenous_financial_crisis", "shock_financial_severity",
+        enter_threshold=0.20, exit_threshold=0.05,
+        min_persist_ticks=1, cooldown_ticks=30,
+        authorized_seats=("central_bank", "regulator", "treasury"),
+    ),
+    TriggerSpec(
+        "exogenous_trade_crisis", "shock_trade_severity",
+        enter_threshold=0.20, exit_threshold=0.05,
+        min_persist_ticks=1, cooldown_ticks=30,
+        authorized_seats=("external_affairs", "treasury"),
+    ),
+    TriggerSpec(
+        "exogenous_demand_crisis", "shock_demand_severity",
+        enter_threshold=0.20, exit_threshold=0.05,
+        min_persist_ticks=1, cooldown_ticks=30,
+        authorized_seats=("central_bank", "treasury"),
+    ),
 )
 
 

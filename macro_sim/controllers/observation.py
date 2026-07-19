@@ -172,10 +172,19 @@ class ObservationFieldSpec:
     def __post_init__(self) -> None:
         if not self.series_id or not self.source_key:
             raise ValueError("series_id and source_key must not be empty")
-        if self.source not in {"economy", "world", "release"}:
-            raise ValueError("source must be 'economy', 'world', or 'release'")
+        if self.source not in {"economy", "world", "release", "shock"}:
+            raise ValueError("source must be 'economy', 'world', 'release', or 'shock'")
         if self.source == "release" and self.economy_indexed:
             raise ValueError("a released dependency is already economy-specific")
+        if self.source == "shock" and (
+            self.aggregation != "last" or self.window_ticks != 1
+            or self.economy_indexed or self.phase_offset_ticks != 0
+            or self.publication_lag_ticks != 0
+        ):
+            raise ValueError(
+                "shock observables require aggregation='last', window_ticks=1, "
+                "economy_indexed=False, phase_offset_ticks=0 and publication_lag_ticks=0"
+            )
         if self.aggregation not in AGGREGATIONS:
             raise ValueError(f"unknown aggregation {self.aggregation!r}")
         _strict_int("window_ticks", self.window_ticks, minimum=1)
@@ -309,6 +318,7 @@ class InstitutionObservation:
     releases: tuple[Release, ...]
     observation_schema_version: int = 1
     elapsed_ticks: int = 0
+    shock_bulletins: tuple[Mapping[str, Any], ...] = ()
     observation_kind: ClassVar[str] = "institution"
     _controller_observation_deeply_immutable: ClassVar[bool] = True
 
@@ -329,6 +339,15 @@ class InstitutionObservation:
             if item.released_at_tick > self.boundary_tick:
                 raise ValueError("observation contains an unreleased future vintage")
         object.__setattr__(self, "releases", ordered)
+        bulletins = tuple(
+            immutable_json_value(item) for item in self.shock_bulletins
+        )
+        if not all(isinstance(item, Mapping) for item in bulletins):
+            raise TypeError("shock_bulletins must contain JSON mappings")
+        bulletins = tuple(sorted(
+            bulletins, key=lambda item: (item.get("start_tick", 0), item.get("shock_id", "")),
+        ))
+        object.__setattr__(self, "shock_bulletins", bulletins)
 
     def release(self, series_id: str) -> Release:
         for item in self.releases:
@@ -351,6 +370,7 @@ class InstitutionObservation:
             "observation_kind": self.observation_kind,
             "releases": [item.to_dict() for item in self.releases],
             "role": self.role,
+            "shock_bulletins": list(self.shock_bulletins),
         }
 
     def to_json(self) -> str:
@@ -481,7 +501,17 @@ class ReleaseService:
                 missing_reason="warmup", unit=item.unit, economy_id=economy_id,
             )
         reference_start = max(0, requested_start)
-        if item.source == "release":
+        if item.source == "shock":
+            from macro_sim.shocks import get_shock_engine
+
+            shock_engine = get_shock_engine(engine)
+            values = [
+                0.0 if shock_engine is None else shock_engine.observable(
+                    item.source_key, economy_id, released_at, role="public",
+                )
+            ]
+            reason = None
+        elif item.source == "release":
             values, reason = self._released_dependency_values(
                 item, economy_id, reference_start, reference_end, released_at,
             )
@@ -589,6 +619,36 @@ class ReleaseService:
         published: list[Release] = []
         for item in self.spec.ordered_fields():
             key = (economy_id, item.series_id)
+            if item.source == "shock":
+                # Shock announcements are boundary information, not a statistic
+                # over a completed economic tick.  Publish a synthetic vintage at
+                # boundary zero as well, so an announced tick-0 crisis is visible
+                # before the first Controller action/RL step.
+                period_index = self._next_period_index.get(key, 0)
+                while True:
+                    released_at = (
+                        item.phase_offset_ticks
+                        + period_index * item.frequency_ticks
+                        + item.publication_lag_ticks
+                    )
+                    if released_at > boundary_tick:
+                        break
+                    from macro_sim.shocks import get_shock_engine
+
+                    shock_engine = get_shock_engine(engine)
+                    value = 0.0 if shock_engine is None else shock_engine.observable(
+                        item.source_key, economy_id, released_at, role="public",
+                    )
+                    release = Release(
+                        item.series_id, value, -1, -1, released_at,
+                        access_class=item.access_class, unit=item.unit,
+                        economy_id=economy_id,
+                    )
+                    self._history.setdefault(key, []).append(release)
+                    published.append(release)
+                    period_index += 1
+                self._next_period_index[key] = period_index
+                continue
             period_index = self._next_period_index.get(key, 1)
             while True:
                 reference_end = (
@@ -643,6 +703,12 @@ class ReleaseService:
                 )
             )
         observation_type = PublicObservation if role == "public" else InstitutionObservation
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(engine)
+        bulletins = () if shock_engine is None else shock_engine.bulletins(
+            economy_id, boundary_tick, role=role,
+        )
         return observation_type(
             boundary_tick=boundary_tick,
             economy_id=economy_id,
@@ -650,6 +716,7 @@ class ReleaseService:
             releases=tuple(visible),
             observation_schema_version=self.spec.schema_version,
             elapsed_ticks=elapsed_ticks,
+            shock_bulletins=bulletins,
         )
 
     def observe_oracle(
@@ -673,6 +740,12 @@ class ReleaseService:
                     item, economy_id, boundary_tick, "not_released",
                 )
             )
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(engine)
+        bulletins = () if shock_engine is None else shock_engine.bulletins(
+            economy_id, boundary_tick, role="oracle",
+        )
         return OracleObservation(
             boundary_tick=boundary_tick,
             economy_id=economy_id,
@@ -680,6 +753,7 @@ class ReleaseService:
             releases=tuple(visible),
             observation_schema_version=self.spec.schema_version,
             elapsed_ticks=elapsed_ticks,
+            shock_bulletins=bulletins,
         )
 
     def history(
@@ -1050,6 +1124,45 @@ def default_observation_spec() -> ObservationSpec:
           economy_indexed=True, aggregation="sum", window_ticks=30,
           frequency_ticks=30, publication_lag_ticks=7,
           normalization_scale=100.0),
+        # v27: fixed numeric features for RL plus typed detail in
+        # InstitutionObservation.shock_bulletins.  These query only shocks whose
+        # announcement boundary has arrived; the future tape remains inaccessible.
+        F("shock_announced_count", "announced_count", source="shock", unit="events",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=1.0),
+        F("shock_active_count", "active_count", source="shock", unit="events",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=1.0),
+        F("shock_max_severity", "max_severity", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_time_to_next", "time_to_next", source="shock", unit="ticks",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=30.0),
+        F("shock_productivity", "severity.productivity", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_labor_availability", "severity.labor_availability", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_energy_capacity", "severity.energy_capacity", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_household_demand", "severity.household_demand", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_import_capacity", "severity.import_capacity", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_export_capacity", "severity.export_capacity", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_credit_supply", "severity.credit_supply", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
+        F("shock_capital_destruction", "severity.capital_destruction", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.25),
         F("oracle_daily_output", "real_output", access_class="oracle",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=100.0),

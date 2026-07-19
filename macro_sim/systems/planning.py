@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from macro_sim.behavior import planning as B
+from macro_sim.shocks.engine import read_shock_factor
 from macro_sim.systems.banking import loan_rate_for
 from macro_sim.systems.securities import household_bond_value
 from macro_sim.systems.firm_accounting import (
@@ -64,7 +65,11 @@ def run_planning_phase(econ: Any) -> None:
         if f.capacity_kappa > 0.0:
             # v17.0 capacity edge (E-firms): never plan past kappa*K, so labor demand is
             # capped at the capacity-implied headcount (short-run supply inelasticity).
-            f.production_target = min(f.production_target, f.capacity_kappa * f.capital)
+            capacity_factor = read_shock_factor(econ, "energy_capacity", firm=f)
+            capacity = f.capacity_kappa * f.capital
+            if capacity_factor != 1.0:
+                capacity *= capacity_factor
+            f.production_target = min(f.production_target, capacity)
         f.labor_demand_notional = B.labor_demand_notional(f, f.production_target, econ._output_factor(f))
         # v23: wage setting now reads COMMITTED inflation expectations -- the same lag/EMA the
         # monetary transmission uses, never this tick's price -- so the labour-tightness terms
@@ -209,6 +214,14 @@ def run_planning_phase(econ: Any) -> None:
             units = housing.units_of(h.id)
             if units > 0.0:
                 h.consumption_budget += hwe * alpha2 * units * price
+
+    # v27: an exogenous confidence/demand shock changes desired spending before
+    # household credit is requested.  It does not move deposits or force realized
+    # consumption, which remain endogenous to credit, cash and market clearing.
+    demand_factor = read_shock_factor(econ, "household_demand")
+    if demand_factor != 1.0:
+        for h in econ.households:
+            h.consumption_budget = max(0.0, h.consumption_budget * demand_factor)
 
     # Keep ``consumption_budget`` as the household's desired nominal demand.  The
     # cash needed for debt service is reserved at the goods-order boundary, after

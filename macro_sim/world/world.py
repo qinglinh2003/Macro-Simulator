@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import List
+from typing import Any, List
 
 from macro_sim.config import Config
 from macro_sim.economy import Economy
@@ -236,6 +236,7 @@ class World:
         outward_remittance_tax: float = 0.0,     # POLICY (migration): HOST taxes outbound remittances
         guest_worker_return: float = 0.0,        # POLICY (migration): temporary migration — return rate
         wage_smoothing: float = 0.02,            # migration reacts to a PERSISTENT wage gap, not a blip
+        shocks: Any = None,                       # v27: semantic exogenous ShockTape/ShockEngine
     ):
         if not configs:
             raise ValueError("World needs at least one economy config")
@@ -271,7 +272,7 @@ class World:
         for i, cfg in enumerate(configs):
             if base_seed is not None:
                 cfg = replace(cfg, seed=base_seed + i * ECONOMY_SEED_STRIDE)
-            econ = Economy(cfg)
+            econ = Economy(cfg, _defer_shocks=True)
             # Residency + currency tags (§0.5 component ①). At v20.0 only labels: an
             # agent's residency is which economy owns it; the currency labels the money.
             # These deepen (per-asset denomination) once capital/trade need them.
@@ -479,7 +480,57 @@ class World:
             # capital position on which the coarse factor-income layer should
             # recursively accrue interest.
             self._factor_interest_principal = self.market_external_positions()
+        # v27: one World-owned engine realizes multi-economy shocks atomically.
+        # Legacy per-Config energy scenarios are translated into the same tape,
+        # with explicit economy targets, before binding.
+        from macro_sim.shocks import ShockEngine, ShockTape, legacy_energy_spec
+
+        legacy_specs = tuple(
+            item for i, econ in enumerate(self.economies)
+            if (item := legacy_energy_spec(econ.cfg, economy_id=i)) is not None
+        )
+        if isinstance(shocks, ShockEngine):
+            if shocks.current_tick >= 0:
+                raise ValueError("a running ShockEngine cannot seed a new World")
+            existing = {item.shock_id for item in shocks.specs}
+            additions = tuple(item for item in legacy_specs if item.shock_id not in existing)
+            self.shock_engine = ShockEngine(tuple(shocks.specs) + additions)
+        else:
+            tape = ShockTape.coerce(shocks)
+            specs = tape.specs + legacy_specs
+            self.shock_engine = ShockEngine(specs) if specs else None
+        if self.shock_engine is not None:
+            self.shock_engine.bind(self.economies, world=self)
+            for econ in self.economies:
+                econ.shock_engine = self.shock_engine
         self._commit_external_policies()   # B5a: normalize the coupling vectors from day one
+
+    def schedule_shock(self, spec: Any) -> None:
+        """Append a concrete shock at this World boundary."""
+        from macro_sim.shocks import ShockEngine
+
+        if self.shock_engine is None:
+            candidate = ShockEngine()
+            candidate.bind(self.economies, world=self)
+            candidate.current_tick = self.t - 1
+            candidate.schedule(
+                spec, economies=self.economies, world=self, boundary_tick=self.t,
+            )
+            # Publish the shared identity only after successful validation.
+            self.shock_engine = candidate
+            for econ in self.economies:
+                econ.shock_engine = candidate
+            return
+        self.shock_engine.schedule(
+            spec, economies=self.economies, world=self, boundary_tick=self.t,
+        )
+
+    def shock_bulletins(
+        self, economy_id: int, *, role: str = "public",
+    ) -> tuple[dict[str, Any], ...]:
+        if self.shock_engine is None:
+            return ()
+        return self.shock_engine.bulletins(economy_id, self.t, role=role)
 
     def _validate_domains(self) -> None:
         """Revalidate mutable World levers before any per-tick state change."""
@@ -697,6 +748,8 @@ class World:
         # never one tick late against stale vectors.
         self._commit_external_policies()
         self._validate_domains()
+        if self.shock_engine is not None:
+            self.shock_engine.begin_tick(self.t, self.economies, world=self)
         self._coupling_barrier()                              # thin central barrier (moves no money)
         if not self.couple:
             # Preserve the ordinary closed-economy path, including the N=1 byte-identity

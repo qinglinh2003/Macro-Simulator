@@ -28,6 +28,7 @@ from typing import Any, Dict, List
 from macro_sim.behavior import planning as B
 from macro_sim.domain.agents import Firm, Household
 from macro_sim.markets.matching import EPS, BuyOrder, SellOffer, Trade, execute_market
+from macro_sim.shocks.engine import read_shock_factor
 
 
 def _proportional_clearing(orders: List[BuyOrder], offers: List[SellOffer],
@@ -200,32 +201,29 @@ def _produce_e_firms(econ: Any) -> None:
     supply implodes exactly when demand explodes (found in the 17.0 kernel probe;
     the phase order is the load-bearing difference from the goods market)."""
     for f in econ.e_firms:
-        f.produced = B.produce(f, f.hired, econ._output_factor(f))
+        labor_factor = read_shock_factor(econ, "labor_availability", firm=f)
+        effective_hired = f.hired if labor_factor == 1.0 else f.hired * labor_factor
+        f.produced = B.produce(f, effective_hired, econ._output_factor(f))
         if f.capacity_kappa > 0.0:
-            f.produced = min(f.produced, f.capacity_kappa * f.capital)
+            capacity_factor = read_shock_factor(econ, "energy_capacity", firm=f)
+            capacity = f.capacity_kappa * f.capital
+            if capacity_factor != 1.0:
+                capacity *= capacity_factor
+            f.produced = min(f.produced, capacity)
         f.inventory += f.produced
 
 
 def apply_energy_shock(econ: Any) -> None:
-    """v17.2: the capacity-shock SCENARIO (the model's first deliberate exogenous
-    shock). kappa multiplier at shock_at; a pulse restores it EXACTLY at the end
-    (float-exact: store the pre-shock value instead of dividing back). The
-    accelerator's v keeps its genesis technology: after a permanent cut, capacity
-    re-expands through the unfilled-demand channel with a lag — the lag IS the
-    experiment. energy_shock_at=0 => never fires => bit-identical."""
-    cfg = econ.cfg
-    if cfg.energy_shock_at <= 0:
-        return
-    if econ.t == cfg.energy_shock_at:
-        econ._energy_kappa0 = [ef.capacity_kappa for ef in econ.e_firms]
-        for ef in econ.e_firms:
-            ef.capacity_kappa *= (1.0 - cfg.energy_shock_magnitude)
-        econ._energy_shock_active = 1.0
-    elif (cfg.energy_shock_duration > 0
-          and econ.t == cfg.energy_shock_at + cfg.energy_shock_duration):
-        for ef, k0 in zip(econ.e_firms, getattr(econ, "_energy_kappa0", [])):
-            ef.capacity_kappa = k0
-        econ._energy_shock_active = 0.0
+    """Deprecated v17 hook; v27 realizes the translated Config shock pre-tick.
+
+    Kept as a public compatibility symbol for downstream imports.  Capacity is now
+    a non-mutating overlay, so overlapping pulses compose and recover exactly.
+    """
+    engine = getattr(econ, "shock_engine", None)
+    if engine is not None:
+        econ._energy_shock_active = float(
+            engine.is_active("energy_capacity", econ.economy_id)
+        )
 
 
 def run_energy_phase(econ: Any) -> None:

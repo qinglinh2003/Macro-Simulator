@@ -417,23 +417,37 @@ def _validate_release_service_snapshot(
             )
 
         releases = history.get((economy_id, series_id), ())
-        if len(releases) != completed_periods:
+        # v27 shock observables are boundary vintages and include boundary zero;
+        # ordinary series cover completed engine periods and begin at boundary one.
+        expected_release_count = (
+            completed_periods + 1 if field.source == "shock" else completed_periods
+        )
+        if len(releases) != expected_release_count:
             raise ValueError(
                 "controlled-session release history length disagrees with its next period"
             )
-        for period_index, release in enumerate(releases, start=1):
-            expected_reference_end = (
-                field.phase_offset_ticks
-                + period_index * field.frequency_ticks
-                - 1
-            )
-            expected_reference_start = max(
-                0,
-                expected_reference_end - field.window_ticks + 1,
-            )
-            expected_released_at = (
-                expected_reference_end + 1 + field.publication_lag_ticks
-            )
+        period_start = 0 if field.source == "shock" else 1
+        for period_index, release in enumerate(releases, start=period_start):
+            if field.source == "shock":
+                expected_reference_start = expected_reference_end = -1
+                expected_released_at = (
+                    field.phase_offset_ticks
+                    + period_index * field.frequency_ticks
+                    + field.publication_lag_ticks
+                )
+            else:
+                expected_reference_end = (
+                    field.phase_offset_ticks
+                    + period_index * field.frequency_ticks
+                    - 1
+                )
+                expected_reference_start = max(
+                    0,
+                    expected_reference_end - field.window_ticks + 1,
+                )
+                expected_released_at = (
+                    expected_reference_end + 1 + field.publication_lag_ticks
+                )
             if release.reference_start_tick != expected_reference_start \
                     or release.reference_end_tick != expected_reference_end \
                     or release.released_at_tick != expected_released_at:
@@ -647,6 +661,63 @@ def _config_digest(obj: Any) -> str | None:
         return None
 
 
+def _validate_shock_snapshot(root: Any, *, tick: int) -> Any | None:
+    """Validate the v27 tape/runtime/event prefix before save and after load."""
+    from macro_sim.shocks import get_shock_engine
+
+    engine_root = root.world if hasattr(root, "world") and hasattr(root, "coordinator") else root
+    engine = get_shock_engine(engine_root)
+    if engine is None:
+        if hasattr(root, "shock_event_cursor") and root.shock_event_cursor != 0:
+            raise ValueError("controlled-session shock cursor exists without a shock engine")
+        return None
+    engine.events.verify()
+    if engine.current_tick != int(tick) - 1:
+        raise ValueError(
+            "shock engine is not at a completed simulation boundary "
+            f"(shock tick {engine.current_tick}, checkpoint tick {tick})"
+        )
+    ids = {item.shock_id for item in engine.specs}
+    for name, values in (
+        ("announced", engine._announced),
+        ("active", engine._active),
+        ("realized", engine._realized),
+    ):
+        if not set(values).issubset(ids):
+            raise ValueError(f"shock engine {name} index references an unknown shock")
+    expected_active = {
+        item.shock_id for item in engine.specs
+        if not engine.registry[item.kind].one_shot
+        and item.intensity_at(engine.current_tick) > 0.0
+    } if engine.current_tick >= 0 else set()
+    if engine._active != expected_active:
+        raise ValueError("shock active index disagrees with tape/current tick")
+    expected_announced = {
+        item.shock_id for item in engine.specs
+        if item.announcement_tick <= engine.current_tick
+    } if engine.current_tick >= 0 else set()
+    if engine._announced != expected_announced:
+        raise ValueError("shock announcement index disagrees with tape/current tick")
+    expected_realized = {
+        item.shock_id for item in engine.specs
+        if engine.registry[item.kind].one_shot and item.start_tick <= engine.current_tick
+    } if engine.current_tick >= 0 else set()
+    if engine._realized != expected_realized:
+        raise ValueError("shock realization index disagrees with tape/current tick")
+    economies = list(getattr(engine_root, "economies", [engine_root]))
+    if any(getattr(economy, "shock_engine", None) is not engine for economy in economies):
+        raise ValueError("World/economy shock-engine identity is broken")
+    if hasattr(root, "shock_event_cursor"):
+        cursor = root.shock_event_cursor
+        if isinstance(cursor, bool) or not isinstance(cursor, int) \
+                or cursor != len(engine.events.events):
+            raise ValueError("controlled-session shock event cursor is not at the event head")
+    # Rebuilding the canonical tape is also a schema/registry validation pass.
+    if not isinstance(engine.contract_hash, str) or len(engine.contract_hash) != 64:
+        raise ValueError("shock tape contract hash is malformed")
+    return engine
+
+
 def save_checkpoint(
     path: str,
     world: Any,
@@ -674,6 +745,7 @@ def save_checkpoint(
             raise ValueError(
                 f"session checkpoint tick {tick} != boundary {world.boundary_tick}"
             )
+    shock_engine = _validate_shock_snapshot(world, tick=int(tick))
     payload = {"world": world, "sidecar": sidecar or {}}
     # gzip level 1: the blob is float-heavy simulation state; speed beats ratio.
     blob = gzip.compress(pickle.dumps(payload, protocol=5), compresslevel=1)
@@ -694,6 +766,12 @@ def save_checkpoint(
             "event_count": len(world.events.events),
             "event_head_hash": world.events.head_hash,
             "session_digest": session_digest(world),
+        })
+    if shock_engine is not None:
+        header.update({
+            "shock_contract_hash": shock_engine.contract_hash,
+            "shock_event_count": len(shock_engine.events.events),
+            "shock_event_head_hash": shock_engine.events.head_hash,
         })
     if meta:
         conflicts = set(meta).intersection(header)
@@ -748,6 +826,16 @@ def load_checkpoint(
             print(f"WARNING: {msg} -- resuming anyway", file=sys.stderr)
         payload = pickle.loads(gzip.decompress(zf.read("state.pkl.gz")))
     root = payload["world"]
+    shock_engine = _validate_shock_snapshot(root, tick=int(header["tick"]))
+    if shock_engine is not None:
+        expected_shock = {
+            "shock_contract_hash": shock_engine.contract_hash,
+            "shock_event_count": len(shock_engine.events.events),
+            "shock_event_head_hash": shock_engine.events.head_hash,
+        }
+        for key, value in expected_shock.items():
+            if header.get(key) != value:
+                raise ValueError(f"checkpoint {key} does not match shock state/event prefix")
     if hasattr(root, "coordinator") and hasattr(root, "events") and hasattr(root, "world"):
         _validate_controlled_session_snapshot(root)
         expected = {

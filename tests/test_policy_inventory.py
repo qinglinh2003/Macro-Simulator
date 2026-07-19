@@ -19,6 +19,6 @@ def test_source_counts_documented():
     fields = discover()
     assert len(fields["Config"]) == 364
     assert len(fields["Policy"]) == 88   # 86 - central_bank(deleted) + monetary_regime + jg_share + deposit_floor
-    assert len(fields["World"]) == 31
+    assert len(fields["World"]) == 32   # + v27 semantic ShockTape/ShockEngine input
     assert len(fields["Social"]) == 35
     assert len(fields["Relationship"]) == 12

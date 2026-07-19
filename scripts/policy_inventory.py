@@ -209,6 +209,7 @@ WORLD_POLICY = {
 WORLD_PENDING_MIGRATION = {"peg_economy"}   # PROPOSED deletion; blocked on §5.1 multi-pegger ruling
 WORLD_STRUCTURE = {"base_seed", "periods_per_year", "peg_reserves0"}
 WORLD_MECHANISM = {"couple", "trade", "capital", "migration"}
+WORLD_SHOCK_MODULE = {"shocks"}
 WORLD_PHYSICS = {
     "fx_lambda", "fx_friction", "fx_trade_cap", "capital_mobility", "capital_adjust",
     "migration_rate", "migration_max_share", "remittance_share", "wage_smoothing",
@@ -283,6 +284,7 @@ def classification() -> dict[str, dict[str, set[str]]]:
             "PENDING_MIGRATION": WORLD_PENDING_MIGRATION,
             "STRUCTURE": WORLD_STRUCTURE,
             "MECHANISM": WORLD_MECHANISM,
+            "SHOCK_MODULE": WORLD_SHOCK_MODULE,
             "PHYSICS": WORLD_PHYSICS,
         },
         "Social": {

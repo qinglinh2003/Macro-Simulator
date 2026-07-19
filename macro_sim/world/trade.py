@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 
 from macro_sim.markets.matching import EPS, SellOffer
+from macro_sim.shocks.engine import read_shock_factor
 from macro_sim.world.capital import capital_financing, capital_grope_signal, peg_defense
 from macro_sim.world.fx import DEALER_ID
 
@@ -125,6 +126,16 @@ def prepare_trade(world) -> None:
     ]
     if any(item is not None for item in world._export_reservations):
         raise AssertionError("stale export reservation crossed a coupling barrier")
+    # Export-side capacity shocks are shared across all importers at this barrier.
+    # A None entry retains the exact historical path and arithmetic when inert.
+    shock_export_remaining = []
+    for source in econs:
+        factor = read_shock_factor(source, "export_capacity")
+        shock_export_remaining.append(
+            None if factor == 1.0
+            else factor * sum(max(0.0, float(f.inventory)) for f in source.c_firms)
+        )
+
     for i, econ in enumerate(econs):
         tariff_rate, tariff_multiplier = tariffs[i]
         # The acquisition-price trade is gross of tariff.  The domestic
@@ -157,6 +168,9 @@ def prepare_trade(world) -> None:
             econ._fx_import_offer = econ._fx_export_order = None
             continue
         cap_real = world.fx_trade_cap * _capacity_real(econ)
+        import_factor = read_shock_factor(econ, "import_capacity")
+        if import_factor != 1.0:
+            cap_real *= import_factor
         # POLICY: an import QUOTA caps the physical volume admitted (a quantity control,
         # unlike the tariff's price control). None ⇒ no ceiling.
         if world.import_quota is not None:
@@ -175,6 +189,7 @@ def prepare_trade(world) -> None:
         candidate_lots = []
         remaining = cap_real * iceberg_multiplier
         source = econs[best_j]
+        export_remaining = shock_export_remaining[best_j]
         _source_subsidy, export_multiplier = export_policies[best_j]
         acquisition_factor = (
             export_multiplier
@@ -187,16 +202,17 @@ def prepare_trade(world) -> None:
             lot_price = float(firm.price)
             if lot_price <= EPS:
                 continue
-            units = min(
-                max(0.0, float(firm.inventory)),
-                remaining,
-            )
+            units = min(max(0.0, float(firm.inventory)), remaining)
+            if export_remaining is not None:
+                units = min(units, max(0.0, export_remaining))
             if units <= EPS:
                 continue
             candidate_lots.append(
                 {"firm_id": firm.id, "units": units, "price": lot_price}
             )
             remaining -= units
+            if export_remaining is not None:
+                export_remaining -= units
 
         candidate_shipped = sum(float(lot["units"]) for lot in candidate_lots)
         candidate_barrier_value = sum(
@@ -243,6 +259,9 @@ def prepare_trade(world) -> None:
                 }
             )
             remaining_budget -= units * unit_acquisition_cost
+        if shock_export_remaining[best_j] is not None:
+            actual_units = sum(float(item["units"]) for item in lots)
+            shock_export_remaining[best_j] -= actual_units
         reserved_shipped = sum(float(lot["units"]) for lot in lots)
         barrier_lot_basic_value = sum(
             float(lot["units"]) * float(lot["price"]) for lot in lots

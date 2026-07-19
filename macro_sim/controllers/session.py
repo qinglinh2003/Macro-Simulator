@@ -141,6 +141,7 @@ class ControlledSimulationSession:
     policy_fingerprint: str = field(init=False)
     next_transaction_sequence: int = 0
     engine_log_cursors: dict[int, int] = field(default_factory=dict)
+    shock_event_cursor: int = 0
     current_context_ids: tuple[str, ...] = ()
     missing_context_ids: tuple[str, ...] = ()
     _collected: dict[str, tuple[PolicyProposal, str, str]] = field(default_factory=dict)
@@ -163,6 +164,11 @@ class ControlledSimulationSession:
             self.engine_log_cursors.setdefault(
                 index, len(getattr(econ, "_policy_action_log", ()))
             )
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(self.world)
+        if shock_engine is not None and self.shock_event_cursor == 0:
+            self.shock_event_cursor = len(shock_engine.events.events)
         self.coordinator = PolicyCoordinator.create(
             self.world, self.scheduler, self.events, self.cost_spec
         )
@@ -467,6 +473,7 @@ class ControlledSimulationSession:
             records = engine_step(self.world)
         self.assert_boundary_integrity(expected_tick=completed_tick + 1)
         self._drain_engine_policy_events()
+        self._drain_engine_shock_events()
         self.boundary_tick = int(getattr(self.world, "t", completed_tick + 1))
         self._publish_due_releases()
         self.policy_fingerprint = world_policy_fingerprint(self.world)
@@ -528,6 +535,13 @@ class ControlledSimulationSession:
                             metrics.setdefault(name, value[economy_id])
                         else:
                             metrics.setdefault(name, value)
+                from macro_sim.shocks import get_shock_engine
+
+                shock_engine = get_shock_engine(self.world)
+                if shock_engine is not None:
+                    metrics.update(shock_engine.trigger_metrics(
+                        economy_id, self.boundary_tick, role="public",
+                    ))
                 notices_by_economy[economy_id] = self.scheduler.evaluate_triggers(
                     self.boundary_tick, economy_id, metrics
                 )
@@ -975,6 +989,31 @@ class ControlledSimulationSession:
                     payload={"legacy_sequence": legacy.get("sequence")},
                 )
             self.engine_log_cursors[economy_id] = len(log)
+
+    def _drain_engine_shock_events(self) -> None:
+        """Mirror deterministic shock transitions into the controller replay stream."""
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(self.world)
+        if shock_engine is None:
+            return
+        log = shock_engine.events.events
+        specs = {item.shock_id: item for item in shock_engine.specs}
+        for item in log[self.shock_event_cursor:]:
+            # The global Controller stream is consumed by generic frontend/Gym
+            # plumbing and has no seat-scoped authorization.  Role-restricted
+            # details travel only through role-filtered observations/bulletins;
+            # the internal ShockEngine chain still records every transition.
+            if specs[item["shock_id"]].visibility != "public":
+                continue
+            ids = item.get("economy_ids")
+            economy_id = ids[0] if isinstance(ids, list) and len(ids) == 1 else None
+            self.events.append(
+                f"shock_{item['event_type']}", "derived", int(item["tick"]),
+                "engine_tick", economy_id=economy_id, actor="shock_engine",
+                payload={"shock_event": item},
+            )
+        self.shock_event_cursor = len(log)
 
     def validate_checkpoint_phase(self) -> None:
         if self.phase not in {BOUNDARY_START, AWAITING_HUMAN, READY_TO_COMMIT}:

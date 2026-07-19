@@ -26,6 +26,7 @@ import numpy as np
 
 from macro_sim.reporting.collectors import EconomyMetricCollector, collect_metric_groups
 from macro_sim.demographics.economic_state import build_household_economic_profiles, need_weight_for_person
+from macro_sim.shocks.engine import read_shock_factor
 from macro_sim.systems.banking import bank_equity_value, bank_for, bank_rwa_exposure
 from macro_sim.systems.firm_balance_sheet import firm_balance_sheet, firm_return_asset_base
 from macro_sim.systems.planning import CAPITAL_SERVICE_PRICED_SECTORS
@@ -2006,8 +2007,13 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "e_markup_mean": _mean([f.markup for f in _e_active]),
             "e_markup_at_cap_share": _mean([1.0 if f.markup >= f.mu_max - 1e-9 else 0.0 for f in e_firms]),
             "e_hhi": (float(np.sum([(s / e_sales_tot) ** 2 for s in e_sales])) if e_sales_tot > 1e-9 else 0.0),
-            "e_capacity_utilization": (e_produced / max(1e-9, float(np.sum([f.capacity_kappa * f.capital
-                                                                            for f in e_firms])))),
+            "e_capacity_utilization": (
+                e_produced / max(1e-9, float(np.sum([
+                    f.capacity_kappa * f.capital
+                    * read_shock_factor(econ, "energy_capacity", firm=f)
+                    for f in e_firms
+                ])))
+            ),
             "tax_energy": float(getattr(econ, "_tax_energy", 0.0)),
             "tax_energy_windfall": float(getattr(econ, "_tax_energy_windfall", 0.0)),  # v17.2
             "energy_shock_active": float(getattr(econ, "_energy_shock_active", 0.0)),  # v17.2 bookkeeping
@@ -2129,6 +2135,21 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
                     float(rec.get("augmented_gov_spending", 0.0)), nominal_gdp
                 ),
             })
+    # v27 shock observability.  Fields exist only when a tape is attached, keeping
+    # the no-shock record contract byte-compatible with prior certified runs.
+    if getattr(econ, "shock_engine", None) is not None:
+        factors = dict(getattr(econ, "_shock_channel_factors", {}))
+        rec.update({
+            "shock_active_count": float(getattr(econ, "_shock_active_count", 0.0)),
+            "shock_max_intensity": float(getattr(econ, "_shock_max_intensity", 0.0)),
+            "shock_capital_destroyed": float(
+                getattr(econ, "_shock_capital_destroyed_tick", 0.0)
+            ),
+            **{
+                f"shock_{channel}_factor": float(value)
+                for channel, value in sorted(factors.items())
+            },
+        })
     return rec
 
 

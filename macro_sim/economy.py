@@ -89,7 +89,15 @@ from macro_sim.systems.settlement import run_settlement_phase
 
 
 class Economy:
-    def __init__(self, cfg: Config, *, protocol: MatchingProtocol = None, goods: Goods = None):
+    def __init__(
+        self,
+        cfg: Config,
+        *,
+        protocol: MatchingProtocol = None,
+        goods: Goods = None,
+        shocks: Any = None,
+        _defer_shocks: bool = False,
+    ):
         self.cfg = cfg
         # v9: the government's LIVE levers (the only mutable-during-run state). Seeded from cfg, so
         # government=False keeps the macroprudential caps at their v8.5 defaults => bit-identical.
@@ -495,6 +503,7 @@ class Economy:
 
         self.records: List[dict] = []
         self.t = 0
+        self.economy_id = 0
         self._prev_price_index = None   # for per-tick inflation (metrics.py)
         self._prev_real_output = None   # for per-tick output growth (metrics.py)
         self._prev_avg_wage = None      # for per-tick wage inflation (metrics.py)
@@ -508,6 +517,32 @@ class Economy:
         self._rate = self.policy_seed.initial_policy_rate   # B6/A5: the seed, not a live dial
         self._infl_ema = cfg.inflation_target       # neutral start (deviation 0 ⇒ r starts at r_neutral)
         self._prev_inflation = cfg.inflation_target
+        # v27: install a semantic exogenous-shock engine only when a tape (or the
+        # legacy v17 energy scenario) is present.  The absent path therefore adds
+        # no RNG, no per-tick work and no record fields to certified baselines.
+        self.shock_engine = None
+        if not _defer_shocks:
+            from macro_sim.shocks import ShockEngine, ShockTape, legacy_energy_spec
+
+            legacy = legacy_energy_spec(cfg, economy_id=0)
+            if isinstance(shocks, ShockEngine):
+                if shocks.current_tick >= 0:
+                    raise ValueError("a running ShockEngine cannot seed a new Economy")
+                specs = shocks.specs
+                if legacy is not None and legacy.shock_id not in {
+                    item.shock_id for item in specs
+                }:
+                    specs += (legacy,)
+                # A new Economy owns a fresh runtime state even when the caller
+                # supplied an unstarted ShockEngine as a convenient tape holder.
+                engine = ShockEngine(specs)
+            else:
+                tape = ShockTape.coerce(shocks)
+                specs = tape.specs + (() if legacy is None else (legacy,))
+                engine = ShockEngine(specs) if specs else None
+            if engine is not None:
+                engine.bind([self])
+                self.shock_engine = engine
         self.state = SimulationState(
             cfg=self.cfg,
             policy=self.policy,
@@ -536,7 +571,43 @@ class Economy:
     def _output_factor(self, firm: Any) -> float:
         """v19: the composite production-seam multiplier = public-capital factor x TFP index.
         Both are 1.0 by default, so this is exactly ``_pubcap_factor`` (x1.0) when inert."""
-        return self._pubcap_factor * self.technology.factor_for(firm)
+        factor = self._pubcap_factor * self.technology.factor_for(firm)
+        shock = self.shock_factor("productivity", firm=firm)
+        return factor if shock == 1.0 else factor * shock
+
+    def shock_factor(
+        self, channel: str, *, firm: Any | None = None, sector: str | None = None,
+    ) -> float:
+        """Read one typed v27 overlay; no engine is the exact multiplicative identity."""
+        engine = self.shock_engine
+        if engine is None:
+            return 1.0
+        if firm is not None:
+            from macro_sim.shocks.engine import sector_for_firm
+
+            sector = sector_for_firm(firm)
+        return engine.factor(channel, self.economy_id, sector)
+
+    def schedule_shock(self, spec: Any) -> None:
+        """Append a concrete shock at the current closed-economy boundary."""
+        from macro_sim.shocks import ShockEngine
+
+        if self.shock_engine is None:
+            candidate = ShockEngine()
+            candidate.bind([self])
+            candidate.current_tick = self.t - 1
+            candidate.schedule(spec, economies=[self], boundary_tick=self.t)
+            # Attach only after all schedule validation succeeds.  In particular,
+            # a rejected first schedule must not change future metrics/checkpoints
+            # by leaving an otherwise empty runtime engine behind.
+            self.shock_engine = candidate
+            return
+        self.shock_engine.schedule(spec, economies=[self], boundary_tick=self.t)
+
+    def shock_bulletins(self, *, role: str = "public") -> tuple[dict[str, Any], ...]:
+        if self.shock_engine is None:
+            return ()
+        return self.shock_engine.bulletins(self.economy_id, self.t, role=role)
 
     def step(self) -> dict:
         """Advance one closed-economy tick.
@@ -546,6 +617,8 @@ class Economy:
         before domestic P&L, fiscal settlement, metrics, and cross-tick state commit.
         Calling :meth:`step` keeps the historical closed-economy order exactly.
         """
+        if self.shock_engine is not None and self.shock_engine.current_tick != self.t:
+            self.shock_engine.begin_tick(self.t, [self])
         self._run_pre_settlement_phases()
         return self._run_settlement_and_commit_phases()
 

@@ -34,6 +34,7 @@ For development work, read in this order:
 | `macro_sim/experiments/` | Experiment registry, run logging, and sweep helpers. |
 | `macro_sim/controllers/` | Institutional decision contexts, schedules, policy coordination, human/heuristic/RL occupants, and the semi-Markov Gym adapter. |
 | `macro_sim/rl/` | Optional SMDP PPO training, paired baseline evaluation, safe portable artifacts, and NumPy deployment. |
+| `macro_sim/shocks/` | Immutable exogenous shock tapes, semantic realization engine, stochastic materialization, and historical crisis templates. |
 | `docs/design/` | Development-first design docs: current brief, durable core rules, and archived research history. |
 | `docs/plans/` | Version-specific implementation plans (`PLAN_v*.md`). |
 | `archive/scripts/` | Archived pre-refactor scripts. Preserved for reference; not an active command surface. |
@@ -86,6 +87,9 @@ uv run --extra train macro-rl evaluate runs/rl-fiscal-v1/policy.msrl --seeds 20 
 
 See [`docs/rl_training_v26.md`](docs/rl_training_v26.md) for the task contract,
 checkpoint rules, Apple Silicon guidance, and the held-out superiority gate.
+
+See [`docs/shocks_v27.md`](docs/shocks_v27.md) for the exogenous shock contract,
+Controller visibility rules, historical templates, and checkpoint/replay gates.
 
 The old plotting, validation, sweep, and scratch scripts are archived under
 [`archive/scripts/`](archive/scripts/README.md). Their protocol layer will be

@@ -692,6 +692,9 @@ class PolicyCoordinator:
                 "expires_at_tick": expires_at_tick,
                 "decision_group": decision_group,
             }
+            shock_bulletins = getattr(observation, "shock_bulletins", ())
+            if shock_bulletins:
+                emergency_bulletin["shock_bulletins"] = list(shock_bulletins)
         context = DecisionContext(
             context_id=context_id,
             decision_window_id=f"window:{context_id}",

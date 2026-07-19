@@ -26,10 +26,11 @@ save-container `events.log` and, later, the frontend network protocol.
 > P0: a MACHINE-VERIFIED classification (script asserts every field appears in exactly one
 > bucket) + the hardcoded-institution sweep + per-lever effectiveness tests.
 
-Sources actually swept so far: 364 root-Config fields, 31 World keyword tunables (32 user
-params incl. `configs`; peg_economy: migration into ExternalPolicy PENDING the §5.1
+Sources actually swept so far: 364 root-Config fields, 32 World keyword tunables (33 user
+params incl. `configs`; the v27 `shocks` input is classified as Shock module, not Policy;
+peg_economy: migration into ExternalPolicy PENDING the §5.1
 multi-pegger ruling), the existing
-Policy class (46 levers). **STILL-UNSWEPT sources — explicit machine-sweep manifest (P0):**
+Policy class (88 levers). **STILL-UNSWEPT sources — explicit machine-sweep manifest (P0):**
 `SocialDynamicsConfig` (35 fields, demographics/social.py) · `RelationshipConfig` (12
 fields, demographics/relationships.py) · `LifecycleHouseholdConfig` · the derived snapshots
 in `config/schema.py` · function-signature defaults / literal scan of production modules.
