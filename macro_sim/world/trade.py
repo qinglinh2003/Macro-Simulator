@@ -160,7 +160,10 @@ def prepare_trade(world) -> None:
         # POLICY: an import QUOTA caps the physical volume admitted (a quantity control,
         # unlike the tariff's price control). None ⇒ no ceiling.
         if world.import_quota is not None:
-            cap_real = min(cap_real, lever(world.import_quota, i) * _capacity_real(econ))
+            q = world.import_quota[i] if isinstance(world.import_quota, (list, tuple)) \
+                else world.import_quota
+            if q is not None:      # B5a: per-economy None = that importer is open
+                cap_real = min(cap_real, float(q) * _capacity_real(econ))
         # ``cap_real`` and the market offer are units DELIVERED to the importer.
         # Under an iceberg cost the exporter must ship ``(1 + friction)`` source
         # units for every delivered unit; the difference melts in transit.  Reserve

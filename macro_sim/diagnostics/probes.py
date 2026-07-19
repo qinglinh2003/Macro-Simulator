@@ -252,7 +252,7 @@ class DeepProbeCollector:
             [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
             if unified_rwa else []
         )
-        rwa_ratio = max(EPS, float(getattr(econ.cfg, "mortgage_min_capital_ratio", 0.0)))
+        rwa_ratio = max(EPS, float(getattr(econ.policy, "mortgage_min_capital_ratio", 0.0)))
         rwa_limits = (
             [max(0.0, bank_economic_capital(econ, bank)) / rwa_ratio for bank in alive_banks]
             if unified_rwa else []

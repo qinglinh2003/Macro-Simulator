@@ -11,6 +11,7 @@ Seeded for reproducibility (§7.6).
 from __future__ import annotations
 
 import os
+import pickle
 import random
 import sys
 
@@ -148,6 +149,42 @@ def test_randomized_credit_sequence_conserves_net_worth():
     assert abs(led.net_worth - M) < 1e-6 * max(M, led.total_money)
 
 
+def test_roundoff_tracking_explains_only_ledger_generated_drift():
+    led = Ledger({"GOV": 0.0, "h": 1575.0, "x": 0.0})
+    led.allow_negative("GOV")
+    led.transfer("GOV", "h", 1e8)
+    for _ in range(10_000):
+        led.transfer("GOV", "x", 1e-9)
+
+    raw_drift = led.net_worth - led.genesis_money
+    assert abs(raw_drift) > 5e-6
+    assert abs(raw_drift - led._a5_roundoff_drift) < 1e-12
+    led.assert_conserved()
+
+    # A write that bypasses the double-entry API has no tracked residual and must
+    # still trip the gate even after a long numerically ill-conditioned sequence.
+    led._bal["h"] += 1e-5
+    try:
+        led.assert_conserved()
+    except ConservationError:
+        pass
+    else:
+        raise AssertionError("tracked roundoff must not hide a rogue single-leg write")
+
+
+def test_pre_roundoff_tracking_checkpoint_lazily_migrates_on_first_write():
+    led = Ledger({"GOV": 0.0, "h": 10.0})
+    led.allow_negative("GOV")
+    del led._a5_roundoff_drift
+    del led._reserve_roundoff_drift
+    restored = pickle.loads(pickle.dumps(led, protocol=5))
+
+    restored.transfer("GOV", "h", 0.1)
+
+    assert hasattr(restored, "_a5_roundoff_drift")
+    restored.assert_conserved()
+
+
 def test_write_off_conserves_and_hits_bank_equity():
     """Bad-debt writeoff (v4): net worth invariant; the bank's deposits absorb the loss."""
     led = Ledger({"h": 100.0, "f": 0.0, "BANK": 50.0})
@@ -196,6 +233,22 @@ def test_remove_nonzero_account_raises():
         pass
     else:
         raise AssertionError("removing a nonzero account should raise")
+
+
+def test_remove_account_rejects_sub_tolerance_deposit_or_debt_dust():
+    """Account deletion must never use the operational float tolerance as a sink."""
+    for kind in ("deposit", "debt"):
+        led = Ledger({"h": 100.0, "f": 0.0})
+        if kind == "deposit":
+            led._bal["f"] = 1e-12
+        else:
+            led._loans["f"] = 1e-12
+        try:
+            led.remove_account("f")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"removing {kind} dust should raise")
 
 
 def _run_all():

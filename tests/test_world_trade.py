@@ -189,8 +189,11 @@ def test_asymmetric_tariffs_settle_at_barrier_rates_and_write_exact_trade_journa
     ]
 
     # Policy mutations after quotation must not change this tick's tax/subsidy split.
-    world.tariff = [0.90, 0.90]
-    world.export_subsidy = [0.50, 0.50]
+    # B5a: the sanctioned mutation path is each economy's ExternalPolicy; the world
+    # vectors are re-derived at the next coupling barrier (same effective timing)
+    for e in world.economies:
+        e.external_policy.tariff = 0.90
+        e.external_policy.export_subsidy = 0.50
     world.fx_friction = 0.90
     settle_trade(world)
 
@@ -472,9 +475,16 @@ def test_invalid_trade_policy_fails_before_reserving_inventory(
     cfg = Config.v124(
         n_firms_c=4, n_firms_k=2, n_households=10, n_ticks=1,
     )
-    world = World(
-        [cfg, cfg], trade=True, tariff=tariff, export_subsidy=export_subsidy,
-    )
+    # B5a: a malformed lever VECTOR (wrong length) fails at CONSTRUCTION (the ctor
+    # seeds per-economy ExternalPolicy) -- strictly earlier than the old trade-time
+    # check, so no inventory can have been reserved. VALUE-domain errors (rate out
+    # of range) still surface at trade time, before any reservation.
+    import re
+    try:
+        world = World([cfg, cfg], trade=True, tariff=tariff, export_subsidy=export_subsidy)
+    except ValueError as e:
+        assert re.search(match, str(e)), f"ctor error {e!r} !~ {match!r}"
+        return
     inventories = [[firm.inventory for firm in econ.c_firms] for econ in world.economies]
 
     with pytest.raises(ValueError, match=match):

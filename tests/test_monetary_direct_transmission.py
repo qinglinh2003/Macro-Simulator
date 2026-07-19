@@ -101,7 +101,8 @@ def test_planning_reads_committed_inflation_lag_without_measurement_side_effects
     ))
     econ._prev_inflation = 8.0e-5
     econ._infl_ema = 5.0e-5
-    econ.policy.policy_rate_override = 2.0e-4
+    econ.policy.manual_policy_rate = 2.0e-4
+    econ.policy.monetary_regime = "manual"
     set_policy_rate(econ)
     committed_sensor = econ._infl_ema
     before = (econ._prev_inflation, len(econ.records))
@@ -144,7 +145,8 @@ def _integrated_phase_response(rate: float) -> tuple[float, float, float, float]
 
     applicant = econ.c_firms[0]
     econ.ledger.transfer(applicant.id, econ.households[2].id, 190.0)
-    econ.policy.policy_rate_override = rate
+    econ.policy.manual_policy_rate = rate
+    econ.policy.monetary_regime = "manual"
     set_policy_rate(econ)
     run_planning_phase(econ)
 
@@ -289,7 +291,8 @@ def _lifecycle_budget(direct: bool) -> tuple[float, float, float]:
     household = econ.households[0]
     econ.ledger.create_loan(household.id, 20.0)
     econ.demographic_bridge.post_household_debt_creation(household.id, 20.0)
-    econ.policy.policy_rate_override = 3.0e-4
+    econ.policy.manual_policy_rate = 3.0e-4
+    econ.policy.monetary_regime = "manual"
     set_policy_rate(econ)
     opening_cash = econ.ledger.balance(household.id)
     run_planning_phase(econ)

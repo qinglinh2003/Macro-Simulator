@@ -1,0 +1,73 @@
+"""v25 B3: the registry is complete, consistent with the inventory, and the
+sanctioned set_lever path validates + logs."""
+import dataclasses
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from macro_sim.config import Config
+from macro_sim.core.policy import Policy
+from macro_sim.core.policy_registry import REGISTRY, set_lever, Range
+from macro_sim.economy import Economy
+
+
+def test_registry_covers_every_policy_field_exactly():
+    from macro_sim.core.external_policy import ExternalPolicy
+    policy_fields = {f.name for f in dataclasses.fields(Policy)}
+    econ_levers = {n for n, lv in REGISTRY.items() if lv.scope != "external"}
+    assert econ_levers == policy_fields, (
+        f"missing={policy_fields - econ_levers} stale={econ_levers - policy_fields}")
+    # external-scope levers must each be an ExternalPolicy field (peg family joins in B5b)
+    ext_fields = {f.name for f in dataclasses.fields(ExternalPolicy)}
+    ext_levers = {n for n, lv in REGISTRY.items() if lv.scope == "external"}
+    assert ext_levers <= ext_fields, f"unknown external levers: {ext_levers - ext_fields}"
+    assert ext_fields == ext_levers, (
+        f"every ExternalPolicy field must be registered: {ext_fields ^ ext_levers}")
+
+
+def test_registry_capabilities_exist_in_config():
+    cfg_fields = {f.name for f in dataclasses.fields(Config)}
+    for lv in REGISTRY.values():
+        assert lv.requires <= cfg_fields, f"{lv.name}: unknown capability {lv.requires - cfg_fields}"
+
+
+def test_set_lever_validates_and_logs():
+    e = Economy(Config.v13(seed=41, n_households=20, n_firms_c=15, n_firms_k=8, n_banks=2,
+                           demographics_population=120, n_ticks=20, government=True))
+    for _ in range(3):
+        e.step()
+    before = e.policy.tax_income_rate            # v13 preset seeds a nonzero rate
+    set_lever(e, "tax_income_rate", 0.25, actor="test")
+    assert e.policy.tax_income_rate == 0.25
+    assert e._policy_action_log[-1]["lever"] == "tax_income_rate"
+    assert e._policy_action_log[-1]["old"] == pytest.approx(before)
+    with pytest.raises(ValueError, match="outside"):
+        set_lever(e, "tax_income_rate", 2.0)
+    with pytest.raises(ValueError, match="capability"):
+        set_lever(e, "tax_energy_rate", 0.1)      # energy_enabled missing
+    with pytest.raises(KeyError):
+        set_lever(e, "no_such_lever", 1)
+
+
+def test_max_step_metadata_is_separate_from_absolute_policy_domain_validation():
+    e = Economy(Config.v13(seed=42, n_households=20, n_firms_c=15, n_firms_k=8, n_banks=2,
+                           demographics_population=120, n_ticks=20, government=True))
+    for _ in range(3):
+        e.step()
+    original = REGISTRY["tax_income_rate"]
+    stepped = dataclasses.replace(original,
+                                  validation=Range(0.0, 0.8, max_step=0.05))
+    REGISTRY["tax_income_rate"] = stepped
+    try:
+        base = e.policy.tax_income_rate          # preset-seeded (0.2 in v13)
+        assert stepped.validation.check_step(base, base + 0.3) is not None
+        assert stepped.validation.check_step(base, base + 0.04) is None
+        # set_lever is also used for bootstrap/migration/diagnostics and therefore
+        # validates the absolute Policy domain only.  The Controller Coordinator
+        # enforces check_step against its projected effective timeline.
+        set_lever(e, "tax_income_rate", base + 0.3)
+    finally:
+        REGISTRY["tax_income_rate"] = original

@@ -115,7 +115,7 @@ def run_credit_phase(econ: Any) -> None:
                     expected_operating_cash_flow=expected_operating_cash_flow,
                     loan_rate=loan_rate_for(econ, f.id),
                     amort=cfg.amort,
-                    min_dscr=cfg.firm_credit_min_dscr,
+                    min_dscr=econ.policy.firm_credit_min_dscr,
                 )
                 econ._firm_credit_dscr_allowed += granted
                 dscr_shortfall = max(0.0, leverage_allowed - granted)
@@ -452,7 +452,7 @@ def _finalize_bank_pnl_legacy(econ: Any, cfg: Any) -> None:
     It is a compatibility surface, not the economically preferred accounting
     model; production diagnostics enable ``bank_realized_pnl`` below.
     """
-    ratio = cfg.bank_target_capital_ratio
+    ratio = econ.policy.bank_target_capital_ratio   # B4a
     if ratio > 0.0 and len(econ.banks) > 1:
         refresh_loan_books(econ)
     comp = cfg.interbank and cfg.deposit_rate_disp > 0.0 and len(econ.banks) > 1
@@ -520,7 +520,8 @@ def _pay_deposit_funding_cost(econ: Any, cfg: Any) -> None:
     squeeze, and a higher policy rate only ever raises bank profit. deposit_rate = 0 => no
     transfer => bit-identical.
     """
-    rate = float(getattr(cfg, "deposit_rate", 0.0))
+    # [N] deposit_rate_floor: a regulatory floor over the config (technology) rate
+    rate = max(float(getattr(cfg, "deposit_rate", 0.0)), econ.policy.deposit_rate_floor)
     if rate <= 0.0:
         return
     bridge = getattr(econ, "demographic_bridge", None)
@@ -558,7 +559,7 @@ def finalize_bank_pnl(econ: Any) -> None:
         # position in ``run_debt_service_phase``.
         return
 
-    ratio = cfg.bank_target_capital_ratio
+    ratio = econ.policy.bank_target_capital_ratio   # B4a
     if ratio > 0.0 and len(econ.banks) > 1:
         refresh_loan_books(econ)
     # v23 COST OF FUNDS: pay contractual interest to depositors BEFORE forming profit. Until now

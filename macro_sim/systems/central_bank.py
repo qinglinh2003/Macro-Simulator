@@ -47,23 +47,28 @@ def set_policy_rate(econ: Any) -> None:
     # decision.  A temporary manual rate setting must not freeze it, otherwise an
     # experimental rate shock also changes the information state and creates a
     # second, hidden treatment when the override is released.
-    if cfg.central_bank:
-        econ._infl_ema += cfg.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
-    if pol.policy_rate_override is not None:
-        # the player hand-sets the rate (a manual hike/cut), bypassing the Taylor rule and the frozen fallback.
-        econ._rate = min(cfg.r_max, max(0.0, pol.policy_rate_override))
+    # A5: the regime decides the rate path. The sensor runs in taylor AND manual
+    # (an observation state -- a manual spell must not blind a later taylor resume);
+    # exogenous has no CB, hence no sensor.
+    if pol.monetary_regime != "exogenous":
+        # B4c: the sensor smoothing is the CB's OWN measurement choice (policy)
+        econ._infl_ema += pol.infl_ema_lambda * (econ._prev_inflation - econ._infl_ema)
+    if pol.monetary_regime == "manual":
+        if pol.manual_policy_rate is not None:
+            econ._rate = min(pol.r_max, max(0.0, pol.manual_policy_rate))
         return
-    if not cfg.central_bank:
-        econ._rate = cfg.r_interest
+    if pol.monetary_regime == "exogenous":
+        econ._rate = econ.policy_seed.initial_policy_rate   # A5: pinned at the SEED
         return
-    u_prev = getattr(econ, "_prev_u", cfg.u_natural)
+    # B4c: r*, u* are the CB's revisable ESTIMATES; r_max is its (policy) ceiling
+    u_prev = getattr(econ, "_prev_u", pol.u_natural)
     r_target = (
-        cfg.r_neutral
+        pol.r_neutral
         + pol.taylor_phi_pi * (econ._infl_ema - pol.inflation_target)
-        - pol.taylor_phi_u * (u_prev - cfg.u_natural)
+        - pol.taylor_phi_u * (u_prev - pol.u_natural)
     )
     r_new = pol.rate_inertia * econ._rate + (1.0 - pol.rate_inertia) * r_target
-    econ._rate = min(cfg.r_max, max(0.0, r_new))
+    econ._rate = min(pol.r_max, max(0.0, r_new))
 
 
 def run_omo_phase(econ: Any) -> None:
@@ -83,11 +88,11 @@ def run_omo_phase(econ: Any) -> None:
     for bank in econ.banks:
         claims.setdefault(bank.id, 0.0)
     _resolve_failed_bank_omo_claims(econ, banks)
-    if getattr(cfg, "omo_index_deposits", False):
+    if pol.omo_index_deposits:   # B4e: live lever
         # v13: index the reserve target to what the payment system actually needs -- the
         # genesis-anchored nominal target detaches as soon as the price level moves (the sick
         # 10k run drained 135M against a fixed 868k target and ran on LOLR for ten years)
-        target = pol.omo_reserve_target * cfg.reserve_floor_frac * econ.ledger.total_money
+        target = pol.omo_reserve_target * pol.reserve_floor_frac * econ.ledger.total_money   # B4a
     else:
         target = pol.omo_reserve_target * econ._reserve_M0
     econ._omo_target_value = target   # metrics: reserve_gap reads the SAME target the OMO acts on

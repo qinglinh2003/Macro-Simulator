@@ -328,7 +328,7 @@ def _finalize_goods(econ: Any, cfg: Any, gov: bool, tc: float, trades: List,
         if pol.gov_deficit_target > 0.0:
             target = pol.gov_deficit_target
             if pol.deficit_u_ref > 0.0:      # state-dependent: taper toward balance at full employment
-                cap = float(getattr(econ.cfg, "deficit_u_cap", 1.0))
+                cap = float(econ.policy.deficit_u_cap)
                 target *= min(cap, getattr(econ, "_prev_u", pol.deficit_u_ref) / pol.deficit_u_ref)
             gov_budget = max(
                 0.0,

@@ -16,11 +16,18 @@ from macro_sim.world.capital import capital_financing
 from macro_sim.world.fx import DEALER_ID
 
 
-def _pair(r_peg, r_anchor=0.05):
-    peg0 = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0, r_interest=r_peg)
-    anc = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0, r_interest=r_anchor)
+def _pair(r_peg, r_anchor=0.05, peg=True):
+    # B5b: peg pressure reads the LIVE rates (the filed static-rate defect is fixed).
+    # The trilemma premise -- a DELIBERATELY independent rate -- therefore needs the
+    # rate PINNED: central_bank=False => monetary_regime='exogenous' => _rate ==
+    # r_interest exactly. (The old test smuggled independence through the static
+    # config read while the live Taylor rates actually converged.)
+    peg0 = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0,
+                       r_interest=r_peg, central_bank=False)
+    anc = Config.v124(n_firms_c=40, n_firms_k=20, n_households=200, n_ticks=400, seed=0,
+                      r_interest=r_anchor, central_bank=False)
     return World([peg0, anc], base_seed=9, trade=True, capital=True, capital_mobility=3.0,
-                 capital_adjust=0.2, peg=True, peg_reserves0=5000.0, peg_reserve_scale=0.02)
+                 capital_adjust=0.2, peg=peg, peg_reserves0=5000.0, peg_reserve_scale=0.02)
 
 
 def test_independent_rate_drains_reserves_to_crisis():
@@ -50,8 +57,7 @@ def test_matched_rate_sustains_peg_but_no_autonomy():
 
 
 def test_peg_off_economies_still_conserve():
-    world = _pair(r_peg=0.02)
-    world.peg = False
+    world = _pair(r_peg=0.02, peg=False)   # B5b: the regime is set at construction
     world.run()
     for econ in world.economies:
         econ.ledger.assert_conserved()
@@ -72,7 +78,10 @@ def test_reserve_asset_survives_depeg_and_does_not_create_a_capital_gap():
     assert capital_financing(world, 0, best_price=1.0) == pytest.approx(0.0)
     assert capital_financing(world, 1, best_price=1.0) == pytest.approx(0.0)
 
-    world.peg = False
+    # B5b sanctioned de-peg: flip the pegger's OWN regime; the barrier commit
+    # stages a voluntary exit. The reserve ASSET must survive the regime change.
+    world.economies[0].external_policy.fx_regime = "float"
+    world._commit_external_policies()
 
     assert world.reserves() == pytest.approx(5000.0)
     assert world.market_external_positions() == pytest.approx([0.0, 0.0])

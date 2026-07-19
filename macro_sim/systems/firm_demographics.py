@@ -43,7 +43,7 @@ def run_firm_demographics_phase(econ: Any) -> None:
             else econ.ledger.balance(f.id) - econ.ledger.debt(f.id)
         )
         f.insolvent_ticks = f.insolvent_ticks + 1 if nw < -EPS else 0
-        if f.insolvent_ticks >= cfg.bankrupt_persist:
+        if f.insolvent_ticks >= econ.policy.bankrupt_persist:
             dead.append(f)
             continue
         if cfg.shell_exit_ticks > 0:
@@ -95,17 +95,27 @@ def bankrupt_firm(econ: Any, firm: Firm) -> None:
     cfg = econ.cfg.firm_demographics
     led = econ.ledger
     pay = min(led.balance(firm.id), led.debt(firm.id))
-    if pay > EPS:
+    # Settle even sub-EPS tails.  remove_account() is deliberately exact: dropping
+    # tiny deposits destroys money and dropping tiny debts creates net worth, which
+    # accumulates under long-run firm turnover.
+    if pay > 0.0:
         led.repay(firm.id, pay)
     bad = led.debt(firm.id)
-    if bad > EPS:
+    if bad > 0.0:
         bank_id = bank_for(econ, firm.id).id
         led.write_off(firm.id, bank_id, bad)
         record_bank_credit_loss(econ, bank_id, bad)
         econ._writeoffs += bad
     residual = led.balance(firm.id)
-    if residual > EPS:
-        led.transfer(firm.id, bank_for(econ, firm.id).id, residual)
+    resolution_bank = bank_for(econ, firm.id).id
+    if residual > 0.0:
+        led.transfer(firm.id, resolution_bank, residual)
+    elif residual < 0.0:
+        # A source account may finish a prior full-balance payment a few ulps
+        # below zero under the ledger's operational overdraft tolerance.  The
+        # resolution bank absorbs that tiny liability just like the bad debt
+        # above, rather than account deletion silently manufacturing deposits.
+        led.transfer(resolution_bank, firm.id, -residual)
     if cfg.per_firm_equity:
         bridge = getattr(econ, "demographic_bridge", None)
         for h in econ.households:
@@ -152,7 +162,7 @@ def liquidate_idle_firm(econ: Any, firm: Firm) -> None:
     cfg = econ.cfg.firm_demographics
     led = econ.ledger
     pay = min(led.balance(firm.id), led.debt(firm.id))
-    if pay > EPS:
+    if pay > 0.0:
         led.repay(firm.id, pay)
     residual = led.balance(firm.id) - led.debt(firm.id)
     if cfg.per_firm_equity and residual > EPS and firm.shares_outstanding > EPS:

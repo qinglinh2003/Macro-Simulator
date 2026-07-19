@@ -66,7 +66,10 @@ def run_migration(world) -> None:
         own_cap = world.migration_max_share * pop
         # POLICY: an EMIGRATION cap — the origin restricts its own people from leaving.
         if world.emigration_cap is not None:
-            own_cap = min(own_cap, lever(world.emigration_cap, i) * pop)
+            ecap = world.emigration_cap[i] if isinstance(world.emigration_cap, (list, tuple)) \
+                else world.emigration_cap
+            if ecap is not None:   # B5a: per-economy None = that origin is open
+                own_cap = min(own_cap, float(ecap) * pop)
         if gap > 0.0:
             world._migrant_stock[i] = min(own_cap, world._migrant_stock[i] + world.migration_rate * gap * pop)
         else:
@@ -86,7 +89,11 @@ def run_migration(world) -> None:
         for h in range(n):
             incoming = [i for i in range(n) if host_of[i] == h]
             total = sum(world._migrant_stock[i] for i in incoming)
-            ceiling = lever(world.immigration_cap, h) * len(econs[h].households)   # per-HOST cap
+            hcap = world.immigration_cap[h] if isinstance(world.immigration_cap, (list, tuple)) \
+                else world.immigration_cap
+            if hcap is None:       # B5a: per-economy None = that host is open
+                continue
+            ceiling = float(hcap) * len(econs[h].households)   # per-HOST cap
             if total > ceiling + EPS and total > 0.0:
                 scale = ceiling / total
                 for i in incoming:
@@ -136,8 +143,9 @@ def _remit(world, host: int, origin: int, amount_host: float):
     # money leaves, revenue to the host's fiscus.
     he = world.economies[host]
     h_fiscal = getattr(he, "_fiscal", None)
-    if world.outward_remittance_tax > 0.0 and h_fiscal is not None and he.ledger.has_account(h_fiscal):
-        out_tax = world.outward_remittance_tax * collected
+    out_rate = lever(world.outward_remittance_tax, host)   # B5a: the HOST's own rate
+    if out_rate > 0.0 and h_fiscal is not None and he.ledger.has_account(h_fiscal):
+        out_tax = out_rate * collected
         if out_tax > EPS:
             he.ledger.transfer(DEALER_ID, h_fiscal, out_tax)   # host taxes the outflow
             he._outward_remittance_tax_revenue += out_tax
@@ -146,8 +154,9 @@ def _remit(world, host: int, origin: int, amount_host: float):
     oe = world.economies[origin]
     tax = 0.0
     fiscal = getattr(oe, "_fiscal", None)
-    if world.remittance_tax > 0.0 and fiscal is not None and oe.ledger.has_account(fiscal):
-        tax = world.remittance_tax * amount_origin
+    in_rate = lever(world.remittance_tax, origin)          # B5a: the ORIGIN's own rate
+    if in_rate > 0.0 and fiscal is not None and oe.ledger.has_account(fiscal):
+        tax = in_rate * amount_origin
         oe.ledger.transfer(DEALER_ID, fiscal, tax)                   # remittance tax → origin fiscal
     _distribute(oe, amount_origin - tax)                             # net to origin households
     return amount_origin - tax, tax, collected, amount_origin

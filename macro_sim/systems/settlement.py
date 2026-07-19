@@ -166,7 +166,7 @@ def run_settlement_phase(econ: Any) -> None:
     for f in econ.investing_firms:
         f.capital_prev = f.capital
         f.capital = (1.0 - f.delta_K) * f.capital + f.investment
-    if cfg.gov_investment_share > 0.0 or econ.policy.job_guarantee:
+    if econ.policy.gov_investment_share > 0.0 or econ.policy.job_guarantee:
         econ.public_capital = (
             (1.0 - cfg.public_capital_depreciation) * econ.public_capital
             + getattr(econ, "_gov_capital_units", 0.0)
@@ -207,7 +207,11 @@ def run_household_fiscal_phase(econ: Any) -> None:
                 h.jg_labor = resid
                 econ._jg_spending += pay
                 econ._jg_employment += resid
-        econ._jg_capital_units = cfg.jg_productivity * econ._jg_employment
+        # [N] jg_public_works_share: the government CHOOSES how much JG labor does
+        # public works vs. pure make-work (1.0 = the legacy implicit share)
+        econ._jg_capital_units = (
+            cfg.jg_productivity * pol.jg_public_works_share * econ._jg_employment
+        )
 
     if pol.benefit_replacement > 0.0:
         wage_ref = sum(f.wage for f in econ.firms) / max(1, len(econ.firms))

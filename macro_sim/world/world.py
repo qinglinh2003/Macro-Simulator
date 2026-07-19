@@ -10,6 +10,7 @@ as N independent closed economies, so `World([cfg])` ≡ `Economy(cfg)` byte-for
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import List
 
@@ -127,14 +128,13 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         strict_lower=True,
     )
 
-    for name in (
-        "migration_rate",
-        "migration_max_share",
-        "remittance_tax",
-        "outward_remittance_tax",
-        "wage_smoothing",
-    ):
+    for name in ("migration_rate", "migration_max_share", "wage_smoothing"):
         _bounded_number(name, values[name], lower=0.0, upper=1.0)
+
+    # B5a: the remittance taxes are per-economy levers now (scalar broadcasts)
+    for name in ("remittance_tax", "outward_remittance_tax"):
+        for index, item in enumerate(_per_economy_values(name, values[name], n)):
+            _bounded_number(f"{name}[{index}]", item, lower=0.0, upper=1.0)
 
     # per-economy migration policy (scalar broadcasts => bit-identical). remittance_share is the
     # origin diaspora's send-home rate; guest_worker_return is the HOST's temporary-migration return
@@ -156,6 +156,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
     immigration_cap = values["immigration_cap"]
     if immigration_cap is not None:
         for index, item in enumerate(_per_economy_values("immigration_cap", immigration_cap, n)):
+            if item is None:
+                continue      # B5a: per-economy None = that host is open (legal mix)
             _bounded_number(f"immigration_cap[{index}]", item, lower=0.0)
 
     emigration_cap = values["emigration_cap"]
@@ -163,6 +165,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         for index, item in enumerate(
             _per_economy_values("emigration_cap", emigration_cap, n)
         ):
+            if item is None:
+                continue      # B5a: per-economy None = that origin is open (legal mix)
             _bounded_number(
                 f"emigration_cap[{index}]", item, lower=0.0, upper=1.0
             )
@@ -172,6 +176,8 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         for index, item in enumerate(
             _per_economy_values("import_quota", import_quota, n)
         ):
+            if item is None:
+                continue      # B5a: per-economy None = that importer is open (legal mix)
             _bounded_number(f"import_quota[{index}]", item, lower=0.0)
 
     _validate_sanctions(values["sanctions"], n)
@@ -278,7 +284,10 @@ class World:
         # v20.1 FX layer. couple=False ⇒ no FX objects, no dealer accounts ⇒ the World is
         # exactly v20.0 (bit-identical). couple=True installs the rate vector + the dealer
         # (one account per economy); with zero trade it is INERT (rates flat, inventory 0).
-        self.couple = couple or trade or capital or migration   # any cross-border flow needs the FX layer
+        self.couple = couple or trade or capital or migration or peg
+        # Any cross-border flow or a legacy constructor-time peg needs the FX layer.
+        # A later runtime peg policy cannot manufacture this structural mechanism;
+        # Controller capability checks reject it when the World started uncoupled.
         self.trade = trade
         self.capital = capital                 # v21: persistent cross-border positions
         self.migration = migration             # v22: labor flow + remittances
@@ -300,6 +309,59 @@ class World:
         self.outward_remittance_tax = outward_remittance_tax
         self.guest_worker_return = guest_worker_return
         self.wage_smoothing = wage_smoothing
+
+        # B5a: every cross-border lever now has a per-economy OWNER. Legacy ctor
+        # vectors SEED each economy's ExternalPolicy; from then on the world's
+        # coupling vectors are re-derived at the coupling barrier (one atomic
+        # commit point -- no per-economy ordering skew). Legacy sanction pairs
+        # seed BOTH sides (unilateral ownership, symmetric effect, A6).
+        from macro_sim.core.external_policy import ExternalPolicy
+        from macro_sim.world.trade import lever as _lv
+
+        def _capv(v, i):
+            if v is None:
+                return None
+            if isinstance(v, (list, tuple)):
+                return None if v[i] is None else float(v[i])
+            return float(v)
+
+        def _lvchk(name, v, i):
+            # fail-fast at construction with the LEGACY trade-time message
+            if isinstance(v, (list, tuple)) and len(v) != self.n:
+                raise ValueError(
+                    f"{name} must be a scalar or have one value per economy ({self.n})"
+                )
+            return _lv(v, i)
+
+        legacy_pairs = sanctions or set()
+        # resolve the legacy anchor default HERE (the peg block below runs later):
+        # explicit anchor wins; else the first economy that isn't the pegger
+        if peg:
+            _anchor_resolved = peg_anchor if peg_anchor is not None \
+                else (1 if peg_economy != 1 else 0)
+        else:
+            _anchor_resolved = None
+        for i, econ in enumerate(self.economies):
+            econ.external_policy = ExternalPolicy(
+                tariff=_lvchk("tariff", tariff, i),
+                import_quota=_capv(import_quota, i),
+                export_subsidy=_lvchk("export_subsidy", export_subsidy, i),
+                capital_control=float(self.capital_control[i]),
+                external_interest_settlement_fraction=_lv(
+                    external_interest_settlement_fraction, i
+                ),
+                sanctions_imposed_on=frozenset(
+                    j for pair in legacy_pairs for j in pair if i in pair and j != i
+                ),
+                immigration_cap=_capv(immigration_cap, i),
+                emigration_cap=_capv(emigration_cap, i),
+                remittance_tax=_lv(remittance_tax, i),
+                outward_remittance_tax=_lv(outward_remittance_tax, i),
+                guest_worker_return=_lv(guest_worker_return, i),
+                fx_regime=("peg" if peg and i == peg_economy else "float"),
+                peg_anchor=(_anchor_resolved if peg and i == peg_economy else None),
+                peg_reserve_scale=float(peg_reserve_scale),
+            )
         self._rw_ema = None
         self._tariff_rev: List[float] = [0.0] * self.n
         self._export_subsidy_cost: List[float] = [0.0] * self.n
@@ -346,25 +408,29 @@ class World:
         self._factor_income_arrears: List[float] = [0.0] * self.n
         self._factor_income_unpaid_tick: List[float] = [0.0] * self.n
         self._factor_income_arrears_cured_tick: List[float] = [0.0] * self.n
-        # v21.2 peg / trilemma: peg_economy pegs its rate; the CB absorbs the imbalance onto
-        # reserves; reserves hitting zero breaks the peg (devaluation = currency crisis).
-        # peg_economy/anchor were hardcoded to 0/1; now settable (e.g. China pegs to the USD).
-        self.peg = peg
-        self.peg_economy = peg_economy
-        if peg_anchor is not None:
-            self.peg_anchor = peg_anchor
-        elif self.n > 1:
-            self.peg_anchor = 1 if peg_economy != 1 else 0   # default anchor (!= pegger; 0-peg => 1)
-        else:
-            self.peg_anchor = 0
+        # v21.2 peg / trilemma, B5b multi-pegger DATA MODEL (A6): per-pegger PegState
+        # keyed by economy id; the legacy world.peg/peg_economy/peg_anchor/_peg_intact/
+        # _pent_up surface survives as property shims over the (P0: single) state.
+        # peg_economy as AUTHORITY is deleted -- it derives from fx_regime.
+        from macro_sim.world.capital import PegState
+        self._legacy_peg_economy = peg_economy
+        self._legacy_peg_anchor = (
+            _anchor_resolved if _anchor_resolved is not None
+            else (1 if self.n > 1 and peg_economy != 1 else 0)
+        )
+        self._legacy_peg_reserve_scale = peg_reserve_scale
+        self.peg_states: dict[int, PegState] = {}
         if peg and self.n > 1:
-            assert 0 <= self.peg_economy < self.n, "peg_economy out of range"
-            assert 0 <= self.peg_anchor < self.n and self.peg_anchor != self.peg_economy, \
+            assert 0 <= peg_economy < self.n, "peg_economy out of range"
+            assert 0 <= self._legacy_peg_anchor < self.n \
+                and self._legacy_peg_anchor != peg_economy, \
                 "peg_anchor must be a valid economy != peg_economy"
-        self.peg_reserve_scale = peg_reserve_scale
+            self.peg_states[peg_economy] = PegState(
+                anchor=self._legacy_peg_anchor,
+                reserve_account_id=f"CBRES:{peg_economy}",
+                reserve_scale=peg_reserve_scale,
+            )
         self._peg_reserves0 = peg_reserves0
-        self._peg_intact = True
-        self._pent_up = 0.0            # suppressed depreciation pressure (released on the crisis)
         self._migrant_stock: List[float] = [0.0] * self.n   # v22: emigrants from i, working abroad
         self._remittances: List[float] = [0.0] * self.n     # v22: remittances received by i (curr_i)
         self._current_transfers: List[float] = [0.0] * self.n  # signed gross CA transfers (curr_i)
@@ -413,6 +479,7 @@ class World:
             # capital position on which the coarse factor-income layer should
             # recursively accrue interest.
             self._factor_interest_principal = self.market_external_positions()
+        self._commit_external_policies()   # B5a: normalize the coupling vectors from day one
 
     def _validate_domains(self) -> None:
         """Revalidate mutable World levers before any per-tick state change."""
@@ -445,6 +512,86 @@ class World:
             },
         )
 
+    # ---- B5b legacy peg surface: property shims over peg_states (P0: <=1) ----
+    def _single_peg(self):
+        states = self.__dict__.get("peg_states")
+        if states is None:
+            return None                       # pre-B5b pickle: no states restored
+        # v26 §1.2 fix: a peg HANDOVER (0 exits, 1 adopts) leaves a dead state
+        # beside the live one -- accessors must select the ACTIVE peg, never
+        # insertion order. Dead states are kept for history (legacy broken-peg
+        # record semantics), but they no longer answer for the world.
+        for st in states.values():
+            if st.intact and not st.exit_pending:
+                return st
+        for st in states.values():
+            if st.exit_pending:
+                return st
+        return next(iter(states.values()), None)
+
+    @property
+    def peg(self) -> bool:
+        states = self.__dict__.get("peg_states")
+        if states is None:
+            return bool(self.__dict__.get("peg", False))
+        return any(st.intact or st.exit_pending for st in states.values())
+
+    @property
+    def peg_economy(self) -> int:
+        states = self.__dict__.get("peg_states")
+        if states:
+            for i, st in states.items():      # the ACTIVE pegger answers (v26 §1.2)
+                if st.intact and not st.exit_pending:
+                    return i
+            for i, st in states.items():
+                if st.exit_pending:
+                    return i
+            return next(iter(states))
+        return int(self.__dict__.get("_legacy_peg_economy",
+                                     self.__dict__.get("peg_economy", 0)))
+
+    @property
+    def peg_anchor(self) -> int:
+        st = self._single_peg()
+        if st is not None:
+            return st.anchor
+        return int(self.__dict__.get("_legacy_peg_anchor",
+                                     self.__dict__.get("peg_anchor", 0)))
+
+    @property
+    def peg_reserve_scale(self) -> float:
+        st = self._single_peg()
+        if st is not None:
+            return st.reserve_scale
+        return float(self.__dict__.get("_legacy_peg_reserve_scale",
+                                       self.__dict__.get("peg_reserve_scale", 1.0e5)))
+
+    @property
+    def _peg_intact(self) -> bool:
+        st = self._single_peg()
+        return st.intact if st is not None else bool(self.__dict__.get("_peg_intact", True))
+
+    @_peg_intact.setter
+    def _peg_intact(self, value: bool) -> None:
+        st = self._single_peg()
+        if st is not None:
+            st.intact = bool(value)
+        else:
+            self.__dict__["_peg_intact"] = bool(value)
+
+    @property
+    def _pent_up(self) -> float:
+        st = self._single_peg()
+        return st.pent_up if st is not None else float(self.__dict__.get("_pent_up", 0.0))
+
+    @_pent_up.setter
+    def _pent_up(self, value: float) -> None:
+        st = self._single_peg()
+        if st is not None:
+            st.pent_up = float(value)
+        else:
+            self.__dict__["_pent_up"] = float(value)
+
     def reserves(self) -> float:
         """The pegging CB's FX reserves — a REAL balance (the anchor currency it holds),
         not a scalar. Zero ⇒ the peg cannot be defended.
@@ -456,16 +603,41 @@ class World:
         """
         if self.n < 2:
             return 0.0
-        led = self.economies[self.peg_anchor].ledger
-        return led.balance(CBRES_ID) if led.has_account(CBRES_ID) else 0.0
+        st = self._single_peg()
+        if st is None:
+            led = self.economies[self.peg_anchor].ledger   # pre-B5b pickle fallback
+            return led.balance(CBRES_ID) if led.has_account(CBRES_ID) else 0.0
+        led = self.economies[st.anchor].ledger
+        acct = st.reserve_account_id
+        return led.balance(acct) if led.has_account(acct) else 0.0
+
+    def _peg_reserve_balances(self) -> dict[int, float]:
+        """Return every pegger's official reserve balance, including old states.
+
+        ``peg_states`` deliberately retains broken and voluntarily exited pegs.  Their
+        reserve assets remain live balance-sheet items until an explicit liquidation;
+        selecting only the currently active state therefore turns the settlement legs
+        of an earlier peg into a spurious private external position after a handoff.
+        """
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            return {self.peg_economy: self.reserves()}
+        balances: dict[int, float] = {}
+        for pegger, state in states.items():
+            ledger = self.economies[state.anchor].ledger
+            account = state.reserve_account_id
+            balances[pegger] = (
+                float(ledger.balance(account)) if ledger.has_account(account) else 0.0
+            )
+        return balances
 
     def market_external_positions(
         self,
         positions: List[float] | None = None,
         rates: List[float] | None = None,
-        reserves: float | None = None,
+        reserves: Mapping[int, float] | float | None = None,
     ) -> List[float]:
-        """Dealer positions net of the CB's explicitly owned reserve asset.
+        """Dealer positions net of every CB's explicitly owned reserve asset.
 
         Values remain in each economy's local currency and retain the dealer sign
         convention (positive = net external liability).  The reserve swap creates
@@ -479,12 +651,37 @@ class World:
         if self.n < 2:
             return result
         e = list(self.rates.e if rates is None else rates)
-        reserve_asset = self.reserves() if reserves is None else float(reserves)
-        if reserve_asset == 0.0:
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            pegger = self.peg_economy
+            if reserves is None:
+                reserve_asset = self.reserves()
+            elif isinstance(reserves, Mapping):
+                reserve_asset = float(reserves.get(pegger, 0.0))
+            else:
+                reserve_asset = float(reserves)
+            if reserve_asset != 0.0:
+                anchor = self.peg_anchor
+                result[pegger] -= reserve_asset * e[pegger] / e[anchor]
+                result[anchor] += reserve_asset
             return result
-        anchor = self.peg_anchor
-        result[self.peg_economy] -= reserve_asset * e[self.peg_economy] / e[anchor]
-        result[anchor] += reserve_asset
+
+        if reserves is None:
+            reserve_balances = self._peg_reserve_balances()
+        elif isinstance(reserves, Mapping):
+            reserve_balances = reserves
+        else:
+            # Retain the historical scalar call surface for external callers.  New
+            # World snapshots use a per-pegger mapping so old retained assets cannot
+            # disappear when the active-peg selector changes.
+            reserve_balances = {self.peg_economy: float(reserves)}
+        for pegger, state in sorted(states.items()):
+            reserve_asset = float(reserve_balances.get(pegger, 0.0))
+            if reserve_asset == 0.0:
+                continue
+            anchor = state.anchor
+            result[pegger] -= reserve_asset * e[pegger] / e[anchor]
+            result[anchor] += reserve_asset
         return result
 
     # ======================================================================
@@ -495,6 +692,10 @@ class World:
         # Runtime policy experiments mutate World attributes directly.  This must
         # precede even the coupling barrier's journal resets so a rejected policy
         # leaves ticks, records, inventories, ledgers and observability untouched.
+        # audit fix: COMMIT the per-economy policies FIRST, so domain validation
+        # sees this tick's stances -- a bad value surfaces on the tick it is set,
+        # never one tick late against stale vectors.
+        self._commit_external_policies()
         self._validate_domains()
         self._coupling_barrier()                              # thin central barrier (moves no money)
         if not self.couple:
@@ -510,7 +711,7 @@ class World:
         # the export leg.
         self._inv0 = self.dealer.inventory()
         self._e0 = self.rates.e
-        self._res0 = self.reserves()
+        self._res0 = self._peg_reserve_balances()
 
         # Every country first clears its domestic goods/capital-goods markets.  Imports
         # are now realized, but P&L, fiscal settlement, metrics, behavioral lags, and
@@ -522,6 +723,160 @@ class World:
         recs = [econ._run_settlement_and_commit_phases() for econ in self.economies]
         self.t += 1
         return recs
+
+    def _commit_external_policies(self) -> None:
+        """Atomically re-derive the world coupling vectors from each economy's
+        ExternalPolicy (B5a). Runs at construction and at the top of every
+        coupling barrier: mutations to econ.external_policy anywhere in a tick
+        all take effect together at the next barrier."""
+        eps = [e.external_policy for e in self.economies]
+
+        # ---- PREPARE (pure): build every derived value into locals ----
+        tariff = [p.tariff for p in eps]
+        import_quota = (
+            None if all(p.import_quota is None for p in eps)
+            else [p.import_quota for p in eps]
+        )
+        export_subsidy = [p.export_subsidy for p in eps]
+        capital_control = [float(p.capital_control) for p in eps]
+        settlement_fraction = [
+            float(p.external_interest_settlement_fraction) for p in eps
+        ]
+        immigration_cap = (
+            None if all(p.immigration_cap is None for p in eps)
+            else [p.immigration_cap for p in eps]
+        )
+        emigration_cap = (
+            None if all(p.emigration_cap is None for p in eps)
+            else [p.emigration_cap for p in eps]
+        )
+        remittance_tax = [p.remittance_tax for p in eps]
+        outward_remittance_tax = [p.outward_remittance_tax for p in eps]
+        guest_worker_return = [p.guest_worker_return for p in eps]
+        # sanctions: a DERIVED cache of the unilateral stances (never authoritative)
+        sanctions = {
+            frozenset({i, j})
+            for i, p in enumerate(eps) for j in p.sanctions_imposed_on if j != i
+        }
+
+        # ---- VALIDATE (pure): every raisable check runs BEFORE the first write.
+        # v26 §1.1/§1.2: an out-of-range sanctions target must never reach the
+        # cache; a vetoed commit leaves NO partial state anywhere. ----
+        self._validate_peg_constraints(eps)
+        _validate_sanctions(sanctions, self.n)
+        _validate_world_domains(self.n, {
+            "fx_lambda": self.fx_lambda, "fx_friction": self.fx_friction,
+            "fx_trade_cap": self.fx_trade_cap,
+            "capital_mobility": self.capital_mobility,
+            "capital_adjust": self.capital_adjust,
+            "external_interest_settlement_fraction": settlement_fraction,
+            "periods_per_year": self.periods_per_year,
+            "peg_reserves0": self._peg_reserves0,
+            "peg_reserve_scale": self.peg_reserve_scale,
+            "migration_rate": self.migration_rate,
+            "migration_max_share": self.migration_max_share,
+            "remittance_share": self.remittance_share,
+            "immigration_cap": immigration_cap,
+            "remittance_tax": remittance_tax,
+            "import_quota": import_quota,
+            "capital_control": capital_control,
+            "sanctions": sanctions,
+            "emigration_cap": emigration_cap,
+            "outward_remittance_tax": outward_remittance_tax,
+            "guest_worker_return": guest_worker_return,
+            "wage_smoothing": self.wage_smoothing,
+        })
+
+        # ---- COMMIT: infallible assignments only ----
+        self.tariff = tariff
+        self.import_quota = import_quota
+        self.export_subsidy = export_subsidy
+        self.capital_control = capital_control
+        self.external_interest_settlement_fraction = settlement_fraction
+        self.immigration_cap = immigration_cap
+        self.emigration_cap = emigration_cap
+        self.remittance_tax = remittance_tax
+        self.outward_remittance_tax = outward_remittance_tax
+        self.guest_worker_return = guest_worker_return
+        self.sanctions = sanctions
+        self._reconcile_peg_states(eps)
+
+    def _validate_peg_constraints(self, eps) -> None:
+        """P0 joint peg constraints -- PURE checks, called before any commit write
+        so a violation leaves the world untouched (audit fix: true atomicity)."""
+        desired = [(i, p) for i, p in enumerate(eps) if p.fx_regime == "peg" and self.n > 1]
+        if desired and (not self.couple or self.rates is None):
+            raise ValueError("P0 runtime constraint: peg requires the coupled FX layer")
+        if len(desired) > 1:
+            raise ValueError("P0 runtime constraint: at most ONE pegger")
+        for i, p in desired:
+            a = p.peg_anchor
+            if a is None or not (0 <= a < self.n) or a == i:
+                raise ValueError(f"economy {i}: peg requires a valid anchor != self, got {a!r}")
+            if eps[a].fx_regime == "peg":
+                raise ValueError(f"economy {i}: anchor {a} must not itself peg (no chains/cycles)")
+
+    def _reconcile_peg_states(self, eps) -> None:
+        """B5b: fx_regime is the AUTHORITY (A6; peg_economy is derived). At each
+        barrier: validate the P0 constraints, adopt new pegs (reserve acquisition
+        swap), apply anchor changes (liquidate -> convert -> reset pent_up),
+        stage voluntary exits (pent-up released ONCE by peg_defense), and sync
+        the live reserve scale."""
+        from macro_sim.world.capital import PegState, seed_reserves
+        desired = {
+            i: p for i, p in enumerate(eps)
+            if p.fx_regime == "peg" and self.n > 1
+        }
+        # voluntary exits: regime flipped to float while an INTACT peg stands
+        for i in list(self.peg_states):
+            st = self.peg_states[i]
+            if i not in desired:
+                if st.intact and not st.exit_pending:
+                    st.exit_pending = True   # released once by peg_defense, then free float
+                continue
+            # a re-peg over a BROKEN/EXITED state is a fresh adoption below
+
+            # Anchor change (A6): liquidate old-anchor reserves, convert at the
+            # current cross, acquire in the new anchor's ledger, reset pent_up.
+            #
+            # This also applies when the retained state is no longer intact.  An
+            # exited/broken peg may still own a positive reserve asset.  Replacing
+            # that state during a later re-adoption without first moving the asset
+            # would orphan the old CBRES account: the balance would remain in the
+            # old anchor's ledger but disappear from reserve ownership, NFA, and
+            # observation records.
+            new_anchor = desired[i].peg_anchor
+            if new_anchor != st.anchor:
+                old_led = self.economies[st.anchor].ledger
+                bal = old_led.balance(st.reserve_account_id) \
+                    if old_led.has_account(st.reserve_account_id) else 0.0
+                if bal > 0.0 and self.rates is not None:
+                    from macro_sim.world.fx import DEALER_ID
+                    old_led.transfer(st.reserve_account_id, DEALER_ID, bal)
+                    converted = bal * self.rates.bilateral(new_anchor, st.anchor)
+                    new_led = self.economies[new_anchor].ledger
+                    if not new_led.has_account(st.reserve_account_id):
+                        new_led.add_account(st.reserve_account_id)
+                    new_led.transfer(DEALER_ID, st.reserve_account_id, converted)
+                st.anchor = new_anchor
+                st.pent_up = 0.0
+            st.reserve_scale = float(desired[i].peg_reserve_scale)
+
+        # adoptions: a NEW pegger (or a re-peg after a break/exit)
+        for i, p in desired.items():
+            st = self.peg_states.get(i)
+            if st is not None and st.intact and not st.exit_pending:
+                continue                       # already pegging
+            self.peg_states[i] = PegState(
+                anchor=p.peg_anchor,
+                reserve_account_id=f"CBRES:{i}",
+                reserve_scale=float(p.peg_reserve_scale),
+            )
+            if self.rates is not None and self.t > 0:
+                # A same-barrier handover temporarily has the old peg's orderly-exit
+                # state and the new active state side by side.  Do not let the legacy
+                # single-peg accessor send the new war chest to the old CBRES account.
+                seed_reserves(self, self._peg_reserves0, pegger=i)
 
     def _coupling_barrier(self) -> None:
         """The thin central barrier: compute cross-border export demand / import supply
@@ -624,7 +979,7 @@ class World:
             # reserve movement makes that official swap neutral here.
             opening_market = self.market_external_positions(inv0, e0, self._res0)
             closing_market = self.market_external_positions(
-                self.dealer.inventory(), e0, self.reserves(),
+                self.dealer.inventory(), e0, self._peg_reserve_balances(),
             )
             principal = list(getattr(
                 self, "_factor_interest_principal", opening_market,
@@ -649,15 +1004,30 @@ class World:
         # positive dealer position is a foreign CLAIM on economy i ⇒ i's net foreign
         # LIABILITY); factor income_i (received) = −(i's interest outflow)/e_i.
         # NFA_i = (i's foreign ASSETS) − (foreigners' CLAIMS on i), in the numéraire.
-        # The dealer's position is the claims; the pegging CB's FX reserves are a real
-        # foreign asset of economy 0 AND a foreign claim on the anchor — the two cancel in
-        # the world sum, so Σ_i NFA_i = −(cumulative revaluation) still closes exactly.
+        # The dealer's position is the claims; every current or former pegging CB's
+        # retained FX reserves are a real foreign asset and a matching claim on its
+        # anchor.  Each pair cancels in the world sum, so Σ_i NFA_i still equals the
+        # negative cumulative dealer revaluation.
         nfa = [-inv[i] / e[i] for i in range(self.n)]
-        res = self.reserves()
-        if self.n > 1 and res != 0.0:
-            a = self.peg_anchor
-            nfa[self.peg_economy] += res / e[a]  # the pegger HOLDS the anchor's currency (a foreign asset)
-            nfa[a] -= res / e[a]                 # ... which is a foreign claim ON the anchor
+        states = self.__dict__.get("peg_states")
+        if states is None:  # pre-B5b checkpoint compatibility
+            res = self.reserves()
+            if self.n > 1 and res != 0.0:
+                anchor = self.peg_anchor
+                value = res / e[anchor]
+                nfa[self.peg_economy] += value
+                nfa[anchor] -= value
+        else:
+            for pegger, st in sorted(states.items()):
+                ledger = self.economies[st.anchor].ledger
+                if not ledger.has_account(st.reserve_account_id):
+                    continue
+                res = ledger.balance(st.reserve_account_id)
+                if res == 0.0:
+                    continue
+                value = res / e[st.anchor]
+                nfa[pegger] += value       # the pegger HOLDS the anchor's currency
+                nfa[st.anchor] -= value    # ... which is a foreign claim ON the anchor
         # Flows settled at the opening vector e0.  Closing e is reserved for end-of-
         # tick stocks and revaluation; valuing the CA at post-grope rates creates a
         # mechanical world residual.
@@ -736,6 +1106,11 @@ class World:
             ]
             for i in range(self.n)
         ]
+        reserve_balances = self._peg_reserve_balances()
+        reserves_by_economy = {
+            economy_id: float(reserve_balances.get(economy_id, 0.0))
+            for economy_id in range(self.n)
+        }
         self.world_records.append(
             {
                 "t": self.t,
@@ -794,6 +1169,7 @@ class World:
                 "bop_numeraire": bop_numeraire,
                 "dealer_valuation": self.dealer.valuation,
                 "reserves": self.reserves(),
+                "reserves_by_economy": reserves_by_economy,
                 "peg_intact": self._peg_intact,
                 "migrant_stock": list(self._migrant_stock),
                 "remittances": remit,

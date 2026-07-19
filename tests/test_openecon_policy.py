@@ -37,7 +37,8 @@ def test_tariff_is_protective_and_raises_revenue():
         tar.step()
     assert base.world_records == tar.world_records
 
-    tar.tariff = 0.01
+    for e in tar.economies:                          # B5a: per-economy ownership
+        e.external_policy.tariff = 0.01
     base.step()
     tar.step()
     for econ in tar.economies:
@@ -119,7 +120,7 @@ def test_export_subsidy_wins_share_at_fiscal_cost():
         sub.step()
     assert base.world_records == sub.world_records
 
-    sub.export_subsidy = [0.0, 0.05]                 # economy 1 subsidises its exports
+    sub.economies[1].external_policy.export_subsidy = 0.05   # B5a: economy 1 subsidises its exports
     base.step()
     sub.step()
     for econ in sub.economies:

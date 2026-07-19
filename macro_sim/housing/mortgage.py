@@ -75,6 +75,25 @@ class MortgageBook:
     originated_tick: float = 0.0
     foreclosures_total: int = 0
 
+    def _sync_policy(self, econ) -> None:
+        """v25 B2(a): mortgage REGULATION is policy -- re-read the policy-owned
+        parameters every maintenance pass instead of trusting the Economy-init
+        snapshot (the audit's 'only LTV re-syncs' defect). Today Policy owns only
+        mortgage_ltv_cap; the seven [C] parameters (underwriting, dsti_cap,
+        stress_rate_addon, risk_weight, min_capital_ratio, foreclosure_ltv,
+        arrears_floor) JOIN THIS METHOD at their B4 migration -- one sync channel,
+        no second snapshot ever."""
+        pol = econ.policy
+        self.ltv_cap = float(getattr(pol, "mortgage_ltv_cap", self.ltv_cap))
+        # B4b: the whole regulation block is policy-owned now
+        self.underwriting_enabled = bool(getattr(pol, "mortgage_underwriting", self.underwriting_enabled))
+        self.dsti_cap = float(getattr(pol, "mortgage_dsti_cap", self.dsti_cap))
+        self.stress_rate_addon = float(getattr(pol, "mortgage_stress_rate_addon", self.stress_rate_addon))
+        self.risk_weight = float(getattr(pol, "mortgage_risk_weight", self.risk_weight))
+        self.min_capital_ratio = float(getattr(pol, "mortgage_min_capital_ratio", self.min_capital_ratio))
+        self.foreclosure_ltv = float(getattr(pol, "mortgage_foreclosure_ltv", self.foreclosure_ltv))
+        self.arrears_floor = float(getattr(pol, "mortgage_arrears_floor", self.arrears_floor))
+
     def balance_total(self) -> float:
         return sum(loan.balance for loan in self.loans.values())
 
@@ -285,7 +304,7 @@ class MortgageBook:
         """Per-session reconciliation: derive each secured balance from the ledger truth,
         close paid-off or collateral-less entries, then run the foreclosure test."""
         # v15.5: the LTV cap is a LIVE macroprudential lever (Policy), synced per session
-        self.ltv_cap = float(getattr(econ.policy, "mortgage_ltv_cap", self.ltv_cap))
+        self._sync_policy(econ)
         led = econ.ledger
         housing = econ.housing
         market = econ.housing_market

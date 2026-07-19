@@ -86,7 +86,8 @@ def test_manual_rate_override_does_not_freeze_inflation_sensor():
     econ._infl_ema = 0.01
     econ._prev_inflation = 0.03
     expected = 0.01 + econ.cfg.infl_ema_lambda * (0.03 - 0.01)
-    econ.policy.policy_rate_override = 0.0
+    econ.policy.manual_policy_rate = 0.0
+    econ.policy.monetary_regime = "manual"
 
     set_policy_rate(econ)
 

@@ -27,9 +27,15 @@ def bond_market_value(econ: Any, lot: dict) -> float:
     n = lot["matures_at"] - econ.t
     if n <= 0:
         return lot["face"]
-    if cfg.bond_maturity <= 1 and cfg.bond_coupon <= 0.0:
+    # B4d cohort: each lot carries the coupon it was ISSUED with (legacy lots and
+    # pre-cohort checkpoints fall back to the config value -- identical by seeding).
+    cpn = lot.get("coupon", cfg.bond_coupon)
+    if n <= 1 and cpn <= 0.0:
+        # par-bill fast path, now PER-LOT: a one-period zero-coupon bill is par by
+        # design (v12.1). Legacy all-bill books hit this for every lot (bit-identical);
+        # legacy multi-period books never did (n>1) and still don't.
         return lot["face"]
-    return bond_price(lot["face"], n, econ._rate, cfg.bond_coupon)
+    return bond_price(lot["face"], n, econ._rate, cpn)
 
 
 def reindex_bonds(econ: Any) -> None:
@@ -52,7 +58,7 @@ def issued_maturity(econ: Any) -> int:
     and can merge (see :func:`consolidate_bonds`). bucket == 1 ⇒ exact ``t + bond_maturity`` ⇒
     no quantisation ⇒ bit-identical to the historical daily book."""
     cfg = econ.cfg.securities
-    m = econ.t + cfg.bond_maturity
+    m = econ.t + econ.policy.bond_maturity   # B4d: Treasury chooses NEW issues' tenor
     bucket = getattr(cfg, "bond_maturity_bucket", 1)
     if bucket <= 1:
         return m
@@ -73,12 +79,13 @@ def consolidate_bonds(econ: Any) -> None:
     Skipped (and never reorders the list) when the bucket is 1: without maturity snapping no two
     lots share a maturity, so there is nothing to merge and the historical list order — hence every
     downstream valuation sum — is preserved exactly (bit-identical)."""
-    if getattr(econ.cfg.securities, "bond_maturity_bucket", 1) <= 1 or not econ._bonds:
+    cfg = econ.cfg.securities
+    if getattr(cfg, "bond_maturity_bucket", 1) <= 1 or not econ._bonds:
         return
     merged: Dict = {}
     order: list = []
     for lot in econ._bonds:
-        key = (lot["holder"], lot["matures_at"])
+        key = (lot["holder"], lot["matures_at"], lot.get("coupon", cfg.bond_coupon))
         existing = merged.get(key)
         if existing is None:
             merged[key] = dict(lot)
@@ -184,9 +191,9 @@ def run_bill_maturity_phase(econ: Any) -> None:
     # bond_maturity_bucket == 1 (bit-identical).
     consolidate_bonds(econ)
     bridge = getattr(econ, "demographic_bridge", None)
-    if cfg.bond_coupon > 0.0:
+    if True:   # B4d: coupons are PER-LOT (a rate change re-coupons NEW issues only)
         for lot in econ._bonds:
-            c = cfg.bond_coupon * lot["face"]
+            c = lot.get("coupon", cfg.bond_coupon) * lot["face"]
             if c > EPS:
                 econ.ledger.transfer(econ._fiscal, lot["holder"], c)
                 if lot["holder"] in econ._bank_ids:
@@ -214,12 +221,12 @@ def run_bill_maturity_phase(econ: Any) -> None:
 
 def run_bill_issuance_phase(econ: Any) -> None:
     cfg = econ.cfg.securities
-    if not (cfg.bonds and cfg.bond_finance_frac > 0.0 and cfg.government):
+    if not (cfg.bonds and econ.policy.bond_finance_frac > 0.0 and cfg.government):
         return
     gov_debt = econ._bonds_outstanding - econ.ledger.balance(econ._fiscal)
     if gov_debt <= EPS:
         return
-    gap = cfg.bond_finance_frac * gov_debt - econ._bonds_outstanding
+    gap = econ.policy.bond_finance_frac * gov_debt - econ._bonds_outstanding
     if gap <= EPS:
         return
     hh = econ.households
@@ -253,6 +260,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "face": buy,
                     "cost": buy,
                     "matures_at": issued_maturity(econ),
+                    "coupon": econ.policy.bond_coupon,   # B4d cohort: issued terms travel with the lot
                 })
                 bump_bonds_version(econ)
                 econ._bonds_outstanding += buy
@@ -266,12 +274,12 @@ def run_bill_issuance_phase(econ: Any) -> None:
         for bk in [b for b in econ.banks if b.alive]:
             if remaining <= EPS:
                 break
-            required = cfg.reserve_floor_frac * dep_by_bank.get(bk.id, 0.0)
+            required = econ.policy.reserve_floor_frac * dep_by_bank.get(bk.id, 0.0)
             excess = max(0.0, econ.ledger.reserves(bk.id) - required)
             want = min(cfg.bank_bond_appetite * excess, remaining)
-            if cfg.bank_bond_duration_limit > 0.0:
+            if econ.policy.bank_bond_duration_limit > 0.0:
                 cur = sum(l["face"] for l in econ._bonds if l["holder"] == bk.id)
-                room = cfg.bank_bond_duration_limit * max(0.0, bank_economic_capital(econ, bk)) - cur
+                room = econ.policy.bank_bond_duration_limit * max(0.0, bank_economic_capital(econ, bk)) - cur
                 want = min(want, max(0.0, room))
             if want > EPS:
                 econ.ledger.bank_buy_bond_with_reserves(bk.id, econ._fiscal, want)
@@ -280,6 +288,7 @@ def run_bill_issuance_phase(econ: Any) -> None:
                     "face": want,
                     "cost": want,
                     "matures_at": issued_maturity(econ),
+                    "coupon": econ.policy.bond_coupon,
                 })
                 bump_bonds_version(econ)
                 econ._bonds_outstanding += want

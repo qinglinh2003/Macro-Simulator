@@ -136,9 +136,10 @@ def firm_balance_sheet(econ: Any, firm: Any) -> FirmBalanceSheet:
     gross_assets = cash + capital_value + inventory_value
     book_equity = gross_assets - debt - interest_arrears
 
-    cfg = econ.cfg
-    capital_haircut = float(cfg.firm_capital_haircut)
-    inventory_haircut = float(cfg.firm_inventory_haircut)
+    # B4e: regulatory haircuts are Policy (renamed regulatory_*); they only enter
+    # underwriting via the borrowing base, so a change touches NEW credit only.
+    capital_haircut = float(econ.policy.regulatory_firm_capital_haircut)
+    inventory_haircut = float(econ.policy.regulatory_firm_inventory_haircut)
     eligible_collateral_value = (
         (1.0 - capital_haircut) * capital_value
         + (1.0 - inventory_haircut) * inventory_value

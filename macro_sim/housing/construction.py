@@ -55,7 +55,7 @@ def create_builders(econ: Any, cfg: Any) -> None:
         fiscal = getattr(econ, "_fiscal", None)
         if fiscal is not None:
             gestation_wages = cfg.w_firm0 / max(cfg.builder_productivity, 1e-12)
-            seed = cfg.d_firm0 + gestation_wages + cfg.land_fee_share * econ._house_price
+            seed = cfg.d_firm0 + gestation_wages + econ.policy.land_fee_share * econ._house_price
             econ.ledger.transfer(fiscal, firm.id, seed)
         # no explicit bank assignment: bank_for() falls back to the first alive bank,
         # and _bank_of does not exist yet at this point in Economy.__init__
@@ -95,8 +95,8 @@ def run_construction_step(econ: Any) -> None:
         # incl. the land fee), floor the demand prior at the seed; unprofitable prices
         # lift the floor and the native decay shuts the builder down.
         land_fee = (
-            cfg.land_fee_share * econ._house_price
-            * (housing.count() / stock0) ** cfg.land_convexity
+            econ.policy.land_fee_share * econ._house_price
+            * (housing.count() / stock0) ** econ.policy.land_fee_stock_elasticity
         )
         unit_cost = firm.wage / max(firm.a, EPS) + land_fee
         if econ._house_price > unit_cost:
@@ -121,6 +121,6 @@ def run_construction_step(econ: Any) -> None:
             if market is not None:
                 market.list_dwelling(econ, dwelling.id, firm.id, forced=False)
             land_fee = (
-                cfg.land_fee_share * econ._house_price
-                * (housing.count() / stock0) ** cfg.land_convexity
+                econ.policy.land_fee_share * econ._house_price
+                * (housing.count() / stock0) ** econ.policy.land_fee_stock_elasticity
             )

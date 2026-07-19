@@ -122,6 +122,9 @@ def run_housing_market_phase(econ: Any) -> None:
         mortgage_book.originated_tick = 0.0
     rental = getattr(econ, "rental_market", None)
     if rental is not None:
+        # B4e anti-snapshot: eviction law is Policy; the market object snapshots it at
+        # construction, so re-sync every tick (same channel as MortgageBook._sync_policy)
+        rental.eviction_arrears = econ.policy.rental_eviction_arrears
         rental.collect_rents(econ)        # v15.3: tenancies pay every tick, not per session
     _collect_property_tax(econ, housing)  # v15.5: live lever; no-op at rate 0
     if getattr(econ, "builders", None):

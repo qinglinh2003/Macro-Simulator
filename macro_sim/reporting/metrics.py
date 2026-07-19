@@ -1572,7 +1572,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "effective_unemployment": max(0.0, rec["unemployment_rate"] - jg_emp_rate),
             "gov_spending": spend_total, "gov_deficit": deficit, "gov_debt": gov_debt,
             "fiscal_uses_national_accounts_gdp": float(
-                bool(getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False))
+                bool(getattr(econ.policy, "fiscal_uses_national_accounts_gdp", False))
             ),
             "fiscal_output_lag": float(getattr(
                 econ,
@@ -1605,7 +1605,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             ])) if live_households and benefit_paid > 0.0 else 0.0,
         })
     # v9.1/v9.3 public capital: government investment AND job-guarantee public works build the stock.
-    if getattr(econ.cfg, "gov_investment_share", 0.0) > 0.0 or getattr(econ.policy, "job_guarantee", False):
+    if getattr(econ.policy, "gov_investment_share", 0.0) > 0.0 or getattr(econ.policy, "job_guarantee", False):
         priv_k = sum(f.capital for f in econ.c_firms)
         rec.update({
             "public_capital": float(econ.public_capital),
@@ -1620,30 +1620,34 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         cb_cfg = econ.cfg.central_banking
         pol = econ.policy
         inflation_gap = infl_ema - pol.inflation_target
-        unemployment_gap = rec.get("unemployment_rate", 0.0) - cb_cfg.u_natural
+        unemployment_gap = rec.get("unemployment_rate", 0.0) - pol.u_natural
         taylor_target = (
-            cb_cfg.r_neutral
+            pol.r_neutral
             + pol.taylor_phi_pi * inflation_gap
             - pol.taylor_phi_u * unemployment_gap
         )
+        # v25 B2(b): the OMO STANCE (on/off + target) is POLICY; the metrics gate must
+        # read the same source as behaviour or a runtime policy change desynchronises
+        # observation from action (the split-brain defect). bonds/interbank stay cfg:
+        # they are structural capabilities, not stances.
         omo_target = (
             float(getattr(econ, "_omo_target_value",
-                          cb_cfg.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))))
-            if cb_cfg.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
+                          pol.omo_reserve_target * float(getattr(econ, "_reserve_M0", 0.0))))
+            if pol.omo and cb_cfg.bonds and cb_cfg.interbank else 0.0
         )
         bank_reserves_total = rec.get("bank_reserves_total", 0.0)
         cb_bond_market = float(sum(bond_mv_by_holder.get("CB", ())))
         rec.update({
             "policy_rate": rate,
             "cb_uses_fixed_basket_cpi": float(
-                bool(getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False))
+                bool(getattr(econ.policy, "cb_uses_fixed_basket_cpi", False))
             ),
             "cb_inflation_lag_input": float(getattr(econ, "_prev_inflation", 0.0)),
             "inflation_ema": infl_ema,
             "real_rate": rate - infl_ema,        # ex-ante real policy rate (Taylor principle => rises with π)
             "inflation_target": float(pol.inflation_target),
             "inflation_gap_to_target": inflation_gap,
-            "u_natural": float(cb_cfg.u_natural),
+            "u_natural": float(pol.u_natural),
             "unemployment_gap": unemployment_gap,
             "taylor_rate_target": taylor_target,
             "policy_rate_gap": rate - taylor_target,
@@ -1659,11 +1663,11 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     # Optional common bank-capital envelope.  Report live ledger exposure rather
     # than the intra-credit cache so principal service and write-offs later in the
     # tick are reflected without mutating model state during observation.
-    if getattr(econ.cfg, "unified_bank_rwa", False) and getattr(econ, "banks", None):
+    if getattr(econ.policy, "unified_bank_rwa", False) and getattr(econ, "banks", None):
         alive_banks = [bank for bank in econ.banks if bank.alive]
         exposures = [bank_rwa_exposure(econ, bank, use_cache=False) for bank in alive_banks]
         capitals = [max(0.0, _bank_economic_capital_snapshot(econ, bank, bond_deltas)) for bank in alive_banks]
-        ratio = max(1e-12, float(econ.cfg.mortgage_min_capital_ratio))
+        ratio = max(1e-12, float(econ.policy.mortgage_min_capital_ratio))
         limits = [capital / ratio for capital in capitals]
         headrooms = [limit - exposure for limit, exposure in zip(limits, exposures)]
         capital_ratios = [
@@ -1711,14 +1715,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
             "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
             "negative_capital_bank_count": float(sum(1 for c in caps if c < -1e-9)),
-            "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.cfg.bank_min_capital)),
+            "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.policy.bank_min_capital)),
         })
-        if getattr(econ.cfg, "bank_exposure_limit", 0.0) > 0.0:
+        if getattr(econ.policy, "bank_exposure_limit", 0.0) > 0.0:
             usage = []
             for a in list(econ.firms) + list(econ.households):
                 bid = bank_for(econ, a.id).id
-                cap = max(1e-9, float(getattr(econ.cfg, "bank_min_capital", 0.0)), led.balance(bid))
-                usage.append(led.debt(a.id) / (econ.cfg.bank_exposure_limit * cap))
+                cap = max(1e-9, float(getattr(econ.policy, "bank_min_capital", 0.0)), led.balance(bid))
+                usage.append(led.debt(a.id) / (econ.policy.bank_exposure_limit * cap))
             rec["large_exposure_usage_max"] = float(max(usage)) if usage else 0.0
         else:
             rec["large_exposure_usage_max"] = 0.0
@@ -1733,7 +1737,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             peak_od = -min([econ.ledger.reserve_min(b.id) for b in econ.banks] + [0.0])
             bank_reserves = [econ.ledger.reserves(b.id) for b in econ.banks]
             reserve_floor = {
-                b.id: econ.cfg.reserve_floor_frac * dep.get(b.id, 0.0)
+                b.id: econ.policy.reserve_floor_frac * dep.get(b.id, 0.0)
                 for b in econ.banks
             }
             reserve_breaches = [
@@ -1782,7 +1786,9 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         # ONE pass computes each lot's market value once (was ~6 full-lot scans per tick, each
         # recomputing bond_market_value). Every list is built in lot order, so each sum below is
         # byte-for-byte the former generator sum over the same order -- bit-identical.
-        coupon_bearing = getattr(econ.cfg, "bond_coupon", 0.0) > 0.0
+        # B6: coupons are PER-LOT cohorts; the gauge is honest only over the lots
+        cfg_cpn = getattr(econ.cfg, "bond_coupon", 0.0)
+        coupon_bearing = any(lot.get("coupon", cfg_cpn) > 0.0 for lot in lots)
         all_mv: list = []
         hh_mv: list = []
         bank_mv: list = []
@@ -2172,7 +2178,7 @@ def commit_tick_metrics(econ, rec: Dict[str, float]) -> None:
         econ._prev_benefit = float(rec.get("benefit_paid", 0.0))
         econ._prev_nominal_output = float(rec.get("nominal_output", 0.0))
         econ._prev_fiscal_output = float(rec.get(
-            "nominal_gdp" if getattr(econ.cfg, "fiscal_uses_national_accounts_gdp", False)
+            "nominal_gdp" if getattr(econ.policy, "fiscal_uses_national_accounts_gdp", False)
             else "nominal_output",
             0.0,
         ))
@@ -2183,15 +2189,15 @@ def commit_tick_metrics(econ, rec: Dict[str, float]) -> None:
     if getattr(econ.cfg, "energy_household", False) and "cpi_headline" in rec:
         econ._prev_headline_index = float(rec["cpi_headline"])
 
-    if getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False):
+    if getattr(econ.policy, "cb_uses_fixed_basket_cpi", False):
         cb_inflation = float(rec.get("cpi_fixed_basket_inflation", 0.0))
     else:
         cb_inflation = float(rec.get("inflation", 0.0))
-    if (not getattr(econ.cfg, "cb_uses_fixed_basket_cpi", False)
+    if (not getattr(econ.policy, "cb_uses_fixed_basket_cpi", False)
             and getattr(econ.cfg, "energy_household", False)
-            and not getattr(econ.cfg, "cb_core_inflation", False)):
+            and not getattr(econ.policy, "cb_core_inflation", False)):
         cb_inflation = float(rec.get("headline_inflation", cb_inflation))
-    if getattr(econ.cfg, "cb_log_inflation", False):
+    if getattr(econ.policy, "cb_log_inflation", False):
         # Feed Taylor's EMA the log price change; the exported inflation field remains
         # the arithmetic change, exactly as before this state transition was separated.
         econ._prev_inflation = math.log1p(cb_inflation) if cb_inflation > -1.0 else 0.0
