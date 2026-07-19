@@ -48,6 +48,43 @@ def scenario(name):
                             benefit_replacement=0.5, pension_replacement=0.5)
     elif name == "X5":  # century world
         years, pop_mult = 60.0, 1.0
+    elif name == "X6":  # AGING COLLAPSE: inverted demography -> pension burden + housing glut
+        old_tfr = {"China": 0.9, "India": 1.6, "USA": 1.3, "Germany": 0.8, "Gulf": 1.5, "Hub": 0.9}
+        for i, a in enumerate(ARCHETYPES):
+            extra_by_econ[i] = dict(demographics_tfr=old_tfr[a["name"]],
+                                    demographics_mortality_scale=a["mort"] * 1.1)
+        extra_common = dict(pension_replacement=0.45)     # generous pensions meet a shrinking base
+        # natural experiment: Germany swings the door OPEN, Hub slams it shut
+        imm = [a["imm"] for a in ARCHETYPES]
+        imm[3] = 8.0   # Germany
+        imm[5] = 0.01  # Hub
+        wo.update(immigration_cap=imm)
+    elif name == "X8":  # NIM WORLD: realized bank P&L + contractual deposit interest
+        # the deposit-interest leg has NEVER run in a portrait (capability-gated,
+        # found by the v25 effectiveness scaffold). Banks finally pay for funding:
+        # net-interest-margin squeezes, deposit competition matters.
+        extra_common = dict(bank_realized_pnl=True, deposit_rate=5.0e-5)   # ~1.8%/yr
+    elif name == "X9":  # TRADE WAR: bloc sanctions + high tariffs + subsidy duel
+        wo.update(tariff=0.4,                              # every importer walls up (WORLD arg!)
+                  sanctions={frozenset({0, 2})},           # China x USA total embargo
+                  export_subsidy=[0.15, 0.0, 0.0, 0.0, 0.0, 0.0])   # China subsidises exports
+    elif name == "X10":  # MORTGAGE BOOM: housing credit on a 0.95 LTV + easy household credit
+        # NOTE: the X3 construction-stall bug means supply is dead -- this is a
+        # PRICE bubble on existing stock (the A1b family with credit fuel), by design.
+        extra_common = dict(mortgage_enabled=True, mortgage_underwriting=True,
+                            mortgage_ltv_cap=0.95, hh_credit_limit=3.0)
+    elif name == "X7b":  # ENERGY CRISIS recalibrated: the archetype sector runs at ~44%
+        # utilization, so -40% was absorbed by slack (X7 null result). -70% forces
+        # utilization past 1.0 -> hard rationing, the actual 1970s regime.
+        extra_common = dict(energy_shock_at=3650, energy_shock_magnitude=0.7,
+                            energy_shock_duration=0,
+                            energy_subsidy_rate=0.3, energy_subsidy_threshold=2.0,
+                            tax_energy_windfall=0.3)
+    elif name == "X7":  # ENERGY CRISIS: permanent -40% capacity cut at year 10 (1970s test)
+        extra_common = dict(energy_shock_at=3650, energy_shock_magnitude=0.4,
+                            energy_shock_duration=0,      # permanent step
+                            energy_subsidy_rate=0.3, energy_subsidy_threshold=2.0,
+                            tax_energy_windfall=0.3)      # the 70s policy mix: subsidize + windfall-tax
     else:
         raise SystemExit(f"unknown scenario {name}")
     pops = [max(150, int(round(p * pop_mult))) for p in mapped_pops()]
