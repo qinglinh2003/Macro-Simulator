@@ -678,6 +678,7 @@ Explicit v1 non-goals:
 | C3 | InstitutionObservation, Release calendar/access control, permitted-action reasons, full observation table, ObjectiveSpec/score components | at boundary t only releases with released_at<=t are visible; rolling values use released vintages; role/access and missing-reason tests; human and Gym serializers receive byte-equivalent contexts; oracle data/reward cannot enter human-comparable profile |
 | C4 | HumanQueueOccupant, four execution-surface modes, hot-swap, server API types, full session checkpoint coverage, canonical input/derived replay | idempotent retries do not double-charge/log; stale and forged emergency submissions reject; timeout/no-action/swap replay; checkpoint with pending action or open human context resumes bit-identically; full session/event digest matches for canonical built-in occupants; opaque RL event replay obeys the recorded-proposal contract above |
 | C5 | Gym semi-Markov adapter, action normalization/masking, checkpoint reset | a fixed canonical proposal trace through Gym and direct Coordinator paths is bit-identical; elapsed-tick reward normalization is correct; masked agent emits legal proposals while adversarial/stale actions are still safely rejected by Coordinator |
+| C6 | versioned context/action codecs, masked SMDP PPO, persistent process sampling, exact trainer checkpoints, safe portable artifacts, paired independent evaluation | training and deployed occupants encode/decode the same immutable context; `gamma ** elapsed_ticks` and terminal bootstrap semantics pass; continuous and resumed training are bit-identical; CPU/MPS checkpoints restore safely; malformed artifacts and contract drift fail closed; a disjoint-seed candidate clears the registered random, active-heuristic, and no-action superiority gate |
 
 ### 13.1 Local acceptance record — 2026-07-18
 
@@ -697,3 +698,19 @@ The C1 lever table and C3 observation table remain separate economic review surf
 This branch's P0 implementation treats their current no-`TODO` contents as frozen; a
 later change to ownership, timing, visibility, or normalization is a new economic ruling,
 not an incidental refactor.
+
+### 13.2 RL extension acceptance — 2026-07-19
+
+- **123** focused Controller/Gym/RL tests covering masked SMDP PPO training,
+  exact checkpoint/resume, CPU/MPS restore, compact
+  persistent process workers, safe artifact loading, train/deploy codec parity,
+  and CLI trust-boundary tests passed;
+- the current `reward_scale=0.01` CPU artifact trained for **20 updates**, **7,840
+  decision samples**, and **116,800 engine ticks** in **376 seconds**;
+- on 20 disjoint held-out seeds it passed all three corrected comparisons:
+  **100%** wins against the active fiscal heuristic, **85%** against mask-aware
+  random, and **100%** against no action; full statistics and caveats are in
+  [`rl_training_v26.md`](rl_training_v26.md);
+- complete repository suite with the training extra: **1406 passed, 11 skipped,
+  4 warnings, 0 failed** in **1:06:56**. The warnings are the four existing
+  Gymnasium advisories about intentionally unbounded `Box` limits.

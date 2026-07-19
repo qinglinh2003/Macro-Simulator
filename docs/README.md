@@ -10,6 +10,8 @@ This directory keeps long-form project documentation out of the repository root.
   acceptance contract, with the current
   [lever](controller_levers_v26.md) and
   [observation](controller_observations_v26.md) review tables.
+- [`rl_training_v26.md`](rl_training_v26.md) — SMDP PPO training, held-out
+  baseline evaluation, portable model artifacts, and engine deployment.
 - [`../archive/`](../archive/README.md) — archived scripts and other pre-refactor reference material.
 - [`../artifacts/`](../artifacts/README.md) — generated/reference images and small experiment artifacts.
 

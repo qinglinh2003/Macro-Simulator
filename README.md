@@ -32,6 +32,8 @@ For development work, read in this order:
 | `macro_sim/systems/` | Phase-level economic mechanisms: planning, credit, labor, goods, settlement, firm demographics, equity, banking, securities, and central bank. |
 | `macro_sim/reporting/` | Metrics, diagnostics, and metric collector boundaries. Observation only. |
 | `macro_sim/experiments/` | Experiment registry, run logging, and sweep helpers. |
+| `macro_sim/controllers/` | Institutional decision contexts, schedules, policy coordination, human/heuristic/RL occupants, and the semi-Markov Gym adapter. |
+| `macro_sim/rl/` | Optional SMDP PPO training, paired baseline evaluation, safe portable artifacts, and NumPy deployment. |
 | `docs/design/` | Development-first design docs: current brief, durable core rules, and archived research history. |
 | `docs/plans/` | Version-specific implementation plans (`PLAN_v*.md`). |
 | `archive/scripts/` | Archived pre-refactor scripts. Preserved for reference; not an active command surface. |
@@ -71,6 +73,19 @@ uv run python run.py                     # run kernel, write diagnostic.png, see
 uv run python tests/test_conservation.py # ledger foundation tests (zero-dependency)
 uv run pytest -n auto -q                 # full parallel regression suite
 ```
+
+Controller RL training is optional and does not add PyTorch to the normal engine:
+
+```bash
+uv sync --extra train
+uv run --extra train macro-rl train --updates 50 --num-envs 8 --device cpu \
+  --output-dir runs/rl-fiscal-v1
+uv run --extra train macro-rl evaluate runs/rl-fiscal-v1/policy.msrl --seeds 20 \
+  --evaluation-seed-start 1000000 --output runs/rl-fiscal-v1/evaluation.json
+```
+
+See [`docs/rl_training_v26.md`](docs/rl_training_v26.md) for the task contract,
+checkpoint rules, Apple Silicon guidance, and the held-out superiority gate.
 
 The old plotting, validation, sweep, and scratch scripts are archived under
 [`archive/scripts/`](archive/scripts/README.md). Their protocol layer will be
