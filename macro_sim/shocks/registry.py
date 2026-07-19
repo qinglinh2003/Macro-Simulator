@@ -62,7 +62,7 @@ class ShockRegistry:
             raise ValueError(f"{spec.kind} does not support sectors {sorted(unknown)}")
 
 
-_FIRM_SECTORS = frozenset({"consumption", "necessity", "luxury", "capital", "energy"})
+_FIRM_SECTORS = frozenset({"consumption", "necessity", "luxury", "capital", "energy", "housing"})
 
 DEFAULT_SHOCK_REGISTRY = ShockRegistry((
     ShockDefinition(
