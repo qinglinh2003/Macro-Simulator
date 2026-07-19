@@ -41,6 +41,10 @@ class ControllerEnv(_EnvBase):
         seat: str,
         objective_evaluator: Any = None,
         max_boundary_tick: int | None = None,
+        terminate_on_horizon: bool = False,
+        action_levers: Sequence[str] | None = None,
+        context_codec: Any = None,
+        action_codec: Any = None,
     ) -> None:
         if isinstance(economy_id, bool) or not isinstance(economy_id, int):
             raise TypeError("economy_id must be an integer")
@@ -50,6 +54,10 @@ class ControllerEnv(_EnvBase):
             or max_boundary_tick < 0
         ):
             raise ValueError("max_boundary_tick must be a non-negative integer or None")
+        if not isinstance(terminate_on_horizon, bool):
+            raise TypeError("terminate_on_horizon must be a boolean")
+        if terminate_on_horizon and max_boundary_tick is None:
+            raise ValueError("terminate_on_horizon requires max_boundary_tick")
         valid_seats = frozenset(lever.owner_role for lever in REGISTRY.values())
         if seat not in valid_seats:
             raise ValueError(f"unknown controller seat: {seat}")
@@ -58,19 +66,40 @@ class ControllerEnv(_EnvBase):
         if not 0 <= economy_id < economy_count:
             raise ValueError("controller economy is out of range")
         economy = economies[economy_id] if economies is not None else session.world
-        action_levers = tuple(sorted(
+        owned_action_levers = tuple(sorted(
             name
             for name, lever in REGISTRY.items()
             if lever.owner_role == seat
             and (lever.scope != "external" or hasattr(economy, "external_policy"))
         ))
-        if not action_levers:
+        if not owned_action_levers:
             raise ValueError(f"controller seat {seat!r} owns no policy levers")
+        restrict_mapping_actions = action_levers is not None
+        if action_levers is None:
+            selected_action_levers = owned_action_levers
+        else:
+            try:
+                selected_action_levers = tuple(action_levers)
+            except TypeError as exc:
+                raise TypeError("action_levers must be a sequence of lever names") from exc
+            if not selected_action_levers:
+                raise ValueError("action_levers must not be empty")
+            if any(not isinstance(name, str) or not name for name in selected_action_levers):
+                raise ValueError("action_levers must contain non-empty strings")
+            if len(selected_action_levers) != len(set(selected_action_levers)):
+                raise ValueError("action_levers must not contain duplicates")
+            unknown = set(selected_action_levers) - set(owned_action_levers)
+            if unknown:
+                raise ValueError(
+                    f"action_levers are not owned by {seat!r}: {sorted(unknown)}"
+                )
+            # The wire proposal is canonical and model artifacts need a stable order.
+            selected_action_levers = tuple(sorted(selected_action_levers))
         economy_targets = tuple(
             target for target in range(economy_count) if target != economy_id
         )
         dimensions: list[tuple[str, int | None]] = []
-        for lever_name in action_levers:
+        for lever_name in selected_action_levers:
             if isinstance(REGISTRY[lever_name].validation, EconomySet):
                 dimensions.extend(
                     (lever_name, target) for target in economy_targets
@@ -82,6 +111,7 @@ class ControllerEnv(_EnvBase):
         self.seat = seat
         self.objective_evaluator = objective_evaluator
         self.max_boundary_tick = max_boundary_tick
+        self.terminate_on_horizon = terminate_on_horizon
         self._objective_genesis = (
             pickle.dumps(objective_evaluator, protocol=5)
             if objective_evaluator is not None else None
@@ -92,9 +122,28 @@ class ControllerEnv(_EnvBase):
         self._action_probe_cache: dict[tuple[Any, ...], tuple[bool, float, str]] = {}
         self.session = session
         self.context: DecisionContext | None = None
-        self.action_levers = action_levers
+        self.action_levers = selected_action_levers
         self._economy_targets = economy_targets
         self.action_dimensions = tuple(dimensions)
+        self.context_codec = context_codec
+        self.action_codec = action_codec
+        self._restrict_mapping_actions = restrict_mapping_actions
+        if context_codec is not None:
+            if tuple(getattr(context_codec, "action_levers", ())) != self.action_levers:
+                raise ValueError("context_codec action levers do not match the environment")
+            if getattr(context_codec, "economy_id", None) != economy_id \
+                    or getattr(context_codec, "seat", None) != seat:
+                raise ValueError("context_codec economy/seat does not match the environment")
+            if not callable(getattr(context_codec, "encode", None)):
+                raise TypeError("context_codec must expose encode(context)")
+        if action_codec is not None:
+            if context_codec is None:
+                raise ValueError("action_codec requires a context_codec")
+            if tuple(getattr(action_codec, "action_dimensions", ())) != self.action_dimensions:
+                raise ValueError("action_codec dimensions do not match the environment")
+            if not callable(getattr(action_codec, "decode", None)) \
+                    or not callable(getattr(action_codec, "action_mask", None)):
+                raise TypeError("action_codec must expose decode() and action_mask()")
         self.observation_features = self._observation_feature_names(session)
         if spaces is not None:
             self.action_space = spaces.MultiDiscrete(
@@ -133,6 +182,11 @@ class ControllerEnv(_EnvBase):
         self, session: ControlledSimulationSession,
     ) -> tuple[str, ...]:
         """Declare the stable, inspectable SMDP vector contract."""
+        if self.context_codec is not None:
+            names = tuple(getattr(self.context_codec, "feature_names", ()))
+            if not names or len(names) != len(set(names)):
+                raise ValueError("context_codec feature_names must be non-empty and unique")
+            return names
         names = ["boundary_tick", "elapsed_ticks"]
         service = getattr(session, "release_service", None)
         fields = () if service is None else service.spec.fields
@@ -212,8 +266,8 @@ class ControllerEnv(_EnvBase):
                 on_advanced=lambda item: interval_evaluations.append(item)
             )
             interval_results.extend(trace)
-        truncated = next_context is None
-        elapsed = self.session.boundary_tick - previous_tick if truncated else (
+        horizon_reached = next_context is None
+        elapsed = self.session.boundary_tick - previous_tick if horizon_reached else (
             next_context.boundary_tick - previous_tick
         )
         output_context = next_context or self._terminal_context(previous_context, elapsed)
@@ -227,9 +281,10 @@ class ControllerEnv(_EnvBase):
         )
         if self.objective_evaluator is not None:
             assert objective is not None
-        self.context = None if truncated else next_context
+        self.context = None if horizon_reached else next_context
         self._action_probe_cache = {}
-        terminated = False
+        terminated = horizon_reached and self.terminate_on_horizon
+        truncated = horizon_reached and not self.terminate_on_horizon
         info = self._info(output_context, elapsed_ticks=elapsed)
         info["decisions"] = [decision.__dict__.copy() for decision in decisions]
         info["interval_trace"] = [
@@ -245,7 +300,7 @@ class ControllerEnv(_EnvBase):
         ]
         if objective is not None:
             info["objective"] = objective
-        if truncated:
+        if horizon_reached:
             info["terminal_observation"] = True
         return self._vector(output_context), float(reward), terminated, truncated, info
 
@@ -261,6 +316,11 @@ class ControllerEnv(_EnvBase):
         actions: list[PolicyAction] = []
         if isinstance(action, Mapping):
             for lever, value in sorted(action.items()):
+                if self._restrict_mapping_actions and lever not in self.action_levers:
+                    raise ValueError(
+                        f"mapping action lever {lever!r} is outside this "
+                        "environment's configured action_levers"
+                    )
                 if lever not in permitted:
                     # Advisory masks are not authority: allow the Coordinator to
                     # reject an adversarial lever safely.
@@ -313,7 +373,15 @@ class ControllerEnv(_EnvBase):
                     )
                 checked.append(code)
             codes = np.asarray(checked, dtype=np.int64)
-            actions, _selected, _cost = self._legal_vector_actions(codes, context)
+            if self.action_codec is not None:
+                actions = list(self.action_codec.decode(
+                    codes,
+                    context,
+                    context_codec=self.context_codec,
+                    strict=False,
+                ))
+            else:
+                actions, _selected, _cost = self._legal_vector_actions(codes, context)
         proposal_id = f"proposal:{context.context_id}:gym"
         return PolicyProposal(
             proposal_id=proposal_id,
@@ -578,6 +646,25 @@ class ControllerEnv(_EnvBase):
         return self._direction_metadata(context)[0].copy()
 
     def _direction_metadata(self, context: DecisionContext):
+        if self.action_codec is not None:
+            mask = np.asarray(self.action_codec.action_mask(
+                context, context_codec=self.context_codec,
+            ), dtype=np.int8)
+            expected = (len(self.action_dimensions), 3)
+            if mask.shape != expected:
+                raise RuntimeError(
+                    f"action_codec mask must have shape {expected}, got {mask.shape}"
+                )
+            costs = np.zeros(expected, dtype=np.float64)
+            for index, (lever, _target) in enumerate(self.action_dimensions):
+                estimate = context.visible_cost_estimates.get(lever, {})
+                one_step = estimate.get("adjustment_for_one_control_step", 0.0) \
+                    if isinstance(estimate, Mapping) else 0.0
+                if isinstance(one_step, (int, float)) and not isinstance(one_step, bool) \
+                        and np.isfinite(float(one_step)):
+                    costs[index, 0] = float(one_step) if mask[index, 0] else 0.0
+                    costs[index, 2] = float(one_step) if mask[index, 2] else 0.0
+            return mask, costs
         mask = np.zeros((len(self.action_dimensions), 3), dtype=np.int8)
         costs = np.zeros((len(self.action_dimensions), 3), dtype=np.float64)
         mask[:, 1] = 1
@@ -822,12 +909,14 @@ class ControllerEnv(_EnvBase):
                 earliest_effective_tick=boundary,
             )
             for item in previous.permitted_actions
+            if item.lever in current_policy
         )
         versions = {
             lever: coordinator.policy_versions.get(
                 f"{self.economy_id}:{lever}", version
             )
             for lever, version in previous.policy_versions.items()
+            if lever in current_policy
         }
         pending_policy: dict[str, Any] = {}
         pending_effective_ticks: dict[str, int] = {}
@@ -932,6 +1021,16 @@ class ControllerEnv(_EnvBase):
         return target[0] if target else None
 
     def _vector(self, context: DecisionContext) -> np.ndarray:
+        if self.context_codec is not None:
+            encoded = np.asarray(self.context_codec.encode(context), dtype=np.float64)
+            expected = (len(self.observation_features),)
+            if encoded.shape != expected:
+                raise RuntimeError(
+                    f"context_codec returned shape {encoded.shape}, expected {expected}"
+                )
+            if not np.all(np.isfinite(encoded)):
+                raise ValueError("context_codec returned NaN or Infinity")
+            return encoded
         values: list[float] = [float(context.boundary_tick), float(context.elapsed_ticks)]
         observation = context.observation
         releases = getattr(observation, "releases", ())
@@ -1053,4 +1152,11 @@ class ControllerEnv(_EnvBase):
         profile = self._objective_profile()
         if profile is not None:
             info["objective_profile"] = profile
+            info["reward_time_normalization"] = (
+                self.objective_evaluator.spec.time_normalization
+            )
+        if self.context_codec is not None:
+            info["context_contract_hash"] = self.context_codec.contract_hash
+        if self.action_codec is not None:
+            info["action_contract_hash"] = self.action_codec.contract_hash
         return info
