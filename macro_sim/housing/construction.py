@@ -112,21 +112,11 @@ def run_construction_step(econ: Any) -> None:
             permits = int(getattr(econ.policy, "housing_permits", cfg.housing_permits))
             if econ._permits_used >= permits:
                 break                            # the zoning quota binds this year (live Policy lever)
-            if fiscal is None:
-                break
-            if econ.ledger.balance(firm.id) < land_fee:
-                # CAMPAIGN FIX leg 3: wage credit funds labor but completion needs the
-                # land fee IN CASH at the moment of minting -- the wage loan is spent,
-                # so WIP piles up >= 1.0 forever. With the flag on, the builder draws
-                # a development loan for the shortfall (bank-capacity constrained,
-                # conserving); off = legacy cash-only gate, bit-identical.
-                borrowed = 0.0
-                if cfg.builder_land_fee_credit:
-                    from macro_sim.systems.credit import grant_loan
-                    shortfall = land_fee - econ.ledger.balance(firm.id)
-                    borrowed = grant_loan(econ, firm.id, shortfall)
-                if econ.ledger.balance(firm.id) < land_fee:
-                    break                        # cannot pay for land: unit stays as WIP
+            if fiscal is None or econ.ledger.balance(firm.id) < land_fee:
+                break                            # cannot pay for land: unit stays as WIP
+                # (leg 3 land-fee credit is provisioned in the CREDIT PHASE -- a
+                # mid-market-phase loan bypassed the CA/NFA reconciliation journals
+                # and broke two world identities in the acceptance portraits)
             if land_fee > EPS:
                 econ.ledger.transfer(firm.id, fiscal, land_fee)
                 econ._land_fee_paid = getattr(econ, "_land_fee_paid", 0.0) + land_fee

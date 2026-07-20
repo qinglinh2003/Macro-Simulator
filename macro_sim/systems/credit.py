@@ -56,6 +56,25 @@ def run_credit_phase(econ: Any) -> None:
         deposits = econ.ledger.balance(f.id)
         debt = econ.ledger.debt(f.id)
         requested = B.credit_request(f, deposits, p_k_est)
+        # CAMPAIGN FIX leg 3 (relocated): a builder whose WIP will complete this
+        # tick requests the LAND FEE alongside its wage need, so the development
+        # loan flows through the one sanctioned credit channel (the earlier
+        # completion-time grant_loan bypassed the CA/NFA reconciliation journals).
+        if (
+            getattr(econ.cfg, "builder_land_fee_credit", False)
+            and getattr(f, "sells", None) == "housing"
+            and getattr(f, "wip", 0.0) >= 1.0
+        ):
+            housing = getattr(econ, "housing", None)
+            if housing is not None:
+                stock0 = max(1, getattr(econ, "_genesis_dwellings", housing.count()))
+                fee = (
+                    econ.policy.land_fee_share * econ._house_price
+                    * (housing.count() / stock0) ** econ.policy.land_fee_stock_elasticity
+                )
+                units = int(getattr(f, "wip", 0.0))
+                need = max(0.0, fee * units - max(0.0, deposits - requested))
+                requested += need
         if requested > EPS:
             econ._firm_credit_requesters += 1
             econ._firm_credit_requested += requested

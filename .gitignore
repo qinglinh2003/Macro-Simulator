@@ -18,3 +18,8 @@ wheels/
 
 # generated demographic data caches
 /data/demographics/cache/
+
+# extreme/acceptance portrait outputs (checkpoints are 300MB+; reports get committed separately)
+artifacts/openecon/extreme_*/
+artifacts/experiments/
+*.msim

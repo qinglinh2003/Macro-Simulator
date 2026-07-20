@@ -87,3 +87,33 @@ def test_flags_off_no_new_attributes_leak():
         e.step()
     for bk in e.banks:
         assert getattr(bk, "deposit_interest_arrears", 0.0) == 0.0
+
+
+def test_land_fee_credit_flows_through_credit_phase_and_identities_hold():
+    """Leg-3 relocation: the development loan must go through the CREDIT phase --
+    the completion-time grant_loan bypassed CA/NFA reconciliation journals and
+    broke two world identities in the acceptance portraits. Proxy check: in a
+    COUPLED world with the full package on, each economy's augmented-NFA change
+    matches its accrued current account to gate tolerance."""
+    from macro_sim.world import World
+    cfg = Config.v13(seed=11, n_households=30, n_firms_c=12, n_firms_k=6, n_banks=2,
+                     demographics_population=200, n_ticks=320, government=True,
+                     housing_enabled=True, housing_market_enabled=True,
+                     housing_construction_enabled=True, n_builders=2,
+                     demographics_tfr=3.0, builder_demand_price_gain=2.0,
+                     builder_inventory_buffer=3.0, builder_land_fee_credit=True,
+                     housing_demand_step=0.02, housing_ask_floor_wage_share=1.5)
+    w = World([cfg, cfg], base_seed=13, trade=True, capital=True)
+    w.run(300)
+    for econ in w.economies:
+        econ.ledger.assert_conserved()
+    wr = w.world_records
+    if not wr:
+        return
+    for i in range(2):
+        nfa0 = float(wr[0].get(f"augmented_nfa_{i}", 0.0))
+        nfa1 = float(wr[-1].get(f"augmented_nfa_{i}", 0.0))
+        ca = sum(float(r.get(f"current_account_accrual_{i}", 0.0)) for r in wr[1:])
+        scale = max(1.0, abs(nfa1), abs(nfa0))
+        assert abs((nfa1 - nfa0) - ca) / scale < 5e-3, (
+            f"economy {i}: dNFA {nfa1-nfa0:.3f} vs accrued CA {ca:.3f}")
