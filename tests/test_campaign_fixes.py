@@ -24,11 +24,13 @@ def _cfg(**over):
     return Config.v13(**{**base, **over})
 
 
-def test_ask_floor_holds_under_decay():
+def test_ask_floor_holds_under_decay_and_tracks_current_wage():
     e = Economy(_cfg(housing_ask_floor_wage_share=1.5))
-    floor = 1.5 * e.cfg.w_firm0 * 365.0
     for _ in range(300):
         e.step()
+    floor = e.housing_market.price_floor(e)      # CURRENT-wage anchored (dynamic)
+    wage_ref = sum(f.wage for f in e.firms) / len(e.firms)
+    assert floor == pytest.approx(1.5 * wage_ref * 365.0)
     asks = [l.ask for l in e.housing_market.listings.values()]
     if asks:
         assert min(asks) >= floor - 1e-9, "decay must stop at the wage-anchored floor"
@@ -36,7 +38,8 @@ def test_ask_floor_holds_under_decay():
 
 def test_ask_floor_off_is_floorless():
     e = Economy(_cfg())
-    assert e.housing_market.ask_floor == 0.0
+    assert e.housing_market.ask_floor_wage_share == 0.0
+    assert e.housing_market.price_floor(e) <= 1e-6
 
 
 def test_builder_buffer_keeps_planning_alive():

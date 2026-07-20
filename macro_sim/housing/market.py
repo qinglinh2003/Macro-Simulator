@@ -56,7 +56,7 @@ class HousingMarket:
     # with buyers still queuing lifts the reference price one step (mirror of ask_decay).
     # 0.0 = legacy ratchet, bit-identical.
     demand_step: float = 0.0
-    ask_floor: float = 0.0          # absolute price floor under ask decay (0 = legacy EPS)
+    ask_floor_wage_share: float = 0.0   # floor = share x CURRENT avg firm wage x 365 (0 = legacy EPS)
 
     listings: dict[int, Listing] = field(default_factory=dict)   # dwelling_id -> Listing
     sales_total: int = 0
@@ -69,11 +69,23 @@ class HousingMarket:
     def is_listed(self, dwelling_id: int) -> bool:
         return dwelling_id in self.listings
 
+    def price_floor(self, econ: Any) -> float:
+        """CAMPAIGN FIX: wage-anchored ask floor, computed against the CURRENT
+        average firm wage -- a genesis-anchored floor is nominally meaningless
+        after 30y of inflation (Germany x15) and over-binds under deflation."""
+        if self.ask_floor_wage_share <= 0.0:
+            return EPS
+        firms = getattr(econ, "firms", None) or ()
+        wage_ref = (sum(f.wage for f in firms) / len(firms)) if firms else 0.0
+        return max(EPS, self.ask_floor_wage_share * wage_ref * 365.0)
+
     def list_dwelling(self, econ: Any, dwelling_id: int, seller_account: str, *, forced: bool) -> None:
         if dwelling_id in self.listings:
             return
         reference = max(EPS, float(econ._house_price))
         ask = reference * ((1.0 - self.forced_discount) if forced else (1.0 + self.ask_markup))
+        # coherence: a forced listing may not START below the floor either
+        ask = max(ask, self.price_floor(econ))
         self.listings[dwelling_id] = Listing(
             dwelling_id=dwelling_id,
             seller_account=seller_account,
@@ -296,7 +308,7 @@ def run_housing_market_phase(econ: Any) -> None:
         econ._house_price *= 1.0 + market.demand_step
     market.last_session_sales = len(sold)
     market.last_session_volume = sum(p for _, p in sold)
-    floor = max(EPS, market.ask_floor)
+    floor = market.price_floor(econ)
     for listing in market.listings.values():
         listing.ask = max(floor, listing.ask * (1.0 - market.ask_decay))
     n_listed = len(market.listings)
