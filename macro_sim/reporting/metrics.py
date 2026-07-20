@@ -1685,6 +1685,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     # v11 multi-bank: capital, leverage, failures, bank-size concentration (only with >1 bank)
     if getattr(econ, "banks", None) and len(econ.banks) > 1:
         caps = [econ.ledger.balance(b.id) for b in econ.banks]
+        econ_caps_pre = [_bank_economic_capital_snapshot(econ, b, bond_deltas) for b in econ.banks if b.alive]
         lb = {b.id: 0.0 for b in econ.banks}
         for a in list(econ.firms) + list(econ.households):
             lb[bank_for(econ, a.id).id] += econ.ledger.debt(a.id)
@@ -1715,7 +1716,14 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
         rec.update({
             "bank_economic_capital_total": float(sum(econ_caps)) if econ_caps else 0.0,
             "bank_economic_capital_median": float(np.median(econ_caps)) if econ_caps else 0.0,
+            # LEGACY-MISNAMED (kept for series continuity): this counts negative
+            # CASH (permanent overdraft / LoLR dependence), NOT insolvency -- it
+            # mislabeled a 28.7y-overdraft-but-solvent bank as a zombie in X2.
             "negative_capital_bank_count": float(sum(1 for c in caps if c < -1e-9)),
+            "bank_negative_cash_count": float(sum(1 for c in caps if c < -1e-9)),
+            "bank_insolvent_count": float(sum(
+                1 for c in econ_caps_pre if c < -1e-9
+            )),
             "near_failure_bank_count": float(sum(1 for c in caps if 0.0 <= c < econ.policy.bank_min_capital)),
         })
         if getattr(econ.policy, "bank_exposure_limit", 0.0) > 0.0:
