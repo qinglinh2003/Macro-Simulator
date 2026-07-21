@@ -18,7 +18,7 @@ cd "$prototype_root"
 uv run python -m macro_sim.desktop.server --port "$prototype_port" >"$worker_log" 2>&1 &
 worker_pid=$!
 
-for _ in {1..40}; do
+for _ in {1..150}; do
     if grep -q '"status": "ready"' "$worker_log"; then
         break
     fi
