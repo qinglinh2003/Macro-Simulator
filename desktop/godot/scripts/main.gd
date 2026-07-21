@@ -36,15 +36,22 @@ const GREEN := Color("1f9d63")
 const ECON_COLORS := [Color("0f9d90"), Color("c17d16"), Color("2f6fd0")]
 
 # 公报磁贴(诚实信道:发布日历 + 时滞 + 缺失显式化)
+const TILE_TO_GROUP := {
+	"real_output": "实体经济", "unemployment_rate": "劳动力",
+	"inflation": "价格与货币", "price_index": "价格与货币",
+	"policy_rate": "价格与货币", "gov_deficit_to_gdp": "财政",
+	"bank_reserves_total": "银行与信贷", "poverty_rate": "分配与福利",
+}
+
 const TILE_SPEC := [
-	{"id": "real_output", "label": "实际产出 · GDP", "color": TEAL, "bad_up": false},
-	{"id": "unemployment_rate", "label": "失业率", "color": AMBER, "bad_up": true},
-	{"id": "inflation", "label": "通胀(每tick)", "color": PURPLE, "bad_up": true},
-	{"id": "price_index", "label": "物价指数", "color": BLUE, "bad_up": true},
-	{"id": "policy_rate", "label": "政策利率", "color": TEAL, "bad_up": false},
-	{"id": "gov_deficit_to_gdp", "label": "赤字 / GDP", "color": AMBER, "bad_up": true},
-	{"id": "bank_reserves_total", "label": "银行准备金", "color": GREEN, "bad_up": false},
-	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true},
+	{"id": "real_output", "label": "实际产出 · GDP", "color": TEAL, "bad_up": false, "kind": "num"},
+	{"id": "unemployment_rate", "label": "失业率", "color": AMBER, "bad_up": true, "kind": "pp"},
+	{"id": "inflation", "label": "通胀(每tick)", "color": PURPLE, "bad_up": true, "kind": "pp"},
+	{"id": "price_index", "label": "物价指数", "color": BLUE, "bad_up": true, "kind": "num"},
+	{"id": "policy_rate", "label": "政策利率", "color": TEAL, "bad_up": false, "kind": "pp"},
+	{"id": "gov_deficit_to_gdp", "label": "赤字 / GDP", "color": AMBER, "bad_up": true, "kind": "pp"},
+	{"id": "bank_reserves_total", "label": "银行准备金", "color": GREEN, "bad_up": false, "kind": "num"},
+	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true, "kind": "pp"},
 ]
 
 const SEAT_LIST := [
@@ -271,6 +278,8 @@ var _god := false
 var _mode := "interactive"
 var _tab := "focus"
 var _rank_by := "real_output"
+var _focus_extra := "inflation"        # 焦点图第三条序列(SERIES 卡点击切换)
+var _goto_panel_group := ""            # 磁贴点击 -> 全景滚动目标
 var _filter_mine := false
 var _last_toasted := ""
 var _capture_path := ""
@@ -377,6 +386,12 @@ func _on_response(response: Dictionary) -> void:
 		_snapshot = payload
 		_ingest_releases()
 		_cache_permitted()
+		var splash := _n.get("splash") as Control
+		if splash != null and splash.visible:
+			var stw2 := create_tween()
+			stw2.tween_property(splash, "modulate:a", 0.0, 0.35)
+			stw2.tween_callback(func() -> void:
+				splash.visible = false)
 		var verdict: Variant = payload.get("last_verdict")
 		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
 			_show_verdict(verdict)
@@ -749,6 +764,36 @@ func _build_ui() -> void:
 	_n["tiles"] = tiles
 	_build_main(shell)
 	_build_overlays()
+	var splash := ColorRect.new()
+	splash.color = GROUND
+	splash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_n["splash"] = splash
+	add_child(splash)
+	var sv := VBoxContainer.new()
+	sv.set_anchors_preset(Control.PRESET_CENTER)
+	sv.position = Vector2(-140, -70)
+	sv.add_theme_constant_override("separation", 16)
+	sv.alignment = BoxContainer.ALIGNMENT_CENTER
+	splash.add_child(sv)
+	var st := HBoxContainer.new()
+	st.add_theme_constant_override("separation", 10)
+	st.alignment = BoxContainer.ALIGNMENT_CENTER
+	st.add_child(_dot(TEAL, 11.0))
+	st.add_child(_lbl("宏观指挥室", 26, INK))
+	sv.add_child(st)
+	var sub := _lbl("MACRO COMMAND · 三国耦合世界", 12, Color("68788b"), true)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sv.add_child(sub)
+	var spin := _Spinner.new()
+	spin.custom_minimum_size = Vector2(30, 30)
+	spin.pivot_offset = Vector2(15, 15)
+	spin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	sv.add_child(spin)
+	var stw := create_tween().set_loops()
+	stw.tween_property(spin, "rotation", TAU, 1.1).from(0.0)
+	var sload := _lbl("连接引擎中 · 创世三国经济体…", 12, INK2)
+	sload.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sv.add_child(sload)
 
 
 func _build_header(shell: VBoxContainer) -> void:
@@ -789,13 +834,21 @@ func _build_header(shell: VBoxContainer) -> void:
 	var tickl := _lbl("t = 0", 11, Color("68788b"), true)
 	_n["tick"] = tickl
 	clock.add_child(tickl)
+	var yb := _YearBar.new()
+	yb.custom_minimum_size = Vector2(150, 5)
+	_n["yearbar"] = yb
+	clock.add_child(yb)
 	h.add_child(clock)
 	var waitp := PanelContainer.new()
 	waitp.add_theme_stylebox_override("panel", _sb(AMBER_BG, AMBER_BD, 20, 5))
 	var wbx := HBoxContainer.new()
 	wbx.add_theme_constant_override("separation", 7)
 	waitp.add_child(wbx)
-	wbx.add_child(_dot(AMBER))
+	var wdot := _dot(AMBER)
+	var wtw := create_tween().set_loops()
+	wtw.tween_property(wdot, "modulate:a", 0.3, 0.55).set_trans(Tween.TRANS_SINE)
+	wtw.tween_property(wdot, "modulate:a", 1.0, 0.55).set_trans(Tween.TRANS_SINE)
+	wbx.add_child(wdot)
 	wbx.add_child(_lbl("等待决策", 12, AMBER))
 	_n["awaitchip"] = waitp
 	h.add_child(waitp)
@@ -805,6 +858,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	for m: Array in [["interactive", "交互"], ["realtime", "实时"]]:
 		var mb := Button.new()
 		mb.text = m[1]
+		mb.tooltip_text = "交互:每逢会议暂停等你决策\n实时:播放中自动通过非紧急会议" 
 		var mid: String = m[0]
 		mb.pressed.connect(func() -> void:
 			_mode = mid
@@ -930,6 +984,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	sm.add_theme_constant_override("margin_top", 4)
 	wb.add_child(sm)
 	var search := LineEdit.new()
+	search.clear_button_enabled = true
 	search.placeholder_text = "搜索政策(中文或英文,跨席位)…"
 	search.add_theme_font_size_override("font_size", 12)
 	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
@@ -1165,6 +1220,9 @@ func _render() -> void:
 	var t := int(_snapshot.get("tick", 0))
 	_set_text("cal", _cal_str(t))
 	_set_text("tick", "t = %d" % t)
+	var yb := _n["yearbar"] as _YearBar
+	yb.frac = float(t % 365) / 365.0
+	yb.queue_redraw()
 	(_n["awaitchip"] as Control).visible = _awaiting()
 	var playb := _n["play"] as Button
 	playb.text = "⏸  暂停" if _playing else "▶  播放"
@@ -1250,6 +1308,15 @@ func _render_tiles() -> void:
 			tile.add_theme_stylebox_override("panel", thover))
 		tile.mouse_exited.connect(func() -> void:
 			tile.add_theme_stylebox_override("panel", trest))
+		tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		tile.tooltip_text = "点击打开「指标全景 · %s」" % str(TILE_TO_GROUP.get(sid, ""))
+		tile.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton \
+					and (event as InputEventMouseButton).pressed \
+					and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				_tab = "panels"
+				_goto_panel_group = str(TILE_TO_GROUP.get(sid, ""))
+				_render())
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 4)
 		tile.add_child(v)
@@ -1289,7 +1356,13 @@ func _render_tiles() -> void:
 					var up := curv > prev
 					var dc: Color = (RED if up else GREEN) if bool(spec["bad_up"]) \
 						else (GREEN if up else RED)
-					vr.add_child(_lbl("▲" if up else "▼", 11, dc))
+					var mag := ""
+					if str(spec.get("kind", "num")) == "pp":
+						mag = "%.2fpp" % (absf(curv - prev) * 100.0)
+					elif absf(prev) > 1e-9:
+						var pct := absf(curv - prev) / absf(prev) * 100.0
+						mag = "99%+" if pct > 99.0 else "%.1f%%" % pct
+					vr.add_child(_lbl(("▲" if up else "▼") + mag, 10, dc))
 			v.add_child(vr)
 			var chart := _SparkLine.new()
 			chart.color = spec["color"]
@@ -1300,8 +1373,8 @@ func _render_tiles() -> void:
 			chart.values = vals
 			v.add_child(chart)
 			var ref_end := int(rel.get("reference_end_tick", t))
-			var rline := _lbl("发布 t%d · 止 t%d · 距今 %d天" % [
-				int(rel.get("released_at_tick", 0)), ref_end, t - ref_end], 9, INK3, true)
+			var rline := _lbl("t%d发布 · %dd前" % [
+				int(rel.get("released_at_tick", 0)), t - ref_end], 9, INK3, true)
 			rline.clip_text = true
 			v.add_child(rline)
 			if _god and truth.has(sid):
@@ -1310,9 +1383,14 @@ func _render_tiles() -> void:
 				gl.clip_text = true
 				v.add_child(gl)
 		else:
-			v.add_child(_lbl("暂无数据", 13, Color("68788b")))
+			var wait_row := HBoxContainer.new()
+			wait_row.add_theme_constant_override("separation", 6)
+			wait_row.add_child(_chip("待发布", Color("849098"), Color("f2f5f9"),
+				Color("e0e6ee"), 10))
+			v.add_child(wait_row)
+			v.add_child(_lbl("— —", 17, Color("c3ccd6"), true))
 			var why := str(rel.get("missing_reason", "not_released"))
-			var wl := _lbl(why, 10, Color("849098"))
+			var wl := _lbl(why, 9, Color("9aa7b4"), true)
 			wl.clip_text = true
 			v.add_child(wl)
 		row.add_child(tile)
@@ -1350,8 +1428,11 @@ func _render_workbench() -> void:
 			cap_text = " · 行政容量 " + str(ctx.get("admin_remaining"))
 			break
 	_set_text("meeting", (("🚨 紧急会议 · 仅白名单杠杆可动" if emg
-		else "例会开启(%d 议题)· 调整杠杆后「加入提案」" % _contexts().size()) + cap_text) if open
+		else "● 例会开启(%d 议题)· 调整杠杆后「加入提案」" % _contexts().size()) + cap_text) if open
 		else "会议未开 · 只读(推进至会议自动暂停)")
+	var meetl := _n["meeting"] as Label
+	meetl.add_theme_color_override("font_color",
+		(Color("b02a1c") if emg else Color("9a6b10")) if open else INK2)
 	var permitted: Dictionary = {}
 	for ctx: Dictionary in _contexts():
 		for item: Dictionary in ctx.get("permitted_actions", []):
@@ -1855,7 +1936,9 @@ func _render_cart(open: bool) -> void:
 			_render())
 		r.add_child(rm)
 		items.add_child(rowp)
-	(_n["submit"] as Button).disabled = not open or _cart.is_empty()
+	var subb := _n["submit"] as Button
+	subb.text = "提交提案(%d)" % _cart.size() if not _cart.is_empty() else "提交提案"
+	subb.disabled = not open or _cart.is_empty()
 	(_n["pass"] as Button).disabled = not open
 
 
@@ -1930,6 +2013,7 @@ func _show_verdict(v: Dictionary) -> void:
 func _submit_cart() -> void:
 	if _cart.is_empty():
 		return
+	_show_hint("已递交 %d 项动作,闭合本届会议,裁决将在边界返回…" % _cart.size())
 	var by_group: Dictionary = {}
 	for c: Dictionary in _cart:
 		var g := str(c["group"])
@@ -1968,6 +2052,14 @@ func _render_center() -> void:
 
 
 func _render_focus_tab(body: VBoxContainer) -> void:
+	var extra_label := "通胀"
+	var extra_color: Color = PURPLE
+	for tsp: Dictionary in TILE_SPEC:
+		if str(tsp["id"]) == _focus_extra:
+			extra_label = str(tsp["label"]).split("(")[0].split(" · ")[0]
+			extra_color = tsp["color"]
+	if _focus_extra == "inflation":
+		extra_color = PURPLE
 	var fp := PanelContainer.new()
 	var fv := VBoxContainer.new()
 	fv.add_theme_constant_override("separation", 6)
@@ -1976,7 +2068,7 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	legend.add_theme_constant_override("separation", 14)
 	legend.add_child(_lbl("宏观焦点 · 公报序列", 14, INK))
 	legend.add_child(_spacer_h())
-	for item: Array in [["实际产出", TEAL], ["失业率", AMBER], ["通胀", PURPLE]]:
+	for item: Array in [["实际产出", TEAL], ["失业率", AMBER], [extra_label, extra_color]]:
 		var li := HBoxContainer.new()
 		li.add_theme_constant_override("separation", 5)
 		var swatch := ColorRect.new()
@@ -1989,13 +2081,25 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	fv.add_child(legend)
 	var chart := _FocusChart.new()
 	chart.custom_minimum_size = Vector2(0, 250)
-	chart.series = [
-		{"vals": _hist_vals("real_output"), "color": TEAL, "width": 2.4, "fill": true},
-		{"vals": _hist_vals("unemployment_rate"), "color": AMBER, "width": 1.8},
-		{"vals": _hist_vals("inflation"), "color": PURPLE, "width": 1.8},
+	var focus_defs: Array = [
+		["real_output", "实际产出", TEAL, 2.4, true],
+		["unemployment_rate", "失业率", AMBER, 1.8, false],
+		[_focus_extra, extra_label, extra_color, 1.8, false],
 	]
+	var fseries: Array = []
+	for fd: Array in focus_defs:
+		var sid := str(fd[0])
+		var vals := _hist_vals(sid)
+		fseries.append({"vals": vals, "color": fd[2], "width": fd[3], "fill": fd[4],
+			"label": fd[1],
+			"last_text": _fmt_series(sid, float(vals[-1])) if not vals.is_empty() else "",
+			"fmt": func(v: float) -> String: return _fmt_series(sid, v)})
+	chart.series = fseries
 	chart.shock_active = not _snapshot.get("active_shocks", []).is_empty()
 	chart.font = _sans
+	chart.mouse_exited.connect(func() -> void:
+		chart.hover_pos = Vector2(-1, -1)
+		chart.queue_redraw())
 	fv.add_child(chart)
 	var notes := HBoxContainer.new()
 	notes.add_theme_constant_override("separation", 10)
@@ -2016,11 +2120,27 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	grid.add_theme_constant_override("separation", 10)
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sv.add_child(grid)
-	for spec: Dictionary in [TILE_SPEC[0], TILE_SPEC[1], TILE_SPEC[2], TILE_SPEC[4]]:
+	for spec: Dictionary in [TILE_SPEC[2], TILE_SPEC[4], TILE_SPEC[3], TILE_SPEC[7]]:
 		var sid := str(spec["id"])
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 10, 10))
+		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var chosen := sid == _focus_extra
+		var crest := _sb(Color("eef7f5") if chosen else PANEL3,
+			TEAL_BD if chosen else Color("e6ebf1"), 10, 10)
+		var chover := _sb(Color.WHITE, spec["color"], 10, 10, 8)
+		card.add_theme_stylebox_override("panel", crest)
+		card.mouse_entered.connect(func() -> void:
+			card.add_theme_stylebox_override("panel", chover))
+		card.mouse_exited.connect(func() -> void:
+			card.add_theme_stylebox_override("panel", crest))
+		card.tooltip_text = "点击加入上方主图(第三序列)"
+		card.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton \
+					and (event as InputEventMouseButton).pressed \
+					and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				_focus_extra = sid
+				_render())
 		var cv := VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 5)
 		card.add_child(cv)
@@ -2061,8 +2181,11 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	scroll.add_child(col)
 	var series: Array = _snapshot.get("series", [])
 	var latest: Dictionary = _snapshot.get("metrics", {})
+	var goto_target: Control = null
 	for grp: Dictionary in PANEL_GROUPS:
 		var gp := PanelContainer.new()
+		if str(grp["name"]) == _goto_panel_group:
+			goto_target = gp
 		var gcolor: Color = grp["color"]
 		var gsb := _sb(PANEL, Color(gcolor.r, gcolor.g, gcolor.b, 0.45), 13, 12, 8)
 		gsb.border_width_left = 4
@@ -2084,25 +2207,46 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 		gv.add_child(grid)
 		for item: Array in grp["items"]:
 			var key := str(item[0])
+			var kind := str(item[2])
 			var card := PanelContainer.new()
 			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			card.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 9, 8))
+			var prest := _sb(PANEL3, Color("e6ebf1"), 9, 8)
+			var phover := _sb(Color.WHITE, grp["color"], 9, 8, 8)
+			card.add_theme_stylebox_override("panel", prest)
+			card.mouse_entered.connect(func() -> void:
+				card.add_theme_stylebox_override("panel", phover))
+			card.mouse_exited.connect(func() -> void:
+				card.add_theme_stylebox_override("panel", prest))
 			var cv := VBoxContainer.new()
 			cv.add_theme_constant_override("separation", 3)
 			card.add_child(cv)
 			cv.add_child(_lbl(str(item[1]), 10, Color("516375")))
-			cv.add_child(_lbl(_fmt_val(str(item[2]), float(latest.get(key, 0.0))),
+			cv.add_child(_lbl(_fmt_val(kind, float(latest.get(key, 0.0))),
 				15, grp["color"], true))
 			var sl := _SparkLine.new()
 			sl.color = grp["color"]
 			sl.custom_minimum_size = Vector2(120, 24)
 			var vals: Array = []
+			var vlo := INF
+			var vhi := -INF
 			for point: Dictionary in series:
-				vals.append(float(point.get(key, 0.0)))
+				var pv := float(point.get(key, 0.0))
+				vals.append(pv)
+				vlo = minf(vlo, pv)
+				vhi = maxf(vhi, pv)
 			sl.values = vals
 			cv.add_child(sl)
+			if not vals.is_empty():
+				card.tooltip_text = "%s(%s)\n当前 %s · 区间低 %s · 高 %s · 近 %d tick" % [
+					str(item[1]), key,
+					_fmt_val(kind, float(latest.get(key, 0.0))),
+					_fmt_val(kind, vlo), _fmt_val(kind, vhi), vals.size()]
 			grid.add_child(card)
 		col.add_child(gp)
+	if goto_target != null:
+		_goto_panel_group = ""
+		var target := goto_target
+		scroll.call_deferred("ensure_control_visible", target)
 
 
 func _render_world_tab(body: VBoxContainer) -> void:
@@ -2137,9 +2281,15 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var mine := i == int(world.get("player_economy", 0))
-		card.add_theme_stylebox_override("panel", _sb(
-			Color("eef7f5") if mine else PANEL,
-			TEAL_BD if mine else LINE, 12, 11))
+		var wrest := _sb(Color("eef7f5") if mine else PANEL,
+			TEAL_BD if mine else LINE, 12, 11, 6)
+		var whover := _sb(Color("eef7f5") if mine else PANEL,
+			ECON_COLORS[i % 3], 12, 11, 13)
+		card.add_theme_stylebox_override("panel", wrest)
+		card.mouse_entered.connect(func() -> void:
+			card.add_theme_stylebox_override("panel", whover))
+		card.mouse_exited.connect(func() -> void:
+			card.add_theme_stylebox_override("panel", wrest))
 		var cv := VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		card.add_child(cv)
@@ -2216,9 +2366,12 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		var i := int(row[0])
 		var rr := HBoxContainer.new()
 		rr.add_theme_constant_override("separation", 9)
-		rr.add_child(_lbl("#%d" % (pos + 1), 12, INK3, true))
+		var lead := pos == 0
+		rr.add_child(_lbl("#%d" % (pos + 1), 13 if lead else 12,
+			Color("1c4a8f") if lead else INK3, true))
 		rr.add_child(_flag(i, Vector2(14, 10)))
-		rr.add_child(_lbl(_country_name(i), 12, INK_BODY))
+		rr.add_child(_lbl(_country_name(i), 13 if lead else 12,
+			INK if lead else INK_BODY))
 		var barwrap := Control.new()
 		barwrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		barwrap.custom_minimum_size = Vector2(0, 12)
@@ -2455,7 +2608,27 @@ func _render_events() -> void:
 		if ev is Dictionary:
 			merged.append(ev)
 	merged.reverse()
+	var last_tick_s := ""
 	for ev: Dictionary in merged.slice(0, 36):
+		var tick_var: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
+		var group_tick := str(int(tick_var)) if tick_var is float else str(tick_var)
+		if group_tick != last_tick_s:
+			last_tick_s = group_tick
+			var sep := HBoxContainer.new()
+			sep.add_theme_constant_override("separation", 7)
+			var sline := ColorRect.new()
+			sline.color = Color("e6ebf1")
+			sline.custom_minimum_size = Vector2(10, 1)
+			sline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sep.add_child(sline)
+			sep.add_child(_lbl("t" + group_tick, 9, Color("9aa7b4"), true))
+			var sline2 := ColorRect.new()
+			sline2.color = Color("e6ebf1")
+			sline2.custom_minimum_size = Vector2(0, 1)
+			sline2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sline2.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sep.add_child(sline2)
+			inner.add_child(sep)
 		var actor := str(ev.get("actor", ""))
 		var mine := actor.contains("desktop") or actor.contains("player")
 		if _filter_mine and not mine:
@@ -2475,7 +2648,12 @@ func _render_events() -> void:
 		var r := HBoxContainer.new()
 		r.add_theme_constant_override("separation", 9)
 		var railv := VBoxContainer.new()
-		railv.add_child(_dot(color, 8))
+		if etype.contains("accepted"):
+			railv.add_child(_lbl("✓", 10, color))
+		elif etype.contains("rejected") or etype.contains("failed"):
+			railv.add_child(_lbl("✕", 10, color))
+		else:
+			railv.add_child(_dot(color, 8))
 		var rail := ColorRect.new()
 		rail.color = Color("dbe2ea")
 		rail.custom_minimum_size = Vector2(1, 10)
@@ -2491,11 +2669,6 @@ func _render_events() -> void:
 		if mine:
 			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
 		trr.add_child(_spacer_h())
-		var tick_v: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
-		var tick_s := str(tick_v)
-		if tick_v is float:
-			tick_s = str(int(tick_v))
-		trr.add_child(_lbl("t" + tick_s, 9, INK3, true))
 		col.add_child(trr)
 		var detail := str(ev.get("status", ev.get("shock_id",
 			ev.get("lever", ev.get("reason", "")))))
@@ -2598,6 +2771,28 @@ func _render_crisis() -> void:
 
 
 # ================= 绘图控件 =================
+class _Spinner extends Control:
+	func _draw() -> void:
+		var c := size / 2.0
+		var r := minf(size.x, size.y) / 2.0 - 3.0
+		draw_arc(c, r, 0, TAU, 40, Color("dbe2ea"), 3.0, true)
+		draw_arc(c, r, 0, TAU * 0.28, 16, Color("0f9d90"), 3.0, true)
+
+
+class _YearBar extends Control:
+	var frac := 0.0
+
+	func _draw() -> void:
+		var h := 3.0
+		var y := (size.y - h) / 2.0
+		draw_rect(Rect2(0, y, size.x, h), Color("e6ebf1"))
+		draw_rect(Rect2(0, y, size.x * frac, h), Color("0f9d90"))
+		for q in [0.25, 0.5, 0.75]:
+			draw_rect(Rect2(size.x * q - 0.5, y - 1.5, 1.0, h + 3.0),
+				Color("cdd7e2"))
+		draw_circle(Vector2(size.x * frac, y + h / 2.0), 2.6, Color("0c8579"))
+
+
 class _SparkLine extends Control:
 	var values: Array = []
 	var color: Color = Color("0f9d90")
@@ -2661,9 +2856,18 @@ class _FocusChart extends Control:
 	var series: Array = []
 	var shock_active := false
 	var font: Font
+	var hover_pos := Vector2(-1, -1)
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseMotion:
+			hover_pos = (event as InputEventMouseMotion).position
+			queue_redraw()
+
+	func _plot_rect() -> Rect2:
+		return Rect2(Vector2(8, 8), size - Vector2(88, 30))
 
 	func _draw() -> void:
-		var plot := Rect2(Vector2(8, 8), size - Vector2(16, 30))
+		var plot := _plot_rect()
 		for i in range(5):
 			var y := plot.position.y + plot.size.y * float(i) / 4.0
 			draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
@@ -2676,9 +2880,12 @@ class _FocusChart extends Control:
 				Vector2(band.position.x + 4, plot.position.y + 14), "冲击生效中",
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("cc5a44"))
 		var any := false
+		var endpoints: Array = []
+		var all_pts: Array = []
 		for s: Dictionary in series:
 			var vals: Array = s.get("vals", [])
 			if vals.size() < 2:
+				all_pts.append(PackedVector2Array())
 				continue
 			any = true
 			var lo := INF
@@ -2695,6 +2902,7 @@ class _FocusChart extends Control:
 				pts.append(Vector2(
 					plot.position.x + plot.size.x * float(i) / float(n - 1),
 					plot.end.y - plot.size.y * (float(vals[i]) - lo) / span))
+			all_pts.append(pts)
 			var scolor: Color = s.get("color", Color.GRAY)
 			if s.get("fill", false) and n >= 2:
 				var poly := PackedVector2Array(pts)
@@ -2703,11 +2911,58 @@ class _FocusChart extends Control:
 				draw_colored_polygon(poly, Color(scolor.r, scolor.g, scolor.b, 0.07))
 			draw_polyline(pts, scolor, float(s.get("width", 2.0)), true)
 			draw_circle(pts[n - 1], 3.0, scolor)
+			endpoints.append({"y": pts[n - 1].y, "color": scolor,
+				"text": str(s.get("last_text", ""))})
+		# 右缘末值标签(避让重叠)
+		endpoints.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["y"]) < float(b["y"]))
+		var last_y := -INF
+		for ep: Dictionary in endpoints:
+			var y := maxf(float(ep["y"]), last_y + 15.0)
+			last_y = y
+			draw_string(font, Vector2(plot.end.x + 8.0, y + 4.0), str(ep["text"]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, ep["color"])
+		# 悬停十字线 + 取值气泡
+		if any and plot.has_point(hover_pos):
+			draw_line(Vector2(hover_pos.x, plot.position.y),
+				Vector2(hover_pos.x, plot.end.y), Color(0.16, 0.25, 0.35, 0.25), 1.0)
+			var frac := (hover_pos.x - plot.position.x) / plot.size.x
+			var lines: Array = []
+			for si in series.size():
+				var pts: PackedVector2Array = all_pts[si]
+				if pts.is_empty():
+					continue
+				var idx := clampi(roundi(frac * float(pts.size() - 1)), 0, pts.size() - 1)
+				var sdef: Dictionary = series[si]
+				draw_circle(pts[idx], 4.2, Color.WHITE)
+				draw_circle(pts[idx], 3.0, sdef.get("color", Color.GRAY))
+				var vals: Array = sdef.get("vals", [])
+				lines.append({"color": sdef.get("color", Color.GRAY),
+					"text": "%s  %s" % [str(sdef.get("label", "")),
+						str(sdef.get("fmt", Callable()).call(float(vals[idx]))
+							if sdef.get("fmt") is Callable else "%.3f" % float(vals[idx]))]})
+			if not lines.is_empty():
+				var bw := 0.0
+				for ln: Dictionary in lines:
+					bw = maxf(bw, font.get_string_size(str(ln["text"]),
+						HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x)
+				var bh := float(lines.size()) * 15.0 + 10.0
+				var bx := minf(hover_pos.x + 12.0, plot.end.x - bw - 18.0)
+				var by := plot.position.y + 6.0
+				draw_rect(Rect2(bx, by, bw + 16.0, bh), Color(1, 1, 1, 0.95))
+				draw_rect(Rect2(bx, by, bw + 16.0, bh), Color("d3dce6"), false, 1.0)
+				for li in lines.size():
+					var ln: Dictionary = lines[li]
+					draw_circle(Vector2(bx + 8.0, by + 12.0 + float(li) * 15.0), 3.0,
+						ln["color"])
+					draw_string(font, Vector2(bx + 15.0, by + 16.0 + float(li) * 15.0),
+						str(ln["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 10,
+						Color("2a3948"))
 		if not any:
 			draw_string(font, plot.get_center() + Vector2(-140, 0),
 				"推进模拟以积累公报序列(发布日历驱动)",
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("60758d"))
-		draw_string(font, Vector2(plot.end.x - 80, size.y - 6),
+		draw_string(font, Vector2(plot.end.x - 66, size.y - 6),
 			"发布时间 →", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("849098"))
 
 
@@ -2751,8 +3006,13 @@ class _RelationsMap extends Control:
 			var b := center - dir * 20.0
 			var perp := Vector2(-dir.y, dir.x)
 			var wexp := 1.0 + 5.0 * _norm(exports, i)
-			draw_line(a + perp * 5.0, b + perp * 5.0,
-				Color(0.122, 0.616, 0.388, 0.85), wexp, true)
+			var exp_color := Color(0.122, 0.616, 0.388, 0.85)
+			draw_line(a + perp * 5.0, b + perp * 5.0, exp_color, wexp, true)
+			var tip := (a + perp * 5.0).lerp(b + perp * 5.0, 0.62)
+			var ah := 4.0 + wexp
+			draw_colored_polygon(PackedVector2Array([
+				tip + dir * ah, tip - dir * ah * 0.4 + perp * ah * 0.6,
+				tip - dir * ah * 0.4 - perp * ah * 0.6]), exp_color)
 			var wimp := 1.0 + 5.0 * _norm(imports, i)
 			var total := (b - a).length()
 			var steps := maxi(1, int(total / 8.0))
