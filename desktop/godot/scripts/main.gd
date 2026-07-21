@@ -48,11 +48,11 @@ const TILE_SPEC := [
 ]
 
 const SEAT_LIST := [
-	{"id": "treasury", "name": "财政部", "tag": "财政 · fiscal"},
-	{"id": "central_bank", "name": "央行", "tag": "货币 · monetary"},
-	{"id": "regulator", "name": "监管", "tag": "审慎 · prudential"},
-	{"id": "external_affairs", "name": "外交贸易", "tag": "对外 · external"},
-	{"id": "energy", "name": "能源", "tag": "能源 · energy"},
+	{"id": "treasury", "name": "财政部", "tag": "财政 · fiscal", "color": Color("2f6fd0")},
+	{"id": "central_bank", "name": "央行", "tag": "货币 · monetary", "color": Color("0f9d90")},
+	{"id": "regulator", "name": "监管", "tag": "审慎 · prudential", "color": Color("7a4fd0")},
+	{"id": "external_affairs", "name": "外交贸易", "tag": "对外 · external", "color": Color("c17d16")},
+	{"id": "energy", "name": "能源", "tag": "能源 · energy", "color": Color("b0641f")},
 ]
 
 const GROUP_CN := {
@@ -283,6 +283,12 @@ var _crisis_dismissed := ""
 var _sans: SystemFont
 var _mono: SystemFont
 var _n: Dictionary = {}
+var _last_tab := ""
+var _last_seat := ""
+var _last_page := ""
+var _last_release_at: Dictionary = {}   # sid -> released_at(磁贴闪光判定)
+var _crisis_was_visible := false
+var _scroll_mem: Dictionary = {}        # key -> scroll_vertical
 
 
 func _ready() -> void:
@@ -316,6 +322,32 @@ func _ready() -> void:
 	var pre_seat := OS.get_environment("MACRO_SIM_CAPTURE_SEAT")
 	if not pre_seat.is_empty():
 		_active_seat = pre_seat
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey):
+		return
+	var key := event as InputEventKey
+	if not key.pressed or key.echo:
+		return
+	match key.keycode:
+		KEY_SPACE:
+			_toggle_play()
+		KEY_RIGHT, KEY_PERIOD:
+			if _awaiting():
+				_show_hint("本届会议未闭合:请「提交提案」或「本次不动」。")
+				_render()
+			else:
+				_send({"command": "advance", "ticks": 1})
+		KEY_1, KEY_2, KEY_3, KEY_4:
+			_speed = SPEEDS[key.keycode - KEY_1]
+			_render()
+		KEY_G:
+			(_n["god_cb"] as CheckBox).button_pressed = not _god
+		KEY_ESCAPE:
+			if _demo_crisis:
+				_demo_crisis = false
+				_render()
 
 
 # ================= 通信 =================
@@ -502,6 +534,19 @@ func _world() -> Dictionary:
 	return _snapshot.get("world", {})
 
 
+func _flag(i: int, fsize := Vector2(18, 12)) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = fsize
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var color: Color = ECON_COLORS[i % 3]
+	c.draw.connect(func() -> void:
+		c.draw_rect(Rect2(Vector2.ZERO, Vector2(fsize.x, fsize.y * 0.62)), color)
+		c.draw_rect(Rect2(Vector2(0, fsize.y * 0.62),
+			Vector2(fsize.x, fsize.y * 0.38)), color.lightened(0.55))
+		c.draw_rect(Rect2(Vector2.ZERO, fsize), Color(0, 0, 0, 0.10), false, 1.0))
+	return c
+
+
 func _cn(lever_name: String) -> String:
 	return str(LEVER_CN.get(lever_name, lever_name))
 
@@ -527,17 +572,22 @@ func _build_theme() -> void:
 	t.set_stylebox("pressed", "Button", _sb(TEAL_BG, TEAL_BD, 8, 7))
 	t.set_stylebox("disabled", "Button", _sb(Color("eef1f5"), LINE, 8, 7))
 	t.set_color("font_disabled_color", "Button", Color("849098"))
-	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12))
+	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12, 10))
 	theme = t
 
 
-func _sb(bg: Color, border: Color, radius: int, margin: int) -> StyleBoxFlat:
+func _sb(bg: Color, border: Color, radius: int, margin: int,
+		shadow := 0) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
 	s.border_color = border
 	s.set_border_width_all(1)
 	s.set_corner_radius_all(radius)
 	s.set_content_margin_all(margin)
+	if shadow > 0:
+		s.shadow_color = Color(0.09, 0.14, 0.20, 0.10)
+		s.shadow_size = shadow
+		s.shadow_offset = Vector2(0, shadow / 3.0)
 	return s
 
 
@@ -598,6 +648,30 @@ func _btn(text: String, cb: Callable, primary := false) -> Button:
 	return b
 
 
+func _fade_in(node: Control) -> void:
+	node.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(node, "modulate:a", 1.0, 0.16)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+func _keep_scroll(key: String, scroll: ScrollContainer) -> void:
+	## 重建前调用:记录;重建后 restore(延迟一帧生效)
+	_scroll_mem[key] = scroll.scroll_vertical
+
+
+func _restore_scroll(key: String, scroll: ScrollContainer) -> void:
+	if _scroll_mem.has(key):
+		scroll.set_deferred("scroll_vertical", int(_scroll_mem[key]))
+
+
+func _apply_cursors(node: Node) -> void:
+	if node is Button or node is CheckBox or node is CheckButton or node is LineEdit:
+		(node as Control).mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for child in node.get_children():
+		_apply_cursors(child)
+
+
 func _set_text(key: String, text: String) -> void:
 	if _n.has(key) and is_instance_valid(_n[key]):
 		(_n[key] as Label).text = text
@@ -644,6 +718,22 @@ func _build_ui() -> void:
 	bgr.color = GROUND
 	bgr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bgr)
+	var glow := TextureRect.new()
+	var grad := Gradient.new()
+	grad.colors = PackedColorArray([Color(1, 1, 1, 0.85), Color(1, 1, 1, 0.0)])
+	grad.offsets = PackedFloat32Array([0.0, 1.0])
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.fill = GradientTexture2D.FILL_RADIAL
+	gtex.fill_from = Vector2(0.5, 0.28)
+	gtex.fill_to = Vector2(0.5, 1.0)
+	gtex.width = 512
+	gtex.height = 512
+	glow.texture = gtex
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(glow)
 	var shell := VBoxContainer.new()
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shell.offset_left = 14
@@ -671,6 +761,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	var tbox := HBoxContainer.new()
 	tbox.add_theme_constant_override("separation", 9)
 	h.add_child(tbox)
+	tbox.add_child(_dot(TEAL, 9.0))
 	tbox.add_child(_lbl("宏观指挥室", 17, INK))
 	tbox.add_child(_lbl("MACRO COMMAND · v29", 11, Color("68788b"), true))
 	var op := PanelContainer.new()
@@ -678,7 +769,13 @@ func _build_header(shell: VBoxContainer) -> void:
 	var online := HBoxContainer.new()
 	online.add_theme_constant_override("separation", 6)
 	op.add_child(online)
-	online.add_child(_dot(TEAL))
+	var live_dot := _dot(TEAL)
+	online.add_child(live_dot)
+	var breath := create_tween().set_loops()
+	breath.tween_property(live_dot, "modulate:a", 0.35, 0.9)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	breath.tween_property(live_dot, "modulate:a", 1.0, 0.9)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	var conn := _lbl("连接中…", 12, TEAL)
 	_n["conn"] = conn
 	online.add_child(conn)
@@ -715,36 +812,48 @@ func _build_header(shell: VBoxContainer) -> void:
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
 	h.add_child(modes)
-	var god := CheckBox.new()
+	var god := Button.new()
+	god.toggle_mode = true
 	god.text = "上帝模式"
+	god.tooltip_text = "显示逐 tick 真值(快捷键 G)"
+	god.add_theme_font_size_override("font_size", 12)
 	god.toggled.connect(func(v: bool) -> void:
 		_god = v
 		_render())
+	_n["god_cb"] = god
 	h.add_child(god)
 	h.add_child(_vdiv())
-	h.add_child(_btn("步进", func() -> void:
+	var transport := PanelContainer.new()
+	transport.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 4))
+	var tp := HBoxContainer.new()
+	tp.add_theme_constant_override("separation", 4)
+	transport.add_child(tp)
+	var stepb := _btn("步进", func() -> void:
 		if _awaiting():
 			_show_hint("本届会议未闭合,推进被暂停:请「提交提案」或「本次不动」;紧急会议在红色面板里处置。切到「实时」模式可自动通过非紧急会议。")
 			_render()
 		else:
-			_send({"command": "advance", "ticks": 1})))
-	var play := _btn("播放", _toggle_play, true)
+			_send({"command": "advance", "ticks": 1}))
+	stepb.tooltip_text = "推进 1 天(快捷键 →)"
+	tp.add_child(stepb)
+	var play := _btn("▶  播放", _toggle_play, true)
+	play.tooltip_text = "播放 / 暂停(空格)"
+	play.custom_minimum_size = Vector2(96, 0)
 	_n["play"] = play
-	h.add_child(play)
-	var speeds := HBoxContainer.new()
-	speeds.add_theme_constant_override("separation", 2)
+	tp.add_child(play)
 	for s: int in SPEEDS:
 		var sbn := Button.new()
 		sbn.text = "%d×" % s
 		sbn.add_theme_font_override("font", _mono)
 		sbn.add_theme_font_size_override("font_size", 12)
+		sbn.tooltip_text = "推进速度(快捷键 1-4)"
 		var chosen := s
 		sbn.pressed.connect(func() -> void:
 			_speed = chosen
 			_render())
 		_n["speed_%d" % s] = sbn
-		speeds.add_child(sbn)
-	h.add_child(speeds)
+		tp.add_child(sbn)
+	h.add_child(transport)
 
 
 func _toggle_play() -> void:
@@ -887,6 +996,11 @@ func _build_workbench(wb: VBoxContainer) -> void:
 func _build_center(center: VBoxContainer) -> void:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 6)
+	var seg := PanelContainer.new()
+	seg.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 3))
+	var segh := HBoxContainer.new()
+	segh.add_theme_constant_override("separation", 2)
+	seg.add_child(segh)
 	for t: Array in [["focus", "宏观焦点"], ["panels", "指标全景"], ["world", "世界视图"]]:
 		var b := Button.new()
 		b.text = t[1]
@@ -895,7 +1009,8 @@ func _build_center(center: VBoxContainer) -> void:
 			_tab = tid
 			_render())
 		_n["tab_" + tid] = b
-		tabs.add_child(b)
+		segh.add_child(b)
+	tabs.add_child(seg)
 	tabs.add_child(_spacer_h())
 	var tabnote := _lbl("X 轴 = 发布时间(非参考期)", 10, INK3, true)
 	_n["tabnote"] = tabnote
@@ -1051,7 +1166,24 @@ func _render() -> void:
 	_set_text("cal", _cal_str(t))
 	_set_text("tick", "t = %d" % t)
 	(_n["awaitchip"] as Control).visible = _awaiting()
-	(_n["play"] as Button).text = "暂停" if _playing else "播放"
+	var playb := _n["play"] as Button
+	playb.text = "⏸  暂停" if _playing else "▶  播放"
+	if _playing:
+		playb.add_theme_stylebox_override("normal", _sb(TEAL, Color("0c8579"), 8, 7))
+		playb.add_theme_color_override("font_color", Color.WHITE)
+	else:
+		playb.add_theme_stylebox_override("normal", _sb(TEAL_BG, Color("59b7a8"), 8, 7))
+		playb.add_theme_color_override("font_color", TEAL_DK)
+	var godb := _n["god_cb"] as Button
+	if _god:
+		godb.add_theme_stylebox_override("normal", _sb(
+			Color(0.478, 0.31, 0.816, 0.14), PURPLE, 20, 6))
+		godb.add_theme_color_override("font_color", Color("5a36a8"))
+		godb.text = "◉ 上帝模式"
+	else:
+		godb.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 20, 6))
+		godb.add_theme_color_override("font_color", Color("586a7b"))
+		godb.text = "○ 上帝模式"
 	for m in ["interactive", "realtime"]:
 		var mb := _n["mode_" + m] as Button
 		if m == _mode:
@@ -1071,10 +1203,10 @@ func _render() -> void:
 	for tab in ["focus", "panels", "world"]:
 		var tb := _n["tab_" + tab] as Button
 		if tab == _tab:
-			tb.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 9, 8))
+			tb.add_theme_stylebox_override("normal", _sb(Color.WHITE, BLUE_BD, 18, 7, 5))
 			tb.add_theme_color_override("font_color", Color("1c4a8f"))
 		else:
-			tb.remove_theme_stylebox_override("normal")
+			tb.add_theme_stylebox_override("normal", _sb(Color(1, 1, 1, 0), Color(0, 0, 0, 0), 18, 7))
 			tb.add_theme_color_override("font_color", Color("586a7b"))
 	_set_text("tabnote", "X 轴 = 发布时间(非参考期)" if _tab == "focus"
 		else "上帝视角 · 逐 tick 真值(公报另见磁贴)")
@@ -1084,6 +1216,14 @@ func _render() -> void:
 	_render_center()
 	_render_events()
 	_render_crisis()
+	if _tab != _last_tab:
+		_fade_in(_n["center_body"] as Control)
+		_last_tab = _tab
+	if _active_seat != _last_seat or _active_group != _last_page:
+		_fade_in(_n["levers"] as Control)
+		_last_seat = _active_seat
+		_last_page = _active_group
+	_apply_cursors(self)
 	(_n["modal"] as Control).visible = not _confirm.is_empty()
 	if not _confirm.is_empty():
 		_set_text("modal_title", str(_confirm.get("title", "")))
@@ -1103,7 +1243,13 @@ func _render_tiles() -> void:
 		var tile := PanelContainer.new()
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.custom_minimum_size = Vector2(0, 118)
-		tile.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 11))
+		var trest := _sb(PANEL, LINE, 12, 11, 6)
+		var thover := _sb(PANEL, spec["color"] if spec["color"] is Color else LINE, 12, 11, 14)
+		tile.add_theme_stylebox_override("panel", trest)
+		tile.mouse_entered.connect(func() -> void:
+			tile.add_theme_stylebox_override("panel", thover))
+		tile.mouse_exited.connect(func() -> void:
+			tile.add_theme_stylebox_override("panel", trest))
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 4)
 		tile.add_child(v)
@@ -1118,6 +1264,20 @@ func _render_tiles() -> void:
 		var rel: Dictionary = by_id.get(sid, {})
 		var has := not rel.is_empty() and rel.get("value") != null
 		if has:
+			var rel_at := int(rel.get("released_at_tick", -1))
+			if int(_last_release_at.get(sid, -1)) != rel_at:
+				if _last_release_at.has(sid):
+					var tcolor: Color = spec["color"]
+					var flash := ColorRect.new()
+					flash.color = Color(tcolor.r, tcolor.g, tcolor.b, 0.16)
+					flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+					tile.add_child(flash)
+					var ftw := create_tween()
+					ftw.tween_property(flash, "modulate:a", 0.0, 0.9)\
+						.set_trans(Tween.TRANS_SINE)
+					ftw.tween_callback(flash.queue_free)
+				_last_release_at[sid] = rel_at
 			var vr := HBoxContainer.new()
 			vr.add_theme_constant_override("separation", 6)
 			vr.add_child(_lbl(_fmt_series(sid, float(rel.get("value"))), 21, spec["color"], true))
@@ -1161,6 +1321,8 @@ func _render_tiles() -> void:
 # ================= 工作台 =================
 func _render_workbench() -> void:
 	var lv := _n["levers"] as VBoxContainer
+	var lscroll := lv.get_parent() as ScrollContainer
+	_keep_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
 	for c in lv.get_children():
 		c.queue_free()
 	var open := _awaiting()
@@ -1174,11 +1336,13 @@ func _render_workbench() -> void:
 			if str(ctx.get("seat", "")) == sid:
 				n_open += 1
 		b.text = str(s["name"]) + (" ·%d" % n_open if n_open > 0 else "")
+		var scolor: Color = s["color"]
 		if sid == _active_seat:
-			b.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 8, 6))
-			b.add_theme_color_override("font_color", Color("1c4a8f"))
+			b.add_theme_stylebox_override("normal", _sb(
+				Color(scolor.r, scolor.g, scolor.b, 0.12), scolor, 8, 6))
+			b.add_theme_color_override("font_color", scolor.darkened(0.25))
 		else:
-			b.remove_theme_stylebox_override("normal")
+			b.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
 			b.add_theme_color_override("font_color", Color("586a7b"))
 	var cap_text := ""
 	for ctx: Dictionary in _contexts():
@@ -1273,6 +1437,7 @@ func _render_workbench() -> void:
 				pending_by, searching))
 		lv.add_child(cm)
 	_render_cart(open)
+	_restore_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
 
 
 func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
@@ -1285,9 +1450,15 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var pending := pending_by.has(name)
 	var row := PanelContainer.new()
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.add_theme_stylebox_override("panel", _sb(
-		Color("e6f5f0") if in_cart else Color.WHITE,
-		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 6))
+	var style_rest := _sb(Color("e6f5f0") if in_cart else Color.WHITE,
+		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 6)
+	var style_hover := _sb(Color("f2faf8") if not in_cart else Color("ddf1ea"),
+		TEAL_BD, 9, 6, 6)
+	row.add_theme_stylebox_override("panel", style_rest)
+	row.mouse_entered.connect(func() -> void:
+		row.add_theme_stylebox_override("panel", style_hover))
+	row.mouse_exited.connect(func() -> void:
+		row.add_theme_stylebox_override("panel", style_rest))
 	var r := HBoxContainer.new()
 	r.add_theme_constant_override("separation", 8)
 	row.add_child(r)
@@ -1710,6 +1881,7 @@ func _show_hint(text: String) -> void:
 			c.queue_free())
 	r.add_child(x)
 	slot.add_child(vp)
+	_fade_in(vp)
 
 
 func _show_verdict(v: Dictionary) -> void:
@@ -1752,6 +1924,7 @@ func _show_verdict(v: Dictionary) -> void:
 			c.queue_free())
 	r.add_child(x)
 	slot.add_child(vp)
+	_fade_in(vp)
 
 
 func _submit_cart() -> void:
@@ -1817,7 +1990,7 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	var chart := _FocusChart.new()
 	chart.custom_minimum_size = Vector2(0, 250)
 	chart.series = [
-		{"vals": _hist_vals("real_output"), "color": TEAL, "width": 2.4},
+		{"vals": _hist_vals("real_output"), "color": TEAL, "width": 2.4, "fill": true},
 		{"vals": _hist_vals("unemployment_rate"), "color": AMBER, "width": 1.8},
 		{"vals": _hist_vals("inflation"), "color": PURPLE, "width": 1.8},
 	]
@@ -1879,6 +2052,9 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
+	_restore_scroll("center:panels", scroll)
+	scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:panels"] = int(v))
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
@@ -1887,6 +2063,10 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	var latest: Dictionary = _snapshot.get("metrics", {})
 	for grp: Dictionary in PANEL_GROUPS:
 		var gp := PanelContainer.new()
+		var gcolor: Color = grp["color"]
+		var gsb := _sb(PANEL, Color(gcolor.r, gcolor.g, gcolor.b, 0.45), 13, 12, 8)
+		gsb.border_width_left = 4
+		gp.add_theme_stylebox_override("panel", gsb)
 		var gv := VBoxContainer.new()
 		gv.add_theme_constant_override("separation", 8)
 		gp.add_child(gv)
@@ -1942,6 +2122,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
+	_restore_scroll("center:world", scroll)
+	scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:world"] = int(v))
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
@@ -1962,11 +2145,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		card.add_child(cv)
 		var hr := HBoxContainer.new()
 		hr.add_theme_constant_override("separation", 7)
-		var flag := ColorRect.new()
-		flag.color = ECON_COLORS[i % 3]
-		flag.custom_minimum_size = Vector2(18, 12)
-		flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		hr.add_child(flag)
+		hr.add_child(_flag(i))
 		hr.add_child(_lbl(_country_name(i), 13, INK))
 		if mine:
 			hr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
@@ -1984,6 +2163,16 @@ func _render_world_tab(body: VBoxContainer) -> void:
 			r2.add_child(_spacer_h())
 			r2.add_child(_lbl(str(rr[1]), 12, ECON_COLORS[i % 3], true))
 			cv.add_child(r2)
+		var gspark := _SparkLine.new()
+		gspark.color = ECON_COLORS[i % 3]
+		gspark.custom_minimum_size = Vector2(0, 18)
+		var gvals: Array = []
+		for point: Dictionary in world.get("history", []):
+			var pe: Array = point.get("economies", [])
+			if i < pe.size():
+				gvals.append(float((pe[i] as Dictionary).get("real_output", 0.0)))
+		gspark.values = gvals
+		cv.add_child(gspark)
 		cards.add_child(card)
 	col.add_child(cards)
 	# --- 排名 ---
@@ -2028,11 +2217,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		var rr := HBoxContainer.new()
 		rr.add_theme_constant_override("separation", 9)
 		rr.add_child(_lbl("#%d" % (pos + 1), 12, INK3, true))
-		var flag := ColorRect.new()
-		flag.color = ECON_COLORS[i % 3]
-		flag.custom_minimum_size = Vector2(14, 10)
-		flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		rr.add_child(flag)
+		rr.add_child(_flag(i, Vector2(14, 10)))
 		rr.add_child(_lbl(_country_name(i), 12, INK_BODY))
 		var barwrap := Control.new()
 		barwrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2042,8 +2227,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		barwrap.draw.connect(func() -> void:
 			barwrap.draw_rect(Rect2(Vector2(0, 3),
 				Vector2(barwrap.size.x, 6)), Color("edf1f6"))
-			barwrap.draw_rect(Rect2(Vector2(0, 3),
-				Vector2(barwrap.size.x * frac, 6)), color))
+			var w := barwrap.size.x * frac
+			barwrap.draw_rect(Rect2(Vector2(0, 3), Vector2(w, 6)), color)
+			barwrap.draw_circle(Vector2(w, 6), 4.0, color))
 		rr.add_child(barwrap)
 		rr.add_child(_lbl(_fmt_val(rank_kind, float(row[1])), 12, ECON_COLORS[i % 3], true))
 		rv.add_child(rr)
@@ -2196,11 +2382,7 @@ func _bar_block(parent: VBoxContainer, title: String, vals: Array,
 	for i in vals.size():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 7)
-		var flag := ColorRect.new()
-		flag.color = ECON_COLORS[i % 3]
-		flag.custom_minimum_size = Vector2(10, 8)
-		flag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(flag)
+		row.add_child(_flag(i, Vector2(10, 8)))
 		var barwrap := Control.new()
 		barwrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		barwrap.custom_minimum_size = Vector2(0, 10)
@@ -2228,6 +2410,8 @@ func _hist_vals(sid: String) -> Array:
 # ================= 时间线 =================
 func _render_events() -> void:
 	var box := _n["events"] as VBoxContainer
+	var escroll := box.get_parent() as ScrollContainer
+	_keep_scroll("events", escroll)
 	for c in box.get_children():
 		c.queue_free()
 	var margin := MarginContainer.new()
@@ -2248,7 +2432,13 @@ func _render_events() -> void:
 		bp.add_child(bv)
 		var br := HBoxContainer.new()
 		br.add_theme_constant_override("separation", 7)
-		br.add_child(_dot(RED, 7))
+		var pulse_dot := _dot(RED, 7)
+		var ptw := create_tween().set_loops()
+		ptw.tween_property(pulse_dot, "modulate:a", 0.3, 0.6)\
+			.set_trans(Tween.TRANS_SINE)
+		ptw.tween_property(pulse_dot, "modulate:a", 1.0, 0.6)\
+			.set_trans(Tween.TRANS_SINE)
+		br.add_child(pulse_dot)
 		br.add_child(_lbl("冲击预告", 10, Color("cc5a44")))
 		br.add_child(_spacer_h())
 		br.add_child(_lbl("t%s" % str((bulletin as Dictionary).get("start_tick", "?")),
@@ -2301,17 +2491,22 @@ func _render_events() -> void:
 		if mine:
 			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
 		trr.add_child(_spacer_h())
-		trr.add_child(_lbl("t%s" % str(ev.get("boundary_tick", ev.get("tick", "?"))),
-			9, INK3, true))
+		var tick_v: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
+		var tick_s := str(tick_v)
+		if tick_v is float:
+			tick_s = str(int(tick_v))
+		trr.add_child(_lbl("t" + tick_s, 9, INK3, true))
 		col.add_child(trr)
 		var detail := str(ev.get("status", ev.get("shock_id",
 			ev.get("lever", ev.get("reason", "")))))
-		if not detail.is_empty() and detail != "<null>":
+		if not detail.is_empty() and detail != "<null>" \
+				and not etype.ends_with(detail):
 			var dl := _lbl(detail, 12, Color("33424f"))
 			dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			col.add_child(dl)
 		r.add_child(col)
 		inner.add_child(r)
+	_restore_scroll("events", escroll)
 
 
 # ================= 危机遮罩 =================
@@ -2321,7 +2516,11 @@ func _render_crisis() -> void:
 	if not real_ctx.is_empty() \
 			and str(real_ctx.get("context_id", "")) == _crisis_dismissed:
 		on = _demo_crisis
-	(_n["crisis"] as Control).visible = on
+	var overlay := _n["crisis"] as Control
+	overlay.visible = on
+	if on and not _crisis_was_visible:
+		_fade_in(overlay)
+	_crisis_was_visible = on
 	if not on:
 		return
 	var ctx := _emergency_context()
@@ -2420,6 +2619,10 @@ class _SparkLine extends Control:
 			pts.append(Vector2(
 				2.0 + (size.x - 4.0) * float(i) / float(n - 1),
 				size.y - 2.0 - (size.y - 4.0) * (float(values[i]) - lo) / span))
+		var poly := PackedVector2Array(pts)
+		poly.append(Vector2(pts[n - 1].x, size.y - 1.0))
+		poly.append(Vector2(pts[0].x, size.y - 1.0))
+		draw_colored_polygon(poly, Color(color.r, color.g, color.b, 0.10))
 		draw_polyline(pts, color, 1.6, true)
 		draw_circle(pts[n - 1], 2.4, color)
 
@@ -2492,7 +2695,14 @@ class _FocusChart extends Control:
 				pts.append(Vector2(
 					plot.position.x + plot.size.x * float(i) / float(n - 1),
 					plot.end.y - plot.size.y * (float(vals[i]) - lo) / span))
-			draw_polyline(pts, s.get("color", Color.GRAY), float(s.get("width", 2.0)), true)
+			var scolor: Color = s.get("color", Color.GRAY)
+			if s.get("fill", false) and n >= 2:
+				var poly := PackedVector2Array(pts)
+				poly.append(Vector2(pts[n - 1].x, plot.end.y))
+				poly.append(Vector2(pts[0].x, plot.end.y))
+				draw_colored_polygon(poly, Color(scolor.r, scolor.g, scolor.b, 0.07))
+			draw_polyline(pts, scolor, float(s.get("width", 2.0)), true)
+			draw_circle(pts[n - 1], 3.0, scolor)
 		if not any:
 			draw_string(font, plot.get_center() + Vector2(-140, 0),
 				"推进模拟以积累公报序列(发布日历驱动)",
