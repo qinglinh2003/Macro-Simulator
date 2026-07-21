@@ -2064,6 +2064,15 @@ func _render_crisis() -> void:
 		if _demo_crisis:
 			_demo_crisis = false
 			_render()
+			return
+		# 危机面板无「加入提案」步骤:把白名单杠杆的编辑值直接装篮提交;
+		# 无编辑时等价「本次不动」,保证玩家总能走出紧急会议。
+		for lname: String in _edits.keys():
+			var linfo: Dictionary = _lever_info.get(lname, {})
+			if bool(linfo.get("emergency", false)):
+				_add_to_cart(linfo, _lever_current(linfo, {}))
+		if _cart.is_empty():
+			_submit_pass()
 		else:
 			_submit_cart())
 	submit.add_theme_stylebox_override("normal", _sb(RED, Color("c23f2a"), 9, 9))

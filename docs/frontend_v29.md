@@ -180,3 +180,38 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 - 图表/仪表盘遵循 Claude Code 的 **dataviz** skill 设计系统(形式启发式、色彩公式、明暗双主题)——HTML 原型与最终实现共用同一套视觉规范
 - UI 原型迭代路径:本文档 → claude.ai design 出视觉/交互稿 → Claude Code 以 HTML Artifact 实现可交互原型(artifact-design skill)接真快照数据回放 → 定稿后落 Godot/Web 实现
 - 后端命令扩展(§5.2)与前端原型可并行;协议先冻结本文档版本
+
+---
+
+## §8 v29.1 落地记录(2026-07-21 夜)
+
+设计模版:`docs/design/policy_room_v29_light.dc.html`(claude.ai 设计稿的 1:1 Godot 复现)。
+
+**协议 v2(macro_sim/desktop/runtime.py)**
+- 世界:三国耦合(奥雷利亚=ADVANCED / 博尔维亚=DEVELOPING / 佩特罗尼亚=PETROSTATE;
+  trade+capital+migration+dealer FX);玩家持 0 号经济体全部 5 席位,各配独立 HumanQueueOccupant。
+- `get_schema` → `{seats: {seat: schema×5}, levers(v1 兼容=treasury), protocol_version: 2}`;
+  102 旋钮 = 35+24+28+9+6。
+- `snapshot` 新增:
+  - `world.countries / world.latest / world.history(≤160 点)`:per-economy 6 指标 +
+    `e/nfa/current_account/migrant_stock/remittances/import_value/export_delivered_volume/
+    tariff_rev/dealer_valuation/peg_intact`(源:`World.world_records[-1]`)。
+  - `metrics/series` 扩到 54 键(9 组×6,均经 v124 records 实测存在)。
+  - `observation` = 五席位公报并集(operational/confidential 序列因玩家兼任央行/监管而可见)。
+- 空动作提案不产生判决 toast(仅真动作设置 `_pending_verdict_pid`)。
+
+**客户端(desktop/godot/scripts/main.gd)**
+- 席位切换 + 分组杠杆卡;控件族:数值步进(档=control_scale,域夹 max_step)/
+  choice 分段 / bool(STATE_TRANSITION 弹确认)/ 可空 None 切换 / economy_id 选国 /
+  economy_set 制裁行(OR 语义)。
+- 提案篮跨席位:按 decision_group 路由 resolve_context,提交闭合本届全部议题;
+  「本次不动」全过。实时模式 = 播放中自动通过非紧急会议。
+- 中央三 tab:宏观焦点(公报诚实信道)/ 指标全景(9×6 真值 spark)/ 世界视图
+  (三国卡 + 可切指标排名 + 6 指标三色对比 + 枢纽辐射关系图 + e/NFA/CA/移民/汇款条图)。
+- 危机遮罩:白名单编辑直接装篮提交;空编辑=本次不动,玩家不会被困。
+- 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT`(按目标 tick 推进,会议中自动 pass)。
+
+**已知边界(v30 候选)**
+- 三国均为玩家可见,但只有 0 号经济体可操控;assign_seat/save/load/schedule_shock 协议未开。
+- 贸易为 per-economy 向量(dealer 路由无双边矩阵),关系图为枢纽辐射而非国对国连线(诚实呈现)。
+- 世界 tab 数据为上帝视角;公报世界序列(exchange_rate/nfa/…)已在磁贴信道可用但未单独成板。
