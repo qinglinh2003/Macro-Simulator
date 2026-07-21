@@ -18,13 +18,17 @@ const SERIES_LABEL := {
 	"policy_rate": "利率(年化)", "gov_deficit_to_gdp": "赤字/GDP",
 	"avg_wage": "平均工资",
 }
-const INK := Color("dce7f2")
-const INK2 := Color("8ba3bc")
-const INK3 := Color("60758d")
-const ACCENT := Color("4fd1c5")
-const WARN := Color("f6ad55")
-const CRIT := Color("f56565")
-const GOOD := Color("68d391")
+const INK := Color("16283c")        # 藏青墨
+const INK2 := Color("5a6b7d")
+const INK3 := Color("93a0ad")
+const ACCENT := Color("1d4e89")     # 财经藏蓝
+const WARN := Color("b26a00")
+const CRIT := Color("b3261e")
+const GOOD := Color("1e7a46")
+const GROUND := Color("f7f5f1")     # 纸白
+const PANEL := Color("ffffff")
+const PANEL2 := Color("efece6")
+const LINE := Color("e0dcd2")
 
 var _client
 var _outbox: Array = []
@@ -137,16 +141,23 @@ func _capture_after_render(path: String) -> void:
 # ---------------- 主题与布局 ----------------
 func _build_theme() -> void:
 	var app_theme := Theme.new()
+	# CJK:Godot 默认字体无中文字形(乱码根因)——挂系统中文字体栈
+	var cjk := SystemFont.new()
+	cjk.font_names = PackedStringArray([
+		"Hiragino Sans GB", "STHeiti", "Heiti SC", "Arial Unicode MS",
+		"Microsoft YaHei", "Noto Sans CJK SC", "Helvetica Neue"])
+	app_theme.default_font = cjk
 	app_theme.default_font_size = 14
 	app_theme.set_color("font_color", "Label", INK)
 	app_theme.set_color("font_color", "Button", INK)
 	app_theme.set_color("font_color", "CheckBox", INK)
-	var button := _style(Color("18283b"), Color("314862"), 6, 6)
+	app_theme.set_color("font_pressed_color", "Button", Color.WHITE)
+	var button := _style(PANEL, LINE, 5, 6)
 	app_theme.set_stylebox("normal", "Button", button)
-	app_theme.set_stylebox("hover", "Button", _style(Color("213952"), ACCENT, 6, 6))
-	app_theme.set_stylebox("pressed", "Button", _style(Color("0d817d"), ACCENT, 6, 6))
-	app_theme.set_stylebox("disabled", "Button", _style(Color("111d2c"), Color("22334a"), 6, 6))
-	app_theme.set_stylebox("panel", "PanelContainer", _style(Color("0d1826"), Color("22334a"), 8, 10))
+	app_theme.set_stylebox("hover", "Button", _style(PANEL2, ACCENT, 5, 6))
+	app_theme.set_stylebox("pressed", "Button", _style(ACCENT, ACCENT, 5, 6))
+	app_theme.set_stylebox("disabled", "Button", _style(GROUND, LINE, 5, 6))
+	app_theme.set_stylebox("panel", "PanelContainer", _style(PANEL, LINE, 6, 10))
 	theme = app_theme
 
 
@@ -162,7 +173,7 @@ func _style(background: Color, border: Color, radius: int, margin: int = 8) -> S
 
 func _build_ui() -> void:
 	var background := ColorRect.new()
-	background.color = Color("07101c")
+	background.color = GROUND
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
 	var shell := VBoxContainer.new()
@@ -180,7 +191,11 @@ func _build_ui() -> void:
 	shell.add_child(header)
 	var title := Label.new()
 	title.text = "宏观政策室"
-	title.add_theme_font_size_override("font_size", 20)
+	var serif := SystemFont.new()
+	serif.font_names = PackedStringArray([
+		"Songti SC", "STSong", "SimSun", "Georgia", "serif"])
+	title.add_theme_font_override("font", serif)
+	title.add_theme_font_size_override("font_size", 21)
 	header.add_child(title)
 	var sub := Label.new()
 	sub.text = "v29 · 真引擎 · 财政席"
@@ -294,7 +309,7 @@ func _build_ui() -> void:
 	# 危机横幅
 	_banner = PanelContainer.new()
 	_banner.visible = false
-	_banner.add_theme_stylebox_override("panel", _style(Color("3a1512"), CRIT, 8, 12))
+	_banner.add_theme_stylebox_override("panel", _style(Color("f7e3e1"), CRIT, 6, 12))
 	shell.add_child(_banner)
 	var bb := HBoxContainer.new()
 	bb.add_theme_constant_override("separation", 12)
@@ -551,6 +566,7 @@ func _render_workbench() -> void:
 	var permitted: Dictionary = {}
 	for item: Dictionary in ctx.get("permitted_actions", []):
 		permitted[str(item.get("lever"))] = item
+	var current_policy: Dictionary = ctx.get("current_policy", {})
 	var pending_by_lever: Dictionary = {}
 	for p in _snapshot.get("pending", []):
 		if p is Dictionary:
@@ -563,14 +579,17 @@ func _render_workbench() -> void:
 		_levers_box.add_child(gh)
 		for lever: Dictionary in _groups[g]:
 			_levers_box.add_child(
-				_lever_row(lever, permitted, pending_by_lever, open, emg))
+				_lever_row(lever, permitted, pending_by_lever, open, emg, current_policy))
 	_render_cart(open)
 
 
 func _lever_row(lever: Dictionary, permitted: Dictionary, pending: Dictionary,
-		open: bool, emg: bool) -> Control:
+		open: bool, emg: bool, current_policy: Dictionary = {}) -> Control:
 	var name := str(lever.get("name"))
 	var perm: Dictionary = permitted.get(name, {})
+	if not perm.has("current_value") and current_policy.has(name):
+		perm = perm.duplicate()
+		perm["current_value"] = current_policy.get(name)
 	var allowed := open and bool(perm.get("allowed", false)) \
 		and (not emg or bool(lever.get("emergency", false)))
 	var row := HBoxContainer.new()
@@ -593,7 +612,7 @@ func _lever_row(lever: Dictionary, permitted: Dictionary, pending: Dictionary,
 	var cur_v: Variant = perm.get("current_value")
 	var cur := Label.new()
 	cur.custom_minimum_size = Vector2(92, 0)
-	cur.text = _lever_value_text(cur_v) if not perm.is_empty() else "—"
+	cur.text = _lever_value_text(cur_v) if perm.has("current_value") else "—"
 	var pend: Variant = pending.get(name)
 	if pend is Dictionary:
 		cur.text += "\n→ %s(t=%s)" % [

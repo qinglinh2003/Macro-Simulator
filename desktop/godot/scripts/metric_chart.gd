@@ -41,8 +41,8 @@ func _draw_spark() -> void:
 		points.append(Vector2(
 			2.0 + (size.x - 6.0) * float(i) / float(n - 1),
 			size.y - 3.0 - (size.y - 6.0) * (float(_spark_values[i]) - lo) / span))
-	draw_polyline(points, Color("8ba3bc"), 1.4, true)
-	draw_circle(points[n - 1], 2.4, Color("4fd1c5"))
+	draw_polyline(points, Color("5a6b7d"), 1.4, true)
+	draw_circle(points[n - 1], 2.4, Color("1d4e89"))
 
 
 func _draw() -> void:
@@ -50,15 +50,15 @@ func _draw() -> void:
 		_draw_spark()
 		return
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("101a29")
-	style.border_color = Color("243750")
+	style.bg_color = Color("ffffff")
+	style.border_color = Color("e0dcd2")
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(12)
 	draw_style_box(style, Rect2(Vector2.ZERO, size))
 	var plot := Rect2(Vector2(46, 34), size - Vector2(66, 66))
 	for i in range(5):
 		var y := plot.position.y + plot.size.y * float(i) / 4.0
-		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), Color("213149"), 1.0)
+		draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), Color("edeae3"), 1.0)
 	draw_string(ThemeDB.fallback_font, Vector2(16, 22), "ECONOMIC PULSE", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("7890aa"))
 	draw_string(ThemeDB.fallback_font, Vector2(size.x - 270, 22), "Output", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("4fd1c5"))
 	draw_string(ThemeDB.fallback_font, Vector2(size.x - 205, 22), "Unemployment", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("f6ad55"))
