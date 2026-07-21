@@ -200,6 +200,9 @@ var _schemas: Dictionary = {}          # seat -> schema dict
 var _lever_info: Dictionary = {}       # lever -> lever dict (all seats merged)
 var _lever_group: Dictionary = {}      # lever -> decision_group
 var _active_seat := "treasury"
+var _active_group := "all"             # 二级页签:decision_group 或 "all"
+var _expanded_lever := ""              # 手风琴:当前展开的旋钮
+var _search := ""
 var _edits: Dictionary = {}            # lever -> 本地编辑值(未入篮)
 var _cart: Array = []                  # [{lever, from, to, value, group}]
 var _perm_cache: Dictionary = {}       # lever -> last permitted action(会议闭合时展示用)
@@ -715,6 +718,8 @@ func _build_workbench(wb: VBoxContainer) -> void:
 		var sid := str(s["id"])
 		b.pressed.connect(func() -> void:
 			_active_seat = sid
+			_active_group = "all"
+			_expanded_lever = ""
 			_render())
 		_n["seat_" + sid] = b
 		chips.add_child(b)
@@ -741,6 +746,31 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	var meet := _lbl("", 11, INK2)
 	_n["meeting"] = meet
 	mp.add_child(meet)
+	var sm := MarginContainer.new()
+	sm.add_theme_constant_override("margin_left", 13)
+	sm.add_theme_constant_override("margin_right", 13)
+	sm.add_theme_constant_override("margin_top", 4)
+	wb.add_child(sm)
+	var search := LineEdit.new()
+	search.placeholder_text = "搜索政策(中文或英文,跨席位)…"
+	search.add_theme_font_size_override("font_size", 12)
+	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
+	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, TEAL_BD, 8, 6))
+	search.text_changed.connect(func(text: String) -> void:
+		_search = text.strip_edges()
+		_render())
+	_n["search"] = search
+	sm.add_child(search)
+	var gm2 := MarginContainer.new()
+	gm2.add_theme_constant_override("margin_left", 13)
+	gm2.add_theme_constant_override("margin_right", 13)
+	gm2.add_theme_constant_override("margin_top", 5)
+	wb.add_child(gm2)
+	var gflow := HFlowContainer.new()
+	gflow.add_theme_constant_override("h_separation", 4)
+	gflow.add_theme_constant_override("v_separation", 4)
+	_n["group_chips"] = gflow
+	gm2.add_child(gflow)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	wb.add_child(scroll)
@@ -1108,31 +1138,120 @@ func _render_workbench() -> void:
 					pending_by[str((act as Dictionary).get("lever", ""))] = {
 						"value": (act as Dictionary).get("value"),
 						"effective_tick": (p as Dictionary).get("effective_tick", "?")}
+	# 二级页签:当前席位的 decision_group(搜索时隐藏)
+	var gflow := _n["group_chips"] as HFlowContainer
+	for c in gflow.get_children():
+		c.queue_free()
 	var groups := _seat_groups(_active_seat)
-	for g: String in groups.keys():
-		var gm := MarginContainer.new()
-		gm.add_theme_constant_override("margin_left", 12)
-		gm.add_theme_constant_override("margin_right", 12)
-		var gh := HBoxContainer.new()
-		gh.add_theme_constant_override("separation", 8)
-		gm.add_child(gh)
-		var g_open := not _context_for_group(g).is_empty()
-		gh.add_child(_dot(TEAL if g_open else LINE2, 6))
-		gh.add_child(_lbl(str(GROUP_CN.get(g, g)) + " · " + g.to_upper(), 10, INK3, true))
-		var rule := ColorRect.new()
-		rule.color = Color("e6ebf1")
-		rule.custom_minimum_size = Vector2(0, 1)
-		rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		gh.add_child(rule)
-		lv.add_child(gm)
-		for lever: Dictionary in groups[g]:
-			var cm := MarginContainer.new()
-			cm.add_theme_constant_override("margin_left", 12)
-			cm.add_theme_constant_override("margin_right", 12)
+	var searching := not _search.is_empty()
+	gflow.visible = not searching
+	if not searching:
+		var total := 0
+		for g: String in groups.keys():
+			total += (groups[g] as Array).size()
+		var tabs: Array = [["all", "全部", total]]
+		for g: String in groups.keys():
+			tabs.append([g, str(GROUP_CN.get(g, g)), (groups[g] as Array).size()])
+		if _active_group != "all" and not groups.has(_active_group):
+			_active_group = "all"
+		for tabdef: Array in tabs:
+			var gid := str(tabdef[0])
+			var b := Button.new()
+			b.text = "%s %d" % [tabdef[1], tabdef[2]]
+			b.add_theme_font_size_override("font_size", 11)
+			if gid == _active_group:
+				b.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 14, 5))
+				b.add_theme_color_override("font_color", TEAL_DK)
+			else:
+				b.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 14, 5))
+				b.add_theme_color_override("font_color", Color("586a7b"))
+			if gid != "all" and not _context_for_group(gid).is_empty():
+				b.text += " ●"
+			b.pressed.connect(func() -> void:
+				_active_group = gid
+				_expanded_lever = ""
+				_render())
+			gflow.add_child(b)
+	# 旋钮列表:搜索=跨席位;否则=当前席位+当前组;手风琴展开
+	var rows: Array = []   # [{lever, seat}]
+	if searching:
+		var needle := _search.to_lower()
+		for seat: String in _schemas.keys():
+			for lever: Dictionary in _schemas[seat].get("levers", []):
+				var lname := str(lever.get("name"))
+				if lname.to_lower().contains(needle) \
+						or _cn(lname).to_lower().contains(needle) \
+						or str(GROUP_CN.get(str(lever.get("decision_group", "")), "")).contains(_search):
+					rows.append({"lever": lever, "seat": seat})
+	else:
+		for g: String in groups.keys():
+			if _active_group != "all" and g != _active_group:
+				continue
+			for lever: Dictionary in groups[g]:
+				rows.append({"lever": lever, "seat": _active_seat})
+	if searching:
+		var sh := MarginContainer.new()
+		sh.add_theme_constant_override("margin_left", 12)
+		sh.add_child(_lbl("搜索「%s」· %d 项(全部席位)" % [_search, rows.size()],
+			10, INK3, true))
+		lv.add_child(sh)
+	for rowdef: Dictionary in rows:
+		var lever: Dictionary = rowdef["lever"]
+		var lname := str(lever.get("name"))
+		var cm := MarginContainer.new()
+		cm.add_theme_constant_override("margin_left", 12)
+		cm.add_theme_constant_override("margin_right", 12)
+		if lname == _expanded_lever:
 			cm.add_child(_lever_card(lever, permitted, pending_by, open, emg))
-			lv.add_child(cm)
+		else:
+			cm.add_child(_lever_row(lever, str(rowdef["seat"]), permitted,
+				pending_by, searching))
+		lv.add_child(cm)
 	_render_cart(open)
+
+
+func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
+		pending_by: Dictionary, show_seat: bool) -> Control:
+	## 收起态单行(Democracy 4 式):点击展开编辑器。
+	var name := str(lever.get("name"))
+	var perm: Dictionary = permitted.get(name, {})
+	var in_cart := _cart.any(func(c: Dictionary) -> bool: return c["lever"] == name)
+	var edited := _edits.has(name)
+	var pending := pending_by.has(name)
+	var row := PanelContainer.new()
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.add_theme_stylebox_override("panel", _sb(
+		Color("e6f5f0") if in_cart else Color.WHITE,
+		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 8))
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 8)
+	row.add_child(r)
+	r.add_child(_dot(TEAL if (edited or in_cart) else (AMBER if pending else LINE2), 6))
+	r.add_child(_lbl(_cn(name), 12, INK))
+	if show_seat:
+		var seat_name := seat
+		for sdef: Dictionary in SEAT_LIST:
+			if str(sdef["id"]) == seat:
+				seat_name = str(sdef["name"])
+		r.add_child(_chip(seat_name, Color("3f6db2"), Color(0, 0, 0, 0), BLUE_BD, 9))
+	var en := _lbl(name, 9, Color("8a97a5"), true)
+	en.clip_text = true
+	en.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r.add_child(en)
+	var base_v: Variant = _lever_current(lever, perm)
+	r.add_child(_lbl(_lever_value_text(lever, base_v), 11,
+		TEAL_DK if (edited or pending) else INK2, true))
+	r.add_child(_lbl("▾", 11, INK3))
+	row.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton \
+				and (event as InputEventMouseButton).pressed \
+				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			_expanded_lever = name
+			if show_seat:
+				_active_seat = seat
+				_active_group = "all"
+			_render())
+	return row
 
 
 func _lever_current(lever: Dictionary, perm: Dictionary) -> Variant:
@@ -1160,6 +1279,14 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	card.add_child(v)
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 7)
+	var fold := Button.new()
+	fold.text = "▴"
+	fold.flat = true
+	fold.add_theme_font_size_override("font_size", 11)
+	fold.pressed.connect(func() -> void:
+		_expanded_lever = ""
+		_render())
+	tr.add_child(fold)
 	tr.add_child(_dot(TEAL if edited else LINE2, 6))
 	tr.add_child(_lbl(_cn(name), 13, INK))
 	var en := _lbl(name, 9, Color("8a97a5"), true)
