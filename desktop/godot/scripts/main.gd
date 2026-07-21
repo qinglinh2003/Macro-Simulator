@@ -64,6 +64,64 @@ const GROUP_CN := {
 	"energy_structure": "能源结构",
 }
 
+# 二级页:主题化拆分,每页 ≤8 个旋钮,保证单屏放完不滚动。
+# 未列入的新旋钮自动落入该席位「其他」页。
+const LEVER_PAGES := {
+	"treasury": [
+		{"name": "预算与赤字", "levers": ["gov_consumption_share", "gov_deficit_target",
+			"gov_investment_share", "deficit_u_cap", "deficit_u_ref",
+			"fiscal_uses_national_accounts_gdp"]},
+		{"name": "就业与保障", "levers": ["job_guarantee", "jg_wage_ratio",
+			"jg_public_works_share", "benefit_replacement", "benefit_income_floor",
+			"pension_replacement", "housing_permits"]},
+		{"name": "核心税率", "levers": ["tax_income_rate", "tax_profit_rate",
+			"tax_consumption_rate", "tax_wealth_rate", "tax_luxury_rate",
+			"tax_necessity_rate", "tax_energy_rate", "tax_energy_windfall"]},
+		{"name": "起征与住房土地", "levers": ["income_allowance", "wealth_allowance",
+			"housing_in_wealth_tax", "housing_property_tax", "housing_transfer_tax",
+			"land_fee_share", "land_fee_stock_elasticity"]},
+		{"name": "补贴与工资", "levers": ["min_wage", "energy_subsidy_rate",
+			"energy_subsidy_threshold", "energy_cap_compensation"]},
+		{"name": "债务管理", "levers": ["bond_coupon", "bond_finance_frac",
+			"bond_maturity"]},
+	],
+	"central_bank": [
+		{"name": "利率规则", "levers": ["monetary_regime", "manual_policy_rate",
+			"r_neutral", "r_max", "rate_inertia", "taylor_phi_pi", "taylor_phi_u"]},
+		{"name": "通胀目标与口径", "levers": ["inflation_target", "infl_ema_lambda",
+			"u_natural", "cb_core_inflation", "cb_log_inflation",
+			"cb_uses_fixed_basket_cpi"]},
+		{"name": "流动性操作", "levers": ["omo", "omo_reserve_target",
+			"omo_index_deposits", "omo_drain_frac", "reserve_floor_frac", "lolr"]},
+		{"name": "外汇操作", "levers": ["fx_regime", "peg_anchor", "peg_reserve_scale",
+			"capital_control", "external_interest_settlement_fraction"]},
+	],
+	"regulator": [
+		{"name": "银行审慎", "levers": ["bank_min_capital", "bank_target_capital_ratio",
+			"bank_capital_constraint", "bank_leverage_cap", "bank_exposure_limit",
+			"bank_bond_duration_limit", "bank_migrate_on_failure"]},
+		{"name": "按揭与住房", "levers": ["mortgage_ltv_cap", "mortgage_dsti_cap",
+			"mortgage_risk_weight", "mortgage_stress_rate_addon",
+			"mortgage_min_capital_ratio", "mortgage_underwriting"]},
+		{"name": "信贷与杠杆", "levers": ["kappa", "hh_credit_limit",
+			"firm_credit_min_dscr", "deposit_rate_floor", "margin_ltv", "margin_max",
+			"regulatory_firm_capital_haircut", "regulatory_firm_inventory_haircut"]},
+		{"name": "结构性法规", "levers": ["household_bankruptcy", "bankrupt_persist",
+			"bank_resolution_fund", "unified_bank_rwa", "mortgage_arrears_floor",
+			"mortgage_foreclosure_ltv", "rental_eviction_arrears"]},
+	],
+	"external_affairs": [
+		{"name": "贸易壁垒", "levers": ["tariff", "import_quota", "export_subsidy",
+			"sanctions_imposed_on"]},
+		{"name": "移民与汇款", "levers": ["immigration_cap", "emigration_cap",
+			"guest_worker_return", "remittance_tax", "outward_remittance_tax"]},
+	],
+	"energy": [
+		{"name": "能源操作与结构", "levers": ["energy_price_cap", "energy_rationing",
+			"spr_target_units", "spr_flow_cap", "soe_price_at_cost", "soe_efirm"]},
+	],
+}
+
 const LEVER_CN := {
 	# 债务管理
 	"bond_coupon": "国债票息率", "bond_finance_frac": "赤字债券融资比例",
@@ -200,7 +258,7 @@ var _schemas: Dictionary = {}          # seat -> schema dict
 var _lever_info: Dictionary = {}       # lever -> lever dict (all seats merged)
 var _lever_group: Dictionary = {}      # lever -> decision_group
 var _active_seat := "treasury"
-var _active_group := "all"             # 二级页签:decision_group 或 "all"
+var _active_group := ""                # 二级主题页名(空=该席位第一页)
 var _expanded_lever := ""              # 手风琴:当前展开的旋钮
 var _search := ""
 var _edits: Dictionary = {}            # lever -> 本地编辑值(未入篮)
@@ -349,6 +407,30 @@ func _index_schema() -> void:
 			var name := str(lever.get("name"))
 			_lever_info[name] = lever
 			_lever_group[name] = str(lever.get("decision_group", ""))
+
+
+func _seat_pages(seat: String) -> Array:
+	## 主题页定义 + 该席位未收录旋钮兜底成「其他」页;返回 [{name, levers:[lever dict]}]
+	var by_name: Dictionary = {}
+	for lever: Dictionary in _schemas.get(seat, {}).get("levers", []):
+		by_name[str(lever.get("name"))] = lever
+	var out: Array = []
+	var used: Dictionary = {}
+	for pg: Dictionary in LEVER_PAGES.get(seat, []):
+		var levers: Array = []
+		for lname in pg["levers"]:
+			if by_name.has(str(lname)):
+				levers.append(by_name[str(lname)])
+				used[str(lname)] = true
+		if not levers.is_empty():
+			out.append({"name": pg["name"], "levers": levers})
+	var leftover: Array = []
+	for lname: String in by_name.keys():
+		if not used.has(lname):
+			leftover.append(by_name[lname])
+	if not leftover.is_empty():
+		out.append({"name": "其他", "levers": leftover})
+	return out
 
 
 func _seat_groups(seat: String) -> Dictionary:
@@ -718,25 +800,12 @@ func _build_workbench(wb: VBoxContainer) -> void:
 		var sid := str(s["id"])
 		b.pressed.connect(func() -> void:
 			_active_seat = sid
-			_active_group = "all"
+			_active_group = ""
 			_expanded_lever = ""
 			_render())
 		_n["seat_" + sid] = b
 		chips.add_child(b)
 	head.add_child(chips)
-	var srow := HBoxContainer.new()
-	srow.add_theme_constant_override("separation", 8)
-	var stitle := _lbl("财政部", 15, INK)
-	_n["seat_title"] = stitle
-	srow.add_child(stitle)
-	var stag := _chip("财政 · fiscal", Color("647585"), Color(0, 0, 0, 0), LINE2)
-	_n["seat_tag"] = stag
-	srow.add_child(stag)
-	srow.add_child(_spacer_h())
-	var cap := _lbl("行政容量 —", 10, INK3, true)
-	_n["cap"] = cap
-	srow.add_child(cap)
-	head.add_child(srow)
 	wb.add_child(_hrule())
 	var mp := MarginContainer.new()
 	mp.add_theme_constant_override("margin_left", 13)
@@ -1111,20 +1180,13 @@ func _render_workbench() -> void:
 		else:
 			b.remove_theme_stylebox_override("normal")
 			b.add_theme_color_override("font_color", Color("586a7b"))
-	var seat_spec: Dictionary = SEAT_LIST[0]
-	for s: Dictionary in SEAT_LIST:
-		if str(s["id"]) == _active_seat:
-			seat_spec = s
-	_set_text("seat_title", str(seat_spec["name"]))
-	((_n["seat_tag"] as PanelContainer).get_child(0) as Label).text = str(seat_spec["tag"])
-	var cap_text := "行政容量 —"
+	var cap_text := ""
 	for ctx: Dictionary in _contexts():
 		if str(ctx.get("seat", "")) == _active_seat and ctx.get("admin_remaining") != null:
-			cap_text = "行政容量 " + str(ctx.get("admin_remaining"))
+			cap_text = " · 行政容量 " + str(ctx.get("admin_remaining"))
 			break
-	_set_text("cap", cap_text)
-	_set_text("meeting", ("🚨 紧急会议 · 仅白名单杠杆可动" if emg
-		else "例会开启(%d 个议题)· 调整杠杆后「加入提案」" % _contexts().size()) if open
+	_set_text("meeting", (("🚨 紧急会议 · 仅白名单杠杆可动" if emg
+		else "例会开启(%d 议题)· 调整杠杆后「加入提案」" % _contexts().size()) + cap_text) if open
 		else "会议未开 · 只读(推进至会议自动暂停)")
 	var permitted: Dictionary = {}
 	for ctx: Dictionary in _contexts():
@@ -1138,41 +1200,44 @@ func _render_workbench() -> void:
 					pending_by[str((act as Dictionary).get("lever", ""))] = {
 						"value": (act as Dictionary).get("value"),
 						"effective_tick": (p as Dictionary).get("effective_tick", "?")}
-	# 二级页签:当前席位的 decision_group(搜索时隐藏)
+	# 二级页签:主题页(每页 ≤8,单屏无滚动;搜索时隐藏)
 	var gflow := _n["group_chips"] as HFlowContainer
 	for c in gflow.get_children():
 		c.queue_free()
-	var groups := _seat_groups(_active_seat)
 	var searching := not _search.is_empty()
 	gflow.visible = not searching
-	if not searching:
-		var total := 0
-		for g: String in groups.keys():
-			total += (groups[g] as Array).size()
-		var tabs: Array = [["all", "全部", total]]
-		for g: String in groups.keys():
-			tabs.append([g, str(GROUP_CN.get(g, g)), (groups[g] as Array).size()])
-		if _active_group != "all" and not groups.has(_active_group):
-			_active_group = "all"
-		for tabdef: Array in tabs:
-			var gid := str(tabdef[0])
+	var pages := _seat_pages(_active_seat)
+	if not searching and not pages.is_empty():
+		var page_names: Array = []
+		for pg: Dictionary in pages:
+			page_names.append(str(pg["name"]))
+		if not page_names.has(_active_group):
+			_active_group = str(page_names[0])
+		for pg: Dictionary in pages:
+			var pname := str(pg["name"])
 			var b := Button.new()
-			b.text = "%s %d" % [tabdef[1], tabdef[2]]
+			b.text = "%s %d" % [pname, (pg["levers"] as Array).size()]
 			b.add_theme_font_size_override("font_size", 11)
-			if gid == _active_group:
+			if pname == _active_group:
 				b.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 14, 5))
 				b.add_theme_color_override("font_color", TEAL_DK)
 			else:
 				b.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 14, 5))
 				b.add_theme_color_override("font_color", Color("586a7b"))
-			if gid != "all" and not _context_for_group(gid).is_empty():
+			var live := false
+			for lever: Dictionary in pg["levers"]:
+				if not _context_for_group(str(_lever_group.get(
+						str(lever.get("name")), ""))).is_empty():
+					live = true
+					break
+			if live:
 				b.text += " ●"
 			b.pressed.connect(func() -> void:
-				_active_group = gid
+				_active_group = pname
 				_expanded_lever = ""
 				_render())
 			gflow.add_child(b)
-	# 旋钮列表:搜索=跨席位;否则=当前席位+当前组;手风琴展开
+	# 旋钮列表:搜索=跨席位;否则=当前主题页(单屏);手风琴展开
 	var rows: Array = []   # [{lever, seat}]
 	if searching:
 		var needle := _search.to_lower()
@@ -1184,10 +1249,10 @@ func _render_workbench() -> void:
 						or str(GROUP_CN.get(str(lever.get("decision_group", "")), "")).contains(_search):
 					rows.append({"lever": lever, "seat": seat})
 	else:
-		for g: String in groups.keys():
-			if _active_group != "all" and g != _active_group:
+		for pg: Dictionary in pages:
+			if str(pg["name"]) != _active_group:
 				continue
-			for lever: Dictionary in groups[g]:
+			for lever: Dictionary in pg["levers"]:
 				rows.append({"lever": lever, "seat": _active_seat})
 	if searching:
 		var sh := MarginContainer.new()
@@ -1222,7 +1287,7 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	row.add_theme_stylebox_override("panel", _sb(
 		Color("e6f5f0") if in_cart else Color.WHITE,
-		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 8))
+		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 6))
 	var r := HBoxContainer.new()
 	r.add_theme_constant_override("separation", 8)
 	row.add_child(r)
@@ -1249,7 +1314,13 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 			_expanded_lever = name
 			if show_seat:
 				_active_seat = seat
-				_active_group = "all"
+				_active_group = ""
+				for pg: Dictionary in _seat_pages(seat):
+					for lv2: Dictionary in pg["levers"]:
+						if str(lv2.get("name")) == name:
+							_active_group = str(pg["name"])
+				_search = ""
+				(_n["search"] as LineEdit).text = ""
 			_render())
 	return row
 
