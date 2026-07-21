@@ -1,90 +1,110 @@
 extends Control
-## 宏观政策室 v29 — 公报制驾驶舱 + schema 驱动工作台 + 原子提案 + 危机横幅。
-## 前端零经济逻辑:数据全部来自 worker 快照,修改全部走提案 API。
+## 宏观指挥室 v29 — 1:1 复现 docs/design/policy_room_v29_light.dc.html。
+## 前端零经济逻辑:真数据来自 worker;多席位/世界视图等后端未覆盖处以 β/演示标注。
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
-const MetricChartScript = preload("res://scripts/metric_chart.gd")
 
 const TPY := 365
-const QT := 91
 const SPEEDS := [1, 5, 15, 60]
-const HEADLINE := [
-	"real_output", "unemployment_rate", "inflation", "price_index",
-	"policy_rate", "gov_deficit_to_gdp", "avg_wage",
+
+# ---- 设计系统(设计稿原色) ----
+const GROUND := Color("e9edf2")
+const PANEL := Color("fbfcfd")          # 近似 #ffffff→#f6f8fb 渐变
+const PANEL2 := Color("f1f4f8")
+const PANEL3 := Color("f5f7fb")
+const LINE := Color("dde4ec")
+const LINE2 := Color("d3dce6")
+const INK := Color("16232f")
+const INK_BODY := Color("2a3948")
+const INK2 := Color("5e6f81")
+const INK3 := Color("71808f")
+const TEAL := Color("0f9d90")
+const TEAL_BG := Color("e2f4f1")
+const TEAL_BD := Color("9ad9d0")
+const TEAL_DK := Color("0c8579")
+const BLUE := Color("2f6fd0")
+const BLUE_BG := Color("e6effb")
+const BLUE_BD := Color("b6d1f2")
+const AMBER := Color("c17d16")
+const AMBER_BG := Color("fbf0dc")
+const AMBER_BD := Color("ecd3a0")
+const RED := Color("d24a34")
+const RED_BG := Color("fdeee9")
+const RED_BD := Color("f0bcae")
+const PURPLE := Color("7a4fd0")
+const GREEN := Color("1f9d63")
+
+const TILE_SPEC := [
+	{"id": "real_output", "label": "实际产出 · GDP", "color": TEAL, "bad_up": false},
+	{"id": "unemployment_rate", "label": "失业率", "color": AMBER, "bad_up": true},
+	{"id": "inflation", "label": "通胀(每tick)", "color": PURPLE, "bad_up": true},
+	{"id": "price_index", "label": "物价指数", "color": BLUE, "bad_up": true},
+	{"id": "policy_rate", "label": "政策利率", "color": TEAL, "bad_up": false},
+	{"id": "gov_deficit_to_gdp", "label": "赤字 / GDP", "color": AMBER, "bad_up": true},
+	{"id": "bank_reserves_total", "label": "银行准备金", "color": GREEN, "bad_up": false},
+	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true},
 ]
-const SERIES_LABEL := {
-	"real_output": "GDP(30日窗)", "unemployment_rate": "失业率",
-	"inflation": "通胀(年化)", "price_index": "物价指数",
-	"policy_rate": "利率(年化)", "gov_deficit_to_gdp": "赤字/GDP",
-	"avg_wage": "平均工资",
-}
-const INK := Color("16283c")        # 藏青墨
-const INK2 := Color("5a6b7d")
-const INK3 := Color("93a0ad")
-const ACCENT := Color("1d4e89")     # 财经藏蓝
-const WARN := Color("b26a00")
-const CRIT := Color("b3261e")
-const GOOD := Color("1e7a46")
-const GROUND := Color("f7f5f1")     # 纸白
-const PANEL := Color("ffffff")
-const PANEL2 := Color("efece6")
-const LINE := Color("e0dcd2")
+const SEAT_CHIPS := [
+	{"id": "treasury", "name": "财政部", "beta": false},
+	{"id": "central_bank", "name": "央行", "beta": true},
+	{"id": "external", "name": "外部/贸易", "beta": true},
+	{"id": "energy", "name": "能源", "beta": true},
+	{"id": "regulator", "name": "监管", "beta": true},
+]
 
 var _client
 var _outbox: Array = []
 var _snapshot: Dictionary = {}
 var _schema: Dictionary = {}
 var _groups: Dictionary = {}
-var _cart: Dictionary = {}
-var _release_hist: Dictionary = {}
-var _seen_release: Dictionary = {}
+var _edits: Dictionary = {}            # lever -> 本地编辑值(未入篮)
+var _cart: Array = []                  # [{lever, name, from, to, value}]
+var _release_hist: Dictionary = {}     # sid -> [{v, at}]
 var _playing := false
-var _speed := 1
+var _speed := 5
 var _god := false
+var _mode := "interactive"
+var _tab := "focus"
+var _filter_mine := false
 var _last_toasted := ""
 var _capture_path := ""
+var _capture_ticks := 0
+var _confirm: Dictionary = {}
+var _demo_crisis := false
 
-var _connection_label: Label
-var _clock_label: Label
-var _tick_label: Label
-var _tiles_box: HBoxContainer
-var _status_label: Label
-var _capacity_label: Label
-var _levers_box: VBoxContainer
-var _cart_box: HBoxContainer
-var _cart_cost: Label
-var _submit_btn: Button
-var _pass_btn: Button
-var _events_box: VBoxContainer
-var _play_btn: Button
-var _paused_label: Label
-var _banner: PanelContainer
-var _banner_body: Label
-var _toast: PanelContainer
-var _toast_label: Label
-var _toast_timer: Timer
-var _play_timer: Timer
-var _speed_btns: Array = []
+var _sans: SystemFont
+var _mono: SystemFont
+var _n: Dictionary = {}
 
 
 func _ready() -> void:
+	_sans = SystemFont.new()
+	_sans.font_names = PackedStringArray([
+		"Hiragino Sans GB", "STHeiti", "Arial Unicode MS", "Helvetica Neue"])
+	_mono = SystemFont.new()
+	_mono.font_names = PackedStringArray(["Menlo", "Monaco"])
+	_mono.fallbacks = [_sans]
 	_build_theme()
 	_build_ui()
 	_client = SimulationClientScript.new()
 	add_child(_client)
 	_client.connected.connect(_on_connected)
-	_client.disconnected.connect(func() -> void: _connection_label.text = "已断开·重连中")
+	_client.disconnected.connect(func() -> void:
+		_set_text("conn", "已断开 · 重连中"))
 	_client.response_received.connect(_on_response)
 	_client.request_failed.connect(_on_request_failed)
-	_play_timer = Timer.new()
-	_play_timer.wait_time = 1.0
-	_play_timer.timeout.connect(_on_play_tick)
-	add_child(_play_timer)
-	_play_timer.start()
+	var timer := Timer.new()
+	timer.wait_time = 1.0
+	timer.timeout.connect(_on_play_tick)
+	add_child(timer)
+	timer.start()
 	_capture_path = OS.get_environment("MACRO_SIM_CAPTURE_PATH")
+	var pre := OS.get_environment("MACRO_SIM_CAPTURE_TICKS")
+	if pre.is_valid_int():
+		_capture_ticks = pre.to_int()
 
 
-# ---------------- 请求队列(client 单飞行请求) ----------------
+# ================= 通信 =================
 func _send(command: Dictionary) -> void:
 	_outbox.append(command)
 	_pump()
@@ -97,8 +117,7 @@ func _pump() -> void:
 
 
 func _on_connected() -> void:
-	_connection_label.text = "已连接"
-	_connection_label.add_theme_color_override("font_color", GOOD)
+	_set_text("conn", "引擎在线")
 	_send({"command": "hello"})
 	_send({"command": "get_schema"})
 
@@ -113,316 +132,71 @@ func _on_response(response: Dictionary) -> void:
 		_ingest_releases()
 		var verdict: Variant = payload.get("last_verdict")
 		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
-			_maybe_toast(verdict)
+			_show_verdict(verdict)
 		if _playing and _awaiting():
 			_playing = false
 	_render()
+	if not _capture_path.is_empty() and _outbox.is_empty() and not _client.busy:
+		if _awaiting():
+			for ctx: Dictionary in _contexts():
+				_outbox.append({"command": "resolve_context",
+					"context_id": str(ctx.get("context_id")), "actions": []})
+		elif _capture_ticks > 0:
+			var step := mini(_capture_ticks, 100)
+			_capture_ticks -= step
+			_outbox.append({"command": "advance", "ticks": step})
+		else:
+			var path := _capture_path
+			_capture_path = ""
+			_capture(path)
 	_pump()
-	if not _capture_path.is_empty():
-		var path := _capture_path
-		_capture_path = ""
-		_capture_after_render(path)
 
 
 func _on_request_failed(message: String) -> void:
-	_show_toast("⛔ " + message, false)
+	_show_verdict({"status": "rejected", "reason_code": message,
+		"decision_id": "err:%d" % Time.get_ticks_msec()})
 	_pump()
+	if not _capture_path.is_empty() and _outbox.is_empty() and not _client.busy:
+		var path := _capture_path
+		_capture_path = ""
+		_capture(path)
 
 
-func _capture_after_render(path: String) -> void:
-	await get_tree().create_timer(0.3).timeout
+func _capture(path: String) -> void:
+	await get_tree().create_timer(0.35).timeout
 	var image := get_viewport().get_texture().get_image()
-	var error := image.save_png(path)
-	if error != OK:
-		push_error("Could not save prototype capture (%d)." % error)
-	get_tree().quit(error)
+	image.save_png(path)
+	get_tree().quit(0)
 
 
-# ---------------- 主题与布局 ----------------
-func _build_theme() -> void:
-	var app_theme := Theme.new()
-	# CJK:Godot 默认字体无中文字形(乱码根因)——挂系统中文字体栈
-	var cjk := SystemFont.new()
-	cjk.font_names = PackedStringArray([
-		"Hiragino Sans GB", "STHeiti", "Heiti SC", "Arial Unicode MS",
-		"Microsoft YaHei", "Noto Sans CJK SC", "Helvetica Neue"])
-	app_theme.default_font = cjk
-	app_theme.default_font_size = 14
-	app_theme.set_color("font_color", "Label", INK)
-	app_theme.set_color("font_color", "Button", INK)
-	app_theme.set_color("font_color", "CheckBox", INK)
-	app_theme.set_color("font_pressed_color", "Button", Color.WHITE)
-	var button := _style(PANEL, LINE, 5, 6)
-	app_theme.set_stylebox("normal", "Button", button)
-	app_theme.set_stylebox("hover", "Button", _style(PANEL2, ACCENT, 5, 6))
-	app_theme.set_stylebox("pressed", "Button", _style(ACCENT, ACCENT, 5, 6))
-	app_theme.set_stylebox("disabled", "Button", _style(GROUND, LINE, 5, 6))
-	app_theme.set_stylebox("panel", "PanelContainer", _style(PANEL, LINE, 6, 10))
-	theme = app_theme
-
-
-func _style(background: Color, border: Color, radius: int, margin: int = 8) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(radius)
-	style.set_content_margin_all(margin)
-	return style
-
-
-func _build_ui() -> void:
-	var background := ColorRect.new()
-	background.color = GROUND
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
-	var shell := VBoxContainer.new()
-	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shell.offset_left = 14
-	shell.offset_top = 10
-	shell.offset_right = -14
-	shell.offset_bottom = -10
-	shell.add_theme_constant_override("separation", 8)
-	add_child(shell)
-
-	# 顶栏
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 14)
-	shell.add_child(header)
-	var title := Label.new()
-	title.text = "宏观政策室"
-	var serif := SystemFont.new()
-	serif.font_names = PackedStringArray([
-		"Songti SC", "STSong", "SimSun", "Georgia", "serif"])
-	title.add_theme_font_override("font", serif)
-	title.add_theme_font_size_override("font_size", 21)
-	header.add_child(title)
-	var sub := Label.new()
-	sub.text = "v29 · 真引擎 · 财政席"
-	sub.add_theme_color_override("font_color", INK3)
-	header.add_child(sub)
-	_connection_label = Label.new()
-	_connection_label.text = "连接中…"
-	_connection_label.add_theme_color_override("font_color", WARN)
-	header.add_child(_connection_label)
-	var god := CheckBox.new()
-	god.text = "上帝模式"
-	god.toggled.connect(func(v: bool) -> void:
-		_god = v
-		_render())
-	header.add_child(god)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(spacer)
-	_clock_label = Label.new()
-	_clock_label.add_theme_font_size_override("font_size", 16)
-	header.add_child(_clock_label)
-	_tick_label = Label.new()
-	_tick_label.add_theme_color_override("font_color", INK3)
-	header.add_child(_tick_label)
-
-	# 公报瓦片带
-	var tiles_scroll := ScrollContainer.new()
-	tiles_scroll.custom_minimum_size = Vector2(0, 104)
-	tiles_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	shell.add_child(tiles_scroll)
-	_tiles_box = HBoxContainer.new()
-	_tiles_box.add_theme_constant_override("separation", 8)
-	tiles_scroll.add_child(_tiles_box)
-
-	# 主区
-	var split := HSplitContainer.new()
-	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	split.split_offset = 760
-	shell.add_child(split)
-
-	var wb_panel := PanelContainer.new()
-	split.add_child(wb_panel)
-	var wb := VBoxContainer.new()
-	wb.add_theme_constant_override("separation", 6)
-	wb_panel.add_child(wb)
-	var wb_head := HBoxContainer.new()
-	wb_head.add_theme_constant_override("separation", 12)
-	wb.add_child(wb_head)
-	var wb_title := Label.new()
-	wb_title.text = "财政部工作台"
-	wb_title.add_theme_font_size_override("font_size", 15)
-	wb_head.add_child(wb_title)
-	_status_label = Label.new()
-	_status_label.add_theme_color_override("font_color", INK2)
-	wb_head.add_child(_status_label)
-	var wb_sp := Control.new()
-	wb_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wb_head.add_child(wb_sp)
-	_capacity_label = Label.new()
-	_capacity_label.add_theme_color_override("font_color", INK3)
-	wb_head.add_child(_capacity_label)
-	var levers_scroll := ScrollContainer.new()
-	levers_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	wb.add_child(levers_scroll)
-	_levers_box = VBoxContainer.new()
-	_levers_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_levers_box.add_theme_constant_override("separation", 2)
-	levers_scroll.add_child(_levers_box)
-	var cart_lbl := Label.new()
-	cart_lbl.text = "提案(原子批 · 一起过或一起拒)"
-	cart_lbl.add_theme_color_override("font_color", INK3)
-	cart_lbl.add_theme_font_size_override("font_size", 11)
-	wb.add_child(cart_lbl)
-	var cart_scroll := ScrollContainer.new()
-	cart_scroll.custom_minimum_size = Vector2(0, 36)
-	cart_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	wb.add_child(cart_scroll)
-	_cart_box = HBoxContainer.new()
-	_cart_box.add_theme_constant_override("separation", 6)
-	cart_scroll.add_child(_cart_box)
-	var cart_row := HBoxContainer.new()
-	cart_row.add_theme_constant_override("separation", 8)
-	wb.add_child(cart_row)
-	_submit_btn = Button.new()
-	_submit_btn.text = "提交提案"
-	_submit_btn.pressed.connect(_submit_cart)
-	cart_row.add_child(_submit_btn)
-	_pass_btn = Button.new()
-	_pass_btn.text = "本次不动"
-	_pass_btn.pressed.connect(_submit_pass)
-	cart_row.add_child(_pass_btn)
-	_cart_cost = Label.new()
-	_cart_cost.add_theme_color_override("font_color", INK3)
-	cart_row.add_child(_cart_cost)
-
-	var tl_panel := PanelContainer.new()
-	split.add_child(tl_panel)
-	var tl := VBoxContainer.new()
-	tl_panel.add_child(tl)
-	var tl_lbl := Label.new()
-	tl_lbl.text = "事件时间线"
-	tl_lbl.add_theme_font_size_override("font_size", 14)
-	tl.add_child(tl_lbl)
-	var ev_scroll := ScrollContainer.new()
-	ev_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tl.add_child(ev_scroll)
-	_events_box = VBoxContainer.new()
-	_events_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ev_scroll.add_child(_events_box)
-
-	# 危机横幅
-	_banner = PanelContainer.new()
-	_banner.visible = false
-	_banner.add_theme_stylebox_override("panel", _style(Color("f7e3e1"), CRIT, 6, 12))
-	shell.add_child(_banner)
-	var bb := HBoxContainer.new()
-	bb.add_theme_constant_override("separation", 12)
-	_banner.add_child(bb)
-	var bt := Label.new()
-	bt.text = "🚨 紧急会议"
-	bt.add_theme_font_size_override("font_size", 15)
-	bt.add_theme_color_override("font_color", CRIT)
-	bb.add_child(bt)
-	_banner_body = Label.new()
-	_banner_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_banner_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bb.add_child(_banner_body)
-
-	# 驱动条
-	var drive := HBoxContainer.new()
-	drive.add_theme_constant_override("separation", 8)
-	shell.add_child(drive)
-	drive.add_child(_button("新开局", func() -> void:
-		_release_hist.clear()
-		_seen_release.clear()
-		_cart.clear()
-		_send({"command": "new_game"})
-		_send({"command": "get_schema"})))
-	drive.add_child(_button("步进 1 日", func() -> void:
-		_send({"command": "advance", "ticks": 1})))
-	_play_btn = _button("▶ 播放", func() -> void:
-		_playing = not _playing
-		_render())
-	drive.add_child(_play_btn)
-	for s: int in SPEEDS:
-		var b := Button.new()
-		b.text = "%d×" % s
-		b.toggle_mode = true
-		b.button_pressed = s == _speed
-		var chosen := s
-		b.pressed.connect(func() -> void:
-			_speed = chosen
-			_render())
-		_speed_btns.append(b)
-		drive.add_child(b)
-	drive.add_child(_button("⏭ 到下一事件", func() -> void:
-		_send({"command": "advance", "ticks": 100})))
-	drive.add_child(_button("💥 供给冲击", func() -> void:
-		_send({"command": "trigger_shock"})))
-	var dsp := Control.new()
-	dsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	drive.add_child(dsp)
-	_paused_label = Label.new()
-	_paused_label.add_theme_color_override("font_color", ACCENT)
-	drive.add_child(_paused_label)
-
-	# 判决吐司
-	_toast = PanelContainer.new()
-	_toast.visible = false
-	_toast.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_toast.position = Vector2(-430, 56)
-	_toast.custom_minimum_size = Vector2(400, 0)
-	_toast_label = Label.new()
-	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_toast.add_child(_toast_label)
-	add_child(_toast)
-	_toast_timer = Timer.new()
-	_toast_timer.one_shot = true
-	_toast_timer.wait_time = 4.5
-	_toast_timer.timeout.connect(func() -> void: _toast.visible = false)
-	add_child(_toast_timer)
-
-
-func _button(text: String, callback: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.pressed.connect(callback)
-	return b
-
-
-# ---------------- 播放循环 ----------------
 func _on_play_tick() -> void:
-	if not _playing:
-		return
-	if _awaiting():
-		_playing = false
-		_render()
+	if not _playing or _awaiting() or _demo_crisis:
 		return
 	_send({"command": "advance", "ticks": _speed})
 
 
-# ---------------- 数据 ----------------
+# ================= 数据 =================
 func _index_schema() -> void:
 	_groups.clear()
 	for lever: Dictionary in _schema.get("levers", []):
 		var g := str(lever.get("decision_group", "其他"))
 		if not _groups.has(g):
 			_groups[g] = []
-	# 保序追加
-	for lever: Dictionary in _schema.get("levers", []):
-		_groups[str(lever.get("decision_group", "其他"))].append(lever)
+		_groups[g].append(lever)
 
 
 func _ingest_releases() -> void:
-	var obs: Dictionary = _snapshot.get("observation", {})
-	for rel: Dictionary in obs.get("releases", []):
+	for rel: Dictionary in _snapshot.get("observation", {}).get("releases", []):
 		if rel.get("value") == null:
 			continue
 		var sid := str(rel.get("series_id"))
 		var at := int(rel.get("released_at_tick", -1))
-		if int(_seen_release.get(sid, -1)) >= at:
-			continue
-		_seen_release[sid] = at
 		if not _release_hist.has(sid):
 			_release_hist[sid] = []
 		var arr: Array = _release_hist[sid]
-		arr.append(float(rel.get("value")))
+		if not arr.is_empty() and int(arr[-1]["at"]) >= at:
+			continue
+		arr.append({"v": float(rel.get("value")), "at": at})
 		if arr.size() > 24:
 			arr.pop_front()
 
@@ -442,339 +216,1107 @@ func _active_context() -> Dictionary:
 	return _contexts()[0] if not _contexts().is_empty() else {}
 
 
-func _maybe_toast(v: Dictionary) -> void:
-	var key := str(v.get("decision_id", v.get("proposal_id", "")))
-	if key == _last_toasted or key.is_empty():
-		return
-	_last_toasted = key
-	var status := str(v.get("status", "?"))
-	var ok := status.begins_with("accepted")
-	var text := ("✅ " if ok else "⛔ ") + "判决:" + status
-	var reason := str(v.get("reason_code", ""))
-	if not reason.is_empty() and reason != "<null>":
-		text += "\nreason: " + reason
-	if v.get("effective_tick") != null:
-		text += "\n生效 tick:" + str(v.get("effective_tick"))
-	_show_toast(text, ok)
+func _emergency() -> bool:
+	return bool(_active_context().get("emergency", false)) or _demo_crisis
 
 
-func _show_toast(text: String, ok: bool) -> void:
-	_toast_label.text = text
-	_toast_label.add_theme_color_override("font_color", INK if ok else CRIT)
-	_toast.visible = true
-	_toast_timer.start()
+func _releases_by_id() -> Dictionary:
+	var out: Dictionary = {}
+	for rel: Dictionary in _snapshot.get("observation", {}).get("releases", []):
+		out[str(rel.get("series_id"))] = rel
+	return out
 
 
-# ---------------- 渲染 ----------------
-func _fmt_date(t: int) -> String:
-	return "第 %d 年 第 %d 季 第 %d 日" % [t / TPY + 1, (t % TPY) / QT + 1, (t % TPY) % QT + 1]
+# ================= 主题/样式 =================
+func _build_theme() -> void:
+	var t := Theme.new()
+	t.default_font = _sans
+	t.default_font_size = 13
+	t.set_color("font_color", "Label", INK_BODY)
+	t.set_color("font_color", "Button", INK_BODY)
+	t.set_color("font_color", "CheckBox", Color("586a7b"))
+	t.set_color("font_color", "CheckButton", INK_BODY)
+	t.set_stylebox("normal", "Button", _sb(Color("eef2f7"), Color("cdd7e2"), 8, 7))
+	t.set_stylebox("hover", "Button", _sb(Color("eef2f7"), TEAL, 8, 7))
+	t.set_stylebox("pressed", "Button", _sb(TEAL_BG, TEAL_BD, 8, 7))
+	t.set_stylebox("disabled", "Button", _sb(Color("eef1f5"), LINE, 8, 7))
+	t.set_color("font_disabled_color", "Button", Color("849098"))
+	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12))
+	theme = t
 
 
-func _fmt_value(sid: String, v: float) -> String:
+func _sb(bg: Color, border: Color, radius: int, margin: int) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.set_border_width_all(1)
+	s.set_corner_radius_all(radius)
+	s.set_content_margin_all(margin)
+	return s
+
+
+func _lbl(text: String, size: int, color: Color, mono := false) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	if mono:
+		l.add_theme_font_override("font", _mono)
+	return l
+
+
+func _chip(text: String, fg: Color, bg: Color, border: Color, size := 11) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _sb(bg, border, 20, 4))
+	p.add_child(_lbl(text, size, fg))
+	return p
+
+
+func _dot(color: Color, dsize := 7.0) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(dsize, dsize)
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.draw.connect(func() -> void:
+		c.draw_circle(Vector2(dsize / 2, dsize / 2), dsize / 2, color))
+	return c
+
+
+func _spacer_h() -> Control:
+	var c := Control.new()
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return c
+
+
+func _vdiv() -> Control:
+	var c := ColorRect.new()
+	c.color = LINE
+	c.custom_minimum_size = Vector2(1, 30)
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return c
+
+
+func _btn(text: String, cb: Callable, primary := false) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.pressed.connect(cb)
+	if primary:
+		b.add_theme_stylebox_override("normal", _sb(TEAL_BG, Color("59b7a8"), 8, 7))
+		b.add_theme_color_override("font_color", TEAL_DK)
+	return b
+
+
+func _set_text(key: String, text: String) -> void:
+	if _n.has(key) and is_instance_valid(_n[key]):
+		(_n[key] as Label).text = text
+
+
+# ================= 布局 =================
+func _build_ui() -> void:
+	var bgr := ColorRect.new()
+	bgr.color = GROUND
+	bgr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bgr)
+	var shell := VBoxContainer.new()
+	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shell.offset_left = 14
+	shell.offset_top = 12
+	shell.offset_right = -14
+	shell.offset_bottom = -12
+	shell.add_theme_constant_override("separation", 10)
+	add_child(shell)
+	_build_header(shell)
+	var tiles := HBoxContainer.new()
+	tiles.add_theme_constant_override("separation", 9)
+	shell.add_child(tiles)
+	_n["tiles"] = tiles
+	_build_main(shell)
+	_build_overlays()
+
+
+func _build_header(shell: VBoxContainer) -> void:
+	var hp := PanelContainer.new()
+	hp.add_theme_stylebox_override("panel", _sb(PANEL, Color("dbe2ea"), 13, 10))
+	shell.add_child(hp)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	hp.add_child(h)
+	var tbox := HBoxContainer.new()
+	tbox.add_theme_constant_override("separation", 9)
+	h.add_child(tbox)
+	tbox.add_child(_lbl("宏观指挥室", 17, INK))
+	tbox.add_child(_lbl("MACRO COMMAND · v29", 11, Color("68788b"), true))
+	var op := PanelContainer.new()
+	op.add_theme_stylebox_override("panel", _sb(TEAL_BG, TEAL_BD, 20, 5))
+	var online := HBoxContainer.new()
+	online.add_theme_constant_override("separation", 6)
+	op.add_child(online)
+	online.add_child(_dot(TEAL))
+	var conn := _lbl("连接中…", 12, TEAL)
+	_n["conn"] = conn
+	online.add_child(conn)
+	h.add_child(op)
+	h.add_child(_vdiv())
+	var clock := VBoxContainer.new()
+	clock.add_theme_constant_override("separation", 1)
+	var cal := _lbl("—", 15, INK)
+	_n["cal"] = cal
+	clock.add_child(cal)
+	var tickl := _lbl("t = 0", 11, Color("68788b"), true)
+	_n["tick"] = tickl
+	clock.add_child(tickl)
+	h.add_child(clock)
+	var waitp := PanelContainer.new()
+	waitp.add_theme_stylebox_override("panel", _sb(AMBER_BG, AMBER_BD, 20, 5))
+	var wbx := HBoxContainer.new()
+	wbx.add_theme_constant_override("separation", 7)
+	waitp.add_child(wbx)
+	wbx.add_child(_dot(AMBER))
+	wbx.add_child(_lbl("等待决策", 12, AMBER))
+	_n["awaitchip"] = waitp
+	h.add_child(waitp)
+	h.add_child(_spacer_h())
+	var modes := HBoxContainer.new()
+	modes.add_theme_constant_override("separation", 2)
+	for m: Array in [["interactive", "交互"], ["realtime", "实时"]]:
+		var mb := Button.new()
+		mb.text = m[1]
+		var mid: String = m[0]
+		mb.pressed.connect(func() -> void:
+			_mode = mid
+			_render())
+		_n["mode_" + mid] = mb
+		modes.add_child(mb)
+	h.add_child(modes)
+	var god := CheckBox.new()
+	god.text = "上帝模式"
+	god.toggled.connect(func(v: bool) -> void:
+		_god = v
+		_render())
+	h.add_child(god)
+	h.add_child(_vdiv())
+	h.add_child(_btn("步进", func() -> void:
+		_send({"command": "advance", "ticks": 1})))
+	var play := _btn("播放", _toggle_play, true)
+	_n["play"] = play
+	h.add_child(play)
+	var speeds := HBoxContainer.new()
+	speeds.add_theme_constant_override("separation", 2)
+	for s: int in SPEEDS:
+		var sbn := Button.new()
+		sbn.text = "%d×" % s
+		sbn.add_theme_font_override("font", _mono)
+		sbn.add_theme_font_size_override("font_size", 12)
+		var chosen := s
+		sbn.pressed.connect(func() -> void:
+			_speed = chosen
+			_render())
+		_n["speed_%d" % s] = sbn
+		speeds.add_child(sbn)
+	h.add_child(speeds)
+
+
+func _toggle_play() -> void:
+	_playing = not _playing
+	_render()
+
+
+func _build_main(shell: VBoxContainer) -> void:
+	var main := HBoxContainer.new()
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 10)
+	shell.add_child(main)
+	var wbp := PanelContainer.new()
+	wbp.custom_minimum_size = Vector2(430, 0)
+	wbp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
+	main.add_child(wbp)
+	var wb := VBoxContainer.new()
+	wbp.add_child(wb)
+	_build_workbench(wb)
+	var center := VBoxContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.add_theme_constant_override("separation", 10)
+	main.add_child(center)
+	_build_center(center)
+	var tlp := PanelContainer.new()
+	tlp.custom_minimum_size = Vector2(346, 0)
+	tlp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
+	main.add_child(tlp)
+	var tl := VBoxContainer.new()
+	tlp.add_child(tl)
+	_build_timeline(tl)
+
+
+func _build_workbench(wb: VBoxContainer) -> void:
+	var hp := MarginContainer.new()
+	hp.add_theme_constant_override("margin_left", 13)
+	hp.add_theme_constant_override("margin_right", 13)
+	hp.add_theme_constant_override("margin_top", 12)
+	hp.add_theme_constant_override("margin_bottom", 10)
+	wb.add_child(hp)
+	var head := VBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	hp.add_child(head)
+	head.add_child(_lbl("SEAT · 席位工作台", 10, INK3, true))
+	var chips := HBoxContainer.new()
+	chips.add_theme_constant_override("separation", 5)
+	for s: Dictionary in SEAT_CHIPS:
+		var b := Button.new()
+		b.text = str(s["name"]) + (" β" if s["beta"] else "")
+		b.add_theme_font_size_override("font_size", 12)
+		if s["id"] == "treasury":
+			b.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 8, 6))
+			b.add_theme_color_override("font_color", Color("1c4a8f"))
+		else:
+			var sname := str(s["name"])
+			b.pressed.connect(func() -> void:
+				_show_verdict({"status": "noop",
+					"reason_code": sname + " 席位后端将于 v30 接入(β)",
+					"decision_id": "seat:%d" % Time.get_ticks_msec()}))
+		chips.add_child(b)
+	head.add_child(chips)
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 8)
+	srow.add_child(_lbl("财政部", 15, INK))
+	srow.add_child(_chip("财政 · public", Color("647585"), Color(0, 0, 0, 0), LINE2))
+	srow.add_child(_spacer_h())
+	var cap := _lbl("行政容量 —", 10, INK3, true)
+	_n["cap"] = cap
+	srow.add_child(cap)
+	head.add_child(srow)
+	var div := ColorRect.new()
+	div.color = Color("e6ebf1")
+	div.custom_minimum_size = Vector2(0, 1)
+	wb.add_child(div)
+	var mp := MarginContainer.new()
+	mp.add_theme_constant_override("margin_left", 13)
+	mp.add_theme_constant_override("margin_top", 6)
+	mp.add_theme_constant_override("margin_bottom", 2)
+	wb.add_child(mp)
+	var meet := _lbl("", 11, INK2)
+	_n["meeting"] = meet
+	mp.add_child(meet)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	wb.add_child(scroll)
+	var lv := VBoxContainer.new()
+	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lv.add_theme_constant_override("separation", 8)
+	scroll.add_child(lv)
+	_n["levers"] = lv
+	var cf := PanelContainer.new()
+	cf.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 0, 11))
+	wb.add_child(cf)
+	var cart := VBoxContainer.new()
+	cart.add_theme_constant_override("separation", 8)
+	cf.add_child(cart)
+	var vslot := VBoxContainer.new()
+	_n["verdict_slot"] = vslot
+	cart.add_child(vslot)
+	var crow := HBoxContainer.new()
+	crow.add_theme_constant_override("separation", 8)
+	crow.add_child(_lbl("提案篮 · 原子批", 10, INK3, true))
+	var ccount := _lbl("0 项", 11, Color("647585"))
+	_n["cart_count"] = ccount
+	crow.add_child(ccount)
+	crow.add_child(_spacer_h())
+	var ccost := _lbl("", 10, Color("647585"), true)
+	_n["cart_cost"] = ccost
+	crow.add_child(ccost)
+	cart.add_child(crow)
+	var citems := VBoxContainer.new()
+	citems.add_theme_constant_override("separation", 5)
+	_n["cart_items"] = citems
+	cart.add_child(citems)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	var submit := _btn("提交提案", _submit_cart, true)
+	submit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_n["submit"] = submit
+	actions.add_child(submit)
+	var pass_b := _btn("本次不动", _submit_pass)
+	_n["pass"] = pass_b
+	actions.add_child(pass_b)
+	cart.add_child(actions)
+
+
+func _build_center(center: VBoxContainer) -> void:
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 6)
+	for t: Array in [["focus", "宏观焦点"], ["world", "世界视图"]]:
+		var b := Button.new()
+		b.text = t[1]
+		var tid: String = t[0]
+		b.pressed.connect(func() -> void:
+			_tab = tid
+			_render())
+		_n["tab_" + tid] = b
+		tabs.add_child(b)
+	tabs.add_child(_spacer_h())
+	tabs.add_child(_lbl("X 轴 = 发布时间(非参考期)", 10, INK3, true))
+	center.add_child(tabs)
+	var body := VBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 10)
+	_n["center_body"] = body
+	center.add_child(body)
+
+
+func _build_timeline(tl: VBoxContainer) -> void:
+	var hp := MarginContainer.new()
+	hp.add_theme_constant_override("margin_left", 13)
+	hp.add_theme_constant_override("margin_right", 13)
+	hp.add_theme_constant_override("margin_top", 12)
+	hp.add_theme_constant_override("margin_bottom", 10)
+	tl.add_child(hp)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	hp.add_child(head)
+	head.add_child(_lbl("EVENTS · 时间线", 10, INK3, true))
+	head.add_child(_spacer_h())
+	var filter := Button.new()
+	filter.text = "全部事件"
+	filter.add_theme_font_size_override("font_size", 11)
+	filter.pressed.connect(func() -> void:
+		_filter_mine = not _filter_mine
+		_render())
+	_n["filter"] = filter
+	head.add_child(filter)
+	var div := ColorRect.new()
+	div.color = Color("e6ebf1")
+	div.custom_minimum_size = Vector2(0, 1)
+	tl.add_child(div)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tl.add_child(scroll)
+	var ev := VBoxContainer.new()
+	ev.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ev.add_theme_constant_override("separation", 8)
+	scroll.add_child(ev)
+	_n["events"] = ev
+
+
+func _build_overlays() -> void:
+	var crisis := ColorRect.new()
+	crisis.color = Color(0.086, 0.137, 0.204, 0.38)
+	crisis.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	crisis.visible = false
+	_n["crisis"] = crisis
+	add_child(crisis)
+	var cp := PanelContainer.new()
+	cp.add_theme_stylebox_override("panel", _sb(Color("fdeae4"), Color("e79b86"), 16, 0))
+	cp.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	cp.position = Vector2(120, 70)
+	cp.custom_minimum_size = Vector2(1040, 0)
+	crisis.add_child(cp)
+	var cv := VBoxContainer.new()
+	cp.add_child(cv)
+	var chp := MarginContainer.new()
+	for m in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		chp.add_theme_constant_override(m, 14)
+	cv.add_child(chp)
+	var chead := HBoxContainer.new()
+	chead.add_theme_constant_override("separation", 12)
+	chp.add_child(chead)
+	chead.add_child(_dot(RED, 10))
+	var ct := _lbl("紧急会议", 16, Color("7a2418"))
+	_n["crisis_title"] = ct
+	chead.add_child(ct)
+	chead.add_child(_spacer_h())
+	chead.add_child(_btn("离开横幅", func() -> void:
+		_demo_crisis = false
+		_render()))
+	var cbp := MarginContainer.new()
+	for m in ["margin_left", "margin_right", "margin_bottom"]:
+		cbp.add_theme_constant_override(m, 16)
+	cv.add_child(cbp)
+	var cbody := HBoxContainer.new()
+	cbody.add_theme_constant_override("separation", 16)
+	cbp.add_child(cbody)
+	var snapcol := VBoxContainer.new()
+	snapcol.custom_minimum_size = Vector2(420, 0)
+	snapcol.add_theme_constant_override("separation", 8)
+	snapcol.add_child(_lbl("相关公报快照", 10, Color("9a6a5e"), true))
+	_n["crisis_snap"] = snapcol
+	cbody.add_child(snapcol)
+	var levcol := VBoxContainer.new()
+	levcol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	levcol.add_theme_constant_override("separation", 9)
+	var lh := HBoxContainer.new()
+	lh.add_theme_constant_override("separation", 8)
+	lh.add_child(_lbl("紧急白名单杠杆", 10, Color("9a6a5e"), true))
+	lh.add_child(_chip("溢价适用", Color("a0691f"), Color(0, 0, 0, 0), AMBER_BD, 10))
+	levcol.add_child(lh)
+	_n["crisis_levers"] = levcol
+	cbody.add_child(levcol)
+	var trig := _btn("▲ 模拟紧急会议", func() -> void:
+		_demo_crisis = true
+		_render())
+	trig.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	trig.position = Vector2(-180, -54)
+	trig.add_theme_stylebox_override("normal", _sb(RED_BG, RED_BD, 10, 8))
+	trig.add_theme_color_override("font_color", Color("cc5a44"))
+	add_child(trig)
+	# 确认弹窗
+	var modal := ColorRect.new()
+	modal.color = Color(0.086, 0.137, 0.204, 0.38)
+	modal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.visible = false
+	_n["modal"] = modal
+	add_child(modal)
+	var mp := PanelContainer.new()
+	mp.add_theme_stylebox_override("panel", _sb(Color("f6f8fb"), Color("cdd7e2"), 14, 18))
+	mp.set_anchors_preset(Control.PRESET_CENTER)
+	mp.position = Vector2(420, 300)
+	mp.custom_minimum_size = Vector2(440, 0)
+	modal.add_child(mp)
+	var mv := VBoxContainer.new()
+	mv.add_theme_constant_override("separation", 10)
+	mp.add_child(mv)
+	var mtitle := _lbl("", 15, INK)
+	_n["modal_title"] = mtitle
+	mv.add_child(mtitle)
+	var mb := _lbl("", 12, Color("45535f"))
+	mb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mb.custom_minimum_size = Vector2(400, 0)
+	_n["modal_body"] = mb
+	mv.add_child(mb)
+	var mnote := _lbl("", 11, AMBER, true)
+	_n["modal_note"] = mnote
+	mv.add_child(mnote)
+	var mrow := HBoxContainer.new()
+	mrow.add_theme_constant_override("separation", 9)
+	mrow.alignment = BoxContainer.ALIGNMENT_END
+	mrow.add_child(_btn("取消", func() -> void:
+		_confirm = {}
+		_render()))
+	mrow.add_child(_btn("确认", _confirm_yes, true))
+	mv.add_child(mrow)
+
+
+func _confirm_yes() -> void:
+	var cb: Variant = _confirm.get("on_yes")
+	_confirm = {}
+	if cb is Callable:
+		(cb as Callable).call()
+	_render()
+
+
+# ================= 渲染 =================
+func _fmt_series(sid: String, v: float) -> String:
 	match sid:
 		"unemployment_rate", "gov_deficit_to_gdp", "poverty_rate":
 			return "%.1f%%" % (v * 100.0)
 		"inflation", "policy_rate":
-			return "%.2f%%" % (v * TPY * 100.0)
+			return "%.2f%%/t" % (v * 100.0)
 		"price_index":
 			return "%.3f" % v
 		_:
 			return "%.1f" % v
 
 
+func _cal_str(t: int) -> String:
+	return "第 %d 年 · 第 %d 季 · 第 %d 天" % [t / TPY + 1, (t % TPY) / 91 + 1, (t % TPY) % 91 + 1]
+
+
 func _render() -> void:
 	var t := int(_snapshot.get("tick", 0))
-	_clock_label.text = _fmt_date(t)
-	_tick_label.text = "tick %d" % t
-	_play_btn.text = "⏸ 暂停" if _playing else "▶ 播放"
-	for i in _speed_btns.size():
-		_speed_btns[i].button_pressed = SPEEDS[i] == _speed
-	_paused_label.text = "⏸ AWAITING_HUMAN · 引擎冻结" if _awaiting() else ""
+	_set_text("cal", _cal_str(t))
+	_set_text("tick", "t = %d" % t)
+	(_n["awaitchip"] as Control).visible = _awaiting()
+	(_n["play"] as Button).text = "暂停" if _playing else "播放"
+	for m in ["interactive", "realtime"]:
+		var mb := _n["mode_" + m] as Button
+		if m == _mode:
+			mb.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 7, 6))
+			mb.add_theme_color_override("font_color", TEAL_DK)
+		else:
+			mb.remove_theme_stylebox_override("normal")
+			mb.add_theme_color_override("font_color", Color("586a7b"))
+	for s: int in SPEEDS:
+		var sbn := _n["speed_%d" % s] as Button
+		if s == _speed:
+			sbn.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 7, 6))
+			sbn.add_theme_color_override("font_color", Color("3f6db2"))
+		else:
+			sbn.remove_theme_stylebox_override("normal")
+			sbn.add_theme_color_override("font_color", Color("647585"))
+	for tab in ["focus", "world"]:
+		var tb := _n["tab_" + tab] as Button
+		if tab == _tab:
+			tb.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 9, 8))
+			tb.add_theme_color_override("font_color", Color("1c4a8f"))
+		else:
+			tb.remove_theme_stylebox_override("normal")
+			tb.add_theme_color_override("font_color", Color("586a7b"))
+	(_n["filter"] as Button).text = "仅我的席位" if _filter_mine else "全部事件"
 	_render_tiles()
 	_render_workbench()
+	_render_center()
 	_render_events()
-	_render_banner()
+	_render_crisis()
+	(_n["modal"] as Control).visible = not _confirm.is_empty()
+	if not _confirm.is_empty():
+		_set_text("modal_title", str(_confirm.get("title", "")))
+		_set_text("modal_body", str(_confirm.get("body", "")))
+		_set_text("modal_note", str(_confirm.get("note", "")))
 
 
 func _render_tiles() -> void:
-	for child in _tiles_box.get_children():
-		child.queue_free()
-	var obs: Dictionary = _snapshot.get("observation", {})
-	var by_id: Dictionary = {}
-	for rel: Dictionary in obs.get("releases", []):
-		by_id[str(rel.get("series_id"))] = rel
+	var row := _n["tiles"] as HBoxContainer
+	for c in row.get_children():
+		c.queue_free()
+	var by_id := _releases_by_id()
 	var truth: Dictionary = _snapshot.get("metrics", {})
 	var t := int(_snapshot.get("tick", 0))
-	for sid: String in HEADLINE:
+	for spec: Dictionary in TILE_SPEC:
+		var sid := str(spec["id"])
 		var tile := PanelContainer.new()
-		tile.custom_minimum_size = Vector2(164, 96)
+		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tile.custom_minimum_size = Vector2(0, 118)
+		tile.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 11))
 		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 1)
+		v.add_theme_constant_override("separation", 4)
 		tile.add_child(v)
-		var lbl := Label.new()
-		lbl.text = str(SERIES_LABEL.get(sid, sid))
-		lbl.add_theme_font_size_override("font_size", 11)
-		lbl.add_theme_color_override("font_color", INK2)
-		v.add_child(lbl)
+		var lr := HBoxContainer.new()
+		lr.add_theme_constant_override("separation", 6)
+		lr.add_child(_dot(spec["color"], 6))
+		lr.add_child(_lbl(str(spec["label"]), 11, INK2))
+		v.add_child(lr)
 		var rel: Dictionary = by_id.get(sid, {})
-		if rel.is_empty() or rel.get("value") == null:
-			var missing := Label.new()
-			missing.text = "暂无数据"
-			missing.add_theme_color_override("font_color", INK3)
-			v.add_child(missing)
-			var why := Label.new()
-			why.text = str(rel.get("missing_reason", "not_in_spec"))
-			why.add_theme_font_size_override("font_size", 9)
-			why.add_theme_color_override("font_color", INK3)
-			v.add_child(why)
-		else:
-			var val := Label.new()
-			val.text = _fmt_value(sid, float(rel.get("value")))
-			val.add_theme_font_size_override("font_size", 19)
-			v.add_child(val)
-			var meta := Label.new()
-			meta.text = "发布 t=%d · T−%d" % [
-				int(rel.get("released_at_tick", 0)),
-				t - int(rel.get("reference_end_tick", t))]
-			meta.add_theme_font_size_override("font_size", 9)
-			meta.add_theme_color_override("font_color", INK3)
-			v.add_child(meta)
-			if _god and truth.has(sid):
-				var tv := Label.new()
-				tv.text = "真值 " + _fmt_value(sid, float(truth.get(sid, 0.0)))
-				tv.add_theme_font_size_override("font_size", 9)
-				tv.add_theme_color_override("font_color", WARN)
-				v.add_child(tv)
-			var chart = MetricChartScript.new()
-			chart.custom_minimum_size = Vector2(0, 20)
-			if chart.has_method("set_series"):
-				chart.set_series(_release_hist.get(sid, []))
+		var has := not rel.is_empty() and rel.get("value") != null
+		if has:
+			var vr := HBoxContainer.new()
+			vr.add_theme_constant_override("separation", 6)
+			vr.add_child(_lbl(_fmt_series(sid, float(rel.get("value"))), 21, spec["color"], true))
+			var hist: Array = _release_hist.get(sid, [])
+			if hist.size() >= 2:
+				var prev := float(hist[-2]["v"])
+				var curv := float(hist[-1]["v"])
+				if absf(curv - prev) > 1e-12:
+					var up := curv > prev
+					var dc: Color = (RED if up else GREEN) if bool(spec["bad_up"]) \
+						else (GREEN if up else RED)
+					vr.add_child(_lbl("▲" if up else "▼", 11, dc))
+			v.add_child(vr)
+			var chart := _SparkLine.new()
+			chart.color = spec["color"]
+			chart.custom_minimum_size = Vector2(0, 22)
+			var vals: Array = []
+			for hh: Dictionary in _release_hist.get(sid, []):
+				vals.append(hh["v"])
+			chart.values = vals
 			v.add_child(chart)
-		_tiles_box.add_child(tile)
+			var ref_end := int(rel.get("reference_end_tick", t))
+			v.add_child(_lbl("发布 t%d · 参考期止 t%d · 距今 %d天" % [
+				int(rel.get("released_at_tick", 0)), ref_end, t - ref_end], 9, INK3, true))
+			if _god and truth.has(sid):
+				v.add_child(_lbl("真值 " + _fmt_series(sid, float(truth.get(sid, 0.0)))
+					+ " ·(调试)", 9, PURPLE, true))
+		else:
+			v.add_child(_lbl("暂无数据", 13, Color("68788b")))
+			var why := str(rel.get("missing_reason", "not_in_spec"))
+			if sid == "bank_reserves_total":
+				why = "(仅央行/监管席可见)"
+			var wl := _lbl(why, 10, Color("849098"))
+			wl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			v.add_child(wl)
+		row.add_child(tile)
+
+
+func _lever_current(lever: Dictionary, perm: Dictionary, current_policy: Dictionary) -> Variant:
+	if perm.has("current_value"):
+		return perm.get("current_value")
+	return current_policy.get(str(lever.get("name")))
 
 
 func _render_workbench() -> void:
-	for child in _levers_box.get_children():
-		child.queue_free()
+	var lv := _n["levers"] as VBoxContainer
+	for c in lv.get_children():
+		c.queue_free()
 	var open := _awaiting()
 	var ctx := _active_context()
 	var emg := bool(ctx.get("emergency", false))
-	_status_label.text = ("🚨 紧急会议 · 白名单可动" if emg else "例会开启 · 可提案") if open \
-		else "会议未开 · 只读(推进至会议自动暂停)"
 	var remaining: Variant = ctx.get("admin_remaining")
-	_capacity_label.text = ("行政容量:" + str(remaining)) if remaining != null else ""
+	_set_text("cap", "行政容量 " + (str(remaining) if remaining != null else "—"))
+	_set_text("meeting", ("🚨 紧急会议 · 仅白名单杠杆可动" if emg
+		else "例会开启 · 调整杠杆后「加入提案」") if open
+		else "会议未开 · 只读(推进至会议自动暂停)")
 	var permitted: Dictionary = {}
 	for item: Dictionary in ctx.get("permitted_actions", []):
 		permitted[str(item.get("lever"))] = item
 	var current_policy: Dictionary = ctx.get("current_policy", {})
-	var pending_by_lever: Dictionary = {}
+	var pending_by: Dictionary = {}
 	for p in _snapshot.get("pending", []):
 		if p is Dictionary:
-			pending_by_lever[str((p as Dictionary).get("lever", ""))] = p
+			pending_by[str((p as Dictionary).get("lever", ""))] = p
 	for g: String in _groups.keys():
-		var gh := Label.new()
-		gh.text = g.to_upper()
-		gh.add_theme_font_size_override("font_size", 10)
-		gh.add_theme_color_override("font_color", INK3)
-		_levers_box.add_child(gh)
+		var gm := MarginContainer.new()
+		gm.add_theme_constant_override("margin_left", 12)
+		gm.add_theme_constant_override("margin_right", 12)
+		var gh := HBoxContainer.new()
+		gh.add_theme_constant_override("separation", 8)
+		gm.add_child(gh)
+		gh.add_child(_lbl(g.to_upper(), 10, INK3, true))
+		var rule := ColorRect.new()
+		rule.color = Color("e6ebf1")
+		rule.custom_minimum_size = Vector2(0, 1)
+		rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		gh.add_child(rule)
+		lv.add_child(gm)
 		for lever: Dictionary in _groups[g]:
-			_levers_box.add_child(
-				_lever_row(lever, permitted, pending_by_lever, open, emg, current_policy))
+			var cm := MarginContainer.new()
+			cm.add_theme_constant_override("margin_left", 12)
+			cm.add_theme_constant_override("margin_right", 12)
+			cm.add_child(_lever_card(lever, permitted, current_policy, pending_by, open, emg))
+			lv.add_child(cm)
 	_render_cart(open)
 
 
-func _lever_row(lever: Dictionary, permitted: Dictionary, pending: Dictionary,
-		open: bool, emg: bool, current_policy: Dictionary = {}) -> Control:
+func _lever_card(lever: Dictionary, permitted: Dictionary, current_policy: Dictionary,
+		pending_by: Dictionary, open: bool, emg: bool) -> Control:
 	var name := str(lever.get("name"))
 	var perm: Dictionary = permitted.get(name, {})
-	if not perm.has("current_value") and current_policy.has(name):
-		perm = perm.duplicate()
-		perm["current_value"] = current_policy.get(name)
 	var allowed := open and bool(perm.get("allowed", false)) \
 		and (not emg or bool(lever.get("emergency", false)))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	var name_box := VBoxContainer.new()
-	name_box.custom_minimum_size = Vector2(250, 0)
-	name_box.add_theme_constant_override("separation", 0)
-	var nm := Label.new()
-	nm.text = name
-	name_box.add_child(nm)
-	var small := Label.new()
-	small.text = "时滞%d · 冷却%d%s" % [
-		int(lever.get("implementation_lag", 0)),
-		int(lever.get("min_hold_ticks", 0)),
-		" · 紧急✓" if bool(lever.get("emergency", false)) else ""]
-	small.add_theme_font_size_override("font_size", 9)
-	small.add_theme_color_override("font_color", INK3)
-	name_box.add_child(small)
-	row.add_child(name_box)
-	var cur_v: Variant = perm.get("current_value")
-	var cur := Label.new()
-	cur.custom_minimum_size = Vector2(92, 0)
-	cur.text = _lever_value_text(cur_v) if perm.has("current_value") else "—"
-	var pend: Variant = pending.get(name)
+	var in_cart := _cart.any(func(c: Dictionary) -> bool: return c["lever"] == name)
+	var base_v: Variant = _lever_current(lever, perm, current_policy)
+	var edited := _edits.has(name)
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _sb(
+		Color("e6f5f0") if in_cart else Color.WHITE,
+		Color("59b7a8") if in_cart else Color("e2e8ef"), 10, 10))
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 7)
+	card.add_child(v)
+	var tr := HBoxContainer.new()
+	tr.add_theme_constant_override("separation", 7)
+	tr.add_child(_dot(TEAL if edited else LINE2, 6))
+	tr.add_child(_lbl(name, 13, INK))
+	tr.add_child(_spacer_h())
+	var cost_class := str(lever.get("cost_class", "ordinary"))
+	var cost_cn: String = {"regime_switch": "高", "major": "高", "ordinary": "中",
+		"operational": "低"}.get(cost_class, "中")
+	var cost_fg: Color = AMBER if cost_cn == "高" else (Color("3f6db2") if cost_cn == "中" else INK2)
+	tr.add_child(_chip("成本 %.1f · %s" % [float(lever.get("admin_weight", 1.0)), cost_cn],
+		cost_fg, Color(0, 0, 0, 0), AMBER_BD if cost_cn == "高" else LINE2, 10))
+	v.add_child(tr)
+	if allowed:
+		v.add_child(_lever_control(lever, perm, base_v))
+	else:
+		var lockp := PanelContainer.new()
+		lockp.add_theme_stylebox_override("panel", _sb(PANEL3, LINE2, 8, 9))
+		var lr := HBoxContainer.new()
+		lr.add_theme_constant_override("separation", 9)
+		lockp.add_child(lr)
+		lr.add_child(_chip("锁定", Color("647585"), Color(0, 0, 0, 0), LINE2, 10))
+		var reason := str(perm.get("reason_code", ""))
+		if emg and not bool(lever.get("emergency", false)):
+			reason = "不在紧急白名单"
+		elif not open:
+			reason = "当前 " + _lever_value_text(lever, base_v) + " · 会议未开"
+		elif reason.is_empty() or reason == "<null>":
+			reason = "当前 " + _lever_value_text(lever, base_v) + " · 本会议不可动"
+		var rl := _lbl(reason, 11, Color("586a7b"))
+		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lr.add_child(rl)
+		v.add_child(lockp)
+	var meta := HBoxContainer.new()
+	meta.add_theme_constant_override("separation", 9)
+	var lag := int(lever.get("implementation_lag", 0))
+	meta.add_child(_lbl("通过后 %d 天生效" % lag if lag > 0 else "即时生效", 10,
+		Color("68788b"), true))
+	meta.add_child(_lbl("冷却 %d 天" % int(lever.get("min_hold_ticks", 0)), 10,
+		Color("68788b"), true))
+	if bool(lever.get("emergency", false)):
+		meta.add_child(_lbl("紧急✓", 10, AMBER, true))
+	v.add_child(meta)
+	var pend: Variant = pending_by.get(name)
 	if pend is Dictionary:
-		cur.text += "\n→ %s(t=%s)" % [
-			_lever_value_text((pend as Dictionary).get("value")),
-			str((pend as Dictionary).get("effective_tick", "?"))]
-		cur.add_theme_font_size_override("font_size", 11)
-		cur.add_theme_color_override("font_color", WARN)
-	row.add_child(cur)
-	row.add_child(_lever_control(lever, perm, allowed))
-	var info := Label.new()
-	var reason := str(perm.get("reason_code", ""))
-	if emg and not bool(lever.get("emergency", false)):
-		info.text = "不在紧急白名单"
-	elif not allowed and not reason.is_empty() and reason != "<null>":
-		info.text = reason
-	info.add_theme_font_size_override("font_size", 10)
-	info.add_theme_color_override("font_color", INK3)
-	row.add_child(info)
-	row.modulate = Color(1, 1, 1, 1.0 if allowed else 0.55)
-	return row
+		var pp := PanelContainer.new()
+		pp.add_theme_stylebox_override("panel", _sb(TEAL_BG, TEAL_BD, 7, 6))
+		var pr := HBoxContainer.new()
+		pr.add_theme_constant_override("separation", 8)
+		pp.add_child(pr)
+		pr.add_child(_lbl("待生效队列", 10, TEAL, true))
+		pr.add_child(_lbl(_lever_value_text(lever, (pend as Dictionary).get("value")),
+			11, TEAL_DK, true))
+		pr.add_child(_spacer_h())
+		pr.add_child(_lbl("生效 t%s" % str((pend as Dictionary).get("effective_tick", "?")),
+			11, Color("2a9184")))
+		v.add_child(pp)
+	if allowed and edited and not in_cart:
+		var add := _btn("加入提案 ＋", func() -> void:
+			_add_to_cart(lever, base_v), true)
+		add.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		v.add_child(add)
+	elif in_cart:
+		v.add_child(_lbl("✓ 已在提案篮", 11, TEAL))
+	return card
 
 
-func _lever_value_text(v: Variant) -> String:
+func _lever_value_text(lever: Dictionary, v: Variant) -> String:
 	if v == null:
-		return "未设"
+		return "不设(None)"
 	if v is bool:
-		return "开" if v else "关"
+		return "启用" if v else "停用"
 	if v is String:
 		return v
 	var f := float(v)
-	if absf(f) < 0.01 and f != 0.0:
+	var scale := absf(float(lever.get("control_scale", 1.0)))
+	if scale >= 1.0:
+		return "%d" % roundi(f)
+	if scale < 0.001:
 		return "%.5f" % f
 	return "%.3f" % f
 
 
-func _lever_control(lever: Dictionary, perm: Dictionary, allowed: bool) -> Control:
+func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Control:
 	var name := str(lever.get("name"))
 	var kind := str(perm.get("value_kind", lever.get("value_kind", "number")))
 	var choices: Array = perm.get("choices", lever.get("choices", []))
-	var box := HBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	var base_v: Variant = perm.get("current_value")
-	var cur: Variant = _cart.get(name, base_v)
+	var cur: Variant = _edits.get(name, base_v)
 	if not choices.is_empty():
+		var seg := HBoxContainer.new()
+		seg.add_theme_constant_override("separation", 3)
 		for opt in choices:
 			var b := Button.new()
 			b.text = str(opt)
-			b.toggle_mode = true
-			b.button_pressed = str(cur) == str(opt)
-			b.disabled = not allowed
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if str(cur) == str(opt):
+				b.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 6, 6))
+				b.add_theme_color_override("font_color", TEAL_DK)
 			var value := str(opt)
 			b.pressed.connect(func() -> void:
-				_cart_set(name, value))
-			box.add_child(b)
-		return box
+				_edits[name] = value
+				_render())
+			seg.add_child(b)
+		return seg
 	if kind == "bool":
-		var opts := [["关", false], ["开", true]]
-		for opt in opts:
-			var b := Button.new()
-			b.text = opt[0]
-			b.toggle_mode = true
-			b.button_pressed = cur == opt[1]
-			b.disabled = not allowed
-			var value: bool = opt[1]
-			b.pressed.connect(func() -> void:
-				_cart_set(name, value))
-			box.add_child(b)
-		return box
-	# 数值步进器:±control_scale,钳制于 current±max_step 与取值域
+		var brow := HBoxContainer.new()
+		brow.add_theme_constant_override("separation", 9)
+		var sw := CheckButton.new()
+		sw.button_pressed = cur == true
+		sw.text = "启用" if cur == true else "停用"
+		var st := str(lever.get("semantics",
+			lever.get("effective_semantics", ""))).contains("transition")
+		sw.toggled.connect(func(pressed: bool) -> void:
+			if st:
+				_confirm = {"title": "状态迁移确认",
+					"body": "切换「%s」属状态迁移(STATE_TRANSITION),将改变制度分支并按更高成本计费。确认迁移?" % name,
+					"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
+					"on_yes": func() -> void:
+						_edits[name] = pressed
+						_render()}
+				_render()
+			else:
+				_edits[name] = pressed
+				_render())
+		brow.add_child(sw)
+		if st:
+			brow.add_child(_chip("状态迁移", Color("9a7a2e"), Color(0, 0, 0, 0), AMBER_BD, 10))
+		return brow
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 7)
+	var numeric := base_v != null and not (base_v is bool) and not (base_v is String)
 	var dec := Button.new()
 	dec.text = "−"
-	box.add_child(dec)
-	var vl := Label.new()
-	vl.custom_minimum_size = Vector2(84, 0)
-	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vl.text = _lever_value_text(cur)
-	if _cart.has(name):
-		vl.add_theme_color_override("font_color", ACCENT)
-	box.add_child(vl)
+	dec.custom_minimum_size = Vector2(38, 0)
+	dec.add_theme_font_size_override("font_size", 18)
+	srow.add_child(dec)
+	var mid := PanelContainer.new()
+	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mid.add_theme_stylebox_override("panel", _sb(PANEL2, LINE2, 8, 6))
+	var midv := VBoxContainer.new()
+	mid.add_child(midv)
+	var vrow := HBoxContainer.new()
+	vrow.add_theme_constant_override("separation", 7)
+	vrow.add_child(_lbl(_lever_value_text(lever, cur), 18, INK, true))
+	if numeric and _edits.has(name):
+		var delta := float(_edits[name]) - float(base_v)
+		if absf(delta) > 1e-12:
+			vrow.add_child(_lbl("▲" if delta > 0 else "▼", 11, GREEN if delta > 0 else RED))
+	midv.add_child(vrow)
+	var scale := float(perm.get("control_scale", lever.get("control_scale", 0.01)))
+	var lo := float(perm.get("minimum", lever.get("minimum", 0.0)))
+	var hi := float(perm.get("maximum", lever.get("maximum", 0.0)))
+	midv.add_child(_lbl("档 %s · 域 %s – %s" % [
+		_lever_value_text(lever, scale), _lever_value_text(lever, lo),
+		_lever_value_text(lever, hi)], 9, INK3, true))
+	srow.add_child(mid)
 	var inc := Button.new()
 	inc.text = "＋"
-	box.add_child(inc)
-	var numeric := base_v != null and not (base_v is bool) and not (base_v is String)
-	dec.disabled = not allowed or not numeric
-	inc.disabled = not allowed or not numeric
+	inc.custom_minimum_size = Vector2(38, 0)
+	inc.add_theme_font_size_override("font_size", 18)
+	srow.add_child(inc)
+	dec.disabled = not numeric
+	inc.disabled = not numeric
 	if numeric:
 		var base := float(base_v)
-		var scale := float(perm.get("control_scale", lever.get("control_scale", 0.01)))
 		if scale <= 0.0:
 			scale = 0.01
-		var lo := float(perm.get("minimum", lever.get("minimum", -1e30)))
-		var hi := float(perm.get("maximum", lever.get("maximum", 1e30)))
 		var mstep: Variant = perm.get("max_step", lever.get("max_step"))
-		if mstep != null:
-			lo = maxf(lo, base - float(mstep))
-			hi = minf(hi, base + float(mstep))
 		var lo2 := lo
 		var hi2 := hi
+		if mstep != null:
+			lo2 = maxf(lo, base - float(mstep))
+			hi2 = minf(hi, base + float(mstep))
+		var is_int := str(perm.get("value_kind", "")) == "integer"
 		dec.pressed.connect(func() -> void:
-			_cart_set(name, clampf(float(_cart.get(name, base)) - scale, lo2, hi2)))
+			var nv := clampf(float(_edits.get(name, base)) - scale, lo2, hi2)
+			_edits[name] = roundi(nv) if is_int else nv
+			_render())
 		inc.pressed.connect(func() -> void:
-			_cart_set(name, clampf(float(_cart.get(name, base)) + scale, lo2, hi2)))
-	return box
+			var nv := clampf(float(_edits.get(name, base)) + scale, lo2, hi2)
+			_edits[name] = roundi(nv) if is_int else nv
+			_render())
+	return srow
 
 
-func _cart_set(lever_name: String, value: Variant) -> void:
-	_cart[lever_name] = value
-	_render_workbench()
+func _add_to_cart(lever: Dictionary, base_v: Variant) -> void:
+	var name := str(lever.get("name"))
+	if not _edits.has(name):
+		return
+	_cart = _cart.filter(func(c: Dictionary) -> bool: return c["lever"] != name)
+	_cart.append({"lever": name, "name": name,
+		"from": _lever_value_text(lever, base_v),
+		"to": _lever_value_text(lever, _edits[name]),
+		"value": _edits[name]})
+	_render()
 
 
 func _render_cart(open: bool) -> void:
-	for child in _cart_box.get_children():
-		child.queue_free()
+	var items := _n["cart_items"] as VBoxContainer
+	for c in items.get_children():
+		c.queue_free()
+	_set_text("cart_count", "%d 项" % _cart.size())
+	_set_text("cart_cost", "" if _cart.is_empty() else "生效按各杠杆时滞")
 	if _cart.is_empty():
-		var empty := Label.new()
-		empty.text = "购物车为空"
-		empty.add_theme_color_override("font_color", INK3)
-		_cart_box.add_child(empty)
-	for lever_name: String in _cart.keys():
-		var chip := Button.new()
-		chip.text = "%s → %s  ×" % [lever_name, _lever_value_text(_cart[lever_name])]
-		var key := lever_name
-		chip.pressed.connect(func() -> void:
-			_cart.erase(key)
-			_render_workbench())
-		_cart_box.add_child(chip)
-	_submit_btn.disabled = not open or _cart.is_empty()
-	_pass_btn.disabled = not open
-	_cart_cost.text = ("动作 %d 项 · 生效按各杠杆时滞" % _cart.size()) \
-		if not _cart.is_empty() else ""
+		items.add_child(_lbl("尚无动作。调整杠杆后「加入提案」,一起提交、一起裁决。",
+			11, Color("7a8593")))
+	for c: Dictionary in _cart:
+		var rowp := PanelContainer.new()
+		rowp.add_theme_stylebox_override("panel", _sb(Color.WHITE, LINE, 7, 6))
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 8)
+		rowp.add_child(r)
+		r.add_child(_lbl(str(c["name"]), 12, Color("23323f")))
+		r.add_child(_spacer_h())
+		r.add_child(_lbl(str(c["from"]), 11, Color("586a7b"), true))
+		r.add_child(_lbl("→", 11, TEAL))
+		r.add_child(_lbl(str(c["to"]), 11, TEAL_DK, true))
+		var rm := Button.new()
+		rm.text = "×"
+		rm.flat = true
+		var key := str(c["lever"])
+		rm.pressed.connect(func() -> void:
+			_cart = _cart.filter(func(x: Dictionary) -> bool: return x["lever"] != key)
+			_edits.erase(key)
+			_render())
+		r.add_child(rm)
+		items.add_child(rowp)
+	(_n["submit"] as Button).disabled = not open or _cart.is_empty()
+	(_n["pass"] as Button).disabled = not open
+
+
+func _show_verdict(v: Dictionary) -> void:
+	var key := str(v.get("decision_id", v.get("proposal_id", "")))
+	if key == _last_toasted or key.is_empty():
+		return
+	_last_toasted = key
+	var slot := _n["verdict_slot"] as VBoxContainer
+	for c in slot.get_children():
+		c.queue_free()
+	var status := str(v.get("status", "?"))
+	var ok := status.begins_with("accepted") or status == "noop"
+	var vp := PanelContainer.new()
+	vp.add_theme_stylebox_override("panel", _sb(
+		Color("e3f4ea") if ok else RED_BG,
+		Color("59b7a8") if ok else RED_BD, 9, 9))
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 9)
+	vp.add_child(r)
+	r.add_child(_lbl("✓" if ok else "✕", 15, GREEN if ok else RED))
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(_lbl("判决 · " + status, 12, GREEN if ok else RED))
+	var reason := str(v.get("reason_code", ""))
+	var sub := ""
+	if not reason.is_empty() and reason != "<null>":
+		sub = reason
+	if v.get("effective_tick") != null:
+		sub += ("" if sub.is_empty() else " · ") + "生效 t" + str(v.get("effective_tick"))
+	if not sub.is_empty():
+		var sl := _lbl(sub, 11, Color("526475"))
+		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(sl)
+	r.add_child(col)
+	var x := Button.new()
+	x.text = "×"
+	x.flat = true
+	x.pressed.connect(func() -> void:
+		for c in slot.get_children():
+			c.queue_free())
+	r.add_child(x)
+	slot.add_child(vp)
 
 
 func _submit_cart() -> void:
 	var ctx := _active_context()
-	if ctx.is_empty():
+	if ctx.is_empty() or _cart.is_empty():
 		return
 	var actions: Array = []
-	for lever_name: String in _cart.keys():
-		actions.append({"lever": lever_name, "value": _cart[lever_name]})
-	_send({
-		"command": "resolve_context",
-		"context_id": str(ctx.get("context_id")),
-		"actions": actions,
-	})
+	for c: Dictionary in _cart:
+		actions.append({"lever": c["lever"], "value": c["value"]})
+	_send({"command": "resolve_context",
+		"context_id": str(ctx.get("context_id")), "actions": actions})
 	_cart.clear()
+	_edits.clear()
 
 
 func _submit_pass() -> void:
 	var ctx := _active_context()
 	if ctx.is_empty():
 		return
-	_send({
-		"command": "resolve_context",
-		"context_id": str(ctx.get("context_id")),
-		"actions": [],
-	})
+	_send({"command": "resolve_context",
+		"context_id": str(ctx.get("context_id")), "actions": []})
 	_cart.clear()
+	_edits.clear()
+
+
+func _render_center() -> void:
+	var body := _n["center_body"] as VBoxContainer
+	for c in body.get_children():
+		c.queue_free()
+	if _tab == "world":
+		var wp := PanelContainer.new()
+		wp.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var wv := VBoxContainer.new()
+		wv.add_theme_constant_override("separation", 8)
+		wp.add_child(wv)
+		wv.add_child(_lbl("世界视图 · 多经济体", 14, INK))
+		wv.add_child(_lbl("当前 worker 为单经济体世界;多经济体接入排在 v30(协议 assign_seat / 世界快照)。", 12, INK2))
+		wv.add_child(_lbl("设计稿合同:经济体卡片(GDP/失业/通胀/汇率)+ 有向贸易流 + FX 矩阵条。", 11, INK3))
+		body.add_child(wp)
+		return
+	var fp := PanelContainer.new()
+	var fv := VBoxContainer.new()
+	fv.add_theme_constant_override("separation", 6)
+	fp.add_child(fv)
+	var legend := HBoxContainer.new()
+	legend.add_theme_constant_override("separation", 14)
+	legend.add_child(_lbl("宏观焦点 · 公报序列", 14, INK))
+	legend.add_child(_spacer_h())
+	for item: Array in [["实际产出", TEAL], ["失业率", AMBER], ["通胀", PURPLE]]:
+		var li := HBoxContainer.new()
+		li.add_theme_constant_override("separation", 5)
+		var swatch := ColorRect.new()
+		swatch.color = item[1]
+		swatch.custom_minimum_size = Vector2(16, 3)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		li.add_child(swatch)
+		li.add_child(_lbl(str(item[0]), 11, Color("4a5a6b")))
+		legend.add_child(li)
+	fv.add_child(legend)
+	var chart := _FocusChart.new()
+	chart.custom_minimum_size = Vector2(0, 250)
+	chart.series = [
+		{"vals": _hist_vals("real_output"), "color": TEAL, "width": 2.4},
+		{"vals": _hist_vals("unemployment_rate"), "color": AMBER, "width": 1.8},
+		{"vals": _hist_vals("inflation"), "color": PURPLE, "width": 1.8},
+	]
+	chart.shock_active = not _snapshot.get("active_shocks", []).is_empty()
+	chart.font = _sans
+	fv.add_child(chart)
+	var notes := HBoxContainer.new()
+	notes.add_theme_constant_override("separation", 10)
+	notes.add_child(_lbl("t 时刻仅显示 released_at ≤ t 的公报", 11, INK2))
+	notes.add_child(_lbl("·", 11, LINE2))
+	notes.add_child(_lbl("缺失显式化,禁止零填 / 前值补", 11, INK2))
+	notes.add_child(_lbl("·", 11, LINE2))
+	notes.add_child(_lbl("365 tick = 1 年", 11, INK2))
+	fv.add_child(notes)
+	body.add_child(fp)
+	var sp := PanelContainer.new()
+	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var sv := VBoxContainer.new()
+	sv.add_theme_constant_override("separation", 9)
+	sp.add_child(sv)
+	sv.add_child(_lbl("SERIES · 公报小图(近 24 期发布)", 10, INK3, true))
+	var grid := HBoxContainer.new()
+	grid.add_theme_constant_override("separation", 10)
+	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sv.add_child(grid)
+	for spec: Dictionary in [TILE_SPEC[0], TILE_SPEC[1], TILE_SPEC[2], TILE_SPEC[4]]:
+		var sid := str(spec["id"])
+		var card := PanelContainer.new()
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 10, 10))
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 5)
+		card.add_child(cv)
+		var hr := HBoxContainer.new()
+		hr.add_theme_constant_override("separation", 6)
+		hr.add_child(_dot(spec["color"], 6))
+		hr.add_child(_lbl(str(spec["label"]).split(" · ")[0], 11, Color("516375")))
+		cv.add_child(hr)
+		var hist: Array = _release_hist.get(sid, [])
+		if hist.is_empty():
+			cv.add_child(_lbl("暂无发布", 12, INK3))
+		else:
+			cv.add_child(_lbl(_fmt_series(sid, float(hist[-1]["v"])), 17, spec["color"], true))
+			var sl := _SparkLine.new()
+			sl.color = spec["color"]
+			sl.custom_minimum_size = Vector2(0, 30)
+			var vals: Array = []
+			for hh: Dictionary in hist:
+				vals.append(hh["v"])
+			sl.values = vals
+			cv.add_child(sl)
+			cv.add_child(_lbl("发布 t%d" % int(hist[-1]["at"]), 9, INK3, true))
+		grid.add_child(card)
+	body.add_child(sp)
+
+
+func _hist_vals(sid: String) -> Array:
+	var out: Array = []
+	for h: Dictionary in _release_hist.get(sid, []):
+		out.append(float(h["v"]))
+	return out
 
 
 func _render_events() -> void:
-	for child in _events_box.get_children():
-		child.queue_free()
+	var box := _n["events"] as VBoxContainer
+	for c in box.get_children():
+		c.queue_free()
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 8)
+	margin.add_child(inner)
+	box.add_child(margin)
+	for bulletin in _snapshot.get("shock_bulletins", []):
+		if not (bulletin is Dictionary):
+			continue
+		var bp := PanelContainer.new()
+		bp.add_theme_stylebox_override("panel", _sb(Color("fbe3db"), RED_BD, 10, 9))
+		var bv := VBoxContainer.new()
+		bv.add_theme_constant_override("separation", 3)
+		bp.add_child(bv)
+		var br := HBoxContainer.new()
+		br.add_theme_constant_override("separation", 7)
+		br.add_child(_dot(RED, 7))
+		br.add_child(_lbl("冲击预告", 10, Color("cc5a44")))
+		br.add_child(_spacer_h())
+		br.add_child(_lbl("t%s" % str((bulletin as Dictionary).get("start_tick", "?")),
+			10, Color("9a6a5e"), true))
+		bv.add_child(br)
+		bv.add_child(_lbl(str((bulletin as Dictionary).get("shock_id",
+			(bulletin as Dictionary).get("kind", "shock"))), 12, Color("8a3a2c")))
+		inner.add_child(bp)
 	var merged: Array = []
 	for ev in _snapshot.get("events", []):
 		if ev is Dictionary:
@@ -783,23 +1325,195 @@ func _render_events() -> void:
 		if ev is Dictionary:
 			merged.append(ev)
 	merged.reverse()
-	for ev: Dictionary in merged.slice(0, 40):
-		var line := Label.new()
-		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var kind := str(ev.get("event_type", ev.get("kind", "event")))
-		var t_ev: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
-		var detail := str(ev.get("status", ev.get("shock_id", ev.get("lever", ""))))
-		line.text = "t%s · %s%s" % [str(t_ev), kind,
-			("" if detail.is_empty() else " · " + detail)]
-		line.add_theme_font_size_override("font_size", 11)
-		line.add_theme_color_override("font_color", INK2)
-		_events_box.add_child(line)
+	for ev: Dictionary in merged.slice(0, 36):
+		var actor := str(ev.get("actor", ""))
+		var mine := actor.contains("desktop") or actor.contains("player")
+		if _filter_mine and not mine:
+			continue
+		var etype := str(ev.get("event_type", ev.get("kind", "event")))
+		var color := Color("586a7b")
+		if etype.contains("accepted") or etype.contains("committed"):
+			color = GREEN
+		elif etype.contains("rejected") or etype.contains("failed"):
+			color = RED
+		elif etype.contains("context") or etype.contains("proposal"):
+			color = TEAL
+		elif etype.contains("seat"):
+			color = PURPLE
+		elif etype.contains("shock"):
+			color = AMBER
+		var r := HBoxContainer.new()
+		r.add_theme_constant_override("separation", 9)
+		var railv := VBoxContainer.new()
+		railv.add_child(_dot(color, 8))
+		var rail := ColorRect.new()
+		rail.color = Color("dbe2ea")
+		rail.custom_minimum_size = Vector2(1, 10)
+		rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		rail.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		railv.add_child(rail)
+		r.add_child(railv)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var trr := HBoxContainer.new()
+		trr.add_theme_constant_override("separation", 7)
+		trr.add_child(_lbl(etype, 10, color))
+		if mine:
+			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
+		trr.add_child(_spacer_h())
+		trr.add_child(_lbl("t%s" % str(ev.get("boundary_tick", ev.get("tick", "?"))),
+			9, INK3, true))
+		col.add_child(trr)
+		var detail := str(ev.get("status", ev.get("shock_id",
+			ev.get("lever", ev.get("reason", "")))))
+		if not detail.is_empty() and detail != "<null>":
+			var dl := _lbl(detail, 12, Color("33424f"))
+			dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			col.add_child(dl)
+		r.add_child(col)
+		inner.add_child(r)
 
 
-func _render_banner() -> void:
+func _render_crisis() -> void:
+	var on := _emergency()
+	(_n["crisis"] as Control).visible = on
+	if not on:
+		return
 	var ctx := _active_context()
-	var emg := bool(ctx.get("emergency", false))
-	_banner.visible = emg
-	if emg:
-		_banner_body.text = "触发器:%s · 仅紧急白名单杠杆可动 · 决策前引擎冻结" \
-			% str(ctx.get("emergency_trigger", "—"))
+	var trig := str(ctx.get("emergency_trigger",
+		"manual_demo" if _demo_crisis else "—"))
+	_set_text("crisis_title", "紧急会议 · 触发器:%s" % trig)
+	var snapcol := _n["crisis_snap"] as VBoxContainer
+	for c in snapcol.get_children():
+		if c is PanelContainer:
+			c.queue_free()
+	var by_id := _releases_by_id()
+	for sid in ["unemployment_rate", "inflation", "policy_rate"]:
+		var rel: Dictionary = by_id.get(sid, {})
+		var rp := PanelContainer.new()
+		rp.add_theme_stylebox_override("panel", _sb(RED_BG, RED_BD, 8, 8))
+		var rr := HBoxContainer.new()
+		rr.add_theme_constant_override("separation", 9)
+		rp.add_child(rr)
+		var label: String = sid
+		for spec: Dictionary in TILE_SPEC:
+			if str(spec["id"]) == sid:
+				label = str(spec["label"])
+		rr.add_child(_lbl(label, 12, Color("7a3327")))
+		rr.add_child(_spacer_h())
+		rr.add_child(_lbl(_fmt_series(sid, float(rel.get("value")))
+			if rel.get("value") != null else "暂无", 15, RED, true))
+		snapcol.add_child(rp)
+	var levcol := _n["crisis_levers"] as VBoxContainer
+	for c in levcol.get_children():
+		if c is PanelContainer or (c is Button) or (c is Label and c != levcol.get_child(0)):
+			if not (c is HBoxContainer):
+				c.queue_free()
+	var ctx_perm: Dictionary = {}
+	for item: Dictionary in ctx.get("permitted_actions", []):
+		ctx_perm[str(item.get("lever"))] = item
+	var current_policy: Dictionary = ctx.get("current_policy", {})
+	var count := 0
+	for g: String in _groups.keys():
+		for lever: Dictionary in _groups[g]:
+			if count >= 2 or not bool(lever.get("emergency", false)):
+				continue
+			var name := str(lever.get("name"))
+			var perm: Dictionary = ctx_perm.get(name, {})
+			var base_v: Variant = _lever_current(lever, perm, current_policy)
+			if base_v == null or base_v is bool or base_v is String:
+				continue
+			count += 1
+			var lp := PanelContainer.new()
+			lp.add_theme_stylebox_override("panel", _sb(RED_BG, RED_BD, 9, 9))
+			var lvv := VBoxContainer.new()
+			lvv.add_theme_constant_override("separation", 6)
+			lp.add_child(lvv)
+			lvv.add_child(_lbl(name + "(紧急)", 12, Color("6b2317")))
+			lvv.add_child(_lever_control(lever, perm, base_v))
+			levcol.add_child(lp)
+	if _demo_crisis:
+		levcol.add_child(_lbl("演示模式:真实紧急会议由 TriggerSpec 在边界打开(v26)。",
+			10, Color("9a6a5e")))
+	var submit := _btn("提交紧急处置", func() -> void:
+		if _demo_crisis:
+			_demo_crisis = false
+			_render()
+		else:
+			_submit_cart())
+	submit.add_theme_stylebox_override("normal", _sb(RED, Color("c23f2a"), 9, 9))
+	submit.add_theme_color_override("font_color", Color.WHITE)
+	levcol.add_child(submit)
+
+
+# ================= 绘图控件 =================
+class _SparkLine extends Control:
+	var values: Array = []
+	var color: Color = Color("0f9d90")
+
+	func _draw() -> void:
+		if values.size() < 2:
+			return
+		var lo := INF
+		var hi := -INF
+		for v in values:
+			lo = minf(lo, float(v))
+			hi = maxf(hi, float(v))
+		var span := hi - lo
+		if span <= 0.0:
+			span = 1.0
+		var pts := PackedVector2Array()
+		var n := values.size()
+		for i in n:
+			pts.append(Vector2(
+				2.0 + (size.x - 4.0) * float(i) / float(n - 1),
+				size.y - 2.0 - (size.y - 4.0) * (float(values[i]) - lo) / span))
+		draw_polyline(pts, color, 1.6, true)
+		draw_circle(pts[n - 1], 2.4, color)
+
+
+class _FocusChart extends Control:
+	var series: Array = []
+	var shock_active := false
+	var font: Font
+
+	func _draw() -> void:
+		var plot := Rect2(Vector2(8, 8), size - Vector2(16, 30))
+		for i in range(5):
+			var y := plot.position.y + plot.size.y * float(i) / 4.0
+			draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
+				Color("e6ebf1"), 1.0)
+		if shock_active:
+			var band := Rect2(Vector2(plot.end.x - plot.size.x * 0.25, plot.position.y),
+				Vector2(plot.size.x * 0.12, plot.size.y))
+			draw_rect(band, Color(0.824, 0.29, 0.204, 0.08))
+			draw_string(font,
+				Vector2(band.position.x + 4, plot.position.y + 14), "冲击生效中",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("cc5a44"))
+		var any := false
+		for s: Dictionary in series:
+			var vals: Array = s.get("vals", [])
+			if vals.size() < 2:
+				continue
+			any = true
+			var lo := INF
+			var hi := -INF
+			for v in vals:
+				lo = minf(lo, float(v))
+				hi = maxf(hi, float(v))
+			var span := hi - lo
+			if span <= 0.0:
+				span = 1.0
+			var pts := PackedVector2Array()
+			var n := vals.size()
+			for i in n:
+				pts.append(Vector2(
+					plot.position.x + plot.size.x * float(i) / float(n - 1),
+					plot.end.y - plot.size.y * (float(vals[i]) - lo) / span))
+			draw_polyline(pts, s.get("color", Color.GRAY), float(s.get("width", 2.0)), true)
+		if not any:
+			draw_string(font, plot.get_center() + Vector2(-140, 0),
+				"推进模拟以积累公报序列(发布日历驱动)",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("60758d"))
+		draw_string(font, Vector2(plot.end.x - 80, size.y - 6),
+			"发布时间 →", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("849098"))
