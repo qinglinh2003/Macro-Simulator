@@ -140,6 +140,7 @@ var _capture_ticks := 0
 var _capture_target := -1
 var _confirm: Dictionary = {}
 var _demo_crisis := false
+var _crisis_dismissed := ""
 
 var _sans: SystemFont
 var _mono: SystemFont
@@ -556,7 +557,11 @@ func _build_header(shell: VBoxContainer) -> void:
 	h.add_child(god)
 	h.add_child(_vdiv())
 	h.add_child(_btn("步进", func() -> void:
-		_send({"command": "advance", "ticks": 1})))
+		if _awaiting():
+			_show_hint("本届会议未闭合,推进被暂停:请「提交提案」或「本次不动」;紧急会议在红色面板里处置。切到「实时」模式可自动通过非紧急会议。")
+			_render()
+		else:
+			_send({"command": "advance", "ticks": 1})))
 	var play := _btn("播放", _toggle_play, true)
 	_n["play"] = play
 	h.add_child(play)
@@ -578,6 +583,8 @@ func _build_header(shell: VBoxContainer) -> void:
 
 func _toggle_play() -> void:
 	_playing = not _playing
+	if _playing and _awaiting() and _mode != "realtime":
+		_show_hint("播放已就绪,但本届会议未闭合:先「提交提案」或「本次不动」,或切「实时」模式自动通过。")
 	_render()
 
 
@@ -781,6 +788,7 @@ func _build_overlays() -> void:
 	chead.add_child(_spacer_h())
 	chead.add_child(_btn("离开横幅", func() -> void:
 		_demo_crisis = false
+		_crisis_dismissed = str(_emergency_context().get("context_id", ""))
 		_render()))
 	var cbp := MarginContainer.new()
 	for m in ["margin_left", "margin_right", "margin_bottom"]:
@@ -1398,6 +1406,30 @@ func _render_cart(open: bool) -> void:
 	(_n["pass"] as Button).disabled = not open
 
 
+func _show_hint(text: String) -> void:
+	var slot := _n["verdict_slot"] as VBoxContainer
+	for c in slot.get_children():
+		c.queue_free()
+	var vp := PanelContainer.new()
+	vp.add_theme_stylebox_override("panel", _sb(AMBER_BG, AMBER_BD, 9, 9))
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 9)
+	vp.add_child(r)
+	r.add_child(_lbl("!", 15, AMBER))
+	var tl := _lbl(text, 11, Color("8a6114"))
+	tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r.add_child(tl)
+	var x := Button.new()
+	x.text = "×"
+	x.flat = true
+	x.pressed.connect(func() -> void:
+		for c in slot.get_children():
+			c.queue_free())
+	r.add_child(x)
+	slot.add_child(vp)
+
+
 func _show_verdict(v: Dictionary) -> void:
 	var key := str(v.get("decision_id", v.get("proposal_id", "")))
 	if key == _last_toasted or key.is_empty():
@@ -2002,7 +2034,11 @@ func _render_events() -> void:
 
 # ================= 危机遮罩 =================
 func _render_crisis() -> void:
+	var real_ctx := _emergency_context()
 	var on := _emergency()
+	if not real_ctx.is_empty() \
+			and str(real_ctx.get("context_id", "")) == _crisis_dismissed:
+		on = _demo_crisis
 	(_n["crisis"] as Control).visible = on
 	if not on:
 		return
