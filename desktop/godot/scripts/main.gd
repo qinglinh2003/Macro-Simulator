@@ -760,7 +760,7 @@ func _build_main(shell: VBoxContainer) -> void:
 	main.add_theme_constant_override("separation", 10)
 	shell.add_child(main)
 	var wbp := PanelContainer.new()
-	wbp.custom_minimum_size = Vector2(430, 0)
+	wbp.custom_minimum_size = Vector2(412, 0)
 	wbp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
 	main.add_child(wbp)
 	var wb := VBoxContainer.new()
@@ -772,7 +772,7 @@ func _build_main(shell: VBoxContainer) -> void:
 	main.add_child(center)
 	_build_center(center)
 	var tlp := PanelContainer.new()
-	tlp.custom_minimum_size = Vector2(346, 0)
+	tlp.custom_minimum_size = Vector2(330, 0)
 	tlp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
 	main.add_child(tlp)
 	var tl := VBoxContainer.new()
@@ -2084,7 +2084,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		card.add_child(cv)
 		cv.add_child(_lbl(str(item[1]), 10, Color("516375")))
 		var ml := _MultiLine.new()
-		ml.custom_minimum_size = Vector2(140, 42)
+		ml.custom_minimum_size = Vector2(110, 42)
 		var all_series: Array = []
 		for i in econs.size():
 			var vals: Array = []
@@ -2119,7 +2119,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	relrow.add_theme_constant_override("separation", 10)
 	relv.add_child(relrow)
 	var map := _RelationsMap.new()
-	map.custom_minimum_size = Vector2(360, 240)
+	map.custom_minimum_size = Vector2(290, 236)
 	map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	map.font = _sans
 	var mnames: Array = []
@@ -2133,7 +2133,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	map.remit = _num_list(latest.get("remittances", []))
 	relrow.add_child(map)
 	var bars := VBoxContainer.new()
-	bars.custom_minimum_size = Vector2(280, 0)
+	bars.custom_minimum_size = Vector2(248, 0)
 	bars.add_theme_constant_override("separation", 7)
 	relrow.add_child(bars)
 	_bar_block(bars, "汇率 e(numéraire)", _num_list(latest.get("e", [])), "%.4f", false)
