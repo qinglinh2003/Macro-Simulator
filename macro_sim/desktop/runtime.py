@@ -82,6 +82,8 @@ class SimulationRuntime:
         self._shock_sequence = 0
         self._history = []
         self._last_records = []
+        self._last_verdict = None
+        self._pending_verdict_pid = None
         # Open tick-zero decision windows immediately so the UI has something real
         # to operate rather than inventing a separate frontend policy form.
         self.session.advance()
@@ -111,6 +113,10 @@ class SimulationRuntime:
             return self.resolve_context(context_id, actions)
         if name == "trigger_shock":
             return self.trigger_shock()
+        if name == "get_schema":
+            schema = dict(self.service.policy_schema(economy_id=0, seat="treasury"))
+            schema["protocol_version"] = PROTOCOL_VERSION
+            return schema
         raise ValueError(f"unknown command {name!r}")
 
     def advance(self, ticks: int) -> dict[str, Any]:
@@ -140,7 +146,7 @@ class SimulationRuntime:
             normalized_actions.append({"lever": action["lever"], "value": action["value"]})
         self._proposal_sequence += 1
         proposal_id = f"desktop:{self._proposal_sequence}:{context_id}"
-        self.service.submit_proposal(
+        decision = self.service.submit_proposal(
             {
                 "schema_version": context.schema_version,
                 "proposal_id": proposal_id,
@@ -152,6 +158,7 @@ class SimulationRuntime:
             },
             actor="desktop_player",
         )
+        self._pending_verdict_pid = proposal_id
         result = self.session.advance()
         if result.status == "advanced":
             self._record_result(result.records)
@@ -214,8 +221,34 @@ class SimulationRuntime:
                 for spec in shock_engine.specs
                 if spec.intensity_at(self.session.boundary_tick) > 0
             ]
+        # the DECISION is asynchronous: the coordinator emits a decision_* event
+        # once the boundary collects every context -- surface the one matching
+        # the player's latest proposal as last_verdict for the UI toast
+        if getattr(self, "_pending_verdict_pid", None):
+            for event in reversed(list(self.session.events.events)[-40:]):
+                if (
+                    isinstance(event, dict)
+                    and str(event.get("event_type", "")).startswith("decision_")
+                    and event.get("proposal_id") == self._pending_verdict_pid
+                ):
+                    self._last_verdict = {
+                        "status": str(event.get("event_type"))
+                        .removeprefix("decision_"),
+                        "proposal_id": event.get("proposal_id"),
+                        "decision_id": event.get("decision_id"),
+                        "reason_code": event.get("reason"),
+                        "effective_tick": event.get("effective_tick"),
+                    }
+                    self._pending_verdict_pid = None
+                    break
+        observation = self.session._observation(0, "treasury", 0)
+        observation_payload = (
+            observation.to_dict() if hasattr(observation, "to_dict") else observation
+        )
         return {
             "protocol_version": PROTOCOL_VERSION,
+            "observation": observation_payload,
+            "last_verdict": self._last_verdict,
             "tick": self.session.boundary_tick,
             "phase": self.session.phase,
             "awaiting_human": bool(self.session.missing_context_ids),

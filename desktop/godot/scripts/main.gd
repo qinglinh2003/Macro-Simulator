@@ -1,33 +1,66 @@
 extends Control
+## 宏观政策室 v29 — 公报制驾驶舱 + schema 驱动工作台 + 原子提案 + 危机横幅。
+## 前端零经济逻辑:数据全部来自 worker 快照,修改全部走提案 API。
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
-const EconomicMapScript = preload("res://scripts/economic_map.gd")
 const MetricChartScript = preload("res://scripts/metric_chart.gd")
 
+const TPY := 365
+const QT := 91
+const SPEEDS := [1, 5, 15, 60]
+const HEADLINE := [
+	"real_output", "unemployment_rate", "inflation", "price_index",
+	"policy_rate", "gov_deficit_to_gdp", "avg_wage",
+]
+const SERIES_LABEL := {
+	"real_output": "GDP(30日窗)", "unemployment_rate": "失业率",
+	"inflation": "通胀(年化)", "price_index": "物价指数",
+	"policy_rate": "利率(年化)", "gov_deficit_to_gdp": "赤字/GDP",
+	"avg_wage": "平均工资",
+}
+const INK := Color("dce7f2")
+const INK2 := Color("8ba3bc")
+const INK3 := Color("60758d")
+const ACCENT := Color("4fd1c5")
+const WARN := Color("f6ad55")
+const CRIT := Color("f56565")
+const GOOD := Color("68d391")
+
 var _client
-var _play_timer: Timer
+var _outbox: Array = []
 var _snapshot: Dictionary = {}
-var _current_context: Dictionary = {}
+var _schema: Dictionary = {}
+var _groups: Dictionary = {}
+var _cart: Dictionary = {}
+var _release_hist: Dictionary = {}
+var _seen_release: Dictionary = {}
 var _playing := false
+var _speed := 1
+var _god := false
+var _last_toasted := ""
 var _capture_path := ""
 
 var _connection_label: Label
+var _clock_label: Label
 var _tick_label: Label
-var _phase_label: Label
-var _output_value: Label
-var _jobs_value: Label
-var _inflation_value: Label
-var _price_value: Label
-var _context_title: Label
-var _context_detail: Label
-var _lever_selector: OptionButton
-var _value_editor: SpinBox
-var _apply_button: Button
-var _pass_button: Button
-var _play_button: Button
-var _event_log: RichTextLabel
-var _economic_map
-var _chart
+var _tiles_box: HBoxContainer
+var _status_label: Label
+var _capacity_label: Label
+var _levers_box: VBoxContainer
+var _cart_box: HBoxContainer
+var _cart_cost: Label
+var _submit_btn: Button
+var _pass_btn: Button
+var _events_box: VBoxContainer
+var _play_btn: Button
+var _paused_label: Label
+var _banner: PanelContainer
+var _banner_body: Label
+var _toast: PanelContainer
+var _toast_label: Label
+var _toast_timer: Timer
+var _play_timer: Timer
+var _speed_btns: Array = []
 
 
 func _ready() -> void:
@@ -36,18 +69,64 @@ func _ready() -> void:
 	_client = SimulationClientScript.new()
 	add_child(_client)
 	_client.connected.connect(_on_connected)
-	_client.disconnected.connect(_on_disconnected)
+	_client.disconnected.connect(func() -> void: _connection_label.text = "已断开·重连中")
 	_client.response_received.connect(_on_response)
 	_client.request_failed.connect(_on_request_failed)
 	_play_timer = Timer.new()
-	_play_timer.wait_time = 0.55
+	_play_timer.wait_time = 1.0
 	_play_timer.timeout.connect(_on_play_tick)
 	add_child(_play_timer)
+	_play_timer.start()
 	_capture_path = OS.get_environment("MACRO_SIM_CAPTURE_PATH")
 
 
+# ---------------- 请求队列(client 单飞行请求) ----------------
+func _send(command: Dictionary) -> void:
+	_outbox.append(command)
+	_pump()
+
+
+func _pump() -> void:
+	if _client == null or _client.busy or _outbox.is_empty():
+		return
+	_client.send_command(_outbox.pop_front())
+
+
+func _on_connected() -> void:
+	_connection_label.text = "已连接"
+	_connection_label.add_theme_color_override("font_color", GOOD)
+	_send({"command": "hello"})
+	_send({"command": "get_schema"})
+
+
+func _on_response(response: Dictionary) -> void:
+	var payload: Dictionary = response.get("snapshot", {})
+	if payload.has("levers") and payload.has("seat"):
+		_schema = payload
+		_index_schema()
+	else:
+		_snapshot = payload
+		_ingest_releases()
+		var verdict: Variant = payload.get("last_verdict")
+		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
+			_maybe_toast(verdict)
+		if _playing and _awaiting():
+			_playing = false
+	_render()
+	_pump()
+	if not _capture_path.is_empty():
+		var path := _capture_path
+		_capture_path = ""
+		_capture_after_render(path)
+
+
+func _on_request_failed(message: String) -> void:
+	_show_toast("⛔ " + message, false)
+	_pump()
+
+
 func _capture_after_render(path: String) -> void:
-	await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(0.3).timeout
 	var image := get_viewport().get_texture().get_image()
 	var error := image.save_png(path)
 	if error != OK:
@@ -55,20 +134,30 @@ func _capture_after_render(path: String) -> void:
 	get_tree().quit(error)
 
 
+# ---------------- 主题与布局 ----------------
 func _build_theme() -> void:
 	var app_theme := Theme.new()
-	app_theme.default_font_size = 15
-	app_theme.set_color("font_color", "Label", Color("dce7f2"))
-	app_theme.set_color("font_color", "Button", Color("e5edf5"))
-	app_theme.set_color("font_color", "OptionButton", Color("e5edf5"))
-	var button := _style(Color("18283b"), Color("314862"), 8)
-	var button_hover := _style(Color("213952"), Color("4fd1c5"), 8)
+	app_theme.default_font_size = 14
+	app_theme.set_color("font_color", "Label", INK)
+	app_theme.set_color("font_color", "Button", INK)
+	app_theme.set_color("font_color", "CheckBox", INK)
+	var button := _style(Color("18283b"), Color("314862"), 6, 6)
 	app_theme.set_stylebox("normal", "Button", button)
-	app_theme.set_stylebox("hover", "Button", button_hover)
-	app_theme.set_stylebox("pressed", "Button", _style(Color("0d817d"), Color("4fd1c5"), 8))
-	app_theme.set_stylebox("normal", "OptionButton", button)
-	app_theme.set_stylebox("hover", "OptionButton", button_hover)
+	app_theme.set_stylebox("hover", "Button", _style(Color("213952"), ACCENT, 6, 6))
+	app_theme.set_stylebox("pressed", "Button", _style(Color("0d817d"), ACCENT, 6, 6))
+	app_theme.set_stylebox("disabled", "Button", _style(Color("111d2c"), Color("22334a"), 6, 6))
+	app_theme.set_stylebox("panel", "PanelContainer", _style(Color("0d1826"), Color("22334a"), 8, 10))
 	theme = app_theme
+
+
+func _style(background: Color, border: Color, radius: int, margin: int = 8) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(radius)
+	style.set_content_margin_all(margin)
+	return style
 
 
 func _build_ui() -> void:
@@ -79,344 +168,619 @@ func _build_ui() -> void:
 	var shell := VBoxContainer.new()
 	shell.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shell.offset_left = 14
-	shell.offset_top = 12
+	shell.offset_top = 10
 	shell.offset_right = -14
-	shell.offset_bottom = -12
-	shell.add_theme_constant_override("separation", 10)
+	shell.offset_bottom = -10
+	shell.add_theme_constant_override("separation", 8)
 	add_child(shell)
 
-	var header_panel := _panel()
-	header_panel.custom_minimum_size.y = 62
-	shell.add_child(header_panel)
+	# 顶栏
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
-	header_panel.add_child(header)
+	header.add_theme_constant_override("separation", 14)
+	shell.add_child(header)
 	var title := Label.new()
-	title.text = "MACRO COMMAND  /  POLICY ROOM"
-	title.add_theme_font_size_override("font_size", 19)
-	title.add_theme_color_override("font_color", Color("f2f7fb"))
+	title.text = "宏观政策室"
+	title.add_theme_font_size_override("font_size", 20)
 	header.add_child(title)
+	var sub := Label.new()
+	sub.text = "v29 · 真引擎 · 财政席"
+	sub.add_theme_color_override("font_color", INK3)
+	header.add_child(sub)
 	_connection_label = Label.new()
-	_connection_label.text = "CONNECTING"
-	_connection_label.add_theme_color_override("font_color", Color("f6ad55"))
+	_connection_label.text = "连接中…"
+	_connection_label.add_theme_color_override("font_color", WARN)
 	header.add_child(_connection_label)
-	var header_space := Control.new()
-	header_space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(header_space)
+	var god := CheckBox.new()
+	god.text = "上帝模式"
+	god.toggled.connect(func(v: bool) -> void:
+		_god = v
+		_render())
+	header.add_child(god)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(spacer)
+	_clock_label = Label.new()
+	_clock_label.add_theme_font_size_override("font_size", 16)
+	header.add_child(_clock_label)
 	_tick_label = Label.new()
-	_tick_label.text = "DAY 0000"
-	_tick_label.add_theme_font_size_override("font_size", 17)
+	_tick_label.add_theme_color_override("font_color", INK3)
 	header.add_child(_tick_label)
-	_phase_label = Label.new()
-	_phase_label.text = "OFFLINE"
-	header.add_child(_phase_label)
-	header.add_child(_button("New Game", _on_new_game))
-	header.add_child(_button("Step", func(): _send({"command": "advance", "ticks": 1})))
-	_play_button = _button("Play", _toggle_play)
-	header.add_child(_play_button)
-	header.add_child(_button("Fast x5", func(): _send({"command": "advance", "ticks": 5})))
 
-	var columns := HBoxContainer.new()
-	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	columns.add_theme_constant_override("separation", 10)
-	shell.add_child(columns)
-	_build_dashboard(columns)
-	_build_center(columns)
-	_build_policy_panel(columns)
-	_set_policy_enabled(false)
+	# 公报瓦片带
+	var tiles_scroll := ScrollContainer.new()
+	tiles_scroll.custom_minimum_size = Vector2(0, 104)
+	tiles_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	shell.add_child(tiles_scroll)
+	_tiles_box = HBoxContainer.new()
+	_tiles_box.add_theme_constant_override("separation", 8)
+	tiles_scroll.add_child(_tiles_box)
 
+	# 主区
+	var split := HSplitContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	split.split_offset = 760
+	shell.add_child(split)
 
-func _build_dashboard(columns: HBoxContainer) -> void:
-	var left_panel := _panel()
-	left_panel.custom_minimum_size.x = 225
-	columns.add_child(left_panel)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 10)
-	left_panel.add_child(left)
-	left.add_child(_section("NATIONAL DASHBOARD"))
-	var nation := Label.new()
-	nation.text = "Republic 01\nSimulation seed 7"
-	nation.add_theme_color_override("font_color", Color("8ba3bc"))
-	left.add_child(nation)
-	_output_value = _metric(left, "REAL OUTPUT", "—", Color("4fd1c5"))
-	_jobs_value = _metric(left, "UNEMPLOYMENT", "—", Color("f6ad55"))
-	_inflation_value = _metric(left, "INFLATION", "—", Color("b794f4"))
-	_price_value = _metric(left, "PRICE INDEX", "—", Color("78a9ff"))
-	var note := Label.new()
-	note.text = "Each simulation tick is one policy\nand production boundary. Decisions\nmay stop time before the next tick."
-	note.add_theme_color_override("font_color", Color("60758d"))
-	note.add_theme_font_size_override("font_size", 12)
-	left.add_child(note)
+	var wb_panel := PanelContainer.new()
+	split.add_child(wb_panel)
+	var wb := VBoxContainer.new()
+	wb.add_theme_constant_override("separation", 6)
+	wb_panel.add_child(wb)
+	var wb_head := HBoxContainer.new()
+	wb_head.add_theme_constant_override("separation", 12)
+	wb.add_child(wb_head)
+	var wb_title := Label.new()
+	wb_title.text = "财政部工作台"
+	wb_title.add_theme_font_size_override("font_size", 15)
+	wb_head.add_child(wb_title)
+	_status_label = Label.new()
+	_status_label.add_theme_color_override("font_color", INK2)
+	wb_head.add_child(_status_label)
+	var wb_sp := Control.new()
+	wb_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wb_head.add_child(wb_sp)
+	_capacity_label = Label.new()
+	_capacity_label.add_theme_color_override("font_color", INK3)
+	wb_head.add_child(_capacity_label)
+	var levers_scroll := ScrollContainer.new()
+	levers_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	wb.add_child(levers_scroll)
+	_levers_box = VBoxContainer.new()
+	_levers_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_levers_box.add_theme_constant_override("separation", 2)
+	levers_scroll.add_child(_levers_box)
+	var cart_lbl := Label.new()
+	cart_lbl.text = "提案(原子批 · 一起过或一起拒)"
+	cart_lbl.add_theme_color_override("font_color", INK3)
+	cart_lbl.add_theme_font_size_override("font_size", 11)
+	wb.add_child(cart_lbl)
+	var cart_scroll := ScrollContainer.new()
+	cart_scroll.custom_minimum_size = Vector2(0, 36)
+	cart_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	wb.add_child(cart_scroll)
+	_cart_box = HBoxContainer.new()
+	_cart_box.add_theme_constant_override("separation", 6)
+	cart_scroll.add_child(_cart_box)
+	var cart_row := HBoxContainer.new()
+	cart_row.add_theme_constant_override("separation", 8)
+	wb.add_child(cart_row)
+	_submit_btn = Button.new()
+	_submit_btn.text = "提交提案"
+	_submit_btn.pressed.connect(_submit_cart)
+	cart_row.add_child(_submit_btn)
+	_pass_btn = Button.new()
+	_pass_btn.text = "本次不动"
+	_pass_btn.pressed.connect(_submit_pass)
+	cart_row.add_child(_pass_btn)
+	_cart_cost = Label.new()
+	_cart_cost.add_theme_color_override("font_color", INK3)
+	cart_row.add_child(_cart_cost)
 
+	var tl_panel := PanelContainer.new()
+	split.add_child(tl_panel)
+	var tl := VBoxContainer.new()
+	tl_panel.add_child(tl)
+	var tl_lbl := Label.new()
+	tl_lbl.text = "事件时间线"
+	tl_lbl.add_theme_font_size_override("font_size", 14)
+	tl.add_child(tl_lbl)
+	var ev_scroll := ScrollContainer.new()
+	ev_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tl.add_child(ev_scroll)
+	_events_box = VBoxContainer.new()
+	_events_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ev_scroll.add_child(_events_box)
 
-func _build_center(columns: HBoxContainer) -> void:
-	var center := VBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_theme_constant_override("separation", 10)
-	columns.add_child(center)
-	_economic_map = EconomicMapScript.new()
-	_economic_map.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center.add_child(_economic_map)
-	_chart = MetricChartScript.new()
-	center.add_child(_chart)
+	# 危机横幅
+	_banner = PanelContainer.new()
+	_banner.visible = false
+	_banner.add_theme_stylebox_override("panel", _style(Color("3a1512"), CRIT, 8, 12))
+	shell.add_child(_banner)
+	var bb := HBoxContainer.new()
+	bb.add_theme_constant_override("separation", 12)
+	_banner.add_child(bb)
+	var bt := Label.new()
+	bt.text = "🚨 紧急会议"
+	bt.add_theme_font_size_override("font_size", 15)
+	bt.add_theme_color_override("font_color", CRIT)
+	bb.add_child(bt)
+	_banner_body = Label.new()
+	_banner_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bb.add_child(_banner_body)
 
+	# 驱动条
+	var drive := HBoxContainer.new()
+	drive.add_theme_constant_override("separation", 8)
+	shell.add_child(drive)
+	drive.add_child(_button("新开局", func() -> void:
+		_release_hist.clear()
+		_seen_release.clear()
+		_cart.clear()
+		_send({"command": "new_game"})
+		_send({"command": "get_schema"})))
+	drive.add_child(_button("步进 1 日", func() -> void:
+		_send({"command": "advance", "ticks": 1})))
+	_play_btn = _button("▶ 播放", func() -> void:
+		_playing = not _playing
+		_render())
+	drive.add_child(_play_btn)
+	for s: int in SPEEDS:
+		var b := Button.new()
+		b.text = "%d×" % s
+		b.toggle_mode = true
+		b.button_pressed = s == _speed
+		var chosen := s
+		b.pressed.connect(func() -> void:
+			_speed = chosen
+			_render())
+		_speed_btns.append(b)
+		drive.add_child(b)
+	drive.add_child(_button("⏭ 到下一事件", func() -> void:
+		_send({"command": "advance", "ticks": 100})))
+	drive.add_child(_button("💥 供给冲击", func() -> void:
+		_send({"command": "trigger_shock"})))
+	var dsp := Control.new()
+	dsp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	drive.add_child(dsp)
+	_paused_label = Label.new()
+	_paused_label.add_theme_color_override("font_color", ACCENT)
+	drive.add_child(_paused_label)
 
-func _build_policy_panel(columns: HBoxContainer) -> void:
-	var right_panel := _panel()
-	right_panel.custom_minimum_size.x = 335
-	columns.add_child(right_panel)
-	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", 9)
-	right_panel.add_child(right)
-	right.add_child(_section("POLICY DECISION"))
-	_context_title = Label.new()
-	_context_title.text = "Waiting for the simulation worker"
-	_context_title.add_theme_font_size_override("font_size", 18)
-	_context_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	right.add_child(_context_title)
-	_context_detail = Label.new()
-	_context_detail.add_theme_color_override("font_color", Color("8299b1"))
-	_context_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	right.add_child(_context_detail)
-	_lever_selector = OptionButton.new()
-	_lever_selector.item_selected.connect(_on_lever_selected)
-	right.add_child(_lever_selector)
-	_value_editor = SpinBox.new()
-	_value_editor.update_on_text_changed = true
-	right.add_child(_value_editor)
-	var policy_buttons := HBoxContainer.new()
-	_apply_button = _button("Apply Policy", _apply_policy)
-	_apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	policy_buttons.add_child(_apply_button)
-	_pass_button = _button("No Change", _pass_context)
-	_pass_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	policy_buttons.add_child(_pass_button)
-	right.add_child(policy_buttons)
-	right.add_child(HSeparator.new())
-	right.add_child(_section("CRISIS CONSOLE"))
-	var crisis_note := Label.new()
-	crisis_note.text = "Inject a real 20-tick productivity disruption.\nIt is announced and applied by the Shock engine."
-	crisis_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	crisis_note.add_theme_color_override("font_color", Color("8299b1"))
-	right.add_child(crisis_note)
-	var shock_button := _button("Trigger Supply Disruption", func(): _send({"command": "trigger_shock"}))
-	shock_button.add_theme_color_override("font_color", Color("ff9b82"))
-	right.add_child(shock_button)
-	right.add_child(_section("EVENT STREAM"))
-	_event_log = RichTextLabel.new()
-	_event_log.bbcode_enabled = true
-	_event_log.fit_content = false
-	_event_log.scroll_active = true
-	_event_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_event_log.custom_minimum_size.y = 160
-	right.add_child(_event_log)
-
-
-func _panel() -> PanelContainer:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _style(Color("0c1725"), Color("20334a"), 11, 14))
-	return panel
-
-
-func _style(background: Color, border: Color, radius: int, margin: int = 8) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(radius)
-	style.content_margin_left = margin
-	style.content_margin_right = margin
-	style.content_margin_top = margin
-	style.content_margin_bottom = margin
-	return style
-
-
-func _section(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", Color("607f9f"))
-	return label
-
-
-func _metric(parent: VBoxContainer, title: String, value: String, color: Color) -> Label:
-	var box := VBoxContainer.new()
-	var heading := Label.new()
-	heading.text = title
-	heading.add_theme_font_size_override("font_size", 11)
-	heading.add_theme_color_override("font_color", Color("698198"))
-	box.add_child(heading)
-	var label := Label.new()
-	label.text = value
-	label.add_theme_font_size_override("font_size", 25)
-	label.add_theme_color_override("font_color", color)
-	box.add_child(label)
-	parent.add_child(box)
-	return label
+	# 判决吐司
+	_toast = PanelContainer.new()
+	_toast.visible = false
+	_toast.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_toast.position = Vector2(-430, 56)
+	_toast.custom_minimum_size = Vector2(400, 0)
+	_toast_label = Label.new()
+	_toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast.add_child(_toast_label)
+	add_child(_toast)
+	_toast_timer = Timer.new()
+	_toast_timer.one_shot = true
+	_toast_timer.wait_time = 4.5
+	_toast_timer.timeout.connect(func() -> void: _toast.visible = false)
+	add_child(_toast_timer)
 
 
 func _button(text: String, callback: Callable) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.pressed.connect(callback)
-	return button
+	var b := Button.new()
+	b.text = text
+	b.pressed.connect(callback)
+	return b
 
 
-func _on_connected() -> void:
-	_connection_label.text = "ENGINE ONLINE"
-	_connection_label.add_theme_color_override("font_color", Color("4fd1c5"))
-	_send({"command": "snapshot"})
+# ---------------- 播放循环 ----------------
+func _on_play_tick() -> void:
+	if not _playing:
+		return
+	if _awaiting():
+		_playing = false
+		_render()
+		return
+	_send({"command": "advance", "ticks": _speed})
 
 
-func _on_disconnected() -> void:
-	_connection_label.text = "RECONNECTING"
-	_connection_label.add_theme_color_override("font_color", Color("ff7657"))
-	_stop_playing()
-	_set_policy_enabled(false)
+# ---------------- 数据 ----------------
+func _index_schema() -> void:
+	_groups.clear()
+	for lever: Dictionary in _schema.get("levers", []):
+		var g := str(lever.get("decision_group", "其他"))
+		if not _groups.has(g):
+			_groups[g] = []
+	# 保序追加
+	for lever: Dictionary in _schema.get("levers", []):
+		_groups[str(lever.get("decision_group", "其他"))].append(lever)
 
 
-func _on_request_failed(message: String) -> void:
-	_connection_label.text = "ENGINE ERROR"
-	_context_detail.text = message
-	_stop_playing()
+func _ingest_releases() -> void:
+	var obs: Dictionary = _snapshot.get("observation", {})
+	for rel: Dictionary in obs.get("releases", []):
+		if rel.get("value") == null:
+			continue
+		var sid := str(rel.get("series_id"))
+		var at := int(rel.get("released_at_tick", -1))
+		if int(_seen_release.get(sid, -1)) >= at:
+			continue
+		_seen_release[sid] = at
+		if not _release_hist.has(sid):
+			_release_hist[sid] = []
+		var arr: Array = _release_hist[sid]
+		arr.append(float(rel.get("value")))
+		if arr.size() > 24:
+			arr.pop_front()
 
 
-func _on_response(response: Dictionary) -> void:
-	_snapshot = response.get("snapshot", {})
-	_render_snapshot()
-	if not _capture_path.is_empty():
-		var path := _capture_path
-		_capture_path = ""
-		_capture_after_render(path)
+func _awaiting() -> bool:
+	return bool(_snapshot.get("awaiting_human", false))
 
 
-func _render_snapshot() -> void:
-	var tick := int(_snapshot.get("tick", 0))
-	var phase := str(_snapshot.get("phase", "unknown"))
-	_tick_label.text = "DAY %04d" % tick
-	_phase_label.text = phase.replace("_", " ").to_upper()
-	var metrics: Dictionary = _snapshot.get("metrics", {})
-	_output_value.text = "%.1f" % float(metrics.get("real_output", 0.0))
-	_jobs_value.text = "%.2f%%" % (100.0 * float(metrics.get("unemployment_rate", 0.0)))
-	_inflation_value.text = "%+.2f%%" % (100.0 * float(metrics.get("inflation", 0.0)))
-	_price_value.text = "%.3f" % float(metrics.get("price_index", 0.0))
-	_economic_map.set_snapshot(_snapshot)
-	_chart.set_snapshot(_snapshot)
-	_render_context()
+func _contexts() -> Array:
+	return _snapshot.get("contexts", [])
+
+
+func _active_context() -> Dictionary:
+	for ctx: Dictionary in _contexts():
+		if bool(ctx.get("emergency", false)):
+			return ctx
+	return _contexts()[0] if not _contexts().is_empty() else {}
+
+
+func _maybe_toast(v: Dictionary) -> void:
+	var key := str(v.get("decision_id", v.get("proposal_id", "")))
+	if key == _last_toasted or key.is_empty():
+		return
+	_last_toasted = key
+	var status := str(v.get("status", "?"))
+	var ok := status.begins_with("accepted")
+	var text := ("✅ " if ok else "⛔ ") + "判决:" + status
+	var reason := str(v.get("reason_code", ""))
+	if not reason.is_empty() and reason != "<null>":
+		text += "\nreason: " + reason
+	if v.get("effective_tick") != null:
+		text += "\n生效 tick:" + str(v.get("effective_tick"))
+	_show_toast(text, ok)
+
+
+func _show_toast(text: String, ok: bool) -> void:
+	_toast_label.text = text
+	_toast_label.add_theme_color_override("font_color", INK if ok else CRIT)
+	_toast.visible = true
+	_toast_timer.start()
+
+
+# ---------------- 渲染 ----------------
+func _fmt_date(t: int) -> String:
+	return "第 %d 年 第 %d 季 第 %d 日" % [t / TPY + 1, (t % TPY) / QT + 1, (t % TPY) % QT + 1]
+
+
+func _fmt_value(sid: String, v: float) -> String:
+	match sid:
+		"unemployment_rate", "gov_deficit_to_gdp", "poverty_rate":
+			return "%.1f%%" % (v * 100.0)
+		"inflation", "policy_rate":
+			return "%.2f%%" % (v * TPY * 100.0)
+		"price_index":
+			return "%.3f" % v
+		_:
+			return "%.1f" % v
+
+
+func _render() -> void:
+	var t := int(_snapshot.get("tick", 0))
+	_clock_label.text = _fmt_date(t)
+	_tick_label.text = "tick %d" % t
+	_play_btn.text = "⏸ 暂停" if _playing else "▶ 播放"
+	for i in _speed_btns.size():
+		_speed_btns[i].button_pressed = SPEEDS[i] == _speed
+	_paused_label.text = "⏸ AWAITING_HUMAN · 引擎冻结" if _awaiting() else ""
+	_render_tiles()
+	_render_workbench()
 	_render_events()
-	if bool(_snapshot.get("awaiting_human", false)):
-		_stop_playing()
+	_render_banner()
 
 
-func _render_context() -> void:
-	var contexts: Array = _snapshot.get("contexts", [])
-	_lever_selector.clear()
-	if contexts.is_empty():
-		_current_context = {}
-		_context_title.text = "No decision required"
-		_context_detail.text = "The economy is ready for the next tick."
-		_set_policy_enabled(false)
+func _render_tiles() -> void:
+	for child in _tiles_box.get_children():
+		child.queue_free()
+	var obs: Dictionary = _snapshot.get("observation", {})
+	var by_id: Dictionary = {}
+	for rel: Dictionary in obs.get("releases", []):
+		by_id[str(rel.get("series_id"))] = rel
+	var truth: Dictionary = _snapshot.get("metrics", {})
+	var t := int(_snapshot.get("tick", 0))
+	for sid: String in HEADLINE:
+		var tile := PanelContainer.new()
+		tile.custom_minimum_size = Vector2(164, 96)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 1)
+		tile.add_child(v)
+		var lbl := Label.new()
+		lbl.text = str(SERIES_LABEL.get(sid, sid))
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_color_override("font_color", INK2)
+		v.add_child(lbl)
+		var rel: Dictionary = by_id.get(sid, {})
+		if rel.is_empty() or rel.get("value") == null:
+			var missing := Label.new()
+			missing.text = "暂无数据"
+			missing.add_theme_color_override("font_color", INK3)
+			v.add_child(missing)
+			var why := Label.new()
+			why.text = str(rel.get("missing_reason", "not_in_spec"))
+			why.add_theme_font_size_override("font_size", 9)
+			why.add_theme_color_override("font_color", INK3)
+			v.add_child(why)
+		else:
+			var val := Label.new()
+			val.text = _fmt_value(sid, float(rel.get("value")))
+			val.add_theme_font_size_override("font_size", 19)
+			v.add_child(val)
+			var meta := Label.new()
+			meta.text = "发布 t=%d · T−%d" % [
+				int(rel.get("released_at_tick", 0)),
+				t - int(rel.get("reference_end_tick", t))]
+			meta.add_theme_font_size_override("font_size", 9)
+			meta.add_theme_color_override("font_color", INK3)
+			v.add_child(meta)
+			if _god and truth.has(sid):
+				var tv := Label.new()
+				tv.text = "真值 " + _fmt_value(sid, float(truth.get(sid, 0.0)))
+				tv.add_theme_font_size_override("font_size", 9)
+				tv.add_theme_color_override("font_color", WARN)
+				v.add_child(tv)
+			var chart = MetricChartScript.new()
+			chart.custom_minimum_size = Vector2(0, 20)
+			if chart.has_method("set_series"):
+				chart.set_series(_release_hist.get(sid, []))
+			v.add_child(chart)
+		_tiles_box.add_child(tile)
+
+
+func _render_workbench() -> void:
+	for child in _levers_box.get_children():
+		child.queue_free()
+	var open := _awaiting()
+	var ctx := _active_context()
+	var emg := bool(ctx.get("emergency", false))
+	_status_label.text = ("🚨 紧急会议 · 白名单可动" if emg else "例会开启 · 可提案") if open \
+		else "会议未开 · 只读(推进至会议自动暂停)"
+	var remaining: Variant = ctx.get("admin_remaining")
+	_capacity_label.text = ("行政容量:" + str(remaining)) if remaining != null else ""
+	var permitted: Dictionary = {}
+	for item: Dictionary in ctx.get("permitted_actions", []):
+		permitted[str(item.get("lever"))] = item
+	var pending_by_lever: Dictionary = {}
+	for p in _snapshot.get("pending", []):
+		if p is Dictionary:
+			pending_by_lever[str((p as Dictionary).get("lever", ""))] = p
+	for g: String in _groups.keys():
+		var gh := Label.new()
+		gh.text = g.to_upper()
+		gh.add_theme_font_size_override("font_size", 10)
+		gh.add_theme_color_override("font_color", INK3)
+		_levers_box.add_child(gh)
+		for lever: Dictionary in _groups[g]:
+			_levers_box.add_child(
+				_lever_row(lever, permitted, pending_by_lever, open, emg))
+	_render_cart(open)
+
+
+func _lever_row(lever: Dictionary, permitted: Dictionary, pending: Dictionary,
+		open: bool, emg: bool) -> Control:
+	var name := str(lever.get("name"))
+	var perm: Dictionary = permitted.get(name, {})
+	var allowed := open and bool(perm.get("allowed", false)) \
+		and (not emg or bool(lever.get("emergency", false)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var name_box := VBoxContainer.new()
+	name_box.custom_minimum_size = Vector2(250, 0)
+	name_box.add_theme_constant_override("separation", 0)
+	var nm := Label.new()
+	nm.text = name
+	name_box.add_child(nm)
+	var small := Label.new()
+	small.text = "时滞%d · 冷却%d%s" % [
+		int(lever.get("implementation_lag", 0)),
+		int(lever.get("min_hold_ticks", 0)),
+		" · 紧急✓" if bool(lever.get("emergency", false)) else ""]
+	small.add_theme_font_size_override("font_size", 9)
+	small.add_theme_color_override("font_color", INK3)
+	name_box.add_child(small)
+	row.add_child(name_box)
+	var cur_v: Variant = perm.get("current_value")
+	var cur := Label.new()
+	cur.custom_minimum_size = Vector2(92, 0)
+	cur.text = _lever_value_text(cur_v) if not perm.is_empty() else "—"
+	var pend: Variant = pending.get(name)
+	if pend is Dictionary:
+		cur.text += "\n→ %s(t=%s)" % [
+			_lever_value_text((pend as Dictionary).get("value")),
+			str((pend as Dictionary).get("effective_tick", "?"))]
+		cur.add_theme_font_size_override("font_size", 11)
+		cur.add_theme_color_override("font_color", WARN)
+	row.add_child(cur)
+	row.add_child(_lever_control(lever, perm, allowed))
+	var info := Label.new()
+	var reason := str(perm.get("reason_code", ""))
+	if emg and not bool(lever.get("emergency", false)):
+		info.text = "不在紧急白名单"
+	elif not allowed and not reason.is_empty() and reason != "<null>":
+		info.text = reason
+	info.add_theme_font_size_override("font_size", 10)
+	info.add_theme_color_override("font_color", INK3)
+	row.add_child(info)
+	row.modulate = Color(1, 1, 1, 1.0 if allowed else 0.55)
+	return row
+
+
+func _lever_value_text(v: Variant) -> String:
+	if v == null:
+		return "未设"
+	if v is bool:
+		return "开" if v else "关"
+	if v is String:
+		return v
+	var f := float(v)
+	if absf(f) < 0.01 and f != 0.0:
+		return "%.5f" % f
+	return "%.3f" % f
+
+
+func _lever_control(lever: Dictionary, perm: Dictionary, allowed: bool) -> Control:
+	var name := str(lever.get("name"))
+	var kind := str(perm.get("value_kind", lever.get("value_kind", "number")))
+	var choices: Array = perm.get("choices", lever.get("choices", []))
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	var base_v: Variant = perm.get("current_value")
+	var cur: Variant = _cart.get(name, base_v)
+	if not choices.is_empty():
+		for opt in choices:
+			var b := Button.new()
+			b.text = str(opt)
+			b.toggle_mode = true
+			b.button_pressed = str(cur) == str(opt)
+			b.disabled = not allowed
+			var value := str(opt)
+			b.pressed.connect(func() -> void:
+				_cart_set(name, value))
+			box.add_child(b)
+		return box
+	if kind == "bool":
+		var opts := [["关", false], ["开", true]]
+		for opt in opts:
+			var b := Button.new()
+			b.text = opt[0]
+			b.toggle_mode = true
+			b.button_pressed = cur == opt[1]
+			b.disabled = not allowed
+			var value: bool = opt[1]
+			b.pressed.connect(func() -> void:
+				_cart_set(name, value))
+			box.add_child(b)
+		return box
+	# 数值步进器:±control_scale,钳制于 current±max_step 与取值域
+	var dec := Button.new()
+	dec.text = "−"
+	box.add_child(dec)
+	var vl := Label.new()
+	vl.custom_minimum_size = Vector2(84, 0)
+	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vl.text = _lever_value_text(cur)
+	if _cart.has(name):
+		vl.add_theme_color_override("font_color", ACCENT)
+	box.add_child(vl)
+	var inc := Button.new()
+	inc.text = "＋"
+	box.add_child(inc)
+	var numeric := base_v != null and not (base_v is bool) and not (base_v is String)
+	dec.disabled = not allowed or not numeric
+	inc.disabled = not allowed or not numeric
+	if numeric:
+		var base := float(base_v)
+		var scale := float(perm.get("control_scale", lever.get("control_scale", 0.01)))
+		if scale <= 0.0:
+			scale = 0.01
+		var lo := float(perm.get("minimum", lever.get("minimum", -1e30)))
+		var hi := float(perm.get("maximum", lever.get("maximum", 1e30)))
+		var mstep: Variant = perm.get("max_step", lever.get("max_step"))
+		if mstep != null:
+			lo = maxf(lo, base - float(mstep))
+			hi = minf(hi, base + float(mstep))
+		var lo2 := lo
+		var hi2 := hi
+		dec.pressed.connect(func() -> void:
+			_cart_set(name, clampf(float(_cart.get(name, base)) - scale, lo2, hi2)))
+		inc.pressed.connect(func() -> void:
+			_cart_set(name, clampf(float(_cart.get(name, base)) + scale, lo2, hi2)))
+	return box
+
+
+func _cart_set(lever_name: String, value: Variant) -> void:
+	_cart[lever_name] = value
+	_render_workbench()
+
+
+func _render_cart(open: bool) -> void:
+	for child in _cart_box.get_children():
+		child.queue_free()
+	if _cart.is_empty():
+		var empty := Label.new()
+		empty.text = "购物车为空"
+		empty.add_theme_color_override("font_color", INK3)
+		_cart_box.add_child(empty)
+	for lever_name: String in _cart.keys():
+		var chip := Button.new()
+		chip.text = "%s → %s  ×" % [lever_name, _lever_value_text(_cart[lever_name])]
+		var key := lever_name
+		chip.pressed.connect(func() -> void:
+			_cart.erase(key)
+			_render_workbench())
+		_cart_box.add_child(chip)
+	_submit_btn.disabled = not open or _cart.is_empty()
+	_pass_btn.disabled = not open
+	_cart_cost.text = ("动作 %d 项 · 生效按各杠杆时滞" % _cart.size()) \
+		if not _cart.is_empty() else ""
+
+
+func _submit_cart() -> void:
+	var ctx := _active_context()
+	if ctx.is_empty():
 		return
-	_current_context = contexts[0]
-	var group := str(_current_context.get("decision_group", "policy"))
-	_context_title.text = group.replace("_", " ").capitalize()
-	_context_detail.text = "Treasury meeting at day %d  •  %d decision%s waiting" % [
-		int(_current_context.get("boundary_tick", 0)), contexts.size(), "" if contexts.size() == 1 else "s"
-	]
-	for raw_action in _current_context.get("permitted_actions", []):
-		var action: Dictionary = raw_action
-		if bool(action.get("allowed", false)) and str(action.get("value_kind")) in ["number", "integer"]:
-			_lever_selector.add_item(str(action.get("lever", "policy")).replace("_", " ").capitalize())
-			_lever_selector.set_item_metadata(_lever_selector.item_count - 1, action)
-	_set_policy_enabled(true)
-	_apply_button.disabled = _lever_selector.item_count == 0
-	if _lever_selector.item_count > 0:
-		_on_lever_selected(0)
-
-
-func _on_lever_selected(index: int) -> void:
-	if index < 0 or index >= _lever_selector.item_count:
-		return
-	var action: Dictionary = _lever_selector.get_item_metadata(index)
-	_value_editor.min_value = float(action.get("minimum", -1000000.0))
-	_value_editor.max_value = float(action.get("maximum", 1000000.0))
-	var step_value = action.get("max_step")
-	if step_value == null:
-		step_value = action.get("control_scale", 0.01)
-	_value_editor.step = maxf(float(step_value), 0.000001)
-	_value_editor.value = float(action.get("current_value", 0.0))
-	_value_editor.suffix = "  effective day %d" % int(action.get("earliest_effective_tick", 0))
-
-
-func _apply_policy() -> void:
-	if _current_context.is_empty() or _lever_selector.selected < 0:
-		return
-	var action: Dictionary = _lever_selector.get_item_metadata(_lever_selector.selected)
-	var value: Variant = _value_editor.value
-	if str(action.get("value_kind")) == "integer":
-		value = int(round(_value_editor.value))
+	var actions: Array = []
+	for lever_name: String in _cart.keys():
+		actions.append({"lever": lever_name, "value": _cart[lever_name]})
 	_send({
 		"command": "resolve_context",
-		"context_id": _current_context.get("context_id"),
-		"actions": [{"lever": action.get("lever"), "value": value}],
+		"context_id": str(ctx.get("context_id")),
+		"actions": actions,
 	})
+	_cart.clear()
 
 
-func _pass_context() -> void:
-	if _current_context.is_empty():
+func _submit_pass() -> void:
+	var ctx := _active_context()
+	if ctx.is_empty():
 		return
-	_send({"command": "resolve_context", "context_id": _current_context.get("context_id"), "actions": []})
-
-
-func _set_policy_enabled(enabled: bool) -> void:
-	_lever_selector.disabled = not enabled
-	_value_editor.editable = enabled
-	_apply_button.disabled = not enabled
-	_pass_button.disabled = not enabled
+	_send({
+		"command": "resolve_context",
+		"context_id": str(ctx.get("context_id")),
+		"actions": [],
+	})
+	_cart.clear()
 
 
 func _render_events() -> void:
-	var lines: Array[String] = []
-	var events: Array = _snapshot.get("events", [])
-	var start := maxi(0, events.size() - 12)
-	for index in range(events.size() - 1, start - 1, -1):
-		var event: Dictionary = events[index]
-		var event_type := str(event.get("event_type", "event")).replace("_", " ")
-		var status := str(event.get("status", ""))
-		var suffix := "  [color=#7890aa]%s[/color]" % status if not status.is_empty() else ""
-		lines.append("[color=#4fd1c5]D%04d[/color]  %s%s" % [int(event.get("boundary_tick", 0)), event_type, suffix])
-	var bulletins: Array = _snapshot.get("shock_bulletins", [])
-	for bulletin in bulletins:
-		lines.push_front("[color=#ff7657]D%04d  shock: %s[/color]" % [int((bulletin as Dictionary).get("start_tick", 0)), str((bulletin as Dictionary).get("kind", "unknown"))])
-	_event_log.text = "\n".join(lines) if not lines.is_empty() else "[color=#60758d]No events yet.[/color]"
+	for child in _events_box.get_children():
+		child.queue_free()
+	var merged: Array = []
+	for ev in _snapshot.get("events", []):
+		if ev is Dictionary:
+			merged.append(ev)
+	for ev in _snapshot.get("shock_events", []):
+		if ev is Dictionary:
+			merged.append(ev)
+	merged.reverse()
+	for ev: Dictionary in merged.slice(0, 40):
+		var line := Label.new()
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var kind := str(ev.get("event_type", ev.get("kind", "event")))
+		var t_ev: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
+		var detail := str(ev.get("status", ev.get("shock_id", ev.get("lever", ""))))
+		line.text = "t%s · %s%s" % [str(t_ev), kind,
+			("" if detail.is_empty() else " · " + detail)]
+		line.add_theme_font_size_override("font_size", 11)
+		line.add_theme_color_override("font_color", INK2)
+		_events_box.add_child(line)
 
 
-func _send(command: Dictionary) -> void:
-	_client.send_command(command)
-
-
-func _on_new_game() -> void:
-	_stop_playing()
-	_send({"command": "new_game", "seed": 7})
-
-
-func _toggle_play() -> void:
-	if _playing:
-		_stop_playing()
-	elif not bool(_snapshot.get("awaiting_human", true)):
-		_playing = true
-		_play_button.text = "Pause"
-		_play_timer.start()
-
-
-func _stop_playing() -> void:
-	_playing = false
-	if is_instance_valid(_play_timer):
-		_play_timer.stop()
-	if is_instance_valid(_play_button):
-		_play_button.text = "Play"
-
-
-func _on_play_tick() -> void:
-	if _playing and not _client.busy:
-		_send({"command": "advance", "ticks": 1})
+func _render_banner() -> void:
+	var ctx := _active_context()
+	var emg := bool(ctx.get("emergency", false))
+	_banner.visible = emg
+	if emg:
+		_banner_body.text = "触发器:%s · 仅紧急白名单杠杆可动 · 决策前引擎冻结" \
+			% str(ctx.get("emergency_trigger", "—"))

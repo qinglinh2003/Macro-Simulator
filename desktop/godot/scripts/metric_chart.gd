@@ -2,10 +2,13 @@ class_name MetricChart
 extends Control
 
 var _series: Array = []
+var _spark_values: Array = []
+var _spark := false
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(620, 220)
+	if not _spark:
+		custom_minimum_size = Vector2(620, 220)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -14,7 +17,38 @@ func set_snapshot(snapshot: Dictionary) -> void:
 	queue_redraw()
 
 
+func set_series(values: Array) -> void:
+	## 公报瓦片 sparkline 模式:仅一条折线 + 端点强调。
+	_spark = true
+	_spark_values = values
+	queue_redraw()
+
+
+func _draw_spark() -> void:
+	if _spark_values.size() < 2:
+		return
+	var lo := INF
+	var hi := -INF
+	for v in _spark_values:
+		lo = minf(lo, float(v))
+		hi = maxf(hi, float(v))
+	var span := hi - lo
+	if span <= 0.0:
+		span = 1.0
+	var points := PackedVector2Array()
+	var n := _spark_values.size()
+	for i in n:
+		points.append(Vector2(
+			2.0 + (size.x - 6.0) * float(i) / float(n - 1),
+			size.y - 3.0 - (size.y - 6.0) * (float(_spark_values[i]) - lo) / span))
+	draw_polyline(points, Color("8ba3bc"), 1.4, true)
+	draw_circle(points[n - 1], 2.4, Color("4fd1c5"))
+
+
 func _draw() -> void:
+	if _spark:
+		_draw_spark()
+		return
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("101a29")
 	style.border_color = Color("243750")

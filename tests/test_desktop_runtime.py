@@ -122,3 +122,39 @@ def test_ndjson_transport_contains_request_failure(runtime: SimulationRuntime) -
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_get_schema_and_bulletin_observation():
+    runtime = SimulationRuntime(seed=7)
+    schema = runtime.handle({"command": "get_schema"})
+    assert schema["seat"] == "treasury"
+    levers = schema["levers"]
+    assert isinstance(levers, list) and len(levers) >= 20
+    sample = levers[0]
+    for key in ("name", "decision_group", "implementation_lag", "min_hold_ticks"):
+        assert key in sample
+    snap = runtime.handle({"command": "snapshot"})
+    obs = snap["observation"]
+    assert obs["releases"], "the bulletin layer must be present in every snapshot"
+    for release in obs["releases"]:
+        assert "series_id" in release and "missing_reason" in release
+
+
+def test_last_verdict_flows_to_snapshot():
+    runtime = SimulationRuntime(seed=7)
+    snap = runtime.handle({"command": "snapshot"})
+    context = snap["contexts"][0]
+    out = runtime.handle({
+        "command": "resolve_context",
+        "context_id": context["context_id"],
+        "actions": [],
+    })
+    while out.get("contexts"):
+        out = runtime.handle({
+            "command": "resolve_context",
+            "context_id": out["contexts"][0]["context_id"],
+            "actions": [],
+        })
+    out = runtime.handle({"command": "advance", "ticks": 1})
+    verdict = out.get("last_verdict")
+    assert isinstance(verdict, dict) and str(verdict.get("status", "")).startswith("accepted")
