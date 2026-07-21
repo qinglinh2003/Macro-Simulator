@@ -64,6 +64,83 @@ const GROUP_CN := {
 	"energy_structure": "能源结构",
 }
 
+const LEVER_CN := {
+	# 债务管理
+	"bond_coupon": "国债票息率", "bond_finance_frac": "赤字债券融资比例",
+	"bond_maturity": "国债期限",
+	# 能源操作 / 结构
+	"energy_price_cap": "能源限价", "energy_rationing": "能源配给规则",
+	"soe_price_at_cost": "国有能企成本定价", "spr_flow_cap": "战略储备吞吐上限",
+	"spr_target_units": "战略储备目标规模", "soe_efirm": "能源企业国有化",
+	# 财政立场
+	"benefit_income_floor": "最低收入保障线", "benefit_replacement": "失业救济替代率",
+	"deficit_u_cap": "逆周期赤字上限", "deficit_u_ref": "赤字规则失业基准",
+	"fiscal_uses_national_accounts_gdp": "财政采用国民账户GDP口径",
+	"gov_consumption_share": "政府消费占比", "gov_deficit_target": "财政赤字目标",
+	"gov_investment_share": "公共投资占比", "housing_permits": "年度建房许可额度",
+	"jg_public_works_share": "以工代赈工程比例", "jg_wage_ratio": "就业保障工资比率",
+	"job_guarantee": "就业保障计划", "pension_replacement": "养老金替代率",
+	# 外汇操作
+	"capital_control": "资本管制强度",
+	"external_interest_settlement_fraction": "对外利息结算比例",
+	"fx_regime": "汇率制度", "peg_anchor": "联系汇率锚国",
+	"peg_reserve_scale": "联汇储备规模",
+	# 流动性操作
+	"lolr": "最后贷款人机制", "omo": "公开市场操作",
+	"omo_drain_frac": "公开市场回笼比例", "omo_index_deposits": "准备金目标盯住存款",
+	"omo_reserve_target": "准备金目标水平", "reserve_floor_frac": "法定准备金率下限",
+	# 宏观审慎
+	"bank_bond_duration_limit": "银行债券久期限额",
+	"bank_capital_constraint": "银行资本放贷约束",
+	"bank_exposure_limit": "大额风险暴露限额", "bank_leverage_cap": "银行杠杆上限",
+	"bank_migrate_on_failure": "倒闭银行存款迁移", "bank_min_capital": "银行最低资本",
+	"bank_target_capital_ratio": "银行目标资本充足率",
+	"deposit_rate_floor": "存款利率下限",
+	"firm_credit_min_dscr": "企业信贷最低偿债覆盖率",
+	"hh_credit_limit": "家庭信贷额度上限", "kappa": "信贷扩张乘数 κ",
+	"margin_ltv": "融资保证金成数", "margin_max": "融资融券规模上限",
+	"mortgage_dsti_cap": "按揭偿债收入比上限", "mortgage_ltv_cap": "按揭成数上限",
+	"mortgage_min_capital_ratio": "按揭业务最低资本比率",
+	"mortgage_risk_weight": "按揭风险权重",
+	"mortgage_stress_rate_addon": "按揭压力测试加点",
+	"mortgage_underwriting": "按揭审慎审贷",
+	"regulatory_firm_capital_haircut": "企业资本抵押折扣",
+	"regulatory_firm_inventory_haircut": "企业存货抵押折扣",
+	# 货币立场
+	"cb_core_inflation": "盯住核心通胀", "cb_log_inflation": "对数通胀口径",
+	"cb_uses_fixed_basket_cpi": "固定篮子CPI口径",
+	"infl_ema_lambda": "通胀平滑系数 λ", "inflation_target": "通胀目标",
+	"manual_policy_rate": "手动政策利率", "monetary_regime": "货币政策规则",
+	"r_max": "政策利率上限", "r_neutral": "中性利率",
+	"rate_inertia": "利率平滑惯性", "taylor_phi_pi": "泰勒规则通胀系数 φπ",
+	"taylor_phi_u": "泰勒规则失业系数 φu", "u_natural": "自然失业率参数",
+	# 结构性法规
+	"bank_resolution_fund": "银行处置基金", "bankrupt_persist": "破产记录留存",
+	"household_bankruptcy": "个人破产制度",
+	"mortgage_arrears_floor": "按揭欠款处置门槛",
+	"mortgage_foreclosure_ltv": "法拍触发成数",
+	"rental_eviction_arrears": "欠租驱逐门槛",
+	"unified_bank_rwa": "统一风险加权资产框架",
+	# 税收与转移
+	"energy_cap_compensation": "能源限价补偿", "energy_subsidy_rate": "能源补贴率",
+	"energy_subsidy_threshold": "能源补贴门槛",
+	"housing_in_wealth_tax": "住房纳入财富税", "housing_property_tax": "房产税率",
+	"housing_transfer_tax": "房产交易税率", "income_allowance": "所得税起征点",
+	"land_fee_share": "土地出让金比例", "land_fee_stock_elasticity": "土地费存量弹性",
+	"min_wage": "最低工资", "tax_consumption_rate": "消费税率",
+	"tax_energy_rate": "能源税率", "tax_energy_windfall": "能源暴利税率",
+	"tax_income_rate": "个人所得税率", "tax_luxury_rate": "奢侈品税率",
+	"tax_necessity_rate": "必需品税率", "tax_profit_rate": "企业利润税率",
+	"tax_wealth_rate": "财富税率", "wealth_allowance": "财富税起征点",
+	# 贸易与移民
+	"emigration_cap": "移出人口限额", "export_subsidy": "出口补贴率",
+	"guest_worker_return": "客工返回率", "immigration_cap": "移入人口限额",
+	"import_quota": "进口配额", "outward_remittance_tax": "汇出汇款税率",
+	"remittance_tax": "汇入汇款税率", "sanctions_imposed_on": "对外制裁名单",
+	"tariff": "进口关税税率",
+}
+
+
 # 指标全景:9 组 × 6 键(上帝视角,逐 tick 真值;键名与后端 records 一致)
 # fmt: pct=份额%, pt=每tick利率%, idx=指数, num=水平量
 const PANEL_GROUPS := [
@@ -338,6 +415,10 @@ func _releases_by_id() -> Dictionary:
 
 func _world() -> Dictionary:
 	return _snapshot.get("world", {})
+
+
+func _cn(lever_name: String) -> String:
+	return str(LEVER_CN.get(lever_name, lever_name))
 
 
 func _country_name(i: int) -> String:
@@ -1080,8 +1161,11 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 7)
 	tr.add_child(_dot(TEAL if edited else LINE2, 6))
-	tr.add_child(_lbl(name, 13, INK))
-	tr.add_child(_spacer_h())
+	tr.add_child(_lbl(_cn(name), 13, INK))
+	var en := _lbl(name, 9, Color("8a97a5"), true)
+	en.clip_text = true
+	en.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tr.add_child(en)
 	var cost_class := str(lever.get("cost_class", "ordinary"))
 	var cost_cn: String = {"regime_switch": "高", "major": "高", "ordinary": "中",
 		"operational": "低"}.get(cost_class, "中")
@@ -1206,7 +1290,7 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		sw.toggled.connect(func(pressed: bool) -> void:
 			if st:
 				_confirm = {"title": "状态迁移确认",
-					"body": "切换「%s」属状态迁移(STATE_TRANSITION),将改变制度分支并按更高成本计费。确认迁移?" % name,
+					"body": "切换「%s」属状态迁移(STATE_TRANSITION),将改变制度分支并按更高成本计费。确认迁移?" % _cn(name),
 					"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
 					"on_yes": func() -> void:
 						_edits[name] = pressed
@@ -1387,7 +1471,7 @@ func _render_cart(open: bool) -> void:
 		r.add_theme_constant_override("separation", 8)
 		rowp.add_child(r)
 		r.add_child(_lbl(str(GROUP_CN.get(str(c["group"]), c["group"])), 10, INK3))
-		r.add_child(_lbl(str(c["lever"]), 12, Color("23323f")))
+		r.add_child(_lbl(_cn(str(c["lever"])), 12, Color("23323f")))
 		r.add_child(_spacer_h())
 		r.add_child(_lbl(str(c["from"]), 11, Color("586a7b"), true))
 		r.add_child(_lbl("→", 11, TEAL))
@@ -2090,7 +2174,7 @@ func _render_crisis() -> void:
 			var lvv := VBoxContainer.new()
 			lvv.add_theme_constant_override("separation", 6)
 			lp.add_child(lvv)
-			lvv.add_child(_lbl(name + "(紧急)", 12, Color("6b2317")))
+			lvv.add_child(_lbl(_cn(name) + "(紧急)", 12, Color("6b2317")))
 			lvv.add_child(_lever_control(lever, perm, base_v))
 			levcol.add_child(lp)
 	if _demo_crisis:
