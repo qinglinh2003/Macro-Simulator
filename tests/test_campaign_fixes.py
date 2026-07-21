@@ -117,3 +117,43 @@ def test_land_fee_credit_flows_through_credit_phase_and_identities_hold():
         scale = max(1.0, abs(nfa1), abs(nfa0))
         assert abs((nfa1 - nfa0) - ca) / scale < 5e-3, (
             f"economy {i}: dNFA {nfa1-nfa0:.3f} vs accrued CA {ca:.3f}")
+
+
+# ================= dealer-bleed fixes A (spread) + C (mutualization) =================
+
+def _coupled(**kw):
+    from macro_sim.world import World
+    cfg = Config.v13(seed=21, n_households=30, n_firms_c=12, n_firms_k=6, n_banks=2,
+                     demographics_population=200, n_ticks=800, government=True)
+    cfg2 = Config.v13(seed=22, n_households=30, n_firms_c=12, n_firms_k=6, n_banks=2,
+                      demographics_population=200, n_ticks=800, government=True)
+    return World([cfg, cfg2], base_seed=31, trade=True, capital=True, migration=True,
+                 migration_rate=0.02, **kw)
+
+
+def test_fx_spread_earns_the_dealer_and_conserves():
+    a = _coupled()
+    b = _coupled(fx_spread=0.01)
+    a.run(700); b.run(700)
+    for w in (a, b):
+        for econ in w.economies:
+            econ.ledger.assert_conserved()
+    nw_a = a.dealer.net_worth_numeraire(a.rates)
+    nw_b = b.dealer.net_worth_numeraire(b.rates)
+    assert nw_b > nw_a, f"spread must improve dealer NW: {nw_a:.3f} vs {nw_b:.3f}"
+    assert sum(b._conversion_volume) > 0.0, "conversion volume must be tracked"
+
+
+def test_fx_mutualization_settles_losses_annually():
+    w = _coupled(fx_spread=0.0, fx_loss_mutualization=True)
+    w.run(740)                                   # crosses the t=365 and t=730 settlements
+    for econ in w.economies:
+        econ.ledger.assert_conserved()
+    paid = sum(getattr(e, "_fx_mutualization_paid", 0.0) for e in w.economies)
+    nw = w.dealer.net_worth_numeraire(w.rates)
+    if paid > 0.0:
+        assert nw > -1.0e3, f"settled dealer NW should be pulled toward zero, got {nw:.1f}"
+    # flag off = no attribute ever appears
+    a = _coupled()
+    a.run(400)
+    assert all(getattr(e, "_fx_mutualization_paid", 0.0) == 0.0 for e in a.economies)

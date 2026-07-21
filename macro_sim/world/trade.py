@@ -191,10 +191,12 @@ def prepare_trade(world) -> None:
         source = econs[best_j]
         export_remaining = shock_export_remaining[best_j]
         _source_subsidy, export_multiplier = export_policies[best_j]
+        spread = getattr(world, "fx_spread", 0.0)
         acquisition_factor = (
             export_multiplier
             * rates.bilateral(i, best_j)
             * tariff_multiplier
+            / max(1e-9, 1.0 - spread)   # DEALER-BLEED FIX A: the importer pays the spread
         )
         for firm in sorted(source.c_firms, key=lambda item: (item.price, item.id)):
             if remaining <= EPS:
@@ -414,6 +416,20 @@ def settle_trade(world) -> None:
             continue
 
         target = import_value[importer] * rates.bilateral(source_index, importer)
+        # DEALER-BLEED FIX A: settlement converts at mid x (1 - spread); the importer
+        # already paid the mirrored 1/(1-s) in acquisition, so the exporter's contract
+        # identity (sum units x price) recovers EXACTLY and the margin stays in dealer
+        # inventory as market-making revenue.
+        spread = getattr(world, "fx_spread", 0.0)
+        if spread > 0.0:
+            world._conversion_volume[importer] += import_value[importer] / max(
+                1e-12, rates.e[importer]
+            )
+            margin = target * spread / max(1e-12, rates.e[source_index])
+            world._fx_spread_margin_tick = getattr(
+                world, "_fx_spread_margin_tick", 0.0
+            ) + margin
+            target *= 1.0 - spread
         weight_total = sum(weight for _firm, _units, weight, _current in used_lots)
         account_value_total = sum(
             current for _firm, _units, _weight, current in used_lots
