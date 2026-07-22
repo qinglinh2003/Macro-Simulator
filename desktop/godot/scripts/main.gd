@@ -390,7 +390,6 @@ var _god := false
 var _mode := "interactive"
 var _tab := "focus"
 var _rank_by := "real_output"
-var _focus_extra := "policy_rate"      # 默认高频序列,早期也能形成可读主图
 var _goto_panel_group := ""            # 磁贴点击 -> 全景滚动目标
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
@@ -2769,65 +2768,63 @@ func _render_center() -> void:
 
 
 func _render_focus_tab(body: VBoxContainer) -> void:
-	var extra_label := "通胀"
-	var extra_color: Color = PURPLE
-	for tsp: Dictionary in TILE_SPEC:
-		if str(tsp["id"]) == _focus_extra:
-			extra_label = str(tsp["label"]).split("(")[0].split(" · ")[0]
-			extra_color = tsp["color"]
-	if _focus_extra == "inflation":
-		extra_color = PURPLE
-	elif _focus_extra == "policy_rate":
-		extra_color = BLUE
+	var brief := _macro_brief()
 	var fp := PanelContainer.new()
 	var fv := VBoxContainer.new()
-	fv.add_theme_constant_override("separation", 6)
+	fv.add_theme_constant_override("separation", 10)
 	fp.add_child(fv)
-	var legend := HBoxContainer.new()
-	legend.add_theme_constant_override("separation", 14)
-	legend.add_child(_lbl("宏观焦点 · 公报序列", 14, INK))
-	legend.add_child(_spacer_h())
-	for item: Array in [["实际产出", TEAL], ["失业率", AMBER], [extra_label, extra_color]]:
-		var li := HBoxContainer.new()
-		li.add_theme_constant_override("separation", 5)
-		var swatch := ColorRect.new()
-		swatch.color = item[1]
-		swatch.custom_minimum_size = Vector2(16, 3)
-		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		li.add_child(swatch)
-		li.add_child(_lbl(str(item[0]), 11, Color("4a5a6b")))
-		legend.add_child(li)
-	fv.add_child(legend)
-	var chart := _FocusChart.new()
-	chart.custom_minimum_size = Vector2(0, 250)
-	var focus_defs: Array = [
-		["real_output", "实际产出", TEAL, 2.4, true],
-		["unemployment_rate", "失业率", AMBER, 1.8, false],
-		[_focus_extra, extra_label, extra_color, 1.8, false],
-	]
-	var fseries: Array = []
-	for fd: Array in focus_defs:
-		var sid := str(fd[0])
-		var vals := _hist_vals(sid)
-		fseries.append({"vals": vals, "color": fd[2], "width": fd[3], "fill": fd[4],
-			"label": fd[1],
-			"last_text": _fmt_series(sid, float(vals[-1])) if not vals.is_empty() else "",
-			"fmt": func(v: float) -> String: return _fmt_series(sid, v)})
-	chart.series = fseries
-	chart.shock_active = not _snapshot.get("active_shocks", []).is_empty()
-	chart.font = _sans
-	chart.mouse_exited.connect(func() -> void:
-		chart.hover_pos = Vector2(-1, -1)
-		chart.queue_redraw())
-	fv.add_child(chart)
-	var notes := HBoxContainer.new()
-	notes.add_theme_constant_override("separation", 10)
-	notes.add_child(_lbl("t 时刻仅显示 released_at ≤ t 的公报", 11, INK2))
-	notes.add_child(_lbl("·", 11, LINE2))
-	notes.add_child(_lbl("缺失显式化,禁止零填 / 前值补", 11, INK2))
-	notes.add_child(_lbl("·", 11, LINE2))
-	notes.add_child(_lbl("365 tick = 1 年", 11, INK2))
-	fv.add_child(notes)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	header.add_child(_lbl("MACRO BRIEF", 10, INK3, true))
+	header.add_child(_lbl("决策简报", 14, INK))
+	header.add_child(_spacer_h())
+	header.add_child(_chip("公报覆盖 %d / 8" % int(brief["coverage"]),
+		TEAL_DK, TEAL_BG, TEAL_BD, 9))
+	if int(brief["risk_count"]) > 0:
+		header.add_child(_chip("风险事件 %d" % int(brief["risk_count"]),
+		RED, RED_BG, RED_BD, 9))
+	fv.add_child(header)
+	var content := HBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	fv.add_child(content)
+	var map_shell := PanelContainer.new()
+	map_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_shell.add_theme_stylebox_override("panel", _sb(
+		Color("f7f9fc"), Color("e0e7ef"), 11, 10))
+	var map_col := VBoxContainer.new()
+	map_col.add_theme_constant_override("separation", 4)
+	map_shell.add_child(map_col)
+	var map_head := HBoxContainer.new()
+	map_head.add_child(_lbl("经济相位", 11, INK_BODY))
+	map_head.add_child(_lbl("增长动能 × 价格压力", 9, INK3, true))
+	map_head.add_child(_spacer_h())
+	map_head.add_child(_lbl("基于已发布公报", 9, INK3))
+	map_col.add_child(map_head)
+	var phase_map := _MacroPhaseMap.new()
+	phase_map.custom_minimum_size = Vector2(0, 184)
+	phase_map.has_phase = bool(brief["phase_ready"])
+	phase_map.x_value = float(brief["x"])
+	phase_map.y_value = float(brief["y"])
+	phase_map.phase = str(brief["phase"])
+	phase_map.point_color = brief["tone"]
+	phase_map.font = _sans
+	map_col.add_child(phase_map)
+	content.add_child(map_shell)
+	var judgement := VBoxContainer.new()
+	judgement.custom_minimum_size.x = 238
+	judgement.add_theme_constant_override("separation", 7)
+	content.add_child(judgement)
+	judgement.add_child(_lbl("本期判断", 9, INK3, true))
+	var phase_label := _lbl(str(brief["phase"]), 19, brief["tone"])
+	judgement.add_child(phase_label)
+	var summary := _lbl(str(brief["summary"]), 10, INK2)
+	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	judgement.add_child(summary)
+	judgement.add_child(_brief_signal("政策张力", str(brief["tension"]),
+		brief["tone"]))
+	judgement.add_child(_brief_signal("政策传导", str(brief["transmission"]), BLUE))
+	judgement.add_child(_brief_signal("数据可信度", str(brief["data_quality"]),
+		TEAL_DK if int(brief["coverage"]) >= 6 else AMBER))
 	body.add_child(fp)
 	var sp := PanelContainer.new()
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -2836,6 +2833,134 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	sp.add_child(sv)
 	_append_core_dimensions(sv)
 	body.add_child(sp)
+
+
+func _macro_brief() -> Dictionary:
+	## 只综合已发布公报与公开政策状态；不读取未发布真值来判断经济相位。
+	var releases := _releases_by_id()
+	var now := int(_snapshot.get("tick", 0))
+	var coverage := 0
+	var max_lag := 0
+	var latest_release := -1
+	for spec: Dictionary in CORE_DIMENSION_SPEC:
+		var release: Dictionary = releases.get(str(spec["id"]), {})
+		if release.is_empty() or release.get("value") == null:
+			continue
+		coverage += 1
+		latest_release = maxi(latest_release,
+			int(release.get("released_at_tick", -1)))
+		max_lag = maxi(max_lag, maxi(0,
+			now - int(release.get("reference_end_tick", now))))
+	var output_hist: Array = _release_hist.get("real_output", [])
+	var inflation_release: Dictionary = releases.get("inflation", {})
+	var phase_ready := output_hist.size() >= 2 \
+		and not inflation_release.is_empty() \
+		and inflation_release.get("value") != null
+	var x_value := 0.0
+	var y_value := 0.0
+	if output_hist.size() >= 2:
+		var previous := float((output_hist[-2] as Dictionary).get("v", 0.0))
+		var current := float((output_hist[-1] as Dictionary).get("v", 0.0))
+		if absf(previous) > 1e-9:
+			x_value = clampf(((current - previous) / absf(previous)) / 0.05, -1.0, 1.0)
+	if not inflation_release.is_empty() and inflation_release.get("value") != null:
+		var inflation := float(inflation_release.get("value"))
+		var target := float((_snapshot.get("metrics", {}) as Dictionary).get(
+			"inflation_target", 0.02))
+		if _perm_cache.has("inflation_target"):
+			var target_perm: Dictionary = _perm_cache["inflation_target"]
+			if target_perm.get("current_value") != null:
+				target = float(target_perm.get("current_value"))
+		y_value = clampf((inflation - target) / maxf(absf(target), 0.005), -1.0, 1.0)
+	var phase := "初始观察期"
+	var summary := "正在建立首轮公报基线；原始指标与趋势见下方八维卡片。"
+	var tension := "至少需要两期产出公报，才能形成跨指标判断"
+	var tone: Color = INK2
+	if phase_ready:
+		if x_value < -0.18 and y_value > 0.18:
+			phase = "滞胀压力"
+			summary = "增长动能转弱，同时价格压力高于政策参照。"
+			tension = "稳增长与稳物价相互牵制，避免单目标过度反应"
+			tone = RED
+		elif x_value > 0.18 and y_value > 0.18:
+			phase = "需求偏热"
+			summary = "增长与价格压力同步走强，顺周期风险正在上升。"
+			tension = "关注需求扩张是否继续推高价格压力"
+			tone = AMBER
+		elif x_value < -0.18 and y_value < -0.18:
+			phase = "需求偏弱"
+			summary = "增长动能和价格压力同时偏弱，经济处于收缩象限。"
+			tension = "稳需求优先级上升，同时保留政策缓冲"
+			tone = BLUE
+		elif x_value > 0.18 and y_value < -0.18:
+			phase = "低压扩张"
+			summary = "增长动能为正，同时价格压力低于政策参照。"
+			tension = "保护扩张动能，并监测低价格压力是否持续"
+			tone = TEAL
+		elif x_value > 0.18:
+			phase = "温和扩张"
+			summary = "增长动能为正，价格压力仍接近政策参照。"
+			tension = "维持政策连续性，监测扩张是否向过热迁移"
+			tone = TEAL
+		elif x_value < -0.18:
+			phase = "增长承压"
+			summary = "增长动能转弱，但价格压力尚未形成显著约束。"
+			tension = "评估需求支持，同时避免过早消耗政策空间"
+			tone = BLUE
+		elif y_value > 0.18:
+			phase = "价格偏高"
+			summary = "增长接近中枢，价格压力高于政策参照。"
+			tension = "稳价优先级上升，关注紧缩对增长的滞后影响"
+			tone = AMBER
+		elif y_value < -0.18:
+			phase = "价格偏低"
+			summary = "增长接近中枢，价格压力低于政策参照。"
+			tension = "关注低价格压力是否演变为需求不足"
+			tone = BLUE
+		else:
+			phase = "接近平衡"
+			summary = "增长动能与价格压力均未显著偏离中枢。"
+			tension = "当前没有单一目标占据绝对优先级"
+			tone = GREEN
+	var pending_count := (_snapshot.get("pending", []) as Array).size()
+	var transmission := "暂无政策等待实施"
+	if _awaiting():
+		transmission = "%d 个会议窗口等待决策" % _contexts().size()
+	elif pending_count > 0:
+		transmission = "%d 项已通过政策等待生效" % pending_count
+	var data_quality := "尚无核心公报发布"
+	if coverage > 0:
+		data_quality = "%d/8 已发布 · 最大滞后 %d 天" % [coverage, max_lag]
+		if latest_release >= 0:
+			data_quality += " · 截止 t%d" % latest_release
+	var risk_count := (_snapshot.get("active_shocks", []) as Array).size() \
+		+ (_snapshot.get("shock_bulletins", []) as Array).size()
+	return {
+		"coverage": coverage, "risk_count": risk_count,
+		"phase_ready": phase_ready, "x": x_value, "y": y_value,
+		"phase": phase, "summary": summary, "tension": tension,
+		"transmission": transmission, "data_quality": data_quality,
+		"tone": tone,
+	}
+
+
+func _brief_signal(title: String, text: String, color: Color) -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(
+		Color("f7f9fc"), Color("e2e8ef"), 8, 7))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 7)
+	panel.add_child(row)
+	row.add_child(_dot(color, 6))
+	var col := VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_theme_constant_override("separation", 1)
+	row.add_child(col)
+	col.add_child(_lbl(title, 8, INK3, true))
+	var detail := _lbl(text, 9, INK_BODY)
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(detail)
+	return panel
 
 
 func _append_core_dimensions(parent: VBoxContainer) -> void:
@@ -3355,13 +3480,6 @@ func _bar_block(parent: VBoxContainer, title: String, vals: Array,
 	parent.add_child(p)
 
 
-func _hist_vals(sid: String) -> Array:
-	var out: Array = []
-	for h: Dictionary in _release_hist.get(sid, []):
-		out.append(float(h["v"]))
-	return out
-
-
 # ================= 时间线 =================
 func _render_events() -> void:
 	var box := _n["events"] as VBoxContainer
@@ -3681,118 +3799,68 @@ class _MultiLine extends Control:
 			draw_polyline(pts, s.get("color", Color.GRAY), 1.5, true)
 
 
-class _FocusChart extends Control:
-	var series: Array = []
-	var shock_active := false
+class _MacroPhaseMap extends Control:
+	var has_phase := false
+	var x_value := 0.0
+	var y_value := 0.0
+	var phase := "初始观察期"
+	var point_color := Color("5e6f81")
 	var font: Font
-	var hover_pos := Vector2(-1, -1)
-
-	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseMotion:
-			hover_pos = (event as InputEventMouseMotion).position
-			queue_redraw()
-
-	func _plot_rect() -> Rect2:
-		return Rect2(Vector2(8, 8), size - Vector2(88, 30))
 
 	func _draw() -> void:
-		var plot := _plot_rect()
-		for i in range(5):
-			var y := plot.position.y + plot.size.y * float(i) / 4.0
-			draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y),
-				Color("e6ebf1"), 1.0)
-		if shock_active:
-			var band := Rect2(Vector2(plot.end.x - plot.size.x * 0.25, plot.position.y),
-				Vector2(plot.size.x * 0.12, plot.size.y))
-			draw_rect(band, Color(0.824, 0.29, 0.204, 0.08))
-			draw_string(font,
-				Vector2(band.position.x + 4, plot.position.y + 14), "冲击生效中",
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("cc5a44"))
-		var any := false
-		var endpoints: Array = []
-		var all_pts: Array = []
-		for s: Dictionary in series:
-			var vals: Array = s.get("vals", [])
-			if vals.size() < 2:
-				all_pts.append(PackedVector2Array())
-				continue
-			any = true
-			var lo := INF
-			var hi := -INF
-			for v in vals:
-				lo = minf(lo, float(v))
-				hi = maxf(hi, float(v))
-			var span := hi - lo
-			if span <= 0.0:
-				span = 1.0
-			var pts := PackedVector2Array()
-			var n := vals.size()
-			for i in n:
-				pts.append(Vector2(
-					plot.position.x + plot.size.x * float(i) / float(n - 1),
-					plot.end.y - plot.size.y * (float(vals[i]) - lo) / span))
-			all_pts.append(pts)
-			var scolor: Color = s.get("color", Color.GRAY)
-			if s.get("fill", false) and n >= 2:
-				var poly := PackedVector2Array(pts)
-				poly.append(Vector2(pts[n - 1].x, plot.end.y))
-				poly.append(Vector2(pts[0].x, plot.end.y))
-				draw_colored_polygon(poly, Color(scolor.r, scolor.g, scolor.b, 0.07))
-			draw_polyline(pts, scolor, float(s.get("width", 2.0)), true)
-			draw_circle(pts[n - 1], 3.0, scolor)
-			endpoints.append({"y": pts[n - 1].y, "color": scolor,
-				"text": str(s.get("last_text", ""))})
-		# 右缘末值标签(避让重叠)
-		endpoints.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return float(a["y"]) < float(b["y"]))
-		var last_y := -INF
-		for ep: Dictionary in endpoints:
-			var y := maxf(float(ep["y"]), last_y + 15.0)
-			last_y = y
-			draw_string(font, Vector2(plot.end.x + 8.0, y + 4.0), str(ep["text"]),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, ep["color"])
-		# 悬停十字线 + 取值气泡
-		if any and plot.has_point(hover_pos):
-			draw_line(Vector2(hover_pos.x, plot.position.y),
-				Vector2(hover_pos.x, plot.end.y), Color(0.16, 0.25, 0.35, 0.25), 1.0)
-			var frac := (hover_pos.x - plot.position.x) / plot.size.x
-			var lines: Array = []
-			for si in series.size():
-				var pts: PackedVector2Array = all_pts[si]
-				if pts.is_empty():
-					continue
-				var idx := clampi(roundi(frac * float(pts.size() - 1)), 0, pts.size() - 1)
-				var sdef: Dictionary = series[si]
-				draw_circle(pts[idx], 4.2, Color.WHITE)
-				draw_circle(pts[idx], 3.0, sdef.get("color", Color.GRAY))
-				var vals: Array = sdef.get("vals", [])
-				lines.append({"color": sdef.get("color", Color.GRAY),
-					"text": "%s  %s" % [str(sdef.get("label", "")),
-						str(sdef.get("fmt", Callable()).call(float(vals[idx]))
-							if sdef.get("fmt") is Callable else "%.3f" % float(vals[idx]))]})
-			if not lines.is_empty():
-				var bw := 0.0
-				for ln: Dictionary in lines:
-					bw = maxf(bw, font.get_string_size(str(ln["text"]),
-						HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x)
-				var bh := float(lines.size()) * 15.0 + 10.0
-				var bx := minf(hover_pos.x + 12.0, plot.end.x - bw - 18.0)
-				var by := plot.position.y + 6.0
-				draw_rect(Rect2(bx, by, bw + 16.0, bh), Color(1, 1, 1, 0.95))
-				draw_rect(Rect2(bx, by, bw + 16.0, bh), Color("d3dce6"), false, 1.0)
-				for li in lines.size():
-					var ln: Dictionary = lines[li]
-					draw_circle(Vector2(bx + 8.0, by + 12.0 + float(li) * 15.0), 3.0,
-						ln["color"])
-					draw_string(font, Vector2(bx + 15.0, by + 16.0 + float(li) * 15.0),
-						str(ln["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 10,
-						Color("2a3948"))
-		if not any:
-			draw_string(font, plot.get_center() + Vector2(-140, 0),
-				"推进模拟以积累公报序列(发布日历驱动)",
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("60758d"))
-		draw_string(font, Vector2(plot.end.x - 66, size.y - 6),
-			"发布时间 →", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("849098"))
+		var plot := Rect2(Vector2(34, 15), size - Vector2(46, 43))
+		var half := plot.size / 2.0
+		var center := plot.get_center()
+		# 四象限仅承担“关系解释”，不重复绘制原始指标序列。
+		draw_rect(Rect2(plot.position, half), Color(0.824, 0.29, 0.204, 0.045))
+		draw_rect(Rect2(Vector2(center.x, plot.position.y), half),
+			Color(0.757, 0.49, 0.086, 0.045))
+		draw_rect(Rect2(Vector2(plot.position.x, center.y), half),
+			Color(0.184, 0.435, 0.816, 0.035))
+		draw_rect(Rect2(center, half), Color(0.059, 0.616, 0.565, 0.04))
+		draw_rect(plot, Color("dce4ec"), false, 1.0)
+		draw_line(Vector2(center.x, plot.position.y), Vector2(center.x, plot.end.y),
+			Color("cbd6e1"), 1.0)
+		draw_line(Vector2(plot.position.x, center.y), Vector2(plot.end.x, center.y),
+			Color("cbd6e1"), 1.0)
+		draw_string(font, plot.position + Vector2(7, 14), "滞胀压力",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("ad6658"))
+		draw_string(font, Vector2(center.x + 7, plot.position.y + 14), "需求偏热",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("a8782e"))
+		draw_string(font, Vector2(plot.position.x + 7, plot.end.y - 7), "需求偏弱",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("5878a8"))
+		draw_string(font, Vector2(center.x + 7, plot.end.y - 7), "低压扩张",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("408c82"))
+		draw_string(font, Vector2(plot.position.x, size.y - 7),
+			"收缩  ←        增长动能        →  扩张",
+			HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9, Color("71808f"))
+		draw_string(font, Vector2(plot.position.x, 10), "价格压力 ↑",
+			HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9, Color("71808f"))
+		if has_phase:
+			var point := Vector2(
+				center.x + clampf(x_value, -1.0, 1.0) * plot.size.x * 0.43,
+				center.y - clampf(y_value, -1.0, 1.0) * plot.size.y * 0.40)
+			draw_line(Vector2(point.x, center.y), point,
+				Color(point_color.r, point_color.g, point_color.b, 0.25), 1.0)
+			draw_line(Vector2(center.x, point.y), point,
+				Color(point_color.r, point_color.g, point_color.b, 0.25), 1.0)
+			draw_circle(point, 10.0, Color(1, 1, 1, 0.92))
+			draw_circle(point, 6.5, point_color)
+			draw_arc(point, 11.5, 0, TAU, 30,
+				Color(point_color.r, point_color.g, point_color.b, 0.35), 1.0, true)
+			var label_width := font.get_string_size(phase,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 14.0
+			var label_x := minf(point.x + 12.0, plot.end.x - label_width - 4.0)
+			var label_y := clampf(point.y - 12.0, plot.position.y + 20.0, plot.end.y - 23.0)
+			draw_rect(Rect2(label_x, label_y, label_width, 21), Color(1, 1, 1, 0.94))
+			draw_rect(Rect2(label_x, label_y, label_width, 21),
+				Color(point_color.r, point_color.g, point_color.b, 0.35), false, 1.0)
+			draw_string(font, Vector2(label_x + 7, label_y + 14), phase,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, point_color)
+		else:
+			draw_string(font, Vector2(plot.position.x, center.y + 4),
+				"等待第二期产出与通胀公报",
+				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 11, Color("71808f"))
 
 
 class _RelationsMap extends Control:
