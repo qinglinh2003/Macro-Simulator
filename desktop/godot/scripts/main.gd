@@ -882,8 +882,7 @@ func _build_theme() -> void:
 	t.set_color("font_disabled_color", "Button", Color("849098"))
 	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12, 10))
 	# Godot 默认 Tooltip 偏小且透明度低；统一为适合财经信息的高对比浮层。
-	var tooltip_style := _sb(Color("142a38"), Color("4d918b"), 10, 12, 8)
-	tooltip_style.set_border_width(SIDE_LEFT, 3)
+	var tooltip_style := _sb(Color("142a38"), Color("3a5260"), 10, 12, 8)
 	t.set_stylebox("panel", "TooltipPanel", tooltip_style)
 	t.set_font("font", "TooltipLabel", _sans)
 	t.set_font_size("font_size", "TooltipLabel", 13)
