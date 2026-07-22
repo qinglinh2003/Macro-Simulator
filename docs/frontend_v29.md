@@ -192,11 +192,18 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
   trade+capital+migration+dealer FX);玩家持 0 号经济体全部 5 席位,各配独立 HumanQueueOccupant。
 - `get_schema` → `{seats: {seat: schema×5}, levers(v1 兼容=treasury), protocol_version: 2}`;
   102 旋钮 = 35+24+28+9+6。
+- 交互世界基线升级为 `Config.v13` 日历人口经济,并启用既有的 persistent labor、
+  matching friction、relationship wages、job ladder、person efficiency、participation、
+  energy household 与 consumption strata。桌面端因此能读取真实 Person/Job/部门截面,
+  不再从 household FTE 猜年龄、性别或就业归属。
 - `snapshot` 新增:
   - `world.countries / world.latest / world.history(≤160 点)`:per-economy 6 指标 +
     `e/nfa/current_account/migrant_stock/remittances/import_value/export_delivered_volume/
     tariff_rev/dealer_valuation/peg_intact`(源:`World.world_records[-1]`)。
-  - `metrics/series` 扩到 54 键(9 组×6,均经 v124 records 实测存在)。
+  - `metrics/series` 保留 9 组×6 头部指标,并加入各领域结构图需要的账本字段。
+  - `panel_details`:人口金字塔、年龄劳动参与率、E/U·JG/N 状态、就业部门、实名劳动
+    流量、实体部门产销用工、逐企业 Q/投资/市值与收入/财富/消费 Lorenz/十分位分布；
+    全部由引擎当前微观对象只读聚合。
   - `observation` = 五席位公报并集(operational/confidential 序列因玩家兼任央行/监管而可见)。
 - 空动作提案不产生判决 toast(仅真动作设置 `_pending_verdict_pid`)。
 

@@ -97,6 +97,35 @@ def test_world_block_carries_three_coupled_economies(runtime: SimulationRuntime)
     assert world["history"], "world history must accumulate"
 
 
+def test_panel_details_are_real_micro_aggregates(runtime: SimulationRuntime) -> None:
+    snapshot = runtime.snapshot()
+    details = snapshot["panel_details"]
+
+    pyramid = details["population"]["pyramid"]
+    assert [bucket["label"] for bucket in pyramid] == [
+        "0–14", "15–24", "25–34", "35–44", "45–54", "55–64", "65+",
+    ]
+    assert sum(bucket["male"] + bucket["female"] for bucket in pyramid) == 80
+
+    labor = details["labor"]
+    assert sum(state["value"] for state in labor["states"]) == labor[
+        "working_age_population"
+    ]
+    assert [row["label"] for row in labor["participation_by_age"]] == [
+        "18–24", "25–34", "35–44", "45–54", "55–64",
+    ]
+    assert all(
+        0.0 <= row["employment_rate"] <= row["participation_rate"] <= 1.0
+        for row in labor["participation_by_age"]
+    )
+
+    distribution = details["distribution"]
+    for name in ("income", "wealth", "consumption"):
+        assert len(distribution[name]["deciles"]) == 10
+        assert len(distribution[name]["lorenz"]) == 11
+        assert distribution[name]["lorenz"][0] == 0.0
+
+
 def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime) -> None:
     context = next(
         item for item in runtime.snapshot()["contexts"]

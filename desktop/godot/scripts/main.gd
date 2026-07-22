@@ -358,8 +358,8 @@ const PANEL_GROUPS := [
 		["deaths", "死亡 / tick", "num"], ["firm_count_c", "消费品企业数", "num"]]},
 ]
 
-# 每个指标页签使用独立的信息架构。图表只引用 desktop runtime 已验证存在的
-# PANEL_METRIC_NAMES；无法从现有记录可靠推出的年龄、性别、行业和 E/U/N 流转不展示。
+# 每个指标页签使用独立的信息架构。标量历史来自 records，人口、劳动和企业截面
+# 来自 desktop runtime 的只读微观聚合；行业名称严格对应模型中的真实部门。
 const PANEL_DESCRIPTIONS := {
 	"实体经济": "需求、供给与资本形成的同步状态",
 	"劳动力": "就业松弛、岗位缺口与工资脉冲",
@@ -374,29 +374,20 @@ const PANEL_DESCRIPTIONS := {
 
 const PANEL_CHARTS := {
 	"实体经济": [
+		{"type": "sector_matrix", "title": "SECTORS · 部门生产图谱", "note": "产出 · 销售 · 就业",
+			"items": []},
 		{"type": "line", "title": "DEMAND · 产出与消费", "note": "实际量",
 			"items": [["real_output", "实际产出", "num", TEAL],
 				["real_consumption", "实际消费", "num", BLUE]]},
 		{"type": "line", "title": "CAPITAL · 资本形成", "note": "指数化 t0=100", "indexed": true,
 			"items": [["aggregate_capital", "资本存量", "num", BLUE],
-				["investment_spending", "投资支出", "num", AMBER]]},
-		{"type": "columns", "title": "UTILIZATION · 当期实现", "note": "供给侧状态",
-			"items": [["inventory_to_sales", "库存/销售", "idx", AMBER],
-				["production_realization_rate", "生产实现率", "pct", TEAL]]},
+				["investment_spending", "投资支出", "num", AMBER],
+				["real_output", "实际产出", "num", TEAL]]},
 	],
 	"劳动力": [
-		{"type": "line", "title": "SLACK · 劳动力松弛", "note": "占劳动力比例",
-			"items": [["unemployment_rate", "失业率", "pct", AMBER],
-				["u_natural", "自然失业率", "pct", BLUE],
-				["underemployed_share", "不充分就业", "pct", RED]]},
-		{"type": "line", "title": "PULSE · 工资与岗位", "note": "指数化 t0=100", "indexed": true,
-			"items": [["avg_wage", "平均工资", "num", TEAL],
-				["wage_inflation", "工资通胀", "pt", PURPLE],
-				["vacancies_unfilled", "未填补岗位", "num", BLUE]]},
-		{"type": "bars", "title": "STATUS · 当前劳动力状态", "note": "现有记录不含行业与 E/U/N 流转",
-			"items": [["unemployment_rate", "失业率", "pct", AMBER],
-				["u_natural", "自然失业率", "pct", BLUE],
-				["underemployed_share", "不充分就业", "pct", RED]]},
+		{"type": "employment_sectors", "title": "SECTORS · 部门就业结构", "note": "主业+第二职业 FTE"},
+		{"type": "labor_flows", "title": "FLOWS · 劳动力状态与流转", "note": "本次推进的实名账本流量"},
+		{"type": "age_participation", "title": "LFPR · 分年龄劳动参与率", "note": "参与率与就业率 · 劳龄口径 18–64"},
 	],
 	"价格与货币": [
 		{"type": "line", "title": "RATES · 价格与利率脉冲", "note": "每 tick 变化率",
@@ -413,11 +404,7 @@ const PANEL_CHARTS := {
 				["wage_inflation", "工资通胀", "pt", AMBER]]},
 	],
 	"财政": [
-		{"type": "line", "title": "FLOWS · 财政收支", "note": "当期流量",
-			"items": [["tax_total", "税收", "num", TEAL],
-				["gov_spending", "政府支出", "num", BLUE],
-				["benefit_paid", "转移支付", "num", PURPLE],
-				["gov_deficit", "财政赤字", "num", AMBER]]},
+		{"type": "fiscal_flow", "title": "BUDGET MAP · 财政资金地图", "note": "收入来源与支出去向"},
 		{"type": "line", "title": "DEBT · 债务轨迹", "note": "指数化 t0=100", "indexed": true,
 			"items": [["gov_debt", "政府债务", "num", BLUE],
 				["gov_debt_to_gdp", "债务/GDP", "pct", AMBER]]},
@@ -428,24 +415,22 @@ const PANEL_CHARTS := {
 				["gov_deficit", "赤字", "num", AMBER]]},
 	],
 	"银行与信贷": [
-		{"type": "line", "title": "BALANCE SHEET · 银行体系", "note": "指数化 t0=100", "indexed": true,
-			"items": [["total_credit", "信贷", "num", TEAL],
-				["bank_deposit_total", "存款", "num", BLUE],
-				["bank_capital", "银行资本", "num", GREEN]]},
+		{"type": "bank_balance", "title": "BALANCE SHEET · 银行资产负债", "note": "信贷资产 · 存款负债 · 资本缓冲"},
 		{"type": "line", "title": "STRESS · 偿付与资金价格", "note": "压力指标",
 			"items": [["total_debt_service_ratio", "偿债比率", "pct", AMBER],
-				["interbank_rate", "同业利率", "pt", PURPLE]]},
-		{"type": "columns", "title": "CAPACITY · 当前资产负债规模", "note": "货币量",
-			"items": [["total_credit", "信贷", "num", TEAL],
-				["bank_deposit_total", "存款", "num", BLUE],
-				["bank_capital", "资本", "num", GREEN],
-				["writeoffs", "核销", "num", RED]]},
+				["interbank_rate", "同业利率", "pt", PURPLE],
+				["writeoffs", "坏账核销", "num", RED]]},
+		{"type": "columns", "title": "CREDIT MIX · 信贷去向", "note": "当前贷款存量",
+			"items": [["firm_debt_total", "企业", "num", TEAL],
+				["household_debt_total_observed", "居民", "num", BLUE],
+				["new_loans_total", "本期新增", "num", GREEN],
+				["bank_realized_credit_losses", "信用损失", "num", RED]]},
 	],
 	"资本市场": [
-		{"type": "line", "title": "MARKET · 市场规模", "note": "股票市值",
-			"items": [["equity_market_cap", "股票市值", "num", Color("4a6fa5")]]},
+		{"type": "firm_bubbles", "title": "VALUATION MAP · 企业估值分布", "note": "横轴 Q · 纵轴投资 · 气泡=市值"},
 		{"type": "line", "title": "VALUATION · 估值与交易", "note": "指数",
 			"items": [["tobin_q_mean", "托宾 Q", "idx", TEAL],
+				["tobin_q_dispersion", "Q 离散度", "idx", PURPLE],
 				["equity_turnover", "换手率", "idx", AMBER]]},
 		{"type": "bars", "title": "OWNERSHIP · 所有权分布", "note": "份额 / Gini",
 			"items": [["equity_wealth_share", "股权财富占比", "pct", TEAL],
@@ -453,12 +438,11 @@ const PANEL_CHARTS := {
 				["hh_wealth_gini_incl_equity", "财富基尼", "idx", BLUE]]},
 	],
 	"能源": [
-		{"type": "line", "title": "BALANCE · 能源供需", "note": "实物量",
-			"items": [["energy_produced", "产量", "num", GREEN],
-				["energy_used", "消耗", "num", AMBER]]},
+		{"type": "energy_flow", "title": "FLOW · 能源平衡", "note": "生产 → 销售/使用 → 库存"},
 		{"type": "line", "title": "COST · 价格与成本", "note": "指数化 t0=100", "indexed": true,
 			"items": [["energy_price", "能源价格", "idx", Color("b0641f")],
-				["energy_cost_share", "能源成本占比", "pct", RED]]},
+				["energy_cost_share", "能源成本占比", "pct", RED],
+				["energy_capacity_utilization", "产能利用率", "pct", TEAL]]},
 		{"type": "columns", "title": "SECURITY · 供给与库存", "note": "能源实物量",
 			"items": [["energy_produced", "产量", "num", GREEN],
 				["energy_used", "消耗", "num", AMBER],
@@ -466,28 +450,19 @@ const PANEL_CHARTS := {
 				["spr_stock", "战略储备", "num", PURPLE]]},
 	],
 	"分配与福利": [
-		{"type": "line", "title": "HOUSEHOLDS · 家庭状态", "note": "人口份额",
-			"items": [["poverty_rate", "贫困率", "pct", RED],
-				["savings_rate", "储蓄率", "pct", TEAL]]},
+		{"type": "lorenz", "title": "LORENZ · 收入与正净财富分布", "note": "越贴近对角线越均等"},
 		{"type": "line", "title": "WELFARE · 福利与工资分位", "note": "指数化 t0=100", "indexed": true,
 			"items": [["welfare_log", "对数福利", "idx", GREEN],
-				["wage_p90_p10_ratio", "工资 P90/P10", "idx", AMBER]]},
-		{"type": "bars", "title": "INEQUALITY · 不平等截面", "note": "Gini 系数",
-			"items": [["income_gini", "收入基尼", "idx", PURPLE],
-				["hh_wealth_gini", "财富基尼", "idx", BLUE],
-				["equity_ownership_gini", "持股基尼", "idx", TEAL]]},
+				["wage_p90_p10_ratio", "工资 P90/P10", "idx", AMBER],
+				["bottom10_consumption", "底部10%消费", "num", BLUE]]},
+		{"type": "deciles", "title": "DECILES · 十分位资源份额", "note": "收入与消费各组占比"},
 	],
 	"人口与企业": [
-		{"type": "line", "title": "BASE · 人口与企业基础", "note": "指数化 t0=100", "indexed": true,
-			"items": [["population_alive", "总人口", "num", GREEN],
-				["firm_count_c", "消费品企业", "num", BLUE]]},
+		{"type": "pyramid", "title": "AGE · 人口金字塔", "note": "男左女右 · 当前存活人口"},
 		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每 tick 人数",
 			"items": [["births", "出生", "num", TEAL],
 				["deaths", "死亡", "num", RED]]},
-		{"type": "line", "title": "STRUCTURE · 结构趋势", "note": "指数化 t0=100", "indexed": true,
-			"items": [["working_age_share", "劳龄占比", "pct", TEAL],
-				["avg_household_size", "户均规模", "idx", AMBER],
-				["firm_count_c", "企业数", "num", BLUE]]},
+		{"type": "sector_matrix", "title": "BUSINESS · 企业部门生态", "note": "企业数 · 产销 · 用工"},
 	],
 }
 
@@ -3289,18 +3264,20 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	col.add_child(header)
 	var series: Array = _snapshot.get("series", [])
 	var latest: Dictionary = _snapshot.get("metrics", {})
+	var details: Dictionary = _snapshot.get("panel_details", {})
 	_render_panel_kpis(col, active_group, latest, series)
 	var charts: Array = PANEL_CHARTS.get(group_name, [])
 	if charts.size() >= 2:
 		var chart_row := HBoxContainer.new()
 		chart_row.add_theme_constant_override("separation", 10)
 		for chart_index in 2:
-			var chart_panel := _panel_chart(charts[chart_index], latest, series, group_color)
+			var chart_panel := _panel_chart(
+				charts[chart_index], latest, series, group_color, details)
 			chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			chart_row.add_child(chart_panel)
 		col.add_child(chart_row)
 	if charts.size() >= 3:
-		col.add_child(_panel_chart(charts[2], latest, series, group_color))
+		col.add_child(_panel_chart(charts[2], latest, series, group_color, details))
 
 
 func _render_panel_kpis(parent: VBoxContainer, group: Dictionary,
@@ -3392,9 +3369,11 @@ func _panel_values(series: Array, key: String) -> Array:
 
 
 func _panel_chart(spec: Dictionary, latest: Dictionary,
-		series: Array, fallback_color: Color) -> Control:
+		series: Array, fallback_color: Color, details: Dictionary = {}) -> Control:
+	var chart_type := str(spec.get("type", "line"))
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size.y = 190
+	panel.custom_minimum_size.y = 218 if chart_type in [
+		"age_participation", "pyramid", "sector_matrix", "deciles"] else 198
 	panel.add_theme_stylebox_override("panel", _sb(
 		Color("fbfcfd"), Color("dde5ed"), 11, 10, 4))
 	var col := VBoxContainer.new()
@@ -3417,25 +3396,98 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 			"value": float(latest.get(key, 0.0)),
 			"text": _fmt_val(kind, float(latest.get(key, 0.0))),
 		})
-	var chart_type := str(spec.get("type", "line"))
-	if chart_type == "bars":
+	var chart_height := 166.0 if panel.custom_minimum_size.y > 200.0 else 145.0
+	if chart_type == "employment_sectors":
+		var sectors := _PanelCompositionChart.new()
+		sectors.data = (details.get("labor", {}) as Dictionary).get("employment_sectors", [])
+		sectors.font = _sans
+		sectors.colors = [TEAL, BLUE, GREEN, PURPLE, AMBER, Color("64748b")]
+		sectors.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(sectors)
+	elif chart_type == "labor_flows":
+		var labor := _PanelLaborFlowChart.new()
+		var labor_details: Dictionary = details.get("labor", {})
+		labor.states = labor_details.get("states", [])
+		labor.flows = labor_details.get("flows", [])
+		labor.font = _sans
+		labor.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(labor)
+	elif chart_type == "age_participation":
+		var age_chart := _PanelAgeParticipationChart.new()
+		age_chart.data = (details.get("labor", {}) as Dictionary).get("participation_by_age", [])
+		age_chart.font = _sans
+		age_chart.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(age_chart)
+	elif chart_type == "pyramid":
+		var pyramid := _PanelPyramidChart.new()
+		pyramid.data = (details.get("population", {}) as Dictionary).get("pyramid", [])
+		pyramid.font = _sans
+		pyramid.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(pyramid)
+	elif chart_type == "sector_matrix":
+		var sector_chart := _PanelSectorMatrixChart.new()
+		sector_chart.data = (details.get("real_economy", {}) as Dictionary).get("sectors", [])
+		sector_chart.font = _sans
+		sector_chart.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(sector_chart)
+	elif chart_type == "lorenz":
+		var lorenz := _PanelLorenzChart.new()
+		var dist: Dictionary = details.get("distribution", {})
+		lorenz.income = (dist.get("income", {}) as Dictionary).get("lorenz", [])
+		lorenz.wealth = (dist.get("wealth", {}) as Dictionary).get("lorenz", [])
+		lorenz.font = _sans
+		lorenz.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(lorenz)
+	elif chart_type == "deciles":
+		var deciles := _PanelDecileChart.new()
+		var dist: Dictionary = details.get("distribution", {})
+		deciles.income = (dist.get("income", {}) as Dictionary).get("deciles", [])
+		deciles.consumption = (dist.get("consumption", {}) as Dictionary).get("deciles", [])
+		deciles.font = _sans
+		deciles.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(deciles)
+	elif chart_type == "firm_bubbles":
+		var bubbles := _PanelBubbleChart.new()
+		bubbles.data = (details.get("capital_market", {}) as Dictionary).get("firms", [])
+		bubbles.font = _sans
+		bubbles.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(bubbles)
+	elif chart_type == "energy_flow":
+		var energy_flow := _PanelEnergyFlowChart.new()
+		energy_flow.values = latest
+		energy_flow.font = _sans
+		energy_flow.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(energy_flow)
+	elif chart_type == "fiscal_flow":
+		var fiscal_flow := _PanelFiscalFlowChart.new()
+		fiscal_flow.values = latest
+		fiscal_flow.font = _sans
+		fiscal_flow.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(fiscal_flow)
+	elif chart_type == "bank_balance":
+		var bank_balance := _PanelBankBalanceChart.new()
+		bank_balance.values = latest
+		bank_balance.font = _sans
+		bank_balance.custom_minimum_size = Vector2(0, chart_height)
+		col.add_child(bank_balance)
+	elif chart_type == "bars":
 		var bars := _PanelBarChart.new()
 		bars.data = data
 		bars.font = _sans
-		bars.custom_minimum_size = Vector2(0, 145)
+		bars.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(bars)
 	elif chart_type == "columns":
 		var columns := _PanelColumnChart.new()
 		columns.data = data
 		columns.font = _sans
-		columns.custom_minimum_size = Vector2(0, 145)
+		columns.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(columns)
 	else:
 		var line := _PanelLineChart.new()
 		line.data = data
 		line.indexed = bool(spec.get("indexed", false))
 		line.font = _sans
-		line.custom_minimum_size = Vector2(0, 145)
+		line.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(line)
 	return panel
 
@@ -4354,6 +4406,405 @@ class _MultiLine extends Control:
 					2.0 + (size.x - 4.0) * float(i) / float(n - 1),
 					size.y - 2.0 - (size.y - 4.0) * (float(vals[i]) - lo) / span))
 			draw_polyline(pts, s.get("color", Color.GRAY), 1.5, true)
+
+
+class _PanelCompositionChart extends Control:
+	var data: Array = []
+	var colors: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		var total := 0.0
+		for item: Dictionary in data:
+			total += maxf(0.0, float(item.get("value", 0.0)))
+		if total <= 1e-9:
+			draw_string(font, Vector2(0, size.y * 0.52), "尚无就业记录",
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
+			return
+		var bar := Rect2(2, 12, size.x - 4, 24)
+		draw_rect(bar, Color("edf1f6"))
+		var cursor := bar.position.x
+		for index in data.size():
+			var item: Dictionary = data[index]
+			var share := maxf(0.0, float(item.get("value", 0.0))) / total
+			var width := bar.size.x * share
+			var color: Color = colors[index % colors.size()] if not colors.is_empty() else Color.GRAY
+			draw_rect(Rect2(cursor, bar.position.y, width, bar.size.y), color)
+			cursor += width
+		for index in data.size():
+			var item: Dictionary = data[index]
+			var column := index % 2
+			var row := index / 2
+			var cell_width := size.x / 2.0
+			var x := column * cell_width + 3.0
+			var y := 58.0 + row * 23.0
+			var color: Color = colors[index % colors.size()] if not colors.is_empty() else Color.GRAY
+			draw_rect(Rect2(x, y - 8, 8, 8), color)
+			draw_string(font, Vector2(x + 14, y), str(item.get("label", "")),
+				HORIZONTAL_ALIGNMENT_LEFT, cell_width - 66, 9, Color("506172"))
+			var share := maxf(0.0, float(item.get("value", 0.0))) / total
+			draw_string(font, Vector2(x, y), "%.1f%%" % (share * 100.0),
+				HORIZONTAL_ALIGNMENT_RIGHT, cell_width - 8, 9, color)
+
+
+class _PanelLaborFlowChart extends Control:
+	var states: Array = []
+	var flows: Array = []
+	var font: Font
+	var colors := [Color("21a179"), Color("c78216"), Color("64748b")]
+
+	func _draw() -> void:
+		var state_total := 0.0
+		for state: Dictionary in states:
+			state_total += maxf(0.0, float(state.get("value", 0.0)))
+		var bar := Rect2(2, 8, size.x - 4, 18)
+		draw_rect(bar, Color("edf1f6"))
+		var cursor := bar.position.x
+		for index in states.size():
+			var state: Dictionary = states[index]
+			var share := maxf(0.0, float(state.get("value", 0.0))) / maxf(1.0, state_total)
+			var width := bar.size.x * share
+			draw_rect(Rect2(cursor, bar.position.y, width, bar.size.y), colors[index % colors.size()])
+			cursor += width
+		for index in states.size():
+			var state: Dictionary = states[index]
+			var x := 2.0 + index * size.x / maxf(1.0, states.size())
+			var share := maxf(0.0, float(state.get("value", 0.0))) / maxf(1.0, state_total)
+			draw_string(font, Vector2(x, 43), "%s %.0f%%" % [
+				str(state.get("label", "")), share * 100.0],
+				HORIZONTAL_ALIGNMENT_LEFT, size.x / maxf(1.0, states.size()) - 3, 8,
+				colors[index % colors.size()])
+		var max_flow := 1.0
+		for item: Dictionary in flows:
+			max_flow = maxf(max_flow, float(item.get("value", 0.0)))
+		for index in flows.size():
+			var item: Dictionary = flows[index]
+			var column := index % 2
+			var row := index / 2
+			var cell_width := size.x / 2.0 - 7.0
+			var x := 2.0 + column * (size.x / 2.0 + 3.0)
+			var y := 59.0 + row * 26.0
+			var value := float(item.get("value", 0.0))
+			draw_string(font, Vector2(x, y + 9), str(item.get("label", "")),
+				HORIZONTAL_ALIGNMENT_LEFT, 68, 8, Color("5e6f81"))
+			draw_rect(Rect2(x + 70, y + 2, maxf(8.0, cell_width - 96.0), 7), Color("edf1f6"))
+			draw_rect(Rect2(x + 70, y + 2,
+				maxf(8.0, cell_width - 96.0) * value / max_flow, 7), Color("2f72d6"))
+			draw_string(font, Vector2(x, y + 9), "%.0f" % value,
+				HORIZONTAL_ALIGNMENT_RIGHT, cell_width, 8, Color("2a3948"))
+
+
+class _PanelAgeParticipationChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			return
+		var plot := Rect2(Vector2(28, 22), size - Vector2(38, 48))
+		for grid in 3:
+			var y := plot.end.y - plot.size.y * float(grid) / 2.0
+			draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), Color("e5ebf1"))
+			draw_string(font, Vector2(0, y + 3), "%d%%" % (grid * 50),
+				HORIZONTAL_ALIGNMENT_RIGHT, 24, 7, Color("849098"))
+		var slot := plot.size.x / float(data.size())
+		for index in data.size():
+			var item: Dictionary = data[index]
+			var participation := clampf(float(item.get("participation_rate", 0.0)), 0.0, 1.0)
+			var employment := clampf(float(item.get("employment_rate", 0.0)), 0.0, 1.0)
+			var bar_width := minf(24.0, slot * 0.24)
+			var center := plot.position.x + slot * (index + 0.5)
+			var p_height := plot.size.y * participation
+			var e_height := plot.size.y * employment
+			draw_rect(Rect2(center - bar_width - 2, plot.end.y - p_height, bar_width, p_height), Color("16a394"))
+			draw_rect(Rect2(center + 2, plot.end.y - e_height, bar_width, e_height), Color("3274d9"))
+			draw_string(font, Vector2(center - slot / 2.0, plot.end.y + 15), str(item.get("label", "")),
+				HORIZONTAL_ALIGNMENT_CENTER, slot, 8, Color("5e6f81"))
+			draw_string(font, Vector2(center - slot / 2.0, plot.end.y - p_height - 4),
+				"%.0f%%" % (participation * 100.0), HORIZONTAL_ALIGNMENT_CENTER, slot, 7, Color("087f74"))
+		draw_rect(Rect2(plot.position.x, 4, 8, 8), Color("16a394"))
+		draw_string(font, Vector2(plot.position.x + 12, 12), "劳动参与率",
+			HORIZONTAL_ALIGNMENT_LEFT, 70, 8, Color("5e6f81"))
+		draw_rect(Rect2(plot.position.x + 82, 4, 8, 8), Color("3274d9"))
+		draw_string(font, Vector2(plot.position.x + 94, 12), "就业率",
+			HORIZONTAL_ALIGNMENT_LEFT, 60, 8, Color("5e6f81"))
+
+
+class _PanelPyramidChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			return
+		var max_count := 1.0
+		for item: Dictionary in data:
+			max_count = maxf(max_count, maxf(
+				float(item.get("male", 0.0)), float(item.get("female", 0.0))))
+		var center := size.x / 2.0
+		var label_width := 40.0
+		var half_width := maxf(20.0, center - label_width / 2.0 - 18.0)
+		var row_height := (size.y - 25.0) / float(data.size())
+		for row in data.size():
+			var item: Dictionary = data[data.size() - 1 - row]
+			var y := 10.0 + row * row_height
+			var male := float(item.get("male", 0.0))
+			var female := float(item.get("female", 0.0))
+			var male_width := half_width * male / max_count
+			var female_width := half_width * female / max_count
+			draw_rect(Rect2(center - label_width / 2.0 - male_width, y + 2, male_width, row_height - 5), Color("3274d9"))
+			draw_rect(Rect2(center + label_width / 2.0, y + 2, female_width, row_height - 5), Color("c78318"))
+			draw_string(font, Vector2(center - label_width / 2.0, y + row_height - 7), str(item.get("label", "")),
+				HORIZONTAL_ALIGNMENT_CENTER, label_width, 8, Color("5e6f81"))
+			draw_string(font, Vector2(2, y + row_height - 7), "%.0f" % male,
+				HORIZONTAL_ALIGNMENT_RIGHT, center - label_width / 2.0 - 8, 7, Color("3274d9"))
+			draw_string(font, Vector2(center + label_width / 2.0 + 5, y + row_height - 7), "%.0f" % female,
+				HORIZONTAL_ALIGNMENT_LEFT, half_width, 7, Color("c78318"))
+		draw_string(font, Vector2(2, size.y - 1), "男  ◀",
+			HORIZONTAL_ALIGNMENT_RIGHT, center - 22, 8, Color("3274d9"))
+		draw_string(font, Vector2(center + 22, size.y - 1), "▶  女",
+			HORIZONTAL_ALIGNMENT_LEFT, center - 24, 8, Color("c78318"))
+
+
+class _PanelSectorMatrixChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			return
+		var max_produced := 1.0
+		var max_sales := 1.0
+		var max_employment := 1.0
+		for item: Dictionary in data:
+			max_produced = maxf(max_produced, float(item.get("produced", 0.0)))
+			max_sales = maxf(max_sales, float(item.get("sales", 0.0)))
+			max_employment = maxf(max_employment, float(item.get("employment", 0.0)))
+		var name_width := minf(86.0, size.x * 0.23)
+		var metric_width := (size.x - name_width - 8.0) / 3.0
+		for column in 3:
+			draw_string(font, Vector2(name_width + column * metric_width, 11),
+				str(["产出", "销售", "就业FTE"][column]),
+				HORIZONTAL_ALIGNMENT_CENTER, metric_width, 8, Color("849098"))
+		var row_height := (size.y - 22.0) / float(data.size())
+		for row in data.size():
+			var item: Dictionary = data[row]
+			var y := 22.0 + row * row_height
+			draw_string(font, Vector2(2, y + 11), "%s · %d家" % [
+				str(item.get("label", "")), int(item.get("firms", 0))],
+				HORIZONTAL_ALIGNMENT_LEFT, name_width - 4, 8, Color("506172"))
+			var values := [float(item.get("produced", 0.0)), float(item.get("sales", 0.0)), float(item.get("employment", 0.0))]
+			var maxima := [max_produced, max_sales, max_employment]
+			var colors := [Color("16a394"), Color("3274d9"), Color("c78318")]
+			for column in 3:
+				var x := name_width + column * metric_width + 5.0
+				var width := metric_width - 10.0
+				draw_rect(Rect2(x, y + 4, width, 8), Color("edf1f6"))
+				draw_rect(Rect2(x, y + 4, width * values[column] / maxima[column], 8), colors[column])
+
+
+class _PanelLorenzChart extends Control:
+	var income: Array = []
+	var wealth: Array = []
+	var font: Font
+
+	func _curve(values: Array, plot: Rect2, color: Color) -> void:
+		if values.size() < 2:
+			return
+		var points := PackedVector2Array()
+		for index in values.size():
+			points.append(Vector2(
+				plot.position.x + plot.size.x * float(index) / float(values.size() - 1),
+				plot.end.y - plot.size.y * clampf(float(values[index]), 0.0, 1.0)))
+		draw_polyline(points, color, 2.0, true)
+
+	func _draw() -> void:
+		var plot := Rect2(Vector2(24, 18), size - Vector2(34, 35))
+		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.end.x, plot.position.y), Color("b9c5d1"), 1.0)
+		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.end.x, plot.end.y), Color("aebbc8"))
+		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.position.x, plot.position.y), Color("aebbc8"))
+		_curve(income, plot, Color("7950c7"))
+		_curve(wealth, plot, Color("3274d9"))
+		draw_rect(Rect2(plot.position.x, 2, 8, 8), Color("7950c7"))
+		draw_string(font, Vector2(plot.position.x + 12, 10), "个人收入",
+			HORIZONTAL_ALIGNMENT_LEFT, 58, 8, Color("5e6f81"))
+		draw_rect(Rect2(plot.position.x + 76, 2, 8, 8), Color("3274d9"))
+		draw_string(font, Vector2(plot.position.x + 88, 10), "个人正净财富",
+			HORIZONTAL_ALIGNMENT_LEFT, 90, 8, Color("5e6f81"))
+		draw_string(font, Vector2(plot.position.x, size.y - 1), "人口累计份额 →",
+			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
+
+
+class _PanelDecileChart extends Control:
+	var income: Array = []
+	var consumption: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if income.size() < 10 or consumption.size() < 10:
+			return
+		var plot := Rect2(Vector2(24, 22), size - Vector2(34, 45))
+		var max_value := 0.01
+		for value in income + consumption:
+			max_value = maxf(max_value, float(value))
+		var slot := plot.size.x / 10.0
+		for index in 10:
+			var income_h := plot.size.y * float(income[index]) / max_value
+			var consumption_h := plot.size.y * float(consumption[index]) / max_value
+			var width := minf(15.0, slot * 0.28)
+			var center := plot.position.x + slot * (index + 0.5)
+			draw_rect(Rect2(center - width - 1, plot.end.y - income_h, width, income_h), Color("7950c7"))
+			draw_rect(Rect2(center + 1, plot.end.y - consumption_h, width, consumption_h), Color("16a394"))
+			draw_string(font, Vector2(plot.position.x + slot * index, plot.end.y + 14), "D%d" % (index + 1),
+				HORIZONTAL_ALIGNMENT_CENTER, slot, 7, Color("6f7d89"))
+		draw_rect(Rect2(plot.position.x, 3, 8, 8), Color("7950c7"))
+		draw_string(font, Vector2(plot.position.x + 12, 11), "收入份额",
+			HORIZONTAL_ALIGNMENT_LEFT, 55, 8, Color("5e6f81"))
+		draw_rect(Rect2(plot.position.x + 72, 3, 8, 8), Color("16a394"))
+		draw_string(font, Vector2(plot.position.x + 84, 11), "消费份额",
+			HORIZONTAL_ALIGNMENT_LEFT, 55, 8, Color("5e6f81"))
+
+
+class _PanelBubbleChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			draw_string(font, Vector2(0, size.y * 0.52), "尚无逐企业估值记录",
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
+			return
+		var q_max := 1.0
+		var inv_max := 1.0
+		var cap_max := 1.0
+		for item: Dictionary in data:
+			q_max = maxf(q_max, float(item.get("q", 0.0)))
+			inv_max = maxf(inv_max, float(item.get("investment", 0.0)))
+			cap_max = maxf(cap_max, float(item.get("market_cap", 0.0)))
+		var plot := Rect2(Vector2(25, 10), size - Vector2(37, 30))
+		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.end.x, plot.end.y), Color("bac6d2"))
+		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.position.x, plot.position.y), Color("bac6d2"))
+		var q_one_x := plot.position.x + plot.size.x / maxf(1.0, q_max * 1.1)
+		draw_line(Vector2(q_one_x, plot.position.y), Vector2(q_one_x, plot.end.y), Color("d3dae2"))
+		for item: Dictionary in data:
+			var q := maxf(0.0, float(item.get("q", 0.0)))
+			var investment := maxf(0.0, float(item.get("investment", 0.0)))
+			var cap := maxf(0.0, float(item.get("market_cap", 0.0)))
+			var point := Vector2(
+				plot.position.x + plot.size.x * q / maxf(1.0, q_max * 1.1),
+				plot.end.y - plot.size.y * investment / maxf(1.0, inv_max * 1.1))
+			var radius := 3.0 + 8.0 * sqrt(cap / cap_max)
+			draw_circle(point, radius, Color(0.18, 0.45, 0.85, 0.28))
+			draw_arc(point, radius, 0, TAU, 20, Color("3274d9"), 1.0)
+		draw_string(font, Vector2(plot.position.x, size.y - 1), "托宾 Q →",
+			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
+
+
+class _PanelEnergyFlowChart extends Control:
+	var values: Dictionary = {}
+	var font: Font
+
+	func _node(rect: Rect2, title: String, value: float, color: Color) -> void:
+		draw_rect(rect, Color(color.r, color.g, color.b, 0.10))
+		draw_rect(rect, color, false, 1.0)
+		draw_string(font, rect.position + Vector2(0, 17), title,
+			HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 8, Color("5e6f81"))
+		draw_string(font, rect.position + Vector2(0, 36), "%.1f" % value,
+			HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, color)
+
+	func _draw() -> void:
+		var node_w := minf(112.0, size.x * 0.25)
+		var node_h := 48.0
+		var y := 26.0
+		var left := Rect2(3, y, node_w, node_h)
+		var center := Rect2((size.x - node_w) / 2.0, y, node_w, node_h)
+		var right := Rect2(size.x - node_w - 3, y, node_w, node_h)
+		_node(left, "生产", float(values.get("energy_produced", 0.0)), Color("21a179"))
+		_node(center, "市场销售", float(values.get("energy_sold", 0.0)), Color("3274d9"))
+		_node(right, "生产使用", float(values.get("energy_used", 0.0)), Color("c78318"))
+		draw_line(Vector2(left.end.x + 4, y + node_h / 2), Vector2(center.position.x - 4, y + node_h / 2), Color("9cabb9"), 2.0)
+		draw_line(Vector2(center.end.x + 4, y + node_h / 2), Vector2(right.position.x - 4, y + node_h / 2), Color("9cabb9"), 2.0)
+		var stock := float(values.get("energy_stock_total", 0.0))
+		var reserve := float(values.get("spr_stock", 0.0))
+		var coverage := float(values.get("energy_coverage_mean", 0.0))
+		draw_string(font, Vector2(3, 103), "商业+部门库存  %.1f" % stock,
+			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.44, 9, Color("506172"))
+		draw_string(font, Vector2(size.x * 0.44, 103), "战略储备  %.1f" % reserve,
+			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.30, 9, Color("7950c7"))
+		draw_string(font, Vector2(3, 125), "库存覆盖 %.1f tick · 未满足需求 %.1f" % [
+			coverage, float(values.get("energy_unfilled", 0.0))],
+			HORIZONTAL_ALIGNMENT_LEFT, size.x - 6, 8, Color("849098"))
+
+
+class _PanelFiscalFlowChart extends Control:
+	var values: Dictionary = {}
+	var font: Font
+
+	func _draw_stack(rect: Rect2, parts: Array, total: float) -> void:
+		var cursor := rect.position.y
+		for part: Dictionary in parts:
+			var value := maxf(0.0, float(part.get("value", 0.0)))
+			var height := rect.size.y * value / maxf(total, 1e-9)
+			draw_rect(Rect2(rect.position.x, cursor, rect.size.x, height), part.get("color", Color.GRAY))
+			cursor += height
+
+	func _draw() -> void:
+		var revenues := [
+			{"label": "所得", "value": float(values.get("tax_income", 0.0)), "color": Color("16a394")},
+			{"label": "消费", "value": float(values.get("tax_consumption", 0.0)), "color": Color("3274d9")},
+			{"label": "企业", "value": float(values.get("tax_profit", 0.0)), "color": Color("7950c7")},
+			{"label": "其他", "value": maxf(0.0, float(values.get("fiscal_revenue_total", 0.0)) - float(values.get("tax_income", 0.0)) - float(values.get("tax_consumption", 0.0)) - float(values.get("tax_profit", 0.0))), "color": Color("7a8b9b")},
+		]
+		var spending := [
+			{"label": "政府消费", "value": float(values.get("gov_consumption", 0.0)), "color": Color("3274d9")},
+			{"label": "转移", "value": float(values.get("benefit_paid", 0.0)), "color": Color("7950c7")},
+			{"label": "公共投资", "value": float(values.get("public_investment", 0.0)), "color": Color("16a394")},
+			{"label": "其他", "value": maxf(0.0, float(values.get("augmented_gov_spending", 0.0)) - float(values.get("gov_consumption", 0.0)) - float(values.get("benefit_paid", 0.0)) - float(values.get("public_investment", 0.0))), "color": Color("c78318")},
+		]
+		var revenue_total := maxf(0.0, float(values.get("fiscal_revenue_total", 0.0)))
+		var spending_total := maxf(0.0, float(values.get("augmented_gov_spending", 0.0)))
+		var max_total := maxf(1.0, maxf(revenue_total, spending_total))
+		var base_y := size.y - 28.0
+		var max_h := size.y - 52.0
+		var bar_w := minf(54.0, size.x * 0.14)
+		var rev_rect := Rect2(size.x * 0.23 - bar_w / 2, base_y - max_h * revenue_total / max_total, bar_w, max_h * revenue_total / max_total)
+		var spend_rect := Rect2(size.x * 0.70 - bar_w / 2, base_y - max_h * spending_total / max_total, bar_w, max_h * spending_total / max_total)
+		_draw_stack(rev_rect, revenues, maxf(revenue_total, 1e-9))
+		_draw_stack(spend_rect, spending, maxf(spending_total, 1e-9))
+		draw_string(font, Vector2(0, 11), "收入 %.1f" % revenue_total,
+			HORIZONTAL_ALIGNMENT_CENTER, size.x * 0.46, 9, Color("087f74"))
+		draw_string(font, Vector2(size.x * 0.5, 11), "支出 %.1f" % spending_total,
+			HORIZONTAL_ALIGNMENT_CENTER, size.x * 0.46, 9, Color("2f72d6"))
+		draw_string(font, Vector2(0, size.y - 5), "赤字为正 = 净注入  %.1f" % float(values.get("gov_deficit", 0.0)),
+			HORIZONTAL_ALIGNMENT_CENTER, size.x, 8, Color("849098"))
+
+
+class _PanelBankBalanceChart extends Control:
+	var values: Dictionary = {}
+	var font: Font
+
+	func _bar(y: float, label: String, value: float, maximum: float, color: Color) -> void:
+		draw_string(font, Vector2(2, y + 10), label,
+			HORIZONTAL_ALIGNMENT_LEFT, 76, 8, Color("5e6f81"))
+		var x := 80.0
+		var width := maxf(20.0, size.x - 145.0)
+		draw_rect(Rect2(x, y + 2, width, 9), Color("edf1f6"))
+		draw_rect(Rect2(x, y + 2, width * maxf(0.0, value) / maximum, 9), color)
+		draw_string(font, Vector2(x + width + 5, y + 10), "%.1f" % value,
+			HORIZONTAL_ALIGNMENT_RIGHT, 56, 8, color)
+
+	func _draw() -> void:
+		var credit := float(values.get("total_credit", 0.0))
+		var deposits := float(values.get("bank_deposit_total", 0.0))
+		var capital := float(values.get("bank_capital", 0.0))
+		var maximum := maxf(1.0, maxf(credit, maxf(deposits, capital)))
+		_bar(15, "信贷资产", credit, maximum, Color("16a394"))
+		_bar(48, "存款负债", deposits, maximum, Color("3274d9"))
+		_bar(81, "资本缓冲", capital, maximum, Color("21a166"))
+		var capital_ratio := capital / maxf(credit, 1e-9)
+		draw_string(font, Vector2(2, 129), "资本/信贷 %.1f%% · 本期核销 %.1f" % [
+			capital_ratio * 100.0, float(values.get("writeoffs", 0.0))],
+			HORIZONTAL_ALIGNMENT_LEFT, size.x - 4, 8, Color("849098"))
 
 
 class _PanelLineChart extends Control:

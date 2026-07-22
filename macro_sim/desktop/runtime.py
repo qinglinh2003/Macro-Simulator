@@ -98,6 +98,24 @@ PANEL_METRIC_NAMES = (
     # demography & firms
     "population_alive", "working_age_share", "avg_household_size",
     "births", "deaths", "firm_count_c",
+    # domain-specific panel anatomy (kept out of the six headline cards)
+    "real_output_growth", "labor_productivity", "labor_share",
+    "labor_E", "labor_U", "labor_JG", "labor_OLF", "labor_employed_heads",
+    "labor_hires_total", "labor_churn_seps_total", "labor_layoff_seps_total",
+    "labor_bankruptcy_seps_total", "labor_death_seps_total", "labor_recalls_total",
+    "labor_suspensions_total", "labor_ladder_moves_total", "labor_welfare_quits_total",
+    "tax_profit", "tax_income", "tax_consumption", "tax_wealth", "tax_energy",
+    "gov_consumption", "jg_spending", "public_investment", "gov_interest_bill",
+    "augmented_gov_spending", "fiscal_revenue_total",
+    "firm_debt_total", "household_debt_total_observed", "firm_credit_share",
+    "household_credit_share", "new_loans_total", "bank_realized_credit_losses",
+    "tobin_q_dispersion", "n_firms_q_above_1", "investment_q_corr",
+    "energy_sold", "energy_unfilled", "energy_coverage_mean",
+    "energy_capacity_utilization", "energy_flow_gap", "e_hhi",
+    "poverty_gap", "bottom10_consumption", "median_real_household_income",
+    "household_underwater_share", "person_income_gini", "person_wealth_gini",
+    "child_dependency_ratio", "elder_dependency_ratio",
+    "n_firms_necessity", "n_firms_luxury",
 )
 
 METRIC_NAMES = WORLD_METRIC_NAMES + (
@@ -163,13 +181,24 @@ class SimulationRuntime:
     def reset(self, *, seed: int | None = None) -> dict[str, Any]:
         if seed is not None:
             self._seed = _integer("seed", seed, minimum=0, maximum=2_147_483_647)
-        base = Config.v124(
+        # The desktop world uses the daily demographic economy and the existing
+        # person-level labor market.  Without these flags a visually rich labor
+        # page would have to fabricate age/sex/sector records from household FTEs.
+        base = Config.v13(
             n_households=80,
             n_firms_c=12,
             n_firms_k=4,
             n_ticks=100_000,
             seed=self._seed,
             energy_enabled=True,
+            energy_household=True,
+            consumption_strata=True,
+            labor_matching="persistent",
+            labor_matching_friction=True,
+            labor_relationship_wages=True,
+            labor_job_ladder=True,
+            labor_person_efficiency=True,
+            labor_participation=True,
         )
         configs = [spec["profile"].apply(base) for spec in COUNTRIES]
         self.world = World(
@@ -191,6 +220,8 @@ class SimulationRuntime:
         self._shock_sequence = 0
         self._panel_history: list[dict[str, float | int]] = []
         self._world_history: list[dict[str, Any]] = []
+        self._labor_flow_counters: dict[str, float] = {}
+        self._labor_flow_delta: dict[str, float] = {}
         self._last_verdict: dict[str, Any] | None = None
         self._pending_verdict_pid: str | None = None
         # Open tick-zero decision windows immediately so the UI has something real
@@ -247,8 +278,8 @@ class SimulationRuntime:
             result = self.session.advance()
             if result.status == "awaiting_human":
                 break
+            self._record_result(result.records, accumulate_flows=advanced > 0)
             advanced += 1
-            self._record_result(result.records)
         snapshot = self.snapshot()
         snapshot["advanced_ticks"] = advanced
         return snapshot
@@ -305,7 +336,7 @@ class SimulationRuntime:
         )
         return self.snapshot()
 
-    def _record_result(self, records: Any) -> None:
+    def _record_result(self, records: Any, *, accumulate_flows: bool = False) -> None:
         if isinstance(records, list):
             rows = [row for row in records if isinstance(row, dict)]
         elif isinstance(records, dict):
@@ -322,6 +353,27 @@ class SimulationRuntime:
             panel_point[name] = _finite_number(player_row.get(name))
         self._panel_history.append(panel_point)
         del self._panel_history[:-SERIES_LIMIT]
+        flow_counter_names = (
+            "labor_hires_total", "labor_churn_seps_total",
+            "labor_layoff_seps_total", "labor_bankruptcy_seps_total",
+            "labor_death_seps_total", "labor_recalls_total",
+            "labor_suspensions_total", "labor_ladder_moves_total",
+            "labor_welfare_quits_total",
+        )
+        current_counters = {
+            name: _finite_number(player_row.get(name)) for name in flow_counter_names
+        }
+        tick_flow_delta = {
+            name: max(0.0, value - self._labor_flow_counters.get(name, 0.0))
+            for name, value in current_counters.items()
+        }
+        self._labor_flow_delta = {
+            name: tick_flow_delta[name] + (
+                self._labor_flow_delta.get(name, 0.0) if accumulate_flows else 0.0
+            )
+            for name in flow_counter_names
+        }
+        self._labor_flow_counters = current_counters
         # world point: per-economy compact metrics + cross-border record
         world_point: dict[str, Any] = {"tick": tick, "economies": []}
         for row in rows:
@@ -370,6 +422,211 @@ class SimulationRuntime:
         result = dict(meta)
         result["releases"] = [merged[k] for k in sorted(merged)]
         return result
+
+    @staticmethod
+    def _distribution(values: list[float]) -> dict[str, list[float]]:
+        """Return decile shares and a compact Lorenz curve for non-negative values."""
+        ordered = sorted(max(0.0, _finite_number(value)) for value in values)
+        if not ordered:
+            return {"deciles": [0.0] * 10, "lorenz": [0.0] * 11}
+        total = sum(ordered)
+        if total <= 1e-12:
+            return {"deciles": [0.0] * 10, "lorenz": [0.0] * 11}
+        deciles = [0.0] * 10
+        for index, value in enumerate(ordered):
+            bucket = min(9, int(index * 10 / len(ordered)))
+            deciles[bucket] += value / total
+        lorenz = [0.0]
+        running = 0.0
+        for share in deciles:
+            running += share
+            lorenz.append(min(1.0, running))
+        lorenz[-1] = 1.0
+        return {"deciles": deciles, "lorenz": lorenz}
+
+    def _panel_details(self) -> dict[str, Any]:
+        """Read-only micro aggregates for visualizations that scalar records cannot express."""
+        econ = self.world.economies[PLAYER_ECONOMY]
+        state = getattr(econ, "demographic_state", None)
+        people = [
+            person for person in getattr(state, "people", ())
+            if getattr(person, "alive", True)
+        ]
+        pyramid_bands = (
+            ("0–14", 0, 14), ("15–24", 15, 24), ("25–34", 25, 34),
+            ("35–44", 35, 44), ("45–54", 45, 54), ("55–64", 55, 64),
+            ("65+", 65, 200),
+        )
+        pyramid = []
+        for label, low, high in pyramid_bands:
+            bucket = [person for person in people if low <= int(person.age) <= high]
+            pyramid.append({
+                "label": label,
+                "male": sum(1 for person in bucket if str(person.sex).upper() == "M"),
+                "female": sum(1 for person in bucket if str(person.sex).upper() == "F"),
+            })
+
+        lm = getattr(econ, "labor_market", None)
+        active_primary: dict[int, Any] = {}
+        active_secondary: dict[int, Any] = {}
+        nonsearch: set[int] = set()
+        if lm is not None:
+            suspended = set(getattr(lm, "suspended", {}) or {})
+            active_primary = {
+                int(pid): job for pid, job in (getattr(lm, "jobs", {}) or {}).items()
+                if int(pid) not in suspended
+            }
+            active_secondary = {
+                int(pid): job for pid, job in (getattr(lm, "second_jobs", {}) or {}).items()
+                if int(pid) not in suspended
+            }
+            nonsearch = {int(pid) for pid in (getattr(lm, "nonsearch", set()) or set())}
+
+        participation = []
+        for label, low, high in (
+            ("18–24", 18, 24), ("25–34", 25, 34), ("35–44", 35, 44),
+            ("45–54", 45, 54), ("55–64", 55, 64),
+        ):
+            eligible = [person for person in people if low <= int(person.age) <= high]
+            ids = {int(person.id) for person in eligible}
+            participants = max(0, len(ids) - len(ids & nonsearch))
+            employed = len(ids & set(active_primary))
+            participation.append({
+                "label": label,
+                "population": len(ids),
+                "participation_rate": participants / len(ids) if ids else 0.0,
+                "employment_rate": employed / len(ids) if ids else 0.0,
+            })
+
+        working_ids = {int(person.id) for person in people if 18 <= int(person.age) <= 64}
+        employed_heads = len(working_ids & set(active_primary))
+        nonsearch_heads = len(working_ids & nonsearch)
+        searching_or_guaranteed = max(0, len(working_ids) - employed_heads - nonsearch_heads)
+        accounts = getattr(econ, "labor_accounts", None)
+        jg_fte = _finite_number(getattr(accounts, "job_guarantee", 0.0))
+        labor_states = [
+            {"label": "就业 E", "value": employed_heads},
+            {"label": "求职/保障 U·JG", "value": searching_or_guaranteed},
+            {"label": "非劳动力 N", "value": nonsearch_heads},
+        ]
+
+        firm_sector: dict[str, str] = {}
+        for firm in getattr(econ, "c_firms", ()):
+            sector = str(getattr(firm, "consumption_sector", ""))
+            firm_sector[str(firm.id)] = (
+                "必需消费" if sector == "necessity" else
+                "可选消费" if sector == "luxury" else "消费品"
+            )
+        for firm in getattr(econ, "k_firms", ()):
+            firm_sector[str(firm.id)] = "资本品"
+        for firm in getattr(econ, "e_firms", ()):
+            firm_sector[str(firm.id)] = "能源"
+        sector_order = ("必需消费", "可选消费", "消费品", "资本品", "能源")
+        sector_hours = {label: 0.0 for label in sector_order}
+        if lm is not None:
+            for job in list(active_primary.values()) + list(active_secondary.values()):
+                label = firm_sector.get(str(job.firm_id), "消费品")
+                sector_hours[label] = sector_hours.get(label, 0.0) + _finite_number(
+                    getattr(job, "hours", 1.0), 1.0
+                )
+        else:
+            for firm in getattr(econ, "firms", ()):
+                label = firm_sector.get(str(firm.id), "消费品")
+                sector_hours[label] = sector_hours.get(label, 0.0) + _finite_number(
+                    getattr(firm, "hired", 0.0)
+                )
+        employment_sectors = [
+            {"label": label, "value": sector_hours[label]}
+            for label in sector_order if sector_hours[label] > 1e-9
+        ]
+        if jg_fte > 1e-9:
+            employment_sectors.append({"label": "就业保障", "value": jg_fte})
+
+        flow = self._labor_flow_delta
+        labor_flows = [
+            {"label": "新招聘", "value": flow.get("labor_hires_total", 0.0)},
+            {"label": "召回", "value": flow.get("labor_recalls_total", 0.0)},
+            {"label": "岗位转换", "value": flow.get("labor_ladder_moves_total", 0.0)},
+            {"label": "主动离职", "value": flow.get("labor_churn_seps_total", 0.0)},
+            {"label": "裁员/破产", "value": (
+                flow.get("labor_layoff_seps_total", 0.0)
+                + flow.get("labor_bankruptcy_seps_total", 0.0)
+                + flow.get("labor_suspensions_total", 0.0)
+            )},
+            {"label": "退出劳动力", "value": flow.get("labor_welfare_quits_total", 0.0)},
+        ]
+
+        sector_rows = []
+        for label, firms in (
+            ("必需消费", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "necessity"]),
+            ("可选消费", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "luxury"]),
+            ("消费品", [f for f in getattr(econ, "c_firms", ()) if not getattr(f, "consumption_sector", "")]),
+            ("资本品", list(getattr(econ, "k_firms", ()))),
+            ("能源", list(getattr(econ, "e_firms", ()))),
+        ):
+            if not firms:
+                continue
+            sector_rows.append({
+                "label": label,
+                "firms": len(firms),
+                "produced": sum(_finite_number(getattr(firm, "produced", 0.0)) for firm in firms),
+                "sales": sum(_finite_number(getattr(firm, "sales", 0.0)) for firm in firms),
+                "inventory": sum(_finite_number(getattr(firm, "inventory", 0.0)) for firm in firms),
+                "employment": sector_hours.get(label, 0.0),
+            })
+
+        capital_firms = []
+        for firm in getattr(econ, "c_firms", ()):
+            market_cap = _finite_number(getattr(firm, "share_price", 0.0)) * _finite_number(
+                getattr(firm, "shares_outstanding", 0.0)
+            )
+            if market_cap <= 0.0:
+                continue
+            capital_firms.append({
+                "label": str(firm.id),
+                "q": _finite_number(getattr(firm, "tobin_q", 0.0)),
+                "investment": _finite_number(getattr(firm, "investment", 0.0)),
+                "market_cap": market_cap,
+            })
+
+        bridge = getattr(econ, "demographic_bridge", None)
+        person_income: list[float] = []
+        person_wealth: list[float] = []
+        if bridge is not None:
+            for person in people:
+                person_id = int(person.id)
+                if not bridge.claims.has_person(person_id):
+                    continue
+                sheet = bridge.claims.balance_sheet(person_id)
+                person_income.append(_finite_number(
+                    sheet.labor_income_tick + sheet.capital_income_tick
+                    + sheet.transfer_income_tick
+                ))
+                person_wealth.append(_finite_number(sheet.net_worth))
+        live_households = [
+            household for household in getattr(econ, "households", ())
+            if bridge is None or bridge.household_has_living_members(household.id)
+        ]
+        consumption = [_finite_number(household.spent) for household in live_households]
+
+        return {
+            "labor": {
+                "states": labor_states,
+                "employment_sectors": employment_sectors,
+                "flows": labor_flows,
+                "participation_by_age": participation,
+                "working_age_population": len(working_ids),
+                "jg_fte": jg_fte,
+            },
+            "population": {"pyramid": pyramid},
+            "real_economy": {"sectors": sector_rows},
+            "capital_market": {"firms": capital_firms},
+            "distribution": {
+                "income": self._distribution(person_income),
+                "wealth": self._distribution(person_wealth),
+                "consumption": self._distribution(consumption),
+            },
+        }
 
     def snapshot(self) -> dict[str, Any]:
         missing = set(self.session.missing_context_ids)
@@ -428,6 +685,7 @@ class SimulationRuntime:
             "awaiting_human": bool(self.session.missing_context_ids),
             "metrics": metrics,
             "series": list(self._panel_history),
+            "panel_details": _jsonable(self._panel_details()),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}
