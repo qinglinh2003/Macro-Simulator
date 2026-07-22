@@ -504,6 +504,9 @@ var _goto_panel_group := ""            # 指标全景当前独立页签；核心
 var _household_selected := -1         # 家庭页当前选中的 demographic household id
 var _household_search := ""           # 家庭号 / 成员号筛选
 var _household_sort := "net_worth"    # net_worth | members | debt
+var _firm_selected := ""              # 企业页当前选中的 firm id
+var _firm_search := ""                # 企业号 / 部门 / 员工号筛选
+var _firm_sort := "revenue"           # revenue | earnings | assets
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
 var _capture_path := ""
@@ -1504,7 +1507,7 @@ func _build_center(center: VBoxContainer) -> void:
 	var segh := HBoxContainer.new()
 	segh.add_theme_constant_override("separation", 2)
 	seg.add_child(segh)
-	for t: Array in [["focus", "宏观焦点"], ["households", "家庭"],
+	for t: Array in [["focus", "宏观焦点"], ["households", "家庭"], ["firms", "企业"],
 			["panels", "指标全景"], ["world", "世界视图"]]:
 		var b := Button.new()
 		b.text = t[1]
@@ -1713,7 +1716,7 @@ func _render() -> void:
 		else:
 			sbn.remove_theme_stylebox_override("normal")
 			sbn.add_theme_color_override("font_color", Color("647585"))
-	for tab in ["focus", "households", "panels", "world"]:
+	for tab in ["focus", "households", "firms", "panels", "world"]:
 		var tb := _n["tab_" + tab] as Button
 		if tab == _tab:
 			tb.add_theme_stylebox_override("normal", _sb(Color.WHITE, BLUE_BD, 18, 7, 5))
@@ -1724,6 +1727,7 @@ func _render() -> void:
 	_set_text("tabnote", {
 		"focus": "基于已发布公报的跨指标判断",
 		"households": "微观家庭 · 成员与资产负债真值",
+		"firms": "微观企业 · 经营、账表、员工与股权真值",
 		"panels": "上帝视角 · 逐 tick 真值",
 		"world": "多国耦合 · 贸易 / 资本 / 移民",
 	}.get(_tab, ""))
@@ -2889,6 +2893,8 @@ func _render_center() -> void:
 			_render_panels_tab(body)
 		"households":
 			_render_households_tab(body)
+		"firms":
+			_render_firms_tab(body)
 		_:
 			_render_focus_tab(body)
 
@@ -3195,6 +3201,533 @@ func _household_member_card(member: Dictionary) -> Control:
 			float((employer as Dictionary).get("hours", 0.0))]
 	col.add_child(_lbl(work_text, 8, INK3, true))
 	return card
+
+
+func _firm_number(value: Variant, kind: String = "num") -> String:
+	if value == null:
+		return "不适用"
+	return _fmt_val(kind, float(value))
+
+
+func _firm_sector_color(sector_code: String) -> Color:
+	return {
+		"necessity": TEAL,
+		"luxury": PURPLE,
+		"consumption": BLUE,
+		"capital": Color("4a6fa5"),
+		"energy": Color("b56b0b"),
+	}.get(sector_code, INK3)
+
+
+func _firm_sort_value(item: Dictionary) -> float:
+	match _firm_sort:
+		"earnings":
+			return float((item.get("operations", {}) as Dictionary).get("earnings", 0.0))
+		"assets":
+			return float((item.get("balance_sheet", {}) as Dictionary).get("gross_assets", 0.0))
+		_:
+			return float((item.get("operations", {}) as Dictionary).get("revenue", 0.0))
+
+
+func _firm_matches(item: Dictionary) -> bool:
+	var query := _firm_search.strip_edges().to_lower()
+	if query.is_empty():
+		return true
+	for text in [item.get("firm_id", ""), item.get("sector", ""),
+			item.get("condition", "")]:
+		if str(text).to_lower().contains(query):
+			return true
+	var labor: Dictionary = item.get("labor", {})
+	for employee: Dictionary in labor.get("employees", []):
+		var person_id := int(employee.get("person_id", -1))
+		if str(person_id).contains(query) or ("p%03d" % person_id).contains(query):
+			return true
+	return false
+
+
+func _firm_data_panel(title: String, rows: Array, note: String = "") -> Control:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 10, 9))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_child(_lbl(title, 8, INK3, true))
+	head.add_child(_spacer_h())
+	if not note.is_empty():
+		head.add_child(_lbl(note, 7, INK3))
+	col.add_child(head)
+	for spec: Array in rows:
+		var line := HBoxContainer.new()
+		line.add_child(_lbl(str(spec[0]), 8, INK2))
+		line.add_child(_spacer_h())
+		var color: Color = spec[2] if spec.size() > 2 else INK
+		line.add_child(_lbl(str(spec[1]), 8, color, true))
+		col.add_child(line)
+	return panel
+
+
+func _firm_section_head(parent: VBoxContainer, title: String, note: String = "") -> void:
+	var row := HBoxContainer.new()
+	row.add_child(_lbl(title, 9, INK3, true))
+	row.add_child(_spacer_h())
+	if not note.is_empty():
+		row.add_child(_lbl(note, 8, INK3))
+	parent.add_child(row)
+
+
+func _render_firms_tab(body: VBoxContainer) -> void:
+	var payload: Dictionary = _snapshot.get("firms", {})
+	var summary: Dictionary = payload.get("summary", {})
+	var all_items: Array = payload.get("items", [])
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 7)
+	top.add_child(_household_summary_card("FIRMS · 企业",
+		str(int(summary.get("firm_count", 0))), TEAL, "家"))
+	top.add_child(_household_summary_card("EMPLOYMENT · 在岗",
+		"%.1f" % float(summary.get("employment_fte", 0.0)), BLUE, "FTE"))
+	top.add_child(_household_summary_card("REVENUE · 总营收",
+		_fmt_val("num", float(summary.get("total_revenue", 0.0))), PURPLE))
+	top.add_child(_household_summary_card("EARNINGS · 总利润",
+		_fmt_val("num", float(summary.get("total_earnings", 0.0))), AMBER))
+	body.add_child(top)
+
+	var toolbar := PanelContainer.new()
+	toolbar.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 10, 6))
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 6)
+	toolbar.add_child(tools)
+	tools.add_child(_lbl("企业微观档案", 11, INK))
+	tools.add_child(_chip("LIVE BOOKS · 实时账表", Color("285ca8"),
+		Color("eef5ff"), Color("c9dcf5"), 8))
+	tools.add_child(_spacer_h())
+	var search := LineEdit.new()
+	search.custom_minimum_size.x = 145
+	search.placeholder_text = "企业 / 部门 / 员工ID · 回车"
+	search.text = _firm_search
+	search.add_theme_font_size_override("font_size", 9)
+	search.add_theme_color_override("font_color", INK2)
+	search.add_theme_color_override("font_placeholder_color", INK3)
+	search.add_theme_color_override("caret_color", BLUE)
+	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 5))
+	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, BLUE_BD, 8, 5, 2))
+	search.text_submitted.connect(func(value: String) -> void:
+		_firm_search = value
+		_render())
+	tools.add_child(search)
+	for sort_spec: Array in [["revenue", "营收"], ["earnings", "利润"], ["assets", "资产"]]:
+		var sort_id := str(sort_spec[0])
+		var sort_button := Button.new()
+		sort_button.text = str(sort_spec[1])
+		sort_button.add_theme_font_size_override("font_size", 8)
+		if sort_id == _firm_sort:
+			sort_button.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 8, 5))
+			sort_button.add_theme_color_override("font_color", Color("285ca8"))
+		sort_button.pressed.connect(func() -> void:
+			_firm_sort = sort_id
+			_render())
+		tools.add_child(sort_button)
+	body.add_child(toolbar)
+
+	var items: Array = []
+	for item: Dictionary in all_items:
+		if _firm_matches(item):
+			items.append(item)
+	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var av := _firm_sort_value(a)
+		var bv := _firm_sort_value(b)
+		if is_equal_approx(av, bv):
+			return str(a.get("firm_id", "")) < str(b.get("firm_id", ""))
+		return av > bv)
+	if items.is_empty():
+		var empty := PanelContainer.new()
+		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		empty.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 18))
+		empty.add_child(_lbl("没有匹配的企业。清空搜索词后重试。", 11, INK3))
+		body.add_child(empty)
+		return
+	var selected_found := false
+	for item: Dictionary in items:
+		if str(item.get("firm_id", "")) == _firm_selected:
+			selected_found = true
+			break
+	if not selected_found:
+		_firm_selected = str((items[0] as Dictionary).get("firm_id", ""))
+
+	var main := HBoxContainer.new()
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 9)
+	body.add_child(main)
+	var list_shell := PanelContainer.new()
+	list_shell.custom_minimum_size.x = 205
+	list_shell.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	list_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_shell.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), LINE, 11, 7))
+	var list_col := VBoxContainer.new()
+	list_col.add_theme_constant_override("separation", 6)
+	list_shell.add_child(list_col)
+	var list_head := HBoxContainer.new()
+	list_head.add_child(_lbl("COMPANY INDEX", 8, INK3, true))
+	list_head.add_child(_spacer_h())
+	list_head.add_child(_lbl("%d / %d" % [items.size(), all_items.size()], 8, INK3, true))
+	list_col.add_child(list_head)
+	var list_scroll := ScrollContainer.new()
+	list_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_col.add_child(list_scroll)
+	_restore_scroll("center:firms:list", list_scroll)
+	list_scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:firms:list"] = int(v))
+	var list_items := VBoxContainer.new()
+	list_items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_items.add_theme_constant_override("separation", 5)
+	list_scroll.add_child(list_items)
+	var selected: Dictionary = items[0]
+	for item: Dictionary in items:
+		var firm_id := str(item.get("firm_id", ""))
+		var active := firm_id == _firm_selected
+		if active:
+			selected = item
+		var operations: Dictionary = item.get("operations", {})
+		var labor: Dictionary = item.get("labor", {})
+		var entry := Button.new()
+		entry.custom_minimum_size = Vector2(188, 57)
+		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		entry.text = "%s  ·  %s\n营收 %s  ·  利润 %s  ·  %.1f FTE" % [
+			firm_id, str(item.get("sector", "企业")),
+			_fmt_val("num", float(operations.get("revenue", 0.0))),
+			_fmt_val("num", float(operations.get("earnings", 0.0))),
+			float(labor.get("employment_fte", 0.0))]
+		entry.add_theme_font_size_override("font_size", 8)
+		entry.add_theme_stylebox_override("normal", _sb(
+			Color("eef5ff") if active else Color.WHITE,
+			BLUE_BD if active else Color("dfe6ee"), 9, 7, 3 if active else 0))
+		entry.add_theme_color_override("font_color", Color("1f4f91") if active else INK2)
+		entry.tooltip_text = "查看 %s 的经营、财务、员工与所有权档案" % firm_id
+		entry.pressed.connect(func() -> void:
+			_firm_selected = firm_id
+			_render())
+		list_items.add_child(entry)
+	main.add_child(list_shell)
+
+	var detail_scroll := ScrollContainer.new()
+	detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	main.add_child(detail_scroll)
+	_restore_scroll("center:firms:detail", detail_scroll)
+	detail_scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:firms:detail"] = int(v))
+	var detail := VBoxContainer.new()
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.add_theme_constant_override("separation", 8)
+	detail_scroll.add_child(detail)
+	_render_firm_detail(detail, selected, str(payload.get("as_of_date", "")))
+
+
+func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: String) -> void:
+	var operations: Dictionary = firm.get("operations", {})
+	var labor: Dictionary = firm.get("labor", {})
+	var capital: Dictionary = firm.get("capital", {})
+	var book: Dictionary = firm.get("balance_sheet", {})
+	var pnl: Dictionary = firm.get("pnl", {})
+	var equity: Dictionary = firm.get("equity", {})
+	var parameters: Dictionary = firm.get("parameters", {})
+	var signals: Dictionary = firm.get("signals", {})
+	var bank: Dictionary = firm.get("bank", {})
+	var sector_color := _firm_sector_color(str(firm.get("sector_code", "")))
+	var condition := str(firm.get("condition", "正常经营"))
+	var condition_color := GREEN if condition == "正常经营" else RED
+
+	var header := PanelContainer.new()
+	header.add_theme_stylebox_override("panel", _sb(Color("f9fbfd"), Color("dce5ee"), 11, 9, 4))
+	var header_col := VBoxContainer.new()
+	header_col.add_theme_constant_override("separation", 6)
+	header.add_child(header_col)
+	var title := HBoxContainer.new()
+	title.add_child(_dot(sector_color, 8))
+	title.add_child(_lbl(str(firm.get("firm_id", "企业")), 15, INK, true))
+	title.add_child(_chip(str(firm.get("sector", "企业")),
+		sector_color.darkened(0.15), Color(sector_color.r, sector_color.g, sector_color.b, 0.09),
+		Color(sector_color.r, sector_color.g, sector_color.b, 0.30), 8))
+	if bool(firm.get("state_owned", false)):
+		title.add_child(_chip("国有企业", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
+	title.add_child(_chip(condition, condition_color.darkened(0.12),
+		Color(condition_color.r, condition_color.g, condition_color.b, 0.09),
+		Color(condition_color.r, condition_color.g, condition_color.b, 0.28), 8))
+	title.add_child(_spacer_h())
+	title.add_child(_lbl("截至 %s" % as_of_date, 8, INK3, true))
+	header_col.add_child(title)
+	var metrics := HBoxContainer.new()
+	metrics.add_theme_constant_override("separation", 6)
+	metrics.add_child(_household_summary_card("本期营收",
+		_firm_number(operations.get("revenue")), TEAL))
+	metrics.add_child(_household_summary_card("本期利润",
+		_firm_number(operations.get("earnings")), AMBER))
+	metrics.add_child(_household_summary_card("总资产",
+		_firm_number(book.get("gross_assets")), PURPLE))
+	metrics.add_child(_household_summary_card("债务本金",
+		_firm_number(book.get("debt")), BLUE))
+	header_col.add_child(metrics)
+	var bank_text := "往来银行 %s · 贷款利率 %s" % [
+		str(bank.get("bank_id", "无")), _firm_number(bank.get("loan_rate"), "pt")]
+	var identity_text := "技术 %s · 产品 %s · %s · %s" % [
+		str(firm.get("technology", "—")), str(firm.get("sells", "—")),
+		"实施投资" if bool(firm.get("invests", false)) else "不实施投资",
+		"独立上市" if bool(equity.get("enabled", false)) else "未发行独立股份"]
+	header_col.add_child(_lbl(identity_text + "   |   " + bank_text, 8, INK3, true))
+	parent.add_child(header)
+
+	_firm_section_head(parent, "OPERATIONS · 经营与生产", "计划 → 生产 → 销售 → 库存")
+	var operating_metrics := HBoxContainer.new()
+	operating_metrics.add_theme_constant_override("separation", 5)
+	for spec: Array in [
+		["需求预期", operations.get("demand_expected"), TEAL],
+		["计划产量", operations.get("production_target"), BLUE],
+		["实际产量", operations.get("produced"), PURPLE],
+		["销量", operations.get("sales"), AMBER],
+	]:
+		operating_metrics.add_child(_household_summary_card(
+			str(spec[0]), _firm_number(spec[1]), spec[2]))
+	parent.add_child(operating_metrics)
+	var operating_panels := HBoxContainer.new()
+	operating_panels.add_theme_constant_override("separation", 7)
+	operating_panels.add_child(_firm_data_panel("PRICE & MARGIN · 价格成本", [
+		["售价", _firm_number(operations.get("price"))],
+		["发布工资", _firm_number(operations.get("wage"))],
+		["加成率", _firm_number(operations.get("markup"), "pct")],
+		["工资总额", _firm_number(operations.get("wagebill"))],
+		["资本服务单位成本", _firm_number(operations.get("pricing_capital_unit_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
+		["资本服务成本", _firm_number(operations.get("pricing_capital_service_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
+		["资本服务率", _firm_number(operations.get("pricing_capital_service_rate"), "pct") if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
+		["目标库存", _firm_number(operations.get("target_inventory"))],
+		["库存实物量", _firm_number(operations.get("inventory"))],
+		["受抑需求", _firm_number(operations.get("rationed_demand"))],
+	]))
+	operating_panels.add_child(_firm_data_panel("REALIZATION · 执行效率", [
+		["生产实现率", _firm_number(operations.get("production_realization"), "pct")],
+		["产销率", _firm_number(operations.get("sales_realization"), "pct")],
+		["名义劳动需求", _firm_number(labor.get("labor_demand_notional"))],
+		["有效劳动需求", _firm_number(labor.get("labor_demand_effective"))],
+		["劳动效率单位", _firm_number(labor.get("efficiency_units"))],
+		["未填岗位", _firm_number(labor.get("vacancies"))],
+		["岗位空缺持续", "%d tick" % int(labor.get("vacancy_age", 0))],
+		["在岗人数", str(int(labor.get("active_heads", 0)))],
+		["在岗 FTE", "%.2f" % float(labor.get("employment_fte", 0.0))],
+	]))
+	parent.add_child(operating_panels)
+
+	_firm_section_head(parent, "INCOME STATEMENT · 本期损益",
+		"完整损益表" if bool(pnl.get("full_statement", false)) else "兼容口径 · legacy profit")
+	var pnl_panels := HBoxContainer.new()
+	pnl_panels.add_theme_constant_override("separation", 7)
+	pnl_panels.add_child(_firm_data_panel("OPERATING · 营业损益", [
+		["营业收入", _firm_number(pnl.get("revenue")), TEAL],
+		["期初未结收入", _firm_number(pnl.get("revenue_carry_opening"))],
+		["期末未结收入", _firm_number(pnl.get("revenue_carry"))],
+		["中间投入", _firm_number(pnl.get("intermediate_inputs"))],
+		["职工薪酬", _firm_number(pnl.get("compensation"))],
+		["EBITDA", _firm_number(pnl.get("ebitda")), PURPLE],
+		["资本计价", _firm_number(pnl.get("capital_price"))],
+		["折旧", _firm_number(pnl.get("depreciation"))],
+		["EBIT", _firm_number(pnl.get("ebit")), PURPLE],
+		["税前利润", _firm_number(pnl.get("pre_tax_income")), AMBER],
+	]))
+	pnl_panels.add_child(_firm_data_panel("FINANCING · 利息税费与分配", [
+		["应计利息", _firm_number(pnl.get("interest_accrued"))],
+		["到期利息", _firm_number(pnl.get("interest_due"))],
+		["实付利息", _firm_number(pnl.get("interest_paid"))],
+		["利息缺口", _firm_number(pnl.get("interest_shortfall")), RED],
+		["期初利息欠款", _firm_number(pnl.get("interest_arrears_opening"))],
+		["期末利息欠款", _firm_number(pnl.get("interest_arrears")), RED],
+		["利润税", _firm_number(pnl.get("profit_tax"))],
+		["暴利税", _firm_number(pnl.get("windfall_tax"))],
+		["净利润", _firm_number(pnl.get("net_income")), AMBER],
+		["股息", _firm_number(pnl.get("dividends"))],
+		["留存收益", _firm_number(pnl.get("retained_earnings"))],
+	]))
+	parent.add_child(pnl_panels)
+
+	_firm_section_head(parent, "BALANCE SHEET · 资产负债表", "重置成本计价 · 利息欠款单列")
+	var book_panels := HBoxContainer.new()
+	book_panels.add_theme_constant_override("separation", 7)
+	book_panels.add_child(_firm_data_panel("ASSETS · 资产", [
+		["现金", _firm_number(book.get("cash")), TEAL],
+		["生产资本", _firm_number(book.get("capital_value"))],
+		["产成品库存", _firm_number(book.get("output_inventory_value"))],
+		["在产品", _firm_number(book.get("work_in_progress_value"))],
+		["投入品库存", _firm_number(book.get("input_inventory_value"))],
+		["总资产", _firm_number(book.get("gross_assets")), PURPLE],
+	]))
+	book_panels.add_child(_firm_data_panel("LIABILITIES & CREDIT · 融资", [
+		["债务本金", _firm_number(book.get("debt")), BLUE],
+		["利息欠款", _firm_number(book.get("interest_arrears")), RED],
+		["账面权益", _firm_number(book.get("book_equity")), PURPLE],
+		["合格抵押品", _firm_number(book.get("eligible_collateral_value"))],
+		["借款基础", _firm_number(book.get("borrowing_base_proxy"))],
+		["新增借款空间", _firm_number(book.get("borrowing_base_headroom")), TEAL],
+		["资本折扣", _firm_number(book.get("capital_haircut"), "pct")],
+		["库存折扣", _firm_number(book.get("inventory_haircut"), "pct")],
+	]))
+	parent.add_child(book_panels)
+	parent.add_child(_firm_data_panel("VALUATION DETAIL · 实物量与计价依据", [
+		["资本实物量", _firm_number(book.get("capital_units"))],
+		["资本单位重置价", _firm_number(book.get("capital_unit_price"))],
+		["产成品实物量", _firm_number(book.get("output_inventory_units"))],
+		["产成品单位计价", _firm_number(book.get("output_inventory_unit_price"))],
+		["在产品实物量", _firm_number(book.get("work_in_progress_units"))],
+		["投入品实物量", _firm_number(book.get("input_inventory_units"))],
+	], "资产重估只改变观察与授信依据，不创造现金"))
+
+	_firm_section_head(parent, "CAPITAL & ENERGY · 资本形成与能源投入")
+	var capital_panels := HBoxContainer.new()
+	capital_panels.add_theme_constant_override("separation", 7)
+	capital_panels.add_child(_firm_data_panel("CAPITAL · 生产资本", [
+		["资本实物量", _firm_number(capital.get("units"))],
+		["上期资本", _firm_number(capital.get("previous_units"))],
+		["投资目标", _firm_number(capital.get("investment_target")) if bool(firm.get("invests", false)) else "不适用"],
+		["实际投资", _firm_number(capital.get("investment")) if bool(firm.get("invests", false)) else "不适用"],
+		["资本单位重置价", _firm_number(book.get("capital_unit_price"))],
+		["折旧率", _firm_number(capital.get("depreciation_rate"), "pct") if bool(firm.get("invests", false)) else "不适用"],
+		["产能上限", _firm_number(capital.get("capacity")) if str(firm.get("sector_code", "")) == "energy" else "不适用"],
+	]))
+	capital_panels.add_child(_firm_data_panel("ENERGY INPUT · 能源投入", [
+		["投入库存", _firm_number(capital.get("energy_input_stock")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+		["投入库存账面成本", _firm_number(capital.get("energy_input_stock_cost")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+		["库存平均成本", _firm_number(capital.get("energy_input_average_cost")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+		["本期购入", _firm_number(capital.get("energy_bought")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+		["本期消耗", _firm_number(capital.get("energy_used")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+		["能源成本", _firm_number(capital.get("energy_cost_used")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+	]))
+	parent.add_child(capital_panels)
+
+	_firm_section_head(parent, "WORKFORCE · 员工与劳动合同",
+		"%d 份合同 · %.2f FTE" % [int(labor.get("contract_count", 0)), float(labor.get("employment_fte", 0.0))])
+	parent.add_child(_firm_workforce_panel(labor.get("employees", [])))
+
+	_firm_section_head(parent, "EQUITY & OWNERSHIP · 股权与所有权",
+		"逐人持仓 · 不与家庭账户重复")
+	parent.add_child(_firm_equity_panel(equity))
+
+	_firm_section_head(parent, "MODEL STATE · 行为、技术参数与退出信号", "只读模型真值")
+	var parameter_panels := HBoxContainer.new()
+	parameter_panels.add_theme_constant_override("separation", 7)
+	parameter_panels.add_child(_firm_data_panel("BEHAVIOR · 行为参数", [
+		["需求调整 λd", _firm_number(parameters.get("demand_adjustment"))],
+		["目标库存率 φ", _firm_number(parameters.get("inventory_target_ratio"))],
+		["加成调整 η", _firm_number(parameters.get("markup_adjustment"))],
+		["加成下限", _firm_number(parameters.get("markup_min"), "pct")],
+		["加成上限", _firm_number(parameters.get("markup_max"), "pct")],
+		["工资调整 ω", _firm_number(parameters.get("wage_adjustment"))],
+		["股息支付率 ρ", _firm_number(parameters.get("dividend_payout_ratio"), "pct")],
+		["协调成本斜率", _firm_number(parameters.get("coordination_cost_slope"))],
+	]))
+	parameter_panels.add_child(_firm_data_panel("TECH & SIGNALS · 技术与信号", [
+		["劳动生产率 a", _firm_number(parameters.get("labor_productivity"))],
+		["全要素生产率 A", _firm_number(parameters.get("tfp"))],
+		["资本份额 α", _firm_number(parameters.get("capital_share"), "pct")],
+		["目标资本产出比 v", _firm_number(parameters.get("capital_output_target"))],
+		["投资调整 λI", _firm_number(parameters.get("investment_adjustment"))],
+		["能源强度", _firm_number(parameters.get("energy_intensity"))],
+		["产能系数 κ", _firm_number(parameters.get("capacity_kappa"))],
+		["上期销量", _firm_number(signals.get("previous_sales"))],
+		["上期用工", _firm_number(signals.get("previous_hiring"))],
+		["上期有效劳动需求", _firm_number(signals.get("previous_effective_labor_demand"))],
+		["上期目标库存", _firm_number(signals.get("previous_target_inventory"))],
+		["上期受抑需求", _firm_number(signals.get("previous_rationed_demand"))],
+		["部门转换压力", "%d tick" % int(signals.get("sector_switch_pressure", 0))],
+		["股息支付缺口", _firm_number(signals.get("dividend_shortfall"))],
+		["闲置 / 资不抵债 / 低规模", "%d / %d / %d tick" % [
+			int(signals.get("idle_ticks", 0)), int(signals.get("insolvent_ticks", 0)),
+			int(signals.get("subscale_ticks", 0))], RED if condition != "正常经营" else INK],
+	]))
+	parent.add_child(parameter_panels)
+
+
+func _firm_workforce_panel(employees: Array) -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 10, 9))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 5)
+	panel.add_child(col)
+	if employees.is_empty():
+		col.add_child(_lbl("当前没有劳动合同。", 9, INK3))
+		return panel
+	for i in employees.size():
+		var employee: Dictionary = employees[i]
+		if i > 0:
+			col.add_child(_hrule())
+		var sex := str(employee.get("sex", ""))
+		var sex_text := "女" if sex == "F" else "男" if sex == "M" else "—"
+		var person_id := int(employee.get("person_id", -1))
+		var age_text := "—" if employee.get("age") == null else "%d 岁" % int(employee.get("age"))
+		var household_text := "—" if employee.get("household_id") == null else "家庭 #%03d" % int(employee.get("household_id"))
+		var row := HBoxContainer.new()
+		row.add_child(_lbl("P%03d · %s · %s" % [person_id, sex_text, age_text], 9, INK, true))
+		row.add_child(_chip(str(employee.get("contract", "合同")), INK2, PANEL2, LINE2, 7))
+		if str(employee.get("status", "在岗")) != "在岗":
+			row.add_child(_chip(str(employee.get("status")), RED, RED_BG, RED_BD, 7))
+		row.add_child(_spacer_h())
+		row.add_child(_lbl("%.2f FTE" % float(employee.get("hours", 0.0)), 9, TEAL, true))
+		col.add_child(row)
+		col.add_child(_lbl("%s · 入职 %s · 合同 %.2f FTE · 锁定工资 %s · 实付工资率 %s · 效率 %.2f · 本期薪酬 %s" % [
+			household_text, str(employee.get("hire_date", "—")),
+			float(employee.get("contract_hours", 0.0)), _firm_number(employee.get("locked_wage")),
+			_firm_number(employee.get("paid_wage")), float(employee.get("efficiency", 1.0)),
+			_firm_number(employee.get("compensation"))], 8, INK3, true))
+		if employee.get("suspended_since_tick") != null:
+			col.add_child(_lbl("停薪留职自 t%d · 停薪前工资 %s · 合同仍保留召回权" % [
+				int(employee.get("suspended_since_tick")),
+				_firm_number(employee.get("suspension_wage"))], 8, RED, true))
+	return panel
+
+
+func _firm_equity_panel(equity: Dictionary) -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 10, 9))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 5)
+	panel.add_child(col)
+	if not bool(equity.get("enabled", false)):
+		col.add_child(_lbl("该企业未发行独立交易股份；股价、市值、Q 与股东名单不适用。", 9, INK3))
+		return panel
+	var metrics := HBoxContainer.new()
+	metrics.add_theme_constant_override("separation", 5)
+	metrics.add_child(_household_summary_card("股价", _firm_number(equity.get("share_price")), BLUE))
+	metrics.add_child(_household_summary_card("总市值", _firm_number(equity.get("market_cap")), TEAL))
+	metrics.add_child(_household_summary_card("托宾 Q", _firm_number(equity.get("tobin_q"), "idx"), PURPLE))
+	metrics.add_child(_household_summary_card("基本面/股", _firm_number(equity.get("fundamental_per_share")), AMBER))
+	col.add_child(metrics)
+	col.add_child(_lbl("流通股 %s · 上期股价 %s · 趋势 %s · 平滑 Q %s · 吸引力 %s · 剩余收益 EMA %s" % [
+		_firm_number(equity.get("shares_outstanding")),
+		_firm_number(equity.get("last_share_price")),
+		_firm_number(equity.get("share_trend"), "idx"),
+		_firm_number(equity.get("tobin_q_ema"), "idx"),
+		_firm_number(equity.get("attractiveness"), "idx"),
+		_firm_number(equity.get("residual_income_ema"))], 8, INK3, true))
+	var holders: Array = equity.get("shareholders", [])
+	var holder_head := HBoxContainer.new()
+	holder_head.add_child(_lbl("SHAREHOLDERS · 全部逐人股东", 8, INK3, true))
+	holder_head.add_child(_spacer_h())
+	holder_head.add_child(_lbl("%d 人 · 已观察 %s" % [
+		int(equity.get("shareholder_count", 0)),
+		_firm_number(equity.get("ownership_coverage"), "pct")], 8, INK3))
+	col.add_child(holder_head)
+	if holders.is_empty():
+		col.add_child(_lbl("当前未观察到个人股权索取权。", 8, INK3))
+		return panel
+	for holder: Dictionary in holders:
+		var row := HBoxContainer.new()
+		var household_text := "—" if holder.get("household_id") == null else "家庭 #%03d" % int(holder.get("household_id"))
+		row.add_child(_lbl("P%03d · %s" % [int(holder.get("person_id", -1)), household_text], 8, INK2, true))
+		row.add_child(_spacer_h())
+		row.add_child(_lbl("%s 股 · %s · 市值 %s" % [
+			_firm_number(holder.get("shares")),
+			_firm_number(holder.get("ownership"), "pct"),
+			_firm_number(holder.get("market_value"))], 8, INK, true))
+		col.add_child(row)
+	return panel
 
 
 func _render_focus_tab(body: VBoxContainer) -> void:

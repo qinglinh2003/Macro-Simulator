@@ -175,6 +175,71 @@ def test_household_explorer_reconciles_members_and_balance_sheets(
     ))
 
 
+def test_firm_explorer_reconciles_books_people_and_ownership(
+    runtime: SimulationRuntime,
+) -> None:
+    firms = runtime.snapshot()["firms"]
+    items = firms["items"]
+    summary = firms["summary"]
+    assert items
+    assert summary["firm_count"] == len(items)
+    assert len({firm["firm_id"] for firm in items}) == len(items)
+    assert {firm["sector"] for firm in items} == {
+        "必需消费", "可选消费", "资本品", "能源",
+    }
+
+    for firm in items:
+        book = firm["balance_sheet"]
+        assert book["inventory_value"] == pytest.approx(
+            book["output_inventory_value"]
+            + book["work_in_progress_value"]
+            + book["input_inventory_value"]
+        )
+        assert book["gross_assets"] == pytest.approx(
+            book["cash"] + book["capital_value"] + book["inventory_value"]
+        )
+        assert book["book_equity"] == pytest.approx(
+            book["gross_assets"] - book["debt"] - book["interest_arrears"]
+        )
+        equity = firm["equity"]
+        assert equity["market_cap"] == pytest.approx(
+            equity["shares_outstanding"] * equity["share_price"]
+        )
+        assert equity["shares_observed"] == pytest.approx(sum(
+            holder["shares"] for holder in equity["shareholders"]
+        ))
+        if equity["enabled"]:
+            assert equity["ownership_coverage"] == pytest.approx(1.0)
+        assert firm["labor"]["employment_fte"] == pytest.approx(sum(
+            employee["hours"] for employee in firm["labor"]["employees"]
+        ))
+        assert all(employee["person_id"] >= 0 for employee in firm["labor"]["employees"])
+
+    assert summary["employment_fte"] == pytest.approx(sum(
+        firm["labor"]["employment_fte"] for firm in items
+    ))
+    assert summary["total_revenue"] == pytest.approx(sum(
+        firm["operations"]["revenue"] for firm in items
+    ))
+    assert summary["total_assets"] == pytest.approx(sum(
+        firm["balance_sheet"]["gross_assets"] for firm in items
+    ))
+    assert summary["total_debt"] == pytest.approx(sum(
+        firm["balance_sheet"]["debt"] for firm in items
+    ))
+
+    advanced = _pass_all_contexts(runtime)["firms"]
+    contracts = [
+        employee
+        for firm in advanced["items"]
+        for employee in firm["labor"]["employees"]
+    ]
+    assert contracts
+    assert advanced["summary"]["employment_fte"] > 0.0
+    assert all(employee["hire_date"] for employee in contracts)
+    assert all(employee["status"] in {"在岗", "停薪留职"} for employee in contracts)
+
+
 def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime) -> None:
     context = next(
         item for item in runtime.snapshot()["contexts"]

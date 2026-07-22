@@ -23,6 +23,8 @@ from macro_sim.controllers import (
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.protocol import canonical_value
 from macro_sim.shocks import ShockSpec, get_shock_engine
+from macro_sim.systems.banking import bank_for, loan_rate_for
+from macro_sim.systems.firm_balance_sheet import firm_balance_sheet
 from macro_sim.world import World
 from macro_sim.world.country import ADVANCED, DEVELOPING, PETROSTATE
 
@@ -628,6 +630,365 @@ class SimulationRuntime:
             },
         }
 
+    def _firm_snapshot(self) -> dict[str, Any]:
+        """Current operating, financial, workforce and ownership books by firm."""
+        econ = self.world.economies[PLAYER_ECONOMY]
+        state = getattr(econ, "demographic_state", None)
+        people = [
+            person for person in getattr(state, "people", ())
+            if getattr(person, "alive", True)
+        ]
+        people_by_id = {int(person.id): person for person in people}
+        bridge = getattr(econ, "demographic_bridge", None)
+        lm = getattr(econ, "labor_market", None)
+        suspensions = (getattr(lm, "suspended", {}) or {}) if lm is not None else {}
+        suspended = set(suspensions)
+        primary_jobs = (getattr(lm, "jobs", {}) or {}) if lm is not None else {}
+        second_jobs = (getattr(lm, "second_jobs", {}) or {}) if lm is not None else {}
+
+        k_ids = {str(firm.id) for firm in getattr(econ, "k_firms", ())}
+        e_ids = {str(firm.id) for firm in getattr(econ, "e_firms", ())}
+        full_pnl = bool(getattr(econ.cfg, "firm_full_pnl", False))
+        priced_books = bool(getattr(econ.cfg, "priced_firm_balance_sheet", False))
+        items: list[dict[str, Any]] = []
+
+        for firm in getattr(econ, "firms", ()):
+            firm_id = str(firm.id)
+            consumption_sector = str(getattr(firm, "consumption_sector", ""))
+            if firm_id in e_ids:
+                sector = "能源"
+                sector_code = "energy"
+            elif firm_id in k_ids:
+                sector = "资本品"
+                sector_code = "capital"
+            elif consumption_sector == "necessity":
+                sector = "必需消费"
+                sector_code = "necessity"
+            elif consumption_sector == "luxury":
+                sector = "可选消费"
+                sector_code = "luxury"
+            else:
+                sector = "消费品"
+                sector_code = "consumption"
+
+            employees: list[dict[str, Any]] = []
+            for contract_type, jobs in (("主业", primary_jobs), ("第二职业", second_jobs)):
+                for person_id_raw, job in jobs.items():
+                    if str(getattr(job, "firm_id", "")) != firm_id:
+                        continue
+                    person_id = int(person_id_raw)
+                    person = people_by_id.get(person_id)
+                    is_suspended = contract_type == "主业" and person_id in suspended
+                    suspension = suspensions.get(person_id) if is_suspended else None
+                    hours = max(0.0, _finite_number(getattr(job, "hours", 1.0), 1.0))
+                    efficiency = (
+                        _finite_number(lm.e_of(person_id), 1.0)
+                        if lm is not None else 1.0
+                    )
+                    paid_wage = (
+                        _finite_number(lm.wage_of(person_id, firm))
+                        if lm is not None else _finite_number(getattr(firm, "wage", 0.0))
+                    )
+                    employees.append({
+                        "person_id": person_id,
+                        "sex": str(getattr(person, "sex", "")) if person is not None else None,
+                        "age": int(getattr(person, "age", 0)) if person is not None else None,
+                        "household_id": (
+                            int(person.household_id)
+                            if person is not None and person.household_id is not None else None
+                        ),
+                        "contract": contract_type,
+                        "status": "停薪留职" if is_suspended else "在岗",
+                        "suspended_since_tick": (
+                            int(getattr(suspension, "since_tick", 0))
+                            if suspension is not None else None
+                        ),
+                        "suspension_wage": (
+                            _finite_number(getattr(suspension, "wage_at", 0.0))
+                            if suspension is not None else None
+                        ),
+                        "hire_date": str(getattr(job, "hire_date", "")),
+                        "hours": 0.0 if is_suspended else hours,
+                        "contract_hours": hours,
+                        "locked_wage": _finite_number(getattr(job, "wage", 0.0)),
+                        "paid_wage": paid_wage,
+                        "efficiency": efficiency,
+                        "compensation": 0.0 if is_suspended else paid_wage * hours,
+                    })
+            employees.sort(key=lambda row: (row["status"] != "在岗", row["person_id"]))
+            active_ids = {
+                int(row["person_id"]) for row in employees if row["status"] == "在岗"
+            }
+            employment_fte = sum(float(row["hours"]) for row in employees)
+
+            shares_outstanding = max(
+                0.0, _finite_number(getattr(firm, "shares_outstanding", 0.0))
+            )
+            share_price = max(0.0, _finite_number(getattr(firm, "share_price", 0.0)))
+            shareholders: list[dict[str, Any]] = []
+            if bridge is not None and shares_outstanding > 0.0:
+                for person in people:
+                    person_id = int(person.id)
+                    if not bridge.claims.has_person(person_id):
+                        continue
+                    sheet = bridge.claims.balance_sheet(person_id)
+                    shares = max(
+                        0.0, _finite_number(sheet.equity_claims.get(firm_id, 0.0))
+                    )
+                    if shares <= 1e-12:
+                        continue
+                    shareholders.append({
+                        "person_id": person_id,
+                        "household_id": (
+                            int(person.household_id)
+                            if person.household_id is not None else None
+                        ),
+                        "shares": shares,
+                        "ownership": shares / shares_outstanding,
+                        "market_value": shares * share_price,
+                    })
+            shareholders.sort(key=lambda row: float(row["shares"]), reverse=True)
+            shares_observed = sum(float(row["shares"]) for row in shareholders)
+
+            sheet = firm_balance_sheet(econ, firm)
+            bank = bank_for(econ, firm_id)
+            bank_id = str(bank.id) if bank is not None else None
+            loan_rate = _finite_number(loan_rate_for(econ, firm_id)) if bank is not None else None
+            produced = _finite_number(getattr(firm, "produced", 0.0))
+            sales = _finite_number(getattr(firm, "sales", 0.0))
+            production_target = _finite_number(getattr(firm, "production_target", 0.0))
+            revenue = _finite_number(getattr(firm, "revenue", 0.0))
+            profit = _finite_number(getattr(firm, "profit", 0.0))
+            net_income = _finite_number(getattr(firm, "pnl_net_income", 0.0))
+            earnings = net_income if full_pnl else profit
+            if full_pnl:
+                pnl_snapshot: dict[str, Any] = {
+                    "full_statement": True,
+                    "revenue": _finite_number(firm.pnl_revenue),
+                    "revenue_carry_opening": _finite_number(firm.pnl_revenue_carry_opening),
+                    "revenue_carry": _finite_number(firm.pnl_revenue_carry),
+                    "intermediate_inputs": _finite_number(firm.pnl_intermediate_inputs),
+                    "compensation": _finite_number(firm.pnl_compensation),
+                    "ebitda": _finite_number(firm.pnl_ebitda),
+                    "capital_price": _finite_number(firm.pnl_capital_price),
+                    "depreciation": _finite_number(firm.pnl_depreciation),
+                    "ebit": _finite_number(firm.pnl_ebit),
+                    "interest_accrued": _finite_number(firm.pnl_interest_accrued),
+                    "interest_due": _finite_number(firm.pnl_interest_due),
+                    "interest_paid": _finite_number(firm.pnl_interest_expense),
+                    "interest_shortfall": _finite_number(firm.pnl_interest_shortfall),
+                    "interest_arrears_opening": _finite_number(firm.pnl_interest_arrears_opening),
+                    "interest_arrears": _finite_number(firm.pnl_interest_arrears),
+                    "pre_tax_income": _finite_number(firm.pnl_pre_tax_income),
+                    "profit_tax": _finite_number(firm.pnl_profit_tax),
+                    "windfall_tax": _finite_number(firm.pnl_windfall_tax),
+                    "net_income": net_income,
+                    "dividends": _finite_number(firm.pnl_dividends_paid),
+                    "retained_earnings": _finite_number(firm.pnl_retained_earnings),
+                }
+            else:
+                dividends = max(
+                    0.0,
+                    _finite_number(getattr(firm, "rho", 0.0)) * max(0.0, profit)
+                    - _finite_number(getattr(firm, "dividend_shortfall", 0.0)),
+                )
+                pnl_snapshot = {
+                    "full_statement": False,
+                    "revenue": revenue,
+                    "revenue_carry_opening": None,
+                    "revenue_carry": None,
+                    "intermediate_inputs": _finite_number(getattr(firm, "energy_cost_used", 0.0)),
+                    "compensation": _finite_number(getattr(firm, "wagebill", 0.0)),
+                    "ebitda": profit,
+                    "capital_price": None,
+                    "depreciation": None,
+                    "ebit": None,
+                    "interest_accrued": None,
+                    "interest_due": None,
+                    "interest_paid": None,
+                    "interest_shortfall": None,
+                    "interest_arrears_opening": None,
+                    "interest_arrears": None,
+                    "pre_tax_income": profit,
+                    "profit_tax": None,
+                    "windfall_tax": None,
+                    "net_income": profit,
+                    "dividends": dividends,
+                    "retained_earnings": profit - dividends,
+                }
+            idle_ticks = int(getattr(firm, "idle_ticks", 0))
+            insolvent_ticks = int(getattr(firm, "insolvent_ticks", 0))
+            subscale_ticks = int(getattr(firm, "subscale_ticks", 0))
+            if insolvent_ticks > 0:
+                condition = "偿付风险"
+            elif idle_ticks > 0:
+                condition = "闲置观察"
+            elif subscale_ticks > 0:
+                condition = "规模预警"
+            else:
+                condition = "正常经营"
+
+            items.append({
+                "firm_id": firm_id,
+                "sector": sector,
+                "sector_code": sector_code,
+                "condition": condition,
+                "state_owned": bool(getattr(firm, "state_owned", False)),
+                "sells": str(getattr(firm, "sells", "")),
+                "technology": str(getattr(firm, "tech", "")),
+                "invests": bool(getattr(firm, "invests", False)),
+                "bank": {"bank_id": bank_id, "loan_rate": loan_rate},
+                "operations": {
+                    "capital_service_pricing_enabled": bool(
+                        getattr(econ.cfg, "capital_service_pricing", False)
+                    ),
+                    "demand_expected": _finite_number(getattr(firm, "demand_expected", 0.0)),
+                    "target_inventory": _finite_number(getattr(firm, "target_inventory", 0.0)),
+                    "production_target": production_target,
+                    "produced": produced,
+                    "sales": sales,
+                    "revenue": revenue,
+                    "inventory": _finite_number(getattr(firm, "inventory", 0.0)),
+                    "rationed_demand": _finite_number(getattr(firm, "rationed_demand", 0.0)),
+                    "production_realization": produced / production_target if production_target > 0 else None,
+                    "sales_realization": sales / produced if produced > 0 else None,
+                    "price": _finite_number(getattr(firm, "price", 0.0)),
+                    "wage": _finite_number(getattr(firm, "wage", 0.0)),
+                    "markup": _finite_number(getattr(firm, "markup", 0.0)),
+                    "wagebill": _finite_number(getattr(firm, "wagebill", 0.0)),
+                    "pricing_capital_price": _finite_number(getattr(firm, "pricing_capital_price", 0.0)),
+                    "pricing_capital_service_rate": _finite_number(getattr(firm, "pricing_capital_service_rate", 0.0)),
+                    "pricing_capital_service_cost": _finite_number(getattr(firm, "pricing_capital_service_cost", 0.0)),
+                    "pricing_capital_unit_cost": _finite_number(getattr(firm, "pricing_capital_unit_cost", 0.0)),
+                    "profit": profit,
+                    "earnings": earnings,
+                },
+                "labor": {
+                    "active_heads": len(active_ids),
+                    "contract_count": len(employees),
+                    "employment_fte": employment_fte,
+                    "efficiency_units": _finite_number(getattr(firm, "hired", 0.0)),
+                    "labor_demand_notional": _finite_number(getattr(firm, "labor_demand_notional", 0.0)),
+                    "labor_demand_effective": _finite_number(getattr(firm, "labor_demand_eff", 0.0)),
+                    "vacancies": max(0.0, _finite_number(getattr(firm, "labor_demand_eff", 0.0)) - _finite_number(getattr(firm, "hired", 0.0))),
+                    "vacancy_age": int((getattr(lm, "vacancy_age", {}) or {}).get(firm_id, 0)) if lm is not None else 0,
+                    "employees": employees,
+                },
+                "capital": {
+                    "units": _finite_number(getattr(firm, "capital", 0.0)),
+                    "previous_units": _finite_number(getattr(firm, "capital_prev", 0.0)),
+                    "investment_target": _finite_number(getattr(firm, "investment_target", 0.0)),
+                    "investment": _finite_number(getattr(firm, "investment", 0.0)),
+                    "depreciation_rate": _finite_number(getattr(firm, "delta_K", 0.0)),
+                    "energy_input_stock": _finite_number(getattr(firm, "energy_stock", 0.0)),
+                    "energy_input_average_cost": _finite_number(getattr(firm, "energy_avg_cost", 0.0)),
+                    "energy_input_stock_cost": _finite_number(getattr(firm, "energy_stock_cost", 0.0)),
+                    "energy_bought": _finite_number(getattr(firm, "energy_bought", 0.0)),
+                    "energy_used": _finite_number(getattr(firm, "energy_used", 0.0)),
+                    "energy_cost_used": _finite_number(getattr(firm, "energy_cost_used", 0.0)),
+                    "capacity": (
+                        _finite_number(getattr(firm, "capacity_kappa", 0.0))
+                        * _finite_number(getattr(firm, "capital", 0.0))
+                    ),
+                },
+                "balance_sheet": {
+                    "valuation_basis": "replacement_cost",
+                    "priced_book_enabled": priced_books,
+                    "cash": _finite_number(sheet.cash),
+                    "capital_units": _finite_number(sheet.capital_units),
+                    "capital_unit_price": _finite_number(sheet.capital_unit_price),
+                    "capital_value": _finite_number(sheet.capital_value),
+                    "output_inventory_units": _finite_number(sheet.output_inventory_units),
+                    "output_inventory_unit_price": _finite_number(sheet.output_inventory_unit_price),
+                    "output_inventory_value": _finite_number(sheet.output_inventory_value),
+                    "work_in_progress_units": _finite_number(sheet.work_in_progress_units),
+                    "work_in_progress_value": _finite_number(sheet.work_in_progress_value),
+                    "input_inventory_units": _finite_number(sheet.input_inventory_units),
+                    "input_inventory_value": _finite_number(sheet.input_inventory_value),
+                    "inventory_value": _finite_number(sheet.inventory_value),
+                    "gross_assets": _finite_number(sheet.gross_assets),
+                    "debt": _finite_number(sheet.debt),
+                    "interest_arrears": _finite_number(sheet.interest_arrears),
+                    "book_equity": _finite_number(sheet.book_equity),
+                    "eligible_collateral_value": _finite_number(sheet.eligible_collateral_value),
+                    "borrowing_base_proxy": _finite_number(sheet.borrowing_base_proxy),
+                    "borrowing_base_headroom": _finite_number(sheet.borrowing_base_headroom),
+                    "capital_haircut": _finite_number(sheet.capital_haircut),
+                    "inventory_haircut": _finite_number(sheet.inventory_haircut),
+                },
+                "pnl": pnl_snapshot,
+                "equity": {
+                    "enabled": shares_outstanding > 0.0,
+                    "shares_outstanding": shares_outstanding,
+                    "share_price": share_price,
+                    "last_share_price": _finite_number(getattr(firm, "share_last_price", 0.0)),
+                    "share_trend": _finite_number(getattr(firm, "share_trend", 0.0)),
+                    "market_cap": shares_outstanding * share_price,
+                    "fundamental_per_share": _finite_number(getattr(firm, "equity_fundamental", 0.0)),
+                    "residual_income_ema": _finite_number(getattr(firm, "residual_income_ema", 0.0)),
+                    "tobin_q": _finite_number(getattr(firm, "tobin_q", 0.0)),
+                    "tobin_q_ema": _finite_number(getattr(firm, "tobin_q_ema", 0.0)),
+                    "attractiveness": _finite_number(getattr(firm, "attractiveness", 0.0)),
+                    "shareholder_count": len(shareholders),
+                    "shares_observed": shares_observed,
+                    "ownership_coverage": shares_observed / shares_outstanding if shares_outstanding > 0 else None,
+                    "shareholders": shareholders,
+                },
+                "parameters": {
+                    "demand_adjustment": _finite_number(getattr(firm, "lambda_d", 0.0)),
+                    "inventory_target_ratio": _finite_number(getattr(firm, "phi", 0.0)),
+                    "markup_adjustment": _finite_number(getattr(firm, "eta", 0.0)),
+                    "markup_min": _finite_number(getattr(firm, "mu_min", 0.0)),
+                    "markup_max": _finite_number(getattr(firm, "mu_max", 0.0)),
+                    "wage_adjustment": _finite_number(getattr(firm, "omega", 0.0)),
+                    "labor_productivity": _finite_number(getattr(firm, "a", 0.0)),
+                    "tfp": _finite_number(getattr(firm, "A", 0.0)),
+                    "capital_share": _finite_number(getattr(firm, "alpha", 0.0)),
+                    "capital_output_target": _finite_number(getattr(firm, "v", 0.0)),
+                    "investment_adjustment": _finite_number(getattr(firm, "lambda_I", 0.0)),
+                    "dividend_payout_ratio": _finite_number(getattr(firm, "rho", 0.0)),
+                    "coordination_cost_slope": _finite_number(getattr(firm, "dis_slope", 0.0)),
+                    "energy_intensity": _finite_number(getattr(firm, "energy_intensity", 0.0)),
+                    "capacity_kappa": _finite_number(getattr(firm, "capacity_kappa", 0.0)),
+                },
+                "signals": {
+                    "idle_ticks": idle_ticks,
+                    "insolvent_ticks": insolvent_ticks,
+                    "subscale_ticks": subscale_ticks,
+                    "previous_sales": _finite_number(getattr(firm, "sales_prev", 0.0)),
+                    "previous_hiring": _finite_number(getattr(firm, "hired_prev", 0.0)),
+                    "previous_effective_labor_demand": _finite_number(getattr(firm, "labor_demand_eff_prev", 0.0)),
+                    "previous_target_inventory": _finite_number(getattr(firm, "target_inventory_prev", 0.0)),
+                    "previous_rationed_demand": _finite_number(getattr(firm, "rationed_prev", 0.0)),
+                    "sector_switch_pressure": int(getattr(firm, "switch_pressure", 0)),
+                    "dividend_shortfall": _finite_number(getattr(firm, "dividend_shortfall", 0.0)),
+                },
+            })
+
+        sector_counts: dict[str, int] = {}
+        for item in items:
+            label = str(item["sector"])
+            sector_counts[label] = sector_counts.get(label, 0) + 1
+        return {
+            "as_of_date": str(getattr(state, "current_date", "")),
+            "summary": {
+                "firm_count": len(items),
+                "sector_counts": sector_counts,
+                "employment_fte": sum(float(item["labor"]["employment_fte"]) for item in items),
+                "active_heads": len({
+                    int(row["person_id"])
+                    for item in items for row in item["labor"]["employees"]
+                    if row["status"] == "在岗"
+                }),
+                "total_revenue": sum(float(item["operations"]["revenue"]) for item in items),
+                "total_earnings": sum(float(item["operations"]["earnings"]) for item in items),
+                "total_assets": sum(float(item["balance_sheet"]["gross_assets"]) for item in items),
+                "total_debt": sum(float(item["balance_sheet"]["debt"]) for item in items),
+                "total_market_cap": sum(float(item["equity"]["market_cap"]) for item in items),
+            },
+            "items": items,
+        }
+
     def _household_snapshot(self) -> dict[str, Any]:
         """Current household and person balance sheets for the household explorer."""
         econ = self.world.economies[PLAYER_ECONOMY]
@@ -923,6 +1284,7 @@ class SimulationRuntime:
             "series": list(self._panel_history),
             "panel_details": _jsonable(self._panel_details()),
             "households": _jsonable(self._household_snapshot()),
+            "firms": _jsonable(self._firm_snapshot()),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}
