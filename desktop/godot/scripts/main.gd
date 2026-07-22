@@ -881,6 +881,17 @@ func _build_theme() -> void:
 	t.set_stylebox("disabled", "Button", _sb(Color("eef1f5"), LINE, 8, 7))
 	t.set_color("font_disabled_color", "Button", Color("849098"))
 	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12, 10))
+	# Godot 默认 Tooltip 偏小且透明度低；统一为适合财经信息的高对比浮层。
+	var tooltip_style := _sb(Color("142a38"), Color("4d918b"), 10, 12, 8)
+	tooltip_style.set_border_width(SIDE_LEFT, 3)
+	t.set_stylebox("panel", "TooltipPanel", tooltip_style)
+	t.set_font("font", "TooltipLabel", _sans)
+	t.set_font_size("font_size", "TooltipLabel", 13)
+	t.set_color("font_color", "TooltipLabel", Color("f1f7f8"))
+	t.set_color("font_shadow_color", "TooltipLabel", Color(0, 0, 0, 0.32))
+	t.set_constant("shadow_offset_x", "TooltipLabel", 0)
+	t.set_constant("shadow_offset_y", "TooltipLabel", 1)
+	t.set_constant("line_spacing", "TooltipLabel", 4)
 	theme = t
 
 
@@ -1155,7 +1166,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	for m: Array in [["interactive", "交互"], ["realtime", "实时"]]:
 		var mb := Button.new()
 		mb.text = m[1]
-		mb.tooltip_text = "交互:每逢会议暂停等你决策\n实时:播放中自动通过非紧急会议" 
+		mb.tooltip_text = "运行模式\n交互：会议开始时暂停，等待你决策\n实时：自动通过非紧急会议；紧急会议仍会暂停"
 		var mid: String = m[0]
 		mb.pressed.connect(func() -> void:
 			if mid == "realtime" and _mode != "realtime":
@@ -1168,7 +1179,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	var god := Button.new()
 	god.toggle_mode = true
 	god.text = "上帝模式"
-	god.tooltip_text = "显示逐 tick 真值(快捷键 G)"
+	god.tooltip_text = "上帝模式\n显示每个 tick 的即时真值，不再等待统计公报\n快捷键：G"
 	god.add_theme_font_size_override("font_size", 12)
 	god.toggled.connect(func(v: bool) -> void:
 		_god = v
@@ -1187,10 +1198,10 @@ func _build_header(shell: VBoxContainer) -> void:
 			_render()
 		else:
 			_send({"command": "advance", "ticks": 1}))
-	stepb.tooltip_text = "推进 1 天(快捷键 →)"
+	stepb.tooltip_text = "单日步进\n将模拟时间推进 1 天\n快捷键：→"
 	tp.add_child(stepb)
 	var play := _btn("▶  播放", _toggle_play, true)
-	play.tooltip_text = "播放 / 暂停(空格)"
+	play.tooltip_text = "播放 / 暂停模拟\n快捷键：空格"
 	play.custom_minimum_size = Vector2(96, 0)
 	_n["play"] = play
 	tp.add_child(play)
@@ -1199,7 +1210,7 @@ func _build_header(shell: VBoxContainer) -> void:
 		sbn.text = "%d×" % s
 		sbn.add_theme_font_override("font", _mono)
 		sbn.add_theme_font_size_override("font_size", 12)
-		sbn.tooltip_text = "推进速度(快捷键 1-4)"
+		sbn.tooltip_text = "模拟速度：%d 倍\n快捷键：%d" % [s, SPEEDS.find(s) + 1]
 		var chosen := s
 		sbn.pressed.connect(func() -> void:
 			_speed = chosen
@@ -1306,7 +1317,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	search_row.add_child(search)
 	var scope := Button.new()
 	scope.text = "本会议题"
-	scope.tooltip_text = "切换当前席位的本会议题 / 全部政策"
+	scope.tooltip_text = "政策浏览范围\n在“本会议题”和当前席位的“全部政策”之间切换"
 	scope.add_theme_font_size_override("font_size", 11)
 	scope.pressed.connect(func() -> void:
 		_policy_scope = "all" if _policy_scope == "meeting" else "meeting"
@@ -1413,7 +1424,7 @@ func _build_timeline(tl: VBoxContainer) -> void:
 	var filter := Button.new()
 	filter.text = "重点事件"
 	filter.add_theme_font_size_override("font_size", 11)
-	filter.tooltip_text = "切换:重点事件 / 全部记录 / 我的操作"
+	filter.tooltip_text = "时间线筛选\n依次切换：重点事件 / 全部记录 / 我的操作"
 	filter.pressed.connect(func() -> void:
 		match _event_filter:
 			"important": _event_filter = "all"
@@ -1637,7 +1648,7 @@ func _render_tiles() -> void:
 		tile.mouse_exited.connect(func() -> void:
 			tile.add_theme_stylebox_override("panel", trest))
 		tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		tile.tooltip_text = "点击打开「指标全景 · %s」" % str(TILE_TO_GROUP.get(sid, ""))
+		tile.tooltip_text = "查看指标详情\n打开「指标全景 · %s」" % str(TILE_TO_GROUP.get(sid, ""))
 		tile.gui_input.connect(func(event: InputEvent) -> void:
 			if event is InputEventMouseButton \
 					and (event as InputEventMouseButton).pressed \
@@ -2004,7 +2015,7 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 	actions.add_theme_constant_override("separation", 7)
 	var jump := _btn("快进至下一决策", _advance_to_next_decision, true)
 	jump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	jump.tooltip_text = "最多推进 100 天；遇到会议会立即暂停，不会越过决策边界（快捷键 N）"
+	jump.tooltip_text = "快进至下一次决策\n最多推进 100 天；遇到会议立即暂停\n不会越过决策边界 · 快捷键：N"
 	actions.add_child(jump)
 	var focus := _btn("查看宏观", func() -> void:
 		_tab = "focus"
@@ -2040,7 +2051,7 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var row := PanelContainer.new()
 	row.custom_minimum_size = Vector2(0, 62)
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.tooltip_text = "点击展开「%s」的编辑器" % _cn(name)
+	row.tooltip_text = "%s\n展开政策编辑器，查看范围、成本和生效时间" % _cn(name)
 	var accent: Color = AMBER if cart_stale else (TEAL if (edited or in_cart) \
 		else (AMBER if pending else _seat_color(seat)))
 	var row_bg := AMBER_BG if cart_stale else (TEAL_BG if in_cart \
@@ -2475,7 +2486,7 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		input.text = _lever_raw_value_text(lever, cur)
 		input.placeholder_text = "输入模型值"
-		input.tooltip_text = "精确输入 canonical 模型值；百分比 3% 输入 0.03"
+		input.tooltip_text = "精确输入模型原始值\n例如：3% 请输入 0.03"
 		input.add_theme_font_override("font", _mono)
 		input.add_theme_font_size_override("font_size", 11)
 		input.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 7, 6))
@@ -2485,7 +2496,7 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		direct.add_child(input)
 		var apply := _btn("应用数值", func() -> void:
 			_commit_numeric_input(lever, input.text, is_int, lo2, hi2))
-		apply.tooltip_text = "输入超出本次可调范围时会夹到最近边界"
+		apply.tooltip_text = "应用输入值\n若超出本次允许范围，将自动调整到最近边界"
 		direct.add_child(apply)
 		wrap.add_child(direct)
 		wrap.add_child(_lbl("模型值 %s · 制度全域 %s – %s" % [
@@ -2869,7 +2880,7 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 		card.add_theme_stylebox_override("panel", hover))
 	card.mouse_exited.connect(func() -> void:
 		card.add_theme_stylebox_override("panel", rest))
-	card.tooltip_text = "打开%s" % ("世界视图" if target_tab == "world" \
+	card.tooltip_text = "查看维度详情\n打开%s" % ("世界视图" if target_tab == "world" \
 		else "「%s」指标全景" % target_group)
 	card.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton \
@@ -3016,10 +3027,10 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 			sl.values = vals
 			cv.add_child(sl)
 			if not vals.is_empty():
-				card.tooltip_text = "%s(%s)\n当前 %s · 区间低 %s · 高 %s · 近 %d tick" % [
+				card.tooltip_text = "%s · %s\n当前：%s\n近 %d tick 区间：%s — %s" % [
 					str(item[1]), key,
 					_fmt_val(kind, float(latest.get(key, 0.0))),
-					_fmt_val(kind, vlo), _fmt_val(kind, vhi), vals.size()]
+					vals.size(), _fmt_val(kind, vlo), _fmt_val(kind, vhi)]
 			grid.add_child(card)
 		col.add_child(gp)
 	for grp: Dictionary in PANEL_GROUPS:
@@ -3485,7 +3496,7 @@ func _render_events() -> void:
 		var trr := HBoxContainer.new()
 		trr.add_theme_constant_override("separation", 7)
 		var title := _lbl(_event_title(etype), 11, color)
-		title.tooltip_text = "协议事件: " + etype
+		title.tooltip_text = "事件协议标识\n" + etype
 		trr.add_child(title)
 		if mine:
 			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
