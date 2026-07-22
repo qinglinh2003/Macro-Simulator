@@ -112,6 +112,11 @@ def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime)
         item["actions"] == [{"lever": "gov_deficit_target", "value": requested}]
         for item in snapshot["pending"]
     )
+    pending = next(
+        item for item in snapshot["pending"]
+        if item["actions"] == [{"lever": "gov_deficit_target", "value": requested}]
+    )
+    assert pending["decision"]["effective_tick"] == 7
 
 
 def test_cross_seat_actions_resolve_in_one_boundary(runtime: SimulationRuntime) -> None:
@@ -262,3 +267,5 @@ def test_last_verdict_flows_to_snapshot(runtime: SimulationRuntime) -> None:
     out = runtime.handle({"command": "advance", "ticks": 1})
     verdict = out.get("last_verdict")
     assert isinstance(verdict, dict) and str(verdict.get("status", "")).startswith("accepted")
+    assert verdict["effective_tick"] == 7
+    assert verdict["adjustment_cost"] > 0

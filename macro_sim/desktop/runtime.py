@@ -21,6 +21,7 @@ from macro_sim.controllers import (
     HumanQueueOccupant,
 )
 from macro_sim.controllers.coordinator import SEATS
+from macro_sim.controllers.protocol import canonical_value
 from macro_sim.shocks import ShockSpec, get_shock_engine
 from macro_sim.world import World
 from macro_sim.world.country import ADVANCED, DEVELOPING, PETROSTATE
@@ -382,14 +383,19 @@ class SimulationRuntime:
                     and str(event.get("event_type", "")).startswith("decision_")
                     and event.get("proposal_id") == self._pending_verdict_pid
                 ):
-                    self._last_verdict = {
-                        "status": str(event.get("event_type"))
-                        .removeprefix("decision_"),
-                        "proposal_id": event.get("proposal_id"),
-                        "decision_id": event.get("decision_id"),
-                        "reason_code": event.get("reason"),
-                        "effective_tick": event.get("effective_tick"),
-                    }
+                    decision_id = event.get("decision_id")
+                    decision = self.session.coordinator.decisions.get(decision_id)
+                    if decision is not None:
+                        self._last_verdict = _jsonable(canonical_value(decision))
+                    else:
+                        self._last_verdict = {
+                            "status": str(event.get("event_type"))
+                            .removeprefix("decision_"),
+                            "proposal_id": event.get("proposal_id"),
+                            "decision_id": decision_id,
+                            "reason_code": event.get("reason"),
+                            "effective_tick": event.get("effective_tick"),
+                        }
                     self._pending_verdict_pid = None
                     break
         latest_world = self._world_history[-1] if self._world_history else {}

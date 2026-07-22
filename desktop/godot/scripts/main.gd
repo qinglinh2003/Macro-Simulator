@@ -71,6 +71,35 @@ const GROUP_CN := {
 	"energy_structure": "能源结构",
 }
 
+const EVENT_TITLES := {
+	"decision_context_opened": "政策会议召开",
+	"human_proposal_queued": "玩家提案已递交",
+	"human_proposal_collected": "玩家提案已汇总",
+	"decision_accepted_noop": "会议决定维持现状",
+	"decision_accepted_pending": "政策提案获准",
+	"decision_accepted": "政策提案获准",
+	"decision_rejected": "政策提案被否决",
+	"decision_effective": "政策正式生效",
+	"decision_cancelled": "待生效政策已撤销",
+	"emergency_trigger": "风险警报触发",
+	"seat_assignment": "政策席位完成交接",
+	"seat_assigned": "政策席位完成交接",
+	"shock_announced": "外生冲击预告",
+	"shock_started": "外生冲击开始",
+	"shock_ended": "外生冲击结束",
+}
+
+const REASON_CN := {
+	"no_change": "本届会议未调整政策",
+	"accepted": "提案通过权威校验",
+	"bank_capital_stress": "银行资本压力超过风险阈值",
+	"energy_shortage": "能源供应缺口超过风险阈值",
+	"liquidity_stress": "银行体系流动性承压",
+	"inflation_stress": "通胀偏离政策目标",
+	"unemployment_stress": "失业率触发紧急阈值",
+	"energy_stress": "能源供给触发紧急阈值",
+}
+
 # 二级页:主题化拆分,每页 ≤8 个旋钮,保证单屏放完不滚动。
 # 未列入的新旋钮自动落入该席位「其他」页。
 const LEVER_PAGES := {
@@ -278,9 +307,9 @@ var _god := false
 var _mode := "interactive"
 var _tab := "focus"
 var _rank_by := "real_output"
-var _focus_extra := "inflation"        # 焦点图第三条序列(SERIES 卡点击切换)
+var _focus_extra := "policy_rate"      # 默认高频序列,早期也能形成可读主图
 var _goto_panel_group := ""            # 磁贴点击 -> 全景滚动目标
-var _filter_mine := false
+var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
 var _capture_path := ""
 var _capture_ticks := 0
@@ -352,7 +381,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_speed = SPEEDS[key.keycode - KEY_1]
 			_render()
 		KEY_G:
-			(_n["god_cb"] as CheckBox).button_pressed = not _god
+			(_n["god_cb"] as Button).button_pressed = not _god
+		KEY_N:
+			_advance_to_next_decision()
 		KEY_ESCAPE:
 			if _demo_crisis:
 				_demo_crisis = false
@@ -427,7 +458,9 @@ func _on_request_failed(message: String) -> void:
 
 
 func _capture(path: String) -> void:
-	await get_tree().create_timer(0.35).timeout
+	# Dynamic panels rebuild with queue_free; wait long enough for two layout passes
+	# so automated captures reflect the settled UI rather than an empty interim frame.
+	await get_tree().create_timer(0.8).timeout
 	var image := get_viewport().get_texture().get_image()
 	image.save_png(path)
 	get_tree().quit(0)
@@ -571,6 +604,70 @@ func _country_name(i: int) -> String:
 	if i >= 0 and i < countries.size():
 		return str((countries[i] as Dictionary).get("name", "经济体%d" % i))
 	return "经济体%d" % i
+
+
+func _seat_name(seat: String) -> String:
+	for spec: Dictionary in SEAT_LIST:
+		if str(spec.get("id")) == seat:
+			return str(spec.get("name"))
+	return seat
+
+
+func _event_group(event: Dictionary) -> String:
+	var payload: Dictionary = event.get("payload", {})
+	var group := str(payload.get("decision_group", ""))
+	if group.is_empty():
+		var context_id := str(event.get("context_id", ""))
+		var parts := context_id.split(":")
+		if parts.size() > 3:
+			group = parts[3]
+	return str(GROUP_CN.get(group, "紧急处置" if group == "emergency" else group))
+
+
+func _event_title(event_type: String) -> String:
+	if EVENT_TITLES.has(event_type):
+		return str(EVENT_TITLES[event_type])
+	if event_type.begins_with("shock_"):
+		return "外生冲击动态"
+	if event_type.begins_with("decision_"):
+		return "政策裁决更新"
+	if event_type.begins_with("policy_") or event_type.contains("transaction"):
+		return "政策执行更新"
+	return event_type.replace("_", " ").capitalize()
+
+
+func _event_detail(event: Dictionary, event_type: String) -> String:
+	var parts: Array[String] = []
+	var seat := str(event.get("seat", ""))
+	if not seat.is_empty() and seat != "<null>":
+		parts.append(_seat_name(seat))
+	var group := _event_group(event)
+	if not group.is_empty():
+		parts.append(group)
+	var reason := str(event.get("reason", ""))
+	if not reason.is_empty() and reason != "<null>":
+		parts.append(str(REASON_CN.get(reason, reason.replace("_", " "))))
+	elif event_type.begins_with("shock_"):
+		var shock_id := str(event.get("shock_id", ""))
+		if not shock_id.is_empty() and shock_id != "<null>":
+			parts.append(shock_id)
+	elif event.get("lever") != null:
+		parts.append(_cn(str(event.get("lever"))))
+	return " · ".join(parts)
+
+
+func _event_is_important(event_type: String) -> bool:
+	if event_type == "decision_accepted_noop":
+		return false
+	return event_type == "emergency_trigger" \
+		or event_type.begins_with("shock_") \
+		or event_type.begins_with("policy_") \
+		or event_type.contains("effective") \
+		or event_type.contains("rejected") \
+		or event_type.contains("failed") \
+		or event_type.contains("cancel") \
+		or event_type.contains("pending") \
+		or event_type.contains("committed")
 
 
 # ================= 主题/样式 =================
@@ -1096,10 +1193,14 @@ func _build_timeline(tl: VBoxContainer) -> void:
 	head.add_child(_lbl("EVENTS · 时间线", 10, INK3, true))
 	head.add_child(_spacer_h())
 	var filter := Button.new()
-	filter.text = "全部事件"
+	filter.text = "重点事件"
 	filter.add_theme_font_size_override("font_size", 11)
+	filter.tooltip_text = "切换:重点事件 / 全部记录 / 我的操作"
 	filter.pressed.connect(func() -> void:
-		_filter_mine = not _filter_mine
+		match _event_filter:
+			"important": _event_filter = "all"
+			"all": _event_filter = "mine"
+			_: _event_filter = "important"
 		_render())
 	_n["filter"] = filter
 	head.add_child(filter)
@@ -1273,7 +1374,9 @@ func _render() -> void:
 			tb.add_theme_color_override("font_color", Color("586a7b"))
 	_set_text("tabnote", "X 轴 = 发布时间(非参考期)" if _tab == "focus"
 		else "上帝视角 · 逐 tick 真值(公报另见磁贴)")
-	(_n["filter"] as Button).text = "仅我的席位" if _filter_mine else "全部事件"
+	(_n["filter"] as Button).text = {
+		"important": "重点事件", "all": "全部记录", "mine": "我的操作",
+	}.get(_event_filter, "重点事件")
 	_render_tiles()
 	_render_workbench()
 	_render_center()
@@ -1445,11 +1548,12 @@ func _render_workbench() -> void:
 	var pending_by: Dictionary = {}
 	for p in _snapshot.get("pending", []):
 		if p is Dictionary:
+			var decision: Dictionary = (p as Dictionary).get("decision", {})
 			for act in (p as Dictionary).get("actions", []):
 				if act is Dictionary:
 					pending_by[str((act as Dictionary).get("lever", ""))] = {
 						"value": (act as Dictionary).get("value"),
-						"effective_tick": (p as Dictionary).get("effective_tick", "?")}
+						"effective_tick": decision.get("effective_tick", "?")}
 	# 二级页签:主题页(每页 ≤8,单屏无滚动;搜索时隐藏)
 	var gflow := _n["group_chips"] as HFlowContainer
 	for c in gflow.get_children():
@@ -1522,6 +1626,8 @@ func _render_workbench() -> void:
 			cm.add_child(_lever_row(lever, str(rowdef["seat"]), permitted,
 				pending_by, searching))
 		lv.add_child(cm)
+	if open and not searching:
+		_append_meeting_board(lv, emg)
 	if not open and int(_snapshot.get("tick", 0)) < 30 and not searching:
 		var guide := MarginContainer.new()
 		guide.add_theme_constant_override("margin_left", 12)
@@ -1540,8 +1646,147 @@ func _render_workbench() -> void:
 			gv.add_child(_lbl("· " + str(tip), 10, Color("3f5d8a")))
 		guide.add_child(gp)
 		lv.add_child(guide)
+	if not open and not searching:
+		_append_governing_brief(lv)
 	_render_cart(open)
 	_restore_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
+
+
+func _append_meeting_board(parent: VBoxContainer, emergency: bool) -> void:
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 7)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(
+		RED_BG if emergency else AMBER_BG,
+		RED_BD if emergency else AMBER_BD, 10, 10))
+	margin.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 7)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 7)
+	head.add_child(_dot(RED if emergency else AMBER, 7))
+	head.add_child(_lbl("CRISIS SESSION · 紧急内阁" if emergency \
+		else "CABINET SESSION · 联席会议", 10,
+		RED if emergency else Color("9a6b10"), true))
+	head.add_child(_spacer_h())
+	head.add_child(_lbl("%d 项议题" % _contexts().size(), 10, INK2))
+	col.add_child(head)
+	var seats := HFlowContainer.new()
+	seats.add_theme_constant_override("h_separation", 5)
+	seats.add_theme_constant_override("v_separation", 5)
+	for spec: Dictionary in SEAT_LIST:
+		var sid := str(spec.get("id"))
+		var count := 0
+		for ctx: Dictionary in _contexts():
+			if str(ctx.get("seat")) == sid:
+				count += 1
+		if count == 0:
+			continue
+		var active := sid == _active_seat
+		seats.add_child(_chip("%s %d" % [str(spec.get("name")), count],
+			Color("1c4a8f") if active else INK2,
+			Color.WHITE if active else Color(0, 0, 0, 0),
+			BLUE_BD if active else LINE2, 9))
+	col.add_child(seats)
+	var guidance := "紧急会议只允许白名单动作；完成后提交统一裁决。" if emergency \
+		else "可跨席位调整政策；提案篮中的动作将一起提交、一起裁决。"
+	col.add_child(_lbl(guidance, 10, Color("6f5b34") if not emergency else Color("8a4639")))
+	var progress := HBoxContainer.new()
+	progress.add_child(_lbl("提案篮", 10, INK2))
+	progress.add_child(_spacer_h())
+	progress.add_child(_lbl("%d 项动作" % _cart.size(), 11,
+		TEAL_DK if not _cart.is_empty() else INK3, true))
+	col.add_child(progress)
+	parent.add_child(margin)
+
+
+func _append_governing_brief(parent: VBoxContainer) -> void:
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 7)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(
+		Color("162b3a"), Color("315467"), 11, 12, 8))
+	margin.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(_dot(Color("58c8b9"), 7))
+	head.add_child(_lbl("EXECUTIVE BRIEF · 执政简报", 10, Color("9db8c8"), true))
+	head.add_child(_spacer_h())
+	head.add_child(_lbl("政策窗口已关闭", 10, Color("68d2c2")))
+	col.add_child(head)
+	var releases: Array = _snapshot.get("observation", {}).get("releases", [])
+	var released := 0
+	for release in releases:
+		if release is Dictionary and (release as Dictionary).get("value") != null:
+			released += 1
+	var pending: Array = _snapshot.get("pending", [])
+	var risks := (_snapshot.get("active_shocks", []) as Array).size() \
+		+ (_snapshot.get("shock_bulletins", []) as Array).size()
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override("separation", 6)
+	for item: Array in [
+		["公报", "%d/%d" % [released, releases.size()]],
+		["待实施", str(pending.size())],
+		["当前风险", str(risks)],
+	]:
+		var stat := PanelContainer.new()
+		stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stat.add_theme_stylebox_override("panel", _sb(
+			Color("1d3546"), Color("315467"), 7, 7))
+		var sv := VBoxContainer.new()
+		stat.add_child(sv)
+		sv.add_child(_lbl(str(item[0]), 9, Color("8ca5b5")))
+		sv.add_child(_lbl(str(item[1]), 14, Color("e8f2f4"), true))
+		stats.add_child(stat)
+	col.add_child(stats)
+	if pending.is_empty():
+		col.add_child(_lbl("暂无等待实施的政策。推进时间以等待下一轮公报与会议。",
+			10, Color("b4c5cf")))
+	else:
+		col.add_child(_lbl("即将实施", 9, Color("8ca5b5"), true))
+		for raw in pending.slice(0, 3):
+			var p: Dictionary = raw
+			var decision: Dictionary = p.get("decision", {})
+			var effective := str(decision.get("effective_tick", "?"))
+			for action in (p.get("actions", []) as Array).slice(0, 1):
+				var ar: Dictionary = action
+				var row := HBoxContainer.new()
+				row.add_child(_lbl("• " + _cn(str(ar.get("lever", ""))),
+					10, Color("d9e6eb")))
+				row.add_child(_spacer_h())
+				row.add_child(_lbl("t" + effective, 10, Color("68d2c2"), true))
+				col.add_child(row)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 7)
+	var jump := _btn("快进至下一决策", _advance_to_next_decision, true)
+	jump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	jump.tooltip_text = "最多推进 100 天；遇到会议会立即暂停，不会越过决策边界（快捷键 N）"
+	actions.add_child(jump)
+	var focus := _btn("查看宏观", func() -> void:
+		_tab = "focus"
+		_render())
+	focus.add_theme_stylebox_override("normal", _sb(
+		Color("203b4d"), Color("426175"), 8, 7))
+	focus.add_theme_color_override("font_color", Color("d9e6eb"))
+	actions.add_child(focus)
+	col.add_child(actions)
+	parent.add_child(margin)
+
+
+func _advance_to_next_decision() -> void:
+	if _awaiting():
+		_show_hint("已有政策会议等待处理，模拟保持暂停。")
+		return
+	_show_hint("正在快进；遇到下一次政策会议将自动暂停（最多推进 100 天）。")
+	_send({"command": "advance", "ticks": 100})
 
 
 func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
@@ -2005,6 +2250,14 @@ func _show_verdict(v: Dictionary) -> void:
 		c.queue_free()
 	var status := str(v.get("status", "?"))
 	var ok := status.begins_with("accepted") or status == "noop"
+	var status_cn: String = {
+		"accepted_pending": "提案获准 · 等待实施",
+		"accepted_effective": "提案获准 · 已经生效",
+		"accepted_noop": "会议完成 · 维持现状",
+		"accepted": "政策提案获准",
+		"rejected": "政策提案未通过",
+		"cancelled": "待实施政策已撤销",
+	}.get(status, status.replace("_", " "))
 	var vp := PanelContainer.new()
 	vp.add_theme_stylebox_override("panel", _sb(
 		Color("e3f4ea") if ok else RED_BG,
@@ -2015,13 +2268,18 @@ func _show_verdict(v: Dictionary) -> void:
 	r.add_child(_lbl("✓" if ok else "✕", 15, GREEN if ok else RED))
 	var col := VBoxContainer.new()
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(_lbl("判决 · " + status, 12, GREEN if ok else RED))
+	col.add_child(_lbl(str(status_cn), 12, GREEN if ok else RED))
 	var reason := str(v.get("reason_code", ""))
 	var sub := ""
 	if not reason.is_empty() and reason != "<null>":
-		sub = reason
+		sub = str(REASON_CN.get(reason, reason.replace("_", " ")))
 	if v.get("effective_tick") != null:
-		sub += ("" if sub.is_empty() else " · ") + "生效 t" + str(v.get("effective_tick"))
+		var et := int(v.get("effective_tick"))
+		sub += ("" if sub.is_empty() else " · ") + "生效 t%d(%s)" % [et, _cal_str(et)]
+	var cost := float(v.get("adjustment_cost", 0.0))
+	var admin := float(v.get("reserved_admin_cost", 0.0))
+	if cost > 0.0 or admin > 0.0:
+		sub += ("" if sub.is_empty() else " · ") + "调整成本 %.2f / 行政容量 %.2f" % [cost, admin]
 	if not sub.is_empty():
 		var sl := _lbl(sub, 11, Color("526475"))
 		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2088,6 +2346,8 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 			extra_color = tsp["color"]
 	if _focus_extra == "inflation":
 		extra_color = PURPLE
+	elif _focus_extra == "policy_rate":
+		extra_color = BLUE
 	var fp := PanelContainer.new()
 	var fv := VBoxContainer.new()
 	fv.add_theme_constant_override("separation", 6)
@@ -2658,8 +2918,35 @@ func _render_events() -> void:
 		if ev is Dictionary:
 			merged.append(ev)
 	merged.reverse()
+	var visible_events: Array = []
+	var seen_important: Dictionary = {}
+	for raw in merged:
+		var ev: Dictionary = raw
+		var etype := str(ev.get("event_type", ev.get("kind", "event")))
+		var actor := str(ev.get("actor", ""))
+		var mine := actor.contains("desktop") or actor.contains("player")
+		if _event_filter == "mine" and not mine:
+			continue
+		if _event_filter == "important" and not _event_is_important(etype):
+			continue
+		if _event_filter == "important":
+			# 同一边界、同一触发器常向多个席位各发一次；默认视图合并为一条。
+			var dedupe := "%s|%s|%s" % [
+				str(ev.get("boundary_tick", ev.get("tick", "?"))),
+				etype, str(ev.get("reason", ev.get("shock_id", "")))]
+			if seen_important.has(dedupe):
+				continue
+			seen_important[dedupe] = true
+		visible_events.append(ev)
+	if visible_events.is_empty():
+		var empty := PanelContainer.new()
+		empty.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 9, 10))
+		var empty_text := "暂无重点事件" if _event_filter == "important" else "当前筛选下没有记录"
+		empty.add_child(_lbl(empty_text + "\n模拟推进后，危机、政策裁决和生效记录会出现在这里。",
+			11, Color("7b8996")))
+		inner.add_child(empty)
 	var last_tick_s := ""
-	for ev: Dictionary in merged.slice(0, 36):
+	for ev: Dictionary in visible_events.slice(0, 36):
 		var tick_var: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
 		var group_tick := str(int(tick_var)) if tick_var is float else str(tick_var)
 		if group_tick != last_tick_s:
@@ -2681,11 +2968,11 @@ func _render_events() -> void:
 			inner.add_child(sep)
 		var actor := str(ev.get("actor", ""))
 		var mine := actor.contains("desktop") or actor.contains("player")
-		if _filter_mine and not mine:
-			continue
 		var etype := str(ev.get("event_type", ev.get("kind", "event")))
 		var color := Color("586a7b")
-		if etype.contains("accepted") or etype.contains("committed"):
+		if etype.contains("emergency"):
+			color = RED
+		elif etype.contains("accepted") or etype.contains("committed"):
 			color = GREEN
 		elif etype.contains("rejected") or etype.contains("failed"):
 			color = RED
@@ -2715,15 +3002,15 @@ func _render_events() -> void:
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var trr := HBoxContainer.new()
 		trr.add_theme_constant_override("separation", 7)
-		trr.add_child(_lbl(etype, 10, color))
+		var title := _lbl(_event_title(etype), 11, color)
+		title.tooltip_text = "协议事件: " + etype
+		trr.add_child(title)
 		if mine:
 			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
 		trr.add_child(_spacer_h())
 		col.add_child(trr)
-		var detail := str(ev.get("status", ev.get("shock_id",
-			ev.get("lever", ev.get("reason", "")))))
-		if not detail.is_empty() and detail != "<null>" \
-				and not etype.ends_with(detail):
+		var detail := _event_detail(ev, etype)
+		if not detail.is_empty():
 			var dl := _lbl(detail, 12, Color("33424f"))
 			dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			col.add_child(dl)
