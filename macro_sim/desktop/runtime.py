@@ -690,6 +690,7 @@ class SimulationRuntime:
                         if lm is not None else _finite_number(getattr(firm, "wage", 0.0))
                     )
                     employees.append({
+                        "firm_id": firm_id,
                         "person_id": person_id,
                         "sex": str(getattr(person, "sex", "")) if person is not None else None,
                         "age": int(getattr(person, "age", 0)) if person is not None else None,
@@ -1028,11 +1029,8 @@ class SimulationRuntime:
         }
         lm = getattr(econ, "labor_market", None)
         suspended = set(getattr(lm, "suspended", {}) or {}) if lm is not None else set()
-        jobs = {
-            int(person_id): job
-            for person_id, job in (getattr(lm, "jobs", {}) or {}).items()
-            if int(person_id) not in suspended
-        } if lm is not None else {}
+        primary_jobs = (getattr(lm, "jobs", {}) or {}) if lm is not None else {}
+        second_jobs = (getattr(lm, "second_jobs", {}) or {}) if lm is not None else {}
         nonsearch = {
             int(person_id)
             for person_id in (getattr(lm, "nonsearch", set()) or set())
@@ -1126,16 +1124,36 @@ class SimulationRuntime:
                 else:
                     relationship = "成年成员"
 
-                job = jobs.get(person_id)
-                if job is not None:
-                    employer_id = str(job.firm_id)
-                    labor_status = "就业"
-                    employer = {
+                employers: list[dict[str, Any]] = []
+                for contract_name, contract_jobs in (
+                    ("主业", primary_jobs), ("第二职业", second_jobs)
+                ):
+                    contract_job = contract_jobs.get(person_id)
+                    if contract_job is None:
+                        continue
+                    employer_id = str(contract_job.firm_id)
+                    is_suspended = contract_name == "主业" and person_id in suspended
+                    employers.append({
                         "firm_id": employer_id,
                         "sector": firm_sector.get(employer_id, "企业"),
-                        "hours": _finite_number(getattr(job, "hours", 1.0), 1.0),
-                        "wage": _finite_number(getattr(job, "wage", 0.0)),
-                    }
+                        "contract": contract_name,
+                        "status": "停薪留职" if is_suspended else "在岗",
+                        "hours": (
+                            0.0 if is_suspended else
+                            _finite_number(getattr(contract_job, "hours", 1.0), 1.0)
+                        ),
+                        "contract_hours": _finite_number(
+                            getattr(contract_job, "hours", 1.0), 1.0
+                        ),
+                        "wage": _finite_number(getattr(contract_job, "wage", 0.0)),
+                        "hire_date": str(getattr(contract_job, "hire_date", "")),
+                    })
+                active_employers = [
+                    item for item in employers if item["status"] == "在岗"
+                ]
+                if active_employers:
+                    labor_status = "就业"
+                    employer = active_employers[0]
                 elif int(person.age) < 18:
                     labor_status = "未成年"
                     employer = None
@@ -1162,6 +1180,7 @@ class SimulationRuntime:
                     "guardian_id": int(guardian_id) if guardian_id is not None else None,
                     "labor_status": labor_status,
                     "employer": employer,
+                    "employers": employers,
                     "assets": {
                         "cash": cash,
                         "firm_equity": firm_equity,

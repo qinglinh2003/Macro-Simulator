@@ -502,6 +502,7 @@ var _rank_by := "score"
 var _score_country := 0               # 世界视图国家表现雷达当前选中经济体
 var _goto_panel_group := ""            # 指标全景当前独立页签；核心卡片点击可直达
 var _household_selected := -1         # 家庭页当前选中的 demographic household id
+var _person_selected := -1            # 企业深链定位到的家庭成员 id
 var _household_search := ""           # 家庭号 / 成员号筛选
 var _household_sort := "net_worth"    # net_worth | members | debt
 var _firm_selected := ""              # 企业页当前选中的 firm id
@@ -571,6 +572,15 @@ func _ready() -> void:
 	var pre_country := OS.get_environment("MACRO_SIM_CAPTURE_COUNTRY")
 	if pre_country.is_valid_int():
 		_score_country = maxi(0, pre_country.to_int())
+	var pre_household := OS.get_environment("MACRO_SIM_CAPTURE_HOUSEHOLD")
+	if pre_household.is_valid_int():
+		_household_selected = pre_household.to_int()
+	var pre_person := OS.get_environment("MACRO_SIM_CAPTURE_PERSON")
+	if pre_person.is_valid_int():
+		_person_selected = pre_person.to_int()
+	var pre_firm := OS.get_environment("MACRO_SIM_CAPTURE_FIRM")
+	if not pre_firm.is_empty():
+		_firm_selected = pre_firm
 	var pre_seat := OS.get_environment("MACRO_SIM_CAPTURE_SEAT")
 	if not pre_seat.is_empty():
 		_active_seat = pre_seat
@@ -2899,6 +2909,27 @@ func _render_center() -> void:
 			_render_focus_tab(body)
 
 
+func _open_firm(firm_id: String) -> void:
+	if firm_id.is_empty():
+		return
+	_firm_selected = firm_id
+	_firm_search = ""
+	_tab = "firms"
+	_scroll_mem.erase("center:firms:detail")
+	_render()
+
+
+func _open_person(person_id: int, household_id: Variant) -> void:
+	if person_id < 0 or household_id == null:
+		return
+	_person_selected = person_id
+	_household_selected = int(household_id)
+	_household_search = ""
+	_tab = "households"
+	_scroll_mem.erase("center:households:detail")
+	_render()
+
+
 func _household_summary_card(label: String, value: String,
 		color: Color, note: String = "") -> Control:
 	var card := PanelContainer.new()
@@ -3069,6 +3100,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 		entry.tooltip_text = "查看家庭 #%03d 的成员与资产负债" % household_id
 		entry.pressed.connect(func() -> void:
 			_household_selected = household_id
+			_person_selected = -1
 			_render())
 		list_items.add_child(entry)
 	main.add_child(list_shell)
@@ -3127,16 +3159,37 @@ func _render_household_detail(parent: VBoxContainer, household: Dictionary,
 
 	var member_head := HBoxContainer.new()
 	member_head.add_child(_lbl("MEMBERS · 成员档案", 9, INK3, true))
+	var members: Array = household.get("members", []).duplicate()
+	var target_present := false
+	for member: Dictionary in members:
+		if int(member.get("person_id", -1)) == _person_selected:
+			target_present = true
+			break
+	if target_present:
+		member_head.add_child(_chip("已定位 P%03d" % _person_selected,
+			Color("285ca8"), BLUE_BG, BLUE_BD, 7))
 	member_head.add_child(_spacer_h())
 	member_head.add_child(_lbl("个人资产不含家庭层登记的住房产权", 8, INK3))
 	parent.add_child(member_head)
-	for member: Dictionary in household.get("members", []):
-		parent.add_child(_household_member_card(member))
+	if target_present:
+		members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var a_id := int(a.get("person_id", -1))
+			var b_id := int(b.get("person_id", -1))
+			if a_id == _person_selected:
+				return true
+			if b_id == _person_selected:
+				return false
+			return a_id < b_id)
+	for member: Dictionary in members:
+		parent.add_child(_household_member_card(
+			member, int(member.get("person_id", -1)) == _person_selected))
 
 
-func _household_member_card(member: Dictionary) -> Control:
+func _household_member_card(member: Dictionary, focused: bool = false) -> Control:
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 10, 9))
+	card.add_theme_stylebox_override("panel", _sb(
+		Color("f4f8ff") if focused else Color.WHITE,
+		BLUE_BD if focused else Color("dfe6ee"), 10, 9, 3 if focused else 0))
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
@@ -3152,6 +3205,8 @@ func _household_member_card(member: Dictionary) -> Control:
 		Color(sex_color.r, sex_color.g, sex_color.b, 0.32), 8))
 	identity.add_child(_chip(str(member.get("relationship", "成员")),
 		TEAL_DK, TEAL_BG, TEAL_BD, 8))
+	if focused:
+		identity.add_child(_chip("当前员工", Color("285ca8"), BLUE_BG, BLUE_BD, 8))
 	identity.add_child(_spacer_h())
 	identity.add_child(_chip(str(member.get("labor_status", "")),
 		INK2, PANEL2, LINE2, 8))
@@ -3193,13 +3248,32 @@ func _household_member_card(member: Dictionary) -> Control:
 		_fmt_val("num", float(income.get("labor", 0.0))),
 		_fmt_val("num", float(income.get("capital", 0.0))),
 		_fmt_val("num", float(income.get("transfer", 0.0)))]
-	var employer: Variant = member.get("employer")
-	if employer is Dictionary:
-		work_text += "   |   %s · %s · %.2f FTE" % [
-			str((employer as Dictionary).get("sector", "企业")),
-			str((employer as Dictionary).get("firm_id", "")),
-			float((employer as Dictionary).get("hours", 0.0))]
 	col.add_child(_lbl(work_text, 8, INK3, true))
+	var employers: Array = member.get("employers", []).duplicate()
+	var employer: Variant = member.get("employer")
+	if employers.is_empty() and employer is Dictionary:
+		employers.append(employer)
+	if not employers.is_empty():
+		var employment_links := HFlowContainer.new()
+		employment_links.add_theme_constant_override("h_separation", 5)
+		employment_links.add_theme_constant_override("v_separation", 4)
+		employment_links.add_child(_lbl("劳动合同", 8, INK3, true))
+		for employment: Dictionary in employers:
+			var firm_id := str(employment.get("firm_id", ""))
+			var link := Button.new()
+			link.text = "%s ↗  %s · %s/%s · %.2f FTE" % [
+				firm_id, str(employment.get("sector", "企业")),
+				str(employment.get("contract", "合同")), str(employment.get("status", "在岗")),
+				float(employment.get("hours", 0.0))]
+			link.add_theme_font_size_override("font_size", 8)
+			link.add_theme_color_override("font_color", Color("285ca8"))
+			link.add_theme_stylebox_override("normal", _sb(Color("eef5ff"), Color("c9dcf5"), 7, 4))
+			link.add_theme_stylebox_override("hover", _sb(Color("e2eeff"), BLUE_BD, 7, 4, 2))
+			link.tooltip_text = "打开 %s 企业详情" % firm_id
+			link.pressed.connect(func() -> void:
+				_open_firm(firm_id))
+			employment_links.add_child(link)
+		col.add_child(employment_links)
 	return card
 
 
@@ -3670,6 +3744,18 @@ func _firm_workforce_panel(employees: Array) -> Control:
 			row.add_child(_chip(str(employee.get("status")), RED, RED_BG, RED_BD, 7))
 		row.add_child(_spacer_h())
 		row.add_child(_lbl("%.2f FTE" % float(employee.get("hours", 0.0)), 9, TEAL, true))
+		var employee_household: Variant = employee.get("household_id")
+		var person_link := Button.new()
+		person_link.text = "员工档案 ↗"
+		person_link.disabled = employee_household == null
+		person_link.add_theme_font_size_override("font_size", 8)
+		person_link.add_theme_color_override("font_color", Color("285ca8"))
+		person_link.add_theme_stylebox_override("normal", _sb(Color("eef5ff"), Color("c9dcf5"), 7, 4))
+		person_link.add_theme_stylebox_override("hover", _sb(Color("e2eeff"), BLUE_BD, 7, 4, 2))
+		person_link.tooltip_text = "打开 P%03d 的家庭成员档案" % person_id
+		person_link.pressed.connect(func() -> void:
+			_open_person(person_id, employee_household))
+		row.add_child(person_link)
 		col.add_child(row)
 		col.add_child(_lbl("%s · 入职 %s · 合同 %.2f FTE · 锁定工资 %s · 实付工资率 %s · 效率 %.2f · 本期薪酬 %s" % [
 			household_text, str(employee.get("hire_date", "—")),

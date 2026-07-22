@@ -228,7 +228,8 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
         firm["balance_sheet"]["debt"] for firm in items
     ))
 
-    advanced = _pass_all_contexts(runtime)["firms"]
+    advanced_snapshot = _pass_all_contexts(runtime)
+    advanced = advanced_snapshot["firms"]
     contracts = [
         employee
         for firm in advanced["items"]
@@ -238,6 +239,18 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
     assert advanced["summary"]["employment_fte"] > 0.0
     assert all(employee["hire_date"] for employee in contracts)
     assert all(employee["status"] in {"在岗", "停薪留职"} for employee in contracts)
+    members_by_id = {
+        member["person_id"]: member
+        for household in advanced_snapshot["households"]["items"]
+        for member in household["members"]
+    }
+    for employee in contracts:
+        member = members_by_id[employee["person_id"]]
+        assert any(
+            employer["firm_id"] == employee["firm_id"]
+            and employer["contract"] == employee["contract"]
+            for employer in member["employers"]
+        )
 
 
 def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime) -> None:

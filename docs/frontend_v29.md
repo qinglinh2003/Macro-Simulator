@@ -224,8 +224,12 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 - 中央五 tab:宏观焦点(公报诚实信道)/ 家庭(家庭—成员主从浏览)/
   企业(企业—经营/财务/员工/股权主从浏览)/ 指标全景(9×6 真值 spark)/ 世界视图
   (三国卡 + 可切指标排名 + 6 指标三色对比 + 枢纽辐射关系图 + e/NFA/CA/移民/汇款条图)。
+- 家庭成员与企业员工表使用同一份 person↔job 合同关系双向深链：成员卡可按主业、
+  第二职业或停薪留职合同进入企业；企业端可反向定位所属家庭并置顶、高亮目标成员。
 - 危机遮罩:白名单编辑直接装篮提交;空编辑=本次不动,玩家不会被困。
-- 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT/_CRISIS`(按目标 tick 推进,会议中自动 pass；`_CRISIS=1` 展示居中的紧急会议遮罩)。
+- 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT/_CRISIS/_HOUSEHOLD/_PERSON/_FIRM`
+  (按目标 tick 推进,会议中自动 pass；人物与企业参数可复现双向深链后的定位状态；
+  `_CRISIS=1` 展示居中的紧急会议遮罩)。
 
 **已知边界(v30 候选)**
 - 三国均为玩家可见,但只有 0 号经济体可操控;assign_seat/save/load/schedule_shock 协议未开。
