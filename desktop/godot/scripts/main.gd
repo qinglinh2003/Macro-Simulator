@@ -853,8 +853,11 @@ func _build_header(shell: VBoxContainer) -> void:
 	_n["awaitchip"] = waitp
 	h.add_child(waitp)
 	h.add_child(_spacer_h())
+	var modes_wrap := PanelContainer.new()
+	modes_wrap.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 3))
 	var modes := HBoxContainer.new()
 	modes.add_theme_constant_override("separation", 2)
+	modes_wrap.add_child(modes)
 	for m: Array in [["interactive", "交互"], ["realtime", "实时"]]:
 		var mb := Button.new()
 		mb.text = m[1]
@@ -865,7 +868,7 @@ func _build_header(shell: VBoxContainer) -> void:
 			_render())
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
-	h.add_child(modes)
+	h.add_child(modes_wrap)
 	var god := Button.new()
 	god.toggle_mode = true
 	god.text = "上帝模式"
@@ -1245,10 +1248,10 @@ func _render() -> void:
 	for m in ["interactive", "realtime"]:
 		var mb := _n["mode_" + m] as Button
 		if m == _mode:
-			mb.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 7, 6))
+			mb.add_theme_stylebox_override("normal", _sb(Color.WHITE, TEAL_BD, 18, 6, 5))
 			mb.add_theme_color_override("font_color", TEAL_DK)
 		else:
-			mb.remove_theme_stylebox_override("normal")
+			mb.add_theme_stylebox_override("normal", _sb(Color(1, 1, 1, 0), Color(0, 0, 0, 0), 18, 6))
 			mb.add_theme_color_override("font_color", Color("586a7b"))
 	for s: int in SPEEDS:
 		var sbn := _n["speed_%d" % s] as Button
@@ -1669,10 +1672,15 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 			11, Color("2a9184")))
 		v.add_child(pp)
 	if allowed and edited and not in_cart:
+		var addrow := HBoxContainer.new()
+		addrow.add_theme_constant_override("separation", 9)
 		var add := _btn("加入提案 ＋", func() -> void:
 			_add_to_cart(lever, base_v), true)
-		add.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		v.add_child(add)
+		addrow.add_child(add)
+		var lag2 := int(lever.get("implementation_lag", 0))
+		addrow.add_child(_lbl("裁决通过后约 t%d 生效" % (
+			int(_snapshot.get("tick", 0)) + maxi(lag2, 1)), 10, INK3, true))
+		v.add_child(addrow)
 	elif in_cart:
 		v.add_child(_lbl("✓ 已在提案篮", 11, TEAL))
 	return card
@@ -2115,7 +2123,12 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	var sv := VBoxContainer.new()
 	sv.add_theme_constant_override("separation", 9)
 	sp.add_child(sv)
-	sv.add_child(_lbl("SERIES · 公报小图(近 24 期发布)", 10, INK3, true))
+	var shead := HBoxContainer.new()
+	shead.add_theme_constant_override("separation", 8)
+	shead.add_child(_lbl("SERIES · 公报小图(近 24 期发布)", 10, INK3, true))
+	shead.add_child(_spacer_h())
+	shead.add_child(_lbl("点击卡片替换主图第三序列", 9, Color("9aa7b4")))
+	sv.add_child(shead)
 	var grid := HBoxContainer.new()
 	grid.add_theme_constant_override("separation", 10)
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -2181,6 +2194,10 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	scroll.add_child(col)
 	var series: Array = _snapshot.get("series", [])
 	var latest: Dictionary = _snapshot.get("metrics", {})
+	var nav := HFlowContainer.new()
+	nav.add_theme_constant_override("h_separation", 5)
+	nav.add_theme_constant_override("v_separation", 4)
+	col.add_child(nav)
 	var goto_target: Control = null
 	for grp: Dictionary in PANEL_GROUPS:
 		var gp := PanelContainer.new()
@@ -2243,6 +2260,19 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 					_fmt_val(kind, vlo), _fmt_val(kind, vhi), vals.size()]
 			grid.add_child(card)
 		col.add_child(gp)
+	for grp: Dictionary in PANEL_GROUPS:
+		var gname := str(grp["name"])
+		var gcolor2: Color = grp["color"]
+		var nb := Button.new()
+		nb.text = gname
+		nb.add_theme_font_size_override("font_size", 11)
+		nb.add_theme_stylebox_override("normal", _sb(Color.WHITE,
+			Color(gcolor2.r, gcolor2.g, gcolor2.b, 0.5), 14, 5))
+		nb.add_theme_color_override("font_color", gcolor2.darkened(0.2))
+		nb.pressed.connect(func() -> void:
+			_goto_panel_group = gname
+			_render())
+		nav.add_child(nb)
 	if goto_target != null:
 		_goto_panel_group = ""
 		var target := goto_target
@@ -2387,63 +2417,8 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		rr.add_child(_lbl(_fmt_val(rank_kind, float(row[1])), 12, ECON_COLORS[i % 3], true))
 		rv.add_child(rr)
 	col.add_child(rp)
-	# --- 对比小图 ---
-	var cmp := PanelContainer.new()
-	var cmpv := VBoxContainer.new()
-	cmpv.add_theme_constant_override("separation", 8)
-	cmp.add_child(cmpv)
-	var ch := HBoxContainer.new()
-	ch.add_theme_constant_override("separation", 10)
-	ch.add_child(_lbl("COMPARE · 多国对比", 10, INK3, true))
-	ch.add_child(_spacer_h())
-	for i in econs.size():
-		var li := HBoxContainer.new()
-		li.add_theme_constant_override("separation", 5)
-		var swatch := ColorRect.new()
-		swatch.color = ECON_COLORS[i % 3]
-		swatch.custom_minimum_size = Vector2(14, 3)
-		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		li.add_child(swatch)
-		li.add_child(_lbl(_country_name(i), 10, Color("4a5a6b")))
-		ch.add_child(li)
-	cmpv.add_child(ch)
-	var cgrid := GridContainer.new()
-	cgrid.columns = 3
-	cgrid.add_theme_constant_override("h_separation", 9)
-	cgrid.add_theme_constant_override("v_separation", 9)
-	cmpv.add_child(cgrid)
-	var whist: Array = world.get("history", [])
-	for item: Array in WORLD_COMPARE:
-		var key := str(item[0])
-		var card := PanelContainer.new()
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 9, 8))
-		var cv := VBoxContainer.new()
-		cv.add_theme_constant_override("separation", 3)
-		card.add_child(cv)
-		cv.add_child(_lbl(str(item[1]), 10, Color("516375")))
-		var ml := _MultiLine.new()
-		ml.custom_minimum_size = Vector2(110, 42)
-		var all_series: Array = []
-		for i in econs.size():
-			var vals: Array = []
-			for point: Dictionary in whist:
-				var pe: Array = point.get("economies", [])
-				if i < pe.size():
-					vals.append(float((pe[i] as Dictionary).get(key, 0.0)))
-			all_series.append({"vals": vals, "color": ECON_COLORS[i % 3]})
-		ml.series = all_series
-		cv.add_child(ml)
-		var vrow := HBoxContainer.new()
-		vrow.add_theme_constant_override("separation", 8)
-		for i in econs.size():
-			vrow.add_child(_lbl(_fmt_val(str(item[2]),
-				float((econs[i] as Dictionary).get(key, 0.0))), 10,
-				ECON_COLORS[i % 3], true))
-		cv.add_child(vrow)
-		cgrid.add_child(card)
-	col.add_child(cmp)
 	# --- 国际关系:贸易 / 金融 / 移民 ---
+	var whist: Array = world.get("history", [])
 	var rel := PanelContainer.new()
 	var relv := VBoxContainer.new()
 	relv.add_theme_constant_override("separation", 8)
@@ -2489,6 +2464,61 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		else "已破防"), 10, INK3))
 	relv.add_child(foot)
 	col.add_child(rel)
+	# --- 对比小图 ---
+	var cmp := PanelContainer.new()
+	var cmpv := VBoxContainer.new()
+	cmpv.add_theme_constant_override("separation", 8)
+	cmp.add_child(cmpv)
+	var ch := HBoxContainer.new()
+	ch.add_theme_constant_override("separation", 10)
+	ch.add_child(_lbl("COMPARE · 多国对比", 10, INK3, true))
+	ch.add_child(_spacer_h())
+	for i in econs.size():
+		var li := HBoxContainer.new()
+		li.add_theme_constant_override("separation", 5)
+		var swatch := ColorRect.new()
+		swatch.color = ECON_COLORS[i % 3]
+		swatch.custom_minimum_size = Vector2(14, 3)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		li.add_child(swatch)
+		li.add_child(_lbl(_country_name(i), 10, Color("4a5a6b")))
+		ch.add_child(li)
+	cmpv.add_child(ch)
+	var cgrid := GridContainer.new()
+	cgrid.columns = 3
+	cgrid.add_theme_constant_override("h_separation", 9)
+	cgrid.add_theme_constant_override("v_separation", 9)
+	cmpv.add_child(cgrid)
+	for item: Array in WORLD_COMPARE:
+		var key := str(item[0])
+		var card := PanelContainer.new()
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 9, 8))
+		var cv := VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 3)
+		card.add_child(cv)
+		cv.add_child(_lbl(str(item[1]), 10, Color("516375")))
+		var ml := _MultiLine.new()
+		ml.custom_minimum_size = Vector2(110, 42)
+		var all_series: Array = []
+		for i in econs.size():
+			var vals: Array = []
+			for point: Dictionary in whist:
+				var pe: Array = point.get("economies", [])
+				if i < pe.size():
+					vals.append(float((pe[i] as Dictionary).get(key, 0.0)))
+			all_series.append({"vals": vals, "color": ECON_COLORS[i % 3]})
+		ml.series = all_series
+		cv.add_child(ml)
+		var vrow := HBoxContainer.new()
+		vrow.add_theme_constant_override("separation", 8)
+		for i in econs.size():
+			vrow.add_child(_lbl(_fmt_val(str(item[2]),
+				float((econs[i] as Dictionary).get(key, 0.0))), 10,
+				ECON_COLORS[i % 3], true))
+		cv.add_child(vrow)
+		cgrid.add_child(card)
+	col.add_child(cmp)
 
 
 func _fx_at(latest: Dictionary, i: int) -> float:
