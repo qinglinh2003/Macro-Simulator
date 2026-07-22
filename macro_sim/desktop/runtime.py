@@ -628,6 +628,242 @@ class SimulationRuntime:
             },
         }
 
+    def _household_snapshot(self) -> dict[str, Any]:
+        """Current household and person balance sheets for the household explorer."""
+        econ = self.world.economies[PLAYER_ECONOMY]
+        state = getattr(econ, "demographic_state", None)
+        bridge = getattr(econ, "demographic_bridge", None)
+        if state is None or bridge is None:
+            return {
+                "as_of_date": None,
+                "summary": {
+                    "household_count": 0,
+                    "population": 0,
+                    "total_assets": 0.0,
+                    "total_debt": 0.0,
+                    "total_net_worth": 0.0,
+                    "total_consumption": 0.0,
+                },
+                "items": [],
+            }
+
+        people = [person for person in state.people if getattr(person, "alive", True)]
+        grouped: dict[int, list[Any]] = {}
+        for person in people:
+            household_id = getattr(person, "household_id", None)
+            if household_id is not None:
+                grouped.setdefault(int(household_id), []).append(person)
+
+        firm_prices = {
+            str(firm.id): _finite_number(getattr(firm, "share_price", 0.0))
+            for firm in getattr(econ, "firms", ())
+        }
+        aggregate_equity_price = _finite_number(
+            getattr(getattr(econ, "equity", None), "price", 0.0)
+        )
+        bank_prices = {
+            str(bank.id): _finite_number(getattr(bank, "share_price", 0.0))
+            for bank in getattr(econ, "banks", ())
+        }
+        lm = getattr(econ, "labor_market", None)
+        suspended = set(getattr(lm, "suspended", {}) or {}) if lm is not None else set()
+        jobs = {
+            int(person_id): job
+            for person_id, job in (getattr(lm, "jobs", {}) or {}).items()
+            if int(person_id) not in suspended
+        } if lm is not None else {}
+        nonsearch = {
+            int(person_id)
+            for person_id in (getattr(lm, "nonsearch", set()) or set())
+        } if lm is not None else set()
+        firm_sector: dict[str, str] = {}
+        for firm in getattr(econ, "c_firms", ()):
+            subsector = str(getattr(firm, "consumption_sector", ""))
+            firm_sector[str(firm.id)] = (
+                "必需消费" if subsector == "necessity" else
+                "可选消费" if subsector == "luxury" else "消费品"
+            )
+        for firm in getattr(econ, "k_firms", ()):
+            firm_sector[str(firm.id)] = "资本品"
+        for firm in getattr(econ, "e_firms", ()):
+            firm_sector[str(firm.id)] = "能源"
+
+        household_agents = {str(household.id): household for household in econ.households}
+        public_guardian_id = getattr(state, "public_guardian_household_id", None)
+        housing = getattr(econ, "housing", None)
+        house_price = _finite_number(getattr(econ, "_house_price", 0.0))
+        items: list[dict[str, Any]] = []
+
+        for household_id in sorted(grouped):
+            account_id = bridge.household_to_account.get(household_id)
+            if account_id is None:
+                continue
+            member_people = sorted(grouped[household_id], key=lambda person: int(person.id))
+            member_ids = {int(person.id) for person in member_people}
+            member_rows: list[dict[str, Any]] = []
+            household_components = {
+                "cash": 0.0,
+                "firm_equity": 0.0,
+                "bank_equity": 0.0,
+                "bonds": 0.0,
+                "housing": 0.0,
+            }
+            household_debt = 0.0
+            household_consumption = 0.0
+            household_income = 0.0
+
+            for person in member_people:
+                person_id = int(person.id)
+                if not bridge.claims.has_person(person_id):
+                    continue
+                sheet = bridge.claims.balance_sheet(person_id)
+                firm_equity = 0.0
+                for asset_id, shares in sheet.equity_claims.items():
+                    price = (
+                        aggregate_equity_price
+                        if str(asset_id) == "__aggregate_equity__"
+                        else firm_prices.get(str(asset_id), 0.0)
+                    )
+                    firm_equity += _finite_number(shares) * (
+                        price if price > 0.0 else 1.0
+                    )
+                bank_equity = sum(
+                    _finite_number(shares) * (
+                        bank_prices.get(str(bank_id), 0.0)
+                        if bank_prices.get(str(bank_id), 0.0) > 0.0 else 1.0
+                    )
+                    for bank_id, shares in sheet.bank_equity_claims.items()
+                )
+                cash = _finite_number(sheet.cash_claim)
+                bonds = _finite_number(sheet.bond_face_claim)
+                debt = max(0.0, _finite_number(sheet.debt_claim))
+                gross_assets = cash + firm_equity + bank_equity + bonds
+                consumption = max(0.0, _finite_number(sheet.consumption_allocated_tick))
+                labor_income = _finite_number(sheet.labor_income_tick)
+                capital_income = _finite_number(sheet.capital_income_tick)
+                transfer_income = _finite_number(sheet.transfer_income_tick)
+                total_income = labor_income + capital_income + transfer_income
+
+                partner_id = getattr(person, "partner_id", None)
+                parent_ids = [
+                    int(parent_id) for parent_id in (
+                        getattr(person, "mother_id", None),
+                        getattr(person, "father_id", None),
+                    ) if parent_id is not None
+                ]
+                guardian_id = getattr(person, "guardian_id", None)
+                if household_id == public_guardian_id and int(person.age) < 18:
+                    relationship = "公共监护"
+                elif guardian_id is not None and int(guardian_id) in member_ids:
+                    relationship = "被监护人"
+                elif any(parent_id in member_ids for parent_id in parent_ids):
+                    relationship = "子女"
+                elif partner_id is not None and int(partner_id) in member_ids:
+                    relationship = "伴侣"
+                elif int(person.age) < 18:
+                    relationship = "未成年成员"
+                else:
+                    relationship = "成年成员"
+
+                job = jobs.get(person_id)
+                if job is not None:
+                    employer_id = str(job.firm_id)
+                    labor_status = "就业"
+                    employer = {
+                        "firm_id": employer_id,
+                        "sector": firm_sector.get(employer_id, "企业"),
+                        "hours": _finite_number(getattr(job, "hours", 1.0), 1.0),
+                        "wage": _finite_number(getattr(job, "wage", 0.0)),
+                    }
+                elif int(person.age) < 18:
+                    labor_status = "未成年"
+                    employer = None
+                elif int(person.age) > 64:
+                    labor_status = "退休年龄"
+                    employer = None
+                elif person_id in nonsearch:
+                    labor_status = "非劳动力"
+                    employer = None
+                else:
+                    labor_status = "求职/就业保障"
+                    employer = None
+
+                member_rows.append({
+                    "person_id": person_id,
+                    "age": int(person.age),
+                    "sex": str(person.sex),
+                    "birth_date": str(person.birth_date),
+                    "relationship": relationship,
+                    "marital_status": "有伴侣" if partner_id is not None else "无伴侣",
+                    "partner_id": int(partner_id) if partner_id is not None else None,
+                    "mother_id": int(person.mother_id) if person.mother_id is not None else None,
+                    "father_id": int(person.father_id) if person.father_id is not None else None,
+                    "guardian_id": int(guardian_id) if guardian_id is not None else None,
+                    "labor_status": labor_status,
+                    "employer": employer,
+                    "assets": {
+                        "cash": cash,
+                        "firm_equity": firm_equity,
+                        "bank_equity": bank_equity,
+                        "bonds": bonds,
+                        "total": gross_assets,
+                    },
+                    "debt": debt,
+                    "net_worth": gross_assets - debt,
+                    "consumption": consumption,
+                    "income": {
+                        "labor": labor_income,
+                        "capital": capital_income,
+                        "transfer": transfer_income,
+                        "total": total_income,
+                    },
+                })
+                household_components["cash"] += cash
+                household_components["firm_equity"] += firm_equity
+                household_components["bank_equity"] += bank_equity
+                household_components["bonds"] += bonds
+                household_debt += debt
+                household_consumption += consumption
+                household_income += total_income
+
+            housing_units = (
+                _finite_number(housing.units_of(account_id)) if housing is not None else 0.0
+            )
+            housing_value = housing_units * house_price
+            household_components["housing"] = housing_value
+            total_assets = sum(household_components.values())
+            household_agent = household_agents.get(str(account_id))
+            items.append({
+                "household_id": household_id,
+                "account_id": str(account_id),
+                "is_public_guardian": household_id == public_guardian_id,
+                "member_count": len(member_rows),
+                "assets": {**household_components, "total": total_assets},
+                "debt": household_debt,
+                "net_worth": total_assets - household_debt,
+                "consumption": household_consumption,
+                "income": household_income,
+                "housing_units": housing_units,
+                "desired_consumption": _finite_number(
+                    getattr(household_agent, "consumption_budget", 0.0)
+                ),
+                "members": member_rows,
+            })
+
+        summary = {
+            "household_count": len(items),
+            "population": sum(int(item["member_count"]) for item in items),
+            "total_assets": sum(float(item["assets"]["total"]) for item in items),
+            "total_debt": sum(float(item["debt"]) for item in items),
+            "total_net_worth": sum(float(item["net_worth"]) for item in items),
+            "total_consumption": sum(float(item["consumption"]) for item in items),
+        }
+        return {
+            "as_of_date": str(getattr(state, "current_date", "")),
+            "summary": summary,
+            "items": items,
+        }
+
     def snapshot(self) -> dict[str, Any]:
         missing = set(self.session.missing_context_ids)
         contexts = [
@@ -686,6 +922,7 @@ class SimulationRuntime:
             "metrics": metrics,
             "series": list(self._panel_history),
             "panel_details": _jsonable(self._panel_details()),
+            "households": _jsonable(self._household_snapshot()),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}

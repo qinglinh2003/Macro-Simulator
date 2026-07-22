@@ -126,6 +126,55 @@ def test_panel_details_are_real_micro_aggregates(runtime: SimulationRuntime) -> 
         assert distribution[name]["lorenz"][0] == 0.0
 
 
+def test_household_explorer_reconciles_members_and_balance_sheets(
+    runtime: SimulationRuntime,
+) -> None:
+    households = runtime.snapshot()["households"]
+    items = households["items"]
+    summary = households["summary"]
+    assert items
+    assert summary["household_count"] == len(items)
+    assert summary["population"] == 80
+
+    person_ids = []
+    for household in items:
+        members = household["members"]
+        assert household["member_count"] == len(members)
+        person_ids.extend(member["person_id"] for member in members)
+        asset_components = household["assets"]
+        assert asset_components["total"] == pytest.approx(sum(
+            asset_components[name]
+            for name in ("cash", "firm_equity", "bank_equity", "bonds", "housing")
+        ))
+        assert household["net_worth"] == pytest.approx(
+            asset_components["total"] - household["debt"]
+        )
+        for member in members:
+            components = member["assets"]
+            assert components["total"] == pytest.approx(sum(
+                components[name]
+                for name in ("cash", "firm_equity", "bank_equity", "bonds")
+            ))
+            assert member["net_worth"] == pytest.approx(
+                components["total"] - member["debt"]
+            )
+            assert member["birth_date"]
+            assert member["sex"] in {"F", "M"}
+    assert len(person_ids) == len(set(person_ids)) == summary["population"]
+    assert summary["total_assets"] == pytest.approx(sum(
+        household["assets"]["total"] for household in items
+    ))
+    assert summary["total_debt"] == pytest.approx(sum(
+        household["debt"] for household in items
+    ))
+    assert summary["total_net_worth"] == pytest.approx(sum(
+        household["net_worth"] for household in items
+    ))
+    assert summary["total_consumption"] == pytest.approx(sum(
+        household["consumption"] for household in items
+    ))
+
+
 def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime) -> None:
     context = next(
         item for item in runtime.snapshot()["contexts"]

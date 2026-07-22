@@ -501,6 +501,9 @@ var _tab := "focus"
 var _rank_by := "score"
 var _score_country := 0               # 世界视图国家表现雷达当前选中经济体
 var _goto_panel_group := ""            # 指标全景当前独立页签；核心卡片点击可直达
+var _household_selected := -1         # 家庭页当前选中的 demographic household id
+var _household_search := ""           # 家庭号 / 成员号筛选
+var _household_sort := "net_worth"    # net_worth | members | debt
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
 var _capture_path := ""
@@ -1501,7 +1504,8 @@ func _build_center(center: VBoxContainer) -> void:
 	var segh := HBoxContainer.new()
 	segh.add_theme_constant_override("separation", 2)
 	seg.add_child(segh)
-	for t: Array in [["focus", "宏观焦点"], ["panels", "指标全景"], ["world", "世界视图"]]:
+	for t: Array in [["focus", "宏观焦点"], ["households", "家庭"],
+			["panels", "指标全景"], ["world", "世界视图"]]:
 		var b := Button.new()
 		b.text = t[1]
 		var tid: String = t[0]
@@ -1709,7 +1713,7 @@ func _render() -> void:
 		else:
 			sbn.remove_theme_stylebox_override("normal")
 			sbn.add_theme_color_override("font_color", Color("647585"))
-	for tab in ["focus", "panels", "world"]:
+	for tab in ["focus", "households", "panels", "world"]:
 		var tb := _n["tab_" + tab] as Button
 		if tab == _tab:
 			tb.add_theme_stylebox_override("normal", _sb(Color.WHITE, BLUE_BD, 18, 7, 5))
@@ -1719,6 +1723,7 @@ func _render() -> void:
 			tb.add_theme_color_override("font_color", Color("586a7b"))
 	_set_text("tabnote", {
 		"focus": "基于已发布公报的跨指标判断",
+		"households": "微观家庭 · 成员与资产负债真值",
 		"panels": "上帝视角 · 逐 tick 真值",
 		"world": "多国耦合 · 贸易 / 资本 / 移民",
 	}.get(_tab, ""))
@@ -2882,8 +2887,314 @@ func _render_center() -> void:
 			_render_world_tab(body)
 		"panels":
 			_render_panels_tab(body)
+		"households":
+			_render_households_tab(body)
 		_:
 			_render_focus_tab(body)
+
+
+func _household_summary_card(label: String, value: String,
+		color: Color, note: String = "") -> Control:
+	var card := PanelContainer.new()
+	card.custom_minimum_size.y = 58
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", _sb(Color("f8fafc"), Color("e0e7ef"), 10, 8))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 1)
+	card.add_child(col)
+	col.add_child(_lbl(label, 8, INK3, true))
+	var row := HBoxContainer.new()
+	row.add_child(_lbl(value, 16, color, true))
+	row.add_child(_spacer_h())
+	if not note.is_empty():
+		row.add_child(_lbl(note, 8, INK3))
+	col.add_child(row)
+	return card
+
+
+func _household_sort_value(item: Dictionary) -> float:
+	match _household_sort:
+		"members":
+			return float(item.get("member_count", 0))
+		"debt":
+			return float(item.get("debt", 0.0))
+		_:
+			return float(item.get("net_worth", 0.0))
+
+
+func _household_matches(item: Dictionary) -> bool:
+	var query := _household_search.strip_edges().to_lower()
+	if query.is_empty():
+		return true
+	var household_id := str(item.get("household_id", ""))
+	var account_id := str(item.get("account_id", "")).to_lower()
+	if household_id.contains(query) or account_id.contains(query):
+		return true
+	for member: Dictionary in item.get("members", []):
+		if str(member.get("person_id", "")).contains(query):
+			return true
+	return false
+
+
+func _render_households_tab(body: VBoxContainer) -> void:
+	var payload: Dictionary = _snapshot.get("households", {})
+	var summary: Dictionary = payload.get("summary", {})
+	var all_items: Array = payload.get("items", [])
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 7)
+	top.add_child(_household_summary_card("HOUSEHOLDS · 家庭",
+		str(int(summary.get("household_count", 0))), TEAL, "户"))
+	top.add_child(_household_summary_card("POPULATION · 成员",
+		str(int(summary.get("population", 0))), BLUE, "人"))
+	top.add_child(_household_summary_card("ASSETS · 总资产",
+		_fmt_val("num", float(summary.get("total_assets", 0.0))), PURPLE))
+	top.add_child(_household_summary_card("DEBT · 总负债",
+		_fmt_val("num", float(summary.get("total_debt", 0.0))), AMBER))
+	body.add_child(top)
+
+	var toolbar := PanelContainer.new()
+	toolbar.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 10, 6))
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 6)
+	toolbar.add_child(tools)
+	tools.add_child(_lbl("家庭微观档案", 11, INK))
+	tools.add_child(_chip("MICRODATA · 实时真值", Color("5a36a8"),
+		Color("f3effc"), Color("d8ccf0"), 8))
+	tools.add_child(_spacer_h())
+	var search := LineEdit.new()
+	search.custom_minimum_size.x = 155
+	search.placeholder_text = "家庭号 / 成员ID · 回车"
+	search.text = _household_search
+	search.add_theme_font_size_override("font_size", 9)
+	search.add_theme_color_override("font_color", INK2)
+	search.add_theme_color_override("font_placeholder_color", INK3)
+	search.add_theme_color_override("caret_color", BLUE)
+	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 5))
+	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, BLUE_BD, 8, 5, 2))
+	search.text_submitted.connect(func(value: String) -> void:
+		_household_search = value
+		_render())
+	tools.add_child(search)
+	for sort_spec: Array in [["net_worth", "净资产"], ["members", "成员"], ["debt", "负债"]]:
+		var sort_id := str(sort_spec[0])
+		var sort_button := Button.new()
+		sort_button.text = str(sort_spec[1])
+		sort_button.add_theme_font_size_override("font_size", 8)
+		if sort_id == _household_sort:
+			sort_button.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 8, 5))
+			sort_button.add_theme_color_override("font_color", Color("285ca8"))
+		sort_button.pressed.connect(func() -> void:
+			_household_sort = sort_id
+			_render())
+		tools.add_child(sort_button)
+	body.add_child(toolbar)
+
+	var items: Array = []
+	for item: Dictionary in all_items:
+		if _household_matches(item):
+			items.append(item)
+	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var av := _household_sort_value(a)
+		var bv := _household_sort_value(b)
+		if is_equal_approx(av, bv):
+			return int(a.get("household_id", 0)) < int(b.get("household_id", 0))
+		return av > bv)
+	if items.is_empty():
+		var empty := PanelContainer.new()
+		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		empty.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 18))
+		empty.add_child(_lbl("没有匹配的家庭。清空搜索词后重试。", 11, INK3))
+		body.add_child(empty)
+		return
+	var selected_found := false
+	for item: Dictionary in items:
+		if int(item.get("household_id", -1)) == _household_selected:
+			selected_found = true
+			break
+	if not selected_found:
+		_household_selected = int((items[0] as Dictionary).get("household_id", -1))
+
+	var main := HBoxContainer.new()
+	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_theme_constant_override("separation", 9)
+	body.add_child(main)
+	var list_shell := PanelContainer.new()
+	list_shell.custom_minimum_size.x = 205
+	list_shell.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	list_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_shell.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), LINE, 11, 7))
+	var list_col := VBoxContainer.new()
+	list_col.add_theme_constant_override("separation", 6)
+	list_shell.add_child(list_col)
+	var list_head := HBoxContainer.new()
+	list_head.add_child(_lbl("FAMILY INDEX", 8, INK3, true))
+	list_head.add_child(_spacer_h())
+	list_head.add_child(_lbl("%d / %d" % [items.size(), all_items.size()], 8, INK3, true))
+	list_col.add_child(list_head)
+	var list_scroll := ScrollContainer.new()
+	list_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	list_col.add_child(list_scroll)
+	_restore_scroll("center:households:list", list_scroll)
+	list_scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:households:list"] = int(v))
+	var list_items := VBoxContainer.new()
+	list_items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_items.add_theme_constant_override("separation", 5)
+	list_scroll.add_child(list_items)
+	var selected: Dictionary = items[0]
+	for item: Dictionary in items:
+		var household_id := int(item.get("household_id", -1))
+		var active := household_id == _household_selected
+		if active:
+			selected = item
+		var entry := Button.new()
+		entry.custom_minimum_size = Vector2(188, 54)
+		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		entry.text = "家庭 #%03d  ·  %d 人\n总资产 %s  ·  负债 %s" % [
+			household_id, int(item.get("member_count", 0)),
+			_fmt_val("num", float((item.get("assets", {}) as Dictionary).get("total", 0.0))),
+			_fmt_val("num", float(item.get("debt", 0.0)))]
+		entry.add_theme_font_size_override("font_size", 8)
+		entry.add_theme_stylebox_override("normal", _sb(
+			Color("eef5ff") if active else Color.WHITE,
+			BLUE_BD if active else Color("dfe6ee"), 9, 7, 3 if active else 0))
+		entry.add_theme_color_override("font_color", Color("1f4f91") if active else INK2)
+		entry.tooltip_text = "查看家庭 #%03d 的成员与资产负债" % household_id
+		entry.pressed.connect(func() -> void:
+			_household_selected = household_id
+			_render())
+		list_items.add_child(entry)
+	main.add_child(list_shell)
+
+	var detail_scroll := ScrollContainer.new()
+	detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	main.add_child(detail_scroll)
+	_restore_scroll("center:households:detail", detail_scroll)
+	detail_scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:households:detail"] = int(v))
+	var detail := VBoxContainer.new()
+	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detail.add_theme_constant_override("separation", 8)
+	detail_scroll.add_child(detail)
+	_render_household_detail(detail, selected, str(payload.get("as_of_date", "")))
+
+
+func _render_household_detail(parent: VBoxContainer, household: Dictionary,
+		as_of_date: String) -> void:
+	var household_id := int(household.get("household_id", -1))
+	var header := PanelContainer.new()
+	header.add_theme_stylebox_override("panel", _sb(Color("f9fbfd"), Color("dce5ee"), 11, 9, 4))
+	var header_col := VBoxContainer.new()
+	header_col.add_theme_constant_override("separation", 6)
+	header.add_child(header_col)
+	var title := HBoxContainer.new()
+	title.add_child(_dot(TEAL, 8))
+	title.add_child(_lbl("家庭 #%03d" % household_id, 15, INK))
+	if bool(household.get("is_public_guardian", false)):
+		title.add_child(_chip("公共监护家庭", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
+	title.add_child(_chip("%d 位成员" % int(household.get("member_count", 0)),
+		TEAL_DK, TEAL_BG, TEAL_BD, 8))
+	title.add_child(_spacer_h())
+	title.add_child(_lbl("截至 %s" % as_of_date, 8, INK3, true))
+	header_col.add_child(title)
+	var asset: Dictionary = household.get("assets", {})
+	var metrics := HBoxContainer.new()
+	metrics.add_theme_constant_override("separation", 6)
+	metrics.add_child(_household_summary_card("总资产",
+		_fmt_val("num", float(asset.get("total", 0.0))), TEAL))
+	metrics.add_child(_household_summary_card("负债",
+		_fmt_val("num", float(household.get("debt", 0.0))), AMBER))
+	metrics.add_child(_household_summary_card("净资产",
+		_fmt_val("num", float(household.get("net_worth", 0.0))), PURPLE))
+	metrics.add_child(_household_summary_card("本期消费",
+		_fmt_val("num", float(household.get("consumption", 0.0))), BLUE))
+	header_col.add_child(metrics)
+	var allocation := _HouseholdAssetBar.new()
+	allocation.values = asset
+	allocation.font = _sans
+	allocation.custom_minimum_size = Vector2(0, 48)
+	header_col.add_child(allocation)
+	parent.add_child(header)
+
+	var member_head := HBoxContainer.new()
+	member_head.add_child(_lbl("MEMBERS · 成员档案", 9, INK3, true))
+	member_head.add_child(_spacer_h())
+	member_head.add_child(_lbl("个人资产不含家庭层登记的住房产权", 8, INK3))
+	parent.add_child(member_head)
+	for member: Dictionary in household.get("members", []):
+		parent.add_child(_household_member_card(member))
+
+
+func _household_member_card(member: Dictionary) -> Control:
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 10, 9))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	card.add_child(col)
+	var sex := str(member.get("sex", ""))
+	var sex_text := "女" if sex == "F" else "男" if sex == "M" else "未知"
+	var sex_color := Color("c17b16") if sex == "F" else Color("3274d9")
+	var identity := HBoxContainer.new()
+	identity.add_theme_constant_override("separation", 6)
+	identity.add_child(_dot(sex_color, 8))
+	identity.add_child(_lbl("成员 P%03d" % int(member.get("person_id", 0)), 12, INK, true))
+	identity.add_child(_chip("%s · %d 岁" % [sex_text, int(member.get("age", 0))],
+		sex_color.darkened(0.18), Color(sex_color.r, sex_color.g, sex_color.b, 0.09),
+		Color(sex_color.r, sex_color.g, sex_color.b, 0.32), 8))
+	identity.add_child(_chip(str(member.get("relationship", "成员")),
+		TEAL_DK, TEAL_BG, TEAL_BD, 8))
+	identity.add_child(_spacer_h())
+	identity.add_child(_chip(str(member.get("labor_status", "")),
+		INK2, PANEL2, LINE2, 8))
+	col.add_child(identity)
+	var links: Array[String] = []
+	if member.get("mother_id") != null:
+		links.append("母 P%03d" % int(member.get("mother_id")))
+	if member.get("father_id") != null:
+		links.append("父 P%03d" % int(member.get("father_id")))
+	if member.get("partner_id") != null:
+		links.append("伴侣 P%03d" % int(member.get("partner_id")))
+	if member.get("guardian_id") != null:
+		links.append("监护 P%03d" % int(member.get("guardian_id")))
+	var demographic := "出生 %s · %s" % [
+		str(member.get("birth_date", "—")), str(member.get("marital_status", "—"))]
+	if not links.is_empty():
+		demographic += " · " + " / ".join(links)
+	col.add_child(_lbl(demographic, 8, INK3, true))
+
+	var assets: Dictionary = member.get("assets", {})
+	var finance := HBoxContainer.new()
+	finance.add_theme_constant_override("separation", 5)
+	finance.add_child(_household_summary_card("个人资产",
+		_fmt_val("num", float(assets.get("total", 0.0))), TEAL))
+	finance.add_child(_household_summary_card("个人负债",
+		_fmt_val("num", float(member.get("debt", 0.0))), AMBER))
+	finance.add_child(_household_summary_card("个人净资产",
+		_fmt_val("num", float(member.get("net_worth", 0.0))), PURPLE))
+	finance.add_child(_household_summary_card("本期消费",
+		_fmt_val("num", float(member.get("consumption", 0.0))), BLUE))
+	col.add_child(finance)
+	col.add_child(_lbl("资产构成  现金 %s · 企业股权 %s · 银行股权 %s · 债券 %s" % [
+		_fmt_val("num", float(assets.get("cash", 0.0))),
+		_fmt_val("num", float(assets.get("firm_equity", 0.0))),
+		_fmt_val("num", float(assets.get("bank_equity", 0.0))),
+		_fmt_val("num", float(assets.get("bonds", 0.0)))], 8, INK2, true))
+	var income: Dictionary = member.get("income", {})
+	var work_text := "收入  劳动 %s · 资本 %s · 转移 %s" % [
+		_fmt_val("num", float(income.get("labor", 0.0))),
+		_fmt_val("num", float(income.get("capital", 0.0))),
+		_fmt_val("num", float(income.get("transfer", 0.0)))]
+	var employer: Variant = member.get("employer")
+	if employer is Dictionary:
+		work_text += "   |   %s · %s · %.2f FTE" % [
+			str((employer as Dictionary).get("sector", "企业")),
+			str((employer as Dictionary).get("firm_id", "")),
+			float((employer as Dictionary).get("hours", 0.0))]
+	col.add_child(_lbl(work_text, 8, INK3, true))
+	return card
 
 
 func _render_focus_tab(body: VBoxContainer) -> void:
@@ -4406,6 +4717,44 @@ class _MultiLine extends Control:
 					2.0 + (size.x - 4.0) * float(i) / float(n - 1),
 					size.y - 2.0 - (size.y - 4.0) * (float(vals[i]) - lo) / span))
 			draw_polyline(pts, s.get("color", Color.GRAY), 1.5, true)
+
+
+class _HouseholdAssetBar extends Control:
+	var values: Dictionary = {}
+	var font: Font
+	var parts := [
+		["cash", "现金", Color("16a394")],
+		["firm_equity", "企业股权", Color("3274d9")],
+		["bank_equity", "银行股权", Color("7950c7")],
+		["bonds", "债券", Color("c78318")],
+		["housing", "住房", Color("7a8b9b")],
+	]
+
+	func _draw() -> void:
+		var total := 0.0
+		for part: Array in parts:
+			total += maxf(0.0, float(values.get(str(part[0]), 0.0)))
+		var bar := Rect2(2, 3, size.x - 4, 13)
+		draw_rect(bar, Color("e9eef4"))
+		if total <= 1e-9:
+			draw_string(font, Vector2(0, 38), "暂无正资产",
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 8, Color("849098"))
+			return
+		var cursor := bar.position.x
+		for part: Array in parts:
+			var value := maxf(0.0, float(values.get(str(part[0]), 0.0)))
+			var width := bar.size.x * value / total
+			draw_rect(Rect2(cursor, bar.position.y, width, bar.size.y), part[2])
+			cursor += width
+		var cell_width := size.x / float(parts.size())
+		for index in parts.size():
+			var part: Array = parts[index]
+			var value := maxf(0.0, float(values.get(str(part[0]), 0.0)))
+			var x := index * cell_width
+			draw_rect(Rect2(x + 2, 27, 6, 6), part[2])
+			draw_string(font, Vector2(x + 11, 34), "%s %.0f%%" % [
+				str(part[1]), value / total * 100.0],
+				HORIZONTAL_ALIGNMENT_LEFT, cell_width - 10, 7, Color("5e6f81"))
 
 
 class _PanelCompositionChart extends Control:
