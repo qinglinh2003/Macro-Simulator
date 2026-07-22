@@ -1,5 +1,5 @@
 extends Control
-## 宏观指挥室 v29.1 — 设计模版:docs/design/policy_room_v29_light.dc.html。
+## 宏观指挥室 v30.2 — 政策工作台交互优化。
 ## 前端零经济逻辑;三国耦合世界,玩家持 0 号经济体全部 5 个席位(102 旋钮全落地)。
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
@@ -83,6 +83,75 @@ const GROUP_CN := {
 	"energy_structure": "能源结构",
 }
 
+# 政策值只做呈现层转换；提交仍使用 Registry 给出的 canonical 值。
+const CHOICE_CN := {
+	"monetary_regime": {"exogenous": "外生利率", "taylor": "泰勒规则", "manual": "手动设定"},
+	"fx_regime": {"float": "浮动汇率", "peg": "联系汇率"},
+	"energy_rationing": {
+		"market": "市场出清", "household_first": "居民优先",
+		"industry_first": "产业优先", "proportional": "等比例配给"},
+}
+
+const PERCENT_LEVERS := {
+	"gov_consumption_share": true, "gov_deficit_target": true,
+	"gov_investment_share": true, "deficit_u_ref": true,
+	"benefit_replacement": true, "pension_replacement": true,
+	"jg_wage_ratio": true, "jg_public_works_share": true,
+	"tax_income_rate": true, "tax_profit_rate": true,
+	"tax_consumption_rate": true, "tax_wealth_rate": true,
+	"tax_luxury_rate": true, "tax_necessity_rate": true,
+	"tax_energy_rate": true, "tax_energy_windfall": true,
+	"housing_property_tax": true, "housing_transfer_tax": true,
+	"land_fee_share": true, "energy_subsidy_rate": true,
+	"bond_coupon": true, "bond_finance_frac": true,
+	"inflation_target": true, "manual_policy_rate": true,
+	"r_neutral": true, "r_max": true, "u_natural": true,
+	"rate_inertia": true, "infl_ema_lambda": true,
+	"omo_reserve_target": true, "omo_drain_frac": true,
+	"reserve_floor_frac": true, "capital_control": true,
+	"external_interest_settlement_fraction": true,
+	"bank_target_capital_ratio": true, "bank_exposure_limit": true,
+	"deposit_rate_floor": true, "mortgage_ltv_cap": true,
+	"mortgage_dsti_cap": true, "mortgage_risk_weight": true,
+	"mortgage_stress_rate_addon": true,
+	"mortgage_min_capital_ratio": true, "margin_ltv": true,
+	"regulatory_firm_capital_haircut": true,
+	"regulatory_firm_inventory_haircut": true,
+	"mortgage_foreclosure_ltv": true, "tariff": true,
+	"import_quota": true, "export_subsidy": true,
+	"immigration_cap": true, "emigration_cap": true,
+	"guest_worker_return": true, "remittance_tax": true,
+	"outward_remittance_tax": true,
+}
+
+const MULTIPLIER_LEVERS := {
+	"deficit_u_cap": true, "benefit_income_floor": true,
+	"income_allowance": true, "wealth_allowance": true,
+	"energy_subsidy_threshold": true, "land_fee_stock_elasticity": true,
+	"taylor_phi_pi": true, "taylor_phi_u": true,
+	"bank_leverage_cap": true, "firm_credit_min_dscr": true,
+	"hh_credit_limit": true, "kappa": true, "margin_max": true,
+}
+
+const DAY_LEVERS := {
+	"bond_maturity": true, "bankrupt_persist": true,
+	"rental_eviction_arrears": true,
+}
+
+const CAPABILITY_CN := {
+	"bank_enabled": "银行体系", "bank_realized_pnl": "银行完整损益",
+	"bonds": "国债市场", "consumption_strata": "必需品 / 奢侈品分层",
+	"energy_enabled": "能源部门", "energy_household": "居民能源消费",
+	"government": "政府财政账户", "household_credit": "家庭信贷",
+	"housing_construction_enabled": "住房建造", "housing_enabled": "住房登记",
+	"housing_market_enabled": "住房交易市场", "interbank": "银行间市场",
+	"margin_credit": "保证金信贷", "mortgage_enabled": "住房按揭",
+	"omo": "公开市场操作", "soe_efirm": "国有能源企业",
+	"coupling": "跨境耦合", "multiple_economies": "多国世界",
+	"trade": "国际贸易", "capital": "跨境资本", "migration": "跨境迁移",
+	"cross_border_flow": "至少一种跨境流动",
+}
+
 const EVENT_TITLES := {
 	"decision_context_opened": "政策会议召开",
 	"human_proposal_queued": "玩家提案已递交",
@@ -112,7 +181,7 @@ const REASON_CN := {
 	"energy_stress": "能源供给触发紧急阈值",
 }
 
-# 二级页:主题化拆分,每页 ≤8 个旋钮,保证单屏放完不滚动。
+# 二级页:主题化拆分,每页 ≤8 个旋钮；收起态优先单屏浏览。
 # 未列入的新旋钮自动落入该席位「其他」页。
 const LEVER_PAGES := {
 	"treasury": [
@@ -309,6 +378,7 @@ var _active_seat := "treasury"
 var _active_group := ""                # 二级主题页名(空=该席位第一页)
 var _expanded_lever := ""              # 手风琴:当前展开的旋钮
 var _search := ""
+var _policy_scope := "meeting"         # meeting | all；闭会时自动显示全部
 var _edits: Dictionary = {}            # lever -> 本地编辑值(未入篮)
 var _cart: Array = []                  # [{lever, from, to, value, group}]
 var _perm_cache: Dictionary = {}       # lever -> last permitted action(会议闭合时展示用)
@@ -374,6 +444,9 @@ func _ready() -> void:
 	var pre_seat := OS.get_environment("MACRO_SIM_CAPTURE_SEAT")
 	if not pre_seat.is_empty():
 		_active_seat = pre_seat
+	var pre_lever := OS.get_environment("MACRO_SIM_CAPTURE_LEVER")
+	if not pre_lever.is_empty():
+		_expanded_lever = pre_lever
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -611,6 +684,94 @@ func _flag(i: int, fsize := Vector2(18, 12)) -> Control:
 
 func _cn(lever_name: String) -> String:
 	return str(LEVER_CN.get(lever_name, lever_name))
+
+
+func _choice_text(lever_name: String, value: Variant) -> String:
+	var labels: Dictionary = CHOICE_CN.get(lever_name, {})
+	return str(labels.get(str(value), str(value)))
+
+
+func _permission_reason(reason_code: String) -> String:
+	if reason_code.begins_with("missing_capability:"):
+		var capability := reason_code.trim_prefix("missing_capability:")
+		return "需要先在开局结构中启用“%s”" % str(CAPABILITY_CN.get(capability, capability))
+	if reason_code.begins_with("missing_world_capability:"):
+		var capability := reason_code.trim_prefix("missing_world_capability:")
+		return "当前世界未启用“%s”" % str(CAPABILITY_CN.get(capability, capability))
+	if reason_code.begins_with("disabled_prerequisite:"):
+		var prerequisite := reason_code.trim_prefix("disabled_prerequisite:")
+		return "需先启用政策“%s”" % _cn(prerequisite)
+	return {
+		"pending_conflict": "该政策已有等待生效的决定",
+		"minimum_hold": "仍在最短持有期 / 冷却期内",
+		"admin_capacity_exceeded": "本决策窗口的行政容量不足",
+		"joint_constraint:peg_unavailable": "当前没有合法的联系汇率锚国，或已有其他挂钩国",
+		"joint_constraint:no_valid_peg_anchor": "当前没有可用的浮动汇率锚国",
+	}.get(reason_code, reason_code.replace("_", " "))
+
+
+func _seat_color(seat: String) -> Color:
+	for spec: Dictionary in SEAT_LIST:
+		if str(spec.get("id")) == seat:
+			return spec.get("color", TEAL)
+	return TEAL
+
+
+func _cart_entry(lever_name: String) -> Dictionary:
+	for item: Dictionary in _cart:
+		if str(item.get("lever")) == lever_name:
+			return item
+	return {}
+
+
+func _cart_has(lever_name: String) -> bool:
+	return not _cart_entry(lever_name).is_empty()
+
+
+func _reset_lever_draft(lever_name: String) -> void:
+	_cart = _cart.filter(func(item: Dictionary) -> bool:
+		return str(item.get("lever")) != lever_name)
+	_edits.erase(lever_name)
+	_render()
+
+
+func _stage_lever_edit(lever: Dictionary, value: Variant) -> void:
+	var lever_name := str(lever.get("name"))
+	var semantics := str(lever.get("semantics",
+		lever.get("effective_semantics", "")))
+	if semantics.contains("transition"):
+		_confirm = {
+			"title": "制度迁移确认",
+			"body": "将「%s」调整为“%s”会切换制度分支，并按较高成本计费。是否保留为本次草稿？" % [
+				_cn(lever_name), _lever_value_text(lever, value)],
+			"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
+			"on_yes": func() -> void:
+				_edits[lever_name] = value
+				_render(),
+		}
+		_render()
+	else:
+		_edits[lever_name] = value
+		_render()
+
+
+func _focus_lever(lever_name: String) -> void:
+	var info: Dictionary = _lever_info.get(lever_name, {})
+	if info.is_empty():
+		return
+	_active_seat = str(info.get("owner_role", _active_seat))
+	for page: Dictionary in _seat_pages(_active_seat):
+		for page_lever: Dictionary in page["levers"]:
+			if str(page_lever.get("name")) == lever_name:
+				_active_group = str(page["name"])
+				break
+	_expanded_lever = lever_name
+	_search = ""
+	(_n["search"] as LineEdit).text = ""
+	# 从提案篮返回编辑时，确保该项不被“仅本会议题”过滤掉。
+	if _context_for_group(str(info.get("decision_group", ""))).is_empty():
+		_policy_scope = "all"
+	_render()
 
 
 func _country_name(i: int) -> String:
@@ -1040,7 +1201,8 @@ func _build_main(shell: VBoxContainer) -> void:
 	main.add_theme_constant_override("separation", 10)
 	shell.add_child(main)
 	var wbp := PanelContainer.new()
-	wbp.custom_minimum_size = Vector2(412, 0)
+	# 政策编辑是主玩法，给中文名称、状态和精确输入留出稳定宽度。
+	wbp.custom_minimum_size = Vector2(440, 0)
 	wbp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
 	main.add_child(wbp)
 	var wb := VBoxContainer.new()
@@ -1068,9 +1230,15 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	hp.add_theme_constant_override("margin_bottom", 10)
 	wb.add_child(hp)
 	var head := VBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
+	head.add_theme_constant_override("separation", 7)
 	hp.add_child(head)
-	head.add_child(_lbl("SEAT · 席位工作台(玩家持全部席位)", 10, INK3, true))
+	var title_row := HBoxContainer.new()
+	title_row.add_child(_lbl("POLICY DESK · 政策工作台", 10, INK3, true))
+	title_row.add_child(_spacer_h())
+	var seat_brief := _lbl("", 9, INK3, true)
+	_n["seat_brief"] = seat_brief
+	title_row.add_child(seat_brief)
+	head.add_child(title_row)
 	var chips := HBoxContainer.new()
 	chips.add_theme_constant_override("separation", 5)
 	for s: Dictionary in SEAT_LIST:
@@ -1100,9 +1268,13 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	sm.add_theme_constant_override("margin_right", 13)
 	sm.add_theme_constant_override("margin_top", 4)
 	wb.add_child(sm)
+	var search_row := HBoxContainer.new()
+	search_row.add_theme_constant_override("separation", 6)
+	sm.add_child(search_row)
 	var search := LineEdit.new()
+	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	search.clear_button_enabled = true
-	search.placeholder_text = "搜索政策(中文或英文,跨席位)…"
+	search.placeholder_text = "搜索全部席位的政策…"
 	search.add_theme_font_size_override("font_size", 12)
 	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
 	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, TEAL_BD, 8, 6))
@@ -1110,7 +1282,17 @@ func _build_workbench(wb: VBoxContainer) -> void:
 		_search = text.strip_edges()
 		_render())
 	_n["search"] = search
-	sm.add_child(search)
+	search_row.add_child(search)
+	var scope := Button.new()
+	scope.text = "本会议题"
+	scope.tooltip_text = "切换当前席位的本会议题 / 全部政策"
+	scope.add_theme_font_size_override("font_size", 11)
+	scope.pressed.connect(func() -> void:
+		_policy_scope = "all" if _policy_scope == "meeting" else "meeting"
+		_expanded_lever = ""
+		_render())
+	_n["policy_scope"] = scope
+	search_row.add_child(scope)
 	var gm2 := MarginContainer.new()
 	gm2.add_theme_constant_override("margin_left", 13)
 	gm2.add_theme_constant_override("margin_right", 13)
@@ -1140,7 +1322,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	cart.add_child(vslot)
 	var crow := HBoxContainer.new()
 	crow.add_theme_constant_override("separation", 8)
-	crow.add_child(_lbl("提案篮 · 跨席位原子批", 10, INK3, true))
+	crow.add_child(_lbl("提案篮", 10, INK3, true))
 	var ccount := _lbl("0 项", 11, Color("647585"))
 	_n["cart_count"] = ccount
 	crow.add_child(ccount)
@@ -1531,6 +1713,19 @@ func _render_workbench() -> void:
 	var open := _awaiting()
 	var emg_ctx := _emergency_context()
 	var emg := not emg_ctx.is_empty()
+	var active_contexts: Array = []
+	var active_allowed := 0
+	var cap_text := ""
+	var permitted: Dictionary = {}
+	for ctx: Dictionary in _contexts():
+		if str(ctx.get("seat", "")) == _active_seat:
+			active_contexts.append(ctx)
+			if cap_text.is_empty() and ctx.get("admin_remaining") != null:
+				cap_text = "%.1f" % float(ctx.get("admin_remaining"))
+		for item: Dictionary in ctx.get("permitted_actions", []):
+			permitted[str(item.get("lever"))] = item
+			if str(ctx.get("seat", "")) == _active_seat and bool(item.get("allowed", false)):
+				active_allowed += 1
 	for s: Dictionary in SEAT_LIST:
 		var sid := str(s["id"])
 		var b := _n["seat_" + sid] as Button
@@ -1547,21 +1742,26 @@ func _render_workbench() -> void:
 		else:
 			b.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
 			b.add_theme_color_override("font_color", Color("586a7b"))
-	var cap_text := ""
-	for ctx: Dictionary in _contexts():
-		if str(ctx.get("seat", "")) == _active_seat and ctx.get("admin_remaining") != null:
-			cap_text = " · 行政容量 " + str(ctx.get("admin_remaining"))
+	var active_name := _seat_name(_active_seat)
+	var brief := ""
+	for spec: Dictionary in SEAT_LIST:
+		if str(spec.get("id")) == _active_seat:
+			brief = str(spec.get("tag", ""))
 			break
-	_set_text("meeting", (("🚨 紧急会议 · 仅白名单杠杆可动" if emg
-		else "● 例会开启(%d 议题)· 调整杠杆后「加入提案」" % _contexts().size()) + cap_text) if open
-		else "会议未开 · 只读(推进至会议自动暂停)")
+	_set_text("seat_brief", brief)
+	if not open:
+		_set_text("meeting", "%s · 政策窗口关闭 · 可浏览现行制度" % active_name)
+	elif active_contexts.is_empty():
+		_set_text("meeting", "%s · 本届联席会议无待决议题" % active_name)
+	else:
+		var status := "🚨 紧急授权" if emg else "● 例会授权"
+		var cap := "" if cap_text.is_empty() else " · 容量 " + cap_text
+		_set_text("meeting", "%s · %s %d 窗口 / %d 项可调%s" % [
+			active_name, status, active_contexts.size(), active_allowed, cap])
 	var meetl := _n["meeting"] as Label
 	meetl.add_theme_color_override("font_color",
-		(Color("b02a1c") if emg else Color("9a6b10")) if open else INK2)
-	var permitted: Dictionary = {}
-	for ctx: Dictionary in _contexts():
-		for item: Dictionary in ctx.get("permitted_actions", []):
-			permitted[str(item.get("lever"))] = item
+		(Color("b02a1c") if emg else Color("9a6b10")) \
+		if not active_contexts.is_empty() else INK2)
 	var pending_by: Dictionary = {}
 	for p in _snapshot.get("pending", []):
 		if p is Dictionary:
@@ -1571,11 +1771,22 @@ func _render_workbench() -> void:
 					pending_by[str((act as Dictionary).get("lever", ""))] = {
 						"value": (act as Dictionary).get("value"),
 						"effective_tick": decision.get("effective_tick", "?")}
-	# 二级页签:主题页(每页 ≤8,单屏无滚动;搜索时隐藏)
+	# 二级页签:主题页(每页 ≤8；搜索时隐藏)
 	var gflow := _n["group_chips"] as HFlowContainer
 	for c in gflow.get_children():
 		c.queue_free()
 	var searching := not _search.is_empty()
+	var active_open := not active_contexts.is_empty()
+	var scope := _n["policy_scope"] as Button
+	scope.visible = not searching
+	scope.disabled = not active_open
+	scope.text = "本会议题" if _policy_scope == "meeting" and active_open else "全部政策"
+	if _policy_scope == "meeting" and active_open:
+		scope.add_theme_stylebox_override("normal", _sb(AMBER_BG, AMBER_BD, 8, 6))
+		scope.add_theme_color_override("font_color", Color("8a6114"))
+	else:
+		scope.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
+		scope.add_theme_color_override("font_color", Color("586a7b"))
 	gflow.visible = not searching
 	var pages := _seat_pages(_active_seat)
 	if not searching and not pages.is_empty():
@@ -1584,9 +1795,29 @@ func _render_workbench() -> void:
 			page_names.append(str(pg["name"]))
 		if not page_names.has(_active_group):
 			_active_group = str(page_names[0])
+		if _policy_scope == "meeting" and active_open:
+			var current_page_live := false
+			var first_live_page := ""
+			for pg: Dictionary in pages:
+				var page_live := false
+				for lever: Dictionary in pg["levers"]:
+					if not _context_for_group(str(lever.get("decision_group", ""))).is_empty():
+						page_live = true
+						break
+				if page_live and first_live_page.is_empty():
+					first_live_page = str(pg["name"])
+				if page_live and str(pg["name"]) == _active_group:
+					current_page_live = true
+			if not current_page_live and not first_live_page.is_empty():
+				_active_group = first_live_page
 		for pg: Dictionary in pages:
 			var pname := str(pg["name"])
 			var b := Button.new()
+			var draft_count := 0
+			for lever: Dictionary in pg["levers"]:
+				var lever_name := str(lever.get("name"))
+				if _edits.has(lever_name) or _cart_has(lever_name):
+					draft_count += 1
 			b.text = "%s %d" % [pname, (pg["levers"] as Array).size()]
 			b.add_theme_font_size_override("font_size", 11)
 			if pname == _active_group:
@@ -1603,6 +1834,9 @@ func _render_workbench() -> void:
 					break
 			if live:
 				b.text += " ●"
+			b.disabled = _policy_scope == "meeting" and active_open and not live
+			if draft_count > 0:
+				b.text += " ·%d" % draft_count
 			b.pressed.connect(func() -> void:
 				_active_group = pname
 				_expanded_lever = ""
@@ -1624,6 +1858,9 @@ func _render_workbench() -> void:
 			if str(pg["name"]) != _active_group:
 				continue
 			for lever: Dictionary in pg["levers"]:
+				if _policy_scope == "meeting" and active_open \
+						and _context_for_group(str(lever.get("decision_group", ""))).is_empty():
+					continue
 				rows.append({"lever": lever, "seat": _active_seat})
 	if searching:
 		var sh := MarginContainer.new()
@@ -1631,6 +1868,20 @@ func _render_workbench() -> void:
 		sh.add_child(_lbl("搜索「%s」· %d 项(全部席位)" % [_search, rows.size()],
 			10, INK3, true))
 		lv.add_child(sh)
+	if rows.is_empty():
+		var empty := MarginContainer.new()
+		empty.add_theme_constant_override("margin_left", 12)
+		empty.add_theme_constant_override("margin_right", 12)
+		empty.add_theme_constant_override("margin_top", 8)
+		var empty_panel := PanelContainer.new()
+		empty_panel.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 9, 10))
+		var empty_text := "没有匹配的政策。" if searching \
+			else "本主题不在当前会议授权范围；切换为“全部政策”可浏览。"
+		var empty_label := _lbl(empty_text, 11, INK3)
+		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_panel.add_child(empty_label)
+		empty.add_child(empty_panel)
+		lv.add_child(empty)
 	for rowdef: Dictionary in rows:
 		var lever: Dictionary = rowdef["lever"]
 		var lname := str(lever.get("name"))
@@ -1643,8 +1894,6 @@ func _render_workbench() -> void:
 			cm.add_child(_lever_row(lever, str(rowdef["seat"]), permitted,
 				pending_by, searching))
 		lv.add_child(cm)
-	if open and not searching:
-		_append_meeting_board(lv, emg)
 	if not open and int(_snapshot.get("tick", 0)) < 30 and not searching:
 		var guide := MarginContainer.new()
 		guide.add_theme_constant_override("margin_left", 12)
@@ -1667,57 +1916,6 @@ func _render_workbench() -> void:
 		_append_governing_brief(lv)
 	_render_cart(open)
 	_restore_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
-
-
-func _append_meeting_board(parent: VBoxContainer, emergency: bool) -> void:
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 7)
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _sb(
-		RED_BG if emergency else AMBER_BG,
-		RED_BD if emergency else AMBER_BD, 10, 10))
-	margin.add_child(panel)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 7)
-	panel.add_child(col)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 7)
-	head.add_child(_dot(RED if emergency else AMBER, 7))
-	head.add_child(_lbl("CRISIS SESSION · 紧急内阁" if emergency \
-		else "CABINET SESSION · 联席会议", 10,
-		RED if emergency else Color("9a6b10"), true))
-	head.add_child(_spacer_h())
-	head.add_child(_lbl("%d 项议题" % _contexts().size(), 10, INK2))
-	col.add_child(head)
-	var seats := HFlowContainer.new()
-	seats.add_theme_constant_override("h_separation", 5)
-	seats.add_theme_constant_override("v_separation", 5)
-	for spec: Dictionary in SEAT_LIST:
-		var sid := str(spec.get("id"))
-		var count := 0
-		for ctx: Dictionary in _contexts():
-			if str(ctx.get("seat")) == sid:
-				count += 1
-		if count == 0:
-			continue
-		var active := sid == _active_seat
-		seats.add_child(_chip("%s %d" % [str(spec.get("name")), count],
-			Color("1c4a8f") if active else INK2,
-			Color.WHITE if active else Color(0, 0, 0, 0),
-			BLUE_BD if active else LINE2, 9))
-	col.add_child(seats)
-	var guidance := "紧急会议只允许白名单动作；完成后提交统一裁决。" if emergency \
-		else "可跨席位调整政策；提案篮中的动作将一起提交、一起裁决。"
-	col.add_child(_lbl(guidance, 10, Color("6f5b34") if not emergency else Color("8a4639")))
-	var progress := HBoxContainer.new()
-	progress.add_child(_lbl("提案篮", 10, INK2))
-	progress.add_child(_spacer_h())
-	progress.add_child(_lbl("%d 项动作" % _cart.size(), 11,
-		TEAL_DK if not _cart.is_empty() else INK3, true))
-	col.add_child(progress)
-	parent.add_child(margin)
 
 
 func _append_governing_brief(parent: VBoxContainer) -> void:
@@ -1808,17 +2006,25 @@ func _advance_to_next_decision() -> void:
 
 func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		pending_by: Dictionary, show_seat: bool) -> Control:
-	## 收起态单行(Democracy 4 式):点击展开编辑器。
+	## 收起态同时交代现值、草稿/队列目标和可操作状态；点击进入精确编辑。
 	var name := str(lever.get("name"))
 	var perm: Dictionary = permitted.get(name, {})
-	var in_cart := _cart.any(func(c: Dictionary) -> bool: return c["lever"] == name)
+	var cart_entry := _cart_entry(name)
+	var in_cart := not cart_entry.is_empty()
 	var edited := _edits.has(name)
 	var pending := pending_by.has(name)
+	var allowed := bool(perm.get("allowed", false))
+	var draft: Variant = _edits.get(name)
+	var cart_stale: bool = in_cart and edited and cart_entry.get("value") != draft
 	var row := PanelContainer.new()
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var style_rest := _sb(Color("e6f5f0") if in_cart else Color.WHITE,
-		Color("59b7a8") if in_cart else Color("e2e8ef"), 9, 6)
-	var style_hover := _sb(Color("f2faf8") if not in_cart else Color("ddf1ea"),
+	row.tooltip_text = "点击展开「%s」的编辑器" % _cn(name)
+	var row_bg := AMBER_BG if cart_stale else (TEAL_BG if in_cart \
+		else (BLUE_BG if edited else (Color.WHITE if allowed else PANEL3)))
+	var row_bd := AMBER_BD if cart_stale else (TEAL_BD if in_cart \
+		else (BLUE_BD if edited else LINE))
+	var style_rest := _sb(row_bg, row_bd, 9, 7)
+	var style_hover := _sb(row_bg.lightened(0.025),
 		TEAL_BD, 9, 6, 6)
 	row.add_theme_stylebox_override("panel", style_rest)
 	row.mouse_entered.connect(func() -> void:
@@ -1826,39 +2032,70 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	row.mouse_exited.connect(func() -> void:
 		row.add_theme_stylebox_override("panel", style_rest))
 	var r := HBoxContainer.new()
-	r.add_theme_constant_override("separation", 8)
+	r.add_theme_constant_override("separation", 9)
 	row.add_child(r)
-	r.add_child(_dot(TEAL if (edited or in_cart) else (AMBER if pending else LINE2), 6))
-	r.add_child(_lbl(_cn(name), 12, INK))
+	r.add_child(_dot(AMBER if cart_stale else (TEAL if (edited or in_cart) \
+		else (AMBER if pending else _seat_color(seat))), 7))
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.add_theme_constant_override("separation", 1)
+	var title := _lbl(_cn(name), 12, INK)
+	title.clip_text = true
+	names.add_child(title)
+	var sub := HBoxContainer.new()
+	sub.add_theme_constant_override("separation", 6)
 	if show_seat:
-		var seat_name := seat
-		for sdef: Dictionary in SEAT_LIST:
-			if str(sdef["id"]) == seat:
-				seat_name = str(sdef["name"])
-		r.add_child(_chip(seat_name, Color("3f6db2"), Color(0, 0, 0, 0), BLUE_BD, 9))
+		sub.add_child(_lbl(_seat_name(seat), 9, _seat_color(seat)))
 	var en := _lbl(name, 9, Color("8a97a5"), true)
 	en.clip_text = true
 	en.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	r.add_child(en)
+	sub.add_child(en)
+	names.add_child(sub)
+	r.add_child(names)
 	var base_v: Variant = _lever_current(lever, perm)
-	r.add_child(_lbl(_lever_value_text(lever, base_v), 11,
-		TEAL_DK if (edited or pending) else INK2, true))
+	var value_col := VBoxContainer.new()
+	value_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	value_col.custom_minimum_size = Vector2(118, 0)
+	var value_text := _lever_value_text(lever, base_v)
+	if edited:
+		value_text += " → " + _lever_value_text(lever, draft)
+	elif pending:
+		value_text += " → " + _lever_value_text(lever,
+			(pending_by[name] as Dictionary).get("value"))
+	var value := _lbl(value_text, 11, AMBER if cart_stale else (
+		TEAL_DK if (edited or pending or in_cart) else INK2), true)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.clip_text = true
+	value_col.add_child(value)
+	var status_text := ""
+	var status_color := INK3
+	if cart_stale:
+		status_text = "草稿有改动 · 待更新"
+		status_color = AMBER
+	elif in_cart:
+		status_text = "已加入提案篮"
+		status_color = TEAL_DK
+	elif edited:
+		status_text = "未入篮草稿"
+		status_color = BLUE
+	elif pending:
+		status_text = "待生效 · t%s" % str((pending_by[name] as Dictionary).get("effective_tick", "?"))
+		status_color = AMBER
+	elif allowed:
+		status_text = "本会可调整"
+		status_color = GREEN
+	else:
+		status_text = "查看制度"
+	var status := _lbl(status_text, 9, status_color)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_col.add_child(status)
+	r.add_child(value_col)
 	r.add_child(_lbl("▾", 11, INK3))
 	row.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton \
 				and (event as InputEventMouseButton).pressed \
 				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-			_expanded_lever = name
-			if show_seat:
-				_active_seat = seat
-				_active_group = ""
-				for pg: Dictionary in _seat_pages(seat):
-					for lv2: Dictionary in pg["levers"]:
-						if str(lv2.get("name")) == name:
-							_active_group = str(pg["name"])
-				_search = ""
-				(_n["search"] as LineEdit).text = ""
-			_render())
+			_focus_lever(name))
 	return row
 
 
@@ -1875,13 +2112,18 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	var perm: Dictionary = permitted.get(name, {})
 	var allowed := open and bool(perm.get("allowed", false)) \
 		and (not emg or bool(lever.get("emergency", false)))
-	var in_cart := _cart.any(func(c: Dictionary) -> bool: return c["lever"] == name)
+	var cart_entry := _cart_entry(name)
+	var in_cart := not cart_entry.is_empty()
 	var base_v: Variant = _lever_current(lever, perm)
 	var edited := _edits.has(name)
+	var draft_v: Variant = _edits.get(name, base_v)
+	var changed: bool = edited and draft_v != base_v
+	var cart_stale: bool = in_cart and edited and cart_entry.get("value") != draft_v
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", _sb(
-		Color("e6f5f0") if in_cart else Color.WHITE,
-		Color("59b7a8") if in_cart else Color("e2e8ef"), 10, 10))
+		AMBER_BG if cart_stale else (Color("e6f5f0") if in_cart else Color.WHITE),
+		AMBER_BD if cart_stale else (Color("59b7a8") if in_cart else Color("e2e8ef")),
+		10, 10))
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 7)
 	card.add_child(v)
@@ -1908,8 +2150,34 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	tr.add_child(_chip("成本 %.1f · %s" % [float(lever.get("admin_weight", 1.0)), cost_cn],
 		cost_fg, Color(0, 0, 0, 0), AMBER_BD if cost_cn == "高" else LINE2, 10))
 	v.add_child(tr)
+	var state := PanelContainer.new()
+	state.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 8, 7))
+	var state_row := HBoxContainer.new()
+	state_row.add_theme_constant_override("separation", 7)
+	state.add_child(state_row)
+	state_row.add_child(_lbl("当前", 9, INK3, true))
+	state_row.add_child(_lbl(_lever_value_text(lever, base_v), 12, INK2, true))
+	if edited:
+		state_row.add_child(_lbl("→", 11, TEAL))
+		state_row.add_child(_lbl("草稿", 9, TEAL, true))
+		state_row.add_child(_lbl(_lever_value_text(lever, draft_v), 12,
+			AMBER if cart_stale else TEAL_DK, true))
+	state_row.add_child(_spacer_h())
+	if cart_stale:
+		state_row.add_child(_lbl("提案篮尚未同步", 9, AMBER))
+	elif in_cart:
+		state_row.add_child(_lbl("已在提案篮", 9, TEAL_DK))
+	v.add_child(state)
 	if allowed:
 		v.add_child(_lever_control(lever, perm, base_v))
+		var companion := _lever_companion_note(name, draft_v)
+		if not companion.is_empty():
+			var note_panel := PanelContainer.new()
+			note_panel.add_theme_stylebox_override("panel", _sb(BLUE_BG, BLUE_BD, 7, 7))
+			var note := _lbl("联动 · " + companion, 10, Color("315d96"))
+			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			note_panel.add_child(note)
+			v.add_child(note_panel)
 	else:
 		var lockp := PanelContainer.new()
 		lockp.add_theme_stylebox_override("panel", _sb(PANEL3, LINE2, 8, 9))
@@ -1924,6 +2192,8 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 			reason = "当前 " + _lever_value_text(lever, base_v) + " · 会议未开"
 		elif reason.is_empty() or reason == "<null>":
 			reason = "当前 " + _lever_value_text(lever, base_v) + " · 本会议不可动"
+		else:
+			reason = _permission_reason(reason)
 		var rl := _lbl(reason, 11, Color("586a7b"))
 		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		rl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1953,28 +2223,38 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		pr.add_child(_lbl("生效 t%s" % str((pend as Dictionary).get("effective_tick", "?")),
 			11, Color("2a9184")))
 		v.add_child(pp)
-	if allowed and edited and not in_cart:
+	if edited:
 		var addrow := HBoxContainer.new()
 		addrow.add_theme_constant_override("separation", 9)
-		var add := _btn("加入提案 ＋", func() -> void:
-			_add_to_cart(lever, base_v), true)
-		addrow.add_child(add)
-		var lag2 := int(lever.get("implementation_lag", 0))
-		addrow.add_child(_lbl("裁决通过后约 t%d 生效" % (
-			int(_snapshot.get("tick", 0)) + maxi(lag2, 1)), 10, INK3, true))
+		if not changed:
+			addrow.add_child(_lbl("草稿与当前值相同，不会产生政策动作", 10, INK3))
+		elif allowed and (not in_cart or cart_stale):
+			var add := _btn("更新提案篮" if cart_stale else "加入提案 ＋", func() -> void:
+				_add_to_cart(lever, base_v), true)
+			addrow.add_child(add)
+			var lag2 := int(lever.get("implementation_lag", 0))
+			addrow.add_child(_lbl("预计 t%d 生效" % (
+				int(_snapshot.get("tick", 0)) + maxi(lag2, 1)), 10, INK3, true))
+		elif in_cart:
+			addrow.add_child(_lbl("✓ 草稿与提案篮一致", 11, TEAL_DK))
+		else:
+			addrow.add_child(_lbl("当前窗口不可提交此草稿", 10, AMBER))
+		addrow.add_child(_spacer_h())
+		var reset := _btn("移出并撤销" if in_cart else "恢复当前值", func() -> void:
+			_reset_lever_draft(name))
+		reset.add_theme_font_size_override("font_size", 10)
+		addrow.add_child(reset)
 		v.add_child(addrow)
-	elif in_cart:
-		v.add_child(_lbl("✓ 已在提案篮", 11, TEAL))
 	return card
 
 
 func _lever_value_text(lever: Dictionary, v: Variant) -> String:
 	if v == null:
-		return "不设(None)"
+		return "未设置"
 	if v is bool:
 		return "启用" if v else "停用"
 	if v is String:
-		return v
+		return _choice_text(str(lever.get("name", "")), v)
 	if v is Array:
 		if (v as Array).is_empty():
 			return "无制裁对象"
@@ -1986,12 +2266,56 @@ func _lever_value_text(lever: Dictionary, v: Variant) -> String:
 	if kind == "economy_id":
 		return _country_name(int(v))
 	var f := float(v)
+	var name := str(lever.get("name", ""))
+	if PERCENT_LEVERS.has(name):
+		var pct := f * 100.0
+		return ("%.4f%%" if absf(pct) < 0.1 and absf(pct) > 0.0 else "%.2f%%") % pct
+	if MULTIPLIER_LEVERS.has(name):
+		return "%.2f×" % f
+	if DAY_LEVERS.has(name):
+		return "%d 天" % roundi(f)
+	if name == "housing_permits":
+		return "%d 套/年" % roundi(f)
 	var scale := absf(float(lever.get("control_scale", 1.0)))
 	if scale >= 1.0:
 		return "%d" % roundi(f)
 	if scale < 0.001:
 		return "%.5f" % f
 	return "%.3f" % f
+
+
+func _lever_raw_value_text(lever: Dictionary, v: Variant) -> String:
+	if v == null:
+		return ""
+	if str(lever.get("value_kind", "")) == "integer":
+		return str(roundi(float(v)))
+	return str(float(v))
+
+
+func _lever_companion_note(lever_name: String, draft_value: Variant) -> String:
+	match lever_name:
+		"monetary_regime":
+			if str(draft_value) == "manual":
+				return "切换为手动设定时，必须把“手动政策利率”作为同批动作加入提案。"
+		"manual_policy_rate":
+			return "该值只在“货币政策规则 = 手动设定”时生效；切换制度时必须同批提交。"
+		"fx_regime":
+			if str(draft_value) == "peg":
+				return "启用联系汇率时，必须在同批提案中选择一个浮动汇率锚国。"
+		"peg_anchor":
+			return "锚国只在联系汇率制度下生效；锚国无需同意，但不能形成链式或循环挂钩。"
+	return ""
+
+
+func _commit_numeric_input(lever: Dictionary, text: String, is_int: bool,
+		minimum: float, maximum: float) -> void:
+	var cleaned := text.strip_edges()
+	if not cleaned.is_valid_float():
+		_show_hint("请输入有效数字；百分比仍按模型值填写，例如 3% 输入 0.03。")
+		return
+	var value := clampf(cleaned.to_float(), minimum, maximum)
+	_edits[str(lever.get("name"))] = roundi(value) if is_int else value
+	_render()
 
 
 func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Control:
@@ -2008,15 +2332,15 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		seg.add_theme_constant_override("separation", 3)
 		for opt in choices:
 			var b := Button.new()
-			b.text = str(opt)
+			b.text = _choice_text(name, opt)
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			if str(cur) == str(opt):
 				b.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 6, 6))
 				b.add_theme_color_override("font_color", TEAL_DK)
 			var value := str(opt)
 			b.pressed.connect(func() -> void:
-				_edits[name] = value
-				_render())
+				if str(cur) != value:
+					_stage_lever_edit(lever, value))
 			seg.add_child(b)
 		return seg
 	if kind == "bool":
@@ -2028,97 +2352,117 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		var st := str(lever.get("semantics",
 			lever.get("effective_semantics", ""))).contains("transition")
 		sw.toggled.connect(func(pressed: bool) -> void:
-			if st:
-				_confirm = {"title": "状态迁移确认",
-					"body": "切换「%s」属状态迁移(STATE_TRANSITION),将改变制度分支并按更高成本计费。确认迁移?" % _cn(name),
-					"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
-					"on_yes": func() -> void:
-						_edits[name] = pressed
-						_render()}
-				_render()
-			else:
-				_edits[name] = pressed
-				_render())
+			_stage_lever_edit(lever, pressed))
 		brow.add_child(sw)
 		if st:
 			brow.add_child(_chip("状态迁移", Color("9a7a2e"), Color(0, 0, 0, 0), AMBER_BD, 10))
 		return brow
-	# 数值(含可空)
+	# 数值（含可空）：步进适合探索，直接输入负责精确操作。
 	var wrap := VBoxContainer.new()
-	wrap.add_theme_constant_override("separation", 5)
+	wrap.add_theme_constant_override("separation", 6)
 	var nullable := bool(perm.get("nullable", lever.get("nullable", false)))
+	var numeric := cur != null and not (cur is bool) and not (cur is String)
+	var scale := float(perm.get("control_scale", lever.get("control_scale", 0.01)))
+	if scale <= 0.0:
+		scale = 0.01
+	var lo := float(perm.get("minimum", lever.get("minimum", 0.0)))
+	var hi := float(perm.get("maximum", lever.get("maximum", 0.0)))
+	var lo2 := lo
+	var hi2 := hi
+	var max_step: Variant = perm.get("max_step", lever.get("max_step"))
+	if max_step != null and base_v != null and not (base_v is bool):
+		lo2 = maxf(lo, float(base_v) - float(max_step))
+		hi2 = minf(hi, float(base_v) + float(max_step))
+	var is_int := kind == "integer"
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 7)
-	var numeric := cur != null and not (cur is bool) and not (cur is String)
 	var dec := Button.new()
 	dec.text = "−"
-	dec.custom_minimum_size = Vector2(38, 0)
+	dec.custom_minimum_size = Vector2(40, 0)
 	dec.add_theme_font_size_override("font_size", 18)
 	srow.add_child(dec)
 	var mid := PanelContainer.new()
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mid.add_theme_stylebox_override("panel", _sb(PANEL2, LINE2, 8, 6))
+	mid.add_theme_stylebox_override("panel", _sb(PANEL2, LINE2, 8, 7))
 	var midv := VBoxContainer.new()
+	midv.add_theme_constant_override("separation", 1)
 	mid.add_child(midv)
 	var vrow := HBoxContainer.new()
 	vrow.add_theme_constant_override("separation", 7)
-	vrow.add_child(_lbl(_lever_value_text(lever, cur), 18, INK, true))
+	var display := _lbl(_lever_value_text(lever, cur), 18, INK, true)
+	display.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vrow.add_child(display)
 	if numeric and _edits.has(name) and base_v != null and not (base_v is bool):
 		var delta := float(_edits[name]) - float(base_v)
 		if absf(delta) > 1e-12:
-			vrow.add_child(_lbl("▲" if delta > 0 else "▼", 11, GREEN if delta > 0 else RED))
+			vrow.add_child(_lbl("▲" if delta > 0 else "▼", 11,
+				GREEN if delta > 0 else RED))
 	midv.add_child(vrow)
-	var scale := float(perm.get("control_scale", lever.get("control_scale", 0.01)))
-	var lo := float(perm.get("minimum", lever.get("minimum", 0.0)))
-	var hi := float(perm.get("maximum", lever.get("maximum", 0.0)))
-	midv.add_child(_lbl("档 %s · 域 %s – %s" % [
-		_lever_value_text(lever, scale), _lever_value_text(lever, lo),
-		_lever_value_text(lever, hi)], 9, INK3, true))
+	var range_text := "单档 %s · 本次 %s – %s" % [
+		_lever_value_text(lever, scale), _lever_value_text(lever, lo2),
+		_lever_value_text(lever, hi2)]
+	midv.add_child(_lbl(range_text, 9, INK3, true))
 	srow.add_child(mid)
 	var inc := Button.new()
 	inc.text = "＋"
-	inc.custom_minimum_size = Vector2(38, 0)
+	inc.custom_minimum_size = Vector2(40, 0)
 	inc.add_theme_font_size_override("font_size", 18)
 	srow.add_child(inc)
-	dec.disabled = not numeric
-	inc.disabled = not numeric
+	dec.disabled = true
+	inc.disabled = true
 	if numeric:
-		var base := float(cur)
-		if scale <= 0.0:
-			scale = 0.01
-		var mstep: Variant = perm.get("max_step", lever.get("max_step"))
-		var lo2 := lo
-		var hi2 := hi
-		if mstep != null and base_v != null and not (base_v is bool):
-			lo2 = maxf(lo, float(base_v) - float(mstep))
-			hi2 = minf(hi, float(base_v) + float(mstep))
-		var is_int := kind == "integer"
+		var local_base := float(cur)
+		dec.disabled = local_base <= lo2 + 1e-12
+		inc.disabled = local_base >= hi2 - 1e-12
 		dec.pressed.connect(func() -> void:
-			var nv := clampf(float(_edits.get(name, base)) - scale, lo2, hi2)
-			_edits[name] = roundi(nv) if is_int else nv
+			var next := clampf(float(_edits.get(name, local_base)) - scale, lo2, hi2)
+			_edits[name] = roundi(next) if is_int else next
 			_render())
 		inc.pressed.connect(func() -> void:
-			var nv := clampf(float(_edits.get(name, base)) + scale, lo2, hi2)
-			_edits[name] = roundi(nv) if is_int else nv
+			var next := clampf(float(_edits.get(name, local_base)) + scale, lo2, hi2)
+			_edits[name] = roundi(next) if is_int else next
 			_render())
 	wrap.add_child(srow)
+	if numeric:
+		var direct := HBoxContainer.new()
+		direct.add_theme_constant_override("separation", 6)
+		var input := LineEdit.new()
+		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		input.text = _lever_raw_value_text(lever, cur)
+		input.placeholder_text = "输入模型值"
+		input.tooltip_text = "精确输入 canonical 模型值；百分比 3% 输入 0.03"
+		input.add_theme_font_override("font", _mono)
+		input.add_theme_font_size_override("font_size", 11)
+		input.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 7, 6))
+		input.add_theme_stylebox_override("focus", _sb(Color.WHITE, TEAL_BD, 7, 6))
+		input.text_submitted.connect(func(text: String) -> void:
+			_commit_numeric_input(lever, text, is_int, lo2, hi2))
+		direct.add_child(input)
+		var apply := _btn("应用数值", func() -> void:
+			_commit_numeric_input(lever, input.text, is_int, lo2, hi2))
+		apply.tooltip_text = "输入超出本次可调范围时会夹到最近边界"
+		direct.add_child(apply)
+		wrap.add_child(direct)
+		wrap.add_child(_lbl("模型值 %s · 制度全域 %s – %s" % [
+			_lever_raw_value_text(lever, cur), _lever_raw_value_text(lever, lo),
+			_lever_raw_value_text(lever, hi)], 9, INK3, true))
 	if nullable:
 		var nrow := HBoxContainer.new()
 		nrow.add_theme_constant_override("separation", 7)
 		var nb := Button.new()
 		nb.add_theme_font_size_override("font_size", 11)
 		if cur == null:
-			nb.text = "设为数值"
+			nb.text = "设置数值"
 			nb.pressed.connect(func() -> void:
 				_edits[name] = lo
 				_render())
 		else:
-			nb.text = "置为不设(None)"
+			nb.text = "取消该限制"
 			nb.pressed.connect(func() -> void:
 				_edits[name] = null
 				_render())
 		nrow.add_child(nb)
-		nrow.add_child(_lbl("可空杠杆:None = 制度不启用", 10, INK3))
+		nrow.add_child(_lbl("未设置 = 不启用该上限或限制", 10, INK3))
 		wrap.add_child(nrow)
 	return wrap
 
@@ -2186,6 +2530,9 @@ func _add_to_cart(lever: Dictionary, base_v: Variant) -> void:
 	var name := str(lever.get("name"))
 	if not _edits.has(name):
 		return
+	if _edits[name] == base_v:
+		_reset_lever_draft(name)
+		return
 	_cart = _cart.filter(func(c: Dictionary) -> bool: return c["lever"] != name)
 	_cart.append({"lever": name,
 		"group": str(_lever_group.get(name, "")),
@@ -2200,30 +2547,42 @@ func _render_cart(open: bool) -> void:
 	for c in items.get_children():
 		c.queue_free()
 	_set_text("cart_count", "%d 项" % _cart.size())
-	_set_text("cart_cost", "" if _cart.is_empty() else "提交将闭合本次全部议题")
+	var admin_total := 0.0
+	for cart_item: Dictionary in _cart:
+		var info: Dictionary = _lever_info.get(str(cart_item.get("lever")), {})
+		admin_total += float(info.get("admin_weight", 0.0))
+	_set_text("cart_cost", "" if _cart.is_empty() else "行政容量 %.1f" % admin_total)
 	if _cart.is_empty():
-		items.add_child(_lbl("尚无动作。任意席位调整杠杆后「加入提案」,一起提交、一起裁决。",
+		items.add_child(_lbl("尚无动作。展开旋钮形成草稿，再加入提案篮统一裁决。",
 			11, Color("7a8593")))
 	for c: Dictionary in _cart:
+		var key := str(c["lever"])
+		var stale: bool = _edits.has(key) and _edits[key] != c.get("value")
 		var rowp := PanelContainer.new()
-		rowp.add_theme_stylebox_override("panel", _sb(Color.WHITE, LINE, 7, 6))
+		rowp.add_theme_stylebox_override("panel", _sb(
+			AMBER_BG if stale else Color.WHITE, AMBER_BD if stale else LINE, 7, 6))
 		var r := HBoxContainer.new()
-		r.add_theme_constant_override("separation", 8)
+		r.add_theme_constant_override("separation", 6)
 		rowp.add_child(r)
-		r.add_child(_lbl(str(GROUP_CN.get(str(c["group"]), c["group"])), 10, INK3))
 		r.add_child(_lbl(_cn(str(c["lever"])), 12, Color("23323f")))
 		r.add_child(_spacer_h())
+		if stale:
+			r.add_child(_lbl("有新草稿", 9, AMBER))
 		r.add_child(_lbl(str(c["from"]), 11, Color("586a7b"), true))
 		r.add_child(_lbl("→", 11, TEAL))
 		r.add_child(_lbl(str(c["to"]), 11, TEAL_DK, true))
+		var edit := Button.new()
+		edit.text = "编辑"
+		edit.flat = true
+		edit.add_theme_font_size_override("font_size", 10)
+		edit.pressed.connect(func() -> void:
+			_focus_lever(key))
+		r.add_child(edit)
 		var rm := Button.new()
 		rm.text = "×"
 		rm.flat = true
-		var key := str(c["lever"])
 		rm.pressed.connect(func() -> void:
-			_cart = _cart.filter(func(x: Dictionary) -> bool: return x["lever"] != key)
-			_edits.erase(key)
-			_render())
+			_reset_lever_draft(key))
 		r.add_child(rm)
 		items.add_child(rowp)
 	var subb := _n["submit"] as Button
