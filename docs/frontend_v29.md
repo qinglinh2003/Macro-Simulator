@@ -209,7 +209,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 - 中央三 tab:宏观焦点(公报诚实信道)/ 指标全景(9×6 真值 spark)/ 世界视图
   (三国卡 + 可切指标排名 + 6 指标三色对比 + 枢纽辐射关系图 + e/NFA/CA/移民/汇款条图)。
 - 危机遮罩:白名单编辑直接装篮提交;空编辑=本次不动,玩家不会被困。
-- 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT`(按目标 tick 推进,会议中自动 pass)。
+- 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT/_CRISIS`(按目标 tick 推进,会议中自动 pass；`_CRISIS=1` 展示居中的紧急会议遮罩)。
 
 **已知边界(v30 候选)**
 - 三国均为玩家可见,但只有 0 号经济体可操控;assign_seat/save/load/schedule_shock 协议未开。

@@ -363,6 +363,8 @@ func _ready() -> void:
 	add_child(timer)
 	timer.start()
 	_capture_path = OS.get_environment("MACRO_SIM_CAPTURE_PATH")
+	if OS.get_environment("MACRO_SIM_CAPTURE_CRISIS") == "1":
+		_demo_crisis = true
 	var pre := OS.get_environment("MACRO_SIM_CAPTURE_TICKS")
 	if pre.is_valid_int():
 		_capture_ticks = pre.to_int()
@@ -1235,12 +1237,13 @@ func _build_overlays() -> void:
 	crisis.visible = false
 	_n["crisis"] = crisis
 	add_child(crisis)
+	var crisis_center := CenterContainer.new()
+	crisis_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	crisis.add_child(crisis_center)
 	var cp := PanelContainer.new()
 	cp.add_theme_stylebox_override("panel", _sb(Color("fdeae4"), Color("e79b86"), 16, 0))
-	cp.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	cp.position = Vector2(120, 70)
 	cp.custom_minimum_size = Vector2(1040, 0)
-	crisis.add_child(cp)
+	crisis_center.add_child(cp)
 	var cv := VBoxContainer.new()
 	cp.add_child(cv)
 	var chp := MarginContainer.new()
@@ -1296,12 +1299,13 @@ func _build_overlays() -> void:
 	modal.visible = false
 	_n["modal"] = modal
 	add_child(modal)
+	var modal_center := CenterContainer.new()
+	modal_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	modal.add_child(modal_center)
 	var mp := PanelContainer.new()
 	mp.add_theme_stylebox_override("panel", _sb(Color("f6f8fb"), Color("cdd7e2"), 14, 18))
-	mp.set_anchors_preset(Control.PRESET_CENTER)
-	mp.position = Vector2(420, 300)
 	mp.custom_minimum_size = Vector2(440, 0)
-	modal.add_child(mp)
+	modal_center.add_child(mp)
 	var mv := VBoxContainer.new()
 	mv.add_theme_constant_override("separation", 10)
 	mp.add_child(mv)
