@@ -15,6 +15,10 @@ This directory keeps long-form project documentation out of the repository root.
 - [`shocks_v27.md`](shocks_v27.md) — semantic exogenous ShockTape/ShockEngine,
   economic coupling channels, disclosure rules, checkpoint/replay, and historical
   scenario composition.
+- [`start_menu_design_v31.md`](start_menu_design_v31.md) — Claude Design-ready
+  desktop start-menu and new-game specification covering country profiles, the
+  complete Config/initial-Policy surfaces, World coupling, controllers, shocks,
+  validation, and client settings.
 - [`../archive/`](../archive/README.md) — archived scripts and other pre-refactor reference material.
 - [`../artifacts/`](../artifacts/README.md) — generated/reference images and small experiment artifacts.
 
