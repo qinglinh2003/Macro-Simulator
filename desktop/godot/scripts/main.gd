@@ -358,6 +358,139 @@ const PANEL_GROUPS := [
 		["deaths", "死亡 / tick", "num"], ["firm_count_c", "消费品企业数", "num"]]},
 ]
 
+# 每个指标页签使用独立的信息架构。图表只引用 desktop runtime 已验证存在的
+# PANEL_METRIC_NAMES；无法从现有记录可靠推出的年龄、性别、行业和 E/U/N 流转不展示。
+const PANEL_DESCRIPTIONS := {
+	"实体经济": "需求、供给与资本形成的同步状态",
+	"劳动力": "就业松弛、岗位缺口与工资脉冲",
+	"价格与货币": "价格压力、货币立场与购买力",
+	"财政": "收支流量、债务存量与财政空间",
+	"银行与信贷": "信用扩张、银行缓冲与偿付压力",
+	"资本市场": "市场规模、估值活跃度与所有权分布",
+	"能源": "供需平衡、价格成本与安全库存",
+	"分配与福利": "贫困、储蓄、福利与不平等结构",
+	"人口与企业": "人口基础、自然变动与企业生态",
+}
+
+const PANEL_CHARTS := {
+	"实体经济": [
+		{"type": "line", "title": "DEMAND · 产出与消费", "note": "实际量",
+			"items": [["real_output", "实际产出", "num", TEAL],
+				["real_consumption", "实际消费", "num", BLUE]]},
+		{"type": "line", "title": "CAPITAL · 资本形成", "note": "指数化 t0=100", "indexed": true,
+			"items": [["aggregate_capital", "资本存量", "num", BLUE],
+				["investment_spending", "投资支出", "num", AMBER]]},
+		{"type": "columns", "title": "UTILIZATION · 当期实现", "note": "供给侧状态",
+			"items": [["inventory_to_sales", "库存/销售", "idx", AMBER],
+				["production_realization_rate", "生产实现率", "pct", TEAL]]},
+	],
+	"劳动力": [
+		{"type": "line", "title": "SLACK · 劳动力松弛", "note": "占劳动力比例",
+			"items": [["unemployment_rate", "失业率", "pct", AMBER],
+				["u_natural", "自然失业率", "pct", BLUE],
+				["underemployed_share", "不充分就业", "pct", RED]]},
+		{"type": "line", "title": "PULSE · 工资与岗位", "note": "指数化 t0=100", "indexed": true,
+			"items": [["avg_wage", "平均工资", "num", TEAL],
+				["wage_inflation", "工资通胀", "pt", PURPLE],
+				["vacancies_unfilled", "未填补岗位", "num", BLUE]]},
+		{"type": "bars", "title": "STATUS · 当前劳动力状态", "note": "现有记录不含行业与 E/U/N 流转",
+			"items": [["unemployment_rate", "失业率", "pct", AMBER],
+				["u_natural", "自然失业率", "pct", BLUE],
+				["underemployed_share", "不充分就业", "pct", RED]]},
+	],
+	"价格与货币": [
+		{"type": "line", "title": "RATES · 价格与利率脉冲", "note": "每 tick 变化率",
+			"items": [["inflation", "通胀", "pt", PURPLE],
+				["policy_rate", "政策利率", "pt", TEAL],
+				["wage_inflation", "工资通胀", "pt", AMBER]]},
+		{"type": "line", "title": "PURCHASING POWER · 购买力", "note": "指数化 t0=100", "indexed": true,
+			"items": [["price_index", "物价指数", "idx", BLUE],
+				["real_wage", "实际工资", "idx", TEAL],
+				["avg_markup", "平均加成", "idx", PURPLE]]},
+		{"type": "columns", "title": "STANCE · 当前利率组合", "note": "名义变化率",
+			"items": [["inflation", "通胀", "pt", PURPLE],
+				["policy_rate", "政策利率", "pt", TEAL],
+				["wage_inflation", "工资通胀", "pt", AMBER]]},
+	],
+	"财政": [
+		{"type": "line", "title": "FLOWS · 财政收支", "note": "当期流量",
+			"items": [["tax_total", "税收", "num", TEAL],
+				["gov_spending", "政府支出", "num", BLUE],
+				["benefit_paid", "转移支付", "num", PURPLE],
+				["gov_deficit", "财政赤字", "num", AMBER]]},
+		{"type": "line", "title": "DEBT · 债务轨迹", "note": "指数化 t0=100", "indexed": true,
+			"items": [["gov_debt", "政府债务", "num", BLUE],
+				["gov_debt_to_gdp", "债务/GDP", "pct", AMBER]]},
+		{"type": "columns", "title": "BUDGET · 本期预算截面", "note": "收支规模",
+			"items": [["tax_total", "税收", "num", TEAL],
+				["gov_spending", "支出", "num", BLUE],
+				["benefit_paid", "转移", "num", PURPLE],
+				["gov_deficit", "赤字", "num", AMBER]]},
+	],
+	"银行与信贷": [
+		{"type": "line", "title": "BALANCE SHEET · 银行体系", "note": "指数化 t0=100", "indexed": true,
+			"items": [["total_credit", "信贷", "num", TEAL],
+				["bank_deposit_total", "存款", "num", BLUE],
+				["bank_capital", "银行资本", "num", GREEN]]},
+		{"type": "line", "title": "STRESS · 偿付与资金价格", "note": "压力指标",
+			"items": [["total_debt_service_ratio", "偿债比率", "pct", AMBER],
+				["interbank_rate", "同业利率", "pt", PURPLE]]},
+		{"type": "columns", "title": "CAPACITY · 当前资产负债规模", "note": "货币量",
+			"items": [["total_credit", "信贷", "num", TEAL],
+				["bank_deposit_total", "存款", "num", BLUE],
+				["bank_capital", "资本", "num", GREEN],
+				["writeoffs", "核销", "num", RED]]},
+	],
+	"资本市场": [
+		{"type": "line", "title": "MARKET · 市场规模", "note": "股票市值",
+			"items": [["equity_market_cap", "股票市值", "num", Color("4a6fa5")]]},
+		{"type": "line", "title": "VALUATION · 估值与交易", "note": "指数",
+			"items": [["tobin_q_mean", "托宾 Q", "idx", TEAL],
+				["equity_turnover", "换手率", "idx", AMBER]]},
+		{"type": "bars", "title": "OWNERSHIP · 所有权分布", "note": "份额 / Gini",
+			"items": [["equity_wealth_share", "股权财富占比", "pct", TEAL],
+				["equity_ownership_gini", "持股基尼", "idx", PURPLE],
+				["hh_wealth_gini_incl_equity", "财富基尼", "idx", BLUE]]},
+	],
+	"能源": [
+		{"type": "line", "title": "BALANCE · 能源供需", "note": "实物量",
+			"items": [["energy_produced", "产量", "num", GREEN],
+				["energy_used", "消耗", "num", AMBER]]},
+		{"type": "line", "title": "COST · 价格与成本", "note": "指数化 t0=100", "indexed": true,
+			"items": [["energy_price", "能源价格", "idx", Color("b0641f")],
+				["energy_cost_share", "能源成本占比", "pct", RED]]},
+		{"type": "columns", "title": "SECURITY · 供给与库存", "note": "能源实物量",
+			"items": [["energy_produced", "产量", "num", GREEN],
+				["energy_used", "消耗", "num", AMBER],
+				["energy_stock_total", "商业库存", "num", BLUE],
+				["spr_stock", "战略储备", "num", PURPLE]]},
+	],
+	"分配与福利": [
+		{"type": "line", "title": "HOUSEHOLDS · 家庭状态", "note": "人口份额",
+			"items": [["poverty_rate", "贫困率", "pct", RED],
+				["savings_rate", "储蓄率", "pct", TEAL]]},
+		{"type": "line", "title": "WELFARE · 福利与工资分位", "note": "指数化 t0=100", "indexed": true,
+			"items": [["welfare_log", "对数福利", "idx", GREEN],
+				["wage_p90_p10_ratio", "工资 P90/P10", "idx", AMBER]]},
+		{"type": "bars", "title": "INEQUALITY · 不平等截面", "note": "Gini 系数",
+			"items": [["income_gini", "收入基尼", "idx", PURPLE],
+				["hh_wealth_gini", "财富基尼", "idx", BLUE],
+				["equity_ownership_gini", "持股基尼", "idx", TEAL]]},
+	],
+	"人口与企业": [
+		{"type": "line", "title": "BASE · 人口与企业基础", "note": "指数化 t0=100", "indexed": true,
+			"items": [["population_alive", "总人口", "num", GREEN],
+				["firm_count_c", "消费品企业", "num", BLUE]]},
+		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每 tick 人数",
+			"items": [["births", "出生", "num", TEAL],
+				["deaths", "死亡", "num", RED]]},
+		{"type": "line", "title": "STRUCTURE · 结构趋势", "note": "指数化 t0=100", "indexed": true,
+			"items": [["working_age_share", "劳龄占比", "pct", TEAL],
+				["avg_household_size", "户均规模", "idx", AMBER],
+				["firm_count_c", "企业数", "num", BLUE]]},
+	],
+}
+
 const WORLD_COMPARE := [
 	["real_output", "实际产出", "num"], ["unemployment_rate", "失业率", "pct"],
 	["inflation", "通胀", "pt"], ["price_index", "物价指数", "idx"],
@@ -390,7 +523,7 @@ var _god := false
 var _mode := "interactive"
 var _tab := "focus"
 var _rank_by := "real_output"
-var _goto_panel_group := ""            # 磁贴点击 -> 全景滚动目标
+var _goto_panel_group := ""            # 指标全景当前独立页签；核心卡片点击可直达
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
 var _capture_path := ""
@@ -449,6 +582,9 @@ func _ready() -> void:
 	var pre_tab := OS.get_environment("MACRO_SIM_CAPTURE_TAB")
 	if not pre_tab.is_empty():
 		_tab = pre_tab
+	var pre_panel := OS.get_environment("MACRO_SIM_CAPTURE_PANEL")
+	if not pre_panel.is_empty():
+		_goto_panel_group = pre_panel
 	var pre_seat := OS.get_environment("MACRO_SIM_CAPTURE_SEAT")
 	if not pre_seat.is_empty():
 		_active_seat = pre_seat
@@ -1601,8 +1737,11 @@ func _render() -> void:
 		else:
 			tb.add_theme_stylebox_override("normal", _sb(Color(1, 1, 1, 0), Color(0, 0, 0, 0), 18, 7))
 			tb.add_theme_color_override("font_color", Color("586a7b"))
-	_set_text("tabnote", "X 轴 = 发布时间(非参考期)" if _tab == "focus"
-		else "上帝视角 · 逐 tick 真值(公报另见磁贴)")
+	_set_text("tabnote", {
+		"focus": "基于已发布公报的跨指标判断",
+		"panels": "上帝视角 · 逐 tick 真值",
+		"world": "多国耦合 · 贸易 / 资本 / 移民",
+	}.get(_tab, ""))
 	(_n["filter"] as Button).text = {
 		"important": "重点事件", "all": "全部记录", "mine": "我的操作",
 	}.get(_event_filter, "重点事件")
@@ -3078,6 +3217,39 @@ func _open_core_dimension(target_tab: String, group: String) -> void:
 
 
 func _render_panels_tab(body: VBoxContainer) -> void:
+	var valid_groups: Array = []
+	for grp: Dictionary in PANEL_GROUPS:
+		valid_groups.append(str(grp["name"]))
+	if _goto_panel_group.is_empty() or _goto_panel_group not in valid_groups:
+		_goto_panel_group = str(PANEL_GROUPS[0]["name"])
+	var nav_shell := PanelContainer.new()
+	nav_shell.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 11, 6))
+	body.add_child(nav_shell)
+	var nav := HFlowContainer.new()
+	nav.add_theme_constant_override("h_separation", 5)
+	nav.add_theme_constant_override("v_separation", 5)
+	nav_shell.add_child(nav)
+	var active_group: Dictionary = PANEL_GROUPS[0]
+	for grp: Dictionary in PANEL_GROUPS:
+		var group_name := str(grp["name"])
+		var group_color: Color = grp["color"]
+		var active := group_name == _goto_panel_group
+		if active:
+			active_group = grp
+		var tab := Button.new()
+		tab.text = group_name
+		tab.add_theme_font_size_override("font_size", 10)
+		tab.add_theme_stylebox_override("normal", _sb(
+			Color(group_color.r, group_color.g, group_color.b, 0.10) if active else Color.WHITE,
+			Color(group_color.r, group_color.g, group_color.b, 0.72) if active else LINE2,
+			9, 6, 3 if active else 0))
+		tab.add_theme_color_override("font_color",
+			group_color.darkened(0.18) if active else INK2)
+		tab.pressed.connect(func() -> void:
+			_goto_panel_group = group_name
+			_scroll_mem["center:panels"] = 0
+			_render())
+		nav.add_child(tab)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -3089,91 +3261,178 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
 	scroll.add_child(col)
+	var group_color: Color = active_group["color"]
+	var group_name := str(active_group["name"])
+	var header := PanelContainer.new()
+	var header_style := _sb(PANEL,
+		Color(group_color.r, group_color.g, group_color.b, 0.42), 12, 10, 5)
+	header_style.border_width_left = 4
+	header.add_theme_stylebox_override("panel", header_style)
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 8)
+	header.add_child(header_row)
+	header_row.add_child(_dot(group_color, 8))
+	var heading := VBoxContainer.new()
+	heading.add_theme_constant_override("separation", 1)
+	heading.add_child(_lbl(group_name, 15, INK))
+	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_name, "")), 10, INK2))
+	header_row.add_child(heading)
+	header_row.add_child(_spacer_h())
+	header_row.add_child(_chip("GOD VIEW · 逐 tick", group_color.darkened(0.18),
+		Color(group_color.r, group_color.g, group_color.b, 0.08),
+		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
+	col.add_child(header)
 	var series: Array = _snapshot.get("series", [])
 	var latest: Dictionary = _snapshot.get("metrics", {})
-	var nav := HFlowContainer.new()
-	nav.add_theme_constant_override("h_separation", 5)
-	nav.add_theme_constant_override("v_separation", 4)
-	col.add_child(nav)
-	var goto_target: Control = null
-	for grp: Dictionary in PANEL_GROUPS:
-		var gp := PanelContainer.new()
-		if str(grp["name"]) == _goto_panel_group:
-			goto_target = gp
-		var gcolor: Color = grp["color"]
-		var gsb := _sb(PANEL, Color(gcolor.r, gcolor.g, gcolor.b, 0.45), 13, 12, 8)
-		gsb.border_width_left = 4
-		gp.add_theme_stylebox_override("panel", gsb)
-		var gv := VBoxContainer.new()
-		gv.add_theme_constant_override("separation", 8)
-		gp.add_child(gv)
-		var gh := HBoxContainer.new()
-		gh.add_theme_constant_override("separation", 8)
-		gh.add_child(_dot(grp["color"], 8))
-		gh.add_child(_lbl(str(grp["name"]), 13, INK))
-		gh.add_child(_spacer_h())
-		gh.add_child(_lbl("真值 · 逐tick", 9, INK3, true))
-		gv.add_child(gh)
-		var grid := GridContainer.new()
-		grid.columns = 3
-		grid.add_theme_constant_override("h_separation", 9)
-		grid.add_theme_constant_override("v_separation", 9)
-		gv.add_child(grid)
-		for item: Array in grp["items"]:
-			var key := str(item[0])
-			var kind := str(item[2])
-			var card := PanelContainer.new()
+	_render_panel_kpis(col, active_group, latest, series)
+	var charts: Array = PANEL_CHARTS.get(group_name, [])
+	if charts.size() >= 2:
+		var chart_row := HBoxContainer.new()
+		chart_row.add_theme_constant_override("separation", 10)
+		for chart_index in 2:
+			var chart_panel := _panel_chart(charts[chart_index], latest, series, group_color)
+			chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			chart_row.add_child(chart_panel)
+		col.add_child(chart_row)
+	if charts.size() >= 3:
+		col.add_child(_panel_chart(charts[2], latest, series, group_color))
+
+
+func _render_panel_kpis(parent: VBoxContainer, group: Dictionary,
+		latest: Dictionary, series: Array) -> void:
+	var items: Array = group.get("items", [])
+	var color: Color = group.get("color", TEAL)
+	for row_index in 2:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		for column_index in 3:
+			var item_index := row_index * 3 + column_index
+			if item_index >= items.size():
+				break
+			var card := _panel_kpi_card(items[item_index], latest, series, color)
 			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			var prest := _sb(PANEL3, Color("e6ebf1"), 9, 8)
-			var phover := _sb(Color.WHITE, grp["color"], 9, 8, 8)
-			card.add_theme_stylebox_override("panel", prest)
-			card.mouse_entered.connect(func() -> void:
-				card.add_theme_stylebox_override("panel", phover))
-			card.mouse_exited.connect(func() -> void:
-				card.add_theme_stylebox_override("panel", prest))
-			var cv := VBoxContainer.new()
-			cv.add_theme_constant_override("separation", 3)
-			card.add_child(cv)
-			cv.add_child(_lbl(str(item[1]), 10, Color("516375")))
-			cv.add_child(_lbl(_fmt_val(kind, float(latest.get(key, 0.0))),
-				15, grp["color"], true))
-			var sl := _SparkLine.new()
-			sl.color = grp["color"]
-			sl.custom_minimum_size = Vector2(120, 24)
-			var vals: Array = []
-			var vlo := INF
-			var vhi := -INF
-			for point: Dictionary in series:
-				var pv := float(point.get(key, 0.0))
-				vals.append(pv)
-				vlo = minf(vlo, pv)
-				vhi = maxf(vhi, pv)
-			sl.values = vals
-			cv.add_child(sl)
-			if not vals.is_empty():
-				card.tooltip_text = "%s · %s\n当前：%s\n近 %d tick 区间：%s — %s" % [
-					str(item[1]), key,
-					_fmt_val(kind, float(latest.get(key, 0.0))),
-					vals.size(), _fmt_val(kind, vlo), _fmt_val(kind, vhi)]
-			grid.add_child(card)
-		col.add_child(gp)
-	for grp: Dictionary in PANEL_GROUPS:
-		var gname := str(grp["name"])
-		var gcolor2: Color = grp["color"]
-		var nb := Button.new()
-		nb.text = gname
-		nb.add_theme_font_size_override("font_size", 11)
-		nb.add_theme_stylebox_override("normal", _sb(Color.WHITE,
-			Color(gcolor2.r, gcolor2.g, gcolor2.b, 0.5), 14, 5))
-		nb.add_theme_color_override("font_color", gcolor2.darkened(0.2))
-		nb.pressed.connect(func() -> void:
-			_goto_panel_group = gname
-			_render())
-		nav.add_child(nb)
-	if goto_target != null:
-		_goto_panel_group = ""
-		var target := goto_target
-		scroll.call_deferred("ensure_control_visible", target)
+			row.add_child(card)
+		parent.add_child(row)
+
+
+func _panel_kpi_card(item: Array, latest: Dictionary,
+		series: Array, color: Color) -> Control:
+	var key := str(item[0])
+	var label := str(item[1])
+	var kind := str(item[2])
+	var card := PanelContainer.new()
+	card.custom_minimum_size.y = 82
+	var rest := _sb(Color("f8fafc"), Color("e0e7ef"), 10, 9)
+	var hover := _sb(Color.WHITE, Color(color.r, color.g, color.b, 0.65), 10, 9, 7)
+	card.add_theme_stylebox_override("panel", rest)
+	card.mouse_entered.connect(func() -> void:
+		card.add_theme_stylebox_override("panel", hover))
+	card.mouse_exited.connect(func() -> void:
+		card.add_theme_stylebox_override("panel", rest))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	card.add_child(col)
+	var title := HBoxContainer.new()
+	title.add_theme_constant_override("separation", 5)
+	title.add_child(_dot(color, 6))
+	title.add_child(_lbl(label, 10, INK2))
+	title.add_child(_spacer_h())
+	title.add_child(_lbl(key, 8, INK3, true))
+	col.add_child(title)
+	var value_row := HBoxContainer.new()
+	var has_data := not series.is_empty()
+	var current := float(latest.get(key, 0.0))
+	value_row.add_child(_lbl(_fmt_val(kind, current) if has_data else "—",
+		19, color if has_data else Color("a2adb8"), true))
+	value_row.add_child(_spacer_h())
+	if series.size() >= 2:
+		var previous := float((series[-2] as Dictionary).get(key, current))
+		value_row.add_child(_lbl(_panel_delta(kind, previous, current), 9, INK3, true))
+	col.add_child(value_row)
+	var spark := _SparkLine.new()
+	spark.color = color
+	spark.custom_minimum_size = Vector2(0, 20)
+	var values := _panel_values(series, key)
+	spark.values = values
+	col.add_child(spark)
+	if not values.is_empty():
+		var low := INF
+		var high := -INF
+		for raw in values:
+			low = minf(low, float(raw))
+			high = maxf(high, float(raw))
+		card.tooltip_text = "%s · %s\n当前：%s\n窗口区间：%s — %s" % [
+			label, key, _fmt_val(kind, current),
+			_fmt_val(kind, low), _fmt_val(kind, high)]
+	return card
+
+
+func _panel_delta(kind: String, previous: float, current: float) -> String:
+	var delta := current - previous
+	if absf(delta) <= 1e-12:
+		return "— 持平"
+	var arrow := "▲" if delta > 0.0 else "▼"
+	if kind in ["pct", "pt"]:
+		return "%s %.2fpp" % [arrow, absf(delta) * 100.0]
+	if absf(previous) > 1e-9:
+		return "%s %.1f%%" % [arrow, absf(delta / previous) * 100.0]
+	return "%s %s" % [arrow, _fmt_val(kind, absf(delta))]
+
+
+func _panel_values(series: Array, key: String) -> Array:
+	var values: Array = []
+	for point: Dictionary in series:
+		values.append(float(point.get(key, 0.0)))
+	return values
+
+
+func _panel_chart(spec: Dictionary, latest: Dictionary,
+		series: Array, fallback_color: Color) -> Control:
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size.y = 190
+	panel.add_theme_stylebox_override("panel", _sb(
+		Color("fbfcfd"), Color("dde5ed"), 11, 10, 4))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 5)
+	panel.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 7)
+	head.add_child(_lbl(str(spec.get("title", "CHART")), 9, INK3, true))
+	head.add_child(_spacer_h())
+	head.add_child(_lbl(str(spec.get("note", "")), 8, INK3))
+	col.add_child(head)
+	var data: Array = []
+	for item: Array in spec.get("items", []):
+		var key := str(item[0])
+		var kind := str(item[2])
+		var color: Color = item[3] if item.size() > 3 else fallback_color
+		data.append({
+			"key": key, "label": str(item[1]), "kind": kind, "color": color,
+			"values": _panel_values(series, key),
+			"value": float(latest.get(key, 0.0)),
+			"text": _fmt_val(kind, float(latest.get(key, 0.0))),
+		})
+	var chart_type := str(spec.get("type", "line"))
+	if chart_type == "bars":
+		var bars := _PanelBarChart.new()
+		bars.data = data
+		bars.font = _sans
+		bars.custom_minimum_size = Vector2(0, 145)
+		col.add_child(bars)
+	elif chart_type == "columns":
+		var columns := _PanelColumnChart.new()
+		columns.data = data
+		columns.font = _sans
+		columns.custom_minimum_size = Vector2(0, 145)
+		col.add_child(columns)
+	else:
+		var line := _PanelLineChart.new()
+		line.data = data
+		line.indexed = bool(spec.get("indexed", false))
+		line.font = _sans
+		line.custom_minimum_size = Vector2(0, 145)
+		col.add_child(line)
+	return panel
 
 
 func _render_world_tab(body: VBoxContainer) -> void:
@@ -3797,6 +4056,153 @@ class _MultiLine extends Control:
 					2.0 + (size.x - 4.0) * float(i) / float(n - 1),
 					size.y - 2.0 - (size.y - 4.0) * (float(vals[i]) - lo) / span))
 			draw_polyline(pts, s.get("color", Color.GRAY), 1.5, true)
+
+
+class _PanelLineChart extends Control:
+	var data: Array = []   # [{values, label, text, color}]
+	var indexed := false
+	var font: Font
+
+	func _display_values(item: Dictionary) -> Array:
+		var raw: Array = item.get("values", [])
+		if not indexed:
+			return raw
+		var base := 0.0
+		for value in raw:
+			if absf(float(value)) > 1e-9:
+				base = float(value)
+				break
+		if absf(base) <= 1e-9:
+			return raw
+		var out: Array = []
+		for value in raw:
+			out.append(100.0 + (float(value) - base) / absf(base) * 100.0)
+		return out
+
+	func _draw() -> void:
+		var legend_x := 4.0
+		for item: Dictionary in data:
+			var color: Color = item.get("color", Color.GRAY)
+			draw_circle(Vector2(legend_x + 3.0, 10.0), 3.0, color)
+			var legend := "%s %s" % [str(item.get("label", "")), str(item.get("text", ""))]
+			draw_string(font, Vector2(legend_x + 10.0, 14.0), legend,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color("5e6f81"))
+			legend_x += font.get_string_size(legend,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x + 24.0
+		var plot := Rect2(Vector2(4, 25), size - Vector2(8, 34))
+		for grid_index in 4:
+			var gy := plot.position.y + plot.size.y * float(grid_index) / 3.0
+			draw_line(Vector2(plot.position.x, gy), Vector2(plot.end.x, gy),
+				Color("e7ecf2"), 1.0)
+		var prepared: Array = []
+		var low := INF
+		var high := -INF
+		for item: Dictionary in data:
+			var values := _display_values(item)
+			prepared.append(values)
+			for value in values:
+				low = minf(low, float(value))
+				high = maxf(high, float(value))
+		if low == INF:
+			draw_string(font, Vector2(plot.position.x, plot.get_center().y),
+				"推进模拟以积累逐 tick 历史",
+				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 10, Color("849098"))
+			return
+		if is_equal_approx(low, high):
+			var padding := maxf(absf(low) * 0.08, 0.01)
+			low -= padding
+			high += padding
+		var span := maxf(high - low, 0.000001)
+		if low < 0.0 and high > 0.0:
+			var zero_y := plot.end.y - (0.0 - low) / span * plot.size.y
+			draw_line(Vector2(plot.position.x, zero_y), Vector2(plot.end.x, zero_y),
+				Color("c9d3de"), 1.0)
+		for data_index in data.size():
+			var values: Array = prepared[data_index]
+			if values.is_empty():
+				continue
+			var points := PackedVector2Array()
+			for value_index in values.size():
+				var px := plot.position.x if values.size() == 1 else (
+					plot.position.x + plot.size.x * float(value_index) / float(values.size() - 1))
+				var py := plot.end.y - (float(values[value_index]) - low) / span * plot.size.y
+				points.append(Vector2(px, py))
+			var color: Color = (data[data_index] as Dictionary).get("color", Color.GRAY)
+			if points.size() >= 2:
+				draw_polyline(points, color, 1.8, true)
+			draw_circle(points[-1], 3.0, color)
+		draw_string(font, Vector2(plot.position.x, size.y - 1),
+			"最近 %d tick" % int((data[0] as Dictionary).get("values", []).size()) if not data.is_empty() else "",
+			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
+
+
+class _PanelBarChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			return
+		var max_value := 0.000001
+		for item: Dictionary in data:
+			max_value = maxf(max_value, absf(float(item.get("value", 0.0))))
+		var row_height := size.y / float(data.size())
+		for item_index in data.size():
+			var item: Dictionary = data[item_index]
+			var y := row_height * float(item_index)
+			var value := float(item.get("value", 0.0))
+			var color: Color = RED if value < 0.0 else item.get("color", Color.GRAY)
+			draw_string(font, Vector2(2, y + 13), str(item.get("label", "")),
+				HORIZONTAL_ALIGNMENT_LEFT, 84, 9, Color("5e6f81"))
+			var bar_x := 88.0
+			var bar_width := maxf(10.0, size.x - bar_x - 64.0)
+			var bar_y := y + 6.0
+			draw_rect(Rect2(bar_x, bar_y, bar_width, 8), Color("edf1f6"))
+			draw_rect(Rect2(bar_x, bar_y,
+				bar_width * absf(value) / max_value, 8), color)
+			draw_string(font, Vector2(bar_x + bar_width + 6.0, y + 14),
+				str(item.get("text", "")), HORIZONTAL_ALIGNMENT_RIGHT, 56, 9,
+				Color("2a3948"))
+
+
+class _PanelColumnChart extends Control:
+	var data: Array = []
+	var font: Font
+
+	func _draw() -> void:
+		if data.is_empty():
+			return
+		var low := 0.0
+		var high := 0.0
+		for item: Dictionary in data:
+			var value := float(item.get("value", 0.0))
+			low = minf(low, value)
+			high = maxf(high, value)
+		if is_equal_approx(low, high):
+			high = low + 1.0
+		var plot := Rect2(Vector2(4, 18), size - Vector2(8, 44))
+		var span := maxf(high - low, 0.000001)
+		var zero_y := plot.end.y - (0.0 - low) / span * plot.size.y
+		draw_line(Vector2(plot.position.x, zero_y), Vector2(plot.end.x, zero_y),
+			Color("cbd6e1"), 1.0)
+		var slot_width := plot.size.x / float(data.size())
+		for item_index in data.size():
+			var item: Dictionary = data[item_index]
+			var value := float(item.get("value", 0.0))
+			var value_y := plot.end.y - (value - low) / span * plot.size.y
+			var top := minf(value_y, zero_y)
+			var height := maxf(2.0, absf(value_y - zero_y))
+			var color: Color = RED if value < 0.0 else item.get("color", Color.GRAY)
+			var bar_width := minf(42.0, slot_width * 0.58)
+			var bar_x := plot.position.x + slot_width * (float(item_index) + 0.5) - bar_width / 2.0
+			draw_rect(Rect2(bar_x, top, bar_width, height),
+				Color(color.r, color.g, color.b, 0.82))
+			var text_y := maxf(10.0, top - 4.0)
+			draw_string(font, Vector2(plot.position.x + slot_width * float(item_index), text_y),
+				str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8, color)
+			draw_string(font, Vector2(plot.position.x + slot_width * float(item_index), size.y - 7),
+				str(item.get("label", "")), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8,
+				Color("5e6f81"))
 
 
 class _MacroPhaseMap extends Control:
