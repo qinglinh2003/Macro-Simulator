@@ -864,6 +864,8 @@ func _build_header(shell: VBoxContainer) -> void:
 		mb.tooltip_text = "交互:每逢会议暂停等你决策\n实时:播放中自动通过非紧急会议" 
 		var mid: String = m[0]
 		mb.pressed.connect(func() -> void:
+			if mid == "realtime" and _mode != "realtime":
+				_show_hint("实时模式:播放中将自动通过非紧急会议(待生效政策不受影响);紧急会议仍会暂停。")
 			_mode = mid
 			_render())
 		_n["mode_" + mid] = mb
@@ -1520,6 +1522,24 @@ func _render_workbench() -> void:
 			cm.add_child(_lever_row(lever, str(rowdef["seat"]), permitted,
 				pending_by, searching))
 		lv.add_child(cm)
+	if not open and int(_snapshot.get("tick", 0)) < 30 and not searching:
+		var guide := MarginContainer.new()
+		guide.add_theme_constant_override("margin_left", 12)
+		guide.add_theme_constant_override("margin_right", 12)
+		guide.add_theme_constant_override("margin_top", 6)
+		var gp := PanelContainer.new()
+		gp.add_theme_stylebox_override("panel", _sb(BLUE_BG, BLUE_BD, 10, 10))
+		var gv := VBoxContainer.new()
+		gv.add_theme_constant_override("separation", 5)
+		gp.add_child(gv)
+		gv.add_child(_lbl("上手指引", 11, Color("1c4a8f")))
+		for tip in ["▶ 播放(空格)推进模拟,遇到会议自动暂停",
+				"会议开启时:点旋钮行展开 → 调整 → 加入提案 → 提交",
+				"嫌打断多?切「实时」模式自动通过非紧急会议",
+				"点顶部磁贴直达指标全景;世界视图看三国关系"]:
+			gv.add_child(_lbl("· " + str(tip), 10, Color("3f5d8a")))
+		guide.add_child(gp)
+		lv.add_child(guide)
 	_render_cart(open)
 	_restore_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
 
