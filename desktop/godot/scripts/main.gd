@@ -498,6 +498,7 @@ const WORLD_COMPARE := [
 ]
 
 const RANK_METRICS := [
+	["score", "综合", "score", false],
 	["real_output", "GDP", "num", false], ["unemployment_rate", "失业率", "pct", true],
 	["inflation", "通胀", "pt", true], ["avg_wage", "工资", "num", false],
 ]
@@ -522,7 +523,8 @@ var _speed := 5
 var _god := false
 var _mode := "interactive"
 var _tab := "focus"
-var _rank_by := "real_output"
+var _rank_by := "score"
+var _score_country := 0               # 世界视图国家表现雷达当前选中经济体
 var _goto_panel_group := ""            # 指标全景当前独立页签；核心卡片点击可直达
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
@@ -585,6 +587,9 @@ func _ready() -> void:
 	var pre_panel := OS.get_environment("MACRO_SIM_CAPTURE_PANEL")
 	if not pre_panel.is_empty():
 		_goto_panel_group = pre_panel
+	var pre_country := OS.get_environment("MACRO_SIM_CAPTURE_COUNTRY")
+	if pre_country.is_valid_int():
+		_score_country = maxi(0, pre_country.to_int())
 	var pre_seat := OS.get_environment("MACRO_SIM_CAPTURE_SEAT")
 	if not pre_seat.is_empty():
 		_active_seat = pre_seat
@@ -3435,6 +3440,272 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 	return panel
 
 
+func _score_target(value: float, target: float, tolerance: float) -> float:
+	return clampf(100.0 * exp(-absf(value - target) / maxf(tolerance, 0.000001)),
+		0.0, 100.0)
+
+
+func _score_low(value: float, failure_level: float) -> float:
+	return 100.0 * (1.0 - clampf(maxf(value, 0.0) / maxf(failure_level, 0.000001),
+		0.0, 1.0))
+
+
+func _score_growth(current: float, baseline: float, scale: float) -> float:
+	if absf(baseline) <= 1e-9:
+		return 50.0
+	var growth := (current - baseline) / absf(baseline)
+	return clampf(100.0 / (1.0 + exp(-2.0 * growth / maxf(scale, 0.000001))),
+		0.0, 100.0)
+
+
+func _world_economy_at(history: Array, history_index: int,
+		country_index: int) -> Dictionary:
+	if history.is_empty():
+		return {}
+	var point: Dictionary = history[clampi(history_index, 0, history.size() - 1)]
+	var economies: Array = point.get("economies", [])
+	return economies[country_index] if country_index >= 0 and country_index < economies.size() else {}
+
+
+func _world_value_at(point: Dictionary, key: String, country_index: int) -> float:
+	var values: Variant = point.get(key, [])
+	if values is Array and country_index >= 0 and country_index < (values as Array).size():
+		return float((values as Array)[country_index])
+	if values is Dictionary:
+		return float((values as Dictionary).get(str(country_index),
+			(values as Dictionary).get(country_index, 0.0)))
+	return 0.0
+
+
+func _country_scorecard(world: Dictionary, country_index: int,
+		history_index := -1) -> Dictionary:
+	## 固定“均衡发展”合同：结果变量、目标偏离与自身趋势；政策工具不计分。
+	var history: Array = world.get("history", [])
+	if history.is_empty():
+		return {"overall": 0.0, "grade": "数据不足", "dimensions": []}
+	var index := history.size() - 1 if history_index < 0 else clampi(
+		history_index, 0, history.size() - 1)
+	var point: Dictionary = history[index]
+	var economy := _world_economy_at(history, index, country_index)
+	if economy.is_empty():
+		return {"overall": 0.0, "grade": "数据不足", "dimensions": []}
+	var baseline_index := maxi(0, index - 30)
+	var baseline := _world_economy_at(history, baseline_index, country_index)
+	var output := float(economy.get("real_output", 0.0))
+	var output_base := float(baseline.get("real_output", output))
+	var wage := float(economy.get("real_wage", economy.get("avg_wage", 0.0)))
+	var wage_base := float(baseline.get("real_wage", baseline.get("avg_wage", wage)))
+	var output_growth := (output - output_base) / absf(output_base) \
+		if absf(output_base) > 1e-9 else 0.0
+	var wage_growth := (wage - wage_base) / absf(wage_base) \
+		if absf(wage_base) > 1e-9 else 0.0
+	var realization := float(economy.get("production_realization_rate", 0.0))
+	var prosperity := 0.45 * _score_growth(output, output_base, 0.12) \
+		+ 0.30 * _score_growth(wage, wage_base, 0.08) \
+		+ 0.25 * _score_target(realization, 1.0, 0.35)
+	var unemployment := float(economy.get("unemployment_rate", 0.0))
+	var underemployment := float(economy.get("underemployed_share", 0.0))
+	var employment := 0.65 * _score_low(unemployment, 0.20) \
+		+ 0.35 * _score_low(underemployment, 0.25)
+	var inflation_target := float(economy.get("inflation_target", 0.02))
+	var price_sum := 0.0
+	var price_count := 0
+	for price_index in range(maxi(0, index - 29), index + 1):
+		var price_economy := _world_economy_at(history, price_index, country_index)
+		if price_economy.is_empty():
+			continue
+		price_sum += _score_target(float(price_economy.get("inflation", 0.0)),
+			inflation_target, maxf(absf(inflation_target), 0.01))
+		price_count += 1
+	var price_stability := price_sum / float(maxi(price_count, 1))
+	var debt_ratio := maxf(0.0, float(economy.get("gov_debt_to_gdp", 0.0)))
+	var deficit_ratio := float(economy.get("gov_deficit_to_gdp", 0.0))
+	var fiscal := 0.55 * _score_low(debt_ratio, 2.0) \
+		+ 0.45 * _score_target(deficit_ratio, 0.0, 0.08)
+	var credit := absf(float(economy.get("total_credit", 0.0)))
+	var capital := float(economy.get("bank_capital", 0.0))
+	var capital_score := 70.0 if credit <= 1e-9 else clampf(
+		maxf(capital, 0.0) / credit / 0.12 * 100.0, 0.0, 100.0)
+	var debt_service := float(economy.get("total_debt_service_ratio", 0.0))
+	var writeoff_ratio := absf(float(economy.get("writeoffs", 0.0))) / maxf(credit, 1.0)
+	var financial := 0.45 * capital_score \
+		+ 0.35 * _score_low(debt_service, 0.50) \
+		+ 0.20 * _score_low(writeoff_ratio, 0.05)
+	var poverty := float(economy.get("poverty_rate", 0.0))
+	var income_gini := clampf(float(economy.get("income_gini", 0.0)), 0.0, 1.0)
+	var wealth_gini := clampf(float(economy.get("hh_wealth_gini", 0.0)), 0.0, 1.0)
+	var welfare := 0.40 * _score_low(poverty, 0.40) \
+		+ 0.25 * (100.0 * (1.0 - income_gini)) \
+		+ 0.20 * (100.0 * (1.0 - wealth_gini)) \
+		+ 0.15 * _score_growth(float(economy.get("welfare_log", 0.0)),
+			float(baseline.get("welfare_log", economy.get("welfare_log", 0.0))), 0.08)
+	var current_account := _world_value_at(point, "current_account", country_index)
+	var nfa := _world_value_at(point, "nfa", country_index)
+	var ca_ratio := current_account / maxf(absf(output), 1.0)
+	var nfa_ratio := nfa / maxf(absf(output), 1.0)
+	var external := 0.65 * _score_target(ca_ratio, 0.0, 0.12) \
+		+ 0.35 * clampf(100.0 / (1.0 + exp(-2.0 * nfa_ratio / 0.25)), 0.0, 100.0)
+	var energy_used := float(economy.get("energy_used", 0.0))
+	var energy_produced := float(economy.get("energy_produced", 0.0))
+	var energy_stock := float(economy.get("energy_stock_total", 0.0)) \
+		+ float(economy.get("spr_stock", 0.0))
+	var supply_score := 70.0 if energy_used <= 1e-9 else clampf(
+		energy_produced / energy_used * 100.0, 0.0, 100.0)
+	var stock_score := 70.0 if energy_used <= 1e-9 else clampf(
+		energy_stock / energy_used / 30.0 * 100.0, 0.0, 100.0)
+	var resilience := 0.50 * external + 0.25 * supply_score + 0.25 * stock_score
+	var dimensions: Array = [
+		{"label": "繁荣增长", "score": prosperity,
+			"detail": "30t 产出 %+.1f%% · 实际工资 %+.1f%%" % [output_growth * 100.0, wage_growth * 100.0]},
+		{"label": "充分就业", "score": employment,
+			"detail": "失业 %.1f%% · 不充分就业 %.1f%%" % [unemployment * 100.0, underemployment * 100.0]},
+		{"label": "价格稳定", "score": price_stability,
+			"detail": "通胀 %.2f%%/t · 目标 %.2f%%/t" % [float(economy.get("inflation", 0.0)) * 100.0, inflation_target * 100.0]},
+		{"label": "财政韧性", "score": fiscal,
+			"detail": "债务/GDP %.1f%% · 赤字/GDP %.1f%%" % [float(economy.get("gov_debt_to_gdp", 0.0)) * 100.0, deficit_ratio * 100.0]},
+		{"label": "金融稳定", "score": financial,
+			"detail": "资本/信贷 %.1f%% · 偿债 %.1f%%" % [maxf(capital, 0.0) / maxf(credit, 1.0) * 100.0, debt_service * 100.0]},
+		{"label": "民生分配", "score": welfare,
+			"detail": "贫困 %.1f%% · 收入 Gini %.3f" % [poverty * 100.0, income_gini]},
+		{"label": "外部能源", "score": resilience,
+			"detail": "经常账户/产出 %+.1f%% · 能源覆盖 %.1f×" % [ca_ratio * 100.0, energy_produced / maxf(energy_used, 0.000001)]},
+	]
+	var weights := [0.18, 0.14, 0.14, 0.14, 0.14, 0.14, 0.12]
+	var overall := 0.0
+	for dimension_index in dimensions.size():
+		(dimensions[dimension_index] as Dictionary)["score"] = clampf(
+			float((dimensions[dimension_index] as Dictionary)["score"]), 0.0, 100.0)
+		overall += float((dimensions[dimension_index] as Dictionary)["score"]) \
+			* float(weights[dimension_index])
+	var grade := "危机"
+	if overall >= 80.0:
+		grade = "卓越"
+	elif overall >= 65.0:
+		grade = "稳健"
+	elif overall >= 50.0:
+		grade = "承压"
+	elif overall >= 35.0:
+		grade = "脆弱"
+	return {"overall": overall, "grade": grade, "dimensions": dimensions}
+
+
+func _score_bar(dimension: Dictionary, color: Color) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 7)
+	var label := _lbl(str(dimension.get("label", "")), 9, INK2)
+	label.custom_minimum_size.x = 62
+	row.add_child(label)
+	var bar := Control.new()
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.custom_minimum_size = Vector2(0, 12)
+	var fraction := clampf(float(dimension.get("score", 0.0)) / 100.0, 0.0, 1.0)
+	bar.draw.connect(func() -> void:
+		bar.draw_rect(Rect2(Vector2(0, 3), Vector2(bar.size.x, 6)), Color("e8edf3"))
+		bar.draw_rect(Rect2(Vector2(0, 3), Vector2(bar.size.x * fraction, 6)), color)
+		bar.draw_circle(Vector2(bar.size.x * fraction, 6), 3.5, color))
+	row.add_child(bar)
+	var score := _lbl("%d" % roundi(float(dimension.get("score", 0.0))), 10, color, true)
+	score.custom_minimum_size.x = 24
+	score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(score)
+	row.tooltip_text = "%s\n%s" % [str(dimension.get("label", "")),
+		str(dimension.get("detail", ""))]
+	return row
+
+
+func _country_scorecard_panel(world: Dictionary) -> Control:
+	var history: Array = world.get("history", [])
+	var latest: Dictionary = world.get("latest", {})
+	var economies: Array = latest.get("economies", [])
+	_score_country = clampi(_score_country, 0, maxi(0, economies.size() - 1))
+	var scorecard := _country_scorecard(world, _score_country)
+	var dimensions: Array = scorecard.get("dimensions", [])
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 11, 7))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	panel.add_child(col)
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	header.add_child(_lbl("NATIONAL SCORECARD · 国家表现", 10, INK3, true))
+	header.add_child(_lbl(_country_name(_score_country), 13, INK))
+	header.add_child(_spacer_h())
+	header.add_child(_chip("均衡发展 · 固定权重", INK2, PANEL3, LINE2, 9))
+	col.add_child(header)
+	var content := HBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	col.add_child(content)
+	var radar_shell := PanelContainer.new()
+	radar_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	radar_shell.add_theme_stylebox_override("panel", _sb(Color("f8fafc"), LINE, 10, 7))
+	var radar := _CountryRadar.new()
+	radar.custom_minimum_size = Vector2(300, 245)
+	radar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	radar.font = _sans
+	radar.color = ECON_COLORS[_score_country % 3]
+	for dimension: Dictionary in dimensions:
+		radar.labels.append(str(dimension.get("label", "")))
+		radar.scores.append(float(dimension.get("score", 0.0)))
+	if not economies.is_empty() and not dimensions.is_empty():
+		for dimension_index in dimensions.size():
+			var total := 0.0
+			var count := 0
+			for country_index in economies.size():
+				var peer := _country_scorecard(world, country_index)
+				var peer_dimensions: Array = peer.get("dimensions", [])
+				if dimension_index < peer_dimensions.size():
+					total += float((peer_dimensions[dimension_index] as Dictionary).get("score", 0.0))
+					count += 1
+			radar.comparison.append(total / float(maxi(count, 1)))
+	radar_shell.add_child(radar)
+	content.add_child(radar_shell)
+	var side := VBoxContainer.new()
+	side.custom_minimum_size.x = 245
+	side.add_theme_constant_override("separation", 6)
+	content.add_child(side)
+	var total_row := HBoxContainer.new()
+	total_row.add_child(_lbl("综合表现", 10, INK3, true))
+	total_row.add_child(_spacer_h())
+	var overall := float(scorecard.get("overall", 0.0))
+	var score_color: Color = GREEN if overall >= 65.0 else (AMBER if overall >= 45.0 else RED)
+	total_row.add_child(_lbl("%d" % roundi(overall), 27, score_color, true))
+	total_row.add_child(_lbl("/100", 10, INK3, true))
+	side.add_child(total_row)
+	var prior_index := maxi(0, history.size() - 31)
+	var prior := _country_scorecard(world, _score_country, prior_index)
+	var change := overall - float(prior.get("overall", overall))
+	var grade_row := HBoxContainer.new()
+	grade_row.add_child(_chip(str(scorecard.get("grade", "数据不足")), score_color,
+		Color(score_color.r, score_color.g, score_color.b, 0.09),
+		Color(score_color.r, score_color.g, score_color.b, 0.35), 9))
+	grade_row.add_child(_spacer_h())
+	grade_row.add_child(_lbl("近30t %+.1f" % change, 9,
+		GREEN if change > 0.0 else (RED if change < 0.0 else INK3), true))
+	side.add_child(grade_row)
+	for dimension: Dictionary in dimensions:
+		side.add_child(_score_bar(dimension, ECON_COLORS[_score_country % 3]))
+	if not dimensions.is_empty():
+		var ordered := dimensions.duplicate(true)
+		ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a.get("score", 0.0)) > float(b.get("score", 0.0)))
+		var insight := PanelContainer.new()
+		insight.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 8, 6))
+		var insight_label := _lbl("强项 · %s    短板 · %s" % [
+			str((ordered[0] as Dictionary).get("label", "")),
+			str((ordered[-1] as Dictionary).get("label", ""))], 9, INK2)
+		insight.add_child(insight_label)
+		side.add_child(insight)
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 10)
+	footer.add_child(_lbl("实线 · 当前国家", 9, ECON_COLORS[_score_country % 3]))
+	footer.add_child(_lbl("虚线 · 三国均值", 9, INK3))
+	footer.add_child(_spacer_h())
+	footer.add_child(_lbl("结果变量评分 · 政策工具不计分 · 目标偏离双向扣分",
+		9, INK3))
+	col.add_child(footer)
+	return panel
+
+
 func _render_world_tab(body: VBoxContainer) -> void:
 	var world := _world()
 	var latest: Dictionary = world.get("latest", {})
@@ -3462,20 +3733,34 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	# --- 经济体卡片行 ---
 	var cards := HBoxContainer.new()
 	cards.add_theme_constant_override("separation", 9)
+	_score_country = clampi(_score_country, 0, maxi(0, econs.size() - 1))
 	for i in econs.size():
 		var e: Dictionary = econs[i]
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var mine := i == int(world.get("player_economy", 0))
-		var wrest := _sb(Color("eef7f5") if mine else PANEL,
-			TEAL_BD if mine else LINE, 12, 11, 6)
-		var whover := _sb(Color("eef7f5") if mine else PANEL,
+		var selected := i == _score_country
+		var wrest := _sb(
+			Color(ECON_COLORS[i % 3].r, ECON_COLORS[i % 3].g,
+				ECON_COLORS[i % 3].b, 0.10) if selected else (Color("eef7f5") if mine else PANEL),
+			ECON_COLORS[i % 3] if selected else (TEAL_BD if mine else LINE),
+			12, 11, 8 if selected else 6)
+		var whover := _sb(Color("eef7f5") if mine else Color.WHITE,
 			ECON_COLORS[i % 3], 12, 11, 13)
 		card.add_theme_stylebox_override("panel", wrest)
+		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		card.tooltip_text = "选择%s，查看七维国家表现评分" % _country_name(i)
 		card.mouse_entered.connect(func() -> void:
 			card.add_theme_stylebox_override("panel", whover))
 		card.mouse_exited.connect(func() -> void:
 			card.add_theme_stylebox_override("panel", wrest))
+		var country_id := i
+		card.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton \
+					and (event as InputEventMouseButton).pressed \
+					and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				_score_country = country_id
+				_render())
 		var cv := VBoxContainer.new()
 		cv.add_theme_constant_override("separation", 4)
 		card.add_child(cv)
@@ -3485,6 +3770,14 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		hr.add_child(_lbl(_country_name(i), 13, INK))
 		if mine:
 			hr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
+		hr.add_child(_spacer_h())
+		var country_score := _country_scorecard(world, i)
+		var overall := float(country_score.get("overall", 0.0))
+		hr.add_child(_chip("%d" % roundi(overall), ECON_COLORS[i % 3],
+			Color(ECON_COLORS[i % 3].r, ECON_COLORS[i % 3].g,
+				ECON_COLORS[i % 3].b, 0.07),
+			Color(ECON_COLORS[i % 3].r, ECON_COLORS[i % 3].g,
+				ECON_COLORS[i % 3].b, 0.30), 9))
 		cv.add_child(hr)
 		var rows: Array = [
 			["GDP", _fmt_val("num", float(e.get("real_output", 0.0)))],
@@ -3511,6 +3804,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		cv.add_child(gspark)
 		cards.add_child(card)
 	col.add_child(cards)
+	col.add_child(_country_scorecard_panel(world))
 	# --- 排名 ---
 	var rp := PanelContainer.new()
 	var rv := VBoxContainer.new()
@@ -3541,7 +3835,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 			rank_asc = bool(rm[3])
 	var order: Array = []
 	for i in econs.size():
-		order.append([i, float((econs[i] as Dictionary).get(_rank_by, 0.0))])
+		var rank_value := float(_country_scorecard(world, i).get("overall", 0.0)) \
+			if _rank_by == "score" else float((econs[i] as Dictionary).get(_rank_by, 0.0))
+		order.append([i, rank_value])
 	order.sort_custom(func(a: Array, b: Array) -> bool:
 		return (a[1] < b[1]) if rank_asc else (a[1] > b[1]))
 	var maxv := 0.000001
@@ -3570,7 +3866,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 			barwrap.draw_rect(Rect2(Vector2(0, 3), Vector2(w, 6)), color)
 			barwrap.draw_circle(Vector2(w, 6), 4.0, color))
 		rr.add_child(barwrap)
-		rr.add_child(_lbl(_fmt_val(rank_kind, float(row[1])), 12, ECON_COLORS[i % 3], true))
+		var rank_text := "%d" % roundi(float(row[1])) if rank_kind == "score" \
+			else _fmt_val(rank_kind, float(row[1]))
+		rr.add_child(_lbl(rank_text, 12, ECON_COLORS[i % 3], true))
 		rv.add_child(rr)
 	col.add_child(rp)
 	# --- 国际关系:贸易 / 金融 / 移民 ---
@@ -4267,6 +4565,73 @@ class _MacroPhaseMap extends Control:
 			draw_string(font, Vector2(plot.position.x, center.y + 4),
 				"等待第二期产出与通胀公报",
 				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 11, Color("71808f"))
+
+
+class _CountryRadar extends Control:
+	var labels: Array = []
+	var scores: Array = []
+	var comparison: Array = []
+	var color := Color("0f9d90")
+	var font: Font
+
+	func _points(values: Array, center: Vector2, radius: float) -> PackedVector2Array:
+		var points := PackedVector2Array()
+		for index in labels.size():
+			var angle := -PI / 2.0 + TAU * float(index) / float(maxi(labels.size(), 1))
+			var fraction := clampf(float(values[index]) / 100.0, 0.0, 1.0) \
+				if index < values.size() else 0.0
+			points.append(center + Vector2(cos(angle), sin(angle)) * radius * fraction)
+		return points
+
+	func _closed(points: PackedVector2Array) -> PackedVector2Array:
+		var closed := PackedVector2Array(points)
+		if not points.is_empty():
+			closed.append(points[0])
+		return closed
+
+	func _draw_dashed(a: Vector2, b: Vector2, dash_color: Color) -> void:
+		var length := a.distance_to(b)
+		var steps := maxi(1, int(length / 7.0))
+		for step in steps:
+			if step % 2 == 1:
+				continue
+			var start := a.lerp(b, float(step) / float(steps))
+			var finish := a.lerp(b, minf(1.0, float(step + 1) / float(steps)))
+			draw_line(start, finish, dash_color, 1.2, true)
+
+	func _draw() -> void:
+		if labels.size() < 3:
+			draw_string(font, Vector2(0, size.y / 2.0), "等待国家评分数据",
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
+			return
+		var center := Vector2(size.x / 2.0, size.y / 2.0 + 4.0)
+		var radius := minf(size.x * 0.30, size.y * 0.34)
+		for ring in [0.25, 0.50, 0.75, 1.0]:
+			var ring_values: Array = []
+			for _index in labels.size():
+				ring_values.append(100.0 * float(ring))
+			draw_polyline(_closed(_points(ring_values, center, radius)),
+				Color("dce4ec"), 1.0, true)
+		for index in labels.size():
+			var angle := -PI / 2.0 + TAU * float(index) / float(labels.size())
+			var outer := center + Vector2(cos(angle), sin(angle)) * radius
+			draw_line(center, outer, Color("e2e8ef"), 1.0)
+			var label_pos := center + Vector2(cos(angle), sin(angle)) * (radius + 20.0)
+			draw_string(font, Vector2(label_pos.x - 38.0, label_pos.y + 3.0),
+				str(labels[index]), HORIZONTAL_ALIGNMENT_CENTER, 76.0, 9, Color("5e6f81"))
+		if comparison.size() == labels.size():
+			var peer_points := _points(comparison, center, radius)
+			for index in peer_points.size():
+				_draw_dashed(peer_points[index], peer_points[(index + 1) % peer_points.size()],
+					Color("8795a4"))
+		var score_points := _points(scores, center, radius)
+		if score_points.size() >= 3:
+			draw_colored_polygon(score_points, Color(color.r, color.g, color.b, 0.15))
+			draw_polyline(_closed(score_points), color, 2.2, true)
+			for point in score_points:
+				draw_circle(point, 3.2, Color.WHITE)
+				draw_circle(point, 2.1, color)
+		draw_circle(center, 2.2, Color("aeb9c5"))
 
 
 class _RelationsMap extends Control:

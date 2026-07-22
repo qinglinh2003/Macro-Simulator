@@ -83,6 +83,13 @@ def test_world_block_carries_three_coupled_economies(runtime: SimulationRuntime)
     assert len(latest["economies"]) == 3
     for name in WORLD_METRIC_NAMES:
         assert name in latest["economies"][0]
+    assert {
+        "gov_debt_to_gdp",
+        "total_debt_service_ratio",
+        "poverty_rate",
+        "income_gini",
+        "energy_stock_total",
+    } <= set(latest["economies"][0])
     # cross-border record: fx vector + NFA + migration are live lists
     assert len(latest["e"]) == 3
     assert len(latest["nfa"]) == 3

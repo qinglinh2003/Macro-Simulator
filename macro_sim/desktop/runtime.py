@@ -37,14 +37,34 @@ COUNTRIES = (
     {"name": "佩特罗尼亚", "latin": "PETRONIA", "profile": PETROSTATE},
 )
 
-# Compact per-economy series kept for every economy (world comparison charts).
+# Per-economy series kept for every economy (world comparison + scorecard).
 WORLD_METRIC_NAMES = (
     "real_output",
+    "production_realization_rate",
     "unemployment_rate",
+    "underemployed_share",
     "inflation",
+    "inflation_target",
     "price_index",
     "avg_wage",
+    "real_wage",
     "policy_rate",
+    "population_alive",
+    "gov_debt_to_gdp",
+    "gov_deficit_to_gdp",
+    "total_credit",
+    "bank_capital",
+    "writeoffs",
+    "total_debt_service_ratio",
+    "poverty_rate",
+    "income_gini",
+    "hh_wealth_gini",
+    "welfare_log",
+    "energy_price",
+    "energy_produced",
+    "energy_used",
+    "energy_stock_total",
+    "spr_stock",
 )
 
 # Rich god-view series kept for the player economy only (指标全景 panels).
