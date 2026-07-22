@@ -12,12 +12,12 @@
 
 ### 1.1 公报层(玩家默认所见 —— 这是游戏性的核心)
 
-`InstitutionObservation`:**不是引擎真值**,是统计局按发布日历延迟发布的序列。共 29 个序列(权威表:`docs/controller_observations_v26.md`),每条含:窗口、频率、滞后、访问级、缺失原因。摘录骨架:
+`InstitutionObservation`:**不是引擎真值**,是统计局按发布日历延迟发布的序列。当前 schema v2 共 42 个序列(30 个基础观测 + 12 个冲击观测；权威表:`docs/controller_observations_v26.md`),每条含:窗口、频率、滞后、访问级、缺失原因。摘录骨架:
 
 | 组 | 序列(单位) | 频率/滞后(tick) | 访问级 |
 |---|---|---|---|
 | 宏观核心 | price_index, inflation(per-tick), unemployment_rate, employment, avg_wage | 7 / 2 | public |
-| 产出财政 | real_output(30 窗), gov_deficit_to_gdp, gov_debt_to_gdp, poverty_rate, income_gini | 30 / 7 | public |
+| 产出财政与人口 | real_output(30 窗), gov_deficit_to_gdp, gov_debt_to_gdp, population_alive, poverty_rate, income_gini | 30 / 7 | public |
 | 利率 | policy_rate | 1 / 0 | public |
 | 银行机密 | bank_reserves_total, reserve_floor_breach_share, near_failure_bank_count | 1 / 0 | operational/confidential(仅央行/监管席) |
 | 外部 | 贸易/资本/储备类 | — | external 席 |

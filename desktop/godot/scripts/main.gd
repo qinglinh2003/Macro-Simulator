@@ -54,6 +54,18 @@ const TILE_SPEC := [
 	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true, "kind": "pp"},
 ]
 
+# 八维核心指标:每个经济维度只选一个权威公报序列,不读取逐 tick 真值。
+const CORE_DIMENSION_SPEC := [
+	{"id": "real_output", "dimension": "增长", "metric": "实际产出", "group": "实体经济", "color": TEAL},
+	{"id": "unemployment_rate", "dimension": "就业", "metric": "失业率", "group": "劳动力", "color": AMBER},
+	{"id": "inflation", "dimension": "物价", "metric": "通胀", "group": "价格与货币", "color": PURPLE},
+	{"id": "gov_deficit_to_gdp", "dimension": "财政", "metric": "赤字/GDP", "group": "财政", "color": BLUE},
+	{"id": "credit_to_gdp", "dimension": "金融", "metric": "信贷/GDP", "group": "银行与信贷", "color": TEAL_DK},
+	{"id": "poverty_rate", "dimension": "民生", "metric": "贫困率", "group": "分配与福利", "color": GREEN},
+	{"id": "population_alive", "dimension": "人口", "metric": "总人口", "group": "人口与企业", "color": Color("b0641f")},
+	{"id": "current_account", "dimension": "外部", "metric": "经常账户", "tab": "world", "color": Color("4a6fa5")},
+]
+
 const SEAT_LIST := [
 	{"id": "treasury", "name": "财政部", "tag": "财政 · fiscal", "color": Color("2f6fd0")},
 	{"id": "central_bank", "name": "央行", "tag": "货币 · monetary", "color": Color("0f9d90")},
@@ -809,7 +821,8 @@ func _fmt_val(kind: String, v: float) -> String:
 
 func _fmt_series(sid: String, v: float) -> String:
 	match sid:
-		"unemployment_rate", "gov_deficit_to_gdp", "poverty_rate":
+		"unemployment_rate", "gov_deficit_to_gdp", "gov_debt_to_gdp", \
+				"credit_to_gdp", "poverty_rate":
 			return "%.1f%%" % (v * 100.0)
 		"inflation", "policy_rate":
 			return "%.2f%%/t" % (v * 100.0)
@@ -2403,61 +2416,122 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	var sv := VBoxContainer.new()
 	sv.add_theme_constant_override("separation", 9)
 	sp.add_child(sv)
-	var shead := HBoxContainer.new()
-	shead.add_theme_constant_override("separation", 8)
-	shead.add_child(_lbl("SERIES · 公报小图(近 24 期发布)", 10, INK3, true))
-	shead.add_child(_spacer_h())
-	shead.add_child(_lbl("点击卡片替换主图第三序列", 9, Color("9aa7b4")))
-	sv.add_child(shead)
-	var grid := HBoxContainer.new()
-	grid.add_theme_constant_override("separation", 10)
-	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sv.add_child(grid)
-	for spec: Dictionary in [TILE_SPEC[2], TILE_SPEC[4], TILE_SPEC[3], TILE_SPEC[7]]:
-		var sid := str(spec["id"])
-		var card := PanelContainer.new()
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		var chosen := sid == _focus_extra
-		var crest := _sb(Color("eef7f5") if chosen else PANEL3,
-			TEAL_BD if chosen else Color("e6ebf1"), 10, 10)
-		var chover := _sb(Color.WHITE, spec["color"], 10, 10, 8)
-		card.add_theme_stylebox_override("panel", crest)
-		card.mouse_entered.connect(func() -> void:
-			card.add_theme_stylebox_override("panel", chover))
-		card.mouse_exited.connect(func() -> void:
-			card.add_theme_stylebox_override("panel", crest))
-		card.tooltip_text = "点击加入上方主图(第三序列)"
-		card.gui_input.connect(func(event: InputEvent) -> void:
-			if event is InputEventMouseButton \
-					and (event as InputEventMouseButton).pressed \
-					and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-				_focus_extra = sid
-				_render())
-		var cv := VBoxContainer.new()
-		cv.add_theme_constant_override("separation", 5)
-		card.add_child(cv)
-		var hr := HBoxContainer.new()
-		hr.add_theme_constant_override("separation", 6)
-		hr.add_child(_dot(spec["color"], 6))
-		hr.add_child(_lbl(str(spec["label"]).split(" · ")[0], 11, Color("516375")))
-		cv.add_child(hr)
-		var hist: Array = _release_hist.get(sid, [])
-		if hist.is_empty():
-			cv.add_child(_lbl("暂无发布", 12, INK3))
-		else:
-			cv.add_child(_lbl(_fmt_series(sid, float(hist[-1]["v"])), 17, spec["color"], true))
-			var sl := _SparkLine.new()
-			sl.color = spec["color"]
-			sl.custom_minimum_size = Vector2(0, 30)
-			var vals: Array = []
-			for hh: Dictionary in hist:
-				vals.append(hh["v"])
-			sl.values = vals
-			cv.add_child(sl)
-			cv.add_child(_lbl("发布 t%d" % int(hist[-1]["at"]), 9, INK3, true))
-		grid.add_child(card)
+	_append_core_dimensions(sv)
 	body.add_child(sp)
+
+
+func _append_core_dimensions(parent: VBoxContainer) -> void:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(_lbl("CORE 8 · 八维核心指标", 10, INK3, true))
+	head.add_child(_spacer_h())
+	head.add_child(_lbl("增长 · 就业 · 物价 · 财政 · 金融 · 民生 · 人口 · 外部",
+		8, Color("8a97a5")))
+	parent.add_child(head)
+	var releases := _releases_by_id()
+	var now := int(_snapshot.get("tick", 0))
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", 7)
+	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(grid)
+	for row_index in 2:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		grid.add_child(row)
+		for column_index in 4:
+			var spec: Dictionary = CORE_DIMENSION_SPEC[row_index * 4 + column_index]
+			row.add_child(_core_dimension_card(spec, releases, now))
+
+
+func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> Control:
+	var sid := str(spec["id"])
+	var color: Color = spec["color"]
+	var target_tab := str(spec.get("tab", "panels"))
+	var target_group := str(spec.get("group", ""))
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(0, 121)
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var rest := _sb(Color("f7f9fc"), Color("e2e8ef"), 10, 9)
+	var hover := _sb(Color.WHITE, color, 10, 9, 7)
+	card.add_theme_stylebox_override("panel", rest)
+	card.mouse_entered.connect(func() -> void:
+		card.add_theme_stylebox_override("panel", hover))
+	card.mouse_exited.connect(func() -> void:
+		card.add_theme_stylebox_override("panel", rest))
+	card.tooltip_text = "打开%s" % ("世界视图" if target_tab == "world" \
+		else "「%s」指标全景" % target_group)
+	card.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton \
+				and (event as InputEventMouseButton).pressed \
+				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			_open_core_dimension(target_tab, target_group))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	card.add_child(col)
+	var title := HBoxContainer.new()
+	title.add_theme_constant_override("separation", 5)
+	title.add_child(_dot(color, 7))
+	title.add_child(_lbl("%s · %s" % [spec["dimension"], spec["metric"]],
+		10, INK2))
+	title.add_child(_spacer_h())
+	title.add_child(_lbl("↗", 10, INK3))
+	col.add_child(title)
+	var rel: Dictionary = releases.get(sid, {})
+	var hist: Array = _release_hist.get(sid, [])
+	if rel.is_empty() or rel.get("value") == null:
+		col.add_child(_lbl("尚未发布", 18, Color("a2adb8"), true))
+		col.add_child(_lbl("等待首期公报", 9, INK3))
+		return card
+	var value_row := HBoxContainer.new()
+	value_row.add_theme_constant_override("separation", 5)
+	value_row.add_child(_lbl(_fmt_series(sid, float(rel.get("value"))),
+		19, color, true))
+	value_row.add_child(_spacer_h())
+	if hist.size() >= 2:
+		value_row.add_child(_lbl(_release_movement(sid,
+			float(hist[-2]["v"]), float(hist[-1]["v"])), 9, INK2, true))
+	col.add_child(value_row)
+	var spark := _SparkLine.new()
+	spark.color = color
+	spark.custom_minimum_size = Vector2(0, 28)
+	var values: Array = []
+	for point: Dictionary in hist:
+		values.append(point["v"])
+	spark.values = values
+	col.add_child(spark)
+	var released_at := int(rel.get("released_at_tick", now))
+	var reference_at := int(rel.get("reference_end_tick", released_at))
+	var lag := maxi(0, now - reference_at)
+	var source_label := _lbl("发布 t%d · 滞后 %d日" % [released_at, lag],
+		9, INK3, true)
+	source_label.clip_text = true
+	col.add_child(source_label)
+	return card
+
+
+func _release_movement(sid: String, previous: float, current: float) -> String:
+	var delta := current - previous
+	if absf(delta) <= 1e-12:
+		return "持平"
+	var arrow := "▲" if delta > 0.0 else "▼"
+	if sid in ["unemployment_rate", "inflation", "gov_deficit_to_gdp",
+			"gov_debt_to_gdp", "credit_to_gdp", "poverty_rate"]:
+		return "%s%.2fpp" % [arrow, absf(delta) * 100.0]
+	if absf(previous) > 1e-9:
+		var percent := absf(delta / previous) * 100.0
+		return "%s%s" % [arrow,
+			"99%+" if percent > 99.0 else "%.1f%%" % percent]
+	return "%s%s" % [arrow, _fmt_series(sid, absf(delta))]
+
+
+func _open_core_dimension(target_tab: String, group: String) -> void:
+	_tab = target_tab
+	if target_tab == "panels":
+		_goto_panel_group = group
+	_render()
 
 
 func _render_panels_tab(body: VBoxContainer) -> void:

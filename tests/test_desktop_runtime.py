@@ -239,6 +239,12 @@ def test_merged_observation_includes_restricted_series(runtime: SimulationRuntim
     assert "bank_reserves_total" in series
     # world-source series exist because the world is coupled
     assert "exchange_rate" in series
+    # The population card must come from a delayed public release, not truth metrics.
+    assert "population_alive" in series
+    assert all(
+        context["observation_schema_version"] == 2
+        for context in snap["contexts"]
+    )
     for release in obs["releases"]:
         assert "series_id" in release and "missing_reason" in release
 

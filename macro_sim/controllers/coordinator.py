@@ -25,6 +25,7 @@ from .events import EventStream
 from .observation import OracleObservation
 from .protocol import (
     DecisionContext,
+    OBSERVATION_SCHEMA_VERSION,
     PendingDecision,
     PermittedAction,
     PolicyAction,
@@ -719,6 +720,11 @@ class PolicyCoordinator:
             admin_capacity=calendar.admin_capacity,
             visible_cost_estimates=visible_cost_estimates,
             emergency_bulletin=emergency_bulletin,
+            observation_schema_version=getattr(
+                observation,
+                "observation_schema_version",
+                OBSERVATION_SCHEMA_VERSION,
+            ),
         )
         self.contexts[context_id] = context
         return context

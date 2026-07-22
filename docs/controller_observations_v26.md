@@ -1,6 +1,7 @@
 # v26 Controller 默认观测表
 
-本表是当前 `DEFAULT_OBSERVATION_SPEC` 的可审阅快照，共 **29** 个序列。
+本表是当前 `DEFAULT_OBSERVATION_SPEC` 的基础观测快照，共 **30** 个序列；另有 v27
+加入的 12 个固定维度冲击观测，因此默认 schema v2 合计 **42** 个序列。
 `window` 是聚合窗口，`frequency` 是发布周期，`lag` 是参考期结束后的额外发布滞后，
 单位均为 tick。`normalization` 是前端/RL 的归一化尺度，不会改写引擎数值。
 
@@ -15,6 +16,7 @@
 | `unemployment_rate` | `economy.unemployment_rate` | `share` | `mean` | 7 | 7 | 2 | `public` | 全部 | 需完整窗口；否则显式缺失 | 0.1 |
 | `employment` | `economy.employment` | `fte` | `mean` | 7 | 7 | 2 | `public` | 全部 | 需完整窗口；否则显式缺失 | 100 |
 | `avg_wage` | `economy.avg_wage` | `currency_per_tick` | `mean` | 7 | 7 | 2 | `public` | 全部 | 需完整窗口；否则显式缺失 | 1 |
+| `population_alive` | `economy.population_alive` | `persons` | `last` | 30 | 30 | 7 | `public` | 全部 | 需完整窗口；否则显式缺失 | 1000 |
 | `poverty_rate` | `economy.poverty_rate` | `share` | `mean` | 30 | 30 | 7 | `public` | 全部 | 需完整窗口；否则显式缺失 | 0.1 |
 | `income_gini` | `economy.income_gini` | `index` | `last` | 30 | 30 | 7 | `public` | 全部 | 需完整窗口；否则显式缺失 | 0.5 |
 | `gov_deficit_to_gdp` | `economy.gov_deficit_to_gdp` | `share` | `mean` | 30 | 30 | 7 | `public` | 全部 | 需完整窗口；否则显式缺失 | 0.1 |
