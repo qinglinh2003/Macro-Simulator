@@ -1329,7 +1329,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	wb.add_child(scroll)
 	var lv := VBoxContainer.new()
 	lv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lv.add_theme_constant_override("separation", 8)
+	lv.add_theme_constant_override("separation", 11)
 	scroll.add_child(lv)
 	_n["levers"] = lv
 	var cf := PanelContainer.new()
@@ -2038,29 +2038,36 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var draft: Variant = _edits.get(name)
 	var cart_stale: bool = in_cart and edited and cart_entry.get("value") != draft
 	var row := PanelContainer.new()
+	row.custom_minimum_size = Vector2(0, 62)
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	row.tooltip_text = "点击展开「%s」的编辑器" % _cn(name)
+	var accent: Color = AMBER if cart_stale else (TEAL if (edited or in_cart) \
+		else (AMBER if pending else _seat_color(seat)))
 	var row_bg := AMBER_BG if cart_stale else (TEAL_BG if in_cart \
-		else (BLUE_BG if edited else (Color.WHITE if allowed else PANEL3)))
+		else (BLUE_BG if edited else (Color("fcfdfe") if allowed else Color("f6f8fa"))))
 	var row_bd := AMBER_BD if cart_stale else (TEAL_BD if in_cart \
-		else (BLUE_BD if edited else LINE))
-	var style_rest := _sb(row_bg, row_bd, 9, 7)
-	var style_hover := _sb(row_bg.lightened(0.025),
-		TEAL_BD, 9, 6, 6)
+		else (BLUE_BD if edited else Color("d7e0e9")))
+	var style_rest := _sb(row_bg, row_bd, 12, 10, 4)
+	var style_hover := _sb(row_bg.lightened(0.018),
+		accent.lightened(0.12), 12, 10, 7)
 	row.add_theme_stylebox_override("panel", style_rest)
 	row.mouse_entered.connect(func() -> void:
 		row.add_theme_stylebox_override("panel", style_hover))
 	row.mouse_exited.connect(func() -> void:
 		row.add_theme_stylebox_override("panel", style_rest))
 	var r := HBoxContainer.new()
-	r.add_theme_constant_override("separation", 9)
+	r.add_theme_constant_override("separation", 10)
 	row.add_child(r)
-	r.add_child(_dot(AMBER if cart_stale else (TEAL if (edited or in_cart) \
-		else (AMBER if pending else _seat_color(seat))), 7))
+	var rail := PanelContainer.new()
+	rail.custom_minimum_size = Vector2(3, 30)
+	rail.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	rail.add_theme_stylebox_override("panel", _sb(accent, accent, 2, 0))
+	r.add_child(rail)
 	var names := VBoxContainer.new()
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	names.add_theme_constant_override("separation", 1)
-	var title := _lbl(_cn(name), 12, INK)
+	names.alignment = BoxContainer.ALIGNMENT_CENTER
+	names.add_theme_constant_override("separation", 2)
+	var title := _lbl(_cn(name), 13, INK)
 	title.clip_text = true
 	names.add_child(title)
 	var sub := HBoxContainer.new()
@@ -2076,14 +2083,15 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var base_v: Variant = _lever_current(lever, perm)
 	var value_col := VBoxContainer.new()
 	value_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	value_col.custom_minimum_size = Vector2(118, 0)
+	value_col.add_theme_constant_override("separation", 2)
+	value_col.custom_minimum_size = Vector2(122, 0)
 	var value_text := _lever_value_text(lever, base_v)
 	if edited:
 		value_text += " → " + _lever_value_text(lever, draft)
 	elif pending:
 		value_text += " → " + _lever_value_text(lever,
 			(pending_by[name] as Dictionary).get("value"))
-	var value := _lbl(value_text, 11, AMBER if cart_stale else (
+	var value := _lbl(value_text, 12, AMBER if cart_stale else (
 		TEAL_DK if (edited or pending or in_cart) else INK2), true)
 	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	value.clip_text = true
@@ -2107,11 +2115,27 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		status_color = GREEN
 	else:
 		status_text = "查看制度"
-	var status := _lbl(status_text, 9, status_color)
-	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	value_col.add_child(status)
+	var status_bg := Color("f1f4f7")
+	var status_border := Color("dce3ea")
+	if cart_stale or pending:
+		status_bg = Color("fff7e8")
+		status_border = Color("efd39b")
+	elif edited or in_cart:
+		status_bg = Color("e9f7f4")
+		status_border = Color("b9e1d9")
+	elif allowed:
+		status_bg = Color("edf8f2")
+		status_border = Color("c9e7d5")
+	var status_row := HBoxContainer.new()
+	status_row.add_child(_spacer_h())
+	status_row.add_child(_chip(status_text, status_color,
+		status_bg, status_border, 9))
+	value_col.add_child(status_row)
 	r.add_child(value_col)
-	r.add_child(_lbl("▾", 11, INK3))
+	var caret := _lbl("⌄", 13, Color("8190a0"))
+	caret.custom_minimum_size.x = 12
+	caret.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	r.add_child(caret)
 	row.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton \
 				and (event as InputEventMouseButton).pressed \
@@ -2144,9 +2168,9 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	card.add_theme_stylebox_override("panel", _sb(
 		AMBER_BG if cart_stale else (Color("e6f5f0") if in_cart else Color.WHITE),
 		AMBER_BD if cart_stale else (Color("59b7a8") if in_cart else Color("e2e8ef")),
-		10, 10))
+		13, 12, 6))
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 7)
+	v.add_theme_constant_override("separation", 9)
 	card.add_child(v)
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 7)
