@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #e9edf2; }
+  a { color: #0f9d90; text-decoration: none; }
+  a:hover { color: #0c8579; }
+  select { -webkit-appearance: none; appearance: none; outline: none; }
+  button { font-family: inherit; }
+  input { font-family: inherit; outline: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c9d3de; border-radius: 6px; border: 2px solid #f6f8fb; }
+  ::-webkit-scrollbar-thumb:hover { background: #aab8c6; }
+  @keyframes om-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes om-spin { to { transform: rotate(360deg); } }
+  @keyframes om-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</helmet>
+
+<div style="height:100vh;min-height:800px;width:100%;min-width:1280px;background:radial-gradient(1200px 640px at 78% -14%, #ffffff 0%, #e9edf2 60%);font-family:'Open Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:#2a3948;font-size:14px;overflow:hidden;position:relative;">
+
+  <!-- ============================== HOME ============================== -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div style="position:absolute;inset:0;background-image:radial-gradient(#d0d9e3 1px, transparent 1px);background-size:26px 26px;opacity:0.5;"></div>
+    <div style="position:relative;height:100%;display:flex;padding:56px 64px;gap:56px;">
+      <!-- brand column -->
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;max-width:560px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0f9d90,#12b3a4);display:flex;align-items:center;justify-content:center;">
+              <div style="width:14px;height:14px;border:2.4px solid #fff;border-radius:3px;"></div>
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.24em;color:#68788b;">MACRO&nbsp;COMMAND</span>
+          </div>
+          <h1 style="font-size:62px;line-height:1.02;font-weight:700;color:#16232f;margin:40px 0 0;letter-spacing:-0.02em;">宏观<br>指挥室</h1>
+          <div style="width:56px;height:3px;background:#0f9d90;border-radius:2px;margin:26px 0 20px;"></div>
+          <p style="font-size:15.5px;line-height:1.7;color:#586a7b;max-width:420px;margin:0;">多经济体宏观政策模拟。你是坐在席位上的决策者——一切修改走提案,一切危机走冲击。引擎是唯一权威。</p>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#849098;line-height:1.9;">
+          <div>BUILD&nbsp;&nbsp;dev @ 9c7c84d · v29 UI · v31 新游戏规格</div>
+          <div>ENGINE&nbsp;World + ControlledSimulationSession + ControllerService</div>
+          <div style="color:#b0bcc8;">© Republic Simulation Works · 单机本地</div>
+        </div>
+      </div>
+
+      <!-- menu column -->
+      <div style="width:480px;flex:none;display:flex;flex-direction:column;justify-content:center;gap:14px;">
+        <!-- continue hero -->
+        <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:14px;padding:18px 20px;box-shadow:0 6px 24px rgba(22,45,80,0.06);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:#1f9d63;"></span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#68788b;">最近自动存档</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:14px;">
+            <div style="flex:1;">
+              <div style="font-size:17px;font-weight:600;color:#16232f;">奥雷利亚 · 自由沙盒</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#586a7b;margin-top:5px;line-height:1.7;">
+                模拟日期 第 3 年 · Q2 · 35 天 &nbsp;(t=856)<br>
+                3 国 · seed 7 · 交互模式 &nbsp;·&nbsp; 存档于 今天 14:22<br>
+                <span style="color:#849098;">schema v31 · </span><span style="color:#1f9d63;">兼容</span>
+              </div>
+            </div>
+          </div>
+          <button onClick="{{ onContinue }}" style="width:100%;margin-top:15px;background:#0f9d90;border:1px solid #0c8579;border-radius:10px;color:#fff;font-size:15px;font-weight:600;padding:12px;cursor:pointer;" style-hover="background:#0c8579;">继续游戏 →</button>
+        </div>
+
+        <!-- primary menu -->
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <sc-for list="{{ homeMenu }}" as="m" hint-placeholder-count="4">
+            <button onClick="{{ m.onPick }}" style="display:flex;align-items:center;gap:14px;background:{{ m.bg }};border:1px solid {{ m.border }};border-radius:11px;padding:15px 18px;cursor:{{ m.cursor }};text-align:left;" style-hover="{{ m.hover }}">
+              <span style="width:30px;height:30px;flex:none;border-radius:8px;background:{{ m.iconBg }};display:flex;align-items:center;justify-content:center;color:{{ m.iconFg }};font-size:15px;">{{ m.icon }}</span>
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:600;color:{{ m.titleColor }};">{{ m.title }}</div>
+                <div style="font-size:11.5px;color:#849098;margin-top:1px;">{{ m.sub }}</div>
+              </div>
+              <span style="color:#b0bcc8;font-size:16px;">{{ m.arrow }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================== WIZARD ============================== -->
+  <sc-if value="{{ isWizard }}" hint-placeholder-val="{{ false }}">
+    <div style="height:100%;display:flex;flex-direction:column;">
+      <!-- header -->
+      <div style="flex:none;height:56px;background:#ffffff;border-bottom:1px solid #dbe2ea;display:flex;align-items:center;gap:16px;padding:0 20px;">
+        <button onClick="{{ onHome }}" style="display:flex;align-items:center;gap:7px;background:transparent;border:none;cursor:pointer;color:#586a7b;font-size:13px;">← 首页</button>
+        <div style="width:1px;height:26px;background:#e6ebf1;"></div>
+        <span style="font-size:15px;font-weight:600;color:#16232f;">新建模拟</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#849098;">NEW SIMULATION</span>
+        <span style="flex:1;"></span>
+        <!-- mode toggle -->
+        <div style="display:flex;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;padding:2px;">
+          <sc-for list="{{ modeToggle }}" as="m" hint-placeholder-count="2">
+            <button onClick="{{ m.onPick }}" style="border:none;border-radius:7px;padding:6px 13px;font-size:12px;cursor:pointer;background:{{ m.bg }};color:{{ m.fg }};">{{ m.label }}</button>
+          </sc-for>
+        </div>
+        <button onClick="{{ openSettings }}" style="width:34px;height:34px;border-radius:9px;background:#f1f4f8;border:1px solid #d3dce6;cursor:pointer;color:#586a7b;font-size:15px;" style-hover="border-color:#0f9d90;color:#0f9d90;">⚙</button>
+      </div>
+
+      <!-- body -->
+      <div style="flex:1;display:flex;min-height:0;">
+        <!-- step nav -->
+        <div style="width:224px;flex:none;background:#f6f8fb;border-right:1px solid #e6ebf1;padding:18px 14px;display:flex;flex-direction:column;gap:5px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#849098;padding:0 8px 10px;">配置流程</div>
+          <sc-for list="{{ stepNav }}" as="s" hint-placeholder-count="6">
+            <button onClick="{{ s.onPick }}" style="display:flex;align-items:center;gap:11px;background:{{ s.bg }};border:1px solid {{ s.border }};border-radius:10px;padding:11px 12px;cursor:pointer;text-align:left;position:relative;">
+              <span style="width:26px;height:26px;flex:none;border-radius:8px;background:{{ s.numBg }};color:{{ s.numFg }};font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ s.numLabel }}</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:{{ s.weight }};color:{{ s.titleColor }};">{{ s.name }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#96a3b2;letter-spacing:0.06em;">{{ s.sub }}</div>
+              </div>
+              <sc-if value="{{ s.hasBadge }}" hint-placeholder-val="{{ false }}">
+                <span style="width:17px;height:17px;flex:none;border-radius:50%;background:{{ s.badgeBg }};color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ s.badgeText }}</span>
+              </sc-if>
+            </button>
+          </sc-for>
+          <span style="flex:1;"></span>
+          <div style="background:#eef2f7;border:1px solid #e6ebf1;border-radius:10px;padding:11px 12px;">
+            <div style="font-size:11px;color:#586a7b;line-height:1.5;">配置分五类真相:结构、初始政策、世界、席位、客户端设置——互不混淆。</div>
+          </div>
+        </div>
+
+        <!-- center edit area -->
+        <div style="flex:1;min-width:0;overflow-y:auto;padding:22px 26px;">
+
+          <!-- ---------- STEP 1: SCENARIO & MODE ---------- -->
+          <sc-if value="{{ atStep1 }}" hint-placeholder-val="{{ true }}">
+            <div style="max-width:720px;">
+              <h2 style="font-size:20px;font-weight:700;color:#16232f;margin:0 0 4px;">场景与基础模型</h2>
+              <p style="font-size:13.5px;color:#68788b;margin:0 0 20px;line-height:1.6;">选择外生冲击场景与校准模型。历史场景均为约化模型,选择后需确认其建议启用的能力。</p>
+
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin-bottom:9px;">SCENARIO · 场景</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ scenarios }}" as="sc" hint-placeholder-count="6">
+                  <button onClick="{{ sc.onPick }}" style="display:flex;align-items:center;gap:14px;background:{{ sc.bg }};border:1px solid {{ sc.border }};border-radius:11px;padding:13px 15px;cursor:pointer;text-align:left;">
+                    <span style="width:20px;height:20px;flex:none;border-radius:50%;border:2px solid {{ sc.radio }};display:flex;align-items:center;justify-content:center;"><span style="width:9px;height:9px;border-radius:50%;background:{{ sc.dot }};"></span></span>
+                    <div style="flex:1;">
+                      <div style="display:flex;align-items:center;gap:9px;">
+                        <span style="font-size:14.5px;font-weight:600;color:#16232f;">{{ sc.name }}</span>
+                        <sc-if value="{{ sc.isDefault }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#0c8579;border:1px solid #9ad9d0;border-radius:4px;padding:1px 6px;">默认</span></sc-if>
+                        <sc-if value="{{ sc.reduced }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#a0691f;border:1px solid #e3c489;background:#fbf3e2;border-radius:4px;padding:1px 6px;">约化 · 未校准</span></sc-if>
+                      </div>
+                      <div style="font-size:12px;color:#68788b;margin-top:3px;line-height:1.45;">{{ sc.desc }}</div>
+                    </div>
+                    <div style="flex:none;text-align:right;">
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#586a7b;">{{ sc.capStr }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;margin-top:2px;">{{ sc.durStr }}</div>
+                    </div>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- capability requirement panel -->
+              <sc-if value="{{ scenarioNeedsCaps }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;background:#fbf3e2;border:1px solid #e3c489;border-radius:11px;padding:13px 15px;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+                    <span style="color:#a0691f;font-size:14px;">⚠</span>
+                    <span style="font-size:13px;font-weight:600;color:#7a5111;">「{{ scenarioName }}」建议启用以下能力</span>
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px;">
+                    <sc-for list="{{ scenarioCaps }}" as="cap" hint-placeholder-count="2">
+                      <span style="display:flex;align-items:center;gap:6px;background:{{ cap.bg }};border:1px solid {{ cap.border }};border-radius:7px;padding:5px 10px;font-size:12px;color:{{ cap.fg }};">{{ cap.mark }} {{ cap.label }}</span>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:11.5px;color:#7a5111;line-height:1.5;margin-bottom:11px;">场景不会静默修改国家结构。确认后将为相关国家启用缺失能力。</div>
+                  <button onClick="{{ applyScenarioCaps }}" style="background:#c17d16;border:1px solid #a0691f;border-radius:8px;color:#fff;font-size:12.5px;font-weight:600;padding:8px 15px;cursor:pointer;">应用建议能力</button>
+                </div>
+              </sc-if>
+
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin:22px 0 9px;">BASE MODEL · 基础模型</div>
+              <div style="display:flex;gap:9px;">
+                <sc-for list="{{ baseModels }}" as="bm" hint-placeholder-count="2">
+                  <button onClick="{{ bm.onPick }}" style="flex:1;background:{{ bm.bg }};border:1px solid {{ bm.border }};border-radius:11px;padding:13px 15px;cursor:{{ bm.cursor }};text-align:left;opacity:{{ bm.opacity }};">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font-size:13.5px;font-weight:600;color:#16232f;">{{ bm.name }}</span>
+                      <sc-if value="{{ bm.researchOnly }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#7a4fd0;border:1px solid #cdbdf0;border-radius:4px;padding:1px 6px;">研究模式</span></sc-if>
+                    </div>
+                    <div style="font-size:11.5px;color:#68788b;margin-top:4px;line-height:1.45;">{{ bm.desc }}</div>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ---------- STEP 2: WORLD ---------- -->
+          <sc-if value="{{ atStep2 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:760px;">
+              <h2 style="font-size:20px;font-weight:700;color:#16232f;margin:0 0 4px;">世界设置</h2>
+              <p style="font-size:13.5px;color:#68788b;margin:0 0 20px;line-height:1.6;">世界统一的规模、日历与跨境机制。单国世界将禁用需要交易对手的能力。</p>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <!-- country count -->
+                <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:12.5px;color:#586a7b;margin-bottom:3px;">国家数量</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;margin-bottom:10px;">1 – 8 · 默认 3</div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <button onClick="{{ decCountry }}" style="width:38px;height:38px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;color:#3a4956;font-size:20px;cursor:pointer;">−</button>
+                    <div style="flex:1;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:#16232f;">{{ countryCount }}</div>
+                    <button onClick="{{ incCountry }}" style="width:38px;height:38px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;color:#3a4956;font-size:20px;cursor:pointer;">＋</button>
+                  </div>
+                </div>
+                <!-- seed -->
+                <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:12.5px;color:#586a7b;margin-bottom:3px;">随机种子</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;margin-bottom:10px;">0 – 2,147,483,647 · 可复现</div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <input value="{{ seedStr }}" onInput="{{ onSeedInput }}" style="flex:1;min-width:0;background:#f6f8fb;border:1px solid #d3dce6;border-radius:9px;padding:9px 11px;font-family:'IBM Plex Mono',monospace;font-size:15px;color:#16232f;"></input>
+                    <button onClick="{{ rollSeed }}" title="随机" style="width:38px;height:38px;flex:none;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;cursor:pointer;font-size:15px;" style-hover="border-color:#0f9d90;">🎲</button>
+                    <button onClick="{{ copySeed }}" title="复制" style="width:38px;height:38px;flex:none;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;cursor:pointer;color:#586a7b;font-size:13px;" style-hover="border-color:#0f9d90;">⧉</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- duration + perf -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:12.5px;color:#586a7b;margin-bottom:10px;">运行时长</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <sc-for list="{{ durationChips }}" as="d" hint-placeholder-count="5">
+                      <button onClick="{{ d.onPick }}" style="background:{{ d.bg }};border:1px solid {{ d.border }};border-radius:8px;color:{{ d.fg }};font-size:12.5px;padding:8px 13px;cursor:pointer;">{{ d.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#849098;margin-top:9px;">{{ durationNote }}</div>
+                </div>
+                <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:12.5px;color:#586a7b;margin-bottom:10px;">性能规模</div>
+                  <div style="display:flex;gap:6px;">
+                    <sc-for list="{{ perfChips }}" as="p" hint-placeholder-count="3">
+                      <button onClick="{{ p.onPick }}" style="flex:1;background:{{ p.bg }};border:1px solid {{ p.border }};border-radius:8px;color:{{ p.fg }};font-size:12.5px;padding:8px 6px;cursor:pointer;">{{ p.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#849098;margin-top:9px;">{{ perfNote }}</div>
+                </div>
+              </div>
+
+              <!-- cross-border toggles -->
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin:20px 0 9px;">CROSS-BORDER · 跨境机制</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+                <sc-for list="{{ worldToggles }}" as="w" hint-placeholder-count="4">
+                  <button onClick="{{ w.onToggle }}" style="display:flex;align-items:center;gap:11px;background:#ffffff;border:1px solid {{ w.border }};border-radius:10px;padding:11px 13px;cursor:{{ w.cursor }};text-align:left;opacity:{{ w.opacity }};">
+                    <span style="width:38px;height:22px;flex:none;border-radius:12px;background:{{ w.track }};position:relative;"><span style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s;transform:{{ w.knob }};box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span></span>
+                    <div style="flex:1;">
+                      <div style="font-size:13px;color:#16232f;">{{ w.label }}</div>
+                      <div style="font-size:10.5px;color:#849098;">{{ w.note }}</div>
+                    </div>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- advanced cross-border -->
+              <button onClick="{{ toggleCrossAdvanced }}" style="margin-top:14px;display:flex;align-items:center;gap:9px;background:transparent;border:none;cursor:pointer;padding:4px 0;">
+                <span style="color:#586a7b;font-size:12.5px;transition:.15s;transform:{{ crossCaret }};">▶</span>
+                <span style="font-size:12.5px;font-weight:600;color:#3a4956;">跨境高级参数</span>
+                <span style="font-size:10.5px;color:#849098;">{{ crossCoveredStr }}</span>
+                <sc-if value="{{ isResearch }}" hint-placeholder-val="{{ false }}"></sc-if>
+              </button>
+              <sc-if value="{{ crossOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#f6f8fb;border:1px solid #e6ebf1;border-radius:11px;padding:8px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                  <sc-for list="{{ crossFields }}" as="f" hint-placeholder-count="6">
+                    <div style="display:flex;align-items:center;gap:9px;background:#ffffff;border:1px solid #e6ebf1;border-radius:8px;padding:7px 10px;">
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:12px;color:#3a4956;">{{ f.label }}</div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#96a3b2;">{{ f.internal }} · {{ f.range }}</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:2px;flex:none;">
+                        <button onClick="{{ f.onDec }}" style="width:24px;height:26px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:6px 0 0 6px;color:#586a7b;cursor:pointer;font-size:13px;">−</button>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#16232f;min-width:52px;text-align:center;">{{ f.value }}</span>
+                        <button onClick="{{ f.onInc }}" style="width:24px;height:26px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:0 6px 6px 0;color:#586a7b;cursor:pointer;font-size:13px;">＋</button>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div style="grid-column:1/3;font-size:10.5px;color:#849098;padding:4px 4px 2px;line-height:1.5;">periods_per_year 与界面日历口径须冻结为同一合同(见规格 §12.1);当前显示为日历日制(365 tick/年)。</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- ---------- STEP 3: COUNTRIES ---------- -->
+          <sc-if value="{{ atStep3 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px;height:100%;">
+              <!-- country list -->
+              <div style="width:250px;flex:none;display:flex;flex-direction:column;gap:9px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#849098;">国家 · {{ countryCount }}</span>
+                  <span style="flex:1;"></span>
+                  <button onClick="{{ addCountry }}" style="background:#e6f5f0;border:1px solid #9ad9d0;border-radius:7px;color:#0c8579;font-size:11.5px;padding:5px 9px;cursor:pointer;">＋ 新增</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:7px;">
+                  <sc-for list="{{ countryList }}" as="c" hint-placeholder-count="3">
+                    <button onClick="{{ c.onSelect }}" style="background:{{ c.bg }};border:1px solid {{ c.border }};border-left:3px solid {{ c.color }};border-radius:9px;padding:10px 11px;cursor:pointer;text-align:left;">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="width:22px;height:22px;flex:none;border-radius:6px;background:{{ c.color }};color:#fff;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ c.code3 }}</span>
+                        <span style="font-size:13px;font-weight:600;color:#16232f;flex:1;">{{ c.name }}</span>
+                        <sc-if value="{{ c.isPlayer }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#0c8579;">◆ 玩家</span></sc-if>
+                        <sc-if value="{{ c.warn }}" hint-placeholder-val="{{ false }}"><span style="color:#c17d16;font-size:12px;">⚠</span></sc-if>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px;margin-top:7px;">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#68788b;">{{ c.profileLabel }}</span>
+                        <span style="flex:1;"></span>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#96a3b2;">{{ c.scaleStr }}</span>
+                      </div>
+                      <div style="display:flex;gap:3px;margin-top:7px;flex-wrap:wrap;">
+                        <sc-for list="{{ c.badges }}" as="b" hint-placeholder-count="4">
+                          <span style="font-size:9px;color:{{ b.fg }};background:{{ b.bg }};border-radius:4px;padding:1px 5px;">{{ b.label }}</span>
+                        </sc-for>
+                        <sc-if value="{{ c.hasOverride }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#2f6fd0;background:#e6effb;border-radius:4px;padding:1px 5px;">覆盖 {{ c.overrideCount }}</span></sc-if>
+                      </div>
+                    </button>
+                  </sc-for>
+                </div>
+                <div style="font-size:10px;color:#96a3b2;line-height:1.5;padding:2px;">按稳定 country ID 维护引用;删除会列出受影响的 peg / 制裁 / 场景目标。</div>
+              </div>
+
+              <!-- country editor -->
+              <div style="flex:1;min-width:0;overflow-y:auto;padding-right:2px;">
+                <!-- identity -->
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                  <span style="width:44px;height:44px;flex:none;border-radius:11px;background:{{ selColor }};color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ selCode }}</span>
+                  <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:9px;">
+                      <span style="font-size:19px;font-weight:700;color:#16232f;">{{ selName }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#849098;">{{ selCurrency }}</span>
+                    </div>
+                    <div style="font-size:12px;color:#68788b;margin-top:2px;">{{ selIntro }}</div>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button onClick="{{ applyToAll }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;color:#586a7b;font-size:11.5px;padding:7px 11px;cursor:pointer;" style-hover="border-color:#0f9d90;">应用到所有国家</button>
+                    <button onClick="{{ restoreProfile }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;color:#586a7b;font-size:11.5px;padding:7px 11px;cursor:pointer;" style-hover="border-color:#0f9d90;">恢复 Profile</button>
+                    <sc-if value="{{ canDelete }}" hint-placeholder-val="{{ false }}"><button onClick="{{ deleteCountry }}" style="background:#fdeee9;border:1px solid #f0bcae;border-radius:8px;color:#c23f2a;font-size:11.5px;padding:7px 11px;cursor:pointer;">删除</button></sc-if>
+                  </div>
+                </div>
+
+                <!-- profile selector -->
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin-bottom:9px;">COUNTRY PROFILE · 创世覆盖(非政策)</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;">
+                  <sc-for list="{{ profileCards }}" as="p" hint-placeholder-count="6">
+                    <button onClick="{{ p.onPick }}" style="background:{{ p.bg }};border:1px solid {{ p.border }};border-radius:10px;padding:11px 12px;cursor:pointer;text-align:left;">
+                      <div style="display:flex;align-items:center;gap:7px;">
+                        <span style="font-size:13px;font-weight:600;color:#16232f;">{{ p.name }}</span>
+                        <sc-if value="{{ p.exp }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#a0691f;border:1px solid #e3c489;border-radius:4px;padding:0 4px;">实验性</span></sc-if>
+                      </div>
+                      <div style="font-size:10.5px;color:#68788b;margin-top:4px;line-height:1.4;height:29px;">{{ p.desc }}</div>
+                      <div style="display:flex;gap:3px;margin-top:6px;">
+                        <sc-for list="{{ p.bars }}" as="bar" hint-placeholder-count="3">
+                          <div style="flex:1;" title="{{ bar.title }}">
+                            <div style="height:4px;background:#eef2f7;border-radius:2px;overflow:hidden;"><div style="height:100%;width:{{ bar.w }};background:{{ bar.color }};"></div></div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </button>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:14px;background:#f6f8fb;border:1px solid #e6ebf1;border-radius:9px;padding:9px 13px;margin-bottom:16px;">
+                  <div><span style="font-size:10.5px;color:#849098;">最终家庭数</span> <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#16232f;margin-left:5px;">{{ selHouseholds }}</span></div>
+                  <div><span style="font-size:10.5px;color:#849098;">初始人口</span> <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#16232f;margin-left:5px;">{{ selPopulation }}</span></div>
+                  <div><span style="font-size:10.5px;color:#849098;">企业数</span> <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#16232f;margin-left:5px;">{{ selFirms }}</span></div>
+                  <span style="flex:1;"></span>
+                  <span style="font-size:10px;color:#96a3b2;align-self:center;">规模乘数只作用于家庭数,不同比放大企业数</span>
+                </div>
+
+                <!-- structure search + filter -->
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;">结构能力</span>
+                  <span style="flex:1;"></span>
+                  <input value="{{ structSearchStr }}" onInput="{{ onStructSearch }}" placeholder="搜索字段 / 内部名…" style="width:160px;background:#f6f8fb;border:1px solid #d3dce6;border-radius:8px;padding:6px 10px;font-size:12px;color:#16232f;"></input>
+                  <button onClick="{{ toggleStructOverridden }}" style="background:{{ structFilterBg }};border:1px solid {{ structFilterBorder }};border-radius:8px;color:{{ structFilterFg }};font-size:11.5px;padding:6px 10px;cursor:pointer;">只看已覆盖</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <sc-for list="{{ structGroups }}" as="g" hint-placeholder-count="4">
+                    <div>
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+                        <span style="font-size:12px;font-weight:600;color:#3a4956;">{{ g.name }}</span>
+                        <span style="height:1px;flex:1;background:#e6ebf1;"></span>
+                      </div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+                        <sc-for list="{{ g.fields }}" as="f" hint-placeholder-count="4">
+                          <div style="display:flex;align-items:center;gap:10px;background:{{ f.bg }};border:1px solid {{ f.border }};border-radius:9px;padding:9px 11px;">
+                            <div style="flex:1;min-width:0;">
+                              <div style="font-size:12.5px;color:#16232f;">{{ f.label }}</div>
+                              <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#96a3b2;">{{ f.internal }}{{ f.unlockStr }}</div>
+                            </div>
+                            <!-- toggle -->
+                            <sc-if value="{{ f.isToggle }}" hint-placeholder-val="{{ true }}">
+                              <button onClick="{{ f.onToggle }}" style="width:36px;height:21px;flex:none;border:none;padding:0;border-radius:11px;background:{{ f.track }};position:relative;cursor:pointer;"><span style="position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.15s;transform:{{ f.knob }};box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span></button>
+                            </sc-if>
+                            <!-- stepper -->
+                            <sc-if value="{{ f.isStepper }}" hint-placeholder-val="{{ false }}">
+                              <div style="display:flex;align-items:center;gap:2px;flex:none;">
+                                <button onClick="{{ f.onDec }}" style="width:23px;height:25px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:6px 0 0 6px;color:#586a7b;cursor:pointer;">−</button>
+                                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#16232f;min-width:46px;text-align:center;">{{ f.value }}</span>
+                                <button onClick="{{ f.onInc }}" style="width:23px;height:25px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:0 6px 6px 0;color:#586a7b;cursor:pointer;">＋</button>
+                              </div>
+                            </sc-if>
+                            <!-- select -->
+                            <sc-if value="{{ f.isSelect }}" hint-placeholder-val="{{ false }}">
+                              <select onChange="{{ f.onChange }}" style="flex:none;background:#f6f8fb;border:1px solid #d3dce6;border-radius:7px;padding:6px 8px;font-size:11.5px;color:#16232f;cursor:pointer;">
+                                <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}" selected="{{ o.sel }}">{{ o.label }}</option></sc-for>
+                              </select>
+                            </sc-if>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ---------- STEP 4: GOVERNMENT & SEATS ---------- -->
+          <sc-if value="{{ atStep4 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:820px;">
+              <h2 style="font-size:20px;font-weight:700;color:#16232f;margin:0 0 4px;">政府与 Controller 席位</h2>
+              <p style="font-size:13.5px;color:#68788b;margin:0 0 20px;line-height:1.6;">选择玩家国家与你持有的席位。其他国家默认无 Controller——政策冻结在开局状态,而不是 AI。</p>
+
+              <!-- player country picker -->
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin-bottom:9px;">玩家国家</div>
+              <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+                <sc-for list="{{ playerCountryChips }}" as="c" hint-placeholder-count="3">
+                  <button onClick="{{ c.onPick }}" style="display:flex;align-items:center;gap:8px;background:{{ c.bg }};border:1px solid {{ c.border }};border-radius:9px;padding:9px 13px;cursor:pointer;">
+                    <span style="width:20px;height:20px;border-radius:5px;background:{{ c.color }};color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ c.code3 }}</span>
+                    <span style="font-size:13px;color:{{ c.fg }};font-weight:{{ c.weight }};">{{ c.name }}</span>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- seats of player country -->
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;">{{ playerName }} · 五个政策席位</span>
+                <span style="font-size:11px;color:#96a3b2;">占用者可逐席设置;人类席位到会时暂停等待</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ seatRows }}" as="s" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:12px;background:#ffffff;border:1px solid #d3dce6;border-radius:11px;padding:11px 14px;">
+                    <span style="width:9px;height:9px;flex:none;border-radius:3px;background:{{ s.accent }};"></span>
+                    <span style="font-size:14px;font-weight:600;color:#16232f;width:96px;flex:none;">{{ s.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;flex:1;">{{ s.groupsStr }}</span>
+                    <select onChange="{{ s.onChange }}" style="flex:none;width:190px;background:#f6f8fb;border:1px solid #d3dce6;border-radius:8px;padding:8px 11px;font-size:12.5px;color:#16232f;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,#7d95ae 50%),linear-gradient(135deg,#7d95ae 50%,transparent 50%);background-position:calc(100% - 17px) 17px,calc(100% - 12px) 17px;background-size:5px 5px;background-repeat:no-repeat;">
+                      <sc-for list="{{ s.occupantOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o.v }}" selected="{{ o.sel }}">{{ o.label }}</option></sc-for>
+                    </select>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-size:11px;color:#849098;margin-top:8px;line-height:1.5;">{{ seatOccupantNote }}</div>
+
+              <!-- other countries -->
+              <sc-if value="{{ hasOtherCountries }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin:22px 0 9px;">其他国家</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+                  <sc-for list="{{ otherCountries }}" as="c" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:11px;background:#f6f8fb;border:1px dashed #cdd7e2;border-radius:10px;padding:11px 13px;">
+                      <span style="width:24px;height:24px;flex:none;border-radius:6px;background:{{ c.color }};color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ c.code3 }}</span>
+                      <div style="flex:1;">
+                        <div style="font-size:13px;font-weight:600;color:#16232f;">{{ c.name }}</div>
+                        <div style="font-size:11px;color:#586a7b;">无 Controller · 政策冻结(t=0 保持不变)</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:10.5px;color:#96a3b2;margin-top:8px;line-height:1.5;">诚实表示:当前原型不能把他国显示为 AI;指派 Occupant 需先补齐 assign_seat 与新游戏协议(规格 §13)。</div>
+              </sc-if>
+
+              <!-- run mode -->
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;margin:22px 0 9px;">运行方式</div>
+              <div style="display:flex;gap:9px;">
+                <sc-for list="{{ runModeCards }}" as="r" hint-placeholder-count="4">
+                  <button onClick="{{ r.onPick }}" style="flex:1;background:{{ r.bg }};border:1px solid {{ r.border }};border-radius:10px;padding:11px 13px;cursor:{{ r.cursor }};text-align:left;opacity:{{ r.opacity }};">
+                    <div style="font-size:13px;font-weight:600;color:#16232f;">{{ r.name }}</div>
+                    <div style="font-size:10.5px;color:#68788b;margin-top:3px;line-height:1.4;">{{ r.desc }}</div>
+                  </button>
+                </sc-for>
+              </div>
+
+              <!-- calendar advanced -->
+              <button onClick="{{ toggleCalendar }}" style="margin-top:16px;display:flex;align-items:center;gap:9px;background:transparent;border:none;cursor:pointer;padding:4px 0;">
+                <span style="color:#586a7b;font-size:12.5px;transition:.15s;transform:{{ calCaret }};">▶</span>
+                <span style="font-size:12.5px;font-weight:600;color:#3a4956;">制度决策日历</span>
+                <span style="font-size:10.5px;color:#849098;">普通模式为自然语言摘要</span>
+              </button>
+              <sc-if value="{{ calendarOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#f6f8fb;border:1px solid #e6ebf1;border-radius:11px;padding:12px 14px;margin-top:8px;display:flex;flex-direction:column;gap:7px;">
+                  <sc-for list="{{ calendarRows }}" as="c" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <span style="font-size:12px;color:#3a4956;flex:1;">{{ c.groups }}</span>
+                      <span style="font-size:12px;color:#0c8579;font-weight:600;">{{ c.human }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;width:70px;text-align:right;">{{ c.tick }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- ---------- STEP 5: INITIAL POLICY ---------- -->
+          <sc-if value="{{ atStep5 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:800px;">
+              <h2 style="font-size:20px;font-weight:700;color:#16232f;margin:0 0 4px;">初始政策</h2>
+              <p style="font-size:13.5px;color:#68788b;margin:0 0 16px;line-height:1.6;">按 国家 → 席位 → 决策组 组织,全部继承模型预设;控件类型与范围由 Policy Registry schema 生成。仅改动项进入差异摘要。</p>
+
+              <!-- country + seat tabs -->
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                <select onChange="{{ onPolicyCountryChange }}" style="background:#ffffff;border:1px solid #d3dce6;border-radius:8px;padding:7px 11px;font-size:12.5px;color:#16232f;cursor:pointer;">
+                  <sc-for list="{{ policyCountryOptions }}" as="c" hint-placeholder-count="3"><option value="{{ c.v }}" selected="{{ c.sel }}">{{ c.label }}</option></sc-for>
+                </select>
+                <div style="display:flex;background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;padding:2px;">
+                  <sc-for list="{{ policySeatTabs }}" as="t" hint-placeholder-count="5">
+                    <button onClick="{{ t.onPick }}" style="border:none;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }};">{{ t.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <input value="{{ policySearchStr }}" onInput="{{ onPolicySearch }}" placeholder="搜索中文名 / 内部名…" style="flex:1;background:#f6f8fb;border:1px solid #d3dce6;border-radius:8px;padding:7px 11px;font-size:12.5px;color:#16232f;"></input>
+                <sc-for list="{{ policyFilterChips }}" as="f" hint-placeholder-count="3">
+                  <button onClick="{{ f.onPick }}" style="background:{{ f.bg }};border:1px solid {{ f.border }};border-radius:8px;color:{{ f.fg }};font-size:11.5px;padding:7px 10px;cursor:pointer;white-space:nowrap;">{{ f.label }}</button>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <sc-for list="{{ policyGroups }}" as="g" hint-placeholder-count="3">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                      <span style="font-size:12.5px;font-weight:600;color:#3a4956;">{{ g.name }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#96a3b2;">{{ g.internal }}</span>
+                      <span style="height:1px;flex:1;background:#e6ebf1;"></span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:7px;">
+                      <sc-for list="{{ g.levers }}" as="lev" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;gap:12px;background:{{ lev.bg }};border:1px solid {{ lev.border }};border-radius:10px;padding:10px 13px;">
+                          <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:7px;">
+                              <span style="font-size:13px;color:#16232f;">{{ lev.name }}</span>
+                              <span style="font-size:9.5px;color:{{ lev.srcFg }};background:{{ lev.srcBg }};border-radius:4px;padding:1px 6px;">{{ lev.src }}</span>
+                            </div>
+                            <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#96a3b2;margin-top:2px;">{{ lev.internal }}{{ lev.auxStr }}</div>
+                          </div>
+                          <!-- stepper -->
+                          <sc-if value="{{ lev.isStep }}" hint-placeholder-val="{{ true }}">
+                            <div style="display:flex;align-items:center;gap:2px;flex:none;">
+                              <button onClick="{{ lev.onDec }}" style="width:26px;height:28px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:7px 0 0 7px;color:#586a7b;cursor:pointer;font-size:14px;">−</button>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#16232f;min-width:58px;text-align:center;">{{ lev.valueStr }}</span>
+                              <button onClick="{{ lev.onInc }}" style="width:26px;height:28px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:0 7px 7px 0;color:#586a7b;cursor:pointer;font-size:14px;">＋</button>
+                            </div>
+                          </sc-if>
+                          <!-- segmented -->
+                          <sc-if value="{{ lev.isSeg }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;padding:2px;gap:2px;flex:none;">
+                              <sc-for list="{{ lev.options }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onPick }}" style="border:none;border-radius:6px;padding:6px 10px;font-size:11.5px;cursor:pointer;background:{{ o.bg }};color:{{ o.fg }};">{{ o.label }}</button></sc-for>
+                            </div>
+                          </sc-if>
+                          <!-- toggle -->
+                          <sc-if value="{{ lev.isToggle }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ lev.onToggle }}" style="width:38px;height:22px;flex:none;border:none;padding:0;border-radius:12px;background:{{ lev.track }};position:relative;cursor:pointer;"><span style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s;transform:{{ lev.knob }};box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span></button>
+                          </sc-if>
+                          <!-- select (anchor) -->
+                          <sc-if value="{{ lev.isSelect }}" hint-placeholder-val="{{ false }}">
+                            <select onChange="{{ lev.onChange }}" style="flex:none;width:150px;background:#f6f8fb;border:1px solid {{ lev.selBorder }};border-radius:8px;padding:7px 10px;font-size:12px;color:#16232f;cursor:pointer;">
+                              <sc-for list="{{ lev.selOptions }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}" selected="{{ o.sel }}">{{ o.label }}</option></sc-for>
+                            </select>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ policyEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="text-align:center;padding:40px;color:#96a3b2;font-size:13px;">无匹配杠杆——调整搜索或筛选。</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ---------- STEP 6: REVIEW ---------- -->
+          <sc-if value="{{ atStep6 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:900px;">
+              <h2 style="font-size:20px;font-weight:700;color:#16232f;margin:0 0 4px;">建国与运行清单</h2>
+              <p style="font-size:13.5px;color:#68788b;margin:0 0 18px;line-height:1.6;">最终值按解析顺序解释来源。请复核后启动。</p>
+
+              <!-- validation banner -->
+              <div style="display:flex;gap:9px;margin-bottom:18px;">
+                <div style="flex:1;display:flex;align-items:center;gap:9px;background:{{ errBox.bg }};border:1px solid {{ errBox.border }};border-radius:10px;padding:11px 14px;">
+                  <span style="font-size:16px;">{{ errBox.icon }}</span>
+                  <div><div style="font-size:13px;font-weight:600;color:{{ errBox.fg }};">{{ errBox.count }} 错误</div><div style="font-size:10.5px;color:#849098;">阻断启动</div></div>
+                </div>
+                <div style="flex:1;display:flex;align-items:center;gap:9px;background:#fbf3e2;border:1px solid #e3c489;border-radius:10px;padding:11px 14px;">
+                  <span style="font-size:16px;">⚠</span>
+                  <div><div style="font-size:13px;font-weight:600;color:#7a5111;">{{ warnCount }} 警告</div><div style="font-size:10.5px;color:#849098;">允许启动</div></div>
+                </div>
+                <div style="flex:1;display:flex;align-items:center;gap:9px;background:#e6effb;border:1px solid #b6d1f2;border-radius:10px;padding:11px 14px;">
+                  <span style="font-size:16px;">ℹ</span>
+                  <div><div style="font-size:13px;font-weight:600;color:#1c4a8f;">{{ infoCount }} 信息</div><div style="font-size:10.5px;color:#849098;">仅提示</div></div>
+                </div>
+              </div>
+
+              <sc-if value="{{ hasIssues }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px;">
+                  <sc-for list="{{ issues }}" as="i" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:flex-start;gap:9px;background:{{ i.bg }};border:1px solid {{ i.border }};border-radius:9px;padding:9px 13px;">
+                      <span style="color:{{ i.fg }};font-size:13px;line-height:1.4;">{{ i.icon }}</span>
+                      <span style="font-size:12.5px;color:#3a4956;line-height:1.45;flex:1;">{{ i.text }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#96a3b2;">{{ i.loc }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <!-- manifest sections -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <sc-for list="{{ manifestCards }}" as="m" hint-placeholder-count="6">
+                  <div style="background:#ffffff;border:1px solid #d3dce6;border-radius:12px;padding:13px 15px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                      <span style="width:7px;height:7px;border-radius:2px;background:{{ m.accent }};"></span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#68788b;">{{ m.title }}</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                      <sc-for list="{{ m.rows }}" as="r" hint-placeholder-count="4">
+                        <div style="display:flex;align-items:baseline;gap:10px;">
+                          <span style="font-size:12px;color:#68788b;flex:none;width:96px;">{{ r.k }}</span>
+                          <span style="font-size:12.5px;color:#16232f;flex:1;">{{ r.v }}</span>
+                          <sc-if value="{{ r.hasSrc }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#586a7b;background:#eef2f7;border-radius:4px;padding:1px 6px;">{{ r.src }}</span></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+
+        <!-- right summary -->
+        <sc-if value="{{ showSummary }}" hint-placeholder-val="{{ true }}">
+          <div style="width:322px;flex:none;background:#f6f8fb;border-left:1px solid #e6ebf1;padding:18px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#849098;">本局摘要</span>
+              <span style="flex:1;"></span>
+              <span style="width:6px;height:6px;border-radius:50%;background:{{ readyDot }};"></span>
+              <span style="font-size:10.5px;color:{{ readyFg }};">{{ readyLabel }}</span>
+            </div>
+            <sc-for list="{{ summarySections }}" as="s" hint-placeholder-count="5">
+              <div>
+                <div style="font-size:11px;font-weight:600;color:#586a7b;margin-bottom:7px;">{{ s.title }}</div>
+                <div style="background:#ffffff;border:1px solid #e6ebf1;border-radius:9px;padding:9px 11px;display:flex;flex-direction:column;gap:5px;">
+                  <sc-for list="{{ s.rows }}" as="r" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:baseline;gap:8px;">
+                      <span style="font-size:11px;color:#849098;flex:none;width:64px;">{{ r.k }}</span>
+                      <span style="font-size:11.5px;color:#16232f;flex:1;text-align:right;">{{ r.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- footer -->
+      <div style="flex:none;height:60px;background:#ffffff;border-top:1px solid #dbe2ea;display:flex;align-items:center;gap:14px;padding:0 22px;">
+        <button onClick="{{ onBack }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;color:{{ backFg }};font-size:13px;padding:10px 18px;cursor:{{ backCursor }};" style-hover="border-color:#0f9d90;">返回</button>
+        <span style="flex:1;"></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <sc-for list="{{ footDots }}" as="d" hint-placeholder-count="6">
+            <span style="width:{{ d.w }};height:6px;border-radius:3px;background:{{ d.bg }};transition:.2s;"></span>
+          </sc-for>
+        </div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#849098;margin:0 6px;">{{ stepPos }}</span>
+        <span style="flex:1;"></span>
+        <sc-if value="{{ isLastStep }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onLaunch }}" style="display:flex;align-items:center;gap:8px;background:{{ launchBg }};border:1px solid {{ launchBorder }};border-radius:9px;color:{{ launchFg }};font-size:14px;font-weight:600;padding:11px 26px;cursor:{{ launchCursor }};">▶ 启动模拟</button>
+        </sc-if>
+        <sc-if value="{{ isNotLastStep }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ onNext }}" style="background:#0f9d90;border:1px solid #0c8579;border-radius:9px;color:#fff;font-size:14px;font-weight:600;padding:11px 26px;cursor:pointer;" style-hover="background:#0c8579;">下一步 →</button>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================== LAUNCH OVERLAY ============================== -->
+  <sc-if value="{{ isLaunching }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:80;background:radial-gradient(900px 500px at 50% 30%, #ffffff 0%, #e9edf2 65%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="width:22px;height:22px;border:3px solid #d3dce6;border-top-color:#0f9d90;border-radius:50%;animation:om-spin 0.8s linear infinite;"></span>
+        <span style="font-size:19px;font-weight:600;color:#16232f;">正在建立世界</span>
+      </div>
+      <div style="width:440px;display:flex;flex-direction:column;gap:10px;">
+        <sc-for list="{{ launchSteps }}" as="l" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;background:#ffffff;border:1px solid {{ l.border }};border-radius:10px;padding:12px 15px;opacity:{{ l.opacity }};">
+            <span style="width:20px;height:20px;flex:none;border-radius:50%;background:{{ l.markBg }};color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;">{{ l.mark }}</span>
+            <span style="font-size:13.5px;color:#16232f;flex:1;">{{ l.text }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#96a3b2;">{{ l.detail }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <button onClick="{{ onHome }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:9px;color:#586a7b;font-size:12.5px;padding:9px 18px;cursor:pointer;opacity:{{ launchDoneOpacity }};">← 返回首页(原型演示)</button>
+    </div>
+  </sc-if>
+
+  <!-- ============================== SETTINGS ============================== -->
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:90;background:rgba(22,35,52,0.34);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;">
+      <div style="width:min(880px,92vw);max-height:86vh;background:#ffffff;border:1px solid #d3dce6;border-radius:16px;box-shadow:0 30px 80px rgba(22,45,80,0.22);display:flex;flex-direction:column;overflow:hidden;animation:om-rise 0.16s ease;">
+        <div style="flex:none;padding:16px 20px;border-bottom:1px solid #e6ebf1;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:16px;font-weight:700;color:#16232f;">设置</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#849098;">客户端偏好 · 不写入经济 Config</span>
+          <span style="flex:1;"></span>
+          <button onClick="{{ closeSettings }}" style="width:30px;height:30px;border-radius:8px;background:#f1f4f8;border:1px solid #d3dce6;cursor:pointer;color:#586a7b;font-size:15px;">×</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <sc-for list="{{ settingsGroups }}" as="g" hint-placeholder-count="6">
+            <div>
+              <div style="font-size:12.5px;font-weight:600;color:#3a4956;margin-bottom:9px;">{{ g.name }}</div>
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;background:#f6f8fb;border:1px solid #e6ebf1;border-radius:9px;padding:9px 12px;">
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:12.5px;color:#16232f;">{{ it.label }}</div>
+                      <sc-if value="{{ it.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:#96a3b2;">{{ it.note }}</div></sc-if>
+                    </div>
+                    <sc-if value="{{ it.isToggle }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ it.onToggle }}" style="width:36px;height:21px;flex:none;border:none;padding:0;border-radius:11px;background:{{ it.track }};position:relative;cursor:pointer;"><span style="position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:.15s;transform:{{ it.knob }};box-shadow:0 1px 2px rgba(0,0,0,0.15);"></span></button>
+                    </sc-if>
+                    <sc-if value="{{ it.isValue }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#586a7b;flex:none;">{{ it.value }}</span>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:none;padding:13px 20px;border-top:1px solid #e6ebf1;display:flex;align-items:center;gap:10px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#c17d16;">⟳ 分辨率 / 语言更改需要重启</span>
+          <span style="flex:1;"></span>
+          <button onClick="{{ closeSettings }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;color:#586a7b;font-size:12.5px;padding:8px 15px;cursor:pointer;">还原默认</button>
+          <button onClick="{{ closeSettings }}" style="background:#0f9d90;border:1px solid #0c8579;border-radius:8px;color:#fff;font-size:12.5px;font-weight:600;padding:8px 18px;cursor:pointer;">应用</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============================== PROMPT MODAL ============================== -->
+  <sc-if value="{{ hasPrompt }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:95;background:rgba(22,35,52,0.34);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;">
+      <div style="width:min(460px,90vw);background:#ffffff;border:1px solid #d3dce6;border-radius:14px;padding:19px 20px;box-shadow:0 24px 70px rgba(22,45,80,0.22);animation:om-rise 0.14s ease;">
+        <div style="font-size:16px;font-weight:600;color:#16232f;margin-bottom:8px;">{{ promptTitle }}</div>
+        <div style="font-size:13px;color:#586a7b;line-height:1.55;">{{ promptBody }}</div>
+        <sc-if value="{{ promptHasNote }}" hint-placeholder-val="{{ false }}"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c17d16;margin-top:10px;">{{ promptNote }}</div></sc-if>
+        <div style="display:flex;gap:9px;margin-top:17px;justify-content:flex-end;flex-wrap:wrap;">
+          <button onClick="{{ promptCancel }}" style="background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;color:#586a7b;font-size:13px;padding:9px 16px;cursor:pointer;">取消</button>
+          <sc-for list="{{ promptActions }}" as="a" hint-placeholder-count="1">
+            <button onClick="{{ a.onPick }}" style="background:{{ a.bg }};border:1px solid {{ a.border }};border-radius:8px;color:{{ a.fg }};font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer;">{{ a.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;research&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;模式&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'home', step: 1, settingsOpen: false, prompt: null,
+    research: false,
+    // step1
+    scenario: 'sandbox', baseModel: 'stable', scenarioCapsApplied: {},
+    // step2
+    seed: 7, duration: '5y', perfScale: 'fast',
+    trade: true, capital: true, migration: true, startPaused: true,
+    crossOpen: false,
+    cross: { fx_lambda: 0.05, fx_friction: 0.03, fx_trade_cap: 0.15, capital_mobility: 1.0, capital_adjust: 0.2, migration_rate: 0.02, migration_max_share: 0.25, remittance_share: 0.2, wage_smoothing: 0.02, peg_reserves0: 5000 },
+    // step3
+    countries: [
+      { id: 'c1', name: '奥雷利亚', code: 'AUR', color: '#0f9d90', profile: 'advanced', cur: '奥元 AUD ₳', intro: '高生产率核心经济体', ov: {} },
+      { id: 'c2', name: '博尔维亚', code: 'BOL', color: '#2f6fd0', profile: 'developing', cur: '博元 BOD ฿', intro: '账户规模较大的发展中经济体', ov: {} },
+      { id: 'c3', name: '佩特罗尼亚', code: 'PET', color: '#7a4fd0', profile: 'petrostate', cur: '佩元 PED ₽', intro: '资源型经济体(特征待建模)', ov: {} },
+    ],
+    selCountry: 'c1', structSearch: '', structOverriddenOnly: false,
+    // step4
+    playerCountry: 'c1', runMode: 'interactive', calendarOpen: false,
+    seats: { c1: { cb: 'human', treasury: 'human', regulator: 'human', external: 'human', energy: 'human' } },
+    // step5
+    policyCountry: 'c1', policySeat: 'treasury', policySearch: '', policyFilter: 'all', pol: {},
+    // launching
+    launchProg: 0,
+    // settings
+    settings: { fullscreen: false, uiScale: '100%', density: '舒适', lang: '简体中文', numAbbr: true, colorSafe: false, reduceMotion: false, highContrast: true, autosave: true, tutorial: true, godMode: false, internalNames: true },
+  };
+
+  // ---------------- static data ----------------
+  namePool() { return ['奥雷利亚', '博尔维亚', '佩特罗尼亚', '卡兰迪亚', '梅里迪', '诺瓦尼亚', '塞拉菲', '图兰']; }
+  codePool() { return ['AUR', 'BOL', 'PET', 'KAL', 'MER', 'NOV', 'SER', 'TUR']; }
+  colorPool() { return ['#0f9d90', '#2f6fd0', '#7a4fd0', '#c17d16', '#1f9d63', '#d24a34', '#3f6db2', '#0c8579']; }
+
+  initCountries() {
+    return [
+      { id: 'c1', name: '奥雷利亚', code: 'AUR', color: '#0f9d90', profile: 'advanced', cur: '奥元 AUD ₳', intro: '高生产率核心经济体', ov: {} },
+      { id: 'c2', name: '博尔维亚', code: 'BOL', color: '#2f6fd0', profile: 'developing', cur: '博元 BOD ฿', intro: '账户规模较大的发展中经济体', ov: {} },
+      { id: 'c3', name: '佩特罗尼亚', code: 'PET', color: '#7a4fd0', profile: 'petrostate', cur: '佩元 PED ₽', intro: '资源型经济体(特征待建模)', ov: {} },
+    ];
+  }
+
+  profiles() {
+    return {
+      symmetric: { name: '对称基线', hh: 1.00, a: 1.00, desc: '对称基线,无自动覆盖偏离', exp: false, nec: 0.5 },
+      advanced: { name: '发达', hh: 1.00, a: 1.20, desc: '高生产率经济体 (a ×1.20)', exp: false, nec: 0.5 },
+      developing: { name: '发展中', hh: 1.50, a: 0.75, desc: '账户 ×1.5、生产率 ×0.75', exp: false, nec: 0.65 },
+      entrepot: { name: '转口港', hh: 0.40, a: 1.15, desc: '小型高生产率;开放度未建模', exp: true, nec: 0.5 },
+      petrostate: { name: '资源国', hh: 0.80, a: 0.85, desc: '暂无石油出口禀赋覆盖', exp: true, nec: 0.5 },
+      custom: { name: '自定义', hh: 1.00, a: 1.00, desc: '完全自定义,从当前最终值创建', exp: false, nec: 0.5 },
+    };
+  }
+
+  scenarios() {
+    return [
+      { id: 'sandbox', name: '自由沙盒', desc: '无预设 ShockTape,结果完全由模拟与玩家行为产生', caps: [], dur: 0, reduced: false, def: true },
+      { id: 'oil', name: '石油禁运', desc: '能源产能与进口能力同时受限', caps: ['energy', 'trade'], dur: 180, reduced: true },
+      { id: 'gfc', name: '全球金融危机', desc: '信贷供给、需求与生产率受冲击', caps: ['bank'], dur: 365, reduced: true },
+      { id: 'pandemic', name: '大流行', desc: '劳动、生产率、需求、信贷及可选贸易受冲击', caps: ['bank'], dur: 365, reduced: true },
+      { id: 'disaster', name: '自然灾害', desc: '一次性资本损失,加暂时生产率与劳动冲击', caps: [], dur: 30, reduced: true },
+      { id: 'import', name: '导入场景', desc: '读取经校验的 ShockTape JSON', caps: [], dur: 0, reduced: false, import: true },
+    ];
+  }
+
+  capLabel(c) { return ({ energy: '能源部门', trade: 'World 贸易层', bank: '银行' })[c] || c; }
+
+  durations() { return [{ id: '1y', label: '1 年', ticks: 365 }, { id: '5y', label: '5 年', ticks: 1825 }, { id: '10y', label: '10 年', ticks: 3650 }, { id: 'inf', label: '无限', ticks: 0 }, { id: 'custom', label: '自定义', ticks: 900 }]; }
+  perfScales() {
+    return {
+      fast: { label: '快速', hh: 80, fc: 12, fk: 4, fe: 2, banks: 2 },
+      standard: { label: '标准', hh: 200, fc: 30, fk: 10, fe: 4, banks: 4 },
+      custom: { label: '自定义', hh: 120, fc: 20, fk: 6, fe: 3, banks: 3 },
+    };
+  }
+
+  seatDefs() {
+    return [
+      { id: 'cb', name: '央行', accent: '#2f6fd0', groups: 'monetary · liquidity · fx (24)' },
+      { id: 'treasury', name: '财政部', accent: '#0f9d90', groups: 'fiscal · tax · debt (35)' },
+      { id: 'regulator', name: '金融监管', accent: '#7a4fd0', groups: 'macropru · structural (28)' },
+      { id: 'external', name: '对外事务', accent: '#3f6db2', groups: 'trade · migration (9)' },
+      { id: 'energy', name: '能源', accent: '#c17d16', groups: 'operations · structure (6)' },
+    ];
+  }
+  occupants() {
+    return [
+      { id: 'human', label: '人类玩家', tag: '普通' },
+      { id: 'null', label: '固定不动作 (Null)', tag: '基线' },
+      { id: 'heuristic', label: '启发式 fiscal-v3', tag: '普通' },
+      { id: 'rl', label: 'RL 模型 (需 artifact)', tag: '高级' },
+      { id: 'scheduled', label: '预定脚本', tag: '研究' },
+      { id: 'fuzz', label: '随机探索 (实验室)', tag: '实验室' },
+    ];
+  }
+
+  structFields() {
+    return [
+      { g: '规模', fields: [
+        { id: 'n_households', label: '家庭数', internal: 'n_households', kind: 'readout' },
+        { id: 'n_firms_c', label: '消费品企业', internal: 'n_firms_c', kind: 'stepper', step: 1, min: 1 },
+        { id: 'n_firms_k', label: '资本品企业', internal: 'n_firms_k', kind: 'stepper', step: 1, min: 1 },
+        { id: 'n_firms_e', label: '能源企业', internal: 'n_firms_e', kind: 'stepper', step: 1, min: 0 },
+        { id: 'n_banks', label: '银行数', internal: 'n_banks', kind: 'stepper', step: 1, min: 1 },
+      ]},
+      { g: '生产', fields: [
+        { id: 'a', label: '基础生产率', internal: 'a', kind: 'stepper', step: 0.05, min: 0.1, fmt: 'f2' },
+        { id: 'alpha', label: '资本份额', internal: 'alpha', kind: 'stepper', step: 0.01, min: 0, fmt: 'f2', base: 0.33 },
+        { id: 'tfp_law', label: 'TFP 法则', internal: 'tfp_law', kind: 'select', options: [['none', '无'], ['drift', '漂移'], ['learning', '学习']], base: 'drift' },
+      ]},
+      { g: '金融结构', fields: [
+        { id: 'bank', label: '银行系统', internal: 'bank_enabled', kind: 'toggle', unlocks: '企业动态 · 信贷 · 债券', deps: [] },
+        { id: 'interbank', label: '银行间市场', internal: 'interbank', kind: 'toggle', deps: ['bank'] },
+        { id: 'bonds', label: '政府债券', internal: 'bonds', kind: 'toggle', deps: ['bank', 'government'] },
+        { id: 'capital_market', label: '资本市场', internal: 'capital_market', kind: 'toggle', deps: [] },
+        { id: 'per_firm_equity', label: '逐企业股票', internal: 'per_firm_equity', kind: 'toggle', deps: ['capital_market'] },
+        { id: 'household_credit', label: '家庭信贷', internal: 'household_credit', kind: 'toggle', deps: ['bank'] },
+      ]},
+      { g: '住房', fields: [
+        { id: 'housing_market', label: '住房市场', internal: 'housing_market_enabled', kind: 'toggle', unlocks: '按揭 · 租赁 · 建造', deps: [] },
+        { id: 'mortgage', label: '按揭', internal: 'mortgage_enabled', kind: 'toggle', deps: ['housing_market'] },
+        { id: 'rental', label: '租赁', internal: 'housing_rental_enabled', kind: 'toggle', deps: ['housing_market'] },
+        { id: 'construction', label: '住房建造', internal: 'housing_construction_enabled', kind: 'toggle', deps: ['housing_market'] },
+      ]},
+      { g: '人口与产业', fields: [
+        { id: 'demographics', label: '人口系统', internal: 'demographics_enabled', kind: 'toggle', deps: [] },
+        { id: 'consumption_strata', label: '必需/奢侈分层', internal: 'consumption_strata', kind: 'toggle', deps: [] },
+        { id: 'necessity_share0', label: '必需品占比', internal: 'necessity_share0', kind: 'stepper', step: 0.05, min: 0, fmt: 'f2' },
+        { id: 'energy', label: '能源部门', internal: 'energy_enabled', kind: 'toggle', deps: [] },
+        { id: 'government', label: '政府', internal: 'government', kind: 'toggle', deps: [] },
+        { id: 'national_accounts', label: '国民账户指标', internal: 'national_accounts_metrics', kind: 'toggle', deps: [] },
+      ]},
+    ];
+  }
+  structFieldById(id) { for (const g of this.structFields()) for (const f of g.fields) if (f.id === id) return f; return null; }
+
+  profileBaseCaps(profile) {
+    const full = { bank: true, interbank: true, bonds: true, capital_market: true, per_firm_equity: true, household_credit: true, housing_market: true, mortgage: true, rental: true, construction: true, demographics: true, consumption_strata: true, energy: true, government: true, national_accounts: true };
+    const mid = { bank: true, interbank: false, bonds: false, capital_market: false, per_firm_equity: false, household_credit: true, housing_market: true, mortgage: false, rental: false, construction: false, demographics: true, consumption_strata: true, energy: true, government: true, national_accounts: true };
+    const lean = { bank: true, interbank: false, bonds: false, capital_market: false, per_firm_equity: false, household_credit: false, housing_market: false, mortgage: false, rental: false, construction: false, demographics: false, consumption_strata: false, energy: true, government: true, national_accounts: true };
+    if (profile === 'advanced' || profile === 'symmetric' || profile === 'custom') return { ...full };
+    if (profile === 'developing') return { ...mid };
+    if (profile === 'entrepot') return { ...mid, household_credit: false };
+    if (profile === 'petrostate') return { ...lean };
+    return { ...mid };
+  }
+
+  policyDefs() {
+    return {
+      treasury: [
+        { name: '财政立场', internal: 'fiscal_stance', levers: [
+          { id: 'gov_consumption_share', name: '政府消费份额', kind: 'step', v: 0.18, step: 0.005, fmt: 'f3' },
+          { id: 'gov_deficit_target', name: '赤字目标 / GDP', kind: 'step', v: 0.03, step: 0.005, fmt: 'pct1' },
+          { id: 'benefit_replacement', name: '福利替代率', kind: 'step', v: 0.40, step: 0.02, fmt: 'pct0' },
+          { id: 'job_guarantee', name: '就业保障', kind: 'toggle', v: false },
+        ]},
+        { name: '税收与转移', internal: 'tax_and_transfers', levers: [
+          { id: 'tax_income_rate', name: '所得税率', kind: 'step', v: 0.22, step: 0.01, fmt: 'pct0' },
+          { id: 'tax_consumption_rate', name: '消费税率', kind: 'step', v: 0.15, step: 0.01, fmt: 'pct0' },
+          { id: 'energy_subsidy_rate', name: '能源补贴率', kind: 'step', v: 0.08, step: 0.01, fmt: 'pct0' },
+        ]},
+        { name: '债务管理', internal: 'debt_management', levers: [
+          { id: 'bond_finance_frac', name: '债券融资占比', kind: 'step', v: 0.60, step: 0.05, fmt: 'pct0' },
+          { id: 'bond_maturity', name: '债券期限', kind: 'step', v: 20, step: 1, fmt: 'int', unit: ' 期' },
+        ]},
+      ],
+      cb: [
+        { name: '货币立场', internal: 'monetary_stance', levers: [
+          { id: 'monetary_regime', name: '货币制度', kind: 'seg', v: 'taylor', options: [['exogenous', '外生'], ['taylor', '泰勒'], ['manual', '手动']] },
+          { id: 'manual_policy_rate', name: '手动政策利率', kind: 'step', v: 0.035, step: 0.0025, fmt: 'rate', reqRegime: 'manual' },
+          { id: 'inflation_target', name: '通胀目标', kind: 'step', v: 0.02, step: 0.0025, fmt: 'pct2' },
+          { id: 'taylor_phi_pi', name: '泰勒 φπ', kind: 'step', v: 1.5, step: 0.1, fmt: 'f1' },
+        ]},
+        { name: '流动性操作', internal: 'liquidity_operations', levers: [
+          { id: 'omo', name: '公开市场操作', kind: 'toggle', v: true },
+          { id: 'reserve_floor_frac', name: '准备金下限', kind: 'step', v: 0.10, step: 0.005, fmt: 'pct1' },
+        ]},
+        { name: '外汇操作', internal: 'fx_operations', levers: [
+          { id: 'fx_regime', name: '汇率制度', kind: 'seg', v: 'float', options: [['float', '浮动'], ['peg', '盯住']] },
+          { id: 'peg_anchor', name: '锚定经济体', kind: 'anchor', v: '', reqRegime: 'peg' },
+          { id: 'capital_control', name: '资本管制', kind: 'step', v: 0.0, step: 0.05, fmt: 'pct0' },
+        ]},
+      ],
+      regulator: [
+        { name: '宏观审慎', internal: 'macroprudential', levers: [
+          { id: 'bank_leverage_cap', name: '银行杠杆上限', kind: 'step', v: 12, step: 1, fmt: 'int', unit: '×' },
+          { id: 'mortgage_ltv_cap', name: '按揭 LTV 上限', kind: 'step', v: 0.85, step: 0.05, fmt: 'pct0' },
+          { id: 'hh_credit_limit', name: '家庭信贷上限', kind: 'step', v: 0.40, step: 0.05, fmt: 'pct0' },
+        ]},
+        { name: '结构法律', internal: 'structural_law', levers: [
+          { id: 'household_bankruptcy', name: '家庭破产', kind: 'toggle', v: true },
+          { id: 'bank_resolution_fund', name: '银行处置基金', kind: 'toggle', v: true },
+        ]},
+      ],
+      external: [
+        { name: '贸易与迁移', internal: 'trade_and_migration', levers: [
+          { id: 'tariff', name: '关税率', kind: 'step', v: 0.05, step: 0.01, fmt: 'pct0' },
+          { id: 'import_quota', name: '进口配额', kind: 'step', v: 1.0, step: 0.05, fmt: 'f2' },
+          { id: 'immigration_cap', name: '移民上限', kind: 'step', v: 0.25, step: 0.05, fmt: 'pct0' },
+          { id: 'export_subsidy', name: '出口补贴', kind: 'step', v: 0.0, step: 0.01, fmt: 'pct0' },
+        ]},
+      ],
+      energy: [
+        { name: '能源操作', internal: 'energy_operations', levers: [
+          { id: 'energy_rationing', name: '能源配给', kind: 'seg', v: 'none', options: [['none', '无'], ['priority', '优先'], ['rolling', '轮流']] },
+          { id: 'energy_price_cap', name: '能源限价', kind: 'step', v: 0.0, step: 0.1, fmt: 'f1' },
+          { id: 'soe_price_at_cost', name: '国企成本定价', kind: 'toggle', v: false },
+        ]},
+        { name: '能源结构', internal: 'energy_structure', levers: [
+          { id: 'soe_efirm', name: '国企 e-firm', kind: 'toggle', v: false },
+        ]},
+      ],
+    };
+  }
+
+  // ---------------- helpers ----------------
+  cur() { return this.state.countries.find(c => c.id === this.state.selCountry) || this.state.countries[0]; }
+  player() { return this.state.countries.find(c => c.id === this.state.playerCountry) || this.state.countries[0]; }
+  fmtInt(n) { return Math.round(n).toLocaleString('en-US'); }
+  fmtVal(fmt, v) {
+    if (fmt === 'pct0') return (v * 100).toFixed(0) + '%';
+    if (fmt === 'pct1') return (v * 100).toFixed(1) + '%';
+    if (fmt === 'pct2') return (v * 100).toFixed(2) + '%';
+    if (fmt === 'rate') return (v * 100).toFixed(2) + '%';
+    if (fmt === 'f1') return v.toFixed(1);
+    if (fmt === 'f2') return v.toFixed(2);
+    if (fmt === 'f3') return v.toFixed(3);
+    if (fmt === 'int') return this.fmtInt(v);
+    return String(v);
+  }
+  capOf(country, id) { const base = this.profileBaseCaps(country.profile); return country.ov[id] !== undefined ? country.ov[id] : base[id]; }
+  structVal(country, f) {
+    if (country.ov[f.id] !== undefined) return country.ov[f.id];
+    if (f.id === 'n_households') return this.finalHouseholds(country);
+    const ps = this.perfScales()[this.state.perfScale];
+    if (f.id === 'n_firms_c') return ps.fc; if (f.id === 'n_firms_k') return ps.fk; if (f.id === 'n_firms_e') return ps.fe; if (f.id === 'n_banks') return ps.banks;
+    if (f.id === 'a') return +(this.profiles()[country.profile].a).toFixed(2);
+    if (f.id === 'necessity_share0') return this.profiles()[country.profile].nec;
+    if (f.base !== undefined) return f.base;
+    return 0;
+  }
+  finalHouseholds(country) { return Math.round(this.perfScales()[this.state.perfScale].hh * this.profiles()[country.profile].hh); }
+  finalFirms(country) { const ps = this.perfScales()[this.state.perfScale]; const g = (id, d) => country.ov[id] !== undefined ? country.ov[id] : d; return g('n_firms_c', ps.fc) + g('n_firms_k', ps.fk) + g('n_firms_e', ps.fe); }
+  overrideCount(country) { return Object.keys(country.ov).length; }
+
+  // ---------------- mutations ----------------
+  setCountry(id, patch) { this.setState(s => ({ countries: s.countries.map(c => c.id === id ? { ...c, ...patch } : c) })); }
+  setOv(id, key, val) { this.setState(s => ({ countries: s.countries.map(c => c.id === id ? { ...c, ov: { ...c.ov, [key]: val } } : c) })); }
+
+  incCountry() { this.setState(s => { if (s.countries.length >= 8) return {}; const i = s.countries.length; const c = { id: 'c' + Date.now(), name: this.namePool()[i] || ('国家0' + (i + 1)), code: this.codePool()[i] || ('C0' + (i + 1)), color: this.colorPool()[i % 8], profile: 'symmetric', cur: 'CUR' + i, intro: '新经济体', ov: {} }; return { countries: [...s.countries, c] }; }); }
+  decCountry() {
+    this.setState(s => {
+      if (s.countries.length <= 1) return {};
+      const removed = s.countries[s.countries.length - 1];
+      const countries = s.countries.slice(0, -1);
+      const sel = s.selCountry === removed.id ? countries[0].id : s.selCountry;
+      const pc = s.playerCountry === removed.id ? countries[0].id : s.playerCountry;
+      return { countries, selCountry: sel, playerCountry: pc };
+    });
+  }
+  addCountry() { this.incCountry(); }
+  deleteCountry() {
+    const c = this.cur();
+    this.setState(s => {
+      if (s.countries.length <= 1) return {};
+      const countries = s.countries.filter(x => x.id !== c.id);
+      return { countries, selCountry: countries[0].id, playerCountry: s.playerCountry === c.id ? countries[0].id : s.playerCountry, prompt: null };
+    });
+  }
+  pickProfile(pid) {
+    const c = this.cur();
+    if (pid === c.profile) return;
+    if (this.overrideCount(c) > 0) {
+      this.setState({ prompt: { title: '切换 Profile', body: '「' + c.name + '」已有 ' + this.overrideCount(c) + ' 项手工覆盖。切到「' + this.profiles()[pid].name + '」后如何处理?', actions: [
+        { label: '保留覆盖', bg: '#f1f4f8', border: '#d3dce6', fg: '#3a4956', onPick: () => this.setCountry(c.id, { profile: pid }) && this.setState({ prompt: null }) },
+        { label: '清除并重应用', bg: '#0f9d90', border: '#0c8579', fg: '#fff', onPick: () => { this.setCountry(c.id, { profile: pid, ov: {} }); this.setState({ prompt: null }); } },
+      ] } });
+    } else this.setCountry(c.id, { profile: pid });
+  }
+  restoreProfile() {
+    const c = this.cur();
+    if (this.overrideCount(c) === 0) return;
+    this.setState({ prompt: { title: '恢复 Profile', body: '清除「' + c.name + '」的全部 ' + this.overrideCount(c) + ' 项手工覆盖,重新应用 Profile 默认值?', actions: [{ label: '清除覆盖', bg: '#0f9d90', border: '#0c8579', fg: '#fff', onPick: () => { this.setCountry(c.id, { ov: {} }); this.setState({ prompt: null }); } }] } });
+  }
+  applyToAll() {
+    const c = this.cur();
+    this.setState({ prompt: { title: '应用到所有国家', body: '将「' + c.name + '」的 Profile(' + this.profiles()[c.profile].name + ')与 ' + this.overrideCount(c) + ' 项覆盖复制到其余 ' + (this.state.countries.length - 1) + ' 国?能力不兼容处会预览冲突,不会静默跳过。', note: '此操作可撤销', actions: [{ label: '预览并应用', bg: '#0f9d90', border: '#0c8579', fg: '#fff', onPick: () => { this.setState(s => ({ countries: s.countries.map(x => x.id === c.id ? x : { ...x, profile: c.profile, ov: { ...c.ov } }), prompt: null })); } }] } });
+  }
+  toggleStructField(f) {
+    const c = this.cur();
+    const cur = this.capOf(c, f.id);
+    if (!cur) {
+      const missing = (f.deps || []).filter(d => !this.capOf(c, d));
+      if (missing.length) {
+        const names = missing.map(m => { const mf = this.structFieldById(m); return mf ? mf.label : m; }).join('、');
+        this.setState({ prompt: { title: '启用依赖', body: '「' + f.label + '」需要:' + names + '。同时启用?', actions: [{ label: '一并启用', bg: '#0f9d90', border: '#0c8579', fg: '#fff', onPick: () => { const ov = { ...c.ov, [f.id]: true }; missing.forEach(m => ov[m] = true); this.setCountry(c.id, { ov }); this.setState({ prompt: null }); } }] } });
+        return;
+      }
+      this.setOv(c.id, f.id, true);
+    } else {
+      const dependents = [];
+      for (const g of this.structFields()) for (const ff of g.fields) if ((ff.deps || []).includes(f.id) && this.capOf(c, ff.id)) dependents.push(ff);
+      if (dependents.length) {
+        const names = dependents.map(d => d.label).join('、');
+        this.setState({ prompt: { title: '关闭主开关', body: '「' + f.label + '」被以下能力依赖:' + names + '。', note: '「仅关闭此项」将产生启动错误', actions: [
+          { label: '一并关闭', bg: '#0f9d90', border: '#0c8579', fg: '#fff', onPick: () => { const ov = { ...c.ov, [f.id]: false }; dependents.forEach(d => ov[d.id] = false); this.setCountry(c.id, { ov }); this.setState({ prompt: null }); } },
+          { label: '仅关闭此项', bg: '#fdeee9', border: '#f0bcae', fg: '#c23f2a', onPick: () => { this.setOv(c.id, f.id, false); this.setState({ prompt: null }); } },
+        ] } });
+        return;
+      }
+      this.setOv(c.id, f.id, false);
+    }
+  }
+  stepStructField(f, dir) { const c = this.cur(); const cur = this.structVal(c, f); const nv = Math.max(f.min !== undefined ? f.min : 0, +(cur + dir * f.step).toFixed(4)); this.setOv(c.id, f.id, f.fmt ? nv : Math.round(nv)); }
+  setStructSelect(f, v) { this.setOv(this.state.selCountry, f.id, v); }
+
+  // policy
+  polKey(cid, sid, lid) { return cid + '.' + sid + '.' + lid; }
+  polVal(lev) { const k = this.polKey(this.state.policyCountry, this.state.policySeat, lev.id); return this.state.pol[k] !== undefined ? this.state.pol[k] : lev.v; }
+  setPol(lev, v) { const k = this.polKey(this.state.policyCountry, this.state.policySeat, lev.id); this.setState(s => ({ pol: { ...s.pol, [k]: v } })); }
+  stepPol(lev, dir) { const cur = this.polVal(lev); const nv = lev.fmt === 'int' ? Math.max(0, cur + dir) : +(cur + dir * lev.step).toFixed(5); this.setPol(lev, Math.max(0, nv)); }
+  regimeOf(cid, sid, id) { const k = this.polKey(cid, sid, id); if (this.state.pol[k] !== undefined) return this.state.pol[k]; const g = (this.policyDefs()[sid] || []).flatMap(gr => gr.levers).find(l => l.id === id); return g ? g.v : ''; }
+
+  // navigation
+  goStep(n) { this.setState({ step: Math.max(1, Math.min(6, n)) }); }
+  onNext() { this.setState(s => ({ step: Math.min(6, s.step + 1) })); }
+  onBack() { this.setState(s => (s.step <= 1 ? { screen: 'home' } : { step: s.step - 1 })); }
+  launch() { if (this.errors().length) return; this.setState({ screen: 'launching', launchProg: 0 }); this._lt = setInterval(() => { this.setState(s => { const p = s.launchProg + 1; if (p >= 4 && this._lt) { clearInterval(this._lt); this._lt = null; } return { launchProg: Math.min(4, p) }; }); }, 620); }
+  componentWillUnmount() { if (this._lt) clearInterval(this._lt); }
+
+  // validation
+  errors() {
+    const errs = [];
+    for (const c of this.state.countries) {
+      if (this.capOf(c, 'mortgage') && !this.capOf(c, 'housing_market')) errs.push({ text: '按揭已开但住房市场关闭', loc: c.code });
+      if (this.capOf(c, 'bonds') && !this.capOf(c, 'bank')) errs.push({ text: '债券已开但银行关闭', loc: c.code });
+      if (this.capOf(c, 'per_firm_equity') && !this.capOf(c, 'capital_market')) errs.push({ text: '逐企业股票需要资本市场', loc: c.code });
+    }
+    if (this.state.countries.length === 1 && this.state.trade) errs.push({ text: '单国世界不应启用国际贸易(无交易对手)', loc: 'WORLD' });
+    return errs;
+  }
+  warnings() {
+    const w = [];
+    for (const c of this.state.countries) {
+      const p = this.profiles()[c.profile];
+      if (c.profile === 'petrostate') w.push({ text: '实验性 Petrostate Profile 暂无石油禀赋覆盖', loc: c.code });
+      if (c.profile === 'entrepot') w.push({ text: '实验性 Entrepot:土地稀缺与开放度尚未建模', loc: c.code });
+    }
+    const sc = this.scenarios().find(s => s.id === this.state.scenario);
+    if (sc && sc.caps.length && !this.state.scenarioCapsApplied[sc.id]) w.push({ text: '场景「' + sc.name + '」的建议能力尚未确认应用', loc: 'SCENARIO' });
+    return w;
+  }
+  infos() {
+    const inf = [];
+    for (const c of this.state.countries) {
+      const p = this.profiles()[c.profile];
+      if (p.hh !== 1.0) inf.push({ text: 'Profile 使家庭数 ×' + p.hh + ',但企业数未同比变化', loc: c.code });
+    }
+    return inf;
+  }
+
+  // ---------------- view models ----------------
+  homeMenuVM() {
+    const items = [
+      { id: 'new', icon: '＋', title: '新建模拟', sub: '六步配置世界、国家与席位', primary: true, onPick: () => this.setState({ screen: 'wizard', step: 1 }) },
+      { id: 'load', icon: '⤓', title: '载入存档', sub: '3 个存档 · 最近 今天 14:22', onPick: () => this.setState({ screen: 'wizard', step: 1 }) },
+      { id: 'settings', icon: '⚙', title: '设置', sub: '显示、语言、游戏流、存档', onPick: () => this.setState({ settingsOpen: true }) },
+      { id: 'quit', icon: '⏻', title: '退出', sub: '关闭指挥室', onPick: () => {} },
+    ];
+    return items.map(m => ({
+      icon: m.icon, title: m.title, sub: m.sub, arrow: '›', onPick: m.onPick,
+      bg: '#ffffff', border: '#d3dce6', cursor: 'pointer', hover: 'border-color:#0f9d90',
+      iconBg: m.primary ? '#e6f5f0' : '#f1f4f8', iconFg: m.primary ? '#0f9d90' : '#586a7b', titleColor: '#16232f',
+    }));
+  }
+
+  renderVals() {
+    const S = this.state;
+    const scObj = this.scenarios().find(x => x.id === S.scenario);
+    const errs = this.errors(), warns = this.warnings(), infos = this.infos();
+
+    // ---- home ----
+    const homeMenu = this.homeMenuVM();
+
+    // ---- header mode toggle ----
+    const modeToggle = [{ id: false, label: '普通' }, { id: true, label: '研究' }].map(m => ({
+      label: m.label, onPick: () => this.setState({ research: m.id }),
+      bg: S.research === m.id ? '#ffffff' : 'transparent', fg: S.research === m.id ? '#16232f' : '#849098',
+    }));
+
+    // ---- step nav ----
+    const stepMeta = [
+      { n: 1, name: '场景与模式', sub: 'SCENARIO' }, { n: 2, name: '世界设置', sub: 'WORLD' },
+      { n: 3, name: '国家配置', sub: 'COUNTRIES' }, { n: 4, name: '政府与席位', sub: 'GOVERNMENT' },
+      { n: 5, name: '初始政策', sub: 'POLICY' }, { n: 6, name: '检查并开始', sub: 'REVIEW' },
+    ];
+    const stepIssue = { 1: (scObj && scObj.caps.length && !S.scenarioCapsApplied[scObj.id]) ? 1 : 0, 2: (S.countries.length === 1 && S.trade) ? 1 : 0, 3: errs.filter(e => e.loc !== 'WORLD' && e.loc !== 'SCENARIO').length, 4: 0, 5: 0, 6: errs.length };
+    const stepNav = stepMeta.map(m => {
+      const active = S.step === m.n, done = S.step > m.n, badge = stepIssue[m.n];
+      return {
+        name: m.name, sub: m.sub, onPick: () => this.goStep(m.n),
+        numLabel: done && !badge ? '✓' : String(m.n),
+        numBg: active ? '#0f9d90' : done ? '#d3ede8' : '#eef2f7', numFg: active ? '#fff' : done ? '#0c8579' : '#849098',
+        bg: active ? '#ffffff' : 'transparent', border: active ? '#d3dce6' : 'transparent',
+        titleColor: active ? '#16232f' : '#586a7b', weight: active ? 600 : 500,
+        hasBadge: badge > 0, badgeText: String(badge), badgeBg: (m.n === 6 || stepIssue[m.n] && m.n === 3) ? '#d24a34' : '#c17d16',
+      };
+    });
+
+    // ---- step1 scenarios ----
+    const scenarios = this.scenarios().map(sc => {
+      const active = S.scenario === sc.id;
+      return {
+        name: sc.name, desc: sc.desc, isDefault: !!sc.def, reduced: !!sc.reduced,
+        onPick: () => this.setState({ scenario: sc.id }),
+        bg: active ? '#e6f5f0' : '#ffffff', border: active ? '#9ad9d0' : '#d3dce6',
+        radio: active ? '#0f9d90' : '#cdd7e2', dot: active ? '#0f9d90' : 'transparent',
+        capStr: sc.caps.length ? '需 ' + sc.caps.map(c => this.capLabel(c)).join(' + ') : (sc.import ? 'JSON 导入' : '无能力要求'),
+        durStr: sc.dur ? '默认 ' + sc.dur + ' tick' : '—',
+      };
+    });
+    const scenarioNeedsCaps = scObj && scObj.caps.length > 0;
+    const scenarioCaps = scObj ? scObj.caps.map(cp => {
+      const satisfied = cp === 'trade' ? S.trade : this.state.countries.every(c => this.capOf(c, cp === 'energy' ? 'energy' : cp));
+      return { label: this.capLabel(cp), mark: satisfied ? '✓' : '✕', bg: satisfied ? '#e6f5f0' : '#fff', border: satisfied ? '#9ad9d0' : '#e3c489', fg: satisfied ? '#0c8579' : '#a0691f' };
+    }) : [];
+    const baseModels = [
+      { id: 'stable', name: '当前稳定模型', desc: '普通模式唯一推荐 · Config.v124 校准', researchOnly: false },
+      { id: 'yaml', name: '研究预设 / 导入 YAML', desc: 'v2…v124 研究谱系 · 严格校验后加载', researchOnly: true },
+    ].map(bm => ({ ...bm, onPick: () => { if (bm.researchOnly && !S.research) return; this.setState({ baseModel: bm.id }); }, bg: S.baseModel === bm.id ? '#e6f5f0' : '#ffffff', border: S.baseModel === bm.id ? '#9ad9d0' : '#d3dce6', cursor: (bm.researchOnly && !S.research) ? 'not-allowed' : 'pointer', opacity: (bm.researchOnly && !S.research) ? 0.55 : 1 }));
+
+    // ---- step2 world ----
+    const durationChips = this.durations().map(d => ({ label: d.label, onPick: () => this.setState({ duration: d.id }), bg: S.duration === d.id ? '#e6f5f0' : '#f6f8fb', border: S.duration === d.id ? '#9ad9d0' : '#e6ebf1', fg: S.duration === d.id ? '#0c8579' : '#586a7b' }));
+    const dsel = this.durations().find(d => d.id === S.duration);
+    const durationNote = dsel.ticks ? dsel.ticks.toLocaleString('en-US') + ' tick · n_ticks' : '无限:不设 UI 终局,不写入危险大整数';
+    const perfChips = Object.entries(this.perfScales()).map(([k, v]) => ({ label: v.label, onPick: () => this.setState({ perfScale: k }), bg: S.perfScale === k ? '#e6f5f0' : '#f6f8fb', border: S.perfScale === k ? '#9ad9d0' : '#e6ebf1', fg: S.perfScale === k ? '#0c8579' : '#586a7b' }));
+    const ps = this.perfScales()[S.perfScale];
+    const perfNote = ps.hh + ' 户 · ' + ps.fc + '+' + ps.fk + '+' + ps.fe + ' 企业 · ' + ps.banks + ' 银行' + (S.perfScale === 'fast' ? '(沿用当前原型)' : '');
+    const singleCountry = S.countries.length === 1;
+    const worldToggles = [
+      { id: 'trade', label: '国际贸易', note: singleCountry ? '单国:无交易对手' : '双边贸易流', locked: singleCountry },
+      { id: 'capital', label: '跨境资本', note: singleCountry ? '单国禁用' : '可独立于贸易', locked: singleCountry },
+      { id: 'migration', label: '跨境迁移', note: singleCountry ? '单国禁用' : '可独立于贸易', locked: singleCountry },
+      { id: 'startPaused', label: '开局暂停', note: '先展示 t=0 决策会议', locked: false },
+    ].map(w => { const on = w.locked ? false : S[w.id]; return { label: w.label, note: w.note, onToggle: () => { if (w.locked) return; this.setState(st => ({ [w.id]: !st[w.id] })); }, track: on ? '#0f9d90' : '#cdd7e2', knob: on ? 'translateX(16px)' : 'translateX(0)', border: on ? '#9ad9d0' : '#e6ebf1', cursor: w.locked ? 'not-allowed' : 'pointer', opacity: w.locked ? 0.5 : 1 }; });
+    const crossMeta = { fx_lambda: '汇率调整 [0,1]', fx_friction: '汇率摩擦 ≥0', fx_trade_cap: '贸易汇率上限 ≥0', capital_mobility: '资本流动强度 ≥0', capital_adjust: '资本调整 [0,1]', migration_rate: '迁移速度 [0,1]', migration_max_share: '迁移份额上限 [0,1]', remittance_share: '汇回份额 [0,1]', wage_smoothing: '工资平滑 [0,1]', peg_reserves0: '挂钩初始储备 ≥0' };
+    const crossSteps = { fx_lambda: 0.01, fx_friction: 0.01, fx_trade_cap: 0.01, capital_mobility: 0.1, capital_adjust: 0.05, migration_rate: 0.01, migration_max_share: 0.05, remittance_share: 0.05, wage_smoothing: 0.01, peg_reserves0: 500 };
+    const crossFields = Object.keys(S.cross).map(k => ({ label: crossMeta[k].split(' ')[0], internal: k, range: crossMeta[k].split(' ').slice(1).join(' '), value: k === 'peg_reserves0' ? this.fmtInt(S.cross[k]) : S.cross[k].toFixed(2), onInc: () => this.setState(st => ({ cross: { ...st.cross, [k]: +(st.cross[k] + crossSteps[k]).toFixed(3) } })), onDec: () => this.setState(st => ({ cross: { ...st.cross, [k]: Math.max(0, +(st.cross[k] - crossSteps[k]).toFixed(3)) } })) }));
+
+    // ---- step3 countries ----
+    const badgeMeta = [['bank', '银'], ['bonds', '债'], ['housing_market', '房'], ['energy', '能'], ['demographics', '口'], ['capital_market', '股']];
+    const countryList = S.countries.map(c => {
+      const active = c.id === S.selCountry;
+      const badges = badgeMeta.filter(([k]) => this.capOf(c, k)).map(([k, lb]) => ({ label: lb, fg: '#586a7b', bg: '#eef2f7' }));
+      return {
+        name: c.name, code3: c.code, color: c.color, onSelect: () => this.setState({ selCountry: c.id }),
+        bg: active ? '#ffffff' : '#f6f8fb', border: active ? '#d3dce6' : '#e6ebf1',
+        isPlayer: c.id === S.playerCountry, warn: this.profiles()[c.profile].exp,
+        profileLabel: this.profiles()[c.profile].name, scaleStr: this.fmtInt(this.finalHouseholds(c)) + ' 户',
+        badges, hasOverride: this.overrideCount(c) > 0, overrideCount: this.overrideCount(c),
+      };
+    });
+    const c0 = this.cur();
+    const profileCards = Object.entries(this.profiles()).map(([pid, p]) => {
+      const active = c0.profile === pid;
+      const bars = [
+        { title: '生产率', w: Math.min(100, p.a / 1.3 * 100).toFixed(0) + '%', color: '#0f9d90' },
+        { title: '规模', w: Math.min(100, p.hh / 1.6 * 100).toFixed(0) + '%', color: '#2f6fd0' },
+        { title: '必需品倾向', w: (p.nec / 0.8 * 100).toFixed(0) + '%', color: '#c17d16' },
+      ];
+      return { name: p.name, desc: p.desc, exp: p.exp, onPick: () => this.pickProfile(pid), bg: active ? '#e6f5f0' : '#ffffff', border: active ? '#9ad9d0' : '#d3dce6', bars };
+    });
+    const q = S.structSearch.trim().toLowerCase();
+    const structGroups = this.structFields().map(g => ({
+      name: g.g,
+      fields: g.fields.filter(f => {
+        if (S.structOverriddenOnly && c0.ov[f.id] === undefined) return false;
+        if (q && !(f.label.toLowerCase().includes(q) || f.internal.toLowerCase().includes(q))) return false;
+        return true;
+      }).map(f => {
+        const overridden = c0.ov[f.id] !== undefined;
+        const vm = { label: f.label, internal: f.internal, unlockStr: f.unlocks ? ' · 解锁 ' + f.unlocks : '', bg: overridden ? '#f2f7ff' : '#ffffff', border: overridden ? '#b6d1f2' : '#e6ebf1', isToggle: f.kind === 'toggle', isStepper: f.kind === 'stepper', isSelect: f.kind === 'select' };
+        if (f.kind === 'toggle') { const on = this.capOf(c0, f.id); vm.onToggle = () => this.toggleStructField(f); vm.track = on ? '#0f9d90' : '#cdd7e2'; vm.knob = on ? 'translateX(15px)' : 'translateX(0)'; }
+        if (f.kind === 'stepper') { const v = this.structVal(c0, f); vm.value = f.fmt ? this.fmtVal(f.fmt, v) : this.fmtInt(v); vm.onInc = () => this.stepStructField(f, 1); vm.onDec = () => this.stepStructField(f, -1); }
+        if (f.kind === 'select') { const v = this.structVal(c0, f); vm.options = f.options.map(([ov, ol]) => ({ v: ov, label: ol, sel: v === ov })); vm.onChange = (e) => this.setStructSelect(f, e.target.value); }
+        return vm;
+      }),
+    })).filter(g => g.fields.length);
+
+    // ---- step4 seats ----
+    const playerCountryChips = S.countries.map(c => ({ name: c.name, code3: c.code, color: c.color, onPick: () => this.setState({ playerCountry: c.id }), bg: c.id === S.playerCountry ? '#e6f5f0' : '#ffffff', border: c.id === S.playerCountry ? '#9ad9d0' : '#d3dce6', fg: c.id === S.playerCountry ? '#0c8579' : '#586a7b', weight: c.id === S.playerCountry ? 600 : 500 }));
+    const pseats = S.seats[S.playerCountry] || { cb: 'human', treasury: 'human', regulator: 'human', external: 'human', energy: 'human' };
+    const seatRows = this.seatDefs().map(sd => ({
+      name: sd.name, accent: sd.accent, groupsStr: sd.groups,
+      occupantOptions: this.occupants().filter(o => { if (o.tag === '研究' && !S.research) return false; if (o.tag === '实验室' && !S.research) return false; if (o.tag === '高级' && !S.research) return false; return true; }).map(o => ({ v: o.id, label: o.label, sel: (pseats[sd.id] || 'human') === o.id })),
+      onChange: (e) => this.setState(st => ({ seats: { ...st.seats, [S.playerCountry]: { ...pseats, [sd.id]: e.target.value } } })),
+    }));
+    const humanSeatCount = Object.values(pseats).filter(v => v === 'human').length;
+    const seatOccupantNote = '你持有 ' + humanSeatCount + ' / 5 个人类席位;其余为自动 Occupant。RL / 预定 / 随机需研究模式。';
+    const otherCountries = S.countries.filter(c => c.id !== S.playerCountry).map(c => ({ name: c.name, code3: c.code, color: c.color }));
+    const runModeCards = [
+      { id: 'interactive', name: '交互', desc: '人类会议无限等待(默认)', locked: false },
+      { id: 'realtime', name: '实时', desc: '墙钟倒计时,超时走"不动作"', locked: false },
+      { id: 'batch', name: '批量', desc: '需全部自动 Occupant', locked: humanSeatCount > 0 },
+      { id: 'replay', name: '回放', desc: '由存档 / 事件带决定', locked: true },
+    ].map(r => ({ name: r.name, desc: r.desc, onPick: () => { if (r.locked) return; this.setState({ runMode: r.id }); }, bg: S.runMode === r.id && !r.locked ? '#e6f5f0' : '#ffffff', border: S.runMode === r.id && !r.locked ? '#9ad9d0' : '#d3dce6', cursor: r.locked ? 'not-allowed' : 'pointer', opacity: r.locked ? 0.5 : 1 }));
+    const calendarRows = [
+      { groups: '货币立场 · 流动性操作', human: '约每 1.5 月', tick: '45 tick' },
+      { groups: '财政 · 债务 · 宏观审慎 · 贸易迁移 · 外汇 · 能源操作', human: '每季度', tick: '91 tick' },
+      { groups: '税收转移 · 结构法律 · 能源结构', human: '每年', tick: '365 tick' },
+    ];
+
+    // ---- step5 policy ----
+    const policyCountryOptions = S.countries.map(c => ({ v: c.id, label: c.name + (c.id === S.playerCountry ? ' · 玩家' : ''), sel: c.id === S.policyCountry }));
+    const policySeatTabs = this.seatDefs().map(sd => ({ label: sd.name, onPick: () => this.setState({ policySeat: sd.id }), bg: S.policySeat === sd.id ? '#ffffff' : 'transparent', fg: S.policySeat === sd.id ? '#16232f' : '#849098' }));
+    const pfilters = [['all', '全部'], ['changed', '只看已改'], ['mine', '本席位']];
+    const policyFilterChips = pfilters.map(([id, lb]) => ({ label: lb, onPick: () => this.setState({ policyFilter: id }), bg: S.policyFilter === id ? '#e6effb' : '#f6f8fb', border: S.policyFilter === id ? '#b6d1f2' : '#e6ebf1', fg: S.policyFilter === id ? '#1c4a8f' : '#586a7b' }));
+    const pq = S.policySearch.trim().toLowerCase();
+    const curRegimeMon = this.regimeOf(S.policyCountry, 'cb', 'monetary_regime');
+    const curRegimeFx = this.regimeOf(S.policyCountry, 'cb', 'fx_regime');
+    let policyLeverCount = 0;
+    const policyGroups = (this.policyDefs()[S.policySeat] || []).map(g => ({
+      name: g.name, internal: g.internal,
+      levers: g.levers.filter(lev => {
+        if (lev.reqRegime === 'manual' && curRegimeMon !== 'manual') return false;
+        if (lev.reqRegime === 'peg' && curRegimeFx !== 'peg') return false;
+        const k = this.polKey(S.policyCountry, S.policySeat, lev.id);
+        const changed = S.pol[k] !== undefined && S.pol[k] !== lev.v;
+        if (S.policyFilter === 'changed' && !changed) return false;
+        if (pq && !(lev.name.toLowerCase().includes(pq) || lev.id.toLowerCase().includes(pq))) return false;
+        return true;
+      }).map(lev => {
+        policyLeverCount++;
+        const k = this.polKey(S.policyCountry, S.policySeat, lev.id);
+        const changed = S.pol[k] !== undefined && S.pol[k] !== lev.v;
+        const vm = { name: lev.name, internal: lev.id, bg: changed ? '#f2f7ff' : '#ffffff', border: changed ? '#b6d1f2' : '#d3dce6', src: changed ? '本国覆盖' : '继承预设', srcFg: changed ? '#1c4a8f' : '#68788b', srcBg: changed ? '#e6effb' : '#eef2f7', isStep: lev.kind === 'step', isSeg: lev.kind === 'seg', isToggle: lev.kind === 'toggle', isSelect: lev.kind === 'anchor', auxStr: '' };
+        if (lev.kind === 'step') { const v = this.polVal(lev); vm.valueStr = this.fmtVal(lev.fmt, v) + (lev.unit || ''); vm.onInc = () => this.stepPol(lev, 1); vm.onDec = () => this.stepPol(lev, -1); if (lev.fmt === 'rate' || lev.fmt === 'pct2') vm.auxStr = ' · 年化读数'; }
+        if (lev.kind === 'seg') { const v = this.polVal(lev); vm.options = lev.options.map(([ov, ol]) => ({ label: ol, onPick: () => this.setPol(lev, ov), bg: v === ov ? '#0f9d90' : 'transparent', fg: v === ov ? '#fff' : '#586a7b' })); }
+        if (lev.kind === 'toggle') { const on = this.polVal(lev); vm.onToggle = () => this.setPol(lev, !on); vm.track = on ? '#0f9d90' : '#cdd7e2'; vm.knob = on ? 'translateX(16px)' : 'translateX(0)'; }
+        if (lev.kind === 'anchor') { const v = this.polVal(lev); vm.selBorder = v ? '#9ad9d0' : '#e3c489'; vm.selOptions = [{ v: '', label: '— 选锚(浮动国)—', sel: !v }].concat(S.countries.filter(c => c.id !== S.policyCountry).map(c => ({ v: c.id, label: c.name, sel: v === c.id }))); vm.onChange = (e) => this.setPol(lev, e.target.value); }
+        return vm;
+      }),
+    })).filter(g => g.levers.length);
+
+    // ---- step6 review ----
+    const world = this.player();
+    const durLabel = this.durations().find(d => d.id === S.duration).label;
+    const capsOn = [S.trade && '贸易', S.capital && '资本', S.migration && '迁移'].filter(Boolean).join(' · ') || '无';
+    const totalHH = S.countries.reduce((a, c) => a + this.finalHouseholds(c), 0);
+    const changedPol = Object.keys(S.pol).filter(k => { const [cid, sid, lid] = k.split('.'); const lev = (this.policyDefs()[sid] || []).flatMap(g => g.levers).find(l => l.id === lid); return lev && S.pol[k] !== lev.v; }).length;
+    const manifestCards = [
+      { title: 'WORLD · 世界', accent: '#2f6fd0', rows: [
+        { k: '国家数', v: String(S.countries.length), src: '世界设置', hasSrc: true },
+        { k: '日历', v: '365 tick / 年 · 日历日制', hasSrc: false },
+        { k: '时长', v: durLabel, src: '世界设置', hasSrc: true },
+        { k: 'seed', v: String(S.seed), src: '世界设置', hasSrc: true },
+        { k: '跨境', v: capsOn, hasSrc: false },
+      ]},
+      { title: 'COUNTRIES · 国家', accent: '#0f9d90', rows: S.countries.slice(0, 4).map(c => ({ k: c.name, v: this.profiles()[c.profile].name + ' · ' + this.fmtInt(this.finalHouseholds(c)) + ' 户 · 覆盖 ' + this.overrideCount(c), src: 'Profile', hasSrc: true })) },
+      { title: 'GOVERNMENT · 政府', accent: '#7a4fd0', rows: [
+        { k: '玩家国家', v: world.name, hasSrc: false },
+        { k: '人类席位', v: humanSeatCount + ' / 5', src: '席位', hasSrc: true },
+        { k: '会议模式', v: ({ interactive: '交互', realtime: '实时', batch: '批量', replay: '回放' })[S.runMode], hasSrc: false },
+        { k: '他国', v: (S.countries.length - 1) + ' 国政策冻结', hasSrc: false },
+      ]},
+      { title: 'POLICY · 初始政策', accent: '#c17d16', rows: [
+        { k: '相对预设', v: changedPol + ' 项改动', src: '初始政策', hasSrc: true },
+        { k: '货币制度', v: ({ exogenous: '外生', taylor: '泰勒', manual: '手动' })[curRegimeMon], hasSrc: false },
+        { k: '汇率制度', v: curRegimeFx === 'peg' ? '盯住' : '浮动', hasSrc: false },
+      ]},
+      { title: 'SCENARIO · 场景', accent: '#d24a34', rows: [
+        { k: '场景', v: scObj.name, hasSrc: false },
+        { k: '能力需求', v: scObj.caps.length ? scObj.caps.map(c => this.capLabel(c)).join(' + ') : '无', hasSrc: false },
+        { k: '校准', v: scObj.reduced ? '约化 · 未实证校准' : '—', hasSrc: false },
+      ]},
+      { title: 'REPRODUCIBILITY · 可复现', accent: '#3f6db2', rows: [
+        { k: '模型版本', v: 'Config.v124', hasSrc: false },
+        { k: 'schema', v: 'v31', hasSrc: false },
+        { k: 'config hash', v: 'a7f3…9c2e', hasSrc: false },
+        { k: 'base_seed', v: String(S.seed) + ' → +i×1e6', hasSrc: false },
+      ]},
+      { title: 'PERFORMANCE · 性能', accent: '#1f9d63', rows: [
+        { k: '总家庭', v: this.fmtInt(totalHH) + ' 代理人', hasSrc: false },
+        { k: '规模档', v: this.perfScales()[S.perfScale].label, src: '世界设置', hasSrc: true },
+        { k: '企业', v: this.fmtInt(S.countries.reduce((a, c) => a + this.finalFirms(c), 0)) + ' 家', hasSrc: false },
+      ]},
+    ];
+    const allIssues = errs.map(e => ({ ...e, kind: 'err' })).concat(warns.map(w => ({ ...w, kind: 'warn' }))).concat(infos.map(i => ({ ...i, kind: 'info' })));
+    const issues = allIssues.map(x => ({ text: x.text, loc: x.loc, icon: x.kind === 'err' ? '✕' : x.kind === 'warn' ? '⚠' : 'ℹ', bg: x.kind === 'err' ? '#fdeee9' : x.kind === 'warn' ? '#fbf3e2' : '#e6effb', border: x.kind === 'err' ? '#f0bcae' : x.kind === 'warn' ? '#e3c489' : '#b6d1f2', fg: x.kind === 'err' ? '#c23f2a' : x.kind === 'warn' ? '#a0691f' : '#1c4a8f' }));
+
+    // ---- right summary ----
+    const summarySections = [
+      { title: '场景', rows: [{ k: '场景', v: scObj.name }, { k: '模型', v: '稳定 v124' }] },
+      { title: '世界', rows: [{ k: '国家', v: String(S.countries.length) }, { k: '时长', v: durLabel }, { k: 'seed', v: String(S.seed) }, { k: '跨境', v: capsOn }] },
+      { title: '国家', rows: S.countries.slice(0, 4).map(c => ({ k: c.code, v: this.profiles()[c.profile].name })) },
+      { title: '政府', rows: [{ k: '玩家国', v: world.name }, { k: '人类席位', v: humanSeatCount + '/5' }, { k: '模式', v: ({ interactive: '交互', realtime: '实时', batch: '批量', replay: '回放' })[S.runMode] }] },
+      { title: '政策', rows: [{ k: '改动', v: changedPol + ' 项' }] },
+    ];
+
+    // ---- launch ----
+    const launchStepDefs = [
+      { text: '创建 ' + S.countries.length + ' 个经济体', detail: this.fmtInt(totalHH) + ' 户' },
+      { text: '绑定场景 ShockTape', detail: scObj.name },
+      { text: '分配政策席位', detail: humanSeatCount + ' 人类' },
+      { text: '派生 RNG 子流', detail: 'seed ' + S.seed },
+    ];
+    const launchSteps = launchStepDefs.map((l, i) => { const done = i < S.launchProg, active = i === S.launchProg; return { text: l.text, detail: l.detail, mark: done ? '✓' : (active ? '·' : ''), markBg: done ? '#1f9d63' : (active ? '#0f9d90' : '#cdd7e2'), border: active ? '#9ad9d0' : '#e6ebf1', opacity: (done || active) ? 1 : 0.5 }; });
+
+    // ---- settings ----
+    const setToggle = (key) => ({ onToggle: () => this.setState(st => ({ settings: { ...st.settings, [key]: !st.settings[key] } })), track: S.settings[key] ? '#0f9d90' : '#cdd7e2', knob: S.settings[key] ? 'translateX(15px)' : 'translateX(0)' });
+    const settingsGroups = [
+      { name: '显示', items: [{ label: '全屏', isToggle: true, ...setToggle('fullscreen') }, { label: 'UI 缩放', isValue: true, value: S.settings.uiScale }, { label: '界面密度', isValue: true, value: S.settings.density }] },
+      { name: '语言与数字', items: [{ label: '语言', isValue: true, value: S.settings.lang }, { label: '数字缩写', isToggle: true, ...setToggle('numAbbr') }] },
+      { name: '可访问性', items: [{ label: '色觉安全色板', isToggle: true, ...setToggle('colorSafe') }, { label: '减少动效', isToggle: true, ...setToggle('reduceMotion') }, { label: '高对比度', isToggle: true, ...setToggle('highContrast'), hasNote: true, note: '不只靠颜色表达风险' }] },
+      { name: '游戏流', items: [{ label: '默认交互模式', isValue: true, value: '交互' }, { label: '实时决策时限', isValue: true, value: '30 s' }, { label: '开局暂停', isToggle: true, ...setToggle('startPaused') }] },
+      { name: '存档', items: [{ label: '自动存档', isToggle: true, ...setToggle('autosave'), hasNote: true, note: '仅在完成的 tick 边界保存' }, { label: '保留份数', isValue: true, value: '10' }] },
+      { name: '开发者', items: [{ label: '上帝视角(真值)', isToggle: true, ...setToggle('godMode') }, { label: '显示内部字段名', isToggle: true, ...setToggle('internalNames') }, { label: '音频', isValue: true, value: '待实现' }] },
+    ];
+
+    const footDots = stepMeta.map(m => ({ w: S.step === m.n ? '22px' : '6px', bg: S.step === m.n ? '#0f9d90' : (S.step > m.n ? '#9ad9d0' : '#d3dce6') }));
+
+    return {
+      // screens
+      isHome: S.screen === 'home', isWizard: S.screen === 'wizard', isLaunching: S.screen === 'launching',
+      settingsOpen: S.settingsOpen, openSettings: () => this.setState({ settingsOpen: true }), closeSettings: () => this.setState({ settingsOpen: false }),
+      onHome: () => { if (this._lt) { clearInterval(this._lt); this._lt = null; } this.setState({ screen: 'home' }); },
+      onContinue: () => this.setState({ screen: 'wizard', step: 1 }),
+      homeMenu, modeToggle, isResearch: S.research,
+
+      // nav
+      stepNav, atStep1: S.step === 1, atStep2: S.step === 2, atStep3: S.step === 3, atStep4: S.step === 4, atStep5: S.step === 5, atStep6: S.step === 6,
+      onNext: () => this.onNext(), onBack: () => this.onBack(), onLaunch: () => this.launch(), goStep: (n) => this.goStep(n),
+      isLastStep: S.step === 6, isNotLastStep: S.step !== 6,
+      backFg: '#586a7b', backCursor: 'pointer', stepPos: '第 ' + S.step + ' / 6 步', footDots,
+      showSummary: S.step !== 6,
+      launchBg: errs.length ? '#eef1f5' : '#0f9d90', launchBorder: errs.length ? '#d3dce6' : '#0c8579', launchFg: errs.length ? '#96a3b2' : '#fff', launchCursor: errs.length ? 'not-allowed' : 'pointer',
+
+      // step1
+      scenarios, scenarioNeedsCaps, scenarioName: scObj.name, scenarioCaps,
+      applyScenarioCaps: () => this.setState(st => ({ scenarioCapsApplied: { ...st.scenarioCapsApplied, [scObj.id]: true } })),
+      baseModels,
+
+      // step2
+      countryCount: S.countries.length, incCountry: () => this.incCountry(), decCountry: () => this.decCountry(),
+      seedStr: String(S.seed), onSeedInput: (e) => { const v = parseInt(e.target.value.replace(/\D/g, '') || '0', 10); this.setState({ seed: Math.min(2147483647, v) }); },
+      rollSeed: () => this.setState({ seed: Math.floor(Math.random() * 2147483647) }), copySeed: () => {},
+      durationChips, durationNote, perfChips, perfNote, worldToggles,
+      toggleCrossAdvanced: () => this.setState(st => ({ crossOpen: !st.crossOpen })), crossOpen: S.crossOpen, crossCaret: S.crossOpen ? 'rotate(90deg)' : 'rotate(0)', crossCoveredStr: '10 项 · 高级', crossFields,
+
+      // step3
+      addCountry: () => this.addCountry(), countryList,
+      selColor: c0.color, selCode: c0.code, selName: c0.name, selCurrency: c0.cur, selIntro: c0.intro,
+      canDelete: S.countries.length > 1, deleteCountry: () => this.deleteCountry(), applyToAll: () => this.applyToAll(), restoreProfile: () => this.restoreProfile(),
+      profileCards, selHouseholds: this.fmtInt(this.finalHouseholds(c0)), selPopulation: this.fmtInt(this.finalHouseholds(c0) * 2.3) + ' (派生)', selFirms: this.fmtInt(this.finalFirms(c0)),
+      structSearchStr: S.structSearch, onStructSearch: (e) => this.setState({ structSearch: e.target.value }),
+      toggleStructOverridden: () => this.setState(st => ({ structOverriddenOnly: !st.structOverriddenOnly })),
+      structFilterBg: S.structOverriddenOnly ? '#e6effb' : '#f6f8fb', structFilterBorder: S.structOverriddenOnly ? '#b6d1f2' : '#e6ebf1', structFilterFg: S.structOverriddenOnly ? '#1c4a8f' : '#586a7b',
+      structGroups,
+
+      // step4
+      playerCountryChips, playerName: world.name, seatRows, seatOccupantNote,
+      hasOtherCountries: S.countries.length > 1, otherCountries, runModeCards,
+      toggleCalendar: () => this.setState(st => ({ calendarOpen: !st.calendarOpen })), calendarOpen: S.calendarOpen, calCaret: S.calendarOpen ? 'rotate(90deg)' : 'rotate(0)', calendarRows,
+
+      // step5
+      policyCountryOptions, onPolicyCountryChange: (e) => this.setState({ policyCountry: e.target.value }),
+      policySeatTabs, policySearchStr: S.policySearch, onPolicySearch: (e) => this.setState({ policySearch: e.target.value }),
+      policyFilterChips, policyGroups, policyEmpty: policyLeverCount === 0,
+
+      // step6
+      errBox: { count: errs.length, icon: errs.length ? '✕' : '✓', bg: errs.length ? '#fdeee9' : '#e3f4ea', border: errs.length ? '#f0bcae' : '#9ddcb8', fg: errs.length ? '#c23f2a' : '#1f9d63' },
+      warnCount: warns.length, infoCount: infos.length, hasIssues: allIssues.length > 0, issues, manifestCards,
+
+      // summary
+      summarySections, readyDot: errs.length ? '#d24a34' : '#1f9d63', readyFg: errs.length ? '#c23f2a' : '#1f9d63', readyLabel: errs.length ? errs.length + ' 错误' : '就绪',
+
+      // launch
+      launchSteps, launchDoneOpacity: S.launchProg >= 4 ? 1 : 0.35,
+
+      // settings + prompt
+      settingsGroups,
+      hasPrompt: !!S.prompt, promptTitle: S.prompt ? S.prompt.title : '', promptBody: S.prompt ? S.prompt.body : '',
+      promptHasNote: !!(S.prompt && S.prompt.note), promptNote: S.prompt ? S.prompt.note : '',
+      promptActions: S.prompt ? S.prompt.actions : [], promptCancel: () => this.setState({ prompt: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

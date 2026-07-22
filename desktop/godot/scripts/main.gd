@@ -3,6 +3,7 @@ extends Control
 ## 前端零经济逻辑;三国耦合世界,玩家持 0 号经济体全部 5 个席位(102 旋钮全落地)。
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
+const StartMenuScript = preload("res://scripts/start_menu.gd")
 
 const SPEEDS := [1, 5, 15, 60]
 
@@ -409,6 +410,8 @@ var _last_page := ""
 var _last_release_at: Dictionary = {}   # sid -> released_at(磁贴闪光判定)
 var _crisis_was_visible := false
 var _scroll_mem: Dictionary = {}        # key -> scroll_vertical
+var _start_menu: Control
+var _new_game_draft: Dictionary = {}
 
 
 func _ready() -> void:
@@ -420,6 +423,12 @@ func _ready() -> void:
 	_mono.fallbacks = [_sans]
 	_build_theme()
 	_build_ui()
+	if OS.get_environment("MACRO_SIM_SKIP_START_MENU") != "1":
+		_start_menu = StartMenuScript.new()
+		_start_menu.launch_requested.connect(_on_start_menu_launch)
+		_start_menu.continue_requested.connect(func() -> void:
+			_playing = false)
+		add_child(_start_menu)
 	_client = SimulationClientScript.new()
 	add_child(_client)
 	_client.connected.connect(_on_connected)
@@ -450,6 +459,8 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _start_menu != null and _start_menu.visible:
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
@@ -475,6 +486,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _demo_crisis:
 				_demo_crisis = false
 				_render()
+
+
+func _on_start_menu_launch(config: Dictionary) -> void:
+	_playing = false
+	var draft: Dictionary = config.get("draft", {})
+	_new_game_draft = draft.duplicate(true)
+	_mode = str(draft.get("run_mode", "interactive"))
+	if _mode not in ["interactive", "realtime"]:
+		_mode = "interactive"
+	_send({"command": "new_game", "seed": int(config.get("seed", 7))})
 
 
 # ================= 通信 =================
