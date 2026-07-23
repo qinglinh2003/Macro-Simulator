@@ -17,8 +17,8 @@ def test_every_source_field_classified_exactly_once():
 
 def test_source_counts_documented():
     fields = discover()
-    assert len(fields["Config"]) == 364
+    assert len(fields["Config"]) == 370
     assert len(fields["Policy"]) == 88   # 86 - central_bank(deleted) + monetary_regime + jg_share + deposit_floor
-    assert len(fields["World"]) == 32   # + v27 semantic ShockTape/ShockEngine input
+    assert len(fields["World"]) == 34   # + dealer pricing and clearing-union mechanism
     assert len(fields["Social"]) == 35
     assert len(fields["Relationship"]) == 12

@@ -104,7 +104,7 @@ CONFIG_STRUCTURE = {
     "startup_capital", "float_shares", "shares_per_firm", "watchlist_size",
     "genesis_founder_pool", "founder_owned_genesis", "bank_capital_frac",
     "house_price_income_years", "ticks_per_year", "energy_util0",
-    "demographics_population", "K_firm0",
+    "demographics_population", "K_firm0", "simulation_start_date",
 }
 
 CONFIG_PHYSICS = {
@@ -138,6 +138,7 @@ CONFIG_PHYSICS = {
     "housing_ask_markup", "housing_forced_discount", "housing_ask_decay",
     "housing_search_k", "housing_buyer_buffer", "housing_distress_floor",
     "housing_session_interval", "builder_productivity", "builder_demand_seed",
+    "builder_demand_price_gain", "builder_inventory_buffer",
     "housing_wealth_effect", "family_transfer_buffer", "switch_retool_loss",
     "switch_return_gap", "switch_pressure_days", "switch_hazard", "necessity_share0",
     "n_firm_share", "subsistence_share", "tfp_drift_rate", "tfp_drift_sigma",
@@ -181,13 +182,14 @@ CONFIG_MECHANISM = {
     "deprivation_gauges", "national_accounts_metrics", "consumption_strata",
     "family_transfers", "sector_switching", "monetary_direct_transmission",
     "interest_by_deposits", "index_startup", "capital_annual_clock",
-    "pro_rata_dividends",
+    "pro_rata_dividends", "builder_land_fee_credit", "deposit_interest_arrears",
 }
 
 CONFIG_INFRA = {
     "claims_reconcile_interval", "ledger_rel_tol", "bond_maturity_bucket",
     "capital_service_min_utilization", "rental_vacancy_deadband",
     "rental_rent_floor_wage_share", "housing_demand_step", "cpi_item_link_cap",
+    "housing_ask_floor_wage_share",
     "cpi_rebase_interval_days", "demo_feedback_burnin_years",
     "demo_signal_halflife_years", "housing_signal_burnin_years",
     "energy_signal_burnin_years", "deprivation_burnin_years",
@@ -208,11 +210,14 @@ WORLD_POLICY = {
 }
 WORLD_PENDING_MIGRATION = {"peg_economy"}   # PROPOSED deletion; blocked on §5.1 multi-pegger ruling
 WORLD_STRUCTURE = {"base_seed", "periods_per_year", "peg_reserves0"}
-WORLD_MECHANISM = {"couple", "trade", "capital", "migration"}
+WORLD_MECHANISM = {
+    "couple", "trade", "capital", "migration", "fx_loss_mutualization",
+}
 WORLD_SHOCK_MODULE = {"shocks"}
 WORLD_PHYSICS = {
     "fx_lambda", "fx_friction", "fx_trade_cap", "capital_mobility", "capital_adjust",
     "migration_rate", "migration_max_share", "remittance_share", "wage_smoothing",
+    "fx_spread",
 }
 
 # ---- Nested demographic configs ----

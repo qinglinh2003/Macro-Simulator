@@ -26,7 +26,7 @@ save-container `events.log` and, later, the frontend network protocol.
 > P0: a MACHINE-VERIFIED classification (script asserts every field appears in exactly one
 > bucket) + the hardcoded-institution sweep + per-lever effectiveness tests.
 
-Sources actually swept so far: 364 root-Config fields, 32 World keyword tunables (33 user
+Sources actually swept so far: 370 root-Config fields, 34 World keyword tunables (35 user
 params incl. `configs`; the v27 `shocks` input is classified as Shock module, not Policy;
 peg_economy: migration into ExternalPolicy PENDING the §5.1
 multi-pegger ruling), the existing
@@ -230,11 +230,12 @@ interbank_rate_base, interbank_tightness, bond_theta, bank_bond_appetite, rent_y
 rent_adjust, rent_burden_cap, rental_investor_premium,
 housing_ask_markup, housing_forced_discount, housing_ask_decay, housing_search_k,
 housing_buyer_buffer, housing_distress_floor, housing_session_interval,
-builder_productivity, builder_demand_seed,
+builder_productivity, builder_demand_seed, builder_demand_price_gain,
+builder_inventory_buffer,
 housing_wealth_effect, family_transfer_buffer, switch_retool_loss, switch_return_gap,
 switch_pressure_days, switch_hazard, necessity_share0, n_firm_share, subsistence_share,
 tfp_drift_rate, tfp_drift_sigma, tfp_law, tfp_learning_theta, tfp_drift_c/_k/_e,
-[W] fx_lambda, fx_friction, fx_trade_cap, capital_mobility, capital_adjust,
+[W] fx_lambda, fx_friction, fx_spread, fx_trade_cap, capital_mobility, capital_adjust,
 migration_rate, migration_max_share, remittance_share, wage_smoothing.
 
 **Physics — demography**: demographics_tfr, demographics_mortality_scale,
@@ -262,12 +263,14 @@ household_interest_arrears, margin_credit, gibrat_growth, firm_dynamics, symmetr
 k_replacement_floor, energy_enabled, energy_household, deprivation_gauges,
 national_accounts_metrics, consumption_strata,
 family_transfers, sector_switching, monetary_direct_transmission, interest_by_deposits,
-index_startup, capital_annual_clock, pro_rata_dividends, demo feedback/burnin flags,
-[W] couple, trade, capital, migration.
+index_startup, capital_annual_clock, pro_rata_dividends, builder_land_fee_credit,
+deposit_interest_arrears, demo feedback/burnin flags,
+[W] couple, trade, capital, migration, fx_loss_mutualization.
 
 **Infra / numerics / diagnostics**: claims_reconcile_interval, ledger_rel_tol,
 bond_maturity_bucket, capital_service_min_utilization, rental_vacancy_deadband,
-rental_rent_floor_wage_share, housing_demand_step, cpi_item_link_cap,
+rental_rent_floor_wage_share, housing_demand_step, housing_ask_floor_wage_share,
+cpi_item_link_cap,
 cpi_rebase_interval_days, demo_feedback_burnin_years,
 demo_signal_halflife_years, housing_signal_burnin_years, energy_signal_burnin_years,
 deprivation_burnin_years, deprivation_acute_days, deprivation_chronic_days,
