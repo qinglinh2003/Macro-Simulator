@@ -39,6 +39,9 @@ const MAX_START_YEAR := 2200
 const COUNTRY_SCALE_FIELDS := [
 	"n_firms_c", "n_firms_k", "n_firms_e", "n_builders", "n_banks",
 ]
+const POPULATION_LINKED_FIELDS := [
+	"n_firms_c", "n_firms_k", "n_firms_e", "n_builders",
+]
 
 const STEP_META := [
 	["场景", "SCENARIO"], ["世界设置", "WORLD"],
@@ -141,6 +144,8 @@ var _cross_values := {"fx_lambda": 0.05, "fx_friction": 0.03,
 var _countries: Array = []
 var _selected_country := 0
 var _player_country := 0
+var _profile_mapping_enabled := true
+var _population_mapping_enabled := true
 var _run_mode := "interactive"
 var _seat_occupants: Dictionary = {}
 var _calendar_open := false
@@ -184,11 +189,15 @@ func _ready() -> void:
 
 
 func _reset_defaults() -> void:
+	_profile_mapping_enabled = true
+	_population_mapping_enabled = true
 	_countries = [
 		_country_record(0, "advanced"),
 		_country_record(1, "developing"),
 		_country_record(2, "petrostate"),
 	]
+	for country: Dictionary in _countries:
+		_select_profile(country, str(country["profile"]))
 	for seat: Dictionary in SEATS:
 		_seat_occupants[str(seat["id"])] = "human"
 
@@ -203,7 +212,8 @@ func set_policy_schemas(value: Dictionary) -> void:
 
 func _country_record(index: int, profile: String = "symmetric") -> Dictionary:
 	return {"name": COUNTRY_NAMES[index], "code": COUNTRY_CODES[index],
-		"color": COUNTRY_COLORS[index], "profile": profile, "overrides": {}}
+		"color": COUNTRY_COLORS[index], "profile": profile, "overrides": {},
+		"baseline_overrides": {}, "firm_population_ratios": {}}
 
 
 func _render() -> void:
@@ -667,13 +677,16 @@ func _step_countries(parent: VBoxContainer) -> void:
 	var flag := PanelContainer.new(); flag.custom_minimum_size = Vector2(44, 44); flag.add_theme_stylebox_override("panel", _sb(c["color"], c["color"], 11, 0)); var fc := CenterContainer.new(); flag.add_child(fc); fc.add_child(_label(str(c["code"]), 11, Color.WHITE, true, true)); identity.add_child(flag)
 	var idwords := VBoxContainer.new(); idwords.size_flags_horizontal = Control.SIZE_EXPAND_FILL; idwords.add_child(_label(str(c["name"]), 19, INK, true)); idwords.add_child(_label("%s · 高生产率核心经济体" % str(c["code"]), 11, INK3, false, true)); identity.add_child(idwords)
 	identity.add_child(_button("应用到所有国家", func() -> void: _apply_profile_all(), false, 11))
-	identity.add_child(_button("恢复 Profile", func() -> void: c["overrides"] = {}; _render(), false, 11))
+	identity.add_child(_button("恢复 Profile", func() -> void:
+		_select_profile(c, str(c["profile"]))
+		_render(), false, 11))
 	if _countries.size() > 1:
 		identity.add_child(_button("删除", _delete_selected_country, false, 11))
 	editor.add_child(identity)
 	editor.add_child(_kicker("COUNTRY PROFILE · 创世覆盖（非政策）"))
 	var profiles := GridContainer.new(); profiles.columns = 3; profiles.add_theme_constant_override("h_separation", 8); profiles.add_theme_constant_override("v_separation", 8); editor.add_child(profiles)
 	for pid in PROFILES.keys(): profiles.add_child(_profile_card(str(pid)))
+	editor.add_child(_profile_mapping_controls())
 	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("初始人口  %d" % _agent_population(c), 11, INK2)); statrow.add_child(_label("家庭账户  创世匹配派生", 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
 	editor.add_child(_kicker("结构能力"))
 	for group: Dictionary in STRUCT_GROUPS:
@@ -697,8 +710,45 @@ func _country_card(index: int) -> Control:
 
 func _profile_card(pid: String) -> Control:
 	var c: Dictionary = _countries[_selected_country]; var p: Dictionary = PROFILES[pid]; var active := str(c["profile"]) == pid
-	var b := Button.new(); b.custom_minimum_size = Vector2(176, 74); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; b.add_theme_stylebox_override("normal", _sb(TEAL_BG if active else PAPER, TEAL_BD if active else LINE, 10, 9)); b.pressed.connect(func() -> void: c["profile"] = pid; c["overrides"] = {}; _render())
+	var b := Button.new(); b.custom_minimum_size = Vector2(176, 74); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; b.add_theme_stylebox_override("normal", _sb(TEAL_BG if active else PAPER, TEAL_BD if active else LINE, 10, 9)); b.pressed.connect(func() -> void:
+		_select_profile(c, pid)
+		_render())
 	var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(_label(str(p["name"]), 13, INK, true)); var d := _label(str(p["desc"]), 10, Color("68788b")); d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d.max_lines_visible = 2; d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; v.add_child(d); _fill_inset(v, 10); b.add_child(v); return b
+
+
+func _profile_mapping_controls() -> Control:
+	var panel := _panel(PANEL, LINE2, 9, 8)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	panel.add_child(row)
+	row.add_child(_mapping_switch(
+		"Profile 按基线映射",
+		"用修改后的对称基线，按各 Profile 的相对倍率换算",
+		_profile_mapping_enabled,
+		func() -> void:
+			_profile_mapping_enabled = not _profile_mapping_enabled
+			_render()))
+	row.add_child(_v_rule(34))
+	row.add_child(_mapping_switch(
+		"企业随人口缩放",
+		"人口变化时保持各类企业的人口密度；银行数不联动",
+		_population_mapping_enabled,
+		func() -> void: _toggle_population_mapping()))
+	return panel
+
+
+func _mapping_switch(title: String, desc: String, enabled: bool,
+		callback: Callable) -> Control:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 9)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_child(_label(title, 11, INK, true))
+	text.add_child(_label(desc, 9, MUTED))
+	row.add_child(text)
+	row.add_child(_switch_button(enabled, callback))
+	return row
 
 
 func _structure_field(country: Dictionary, field: Array) -> Control:
@@ -708,7 +758,7 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 	var text := VBoxContainer.new(); text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; text.add_child(_label(str(field[0]), 12, INK)); text.add_child(_label(key, 9, MUTED, false, true)); row.add_child(text)
 	if kind == "toggle":
 		var value := bool(overrides.get(key, true)); row.add_child(_switch_button(value, func() -> void:
-			_set_structure_toggle(overrides, key, not value)
+			_set_structure_toggle(country, key, not value)
 			_render()))
 	elif kind == "select":
 		var option := OptionButton.new()
@@ -718,7 +768,7 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 			if str(overrides.get(key, "exogenous")) == str(choice[0]):
 				option.select(option.item_count - 1)
 		option.item_selected.connect(func(index: int) -> void:
-			overrides[key] = str(option.get_item_metadata(index))
+			_set_structure_value(country, key, str(option.get_item_metadata(index)))
 			_render())
 		option.add_theme_font_size_override("font_size", 11)
 		row.add_child(option)
@@ -728,11 +778,11 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 		var step := 1.0 if _is_structure_integer(key) else 0.05
 		row.add_child(_mini_stepper(_format_small(value),
 			func() -> void:
-				_set_structure_number(overrides, key, value - step),
+				_set_structure_number(country, key, value - step),
 			func() -> void:
-				_set_structure_number(overrides, key, value + step),
+				_set_structure_number(country, key, value + step),
 			func(text: String) -> void:
-				_apply_structure_number(overrides, key, text)))
+				_apply_structure_number(country, key, text)))
 	return p
 
 
@@ -740,26 +790,55 @@ func _is_structure_integer(key: String) -> bool:
 	return key.begins_with("n_") or key == "demographics_population"
 
 
-func _set_structure_number(overrides: Dictionary, key: String, value: float) -> void:
+func _normalize_structure_number(key: String, value: float) -> Variant:
 	var minimum := 2.0 if key == "n_firms_c" \
 		else (1.0 if _is_structure_integer(key) \
 		else (0.05 if key in ["a", "alpha", "necessity_share0"] else 0.0))
 	var maximum := 100_000.0 if _is_structure_integer(key) \
 		else (0.95 if key in ["alpha", "necessity_share0"] else INF)
 	var normalized := clampf(value, minimum, maximum)
-	overrides[key] = roundi(normalized) if _is_structure_integer(key) else normalized
+	return roundi(normalized) if _is_structure_integer(key) else normalized
+
+
+func _set_structure_value(country: Dictionary, key: String, value: Variant,
+		record_baseline := true) -> void:
+	var overrides: Dictionary = country["overrides"]
+	overrides[key] = value
+	if record_baseline and str(country["profile"]) == "symmetric":
+		var baseline: Dictionary = country["baseline_overrides"]
+		baseline[key] = value
+
+
+func _set_structure_number(country: Dictionary, key: String, value: float) -> void:
+	var previous_population := maxi(1, _agent_population(country))
+	if key == "demographics_population" and _population_mapping_enabled:
+		_ensure_population_ratios(country)
+	var normalized: Variant = _normalize_structure_number(key, value)
+	_set_structure_value(country, key, normalized)
+	if key == "demographics_population" and _population_mapping_enabled:
+		var ratios: Dictionary = country["firm_population_ratios"]
+		for firm_key: String in POPULATION_LINKED_FIELDS:
+			var scaled: Variant = _normalize_structure_number(
+				firm_key, float(ratios[firm_key]) * int(normalized))
+			_set_structure_value(country, firm_key, scaled)
+	elif key in POPULATION_LINKED_FIELDS and _population_mapping_enabled:
+		var ratios: Dictionary = country["firm_population_ratios"]
+		if ratios.is_empty():
+			_refresh_population_ratios(country)
+		else:
+			ratios[key] = float(normalized) / float(previous_population)
 	_render()
 
 
-func _apply_structure_number(overrides: Dictionary, key: String, text: String) -> void:
+func _apply_structure_number(country: Dictionary, key: String, text: String) -> void:
 	var normalized := text.strip_edges()
 	if _is_structure_integer(key):
 		if normalized.is_valid_int():
-			_set_structure_number(overrides, key, float(normalized.to_int()))
+			_set_structure_number(country, key, float(normalized.to_int()))
 		else:
 			_render()
 	elif normalized.is_valid_float():
-		_set_structure_number(overrides, key, normalized.to_float())
+		_set_structure_number(country, key, normalized.to_float())
 	else:
 		_render()
 
@@ -784,6 +863,137 @@ func _structure_default(key: String, profile: String = "symmetric") -> float:
 	return 1.0
 
 
+func _structure_kind(key: String) -> String:
+	for group: Dictionary in STRUCT_GROUPS:
+		for field: Array in group["fields"]:
+			if str(field[1]) == key:
+				return str(field[2])
+	return "step"
+
+
+func _factory_structure_value(key: String, profile: String) -> Variant:
+	var kind := _structure_kind(key)
+	if kind == "toggle":
+		return true
+	if kind == "select":
+		return "exogenous"
+	return _normalize_structure_number(key, _structure_default(key, profile))
+
+
+func _effective_structure_value(country: Dictionary, key: String) -> Variant:
+	var overrides: Dictionary = country["overrides"]
+	if overrides.has(key):
+		return overrides[key]
+	return _factory_structure_value(key, str(country["profile"]))
+
+
+func _baseline_structure_value(country: Dictionary, key: String) -> Variant:
+	var baseline: Dictionary = country["baseline_overrides"]
+	if baseline.has(key):
+		return baseline[key]
+	return _factory_structure_value(key, "symmetric")
+
+
+func _profile_multiplier(key: String, profile: String) -> float:
+	var selected: Dictionary = PROFILES.get(profile, PROFILES["symmetric"])
+	var symmetric: Dictionary = PROFILES["symmetric"]
+	if key == "demographics_population":
+		return float(selected["scale"]) / float(symmetric["scale"])
+	if key == "a":
+		return float(selected["prod"]) / float(symmetric["prod"])
+	if key == "necessity_share0":
+		return float(selected["nec"]) / float(symmetric["nec"])
+	if key in POPULATION_LINKED_FIELDS and _population_mapping_enabled:
+		return float(selected["scale"]) / float(symmetric["scale"])
+	return 1.0
+
+
+func _same_structure_value(left: Variant, right: Variant) -> bool:
+	if (left is int or left is float) and (right is int or right is float):
+		return is_equal_approx(float(left), float(right))
+	return left == right
+
+
+func _mapped_profile_overrides(country: Dictionary, profile: String) -> Dictionary:
+	var result: Dictionary = {}
+	for group: Dictionary in STRUCT_GROUPS:
+		for field: Array in group["fields"]:
+			var key := str(field[1])
+			var kind := str(field[2])
+			var mapped: Variant = _baseline_structure_value(country, key)
+			if kind == "step":
+				mapped = _normalize_structure_number(
+					key, float(mapped) * _profile_multiplier(key, profile))
+			var factory: Variant = _factory_structure_value(key, profile)
+			if not _same_structure_value(mapped, factory):
+				result[key] = mapped
+	return result
+
+
+func _factory_profile_overrides(profile: String) -> Dictionary:
+	var result: Dictionary = {}
+	if not _population_mapping_enabled:
+		return result
+	for key: String in POPULATION_LINKED_FIELDS:
+		var linked: Variant = _normalize_structure_number(
+			key, float(_factory_structure_value(key, "symmetric")) *
+			_profile_multiplier(key, profile))
+		var factory: Variant = _factory_structure_value(key, profile)
+		if not _same_structure_value(linked, factory):
+			result[key] = linked
+	return result
+
+
+func _profile_snapshot(country: Dictionary) -> Dictionary:
+	var result: Dictionary = {}
+	for group: Dictionary in STRUCT_GROUPS:
+		for field: Array in group["fields"]:
+			var key := str(field[1])
+			result[key] = _effective_structure_value(country, key)
+	return result
+
+
+func _select_profile(country: Dictionary, profile: String) -> void:
+	if not PROFILES.has(profile):
+		return
+	if not country.has("baseline_overrides"):
+		country["baseline_overrides"] = {}
+	if not country.has("firm_population_ratios"):
+		country["firm_population_ratios"] = {}
+	if profile == "custom":
+		var snapshot := _profile_snapshot(country)
+		country["profile"] = profile
+		country["overrides"] = snapshot
+	else:
+		country["profile"] = profile
+		country["overrides"] = _mapped_profile_overrides(country, profile) \
+			if _profile_mapping_enabled else _factory_profile_overrides(profile)
+	_refresh_population_ratios(country)
+
+
+func _refresh_population_ratios(country: Dictionary) -> void:
+	var population := maxi(1, int(_effective_structure_value(
+		country, "demographics_population")))
+	var ratios: Dictionary = {}
+	for key: String in POPULATION_LINKED_FIELDS:
+		ratios[key] = float(_effective_structure_value(country, key)) / population
+	country["firm_population_ratios"] = ratios
+
+
+func _ensure_population_ratios(country: Dictionary) -> void:
+	if not country.has("firm_population_ratios") \
+			or (country["firm_population_ratios"] as Dictionary).is_empty():
+		_refresh_population_ratios(country)
+
+
+func _toggle_population_mapping() -> void:
+	_population_mapping_enabled = not _population_mapping_enabled
+	if _population_mapping_enabled:
+		for country: Dictionary in _countries:
+			_refresh_population_ratios(country)
+	_render()
+
+
 func _firm_count(country: Dictionary) -> int:
 	var overrides: Dictionary = country["overrides"]
 	var total := int(overrides.get("n_firms_c", _structure_default("n_firms_c")))
@@ -795,8 +1005,8 @@ func _firm_count(country: Dictionary) -> int:
 	return total
 
 
-func _set_structure_toggle(overrides: Dictionary, key: String, enabled: bool) -> void:
-	overrides[key] = enabled
+func _set_structure_toggle(country: Dictionary, key: String, enabled: bool) -> void:
+	_set_structure_value(country, key, enabled)
 	var dependants := {
 		"bank_enabled": ["interbank", "bonds", "per_firm_equity",
 			"household_credit", "government"],
@@ -822,10 +1032,10 @@ func _set_structure_toggle(overrides: Dictionary, key: String, enabled: bool) ->
 	}
 	if not enabled:
 		for dependant: Variant in dependants.get(key, []):
-			_set_structure_toggle(overrides, str(dependant), false)
+			_set_structure_toggle(country, str(dependant), false)
 	else:
 		for requirement: Variant in requirements.get(key, []):
-			_set_structure_toggle(overrides, str(requirement), true)
+			_set_structure_toggle(country, str(requirement), true)
 
 
 func _add_country() -> void:
@@ -835,7 +1045,9 @@ func _add_country() -> void:
 		used[str(country["code"])] = true
 	for index in COUNTRY_CODES.size():
 		if not used.has(COUNTRY_CODES[index]):
-			_countries.append(_country_record(index))
+			var country := _country_record(index)
+			_select_profile(country, "symmetric")
+			_countries.append(country)
 			break
 	_render()
 
@@ -902,7 +1114,8 @@ func _remove_country_at(removed: int) -> void:
 
 func _apply_profile_all() -> void:
 	var profile := str(_countries[_selected_country]["profile"])
-	for c: Dictionary in _countries: c["profile"] = profile; c["overrides"] = {}
+	for c: Dictionary in _countries:
+		_select_profile(c, profile)
 	_render()
 
 
