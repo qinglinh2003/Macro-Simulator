@@ -253,6 +253,44 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
         )
 
 
+def test_stock_market_board_uses_traded_securities_and_chain_linked_history(
+    runtime: SimulationRuntime,
+) -> None:
+    snapshot = runtime.snapshot()
+    market = snapshot["stock_market"]
+    summary = market["summary"]
+    listings = market["listings"]
+    assert summary["index_level"] == pytest.approx(1000.0)
+    assert summary["listed_count"] == len(listings)
+    assert {item["instrument_type"] for item in listings} == {"company", "bank"}
+    assert sum(item["market_weight"] for item in listings) == pytest.approx(1.0)
+    assert summary["market_cap"] == pytest.approx(sum(
+        item["market_cap"] for item in listings
+    ))
+    assert summary["corporate_market_cap"] == pytest.approx(sum(
+        firm["equity"]["market_cap"]
+        for firm in snapshot["firms"]["items"]
+        if firm["equity"]["enabled"]
+    ))
+
+    advanced = _pass_all_contexts(runtime)["stock_market"]
+    advanced_summary = advanced["summary"]
+    assert len(advanced["history"]) >= 2
+    assert advanced_summary["index_level"] > 0.0
+    assert (
+        advanced_summary["advances"]
+        + advanced_summary["declines"]
+        + advanced_summary["unchanged"]
+    ) == advanced_summary["listed_count"]
+    assert sum(sector["market_cap"] for sector in advanced["sectors"]) == pytest.approx(
+        advanced_summary["market_cap"]
+    )
+    assert all(
+        item["window_low"] <= item["price"] <= item["window_high"]
+        for item in advanced["listings"]
+    )
+
+
 def test_policy_action_uses_controller_proposal_path(runtime: SimulationRuntime) -> None:
     context = next(
         item for item in runtime.snapshot()["contexts"]

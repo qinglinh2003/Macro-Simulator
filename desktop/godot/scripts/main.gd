@@ -508,6 +508,10 @@ var _household_sort := "net_worth"    # net_worth | members | debt
 var _firm_selected := ""              # 企业页当前选中的 firm id
 var _firm_search := ""                # 企业号 / 部门 / 员工号筛选
 var _firm_sort := "revenue"           # revenue | earnings | assets
+var _stock_selected := ""             # 股市主图当前证券；空=综合指数
+var _stock_search := ""               # 行情表代码 / 板块筛选
+var _stock_filter := "all"             # all | company | bank
+var _stock_sort := "market_cap"        # market_cap | change
 var _event_filter := "important"       # important | all | mine
 var _last_toasted := ""
 var _capture_path := ""
@@ -1518,6 +1522,7 @@ func _build_center(center: VBoxContainer) -> void:
 	segh.add_theme_constant_override("separation", 2)
 	seg.add_child(segh)
 	for t: Array in [["focus", "宏观焦点"], ["households", "家庭"], ["firms", "企业"],
+			["stocks", "股市"],
 			["panels", "指标全景"], ["world", "世界视图"]]:
 		var b := Button.new()
 		b.text = t[1]
@@ -1726,7 +1731,7 @@ func _render() -> void:
 		else:
 			sbn.remove_theme_stylebox_override("normal")
 			sbn.add_theme_color_override("font_color", Color("647585"))
-	for tab in ["focus", "households", "firms", "panels", "world"]:
+	for tab in ["focus", "households", "firms", "stocks", "panels", "world"]:
 		var tb := _n["tab_" + tab] as Button
 		if tab == _tab:
 			tb.add_theme_stylebox_override("normal", _sb(Color.WHITE, BLUE_BD, 18, 7, 5))
@@ -1738,6 +1743,7 @@ func _render() -> void:
 		"focus": "基于已发布公报的跨指标判断",
 		"households": "微观家庭 · 成员与资产负债真值",
 		"firms": "微观企业 · 经营、账表、员工与股权真值",
+		"stocks": "逐 tick 收盘行情 · 企业股与银行股",
 		"panels": "上帝视角 · 逐 tick 真值",
 		"world": "多国耦合 · 贸易 / 资本 / 移民",
 	}.get(_tab, ""))
@@ -2905,6 +2911,8 @@ func _render_center() -> void:
 			_render_households_tab(body)
 		"firms":
 			_render_firms_tab(body)
+		"stocks":
+			_render_stock_market_tab(body)
 		_:
 			_render_focus_tab(body)
 
@@ -3290,6 +3298,7 @@ func _firm_sector_color(sector_code: String) -> Color:
 		"consumption": BLUE,
 		"capital": Color("4a6fa5"),
 		"energy": Color("b56b0b"),
+		"bank": Color("7a54b3"),
 	}.get(sector_code, INK3)
 
 
@@ -3814,6 +3823,335 @@ func _firm_equity_panel(equity: Dictionary) -> Control:
 			_firm_number(holder.get("market_value"))], 8, INK, true))
 		col.add_child(row)
 	return panel
+
+
+func _stock_delta_color(change: float) -> Color:
+	if change > 0.0000001:
+		return GREEN
+	if change < -0.0000001:
+		return RED
+	return INK3
+
+
+func _stock_delta_text(change: float) -> String:
+	if change > 0.0000001:
+		return "▲ +%.2f%%" % (change * 100.0)
+	if change < -0.0000001:
+		return "▼ %.2f%%" % (change * 100.0)
+	return "— 0.00%"
+
+
+func _stock_summary_card(label: String, value: String, color: Color,
+		delta: String = "", note: String = "") -> Control:
+	var card := PanelContainer.new()
+	card.custom_minimum_size.y = 58
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.add_theme_stylebox_override("panel", _sb(Color("f8fafc"), Color("e0e7ef"), 10, 8))
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 1)
+	card.add_child(col)
+	col.add_child(_lbl(label, 8, INK3, true))
+	var row := HBoxContainer.new()
+	row.add_child(_lbl(value, 16, color, true))
+	row.add_child(_spacer_h())
+	if not delta.is_empty():
+		row.add_child(_lbl(delta, 8, color, true))
+	col.add_child(row)
+	if not note.is_empty():
+		col.add_child(_lbl(note, 7, INK3, true))
+	return card
+
+
+func _stock_listing(listings: Array, symbol: String) -> Dictionary:
+	for listing: Dictionary in listings:
+		if str(listing.get("symbol", "")) == symbol:
+			return listing
+	return {}
+
+
+func _stock_table_cell(text: String, width: float, color: Color = INK2,
+		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_RIGHT,
+		mono: bool = true) -> Label:
+	var label := _lbl(text, 8, color, mono)
+	label.custom_minimum_size.x = width
+	label.horizontal_alignment = align
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	return label
+
+
+func _render_stock_market_tab(body: VBoxContainer) -> void:
+	var payload: Dictionary = _snapshot.get("stock_market", {})
+	var summary: Dictionary = payload.get("summary", {})
+	var listings: Array = payload.get("listings", [])
+	var history: Array = payload.get("history", [])
+	var index_change := float(summary.get("index_change", 0.0))
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 7)
+	top.add_child(_stock_summary_card("AURELIA ALL-SHARE",
+		"%.2f" % float(summary.get("index_level", 1000.0)),
+		_stock_delta_color(index_change), _stock_delta_text(index_change), "链式市值加权指数"))
+	top.add_child(_stock_summary_card("MARKET CAP · 总市值",
+		_fmt_val("num", float(summary.get("market_cap", 0.0))), PURPLE, "",
+		"%d 只证券" % int(summary.get("listed_count", 0))))
+	top.add_child(_stock_summary_card("TURNOVER · 换手率",
+		_fmt_val("pct", float(summary.get("turnover", 0.0))), BLUE, "",
+		"企业股与银行股市值加权"))
+	top.add_child(_stock_summary_card("BREADTH · 市场宽度",
+		"%d ↑  %d ↓" % [int(summary.get("advances", 0)), int(summary.get("declines", 0))],
+		TEAL, "", "%d 平" % int(summary.get("unchanged", 0))))
+	body.add_child(top)
+
+	var toolbar := PanelContainer.new()
+	toolbar.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 10, 6))
+	var tools := HBoxContainer.new()
+	tools.add_theme_constant_override("separation", 5)
+	toolbar.add_child(tools)
+	tools.add_child(_lbl("AURELIA EXCHANGE", 10, INK, true))
+	tools.add_child(_chip("CLOSE / TICK", Color("285ca8"), BLUE_BG, Color("c9dcf5"), 7))
+	tools.add_child(_spacer_h())
+	var search := LineEdit.new()
+	search.custom_minimum_size.x = 112
+	search.placeholder_text = "代码 / 板块 · 回车"
+	search.text = _stock_search
+	search.add_theme_font_size_override("font_size", 8)
+	search.add_theme_color_override("font_color", INK2)
+	search.add_theme_color_override("font_placeholder_color", INK3)
+	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 7, 4))
+	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, BLUE_BD, 7, 4, 2))
+	search.text_submitted.connect(func(value: String) -> void:
+		_stock_search = value
+		_render())
+	tools.add_child(search)
+	for filter_spec: Array in [["all", "全部"], ["company", "企业股"], ["bank", "银行股"]]:
+		var filter_id := str(filter_spec[0])
+		var filter_button := Button.new()
+		filter_button.text = str(filter_spec[1])
+		filter_button.add_theme_font_size_override("font_size", 8)
+		if filter_id == _stock_filter:
+			filter_button.add_theme_stylebox_override("normal", _sb(BLUE_BG, BLUE_BD, 7, 4))
+			filter_button.add_theme_color_override("font_color", Color("285ca8"))
+		filter_button.pressed.connect(func() -> void:
+			_stock_filter = filter_id
+			_render())
+		tools.add_child(filter_button)
+	for sort_spec: Array in [["market_cap", "市值"], ["change", "涨跌"]]:
+		var sort_id := str(sort_spec[0])
+		var sort_button := Button.new()
+		sort_button.text = str(sort_spec[1])
+		sort_button.add_theme_font_size_override("font_size", 8)
+		if sort_id == _stock_sort:
+			sort_button.add_theme_stylebox_override("normal", _sb(TEAL_BG, TEAL_BD, 7, 4))
+			sort_button.add_theme_color_override("font_color", TEAL_DK)
+		sort_button.pressed.connect(func() -> void:
+			_stock_sort = sort_id
+			_render())
+		tools.add_child(sort_button)
+	body.add_child(toolbar)
+
+	var selected := _stock_listing(listings, _stock_selected)
+	var overview := HBoxContainer.new()
+	overview.custom_minimum_size.y = 226
+	overview.add_theme_constant_override("separation", 8)
+	body.add_child(overview)
+	var chart_shell := PanelContainer.new()
+	chart_shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_shell.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 11, 9, 3))
+	var chart_col := VBoxContainer.new()
+	chart_col.add_theme_constant_override("separation", 4)
+	chart_shell.add_child(chart_col)
+	var chart_head := HBoxContainer.new()
+	var chart_title := str(payload.get("index_name", "AURELIA ALL-SHARE")) if selected.is_empty() else str(selected.get("symbol", ""))
+	chart_head.add_child(_lbl(chart_title, 12, INK, true))
+	if not selected.is_empty():
+		var selected_color := _firm_sector_color(str(selected.get("sector_code", "")))
+		chart_head.add_child(_chip(str(selected.get("sector", "证券")),
+			selected_color.darkened(0.15),
+			Color(selected_color.r, selected_color.g, selected_color.b, 0.09),
+			Color(selected_color.r, selected_color.g, selected_color.b, 0.28), 7))
+	chart_head.add_child(_spacer_h())
+	if not selected.is_empty():
+		var index_button := Button.new()
+		index_button.text = "返回综合指数"
+		index_button.add_theme_font_size_override("font_size", 8)
+		index_button.pressed.connect(func() -> void:
+			_stock_selected = ""
+			_render())
+		chart_head.add_child(index_button)
+		if bool(selected.get("can_open_firm", false)):
+			var firm_button := Button.new()
+			firm_button.text = "企业详情 ↗"
+			firm_button.add_theme_font_size_override("font_size", 8)
+			var selected_symbol := str(selected.get("symbol", ""))
+			firm_button.pressed.connect(func() -> void:
+				_open_firm(selected_symbol))
+			chart_head.add_child(firm_button)
+	chart_col.add_child(chart_head)
+	var chart_change := index_change if selected.is_empty() else float(selected.get("change", 0.0))
+	var chart_value := float(summary.get("index_level", 1000.0)) if selected.is_empty() else float(selected.get("price", 0.0))
+	var quote_line := HBoxContainer.new()
+	quote_line.add_child(_lbl("%.3f" % chart_value, 19, _stock_delta_color(chart_change), true))
+	quote_line.add_child(_lbl(_stock_delta_text(chart_change), 9, _stock_delta_color(chart_change), true))
+	quote_line.add_child(_spacer_h())
+	quote_line.add_child(_lbl("截至 %s · t%d" % [str(payload.get("as_of_date", "")), int(_snapshot.get("tick", 0))], 8, INK3, true))
+	chart_col.add_child(quote_line)
+	var chart_values: Array = []
+	for point: Dictionary in history:
+		if selected.is_empty():
+			chart_values.append(float(point.get("index_level", 0.0)))
+		else:
+			var prices: Dictionary = point.get("prices", {})
+			if prices.has(str(selected.get("symbol", ""))):
+				chart_values.append(float(prices[str(selected.get("symbol", ""))]))
+	var chart := _StockMarketChart.new()
+	chart.values = chart_values
+	chart.line_color = _stock_delta_color(chart_change)
+	chart.font = _mono
+	chart.custom_minimum_size = Vector2(0, 130)
+	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	chart_col.add_child(chart)
+	var chart_note := "总市值 %s · 企业股 %s · 银行股 %s" % [
+		_fmt_val("num", float(summary.get("market_cap", 0.0))),
+		_fmt_val("num", float(summary.get("corporate_market_cap", 0.0))),
+		_fmt_val("num", float(summary.get("bank_market_cap", 0.0)))]
+	if not selected.is_empty():
+		var valuation: Variant = selected.get("tobin_q") if selected.get("tobin_q") != null else selected.get("price_to_book")
+		chart_note = "窗口 %s – %s · 市值 %s · Q/PB %s · 基本面溢价 %s" % [
+			_firm_number(selected.get("window_low")), _firm_number(selected.get("window_high")),
+			_firm_number(selected.get("market_cap")), _firm_number(valuation, "idx"),
+			_firm_number(selected.get("fundamental_gap"), "pct")]
+	chart_col.add_child(_lbl(chart_note, 8, INK3, true))
+	overview.add_child(chart_shell)
+
+	var pulse_shell := PanelContainer.new()
+	pulse_shell.custom_minimum_size.x = 188
+	pulse_shell.size_flags_horizontal = Control.SIZE_SHRINK_END
+	pulse_shell.add_theme_stylebox_override("panel", _sb(Color("f8fafc"), Color("dfe6ee"), 11, 8))
+	var pulse := VBoxContainer.new()
+	pulse.add_theme_constant_override("separation", 5)
+	pulse_shell.add_child(pulse)
+	var breadth_head := HBoxContainer.new()
+	breadth_head.add_child(_lbl("MARKET BREADTH", 8, INK3, true))
+	breadth_head.add_child(_spacer_h())
+	breadth_head.add_child(_lbl("%d / %d / %d" % [
+		int(summary.get("advances", 0)), int(summary.get("unchanged", 0)),
+		int(summary.get("declines", 0))], 8, INK3, true))
+	pulse.add_child(breadth_head)
+	var breadth := _StockBreadthChart.new()
+	breadth.advances = int(summary.get("advances", 0))
+	breadth.unchanged = int(summary.get("unchanged", 0))
+	breadth.declines = int(summary.get("declines", 0))
+	breadth.font = _sans
+	breadth.custom_minimum_size = Vector2(0, 34)
+	pulse.add_child(breadth)
+	pulse.add_child(_hrule())
+	pulse.add_child(_lbl("SECTORS · 板块表现", 8, INK3, true))
+	for sector: Dictionary in payload.get("sectors", []):
+		var sector_row := HBoxContainer.new()
+		var sector_change := float(sector.get("change", 0.0))
+		sector_row.add_child(_dot(_stock_delta_color(sector_change), 6))
+		sector_row.add_child(_lbl(str(sector.get("label", "")), 8, INK2))
+		sector_row.add_child(_spacer_h())
+		sector_row.add_child(_lbl(_stock_delta_text(sector_change), 8,
+			_stock_delta_color(sector_change), true))
+		pulse.add_child(sector_row)
+	pulse.add_child(_hrule())
+	for metric_spec: Array in [
+		["企业平均 Q", _firm_number(summary.get("q_mean"), "idx")],
+		["企业股权集中度", _firm_number(summary.get("ownership_gini"), "idx")],
+		["企业股权/家庭财富", _firm_number(summary.get("equity_wealth_share"), "pct")],
+	]:
+		var metric_row := HBoxContainer.new()
+		metric_row.add_child(_lbl(str(metric_spec[0]), 8, INK3))
+		metric_row.add_child(_spacer_h())
+		metric_row.add_child(_lbl(str(metric_spec[1]), 8, INK, true))
+		pulse.add_child(metric_row)
+	overview.add_child(pulse_shell)
+
+	var visible_listings: Array = []
+	var query := _stock_search.strip_edges().to_lower()
+	for listing: Dictionary in listings:
+		if _stock_filter != "all" and str(listing.get("instrument_type", "")) != _stock_filter:
+			continue
+		if not query.is_empty() and not str(listing.get("symbol", "")).to_lower().contains(query) \
+				and not str(listing.get("sector", "")).to_lower().contains(query):
+			continue
+		visible_listings.append(listing)
+	visible_listings.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var av := float(a.get(_stock_sort, 0.0))
+		var bv := float(b.get(_stock_sort, 0.0))
+		if is_equal_approx(av, bv):
+			return str(a.get("symbol", "")) < str(b.get("symbol", ""))
+		return av > bv)
+	var quote_shell := PanelContainer.new()
+	quote_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	quote_shell.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("dfe6ee"), 11, 7))
+	var quote_col := VBoxContainer.new()
+	quote_col.add_theme_constant_override("separation", 4)
+	quote_shell.add_child(quote_col)
+	var quote_head := HBoxContainer.new()
+	quote_head.add_child(_lbl("SECURITIES · 逐 tick 收盘行情", 9, INK, true))
+	quote_head.add_child(_spacer_h())
+	quote_head.add_child(_lbl("%d / %d · 点击代码切换主图" % [visible_listings.size(), listings.size()], 8, INK3))
+	quote_col.add_child(quote_head)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 4)
+	columns.add_child(_stock_table_cell("代码", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT))
+	columns.add_child(_stock_table_cell("板块", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT, false))
+	columns.add_child(_stock_table_cell("最新", 58, INK3))
+	columns.add_child(_stock_table_cell("涨跌", 60, INK3))
+	columns.add_child(_stock_table_cell("总市值", 67, INK3))
+	columns.add_child(_stock_table_cell("Q / PB", 52, INK3))
+	columns.add_child(_stock_table_cell("基本面差", 60, INK3))
+	quote_col.add_child(columns)
+	var quote_scroll := ScrollContainer.new()
+	quote_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	quote_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	quote_col.add_child(quote_scroll)
+	_restore_scroll("center:stocks:quotes", quote_scroll)
+	quote_scroll.get_v_scroll_bar().value_changed.connect(func(v: float) -> void:
+		_scroll_mem["center:stocks:quotes"] = int(v))
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation", 2)
+	quote_scroll.add_child(rows)
+	if visible_listings.is_empty():
+		rows.add_child(_lbl("没有匹配的上市证券。", 9, INK3))
+	for listing: Dictionary in visible_listings:
+		var symbol := str(listing.get("symbol", ""))
+		var active := symbol == _stock_selected
+		var row_panel := PanelContainer.new()
+		row_panel.add_theme_stylebox_override("panel", _sb(
+			Color("eef5ff") if active else Color("fbfcfe"),
+			BLUE_BD if active else Color("edf1f5"), 7, 3, 2 if active else 0))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		row_panel.add_child(row)
+		var symbol_button := Button.new()
+		symbol_button.text = symbol
+		symbol_button.custom_minimum_size.x = 66
+		symbol_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		symbol_button.add_theme_font_size_override("font_size", 8)
+		symbol_button.add_theme_font_override("font", _mono)
+		symbol_button.add_theme_color_override("font_color", Color("285ca8"))
+		symbol_button.add_theme_stylebox_override("normal", _sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 5, 2))
+		var selected_symbol := symbol
+		symbol_button.pressed.connect(func() -> void:
+			_stock_selected = selected_symbol
+			_render())
+		row.add_child(symbol_button)
+		row.add_child(_stock_table_cell(str(listing.get("sector", "")), 66, INK2,
+			HORIZONTAL_ALIGNMENT_LEFT, false))
+		row.add_child(_stock_table_cell(_firm_number(listing.get("price")), 58, INK))
+		var change := float(listing.get("change", 0.0))
+		row.add_child(_stock_table_cell(_stock_delta_text(change), 60,
+			_stock_delta_color(change)))
+		row.add_child(_stock_table_cell(_firm_number(listing.get("market_cap")), 67, INK))
+		var valuation: Variant = listing.get("tobin_q") if listing.get("tobin_q") != null else listing.get("price_to_book")
+		row.add_child(_stock_table_cell(_firm_number(valuation, "idx"), 52, PURPLE))
+		row.add_child(_stock_table_cell(_firm_number(listing.get("fundamental_gap"), "pct"), 60,
+			_stock_delta_color(float(listing.get("fundamental_gap", 0.0))) if listing.get("fundamental_gap") != null else INK3))
+		rows.add_child(row_panel)
+	body.add_child(quote_shell)
 
 
 func _render_focus_tab(body: VBoxContainer) -> void:
@@ -5257,6 +5595,93 @@ func _render_crisis() -> void:
 
 
 # ================= 绘图控件 =================
+class _StockMarketChart extends Control:
+	## 模型只提供逐 tick 成交价，因此这里绘制真实收盘序列，不合成 OHLC/K 线。
+	var values: Array = []
+	var line_color := Color("0f9d90")
+	var font: Font
+
+	func _draw() -> void:
+		var plot := Rect2(Vector2(7, 8), size - Vector2(64, 22))
+		if plot.size.x <= 0.0 or plot.size.y <= 0.0:
+			return
+		for grid_index in 4:
+			var grid_y := plot.position.y + plot.size.y * float(grid_index) / 3.0
+			draw_line(Vector2(plot.position.x, grid_y), Vector2(plot.end.x, grid_y),
+				Color("e5ebf1"), 1.0)
+		if values.is_empty():
+			draw_string(font, Vector2(plot.position.x, plot.get_center().y + 4.0),
+				"等待首个收盘行情", HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9,
+				Color("8794a2"))
+			return
+		var low := float(values[0])
+		var high := low
+		for raw_value: Variant in values:
+			low = minf(low, float(raw_value))
+			high = maxf(high, float(raw_value))
+		var raw_span := high - low
+		var padding := maxf(raw_span * 0.12, maxf(absf(high), 1.0) * 0.0015)
+		low -= padding
+		high += padding
+		var span := maxf(high - low, 0.000001)
+		var points := PackedVector2Array()
+		for index in values.size():
+			var x_fraction := float(index) / float(maxi(values.size() - 1, 1))
+			var y_fraction := (float(values[index]) - low) / span
+			points.append(Vector2(
+				plot.position.x + plot.size.x * x_fraction,
+				plot.end.y - plot.size.y * y_fraction))
+		if points.size() == 1:
+			points.append(Vector2(plot.end.x, points[0].y))
+		var area := PackedVector2Array(points)
+		area.append(Vector2(plot.end.x, plot.end.y))
+		area.append(Vector2(plot.position.x, plot.end.y))
+		draw_colored_polygon(area, Color(line_color.r, line_color.g, line_color.b, 0.10))
+		draw_polyline(points, line_color, 2.0, true)
+		draw_circle(points[-1], 4.2, Color.WHITE)
+		draw_circle(points[-1], 2.8, line_color)
+		draw_string(font, Vector2(plot.end.x + 7.0, plot.position.y + 5.0),
+			"%.3f" % high, HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
+		draw_string(font, Vector2(plot.end.x + 7.0, plot.end.y + 3.0),
+			"%.3f" % low, HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
+		draw_string(font, Vector2(plot.position.x, size.y - 2.0),
+			"%d 个逐 tick 收盘点" % values.size(), HORIZONTAL_ALIGNMENT_LEFT,
+			plot.size.x, 8, Color("8794a2"))
+
+
+class _StockBreadthChart extends Control:
+	var advances := 0
+	var unchanged := 0
+	var declines := 0
+	var font: Font
+
+	func _draw() -> void:
+		var total := advances + unchanged + declines
+		if total <= 0:
+			draw_string(font, Vector2(0, 19), "等待行情",
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 9, Color("8794a2"))
+			return
+		var bar := Rect2(Vector2(0, 4), Vector2(size.x, 11))
+		var cursor := bar.position.x
+		var specs := [
+			[advances, Color("20a566")],
+			[unchanged, Color("aeb9c5")],
+			[declines, Color("d64b38")],
+		]
+		for spec: Array in specs:
+			var segment_width := bar.size.x * float(spec[0]) / float(total)
+			if segment_width > 0.0:
+				draw_rect(Rect2(Vector2(cursor, bar.position.y),
+					Vector2(segment_width, bar.size.y)), spec[1])
+			cursor += segment_width
+		draw_string(font, Vector2(0, 31), "上涨", HORIZONTAL_ALIGNMENT_LEFT,
+			50, 8, Color("20a566"))
+		draw_string(font, Vector2(0, 31), "平盘", HORIZONTAL_ALIGNMENT_CENTER,
+			size.x, 8, Color("7c8997"))
+		draw_string(font, Vector2(size.x - 50, 31), "下跌", HORIZONTAL_ALIGNMENT_RIGHT,
+			50, 8, Color("d64b38"))
+
+
 class _Spinner extends Control:
 	func _draw() -> void:
 		var c := size / 2.0

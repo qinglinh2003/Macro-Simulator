@@ -23,7 +23,12 @@ from macro_sim.controllers import (
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.protocol import canonical_value
 from macro_sim.shocks import ShockSpec, get_shock_engine
-from macro_sim.systems.banking import bank_for, loan_rate_for
+from macro_sim.systems.banking import (
+    bank_economic_capital,
+    bank_for,
+    bank_fundamental,
+    loan_rate_for,
+)
 from macro_sim.systems.firm_balance_sheet import firm_balance_sheet
 from macro_sim.world import World
 from macro_sim.world.country import ADVANCED, DEVELOPING, PETROSTATE
@@ -226,6 +231,8 @@ class SimulationRuntime:
         self._labor_flow_delta: dict[str, float] = {}
         self._last_verdict: dict[str, Any] | None = None
         self._pending_verdict_pid: str | None = None
+        self._stock_market_history: list[dict[str, Any]] = []
+        self._record_stock_market_point(0)
         # Open tick-zero decision windows immediately so the UI has something real
         # to operate rather than inventing a separate frontend policy form.
         self.session.advance()
@@ -355,6 +362,7 @@ class SimulationRuntime:
             panel_point[name] = _finite_number(player_row.get(name))
         self._panel_history.append(panel_point)
         del self._panel_history[:-SERIES_LIMIT]
+        self._record_stock_market_point(tick, player_row)
         flow_counter_names = (
             "labor_hires_total", "labor_churn_seps_total",
             "labor_layoff_seps_total", "labor_bankruptcy_seps_total",
@@ -390,6 +398,138 @@ class SimulationRuntime:
                     world_point[key] = _jsonable(latest.get(key))
         self._world_history.append(world_point)
         del self._world_history[:-SERIES_LIMIT]
+
+    def _stock_quotes(self) -> list[dict[str, Any]]:
+        """Small quote surface used to build a chain-linked all-share index."""
+        econ = self.world.economies[PLAYER_ECONOMY]
+        quotes: list[dict[str, Any]] = []
+        for firm in getattr(econ, "c_firms", ()):
+            shares = max(0.0, _finite_number(getattr(firm, "shares_outstanding", 0.0)))
+            if shares <= 0.0:
+                continue
+            price = max(0.0, _finite_number(getattr(firm, "share_price", 0.0)))
+            quotes.append({
+                "symbol": str(firm.id),
+                "instrument_type": "company",
+                "price": price,
+                "previous_price": max(
+                    0.0, _finite_number(getattr(firm, "share_last_price", price))
+                ),
+                "shares": shares,
+                "market_cap": price * shares,
+            })
+        if bool(getattr(econ.cfg, "bank_equity", False)):
+            for bank in getattr(econ, "banks", ()):
+                shares = max(
+                    0.0, _finite_number(getattr(bank, "shares_outstanding", 0.0))
+                )
+                if shares <= 0.0:
+                    continue
+                price = max(0.0, _finite_number(getattr(bank, "share_price", 0.0)))
+                quotes.append({
+                    "symbol": str(bank.id),
+                    "instrument_type": "bank",
+                    "price": price,
+                    "previous_price": max(
+                        0.0, _finite_number(getattr(bank, "share_last_price", price))
+                    ),
+                    "shares": shares,
+                    "market_cap": price * shares,
+                })
+        return quotes
+
+    def _record_stock_market_point(
+        self,
+        tick: int,
+        player_row: Mapping[str, Any] | None = None,
+    ) -> None:
+        quotes = self._stock_quotes()
+        prices = {str(item["symbol"]): float(item["price"]) for item in quotes}
+        market_caps = {
+            str(item["symbol"]): float(item["market_cap"]) for item in quotes
+        }
+        previous = self._stock_market_history[-1] if self._stock_market_history else None
+        if previous is None:
+            index_return = 0.0
+            index_level = 1000.0
+        else:
+            previous_prices = previous.get("prices", {})
+            previous_caps = previous.get("market_caps", {})
+            weighted_return = 0.0
+            weight_total = 0.0
+            for symbol, price in prices.items():
+                old_price = _finite_number(previous_prices.get(symbol))
+                old_cap = max(0.0, _finite_number(previous_caps.get(symbol)))
+                if old_price <= 0.0 or old_cap <= 0.0:
+                    continue
+                weighted_return += old_cap * (price / old_price - 1.0)
+                weight_total += old_cap
+            index_return = weighted_return / weight_total if weight_total > 0.0 else 0.0
+            index_level = max(
+                0.0, _finite_number(previous.get("index_level"), 1000.0)
+                * (1.0 + index_return)
+            )
+        returns = {
+            str(item["symbol"]): (
+                float(item["price"]) / float(item["previous_price"]) - 1.0
+                if float(item["previous_price"]) > 0.0 else 0.0
+            )
+            for item in quotes
+        }
+        advances = sum(value > 1e-12 for value in returns.values())
+        declines = sum(value < -1e-12 for value in returns.values())
+        unchanged = max(0, len(returns) - advances - declines)
+        corporate_cap = sum(
+            float(item["market_cap"])
+            for item in quotes if item["instrument_type"] == "company"
+        )
+        bank_cap = sum(
+            float(item["market_cap"])
+            for item in quotes if item["instrument_type"] == "bank"
+        )
+        corporate_turnover = _finite_number(
+            (player_row or {}).get(
+                "equity_turnover", getattr(
+                    self.world.economies[PLAYER_ECONOMY], "_equity_turnover", 0.0
+                )
+            )
+        )
+        bank_turnover = _finite_number(
+            (player_row or {}).get(
+                "bank_stock_turnover", getattr(
+                    self.world.economies[PLAYER_ECONOMY], "_bank_equity_turnover", 0.0
+                )
+            )
+        )
+        total_cap = corporate_cap + bank_cap
+        turnover = (
+            (corporate_turnover * corporate_cap + bank_turnover * bank_cap) / total_cap
+            if total_cap > 0.0 else 0.0
+        )
+        point = {
+            "tick": int(tick),
+            "index_level": index_level,
+            "index_return": index_return,
+            "market_cap": total_cap,
+            "corporate_market_cap": corporate_cap,
+            "bank_market_cap": bank_cap,
+            "turnover": turnover,
+            "corporate_turnover": corporate_turnover,
+            "bank_turnover": bank_turnover,
+            "advances": advances,
+            "declines": declines,
+            "unchanged": unchanged,
+            "prices": prices,
+            "market_caps": market_caps,
+            "returns": returns,
+        }
+        if self._stock_market_history and int(
+            self._stock_market_history[-1].get("tick", -1)
+        ) == int(tick):
+            self._stock_market_history[-1] = point
+        else:
+            self._stock_market_history.append(point)
+        del self._stock_market_history[:-SERIES_LIMIT]
 
     def _merged_observation(self) -> dict[str, Any]:
         """Union of the five seat bulletins for the player economy.
@@ -990,6 +1130,218 @@ class SimulationRuntime:
             "items": items,
         }
 
+    def _stock_market_snapshot(self, firm_snapshot: Mapping[str, Any]) -> dict[str, Any]:
+        """All-share market board built only from traded model securities."""
+        econ = self.world.economies[PLAYER_ECONOMY]
+        listings: list[dict[str, Any]] = []
+        for firm in firm_snapshot.get("items", []):
+            equity = firm.get("equity", {})
+            if not equity.get("enabled", False):
+                continue
+            price = _finite_number(equity.get("share_price"))
+            previous_price = _finite_number(equity.get("last_share_price"))
+            market_cap = _finite_number(equity.get("market_cap"))
+            fundamental = _finite_number(equity.get("fundamental_per_share"))
+            book_equity = _finite_number(firm.get("balance_sheet", {}).get("book_equity"))
+            holders = list(equity.get("shareholders", []))
+            listings.append({
+                "symbol": str(firm.get("firm_id", "")),
+                "instrument_type": "company",
+                "sector": str(firm.get("sector", "消费品")),
+                "sector_code": str(firm.get("sector_code", "consumption")),
+                "condition": str(firm.get("condition", "正常经营")),
+                "price": price,
+                "previous_price": previous_price,
+                "change": price / previous_price - 1.0 if previous_price > 0.0 else 0.0,
+                "shares_outstanding": _finite_number(equity.get("shares_outstanding")),
+                "market_cap": market_cap,
+                "book_equity": book_equity,
+                "price_to_book": market_cap / book_equity if book_equity > 0.0 else None,
+                "tobin_q": _finite_number(equity.get("tobin_q")),
+                "fundamental": fundamental,
+                "fundamental_gap": price / fundamental - 1.0 if fundamental > 0.0 else None,
+                "trend": _finite_number(equity.get("share_trend")),
+                "earnings": _finite_number(firm.get("operations", {}).get("earnings")),
+                "dividends": _finite_number(firm.get("pnl", {}).get("dividends")),
+                "shareholder_count": int(equity.get("shareholder_count", 0)),
+                "top_holder_share": max(
+                    (_finite_number(holder.get("ownership")) for holder in holders),
+                    default=0.0,
+                ),
+                "can_open_firm": True,
+            })
+
+        state = getattr(econ, "demographic_state", None)
+        people = [
+            person for person in getattr(state, "people", ())
+            if getattr(person, "alive", True)
+        ]
+        bridge = getattr(econ, "demographic_bridge", None)
+        if bool(getattr(econ.cfg, "monetary_direct_transmission", False)):
+            from macro_sim.systems.valuation import valuation_discount_rate
+
+            bank_discount_rate = valuation_discount_rate(econ)
+        else:
+            bank_discount_rate = max(_finite_number(getattr(econ, "_rate", 0.0)), 0.01)
+        if bool(getattr(econ.cfg, "bank_equity", False)):
+            for bank in getattr(econ, "banks", ()):
+                shares = max(
+                    0.0, _finite_number(getattr(bank, "shares_outstanding", 0.0))
+                )
+                if shares <= 0.0:
+                    continue
+                price = max(0.0, _finite_number(getattr(bank, "share_price", 0.0)))
+                previous_price = max(
+                    0.0, _finite_number(getattr(bank, "share_last_price", price))
+                )
+                market_cap = price * shares
+                book_equity = _finite_number(bank_economic_capital(econ, bank))
+                fundamental = _finite_number(
+                    bank_fundamental(econ, bank, bank_discount_rate)
+                )
+                holders: list[dict[str, Any]] = []
+                if bridge is not None:
+                    for person in people:
+                        person_id = int(person.id)
+                        if not bridge.claims.has_person(person_id):
+                            continue
+                        person_sheet = bridge.claims.balance_sheet(person_id)
+                        held = max(
+                            0.0,
+                            _finite_number(
+                                person_sheet.bank_equity_claims.get(str(bank.id), 0.0)
+                            ),
+                        )
+                        if held <= 1e-12:
+                            continue
+                        holders.append({
+                            "person_id": person_id,
+                            "shares": held,
+                            "ownership": held / shares,
+                        })
+                listings.append({
+                    "symbol": str(bank.id),
+                    "instrument_type": "bank",
+                    "sector": "银行",
+                    "sector_code": "bank",
+                    "condition": "正常交易" if bool(bank.alive) else "退市",
+                    "price": price,
+                    "previous_price": previous_price,
+                    "change": price / previous_price - 1.0 if previous_price > 0.0 else 0.0,
+                    "shares_outstanding": shares,
+                    "market_cap": market_cap,
+                    "book_equity": book_equity,
+                    "price_to_book": market_cap / book_equity if book_equity > 0.0 else None,
+                    "tobin_q": None,
+                    "fundamental": fundamental,
+                    "fundamental_gap": price / fundamental - 1.0 if fundamental > 0.0 else None,
+                    "trend": _finite_number(getattr(bank, "share_trend", 0.0)),
+                    "earnings": _finite_number(getattr(bank, "profit", 0.0)),
+                    "dividends": _finite_number(getattr(bank, "dividends_paid", 0.0)),
+                    "shareholder_count": len(holders),
+                    "top_holder_share": max(
+                        (_finite_number(holder["ownership"]) for holder in holders),
+                        default=0.0,
+                    ),
+                    "can_open_firm": False,
+                })
+
+        total_market_cap = sum(_finite_number(item["market_cap"]) for item in listings)
+        for item in listings:
+            item["market_weight"] = (
+                _finite_number(item["market_cap"]) / total_market_cap
+                if total_market_cap > 0.0 else 0.0
+            )
+            prices = [
+                _finite_number(point.get("prices", {}).get(item["symbol"]))
+                for point in self._stock_market_history
+                if item["symbol"] in point.get("prices", {})
+            ]
+            item["window_low"] = min(prices) if prices else _finite_number(item["price"])
+            item["window_high"] = max(prices) if prices else _finite_number(item["price"])
+            item["window_return"] = (
+                prices[-1] / prices[0] - 1.0
+                if len(prices) > 1 and prices[0] > 0.0 else 0.0
+            )
+        listings.sort(key=lambda item: (-_finite_number(item["market_cap"]), item["symbol"]))
+
+        sectors: list[dict[str, Any]] = []
+        sector_labels = []
+        for item in listings:
+            label = str(item["sector"])
+            if label not in sector_labels:
+                sector_labels.append(label)
+        for label in sector_labels:
+            members = [item for item in listings if item["sector"] == label]
+            sector_cap = sum(_finite_number(item["market_cap"]) for item in members)
+            sectors.append({
+                "label": label,
+                "count": len(members),
+                "market_cap": sector_cap,
+                "market_weight": sector_cap / total_market_cap if total_market_cap > 0.0 else 0.0,
+                "change": (
+                    sum(
+                        _finite_number(item["market_cap"]) * _finite_number(item["change"])
+                        for item in members
+                    ) / sector_cap if sector_cap > 0.0 else 0.0
+                ),
+                "valuation": (
+                    sum(
+                        _finite_number(item["price_to_book"])
+                        for item in members if item["price_to_book"] is not None
+                    ) / max(1, sum(item["price_to_book"] is not None for item in members))
+                ),
+            })
+        sectors.sort(key=lambda item: -_finite_number(item["market_cap"]))
+
+        latest = (
+            self._stock_market_history[-1]
+            if self._stock_market_history else {
+                "index_level": 1000.0, "index_return": 0.0,
+                "advances": 0, "declines": 0, "unchanged": len(listings),
+                "turnover": 0.0,
+            }
+        )
+        latest_panel = self._panel_history[-1] if self._panel_history else {}
+        q_values = [
+            _finite_number(item["tobin_q"])
+            for item in listings if item["tobin_q"] is not None
+        ]
+        return {
+            "as_of_date": str(getattr(state, "current_date", "")),
+            "index_name": "AURELIA ALL-SHARE",
+            "summary": {
+                "index_level": _finite_number(latest.get("index_level"), 1000.0),
+                "index_change": _finite_number(latest.get("index_return")),
+                "listed_count": len(listings),
+                "market_cap": total_market_cap,
+                "corporate_market_cap": sum(
+                    _finite_number(item["market_cap"])
+                    for item in listings if item["instrument_type"] == "company"
+                ),
+                "bank_market_cap": sum(
+                    _finite_number(item["market_cap"])
+                    for item in listings if item["instrument_type"] == "bank"
+                ),
+                "turnover": _finite_number(latest.get("turnover")),
+                "corporate_turnover": _finite_number(latest.get("corporate_turnover")),
+                "bank_turnover": _finite_number(latest.get("bank_turnover")),
+                "advances": int(latest.get("advances", 0)),
+                "declines": int(latest.get("declines", 0)),
+                "unchanged": int(latest.get("unchanged", 0)),
+                "q_mean": sum(q_values) / len(q_values) if q_values else 0.0,
+                "ownership_gini": _finite_number(
+                    latest_panel.get("equity_ownership_gini")
+                ),
+                "equity_wealth_share": _finite_number(
+                    latest_panel.get("equity_wealth_share")
+                ),
+            },
+            "sectors": sectors,
+            "listings": listings,
+            "history": list(self._stock_market_history),
+        }
+
     def _household_snapshot(self) -> dict[str, Any]:
         """Current household and person balance sheets for the household explorer."""
         econ = self.world.economies[PLAYER_ECONOMY]
@@ -1292,6 +1644,9 @@ class SimulationRuntime:
                     self._pending_verdict_pid = None
                     break
         latest_world = self._world_history[-1] if self._world_history else {}
+        household_snapshot = self._household_snapshot()
+        firm_snapshot = self._firm_snapshot()
+        stock_market_snapshot = self._stock_market_snapshot(firm_snapshot)
         return {
             "protocol_version": PROTOCOL_VERSION,
             "observation": self._merged_observation(),
@@ -1302,8 +1657,9 @@ class SimulationRuntime:
             "metrics": metrics,
             "series": list(self._panel_history),
             "panel_details": _jsonable(self._panel_details()),
-            "households": _jsonable(self._household_snapshot()),
-            "firms": _jsonable(self._firm_snapshot()),
+            "households": _jsonable(household_snapshot),
+            "firms": _jsonable(firm_snapshot),
+            "stock_market": _jsonable(stock_market_snapshot),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}
