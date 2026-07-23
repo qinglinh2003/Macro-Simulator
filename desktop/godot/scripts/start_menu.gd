@@ -125,6 +125,7 @@ var _mono: SystemFont
 var _surface: Control
 var _screen := "home"
 var _step := 1
+var _can_continue := false
 var _settings_open := false
 var _scenario := "sandbox"
 var _seed := 7
@@ -208,6 +209,17 @@ func set_policy_schemas(value: Dictionary) -> void:
 	_policy_schemas = value.duplicate(true)
 	if is_inside_tree() and visible:
 		_render()
+
+
+func open_home(can_continue := true) -> void:
+	_launch_timer.stop()
+	_can_continue = can_continue
+	_screen = "home"
+	_settings_open = false
+	_launch_error = ""
+	show()
+	move_to_front()
+	_render()
 
 
 func _country_record(index: int, profile: String = "symmetric") -> Dictionary:
@@ -304,8 +316,12 @@ func _build_home(parent: Control) -> void:
 	menu_wrap.add_child(menu)
 	var choices := VBoxContainer.new()
 	choices.add_theme_constant_override("separation", 9)
+	if _can_continue:
+		choices.add_child(_home_choice("▶", "继续模拟", "返回当前世界与未完成的政策工作", func() -> void:
+			continue_requested.emit()
+			hide(), true))
 	choices.add_child(_home_choice("＋", "新建模拟", "六步配置世界、国家与席位", func() -> void:
-		_screen = "wizard"; _step = 1; _render(), true))
+		_screen = "wizard"; _step = 1; _render(), not _can_continue))
 	choices.add_child(_home_choice("⚙", "设置", "显示、语言、游戏流、存档", func() -> void:
 		_settings_open = true; _render()))
 	choices.add_child(_home_choice("⏻", "退出", "关闭指挥室", func() -> void:

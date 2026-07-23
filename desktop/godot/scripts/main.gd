@@ -665,11 +665,7 @@ func _ready() -> void:
 	_build_theme()
 	_build_ui()
 	if OS.get_environment("MACRO_SIM_SKIP_START_MENU") != "1":
-		_start_menu = StartMenuScript.new()
-		_start_menu.launch_requested.connect(_on_start_menu_launch)
-		_start_menu.continue_requested.connect(func() -> void:
-			_playing = false)
-		add_child(_start_menu)
+		_ensure_start_menu()
 	_client = SimulationClientScript.new()
 	add_child(_client)
 	_client.connected.connect(_on_connected)
@@ -741,6 +737,46 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _demo_crisis:
 				_demo_crisis = false
 				_render()
+
+
+func _ensure_start_menu() -> void:
+	if _start_menu != null:
+		return
+	_start_menu = StartMenuScript.new()
+	_start_menu.launch_requested.connect(_on_start_menu_launch)
+	_start_menu.continue_requested.connect(_on_start_menu_continue)
+	add_child(_start_menu)
+	if not _schemas.is_empty() and _start_menu.has_method("set_policy_schemas"):
+		_start_menu.call("set_policy_schemas", _start_menu_policy_schemas())
+
+
+func _on_start_menu_continue() -> void:
+	_playing = false
+	_confirm.clear()
+	if _start_menu != null:
+		_start_menu.hide()
+	_render()
+
+
+func _request_return_to_main_menu() -> void:
+	var was_playing := _playing
+	_playing = false
+	_confirm = {
+		"title": "返回主菜单",
+		"body": "当前模拟将暂停。返回主菜单后，可以选择“继续模拟”回到当前世界，也可以配置并启动一个新世界。",
+		"note": "返回主菜单不会重置当前世界；只有启动新模拟时，当前世界才会被替换。",
+		"on_cancel": func() -> void: _playing = was_playing,
+		"on_yes": _return_to_main_menu,
+	}
+	_render()
+
+
+func _return_to_main_menu() -> void:
+	_playing = false
+	_outbox.clear()
+	_ensure_start_menu()
+	if _start_menu.has_method("open_home"):
+		_start_menu.call("open_home", true)
 
 
 func _on_start_menu_launch(config: Dictionary) -> void:
@@ -1468,6 +1504,12 @@ func _build_header(shell: VBoxContainer) -> void:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
 	hp.add_child(h)
+	var menu_button := _btn("⌂  主菜单", _request_return_to_main_menu)
+	menu_button.tooltip_text = "暂停当前模拟并返回主菜单"
+	menu_button.custom_minimum_size = Vector2(90, 0)
+	_n["main_menu"] = menu_button
+	h.add_child(menu_button)
+	h.add_child(_vdiv())
 	var tbox := HBoxContainer.new()
 	tbox.add_theme_constant_override("separation", 9)
 	h.add_child(tbox)
@@ -1900,8 +1942,7 @@ func _build_overlays() -> void:
 	top_close.add_theme_color_override("font_hover_color", Color("24384a"))
 	top_close.add_theme_stylebox_override("hover", _sb(Color("e8edf3"), Color("d3dce5"), 17, 4))
 	top_close.pressed.connect(func() -> void:
-		_confirm = {}
-		_render())
+		_confirm_cancel())
 	_n["modal_top_close"] = top_close
 	modal_head.add_child(top_close)
 	mv.add_child(_hrule())
@@ -1934,9 +1975,7 @@ func _build_overlays() -> void:
 	mrow.add_theme_constant_override("separation", 9)
 	mrow.alignment = BoxContainer.ALIGNMENT_END
 	_n["modal_actions"] = mrow
-	var modal_cancel := _btn("取消", func() -> void:
-		_confirm = {}
-		_render())
+	var modal_cancel := _btn("取消", _confirm_cancel)
 	_n["modal_cancel"] = modal_cancel
 	mrow.add_child(modal_cancel)
 	var modal_confirm := _btn("确认", _confirm_yes, true)
@@ -1947,6 +1986,14 @@ func _build_overlays() -> void:
 
 func _confirm_yes() -> void:
 	var cb: Variant = _confirm.get("on_yes")
+	_confirm = {}
+	if cb is Callable:
+		(cb as Callable).call()
+	_render()
+
+
+func _confirm_cancel() -> void:
+	var cb: Variant = _confirm.get("on_cancel")
 	_confirm = {}
 	if cb is Callable:
 		(cb as Callable).call()
