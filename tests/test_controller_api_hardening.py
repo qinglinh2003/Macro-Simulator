@@ -91,6 +91,13 @@ def test_every_registered_policy_has_complete_player_help():
             isinstance(text, str) and len(text.strip()) >= 10
             for text in values.values()
         ), name
+        # Policy meaning is an economics concept, not a description of the UI
+        # control or simulation implementation. Those rules are shown separately.
+        assert "模型" not in explanation.meaning, name
+        assert not any(
+            marker in explanation.meaning
+            for marker in ("旋钮", "控制形式", "生效方式", "注册表")
+        ), name
 
 
 def test_bare_economy_schema_excludes_structurally_absent_external_levers():

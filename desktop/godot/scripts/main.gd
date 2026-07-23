@@ -2487,12 +2487,6 @@ func _lever_meaning_text(lever: Dictionary) -> String:
 	return definition
 
 
-func _lever_definition_context_text(lever: Dictionary) -> String:
-	return "模型口径 · 这项旋钮直接作用于%s，改变的是该环节的规则或约束，不等同于最终宏观结果。\n控制形式 · %s。\n生效方式 · %s。" % [
-		_lever_channel_text(lever), _lever_kind_description(lever),
-		_lever_semantics_text(lever)]
-
-
 func _lever_effect_text(lever: Dictionary) -> String:
 	var name := str(lever.get("name", ""))
 	var label := _cn(name)
@@ -2538,10 +2532,9 @@ func _lever_watch_text(lever: Dictionary) -> String:
 
 
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
-	return "%s  ·  当前 %s\n\n政策定义\n%s\n\n政策传导\n%s\n\n决策权衡\n%s\n\n点击打开完整政策简报" % [
+	return "%s  ·  当前 %s\n\n经济学定义\n%s\n\n经济传导\n%s\n\n政策权衡\n%s\n\n点击打开完整政策简报" % [
 		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
-		_tooltip_wrap("%s\n%s" % [
-			_lever_meaning_text(lever), _lever_definition_context_text(lever)]),
+		_tooltip_wrap(_lever_meaning_text(lever)),
 		_tooltip_wrap(_lever_effect_text(lever)),
 		_tooltip_wrap(_lever_tradeoffs_text(lever))]
 
@@ -2673,7 +2666,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var lever: Dictionary = lever_raw
 	var seat_color := _seat_color(str(lever.get("owner_role", "")))
 
-	# Hero: a light, restrained definition block before the denser decision material.
+	# Hero: the economic meaning stands on its own. Game implementation details belong below.
 	var hero := PanelContainer.new()
 	hero.add_theme_stylebox_override("panel", _sb(Color("f0f4f8"), Color("ccd7e1"), 11, 15, 3))
 	var hero_row := HBoxContainer.new()
@@ -2698,19 +2691,17 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var meaning_col := VBoxContainer.new()
 	meaning_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meaning_col.add_theme_constant_override("separation", 5)
-	meaning_col.add_child(_lbl("POLICY DEFINITION · 政策定义", 9, Color("6d8092"), true))
+	meaning_col.add_child(_lbl("ECONOMIC DEFINITION · 经济学定义", 9, Color("6d8092"), true))
 	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("263b4d"), true))
-	meaning_col.add_child(_brief_text(
-		_lever_definition_context_text(lever), 11, Color("52697c")))
 	hero_row.add_child(meaning_col)
 	content.add_child(hero)
 
-	# Decision first: mechanism and trade-off are the two things a player needs before touching a lever.
+	# The economic transmission and policy trade-off follow the definition.
 	var decision_row := HBoxContainer.new()
 	decision_row.add_theme_constant_override("separation", 12)
-	decision_row.add_child(_brief_panel("POLICY TRANSMISSION · 政策传导", _lever_effect_text(lever),
+	decision_row.add_child(_brief_panel("ECONOMIC TRANSMISSION · 经济传导", _lever_effect_text(lever),
 		Color("386b9d"), Color.WHITE))
-	decision_row.add_child(_brief_panel("DECISION TRADE-OFF · 决策权衡", _lever_tradeoffs_text(lever),
+	decision_row.add_child(_brief_panel("POLICY TRADE-OFF · 政策权衡", _lever_tradeoffs_text(lever),
 		Color("9b6e2c"), Color.WHITE))
 	content.add_child(decision_row)
 
@@ -2732,7 +2723,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 
 	var rule_heading := HBoxContainer.new()
 	rule_heading.add_theme_constant_override("separation", 8)
-	rule_heading.add_child(_lbl("EXECUTION · 执行规则", 10, INK3, true))
+	rule_heading.add_child(_lbl("GAME RULES · 游戏规则（非政策定义）", 10, INK3, true))
 	rule_heading.add_child(_hrule())
 	content.add_child(rule_heading)
 	var rules := GridContainer.new()
@@ -2770,7 +2761,7 @@ func _show_lever_info(lever: Dictionary, current: Variant) -> void:
 	_confirm = {
 		"title": _cn(str(lever.get("name", ""))),
 		"body": "",
-		"note": "模型说明只描述直接机制，不保证政策结果；时滞、经济状态和其他政策可能改变最终效果。",
+		"note": "经济学说明用于解释政策含义、传导与权衡，不代表结果承诺；实际效果取决于当时的经济环境。",
 		"lever": lever,
 		"current": current,
 		"read_only": true,

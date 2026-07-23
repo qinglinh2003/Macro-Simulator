@@ -1,8 +1,8 @@
 """Player-facing explanations for every controllable policy lever.
 
 The Registry remains the authority for validation and execution.  This module is
-the companion authority for explaining those mechanics to a player: what a lever
-means, which model channel it changes, what trade-off it creates, and which
+the companion authority for explaining the economics to a player: what a policy
+means, how it transmits through the economy, what trade-off it creates, and which
 reported outcomes are useful when judging it.  Keeping the catalogue behind the
 controller schema lets every future client reuse the same copy instead of
 reverse-engineering names such as ``kappa`` or ``deficit_u_ref``.
@@ -107,7 +107,7 @@ POLICY_EXPLANATIONS: dict[str, PolicyExplanation] = {
         "住房开工、住房存量、房价、建筑业就业、空置情况",
     ),
     "fiscal_uses_national_accounts_gdp": _e(
-        "财政规则是否使用国民账户GDP，而不是模型中的替代产出口径计算占比。",
+        "财政规则是否以国民账户GDP作为衡量经济规模、计算赤字率和债务率的统一基准。",
         "启用会改变赤字目标和其他财政比率所使用的分母；实际支出规则可能因此给出不同结果。",
         "这是一项统计制度选择，不直接创造资源。切换可提高特定口径的一致性，但会造成政策指标的水平断点。",
         "两种GDP口径、赤字/GDP、债务/GDP、政策切换前后断点",
@@ -336,7 +336,7 @@ POLICY_EXPLANATIONS: dict[str, PolicyExplanation] = {
     ),
     "cb_uses_fixed_basket_cpi": _e(
         "央行计算政策通胀时是否使用固定消费篮子CPI。",
-        "启用会固定商品权重，价格变化更直接进入指数；关闭则使用模型的替代价格口径，可能反映消费结构变化。",
+        "启用会固定商品权重，价格变化更直接进入指数；关闭则使用会随当期消费结构变化的价格口径。",
         "固定篮子便于比较但可能忽略替代行为；可变口径更贴近实际购买结构，却可能弱化生活成本跃升。",
         "固定篮子CPI、替代价格指数、政策利率、消费结构",
     ),
