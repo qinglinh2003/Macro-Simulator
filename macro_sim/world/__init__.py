@@ -1,11 +1,10 @@
-"""v20 open economy — the multi-economy `World` container.
+"""Current multi-economy Bulk-Synchronous-Parallel World container.
 
-An open economy is N closed economies coupled at the border. `World` holds N
-instantiable `Economy` objects and runs the Bulk-Synchronous-Parallel tick: a thin
-central coupling barrier (empty at v20.0; FX in v20.1, trade in v20.2) followed by each
-economy's INDEPENDENT domestic step. With every open-economy flag off, a World of N
-economies is exactly N independent closed runs, and an N=1 World reproduces
-`Economy(cfg)` byte-for-byte (the keystone bit-identity gate).
+World coordinates independent domestic economies at registered cross-border
+boundaries. Depending on capabilities, it owns FX/dealer settlement, trade,
+external capital, migration, sanctions, peg reserves, global invariants, and
+publication. With coupling disabled, N economies remain independent; an N=1
+World preserves the bare Economy behavior tripwire.
 """
 
 from macro_sim.world.world import ECONOMY_SEED_STRIDE, World

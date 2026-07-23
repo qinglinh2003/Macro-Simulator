@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from scripts.cpp_migration.inventory import _module_paths
+from scripts.cpp_migration.module_map import build_module_map
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -33,3 +34,8 @@ def test_every_maintained_runtime_or_client_file_has_a_disposition():
         }
         for row in inventory["rows"]
     )
+
+
+def test_generated_module_map_matches_disposition_inventory():
+    path = ROOT / "docs/design/current/module-map.md"
+    assert path.read_text(encoding="utf-8") == build_module_map()

@@ -1,21 +1,58 @@
-# Module Map
+# Current Module Map
 
-This map is conceptual. It tells a developer which design layer they are
-touching and where the detailed history lives.
+This document is generated from the checked M0 module-disposition inventory.
+The inventory is authoritative for file coverage, migration action, and owner
+milestone; this page provides the human-oriented subsystem view.
 
-| Subsystem | Current code path | Current role | First read | Historical evidence |
-|---|---|---|---|---|
-| Accounting / ledger | `macro_sim/core/ledger.py` | Hard financial invariants, transfers, loans, write-offs, reserves, securities. | [`../core/01-accounting-axioms.md`](../core/01-accounting-axioms.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
-| Behavior rules | `macro_sim/behavior/planning.py` | Consumption, expectations, pricing, wages, investment, credit demand/supply. | [`../core/02-behavioral-axioms.md`](../core/02-behavioral-axioms.md) | [`../history/arcs/05-kernel-findings-v2-v3.md`](../history/arcs/05-kernel-findings-v2-v3.md) |
-| Market protocol | `macro_sim/markets/matching.py` | Decentralized matching, rationing, scheduling, information timing. | [`../core/03-market-institutional-axioms.md`](../core/03-market-institutional-axioms.md) | [`../history/arcs/06-firms-competition-equity.md`](../history/arcs/06-firms-competition-equity.md) |
-| Economy scheduler | `macro_sim/economy.py` | Construction, phase order, state carrier, hard accounting gate, per-tick record append. | [`developer-brief.md`](developer-brief.md) | [`../history/change-log.md`](../history/change-log.md) |
-| Config surface | `macro_sim/config/model.py`, `macro_sim/config/loader.py`, `macro_sim/config/schema.py`, `configs/` | Canonical config model, YAML profile loading, validation, and typed grouped config views. | [`development-rules.md`](development-rules.md) | [`../history/change-log.md`](../history/change-log.md) |
-| Firms and competition | `macro_sim/systems/firm_demographics.py`, `macro_sim/domain/agents.py` | Entry/exit, bankruptcy, diseconomies, Gibrat growth, concentration. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/06-firms-competition-equity.md`](../history/arcs/06-firms-competition-equity.md) |
-| Households and portfolios | `macro_sim/systems/equity.py`, `macro_sim/behavior/planning.py` | MPC heterogeneity, equity, margin credit, wealth concentration. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/07-households-portfolios-equity.md`](../history/arcs/07-households-portfolios-equity.md) |
-| Goods and capital markets | `macro_sim/systems/goods.py`, `macro_sim/systems/capital_goods.py` | Consumption market clearing, government goods demand, capital-goods purchases. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/05-kernel-findings-v2-v3.md`](../history/arcs/05-kernel-findings-v2-v3.md) |
-| Fiscal and welfare | `macro_sim/systems/settlement.py`, `macro_sim/reporting/metrics.py` | Taxes, transfers, deficit, public investment, welfare metrics, job guarantee. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/08-government-labor-monetary.md`](../history/arcs/08-government-labor-monetary.md) |
-| Central bank | `macro_sim/systems/central_bank.py`, `macro_sim/core/policy.py` | Policy rate, deposit-interest routing, OMO/QE, LoLR, reserve supply. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/08-government-labor-monetary.md`](../history/arcs/08-government-labor-monetary.md), [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
-| Banks | `macro_sim/systems/banking.py`, `macro_sim/systems/credit.py` | Multi-bank loan books, capital, competition, runs, bank equity, entry. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
-| Bonds and securities | `macro_sim/systems/securities.py` | Treasury/CB split, bond lots, bank securities, duration, SVB, OMO. | [`developer-brief.md`](developer-brief.md) | [`../history/arcs/09-banking-securities.md`](../history/arcs/09-banking-securities.md) |
-| Reporting and experiments | `macro_sim/reporting/`, `macro_sim/experiments/` | Per-tick metrics, diagnostic plots, run logs, and sweep registry. | [`developer-brief.md`](developer-brief.md) | [`../history/change-log.md`](../history/change-log.md) |
-| Validation | `tests/`, `macro_sim/reporting/diagnostics.py` | Held-out macro regularities and diagnostic discipline. | [`../core/04-validation-roadmap-kernel.md`](../core/04-validation-roadmap-kernel.md) | [`../history/change-log.md`](../history/change-log.md) |
+## Runtime Architecture
+
+| Subsystem | Current path | Responsibility |
+|---|---|---|
+| Simulation scheduler | `macro_sim/economy.py` | Per-economy phase execution and publication. |
+| World | `macro_sim/world/` | FX, trade, capital, migration, sanctions, pegs, and BSP coordination. |
+| Configuration | `macro_sim/config/` | Latest Config model, profiles, schema, and new-game normalization. |
+| Accounting kernel | `macro_sim/core/ledger.py` | Money, credit, reserve, and securities invariants. |
+| Policy | `macro_sim/core/policy*.py` | Domestic/external live policy state, registry, validation, and control metadata. |
+| Controller | `macro_sim/controllers/` | Institutional seats, decisions, transactions, replay, costs, and Gym boundary. |
+| Shocks | `macro_sim/shocks/` | Typed exogenous shock tapes, realization, disclosure, and scenarios. |
+| Agents | `macro_sim/domain/` | Households, firms, banks, employment, and market state. |
+| Demography and labor | `macro_sim/demographics/, macro_sim/labor/` | Population, households, relationships, participation, and employment state. |
+| Markets and behavior | `macro_sim/markets/, macro_sim/behavior/` | Planning, matching, and decentralized trade protocols. |
+| Economic systems | `macro_sim/systems/` | Banking, production, settlement, housing, energy, fiscal, and securities phases. |
+| Reporting and diagnostics | `macro_sim/reporting/, macro_sim/diagnostics/` | Metrics, probes, scorecards, and oracle diagnostics. |
+| RL | `macro_sim/rl/` | Versioned environment, codecs, training, evaluation, and deployable artifact. |
+| Desktop worker | `macro_sim/desktop/` | Transport-neutral Godot protocol adapter and snapshot service. |
+| Godot client | `desktop/godot/` | Native desktop presentation, interaction, and local main-menu flow. |
+
+## Migration Disposition Summary
+
+Tracked runtime/client/config/script assets: **199**.
+
+| Action | Files |
+|---|---:|
+| `adapter` | 18 |
+| `keep` | 7 |
+| `keep_client` | 16 |
+| `oracle_only` | 30 |
+| `port` | 91 |
+| `port_or_adapter` | 33 |
+| `wrap_native_worker` | 4 |
+
+| Owner milestone | Files |
+|---|---:|
+| `m0` | 35 |
+| `m1` | 14 |
+| `m10` | 46 |
+| `m11` | 20 |
+| `m3` | 4 |
+| `m4` | 20 |
+| `m5` | 5 |
+| `m6` | 7 |
+| `m7` | 27 |
+| `m8` | 8 |
+| `m9` | 13 |
+
+The canonical per-file rows and hashes are in
+[`schemas/m0/inventory/modules.json`](../../../schemas/m0/inventory/modules.json).
+Regenerate this page only through
+`uv run python scripts/cpp_migration/generate_module_map.py --write`.

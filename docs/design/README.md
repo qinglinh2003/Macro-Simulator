@@ -1,6 +1,6 @@
 # Design Documentation
 
-Version `2.23` · Status: **v12 securities arc closed; v13 labor search is the next major gap**
+Version `v33` · Status: **v124 Python oracle; C++20 migration M0 in progress**
 
 This directory is organized for development, not chronology. Start with the
 short current-state documents, then drill into durable rules or historical arcs

@@ -34,7 +34,8 @@ to connect a model concept to the current `macro_sim/` package path. Older
 history files may mention root modules such as `economy.py` or `metrics.py`;
 those names are historical references, not the active import surface.
 
-The current v23 patch status is summarized at the top of
-[`plans/PLAN_v23.md`](plans/PLAN_v23.md). Runtime, causal, and observed-data
-verification—including the limits that remain outside the present patch—is
-documented in [`diagnostics/README.md`](diagnostics/README.md).
+The current product frontier is the latest v124 Python oracle. The active v33
+C++ migration starts with the M0 contract freeze documented above. Runtime,
+causal, and observed-data verification is documented in
+[`diagnostics/README.md`](diagnostics/README.md); older version plans remain
+historical evidence rather than the current architecture boundary.
