@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
+from datetime import date, timedelta
 import hashlib
 import math
 import re
@@ -40,6 +41,7 @@ from macro_sim.world.country import (
 NEW_GAME_SCHEMA_VERSION = 1
 PLAYABLE_MODEL_ID = "current_playable_v1"
 MAX_COUNTRIES = 8
+MAX_DURATION_TICKS = (date.max - date.min).days
 
 # This is intentionally a production preset, not another historical Config version.
 # Policy instruments keep their neutral opening stance but every structural system
@@ -133,6 +135,8 @@ PERFORMANCE_PRESETS: dict[str, dict[str, int]] = {
     },
 }
 
+# Legacy request/save tokens remain readable, but the normalized contract stores
+# a finite duration as its exact number of simulation days (1 tick == 1 day).
 DURATION_TICKS: dict[str, int | None] = {
     "1y": 365,
     "5y": 5 * 365,
@@ -405,8 +409,9 @@ class NewGameSpec:
     schema_version: int
     model_id: str
     seed: int
+    start_date: str
     scenario: str
-    duration: str
+    duration: int | None
     performance_scale: str
     world: Mapping[str, Any]
     countries: tuple[CountrySpec, ...]
@@ -420,8 +425,10 @@ class NewGameSpec:
         return cls.from_mapping({
             "schema_version": NEW_GAME_SCHEMA_VERSION,
             "seed": seed,
+            "start_date": "2000-01-01",
             "scenario": "sandbox",
-            "duration": "5y",
+            # Five Gregorian calendar years from the default genesis date.
+            "duration": 1_827,
             "performance_scale": "fast",
             "world": {
                 "trade": True,
@@ -464,7 +471,7 @@ class NewGameSpec:
             "performance_scale", "world", "countries", "player_country",
             "run_mode", "seats", "initial_policy_overrides",
         }
-        allowed = expected | {"model_id"}
+        allowed = expected | {"model_id", "start_date"}
         if not expected <= set(value) or not set(value) <= allowed:
             raise ValueError(
                 "new_game spec fields differ; "
@@ -479,12 +486,40 @@ class NewGameSpec:
         # saved request envelopes may still echo it; every new run deliberately
         # resolves to the backend's current production model.
         seed = _strict_int("seed", value["seed"], low=0, high=2_147_483_647)
+        raw_start_date = value.get("start_date", "2000-01-01")
+        if not isinstance(raw_start_date, str):
+            raise TypeError("start_date must be an ISO Gregorian date")
+        try:
+            parsed_start_date = date.fromisoformat(raw_start_date)
+        except ValueError as exc:
+            raise ValueError(
+                "start_date must be an ISO Gregorian date (YYYY-MM-DD)"
+            ) from exc
+        start_date = parsed_start_date.isoformat()
         scenario = value["scenario"]
         if scenario not in {"sandbox", "oil", "gfc", "pandemic", "disaster"}:
             raise ValueError(f"unsupported scenario {scenario!r}")
-        duration = value["duration"]
-        if duration not in DURATION_TICKS:
-            raise ValueError(f"unsupported duration {duration!r}")
+        raw_duration = value["duration"]
+        if raw_duration is None:
+            duration = None
+        elif isinstance(raw_duration, str):
+            if raw_duration not in DURATION_TICKS:
+                raise ValueError(f"unsupported duration {raw_duration!r}")
+            duration = DURATION_TICKS[raw_duration]
+        else:
+            duration = _strict_int(
+                "duration",
+                raw_duration,
+                low=1,
+                high=MAX_DURATION_TICKS,
+            )
+        calendar_horizon = duration if duration is not None else 100_000
+        try:
+            parsed_start_date + timedelta(days=calendar_horizon)
+        except OverflowError as exc:
+            raise ValueError(
+                "start_date plus duration exceeds the Gregorian calendar"
+            ) from exc
         performance_scale = value["performance_scale"]
         if performance_scale not in PERFORMANCE_PRESETS:
             raise ValueError(f"unsupported performance scale {performance_scale!r}")
@@ -571,8 +606,9 @@ class NewGameSpec:
             schema_version=schema_version,
             model_id=PLAYABLE_MODEL_ID,
             seed=seed,
+            start_date=start_date,
             scenario=str(scenario),
-            duration=str(duration),
+            duration=duration,
             performance_scale=str(performance_scale),
             world=immutable_json_mapping(world),
             countries=countries,
@@ -584,7 +620,7 @@ class NewGameSpec:
 
     @property
     def duration_ticks(self) -> int | None:
-        return DURATION_TICKS[self.duration]
+        return self.duration
 
     @property
     def contract_hash(self) -> str:
@@ -597,6 +633,7 @@ class NewGameSpec:
             "schema_version": self.schema_version,
             "model_id": self.model_id,
             "seed": self.seed,
+            "start_date": self.start_date,
             "scenario": self.scenario,
             "duration": self.duration,
             "performance_scale": self.performance_scale,
@@ -619,6 +656,7 @@ class NewGameSpec:
             **scale,
             n_ticks=ticks,
             seed=self.seed,
+            simulation_start_date=self.start_date,
         )
         result: list[Config] = []
         for country in self.countries:

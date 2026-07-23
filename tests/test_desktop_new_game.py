@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import fields
+from datetime import date
 
 import pytest
 
@@ -13,6 +14,7 @@ from macro_sim.controllers import (
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.desktop.new_game import NewGameSpec
 from macro_sim.desktop.runtime import PROTOCOL_VERSION, SimulationRuntime
+from macro_sim.economy import Economy
 
 
 def _automatic_spec(*, seed: int = 41) -> dict:
@@ -28,6 +30,87 @@ def test_contract_round_trips_and_identifies_the_playable_model() -> None:
     assert restored == spec
     assert restored.contract_hash == spec.contract_hash
     assert restored.model_id == "current_playable_v1"
+    assert restored.duration == restored.duration_ticks == 1_827
+
+
+@pytest.mark.parametrize(
+    ("raw_duration", "expected"),
+    [
+        ("1y", 365),
+        ("5y", 1_825),
+        ("10y", 3_650),
+        ("inf", None),
+        (None, None),
+        (830, 830),
+    ],
+)
+def test_duration_accepts_legacy_presets_and_exact_tick_counts(
+    raw_duration: object,
+    expected: int | None,
+) -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["duration"] = raw_duration
+
+    spec = NewGameSpec.from_mapping(raw)
+
+    assert spec.duration == expected
+    assert spec.duration_ticks == expected
+    assert spec.to_dict()["duration"] == expected
+
+
+@pytest.mark.parametrize("duration", [True, 0, -1, 1.5, "365", [], {}])
+def test_duration_rejects_non_positive_or_ambiguous_values(duration: object) -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["duration"] = duration
+    with pytest.raises((TypeError, ValueError)):
+        NewGameSpec.from_mapping(raw)
+
+
+def test_start_date_is_real_genesis_input_and_leap_days_are_exact() -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["start_date"] = "2024-02-29"
+    raw["duration"] = 366
+
+    spec = NewGameSpec.from_mapping(raw)
+    economy = spec.configs()[0]
+
+    assert spec.start_date == "2024-02-29"
+    assert economy.simulation_start_date == "2024-02-29"
+    assert economy.n_ticks == 366
+    assert Economy(economy).demographic_state.current_date == date(2024, 2, 29)
+
+
+@pytest.mark.parametrize("start_date", [None, "", "2023-02-29", "23-01-01"])
+def test_start_date_rejects_non_iso_or_impossible_dates(start_date: object) -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["start_date"] = start_date
+    with pytest.raises((TypeError, ValueError)):
+        NewGameSpec.from_mapping(raw)
+
+
+def test_start_date_and_duration_must_fit_the_gregorian_calendar() -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["start_date"] = date.max.isoformat()
+    raw["duration"] = 1
+    with pytest.raises(ValueError, match="exceeds the Gregorian calendar"):
+        NewGameSpec.from_mapping(raw)
+
+
+def test_exact_tick_duration_stops_the_desktop_runtime_without_overshoot() -> None:
+    raw = _automatic_spec(seed=31)
+    raw["start_date"] = "2024-02-28"
+    raw["duration"] = 3
+    runtime = SimulationRuntime(seed=1)
+
+    initial = runtime.reset(spec=raw)
+    final = runtime.advance(20)
+
+    assert initial["tick"] == 1
+    assert final["tick"] == 3
+    assert final["advanced_ticks"] == 2
+    assert final["new_game"]["run_complete"] is True
+    assert final["new_game"]["remaining_ticks"] == 0
+    assert runtime.world.economies[0].demographic_state.current_date == date(2024, 3, 2)
 
 
 def test_backend_resolves_the_current_model_without_a_client_selector() -> None:
@@ -37,6 +120,12 @@ def test_backend_resolves_the_current_model_without_a_client_selector() -> None:
 
     request["model_id"] = "historical-client-value"
     assert NewGameSpec.from_mapping(request).model_id == "current_playable_v1"
+
+
+def test_legacy_new_game_without_start_date_uses_original_genesis_date() -> None:
+    request = NewGameSpec.default().to_dict()
+    request.pop("start_date")
+    assert NewGameSpec.from_mapping(request).start_date == "2000-01-01"
 
 
 def test_playable_preset_activates_every_completed_gameplay_domain() -> None:

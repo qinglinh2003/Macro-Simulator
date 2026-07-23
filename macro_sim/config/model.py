@@ -19,6 +19,7 @@ That count is the parsimony target we protect (spec §7.4 read-out).
 
 from __future__ import annotations
 
+from datetime import date
 import functools
 from dataclasses import dataclass, field
 
@@ -56,6 +57,7 @@ class Config:
     # -- horizon & reproducibility -----------------------------------------
     n_ticks: int = 500
     seed: int = 0                    # single seed feeds ALL randomness (§7.6)
+    simulation_start_date: str = "2000-01-01"  # ISO Gregorian genesis date
 
     # -- production (scale: a is a unit normalization) ---------------------
     a: float = 1.0                   # labor productivity, units/worker/tick -- scale
@@ -1808,6 +1810,12 @@ class Config:
 
     def _validate(self) -> None:
         """Guard the axiom-forced relations up front (fail loud, not silently)."""
+        try:
+            date.fromisoformat(self.simulation_start_date)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(
+                "simulation_start_date must be an ISO Gregorian date (YYYY-MM-DD)"
+            ) from exc
         assert self.a > 0, "productivity a must be > 0 (spec §8.1 degenerate guard)"
         assert self.w_firm0 > 0, "initial wage must be > 0 before w/a and floor(D/w)"
         assert 0 < self.alpha2 < self.alpha1 < 1, "B1 requires 0 < alpha2 < alpha1 < 1"

@@ -13,6 +13,7 @@ money, so it never touches the ledger.
 
 from __future__ import annotations
 
+from datetime import date
 import random
 from typing import Any, Dict, List
 
@@ -131,6 +132,7 @@ class Economy:
                 self.demographic_rates,
                 n=population,
                 seed=cfg.seed + 13_000,
+                start_date=date.fromisoformat(cfg.simulation_start_date),
             )
             household_count = len(
                 {

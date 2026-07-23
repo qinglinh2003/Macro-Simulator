@@ -33,6 +33,9 @@ const RED_BD := Color("f0bcae")
 const GREEN := Color("1f9d63")
 const GREEN_BG := Color("e3f4ea")
 const GREEN_BD := Color("9ddcb8")
+const SECONDS_PER_DAY := 86_400
+const MIN_START_YEAR := 1900
+const MAX_START_YEAR := 2200
 
 const STEP_META := [
 	["场景", "SCENARIO"], ["世界设置", "WORLD"],
@@ -120,6 +123,9 @@ var _settings_open := false
 var _scenario := "sandbox"
 var _seed := 7
 var _duration := "5y"
+var _duration_input_mode := "end_date"
+var _custom_duration_ticks := 1_827
+var _start_date := {"year": 2000, "month": 1, "day": 1}
 var _perf_scale := "fast"
 var _trade := true
 var _capital := true
@@ -161,6 +167,9 @@ func _ready() -> void:
 	if capture_step.is_valid_int() and capture_step.to_int() >= 1:
 		_screen = "wizard"
 		_step = clampi(capture_step.to_int(), 1, 6)
+	var capture_duration := OS.get_environment("MACRO_SIM_CAPTURE_START_DURATION")
+	if capture_duration in ["1y", "5y", "10y", "custom", "inf"]:
+		_duration = capture_duration
 	_settings_open = OS.get_environment("MACRO_SIM_CAPTURE_START_SETTINGS") == "1"
 	_surface = Control.new()
 	_surface.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -473,7 +482,7 @@ func _seed_card() -> Control:
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); p.add_child(v)
 	v.add_child(_label("随机种子", 12, INK2)); v.add_child(_label("0 – 2,147,483,647 · 可复现", 10, MUTED, false, true))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8)
-	var edit := LineEdit.new(); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.text = str(_seed); edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 15); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE, 9, 8)); edit.text_submitted.connect(func(text: String) -> void: _apply_seed(text)); edit.focus_exited.connect(func() -> void: _apply_seed(edit.text)); row.add_child(edit)
+	var edit := LineEdit.new(); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.text = str(_seed); edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 15); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE, 9, 8)); edit.text_submitted.connect(func(text: String) -> void: _apply_seed(text)); edit.focus_exited.connect(func() -> void: _apply_seed(edit.text)); row.add_child(edit)
 	row.add_child(_square_button("🎲", func() -> void: _seed = randi_range(0, 2147483647); _render(), 38)); row.add_child(_square_button("⧉", func() -> void: DisplayServer.clipboard_set(str(_seed)), 38)); v.add_child(row)
 	return p
 
@@ -485,11 +494,140 @@ func _apply_seed(text: String) -> void:
 
 func _duration_card() -> Control:
 	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v); v.add_child(_label("运行时长", 12, INK2))
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v)
+	var title := HBoxContainer.new(); title.add_child(_label("模拟日历", 12, INK2)); title.add_child(_h_spacer()); title.add_child(_chip("1 tick = 1 天", TEAL_DK, TEAL_BG, TEAL_BD)); v.add_child(title)
+	v.add_child(_label("开始日期", 10, INK3))
+	v.add_child(_date_fields(_start_date, _apply_start_date_component))
+	var duration_head := HBoxContainer.new(); duration_head.add_child(_label("运行期限", 10, INK3)); duration_head.add_child(_h_spacer()); duration_head.add_child(_label("Gregorian 自然日历", 9, MUTED, false, true)); v.add_child(duration_head)
 	var flow := HFlowContainer.new(); flow.add_theme_constant_override("h_separation", 6); flow.add_theme_constant_override("v_separation", 6)
-	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["inf", "无限"]]:
-		var id := str(d[0]); flow.add_child(_select_chip(str(d[1]), _duration == id, func() -> void: _duration = id; _render()))
-	v.add_child(flow); v.add_child(_label("自然日历 · 5 年共 1,825 天" if _duration == "5y" else "自然日历 · 每年 365 天", 10, INK3, false, true)); return p
+	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["custom", "自定义"], ["inf", "无限"]]:
+		var id := str(d[0]); flow.add_child(_select_chip(str(d[1]), _duration == id, func() -> void: _select_duration(id)))
+	v.add_child(flow)
+	if _duration == "custom":
+		var modes := HBoxContainer.new(); modes.add_theme_constant_override("separation", 6)
+		for mode: Array in [["end_date", "结束年月日"], ["ticks", "直接输入 tick"]]:
+			var mode_id := str(mode[0]); var mode_chip := _select_chip(str(mode[1]), _duration_input_mode == mode_id, func() -> void: _duration_input_mode = mode_id; _render()); mode_chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL; modes.add_child(mode_chip)
+		v.add_child(modes)
+		if _duration_input_mode == "end_date":
+			v.add_child(_date_fields(_end_date(), _apply_end_date_component))
+		else:
+			v.add_child(_duration_tick_field())
+	var note := _label(_duration_note(), 10, INK3, false, true); note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; v.add_child(note)
+	return p
+
+
+func _date_fields(parts: Dictionary, callback: Callable) -> Control:
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6)
+	for field: Array in [["年", "year", 74], ["月", "month", 54], ["日", "day", 54]]:
+		var box := VBoxContainer.new(); box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation", 3)
+		var edit := LineEdit.new(); edit.text = str(parts[str(field[1])]); edit.custom_minimum_size = Vector2(int(field[2]), 34); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.alignment = HORIZONTAL_ALIGNMENT_CENTER; edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 13); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE2, 8, 7))
+		var key := str(field[1])
+		edit.text_submitted.connect(func(text: String) -> void: callback.call(key, text))
+		edit.focus_exited.connect(func() -> void: callback.call(key, edit.text))
+		box.add_child(edit); var caption := _label(str(field[0]), 9, MUTED); caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; box.add_child(caption); row.add_child(box)
+	return row
+
+
+func _duration_tick_field() -> Control:
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8)
+	var edit := LineEdit.new(); edit.text = str(_custom_duration_ticks); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.custom_minimum_size.y = 36; edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 14); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE2, 8, 7)); edit.text_submitted.connect(_apply_duration_ticks); edit.focus_exited.connect(func() -> void: _apply_duration_ticks(edit.text)); row.add_child(edit)
+	row.add_child(_label("tick / 天", 11, INK2, false, true))
+	return row
+
+
+func _select_duration(value: String) -> void:
+	if value == "custom" and _duration != "custom":
+		var current: Variant = _duration_ticks_value()
+		if current != null:
+			_custom_duration_ticks = int(current)
+	_duration = value
+	_render()
+
+
+func _apply_start_date_component(key: String, text: String) -> void:
+	if text.is_valid_int():
+		var proposed := _start_date.duplicate()
+		proposed[key] = text.to_int()
+		_start_date = _normalize_date(proposed, MIN_START_YEAR, MAX_START_YEAR)
+		_custom_duration_ticks = mini(_custom_duration_ticks, _maximum_duration_from_start())
+	_render()
+
+
+func _apply_end_date_component(key: String, text: String) -> void:
+	if text.is_valid_int():
+		var proposed := _end_date()
+		proposed[key] = text.to_int()
+		proposed = _normalize_date(proposed, int(_start_date["year"]), 9999)
+		_custom_duration_ticks = clampi(_date_day(proposed) - _date_day(_start_date), 1, _maximum_duration_from_start())
+	_render()
+
+
+func _apply_duration_ticks(text: String) -> void:
+	if text.is_valid_int():
+		_custom_duration_ticks = clampi(text.to_int(), 1, _maximum_duration_from_start())
+	_render()
+
+
+func _normalize_date(parts: Dictionary, min_year: int, max_year: int) -> Dictionary:
+	var year := clampi(int(parts.get("year", min_year)), min_year, max_year)
+	var month := clampi(int(parts.get("month", 1)), 1, 12)
+	var day := clampi(int(parts.get("day", 1)), 1, _days_in_month(year, month))
+	return {"year": year, "month": month, "day": day}
+
+
+func _days_in_month(year: int, month: int) -> int:
+	if month == 2:
+		return 29 if year % 400 == 0 or (year % 4 == 0 and year % 100 != 0) else 28
+	if month in [4, 6, 9, 11]:
+		return 30
+	return 31
+
+
+func _date_day(parts: Dictionary) -> int:
+	var datetime := {"year": int(parts["year"]), "month": int(parts["month"]), "day": int(parts["day"]), "hour": 0, "minute": 0, "second": 0}
+	return floori(float(Time.get_unix_time_from_datetime_dict(datetime)) / float(SECONDS_PER_DAY))
+
+
+func _date_from_day(day_number: int) -> Dictionary:
+	var parts := Time.get_date_dict_from_unix_time(day_number * SECONDS_PER_DAY)
+	return {"year": int(parts["year"]), "month": int(parts["month"]), "day": int(parts["day"])}
+
+
+func _date_iso(parts: Dictionary) -> String:
+	return "%04d-%02d-%02d" % [int(parts["year"]), int(parts["month"]), int(parts["day"])]
+
+
+func _add_years(parts: Dictionary, years: int) -> Dictionary:
+	var result := parts.duplicate()
+	result["year"] = int(parts["year"]) + years
+	result["day"] = mini(int(parts["day"]), _days_in_month(int(result["year"]), int(result["month"])))
+	return result
+
+
+func _maximum_duration_from_start() -> int:
+	return _date_day({"year": 9999, "month": 12, "day": 31}) - _date_day(_start_date)
+
+
+func _duration_ticks_value() -> Variant:
+	if _duration == "inf":
+		return null
+	if _duration == "custom":
+		return _custom_duration_ticks
+	var years: int = int({"1y": 1, "5y": 5, "10y": 10}.get(_duration, 5))
+	return _date_day(_add_years(_start_date, int(years))) - _date_day(_start_date)
+
+
+func _end_date() -> Dictionary:
+	var ticks: Variant = _duration_ticks_value()
+	if ticks == null:
+		return {}
+	return _date_from_day(_date_day(_start_date) + int(ticks))
+
+
+func _duration_note() -> String:
+	if _duration == "inf":
+		return "%s 起 · 不设终局日期" % _date_iso(_start_date)
+	return "%s → %s · %d tick（含闰日）" % [_date_iso(_start_date), _date_iso(_end_date()), int(_duration_ticks_value())]
 
 
 func _performance_card() -> Control:
@@ -1078,7 +1216,7 @@ func _step_review(parent: VBoxContainer) -> void:
 	var country_rows: Array = []
 	for c: Dictionary in _countries:
 		country_rows.append([str(c["name"]), "%s · %d 户" % [str(PROFILES[str(c["profile"])]["name"]), _households(c)]])
-	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["日历", "每年 365 天"], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["开始日期", _date_iso(_start_date)], ["运行期限", _duration_label()], ["结束日期", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
 	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "启动时原子应用"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))
@@ -1116,7 +1254,7 @@ func _manifest_card(title: String, accent: Color, rows: Array) -> Control:
 func _summary_panel() -> Control:
 	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(322, 0); p.add_theme_stylebox_override("panel", _sb(PANEL, LINE2, 0, 14)); var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 12); p.add_child(col)
 	var head := HBoxContainer.new(); head.add_child(_kicker("本局摘要")); head.add_child(_h_spacer()); head.add_child(_dot(GREEN, 6)); head.add_child(_label("协议已接入", 10, GREEN)); col.add_child(head)
-	col.add_child(_summary_section("场景", [["场景", _scenario_name()]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	col.add_child(_summary_section("场景", [["场景", _scenario_name()]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["开始", _date_iso(_start_date)], ["期限", _duration_label()], ["结束", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	var cr: Array = []
 	for c: Dictionary in _countries.slice(0, 4):
 		cr.append([str(c["code"]), str(PROFILES[str(c["profile"])]["name"])])
@@ -1209,8 +1347,8 @@ func _draft_manifest() -> Dictionary:
 		countries.append({"name": str(country["name"]), "code": str(country["code"]),
 			"profile": str(country["profile"]),
 			"overrides": (country["overrides"] as Dictionary).duplicate(true)})
-	return {"schema_version": 1, "seed": _seed,
-		"scenario": _scenario, "duration": _duration, "performance_scale": _perf_scale,
+	return {"schema_version": 1, "seed": _seed, "start_date": _date_iso(_start_date),
+		"scenario": _scenario, "duration": _duration_ticks_value(), "performance_scale": _perf_scale,
 		"world": world,
 		"countries": countries, "player_country": _player_country,
 		"run_mode": _run_mode, "seats": _seat_occupants.duplicate(true),
@@ -1256,7 +1394,11 @@ func _scenario_name() -> String:
 	return "自由沙盒"
 
 
-func _duration_label() -> String: return {"1y": "1 年", "5y": "5 年", "10y": "10 年", "inf": "无限"}.get(_duration, _duration)
+func _duration_label() -> String:
+	if _duration == "inf":
+		return "无限"
+	var prefix: String = str({"1y": "1 年", "5y": "5 年", "10y": "10 年", "custom": "自定义"}.get(_duration, "自定义"))
+	return "%s · %d 天" % [prefix, int(_duration_ticks_value())]
 func _cross_label() -> String: return " · ".join(["贸易" if _trade else "", "资本" if _capital else "", "迁移" if _migration else ""].filter(func(x: String) -> bool: return not x.is_empty()))
 func _total_households() -> int:
 	var total := 0

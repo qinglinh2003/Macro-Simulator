@@ -200,6 +200,7 @@ frozen)**: delete in favour of each economy's own peg choice in ExternalPolicy; 
 the §5.1 multi-pegger / cyclic-peg / anchor-switch ruling; migration note mandatory.
 
 **Structure / genesis / scale** (immutable by nature): n_households, n_firms, n_ticks, seed,
+simulation_start_date,
 a, n_firms_c, n_firms_k, n_firms_e, n_banks, n_builders, d_household0, d_firm0, d_cfirm0,
 d_kfirm0, d_efirm0, d_bank0, p_firm0, p_kfirm0, p_efirm0, w_firm0, inv_firm0, inv_kfirm0,
 mu_firm0, demand_e_firm0, startup_deposits, startup_capital, float_shares, shares_per_firm,
