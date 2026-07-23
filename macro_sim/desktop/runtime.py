@@ -22,6 +22,7 @@ from macro_sim.controllers import (
 )
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.protocol import canonical_value
+from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.shocks import ShockSpec, get_shock_engine
 from macro_sim.systems.banking import (
     bank_economic_capital,
@@ -1647,6 +1648,17 @@ class SimulationRuntime:
         household_snapshot = self._household_snapshot()
         firm_snapshot = self._firm_snapshot()
         stock_market_snapshot = self._stock_market_snapshot(firm_snapshot)
+        player_economy = self.world.economies[PLAYER_ECONOMY]
+        policy_values = {
+            name: getattr(
+                player_economy.external_policy
+                if lever.scope == "external" else player_economy.policy,
+                name,
+            )
+            for name, lever in REGISTRY.items()
+            if lever.scope != "external"
+            or hasattr(player_economy, "external_policy")
+        }
         return {
             "protocol_version": PROTOCOL_VERSION,
             "observation": self._merged_observation(),
@@ -1660,6 +1672,7 @@ class SimulationRuntime:
             "households": _jsonable(household_snapshot),
             "firms": _jsonable(firm_snapshot),
             "stock_market": _jsonable(stock_market_snapshot),
+            "policy_values": _jsonable(policy_values),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}

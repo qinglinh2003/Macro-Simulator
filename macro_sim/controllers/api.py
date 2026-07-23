@@ -72,8 +72,13 @@ class ControllerService:
             if lever.scope == "external" and not hasattr(economy, "external_policy"):
                 continue
             validation = lever.validation
+            holder = (
+                economy.external_policy
+                if lever.scope == "external" else economy.policy
+            )
             row: dict[str, Any] = {
                 "name": name,
+                "current_value": getattr(holder, name),
                 "scope": lever.scope,
                 "owner_role": lever.owner_role,
                 "decision_group": lever.decision_group,
@@ -88,6 +93,9 @@ class ControllerService:
                 "semantics": lever.semantics,
                 "requires": sorted(lever.requires),
                 "enabled_if": sorted(lever.enabled_if),
+                "shadowed_by": list(lever.shadowed_by),
+                "read_point": lever.read_point,
+                "state_notes": lever.state_notes,
             }
             if isinstance(validation, IntRange):
                 row.update(

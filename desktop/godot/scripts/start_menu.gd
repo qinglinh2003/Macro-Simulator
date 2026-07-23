@@ -296,7 +296,7 @@ func _continue_card() -> Control:
 	kicker.add_child(_label("最近自动存档", 10, Color("68788b"), false, true))
 	col.add_child(kicker)
 	col.add_child(_label("奥雷利亚 · 自由沙盒", 17, INK, true))
-	var detail := _label("模拟日期 第 3 年 · Q2 · 35 天  (t=856)\n3 国 · seed 7 · 交互模式 · 存档于 今天 14:22\nschema v31 · 兼容", 12, INK2, false, true)
+	var detail := _label("模拟日期 第 3 年 · 第 2 季 · 第 35 天\n3 国 · seed 7 · 交互模式 · 存档于 今天 14:22\nschema v31 · 兼容", 12, INK2, false, true)
 	detail.add_theme_constant_override("line_spacing", 4)
 	col.add_child(detail)
 	var cont := _button("继续游戏 →", func() -> void:
@@ -538,7 +538,7 @@ func _duration_card() -> Control:
 	var flow := HFlowContainer.new(); flow.add_theme_constant_override("h_separation", 6); flow.add_theme_constant_override("v_separation", 6)
 	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["inf", "无限"], ["custom", "自定义"]]:
 		var id := str(d[0]); flow.add_child(_select_chip(str(d[1]), _duration == id, func() -> void: _duration = id; _render()))
-	v.add_child(flow); v.add_child(_label("1,825 tick · n_ticks" if _duration == "5y" else "365 tick / 年", 10, INK3, false, true)); return p
+	v.add_child(flow); v.add_child(_label("自然日历 · 5 年共 1,825 天" if _duration == "5y" else "自然日历 · 每年 365 天", 10, INK3, false, true)); return p
 
 
 func _performance_card() -> Control:
@@ -683,7 +683,7 @@ func _step_government(parent: VBoxContainer) -> void:
 	var cal := _button(("▼" if _calendar_open else "▶") + "  制度决策日历    普通模式为自然语言摘要", func() -> void: _calendar_open = not _calendar_open; _render(), false, 12, true); var cm := MarginContainer.new(); cm.add_theme_constant_override("margin_top", 12); cm.add_child(cal); parent.add_child(cm)
 	if _calendar_open:
 		var cp := _panel(PANEL, LINE2, 11, 11); var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 7); cp.add_child(cv)
-		for line: Array in [["货币立场 · 流动性操作", "约每 1.5 月", "45 tick"], ["财政 · 债务 · 宏观审慎 · 贸易迁移 · 外汇 · 能源操作", "每季度", "91 tick"], ["税收转移 · 结构法律 · 能源结构", "每年", "365 tick"]]:
+		for line: Array in [["货币立场 · 流动性操作", "约每 1.5 月", "45 天"], ["财政 · 债务 · 宏观审慎 · 贸易迁移 · 外汇 · 能源操作", "每季度", "91 天"], ["税收转移 · 结构法律 · 能源结构", "每年", "365 天"]]:
 			var lr := HBoxContainer.new()
 			lr.add_child(_label(str(line[0]), 11, Color("3a4956")))
 			lr.add_child(_h_spacer())
@@ -703,7 +703,7 @@ func _seat_row(seat: Dictionary) -> Control:
 
 
 func _frozen_country(country: Dictionary) -> Control:
-	var p := _panel(PANEL, LINE, 10, 10); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); p.add_child(row); row.add_child(_dot(country["color"], 9)); var v := VBoxContainer.new(); v.add_child(_label(str(country["name"]), 13, INK, true)); v.add_child(_label("无 Controller · 政策冻结（t=0 保持不变）", 10, INK2)); row.add_child(v); return p
+	var p := _panel(PANEL, LINE, 10, 10); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); p.add_child(row); row.add_child(_dot(country["color"], 9)); var v := VBoxContainer.new(); v.add_child(_label(str(country["name"]), 13, INK, true)); v.add_child(_label("无 Controller · 政策自开局起保持不变", 10, INK2)); row.add_child(v); return p
 
 
 func _mode_card(title: String, note: String, active: bool, locked: bool, callback: Callable) -> Control:
@@ -807,7 +807,7 @@ func _step_review(parent: VBoxContainer) -> void:
 	var country_rows: Array = []
 	for c: Dictionary in _countries:
 		country_rows.append([str(c["name"]), "%s · %d 户" % [str(PROFILES[str(c["profile"])]["name"]), _households(c)]])
-	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["日历", "365 tick / 年"], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["日历", "每年 365 天"], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
 	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "等待新游戏协议"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))

@@ -47,7 +47,7 @@ const TILE_TO_GROUP := {
 const TILE_SPEC := [
 	{"id": "real_output", "label": "实际产出 · GDP", "color": TEAL, "bad_up": false, "kind": "num"},
 	{"id": "unemployment_rate", "label": "失业率", "color": AMBER, "bad_up": true, "kind": "pp"},
-	{"id": "inflation", "label": "通胀(每tick)", "color": PURPLE, "bad_up": true, "kind": "pp"},
+	{"id": "inflation", "label": "通胀(日率)", "color": PURPLE, "bad_up": true, "kind": "pp"},
 	{"id": "price_index", "label": "物价指数", "color": BLUE, "bad_up": true, "kind": "num"},
 	{"id": "policy_rate", "label": "政策利率", "color": TEAL, "bad_up": false, "kind": "pp"},
 	{"id": "gov_deficit_to_gdp", "label": "赤字 / GDP", "color": AMBER, "bad_up": true, "kind": "pp"},
@@ -316,6 +316,125 @@ const LEVER_CN := {
 	"tariff": "进口关税税率",
 }
 
+# 不能可靠地由字段名推出的核心机制。其余比例、上下限、税率和制度开关由下方
+# 规则生成定义；所有说明仍以 registry 的 read_point / semantics 为机制边界。
+const POLICY_HELP := {
+	"gov_consumption_share": {
+		"definition": "政府用于购买商品和服务的目标支出比例。",
+		"effect": "提高通常直接扩大公共需求和企业订单，同时增加财政支出；存在赤字目标时可能被该规则覆盖。"},
+	"gov_deficit_target": {
+		"definition": "财政规则希望维持的政府赤字相对经济规模的目标。",
+		"effect": "提高会允许更强的财政净注入，通常支撑需求与就业，但也会更快累积政府债务。"},
+	"deficit_u_ref": {
+		"definition": "逆周期赤字规则判断劳动力市场松弛程度时采用的失业率参照。",
+		"effect": "改变自动稳定器开始扩张或收缩的失业基准，影响财政对就业波动的敏感度。"},
+	"deficit_u_cap": {
+		"definition": "失业压力最多能够触发的额外逆周期赤字规模。",
+		"effect": "提高会放大衰退时的财政托底上限，但增加高失业阶段的借款与债务压力。"},
+	"benefit_replacement": {
+		"definition": "失业救济相对参考工资的支付比例。",
+		"effect": "提高可稳定失业家庭收入和消费，但增加财政支出，并可能改变求职与就业保障计划之间的选择。"},
+	"benefit_income_floor": {
+		"definition": "在职低收入者可获得补足时采用的最低收入保障标准。",
+		"effect": "提高可改善低收入劳动者收入与消费，同时扩大财政转移支付。"},
+	"job_guarantee": {
+		"definition": "政府是否向未被市场吸收的劳动者提供就业保障岗位。",
+		"effect": "启用后可直接吸收失业劳动力并形成收入底线，但需要财政支出并可能与私人部门争夺劳动。"},
+	"jg_wage_ratio": {
+		"definition": "就业保障岗位工资相对市场参考工资的比例。",
+		"effect": "提高会强化工资与收入底线，也会提高公共用工成本并影响私人部门招聘。"},
+	"bond_finance_frac": {
+		"definition": "财政赤字中通过发行国债而非其他结算方式融资的比例。",
+		"effect": "提高会增加国债供给、利息现金流和金融机构可持有的安全资产。"},
+	"bond_coupon": {
+		"definition": "新发行国债承诺支付的票面利率。",
+		"effect": "提高会改善新债对投资者的吸引力，但抬升政府未来利息支出；既有债券票息不会被追溯改写。"},
+	"bond_maturity": {
+		"definition": "新发行国债从发行到到期偿还的期限。",
+		"effect": "延长期限降低短期再融资频率，但增加久期风险；只影响生效后发行的新债。"},
+	"monetary_regime": {
+		"definition": "政策利率路径采用外生利率、泰勒规则还是手动钉住。",
+		"effect": "切换会改变整个利率形成机制，并影响信贷成本、存款收益、资产估值和汇率压力。"},
+	"manual_policy_rate": {
+		"definition": "手动货币制度下直接钉住的每日政策利率。",
+		"effect": "提高通常收紧融资条件并压低需求与估值；降低则相反。仅在手动制度下有效。"},
+	"inflation_target": {
+		"definition": "泰勒规则判断通胀偏离时采用的每日通胀目标。",
+		"effect": "提高目标会在同等通胀下形成更宽松的利率反应；降低目标通常使政策更偏紧。"},
+	"taylor_phi_pi": {
+		"definition": "泰勒规则对通胀缺口的反应强度。",
+		"effect": "提高会让政策利率对通胀偏离作出更大幅度的反应。"},
+	"taylor_phi_u": {
+		"definition": "泰勒规则对失业缺口的反应强度。",
+		"effect": "提高会让政策利率更积极地回应劳动力市场偏冷或偏热。"},
+	"rate_inertia": {
+		"definition": "当前政策利率在下一期利率决策中保留的权重。",
+		"effect": "提高会让利率路径更平滑但响应更慢；降低会加快政策调整。"},
+	"infl_ema_lambda": {
+		"definition": "通胀平滑指标赋予最新观测的权重。",
+		"effect": "提高会让央行更重视近期通胀、反应更快；降低会增强历史平滑。"},
+	"omo": {
+		"definition": "央行是否通过公开市场操作调节银行准备金。",
+		"effect": "启用后央行可围绕准备金目标注入或回笼流动性，影响同业资金条件和银行放贷能力。"},
+	"lolr": {
+		"definition": "央行是否向遭遇流动性压力但仍可处置的银行提供最后贷款人支持。",
+		"effect": "启用可减少流动性冲击演变为银行倒闭的风险，但会扩大央行风险暴露。"},
+	"reserve_floor_frac": {
+		"definition": "银行准备金相对相关负债必须维持的最低比例。",
+		"effect": "提高会增强流动性缓冲，同时占用可用于放贷和投资的资金。"},
+	"fx_regime": {
+		"definition": "本国汇率采用市场浮动还是盯住锚国货币。",
+		"effect": "联系汇率降低名义汇率波动，但需要储备防守并约束国内政策空间；浮动汇率允许价格自行调整。"},
+	"peg_anchor": {
+		"definition": "联系汇率制度引用其货币价值的锚定经济体。",
+		"effect": "更换锚国会重配外汇储备并把本国汇率路径连接到新的参照货币。"},
+	"peg_reserve_scale": {
+		"definition": "联系汇率防守机制可动用的目标储备规模。",
+		"effect": "提高通常增强抵御资本流动和汇率压力的能力，但占用更多外部资产。"},
+	"capital_control": {
+		"definition": "限制跨境资本流动的强度。",
+		"effect": "提高可减缓资本外流和联汇压力，但也压低跨境融资与资本配置。"},
+	"bank_capital_constraint": {
+		"definition": "银行放贷是否受资本充足约束。",
+		"effect": "启用后资本不足的银行会收缩信贷，增强偿付韧性但可能抑制融资和投资。"},
+	"bank_target_capital_ratio": {
+		"definition": "银行经营时希望维持的资本相对风险资产比例。",
+		"effect": "提高会促使银行积累更多资本并更谨慎放贷，降低破产风险但收紧信贷。"},
+	"bank_leverage_cap": {
+		"definition": "银行总资产相对资本所允许的最高倍数。",
+		"effect": "下调会收紧杠杆约束、提高韧性，但可能迫使银行缩减信贷资产。"},
+	"mortgage_ltv_cap": {
+		"definition": "按揭贷款相对住房抵押价值所允许的最高比例。",
+		"effect": "下调要求更高首付并降低银行损失风险，但减少能够获得按揭的家庭。"},
+	"mortgage_dsti_cap": {
+		"definition": "家庭按揭偿债额相对收入所允许的最高比例。",
+		"effect": "下调会加强偿付能力审查并降低违约风险，同时收紧住房信贷。"},
+	"energy_rationing": {
+		"definition": "能源短缺时在居民与产业之间分配有限供给的优先规则。",
+		"effect": "居民优先保护家庭消费，产业优先保护生产；只在供给不足时产生实际差异。"},
+	"energy_price_cap": {
+		"definition": "能源市场成交价格不得超过的最高水平；零值表示关闭限价。",
+		"effect": "下调可压低用户支付价格，但可能放大短缺；配合补偿可缓解供应方损失并增加财政成本。"},
+	"spr_target_units": {
+		"definition": "政府希望战略能源储备维持的实物库存规模。",
+		"effect": "提高增强未来短缺缓冲，但当前补库会增加需求和财政占用。"},
+	"spr_flow_cap": {
+		"definition": "战略能源储备每日最多可买入或释放的实物量。",
+		"effect": "提高可加快危机释放或补库速度，也会放大对当日市场供需的影响。"},
+	"sanctions_imposed_on": {
+		"definition": "本国当前主动施加贸易制裁的经济体名单。",
+		"effect": "加入目标会切断双方贸易流；移除只撤销本国施加的那一份制裁。"},
+	"tariff": {
+		"definition": "进口商品进入本国市场时征收的从价税率。",
+		"effect": "提高通常保护国内生产并增加关税收入，但抬高进口成本并压低进口数量。"},
+	"import_quota": {
+		"definition": "允许进入本国市场的进口数量上限；不设置表示没有配额。",
+		"effect": "下调会直接限制进口供给，可能保护本国产业，也可能造成价格上涨或投入短缺。"},
+	"export_subsidy": {
+		"definition": "政府对出口交易给予的补贴比例；负值等价于出口税。",
+		"effect": "提高可改善出口竞争力和海外份额，但需要财政支出并可能挤压国内供给。"},
+}
+
 
 # 指标全景:9 组 × 6 键(上帝视角,逐 tick 真值;键名与后端 records 一致)
 # fmt: pct=份额%, pt=每tick利率%, idx=指数, num=水平量
@@ -354,8 +473,8 @@ const PANEL_GROUPS := [
 		["welfare_log", "对数福利", "idx"], ["savings_rate", "储蓄率", "pct"]]},
 	{"name": "人口与企业", "color": Color("2a8a68"), "items": [
 		["population_alive", "总人口", "num"], ["working_age_share", "劳龄占比", "pct"],
-		["avg_household_size", "户均规模", "idx"], ["births", "出生 / tick", "num"],
-		["deaths", "死亡 / tick", "num"], ["firm_count_c", "消费品企业数", "num"]]},
+		["avg_household_size", "户均规模", "idx"], ["births", "当日出生", "num"],
+		["deaths", "当日死亡", "num"], ["firm_count_c", "消费品企业数", "num"]]},
 ]
 
 # 每个指标页签使用独立的信息架构。标量历史来自 records，人口、劳动和企业截面
@@ -379,7 +498,7 @@ const PANEL_CHARTS := {
 		{"type": "line", "title": "DEMAND · 产出与消费", "note": "实际量",
 			"items": [["real_output", "实际产出", "num", TEAL],
 				["real_consumption", "实际消费", "num", BLUE]]},
-		{"type": "line", "title": "CAPITAL · 资本形成", "note": "指数化 t0=100", "indexed": true,
+		{"type": "line", "title": "CAPITAL · 资本形成", "note": "期初指数=100", "indexed": true,
 			"items": [["aggregate_capital", "资本存量", "num", BLUE],
 				["investment_spending", "投资支出", "num", AMBER],
 				["real_output", "实际产出", "num", TEAL]]},
@@ -390,11 +509,11 @@ const PANEL_CHARTS := {
 		{"type": "age_participation", "title": "LFPR · 分年龄劳动参与率", "note": "参与率与就业率 · 劳龄口径 18–64"},
 	],
 	"价格与货币": [
-		{"type": "line", "title": "RATES · 价格与利率脉冲", "note": "每 tick 变化率",
+		{"type": "line", "title": "RATES · 价格与利率脉冲", "note": "每日变化率",
 			"items": [["inflation", "通胀", "pt", PURPLE],
 				["policy_rate", "政策利率", "pt", TEAL],
 				["wage_inflation", "工资通胀", "pt", AMBER]]},
-		{"type": "line", "title": "PURCHASING POWER · 购买力", "note": "指数化 t0=100", "indexed": true,
+		{"type": "line", "title": "PURCHASING POWER · 购买力", "note": "期初指数=100", "indexed": true,
 			"items": [["price_index", "物价指数", "idx", BLUE],
 				["real_wage", "实际工资", "idx", TEAL],
 				["avg_markup", "平均加成", "idx", PURPLE]]},
@@ -405,7 +524,7 @@ const PANEL_CHARTS := {
 	],
 	"财政": [
 		{"type": "fiscal_flow", "title": "BUDGET MAP · 财政资金地图", "note": "收入来源与支出去向"},
-		{"type": "line", "title": "DEBT · 债务轨迹", "note": "指数化 t0=100", "indexed": true,
+		{"type": "line", "title": "DEBT · 债务轨迹", "note": "期初指数=100", "indexed": true,
 			"items": [["gov_debt", "政府债务", "num", BLUE],
 				["gov_debt_to_gdp", "债务/GDP", "pct", AMBER]]},
 		{"type": "columns", "title": "BUDGET · 本期预算截面", "note": "收支规模",
@@ -439,7 +558,7 @@ const PANEL_CHARTS := {
 	],
 	"能源": [
 		{"type": "energy_flow", "title": "FLOW · 能源平衡", "note": "生产 → 销售/使用 → 库存"},
-		{"type": "line", "title": "COST · 价格与成本", "note": "指数化 t0=100", "indexed": true,
+		{"type": "line", "title": "COST · 价格与成本", "note": "期初指数=100", "indexed": true,
 			"items": [["energy_price", "能源价格", "idx", Color("b0641f")],
 				["energy_cost_share", "能源成本占比", "pct", RED],
 				["energy_capacity_utilization", "产能利用率", "pct", TEAL]]},
@@ -451,7 +570,7 @@ const PANEL_CHARTS := {
 	],
 	"分配与福利": [
 		{"type": "lorenz", "title": "LORENZ · 收入与正净财富分布", "note": "越贴近对角线越均等"},
-		{"type": "line", "title": "WELFARE · 福利与工资分位", "note": "指数化 t0=100", "indexed": true,
+		{"type": "line", "title": "WELFARE · 福利与工资分位", "note": "期初指数=100", "indexed": true,
 			"items": [["welfare_log", "对数福利", "idx", GREEN],
 				["wage_p90_p10_ratio", "工资 P90/P10", "idx", AMBER],
 				["bottom10_consumption", "底部10%消费", "num", BLUE]]},
@@ -459,7 +578,7 @@ const PANEL_CHARTS := {
 	],
 	"人口与企业": [
 		{"type": "pyramid", "title": "AGE · 人口金字塔", "note": "男左女右 · 当前存活人口"},
-		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每 tick 人数",
+		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每日人数",
 			"items": [["births", "出生", "num", TEAL],
 				["deaths", "死亡", "num", RED]]},
 		{"type": "sector_matrix", "title": "BUSINESS · 企业部门生态", "note": "企业数 · 产销 · 用工"},
@@ -517,6 +636,7 @@ var _last_toasted := ""
 var _capture_path := ""
 var _capture_ticks := 0
 var _capture_target := -1
+var _capture_policy_info := ""
 var _confirm: Dictionary = {}
 var _demo_crisis := false
 var _crisis_dismissed := ""
@@ -591,6 +711,7 @@ func _ready() -> void:
 	var pre_lever := OS.get_environment("MACRO_SIM_CAPTURE_LEVER")
 	if not pre_lever.is_empty():
 		_expanded_lever = pre_lever
+	_capture_policy_info = OS.get_environment("MACRO_SIM_CAPTURE_POLICY_INFO")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -672,6 +793,13 @@ func _on_response(response: Dictionary) -> void:
 		if _playing and _awaiting() and _mode != "realtime":
 			_playing = false
 	_render()
+	if not _capture_policy_info.is_empty() and _lever_info.has(_capture_policy_info) \
+			and not _snapshot.is_empty():
+		var info_lever: Dictionary = _lever_info[_capture_policy_info]
+		var info_perm: Dictionary = _perm_cache.get(_capture_policy_info, {})
+		var info_current: Variant = _lever_current(info_lever, info_perm)
+		_capture_policy_info = ""
+		_show_lever_info(info_lever, info_current)
 	if not _capture_path.is_empty() and _outbox.is_empty() and not _client.busy:
 		var now := int(_snapshot.get("tick", 0))
 		if _capture_target < 0:
@@ -1135,7 +1263,7 @@ func _fmt_val(kind: String, v: float) -> String:
 		"pct":
 			return "%.1f%%" % (v * 100.0)
 		"pt":
-			return "%.2f%%/t" % (v * 100.0)
+			return "%.2f%%/日" % (v * 100.0)
 		"idx":
 			return "%.3f" % v if absf(v) < 10.0 else "%.2f" % v
 		_:
@@ -1154,7 +1282,7 @@ func _fmt_series(sid: String, v: float) -> String:
 				"credit_to_gdp", "poverty_rate":
 			return "%.1f%%" % (v * 100.0)
 		"inflation", "policy_rate":
-			return "%.2f%%/t" % (v * 100.0)
+			return "%.2f%%/日" % (v * 100.0)
 		"price_index":
 			return "%.3f" % v
 		_:
@@ -1162,8 +1290,23 @@ func _fmt_series(sid: String, v: float) -> String:
 
 
 func _cal_str(t: int) -> String:
+	var year_day := t % 365
+	var quarter := mini(year_day / 91, 3)
 	return "第 %d 年 · 第 %d 季 · 第 %d 天" % [
-		t / 365 + 1, (t % 365) / 91 + 1, (t % 365) % 91 + 1]
+		t / 365 + 1, quarter + 1, year_day - quarter * 91 + 1]
+
+
+func _cal_short(t: int) -> String:
+	return "第 %d 年 · 第 %d 日" % [t / 365 + 1, t % 365 + 1]
+
+
+func _cal_value(value: Variant) -> String:
+	var raw := str(value)
+	if value is int or value is float:
+		return _cal_short(int(value))
+	if raw.is_valid_int():
+		return _cal_short(raw.to_int())
+	return "日期待定"
 
 
 # ================= 布局 =================
@@ -1270,7 +1413,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	var cal := _lbl("—", 15, INK)
 	_n["cal"] = cal
 	clock.add_child(cal)
-	var tickl := _lbl("t = 0", 11, Color("68788b"), true)
+	var tickl := _lbl("tick 0", 11, Color("68788b"), true)
 	_n["tick"] = tickl
 	clock.add_child(tickl)
 	var yb := _YearBar.new()
@@ -1313,7 +1456,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	var god := Button.new()
 	god.toggle_mode = true
 	god.text = "上帝模式"
-	god.tooltip_text = "上帝模式\n显示每个 tick 的即时真值，不再等待统计公报\n快捷键：G"
+	god.tooltip_text = "上帝模式\n显示每日即时真值，不再等待统计公报\n快捷键：G"
 	god.add_theme_font_size_override("font_size", 12)
 	god.toggled.connect(func(v: bool) -> void:
 		_god = v
@@ -1655,6 +1798,7 @@ func _build_overlays() -> void:
 	var mp := PanelContainer.new()
 	mp.add_theme_stylebox_override("panel", _sb(Color("f6f8fb"), Color("cdd7e2"), 14, 18))
 	mp.custom_minimum_size = Vector2(440, 0)
+	_n["modal_panel"] = mp
 	modal_center.add_child(mp)
 	var mv := VBoxContainer.new()
 	mv.add_theme_constant_override("separation", 10)
@@ -1673,10 +1817,14 @@ func _build_overlays() -> void:
 	var mrow := HBoxContainer.new()
 	mrow.add_theme_constant_override("separation", 9)
 	mrow.alignment = BoxContainer.ALIGNMENT_END
-	mrow.add_child(_btn("取消", func() -> void:
+	var modal_cancel := _btn("取消", func() -> void:
 		_confirm = {}
-		_render()))
-	mrow.add_child(_btn("确认", _confirm_yes, true))
+		_render())
+	_n["modal_cancel"] = modal_cancel
+	mrow.add_child(modal_cancel)
+	var modal_confirm := _btn("确认", _confirm_yes, true)
+	_n["modal_confirm"] = modal_confirm
+	mrow.add_child(modal_confirm)
 	mv.add_child(mrow)
 
 
@@ -1692,7 +1840,7 @@ func _confirm_yes() -> void:
 func _render() -> void:
 	var t := int(_snapshot.get("tick", 0))
 	_set_text("cal", _cal_str(t))
-	_set_text("tick", "t = %d" % t)
+	_set_text("tick", "tick %d" % t)
 	var yb := _n["yearbar"] as _YearBar
 	yb.frac = float(t % 365) / 365.0
 	yb.queue_redraw()
@@ -1743,8 +1891,8 @@ func _render() -> void:
 		"focus": "基于已发布公报的跨指标判断",
 		"households": "微观家庭 · 成员与资产负债真值",
 		"firms": "微观企业 · 经营、账表、员工与股权真值",
-		"stocks": "逐 tick 收盘行情 · 企业股与银行股",
-		"panels": "上帝视角 · 逐 tick 真值",
+		"stocks": "每日收盘行情 · 企业股与银行股",
+		"panels": "上帝视角 · 每日真值",
 		"world": "多国耦合 · 贸易 / 资本 / 移民",
 	}.get(_tab, ""))
 	(_n["filter"] as Button).text = {
@@ -1765,6 +1913,13 @@ func _render() -> void:
 	_apply_cursors(self)
 	(_n["modal"] as Control).visible = not _confirm.is_empty()
 	if not _confirm.is_empty():
+		var read_only := bool(_confirm.get("read_only", false))
+		(_n["modal_panel"] as Control).custom_minimum_size = Vector2(
+			700 if read_only else 440, 0)
+		(_n["modal_body"] as Label).custom_minimum_size = Vector2(
+			650 if read_only else 400, 330 if read_only else 0)
+		(_n["modal_cancel"] as Button).text = "关闭" if read_only else "取消"
+		(_n["modal_confirm"] as Button).visible = not read_only
 		_set_text("modal_title", str(_confirm.get("title", "")))
 		_set_text("modal_body", str(_confirm.get("body", "")))
 		_set_text("modal_note", str(_confirm.get("note", "")))
@@ -1854,8 +2009,8 @@ func _render_tiles() -> void:
 			chart.values = vals
 			v.add_child(chart)
 			var ref_end := int(rel.get("reference_end_tick", t))
-			var rline := _lbl("t%d发布 · %dd前" % [
-				int(rel.get("released_at_tick", 0)), t - ref_end], 9, INK3, true)
+			var rline := _lbl("%s发布 · %d日前" % [
+				_cal_short(int(rel.get("released_at_tick", 0))), t - ref_end], 9, INK3, true)
 			rline.clip_text = true
 			v.add_child(rline)
 			if _god and truth.has(sid):
@@ -2144,14 +2299,14 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 		for raw in pending.slice(0, 3):
 			var p: Dictionary = raw
 			var decision: Dictionary = p.get("decision", {})
-			var effective := str(decision.get("effective_tick", "?"))
+			var effective: Variant = decision.get("effective_tick", "?")
 			for action in (p.get("actions", []) as Array).slice(0, 1):
 				var ar: Dictionary = action
 				var row := HBoxContainer.new()
 				row.add_child(_lbl("• " + _cn(str(ar.get("lever", ""))),
 					10, Color("d9e6eb")))
 				row.add_child(_spacer_h())
-				row.add_child(_lbl("t" + effective, 10, Color("68d2c2"), true))
+				row.add_child(_lbl(_cal_value(effective), 10, Color("68d2c2"), true))
 				col.add_child(row)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 7)
@@ -2178,6 +2333,223 @@ func _advance_to_next_decision() -> void:
 	_send({"command": "advance", "ticks": 100})
 
 
+func _lever_kind_description(lever: Dictionary) -> String:
+	var kind := str(lever.get("value_kind", "number"))
+	var nullable := bool(lever.get("nullable", false))
+	match kind:
+		"bool":
+			return "启用 / 停用型制度开关"
+		"choice":
+			var options: Array = []
+			for option in lever.get("choices", []):
+				options.append(_choice_text(str(lever.get("name", "")), option))
+			return "制度选项（%s）" % "、".join(options)
+		"economy_id":
+			return "国家参照选择"
+		"economy_set":
+			return "国家名单选择"
+		"integer":
+			return "整数政策参数，范围 %s – %s" % [
+				_lever_value_text(lever, lever.get("minimum", 0)),
+				_lever_value_text(lever, lever.get("maximum", 0))]
+		_:
+			var range_text := "连续政策参数，范围 %s – %s" % [
+				_lever_value_text(lever, lever.get("minimum", 0.0)),
+				_lever_value_text(lever, lever.get("maximum", 0.0))]
+			return range_text + ("，也可不设置" if nullable else "")
+
+
+func _lever_channel_text(lever: Dictionary) -> String:
+	var read_point := str(lever.get("read_point", "")).to_lower()
+	var group := str(lever.get("decision_group", ""))
+	if read_point.contains("energy"):
+		return "能源定价、供给分配、补贴或战略储备"
+	if read_point.contains("mortgage") or read_point.contains("housing"):
+		return "住房融资、交易、建设、违约与处置"
+	if read_point.contains("central_bank"):
+		return "政策利率、准备金和银行流动性"
+	if read_point.contains("banking") or read_point.contains("credit"):
+		return "银行授信能力、借款约束和资产负债表风险"
+	if read_point.contains("securities"):
+		return "国债发行、持有、定价和利息现金流"
+	if read_point.contains("trade"):
+		return "进出口价格、数量、企业份额和关税收入"
+	if read_point.contains("migration"):
+		return "人口跨境流动、劳动力供给和汇款"
+	if read_point.contains("world") or read_point.contains("capital") \
+			or read_point.contains("fx"):
+		return "汇率、跨境资本、外汇储备和国际收支"
+	if read_point.contains("settlement"):
+		return "居民、企业与政府结算以及税后可支配资源"
+	if read_point.contains("goods") or read_point.contains("planning"):
+		return "商品需求、生产计划、价格和财政收支"
+	if read_point.contains("reporting"):
+		return "政策规则采用的统计口径和决策信号"
+	return {
+		"fiscal_stance": "政府支出、总需求、就业与赤字债务",
+		"tax_and_transfers": "税后收入、消费成本、分配与财政收入",
+		"debt_management": "国债融资、期限结构和偿债成本",
+		"monetary_stance": "政策利率反应、融资成本与资产估值",
+		"liquidity_operations": "银行准备金、流动性与支付稳定",
+		"macroprudential": "信贷供给、杠杆、抵押品与违约风险",
+		"structural_law": "破产、处置与金融合同的制度边界",
+		"trade_and_migration": "贸易、人口流动和跨境收入",
+		"fx_operations": "汇率、资本流动和外汇储备",
+		"energy_operations": "能源价格、供给和战略储备",
+		"energy_structure": "能源部门产权和长期供给结构",
+	}.get(group, "相关部门的预算约束与行为规则")
+
+
+func _lever_definition_text(lever: Dictionary, current: Variant) -> String:
+	var name := str(lever.get("name", ""))
+	var label := _cn(name)
+	var help: Dictionary = POLICY_HELP.get(name, {})
+	var definition := str(help.get("definition", ""))
+	if definition.is_empty():
+		if name.begins_with("tax_") or label.ends_with("税率"):
+			definition = "“%s”规定相关计税基数向政府缴纳的比例。" % label
+		elif name.contains("allowance") or label.ends_with("起征点"):
+			definition = "“%s”规定低于该水平时不计入相应税基的免征额度。" % label
+		elif name.contains("cap") or name.contains("limit") or label.ends_with("上限"):
+			definition = "“%s”规定相关数量、比例或风险暴露不得超过的最高边界。" % label
+		elif name.contains("floor") or name.begins_with("min_") or label.ends_with("下限"):
+			definition = "“%s”规定相关价格、收入或资本必须达到的最低边界。" % label
+		elif name.ends_with("_share") or name.ends_with("_frac") \
+				or name.ends_with("_ratio") or name.ends_with("_ltv"):
+			definition = "“%s”规定相关政策量相对其基数的比例。" % label
+		elif str(lever.get("value_kind", "")) == "bool":
+			definition = "“%s”决定模型是否启用这一制度或操作机制。" % label
+		elif str(lever.get("value_kind", "")) == "choice":
+			definition = "“%s”决定模型采用哪一种制度运行规则。" % label
+		else:
+			definition = "“%s”是模型中直接控制%s的政策参数。" % [
+				label, _lever_channel_text(lever)]
+	return "%s 当前值为 %s。" % [definition, _lever_value_text(lever, current)]
+
+
+func _lever_effect_text(lever: Dictionary) -> String:
+	var name := str(lever.get("name", ""))
+	var label := _cn(name)
+	var help: Dictionary = POLICY_HELP.get(name, {})
+	var effect := str(help.get("effect", ""))
+	if not effect.is_empty():
+		return effect
+	if name.begins_with("tax_") or label.ends_with("税率"):
+		return "提高通常增加财政收入，同时降低相关主体的税后收入、回报或需求；降低则方向相反。"
+	if name.contains("subsidy") or name.contains("benefit") \
+			or name.contains("pension"):
+		return "提高通常增加受益方可支配资源并支撑需求，同时扩大财政成本。"
+	if name.contains("allowance") or label.ends_with("起征点"):
+		return "提高会缩小税基、增加纳税方税后资源并减少财政收入；降低则方向相反。"
+	if name.contains("haircut") or name.contains("risk_weight"):
+		return "提高会降低抵押品或资产的监管认可价值、增加资本占用，通常使信贷更审慎。"
+	if name.contains("cap") or name.contains("limit") or label.ends_with("上限"):
+		return "下调代表收紧上限，通常降低相关风险或规模，同时限制交易、融资或供给；上调则放宽约束。"
+	if name.contains("floor") or name.begins_with("min_") or label.ends_with("下限"):
+		return "提高代表抬高最低要求，强化保护或审慎标准，同时增加达标成本并可能减少可获得性。"
+	if str(lever.get("value_kind", "")) == "bool":
+		return "启用后模型会执行%s机制；停用则绕过该机制。最终宏观影响取决于当时经济状态。" % \
+			_lever_channel_text(lever)
+	return "调整会先改变%s中的约束或决策，再经交易、结算和资产负债表传导；方向与幅度取决于当时经济状态。" % \
+		_lever_channel_text(lever)
+
+
+func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
+	return "定义\n%s\n\n作用\n%s\n\n点击打开完整政策说明" % [
+		_tooltip_wrap(_lever_definition_text(lever, current)),
+		_tooltip_wrap(_lever_effect_text(lever))]
+
+
+func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
+	# Godot 的默认 tooltip 不会自动换行；优先在中文标点后断行，并给长句设置硬上限。
+	var result := ""
+	var column := 0
+	for index in text.length():
+		var character := text.substr(index, 1)
+		result += character
+		column += 1
+		var punctuation := "，；。！？、".contains(character)
+		if (column >= preferred_width and punctuation) or column >= preferred_width + 8:
+			result += "\n"
+			column = 0
+	return result.trim_suffix("\n")
+
+
+func _lever_info_body(lever: Dictionary, current: Variant) -> String:
+	var lag := int(lever.get("implementation_lag", 0))
+	var hold := int(lever.get("min_hold_ticks", 0))
+	var scale: Variant = lever.get("control_scale")
+	var max_step: Variant = lever.get("max_step")
+	var timing := "即时生效" if lag <= 0 else "通过后 %d 天生效" % lag
+	var adjustment := "无固定数值档位"
+	if scale != null:
+		adjustment = "建议单档 %s" % _lever_value_text(lever, scale)
+	if max_step != null:
+		adjustment += "；单次最多变动 %s" % _lever_value_text(lever, max_step)
+	var semantics: String = str({
+		"immediate": "生效后从下一自然日的相关计算开始使用新值",
+		"new-contracts-only": "只影响生效后新签合同，既有存量合同不会被追溯改写",
+		"state-transition": "属于制度迁移，生效时会执行一次状态与账本衔接",
+	}.get(str(lever.get("semantics", "immediate")), "按注册表规定的生效语义执行"))
+	var requirements: Array = []
+	for capability in lever.get("requires", []):
+		requirements.append(str(CAPABILITY_CN.get(str(capability), capability)))
+	for prerequisite in lever.get("enabled_if", []):
+		requirements.append("政策“%s”已启用" % _cn(str(prerequisite)))
+	var conditions: String = "无额外前置条件" if requirements.is_empty() else "、".join(requirements)
+	var shadowed: Array = []
+	for raw_shadow in lever.get("shadowed_by", []):
+		var token := str(raw_shadow)
+		var base: String = token.split(">")[0].split("=")[0]
+		if token == "ZLB/r_max clamp":
+			shadowed.append("零利率下限或政策利率上限")
+		else:
+			shadowed.append(_cn(base) if LEVER_CN.has(base) else token)
+	var boundary := "未登记规则覆盖关系"
+	if not shadowed.is_empty():
+		boundary = "可能被“%s”等优先规则覆盖，届时调整可能暂不改变结果" % "、".join(shadowed)
+	elif not str(lever.get("state_notes", "")).is_empty():
+		boundary = "注册表标记了条件性生效边界，应结合对应指标确认实际传导"
+	var cost_cn: String = {
+		"regime_switch": "制度切换", "major": "重大调整",
+		"ordinary": "常规调整", "operational": "日常操作",
+	}.get(str(lever.get("cost_class", "ordinary")), "常规调整")
+	return "定义\n%s\n\n作用与传导\n%s\n\n规则与约束\n• 管理：%s · %s\n• 取值：%s\n• 时点：%s；调整后至少保持 %d 天\n• 调整：%s\n• 生效语义：%s\n• 前置条件：%s\n• 条件边界：%s\n• 行政成本：%.1f（%s）\n• 紧急会议：%s" % [
+		_lever_definition_text(lever, current), _lever_effect_text(lever),
+		_seat_name(str(lever.get("owner_role", ""))),
+		str(GROUP_CN.get(str(lever.get("decision_group", "")),
+			lever.get("decision_group", "政策"))),
+		_lever_kind_description(lever), timing, hold, adjustment, semantics,
+		conditions, boundary, float(lever.get("admin_weight", 0.0)), cost_cn,
+		"可使用紧急授权" if bool(lever.get("emergency", false)) else "不在紧急白名单"]
+
+
+func _show_lever_info(lever: Dictionary, current: Variant) -> void:
+	_confirm = {
+		"title": "POLICY BRIEF · %s" % _cn(str(lever.get("name", ""))),
+		"body": _lever_info_body(lever, current),
+		"note": "说明描述模型中的直接机制，不承诺宏观结果；请结合当期公报与情景判断。",
+		"read_only": true,
+	}
+	_render()
+
+
+func _lever_info_button(lever: Dictionary, current: Variant) -> Button:
+	var info := Button.new()
+	info.text = "ⓘ"
+	info.flat = true
+	info.custom_minimum_size = Vector2(27, 27)
+	info.add_theme_font_size_override("font_size", 13)
+	info.add_theme_color_override("font_color", Color("65798c"))
+	info.add_theme_color_override("font_hover_color", Color("285ca8"))
+	info.add_theme_stylebox_override("hover", _sb(Color("edf4ff"),
+		Color("c9dcf5"), 14, 3))
+	info.tooltip_text = _lever_info_tooltip(lever, current)
+	info.pressed.connect(func() -> void:
+		_show_lever_info(lever, current))
+	return info
+
+
 func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		pending_by: Dictionary, show_seat: bool) -> Control:
 	## 收起态同时交代现值、草稿/队列目标和可操作状态；点击进入精确编辑。
@@ -2189,6 +2561,7 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var pending := pending_by.has(name)
 	var allowed := bool(perm.get("allowed", false))
 	var draft: Variant = _edits.get(name)
+	var base_v: Variant = _lever_current(lever, perm)
 	var cart_stale: bool = in_cart and edited and cart_entry.get("value") != draft
 	var row := PanelContainer.new()
 	row.custom_minimum_size = Vector2(0, 62)
@@ -2220,9 +2593,14 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	names.alignment = BoxContainer.ALIGNMENT_CENTER
 	names.add_theme_constant_override("separation", 2)
+	var name_line := HBoxContainer.new()
+	name_line.add_theme_constant_override("separation", 3)
 	var title := _lbl(_cn(name), 13, INK)
 	title.clip_text = true
-	names.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_line.add_child(title)
+	name_line.add_child(_lever_info_button(lever, base_v))
+	names.add_child(name_line)
 	var sub := HBoxContainer.new()
 	sub.add_theme_constant_override("separation", 6)
 	if show_seat:
@@ -2233,7 +2611,6 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	sub.add_child(en)
 	names.add_child(sub)
 	r.add_child(names)
-	var base_v: Variant = _lever_current(lever, perm)
 	var value_col := VBoxContainer.new()
 	value_col.alignment = BoxContainer.ALIGNMENT_CENTER
 	value_col.add_theme_constant_override("separation", 2)
@@ -2261,7 +2638,8 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		status_text = "未入篮草稿"
 		status_color = BLUE
 	elif pending:
-		status_text = "待生效 · t%s" % str((pending_by[name] as Dictionary).get("effective_tick", "?"))
+		status_text = "待生效 · %s" % _cal_value(
+			(pending_by[name] as Dictionary).get("effective_tick", "?"))
 		status_color = AMBER
 	elif allowed:
 		status_text = "本会可调整"
@@ -2300,8 +2678,14 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 func _lever_current(lever: Dictionary, perm: Dictionary) -> Variant:
 	if perm.has("current_value"):
 		return perm.get("current_value")
+	var policy_values: Dictionary = _snapshot.get("policy_values", {})
+	var lever_name := str(lever.get("name", ""))
+	if policy_values.has(lever_name):
+		return policy_values.get(lever_name)
 	var cached: Dictionary = _perm_cache.get(str(lever.get("name")), {})
-	return cached.get("current_value")
+	if cached.has("current_value"):
+		return cached.get("current_value")
+	return lever.get("current_value")
 
 
 func _lever_card(lever: Dictionary, permitted: Dictionary,
@@ -2337,6 +2721,7 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	tr.add_child(fold)
 	tr.add_child(_dot(TEAL if edited else LINE2, 6))
 	tr.add_child(_lbl(_cn(name), 13, INK))
+	tr.add_child(_lever_info_button(lever, base_v))
 	var en := _lbl(name, 9, Color("8a97a5"), true)
 	en.clip_text = true
 	en.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2418,7 +2803,8 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		pr.add_child(_lbl(_lever_value_text(lever, (pend as Dictionary).get("value")),
 			11, TEAL_DK, true))
 		pr.add_child(_spacer_h())
-		pr.add_child(_lbl("生效 t%s" % str((pend as Dictionary).get("effective_tick", "?")),
+		pr.add_child(_lbl("%s生效" % _cal_value(
+			(pend as Dictionary).get("effective_tick", "?")),
 			11, Color("2a9184")))
 		v.add_child(pp)
 	if edited:
@@ -2431,7 +2817,7 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 				_add_to_cart(lever, base_v), true)
 			addrow.add_child(add)
 			var lag2 := int(lever.get("implementation_lag", 0))
-			addrow.add_child(_lbl("预计 t%d 生效" % (
+			addrow.add_child(_lbl("预计 %s 生效" % _cal_short(
 				int(_snapshot.get("tick", 0)) + maxi(lag2, 1)), 10, INK3, true))
 		elif in_cart:
 			addrow.add_child(_lbl("✓ 草稿与提案篮一致", 11, TEAL_DK))
@@ -2849,7 +3235,7 @@ func _show_verdict(v: Dictionary) -> void:
 		sub = str(REASON_CN.get(reason, reason.replace("_", " ")))
 	if v.get("effective_tick") != null:
 		var et := int(v.get("effective_tick"))
-		sub += ("" if sub.is_empty() else " · ") + "生效 t%d(%s)" % [et, _cal_str(et)]
+		sub += ("" if sub.is_empty() else " · ") + "%s 生效" % _cal_str(et)
 	var cost := float(v.get("adjustment_cost", 0.0))
 	var admin := float(v.get("reserved_admin_cost", 0.0))
 	if cost > 0.0 or admin > 0.0:
@@ -3595,7 +3981,7 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 		["有效劳动需求", _firm_number(labor.get("labor_demand_effective"))],
 		["劳动效率单位", _firm_number(labor.get("efficiency_units"))],
 		["未填岗位", _firm_number(labor.get("vacancies"))],
-		["岗位空缺持续", "%d tick" % int(labor.get("vacancy_age", 0))],
+		["岗位空缺持续", "%d 天" % int(labor.get("vacancy_age", 0))],
 		["在岗人数", str(int(labor.get("active_heads", 0)))],
 		["在岗 FTE", "%.2f" % float(labor.get("employment_fte", 0.0))],
 	]))
@@ -3719,9 +4105,9 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 		["上期有效劳动需求", _firm_number(signals.get("previous_effective_labor_demand"))],
 		["上期目标库存", _firm_number(signals.get("previous_target_inventory"))],
 		["上期受抑需求", _firm_number(signals.get("previous_rationed_demand"))],
-		["部门转换压力", "%d tick" % int(signals.get("sector_switch_pressure", 0))],
+		["部门转换压力", "%d 天" % int(signals.get("sector_switch_pressure", 0))],
 		["股息支付缺口", _firm_number(signals.get("dividend_shortfall"))],
-		["闲置 / 资不抵债 / 低规模", "%d / %d / %d tick" % [
+		["闲置 / 资不抵债 / 低规模", "%d / %d / %d 天" % [
 			int(signals.get("idle_ticks", 0)), int(signals.get("insolvent_ticks", 0)),
 			int(signals.get("subscale_ticks", 0))], RED if condition != "正常经营" else INK],
 	]))
@@ -3772,8 +4158,8 @@ func _firm_workforce_panel(employees: Array) -> Control:
 			_firm_number(employee.get("paid_wage")), float(employee.get("efficiency", 1.0)),
 			_firm_number(employee.get("compensation"))], 8, INK3, true))
 		if employee.get("suspended_since_tick") != null:
-			col.add_child(_lbl("停薪留职自 t%d · 停薪前工资 %s · 合同仍保留召回权" % [
-				int(employee.get("suspended_since_tick")),
+			col.add_child(_lbl("停薪留职自 %s · 停薪前工资 %s · 合同仍保留召回权" % [
+				_cal_short(int(employee.get("suspended_since_tick"))),
 				_firm_number(employee.get("suspension_wage"))], 8, RED, true))
 	return panel
 
@@ -3907,7 +4293,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	tools.add_theme_constant_override("separation", 5)
 	toolbar.add_child(tools)
 	tools.add_child(_lbl("AURELIA EXCHANGE", 10, INK, true))
-	tools.add_child(_chip("CLOSE / TICK", Color("285ca8"), BLUE_BG, Color("c9dcf5"), 7))
+	tools.add_child(_chip("DAILY CLOSE", Color("285ca8"), BLUE_BG, Color("c9dcf5"), 7))
 	tools.add_child(_spacer_h())
 	var search := LineEdit.new()
 	search.custom_minimum_size.x = 112
@@ -3992,7 +4378,8 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	quote_line.add_child(_lbl("%.3f" % chart_value, 19, _stock_delta_color(chart_change), true))
 	quote_line.add_child(_lbl(_stock_delta_text(chart_change), 9, _stock_delta_color(chart_change), true))
 	quote_line.add_child(_spacer_h())
-	quote_line.add_child(_lbl("截至 %s · t%d" % [str(payload.get("as_of_date", "")), int(_snapshot.get("tick", 0))], 8, INK3, true))
+	quote_line.add_child(_lbl("截至 %s" % str(payload.get("as_of_date", "")),
+		8, INK3, true))
 	chart_col.add_child(quote_line)
 	var chart_values: Array = []
 	for point: Dictionary in history:
@@ -4089,7 +4476,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	quote_col.add_theme_constant_override("separation", 4)
 	quote_shell.add_child(quote_col)
 	var quote_head := HBoxContainer.new()
-	quote_head.add_child(_lbl("SECURITIES · 逐 tick 收盘行情", 9, INK, true))
+	quote_head.add_child(_lbl("SECURITIES · 每日收盘行情", 9, INK, true))
 	quote_head.add_child(_spacer_h())
 	quote_head.add_child(_lbl("%d / %d · 点击代码切换主图" % [visible_listings.size(), listings.size()], 8, INK3))
 	quote_col.add_child(quote_head)
@@ -4319,7 +4706,7 @@ func _macro_brief() -> Dictionary:
 	if coverage > 0:
 		data_quality = "%d/8 已发布 · 最大滞后 %d 天" % [coverage, max_lag]
 		if latest_release >= 0:
-			data_quality += " · 截止 t%d" % latest_release
+			data_quality += " · 截止 %s" % _cal_short(latest_release)
 	var risk_count := (_snapshot.get("active_shocks", []) as Array).size() \
 		+ (_snapshot.get("shock_bulletins", []) as Array).size()
 	return {
@@ -4435,7 +4822,7 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 	var released_at := int(rel.get("released_at_tick", now))
 	var reference_at := int(rel.get("reference_end_tick", released_at))
 	var lag := maxi(0, now - reference_at)
-	var source_label := _lbl("发布 t%d · 滞后 %d日" % [released_at, lag],
+	var source_label := _lbl("%s发布 · 滞后 %d 日" % [_cal_short(released_at), lag],
 		9, INK3, true)
 	source_label.clip_text = true
 	col.add_child(source_label)
@@ -4526,7 +4913,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_name, "")), 10, INK2))
 	header_row.add_child(heading)
 	header_row.add_child(_spacer_h())
-	header_row.add_child(_chip("GOD VIEW · 逐 tick", group_color.darkened(0.18),
+	header_row.add_child(_chip("GOD VIEW · 每日真值", group_color.darkened(0.18),
 		Color(group_color.r, group_color.g, group_color.b, 0.08),
 		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
 	col.add_child(header)
@@ -4876,11 +5263,11 @@ func _country_scorecard(world: Dictionary, country_index: int,
 	var resilience := 0.50 * external + 0.25 * supply_score + 0.25 * stock_score
 	var dimensions: Array = [
 		{"label": "繁荣增长", "score": prosperity,
-			"detail": "30t 产出 %+.1f%% · 实际工资 %+.1f%%" % [output_growth * 100.0, wage_growth * 100.0]},
+			"detail": "近 30 日产出 %+.1f%% · 实际工资 %+.1f%%" % [output_growth * 100.0, wage_growth * 100.0]},
 		{"label": "充分就业", "score": employment,
 			"detail": "失业 %.1f%% · 不充分就业 %.1f%%" % [unemployment * 100.0, underemployment * 100.0]},
 		{"label": "价格稳定", "score": price_stability,
-			"detail": "通胀 %.2f%%/t · 目标 %.2f%%/t" % [float(economy.get("inflation", 0.0)) * 100.0, inflation_target * 100.0]},
+			"detail": "日通胀 %.2f%% · 目标 %.2f%%" % [float(economy.get("inflation", 0.0)) * 100.0, inflation_target * 100.0]},
 		{"label": "财政韧性", "score": fiscal,
 			"detail": "债务/GDP %.1f%% · 赤字/GDP %.1f%%" % [float(economy.get("gov_debt_to_gdp", 0.0)) * 100.0, deficit_ratio * 100.0]},
 		{"label": "金融稳定", "score": financial,
@@ -4999,7 +5386,7 @@ func _country_scorecard_panel(world: Dictionary) -> Control:
 		Color(score_color.r, score_color.g, score_color.b, 0.09),
 		Color(score_color.r, score_color.g, score_color.b, 0.35), 9))
 	grade_row.add_child(_spacer_h())
-	grade_row.add_child(_lbl("近30t %+.1f" % change, 9,
+	grade_row.add_child(_lbl("近 30 日 %+.1f" % change, 9,
 		GREEN if change > 0.0 else (RED if change < 0.0 else INK3), true))
 	side.add_child(grade_row)
 	for dimension: Dictionary in dimensions:
@@ -5226,7 +5613,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	relrow.add_child(bars)
 	_bar_block(bars, "汇率 e(numéraire)", _num_list(latest.get("e", [])), "%.4f", false)
 	_bar_block(bars, "净外国资产 NFA", _num_list(latest.get("nfa", [])), "%.1f", true)
-	_bar_block(bars, "经常账户(近30t累计)", _ca_sum(whist), "%.1f", true)
+	_bar_block(bars, "经常账户（近 30 日累计）", _ca_sum(whist), "%.1f", true)
 	_bar_block(bars, "海外移民存量", _num_list(latest.get("migrant_stock", [])), "%.2f", false)
 	_bar_block(bars, "汇款流入", _num_list(latest.get("remittances", [])), "%.3f", false)
 	var foot := HBoxContainer.new()
@@ -5391,7 +5778,7 @@ func _render_events() -> void:
 		br.add_child(pulse_dot)
 		br.add_child(_lbl("冲击预告", 10, Color("cc5a44")))
 		br.add_child(_spacer_h())
-		br.add_child(_lbl("t%s" % str((bulletin as Dictionary).get("start_tick", "?")),
+		br.add_child(_lbl(_cal_value((bulletin as Dictionary).get("start_tick", "?")),
 			10, Color("9a6a5e"), true))
 		bv.add_child(br)
 		bv.add_child(_lbl(str((bulletin as Dictionary).get("shock_id",
@@ -5432,12 +5819,12 @@ func _render_events() -> void:
 		empty.add_child(_lbl(empty_text + "\n模拟推进后，危机、政策裁决和生效记录会出现在这里。",
 			11, Color("7b8996")))
 		inner.add_child(empty)
-	var last_tick_s := ""
+	var last_time_label := ""
 	for ev: Dictionary in visible_events.slice(0, 36):
 		var tick_var: Variant = ev.get("boundary_tick", ev.get("tick", "?"))
-		var group_tick := str(int(tick_var)) if tick_var is float else str(tick_var)
-		if group_tick != last_tick_s:
-			last_tick_s = group_tick
+		var group_time := _cal_value(tick_var)
+		if group_time != last_time_label:
+			last_time_label = group_time
 			var sep := HBoxContainer.new()
 			sep.add_theme_constant_override("separation", 7)
 			var sline := ColorRect.new()
@@ -5445,7 +5832,7 @@ func _render_events() -> void:
 			sline.custom_minimum_size = Vector2(10, 1)
 			sline.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			sep.add_child(sline)
-			sep.add_child(_lbl("t" + group_tick, 9, Color("9aa7b4"), true))
+			sep.add_child(_lbl(group_time, 9, Color("9aa7b4"), true))
 			var sline2 := ColorRect.new()
 			sline2.color = Color("e6ebf1")
 			sline2.custom_minimum_size = Vector2(0, 1)
@@ -5596,7 +5983,7 @@ func _render_crisis() -> void:
 
 # ================= 绘图控件 =================
 class _StockMarketChart extends Control:
-	## 模型只提供逐 tick 成交价，因此这里绘制真实收盘序列，不合成 OHLC/K 线。
+	## 模型只提供每日成交价，因此这里绘制真实收盘序列，不合成 OHLC/K 线。
 	var values: Array = []
 	var line_color := Color("0f9d90")
 	var font: Font
@@ -5645,7 +6032,7 @@ class _StockMarketChart extends Control:
 		draw_string(font, Vector2(plot.end.x + 7.0, plot.end.y + 3.0),
 			"%.3f" % low, HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
 		draw_string(font, Vector2(plot.position.x, size.y - 2.0),
-			"%d 个逐 tick 收盘点" % values.size(), HORIZONTAL_ALIGNMENT_LEFT,
+			"%d 个每日收盘点" % values.size(), HORIZONTAL_ALIGNMENT_LEFT,
 			plot.size.x, 8, Color("8794a2"))
 
 
@@ -6124,7 +6511,7 @@ class _PanelEnergyFlowChart extends Control:
 			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.44, 9, Color("506172"))
 		draw_string(font, Vector2(size.x * 0.44, 103), "战略储备  %.1f" % reserve,
 			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.30, 9, Color("7950c7"))
-		draw_string(font, Vector2(3, 125), "库存覆盖 %.1f tick · 未满足需求 %.1f" % [
+		draw_string(font, Vector2(3, 125), "库存覆盖 %.1f 天 · 未满足需求 %.1f" % [
 			coverage, float(values.get("energy_unfilled", 0.0))],
 			HORIZONTAL_ALIGNMENT_LEFT, size.x - 6, 8, Color("849098"))
 
@@ -6247,7 +6634,7 @@ class _PanelLineChart extends Control:
 				high = maxf(high, float(value))
 		if low == INF:
 			draw_string(font, Vector2(plot.position.x, plot.get_center().y),
-				"推进模拟以积累逐 tick 历史",
+				"推进模拟以积累每日历史",
 				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 10, Color("849098"))
 			return
 		if is_equal_approx(low, high):
@@ -6274,7 +6661,7 @@ class _PanelLineChart extends Control:
 				draw_polyline(points, color, 1.8, true)
 			draw_circle(points[-1], 3.0, color)
 		draw_string(font, Vector2(plot.position.x, size.y - 1),
-			"最近 %d tick" % int((data[0] as Dictionary).get("values", []).size()) if not data.is_empty() else "",
+			"最近 %d 日" % int((data[0] as Dictionary).get("values", []).size()) if not data.is_empty() else "",
 			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
 
 

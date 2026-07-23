@@ -48,8 +48,14 @@ def test_policy_schema_distinguishes_integer_nullable_and_dynamic_reference_type
     }
     assert treasury["bond_maturity"]["value_kind"] == "integer"
     assert treasury["bond_maturity"]["nullable"] is False
+    assert treasury["tax_income_rate"]["current_value"] == 0.20
     assert treasury["tax_necessity_rate"]["value_kind"] == "number"
     assert treasury["tax_necessity_rate"]["nullable"] is True
+    assert treasury["gov_consumption_share"]["read_point"]
+    assert treasury["gov_consumption_share"]["shadowed_by"] == [
+        "gov_deficit_target>0",
+    ]
+    assert "state_notes" in treasury["gov_consumption_share"]
 
     central_bank = {
         row["name"]: row
