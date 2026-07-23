@@ -89,7 +89,7 @@ class Config:
     omega: float = 0.02             # wage-raise step on labor shortage -- FREE
     theta_wage: float = 0.15        # rewage probability / tick -- anchored (wage-rigidity data)
 
-    # -- consumption (B1), choice (甲): V_h = D_h --------------------------
+    # -- consumption (B1), choice A: V_h = D_h -----------------------------
     alpha1: float = 0.8             # MPC out of expected income -- anchored; 0<alpha2<alpha1<1
     alpha2: float = 0.05            # propensity out of wealth (deposits) -- anchored
     demographics_enabled: bool = False  # v13 Phase 1: attach the demographic kernel to the economy
@@ -321,7 +321,7 @@ class Config:
                                     # have low MPC -- the realistic causality (wealth→MPC), and a
                                     # HOMOGENEOUS rule, so inequality emerges not assumed (§16.7). -- FREE
 
-    # -- settlement / dividends (choice 甲) --------------------------------
+    # -- settlement / dividends (choice A) ---------------------------------
     rho: float = 0.5                # dividend payout ratio of positive profit -- anchored
     # Full cash-basis firm income statement.  Off keeps the historical
     # EBITDA-like ``Firm.profit`` and phase order exactly; the production
@@ -543,7 +543,7 @@ class Config:
     # Households split wealth between deposits (safe, earns r) and the index (a claim on total
     # C-firm net worth). Price gropes on notional excess demand (no auctioneer); trades are
     # pro-rata rationed so shares AND money conserve. Demand = fundamentalist (value-price,
-    # stabilising) + chartist (price trend, the BUBBLE knob). Activates choice 乙 (equity enters
+    # stabilising) + chartist (price trend, the BUBBLE knob). Activates choice B (equity enters
     # household wealth). capital_market=False => v5 bit-identical.
     # ======================================================================
     capital_market: bool = False    # v6 master switch (equity index + portfolio choice)
@@ -554,7 +554,7 @@ class Config:
     theta_equity: float = 0.30      # target equity share of household wealth -- FREE
     trend_lambda: float = 0.3       # adaptive momentum speed on index returns -- anchored (~lambda_d)
     wealth_effect: float = 0.0      # weight of (smoothed) equity value in B1 consumption. 0 =
-                                    # equity affects WEALTH ACCOUNTING (乙, for T8) but NOT
+                                    # equity affects WEALTH ACCOUNTING (choice B, for T8) but NOT
                                     # consumption -- the stable core. >0 turns on the wealth-effect
                                     # demand channel, which amplifies the §9 drain (§16). -- FREE
     equity_ema_lambda: float = 0.1  # equity-wealth smoothing for the wealth effect -- FREE (throttle)
@@ -644,7 +644,7 @@ class Config:
     # ======================================================================
     # v8.4 -- dividends flow to shareholders PRO-RATA (DESIGNDOC §26). In the per-firm regime we track
     # who owns what (h.holdings[f.id]) yet pay dividends EQUALLY per capita -- an accounting
-    # inconsistency inherited from the v6 aggregate-index era ("choice 甲 homogeneity"). Pro-rata is
+    # inconsistency inherited from the v6 aggregate-index era ("choice A homogeneity"). Pro-rata is
     # the correctness fix: each firm's payout goes to ITS holders in proportion to their shares, so
     # a non-owner earns zero dividend income and the cash-flow return to equity is differential (like
     # the capital-gains channel already is). pro_rata_dividends=False => equal split => bit-identical.
@@ -1414,7 +1414,7 @@ class Config:
     @classmethod
     def v6(cls, **overrides) -> "Config":
         """v6: capital market (§16). v4 PLUS a single aggregate equity index and household
-        portfolio choice, activating choice 乙 (equity enters household wealth). Ships near the
+        portfolio choice, activating choice B (equity enters household wealth). Ships near the
         FUNDAMENTAL regime (w_chartist small) so the first economy is stable; Config.v6_bubble()
         raises the chartist weight to summon bubbles once the core is trusted. Note: v6 does NOT
         inherit v5's diseconomy (dis_slope=0) -- the equity layer is studied on the plain v4 base;

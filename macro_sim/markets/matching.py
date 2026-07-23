@@ -352,7 +352,7 @@ class SampledCompareMatch(MatchingProtocol):
     single dial spanning the whole competition axis:
 
       * m = 1            -> zero transparency: one random seller, no comparison (RandomMatch).
-      * 1 < m < #sellers -> partial transparency: "compare m, take the cheapest" ("货比三家").
+      * 1 < m < #sellers -> partial transparency: compare m and take the cheapest.
       * m >= #sellers    -> full transparency: perfect price comparison (PriceSortedMatch).
 
     So RandomMatch and PriceSortedMatch are not separate protocols but the two endpoints

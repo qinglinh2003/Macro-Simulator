@@ -764,7 +764,7 @@ class DemographicEconomicBridge:
         self._clear_deceased_claims(person_id, sheet.household_id)
         if sole_claimant:
             # the probate waterfall on the emptied estate account (net of parked suspense):
-            # the creditor recovers up to the loss it just booked, any残余 escheats to the
+            # the creditor recovers up to the loss it just booked; any residual escheats to the
             # state (or stays put in degraded environments without a fiscal account)
             suspense = max(0.0, float(self.claims.estate_suspense_by_household.get(int(sheet.household_id), 0.0)))
             account_id = self.household_to_account.get(int(sheet.household_id))

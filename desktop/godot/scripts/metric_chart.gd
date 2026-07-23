@@ -18,7 +18,7 @@ func set_snapshot(snapshot: Dictionary) -> void:
 
 
 func set_series(values: Array) -> void:
-	## 公报瓦片 sparkline 模式:仅一条折线 + 端点强调。
+	## Bulletin-tile sparkline mode: one line with an emphasized endpoint.
 	_spark = true
 	_spark_values = values
 	queue_redraw()

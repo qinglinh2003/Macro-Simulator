@@ -210,9 +210,9 @@ def test_new_game_constructs_selected_profiles_world_and_player() -> None:
     raw["world"]["trade"] = False
     raw["world"]["migration"] = False
     raw["countries"] = [
-        {"name": "小港", "code": "PRT", "profile": "entrepot", "overrides": {}},
+        {"name": "Port Republic", "code": "PRT", "profile": "entrepot", "overrides": {}},
         {
-            "name": "资源国",
+            "name": "Resource Republic",
             "code": "RES",
             "profile": "petrostate",
             "overrides": {"n_firms_c": 7, "a": 1.4},

@@ -1203,7 +1203,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
     if getattr(econ, "equity", None) is not None:
         mkt = econ.equity
         market_cap = mkt.price * mkt.float_shares
-        # household wealth NOW includes equity (choice 乙): D_h + shares_h·p.
+        # household wealth NOW includes equity (choice B): D_h + shares_h·p.
         hh_wealth = [hh_dep[i] + households[i].shares * mkt.price for i in range(n_h)]
         live_wealth = [w for w, alive in zip(hh_wealth, live_mask) if alive]
         rec.update({
@@ -1215,7 +1215,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "tobin_q": float(market_cap / mkt.book_value) if abs(mkt.book_value) > 1e-9 else 0.0,
             "equity_trend": float(mkt.trend),
             "equity_turnover": float(getattr(econ, "_equity_turnover", 0.0)),
-            "hh_wealth_gini_incl_equity": gini(live_wealth),       # 乙: the T8-relevant measure
+            "hh_wealth_gini_incl_equity": gini(live_wealth),  # choice B: T8 measure
             "equity_wealth_share": float(mkt.price * mkt.float_shares
                                          / max(1e-9, np.sum(hh_wealth))),
             "dividend_yield": float(dividends_paid / market_cap) if market_cap > 1e-9 else 0.0,
@@ -1250,7 +1250,7 @@ def _compute_tick_metrics(econ) -> Dict[str, float]:
             "n_firms_q_above_1": float(np.sum(np.asarray(qs) > 1.0)) if qs else 0.0,
             "share_price_dispersion": cv(share_prices),
             "equity_ownership_gini": gini(live_eq_val),      # who owns equity (founder concentration)
-            "hh_wealth_gini_incl_equity": gini(live_wealth), # T8 with per-firm equity (choice 乙)
+            "hh_wealth_gini_incl_equity": gini(live_wealth),  # T8 with per-firm equity (choice B)
             "equity_wealth_share": mkt_cap / max(1e-9, float(np.sum(hh_wealth))),
             "investment_q_corr": iq,                          # v6.1b: does investment track q?
             "shares_conservation_drift": float(drift),        # per-firm float gate (== 0)

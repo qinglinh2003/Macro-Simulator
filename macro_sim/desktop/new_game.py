@@ -454,9 +454,9 @@ class NewGameSpec:
                 "peg_reserves0": 5000.0,
             },
             "countries": [
-                {"name": "奥雷利亚", "code": "AUR", "profile": "advanced", "overrides": {}},
-                {"name": "博尔维亚", "code": "BOL", "profile": "developing", "overrides": {}},
-                {"name": "佩特罗尼亚", "code": "PET", "profile": "petrostate", "overrides": {}},
+                {"name": "Aurelia", "code": "AUR", "profile": "advanced", "overrides": {}},
+                {"name": "Borvia", "code": "BOL", "profile": "developing", "overrides": {}},
+                {"name": "Petronia", "code": "PET", "profile": "petrostate", "overrides": {}},
             ],
             "player_country": 0,
             "run_mode": "interactive",

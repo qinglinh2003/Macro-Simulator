@@ -1,12 +1,12 @@
 """v6 acceptance tests (DESIGNDOC §16; PLAN_v6).
 
-v6 adds a single aggregate equity index + household portfolio choice, activating choice 乙
+v6 adds a single aggregate equity index + household portfolio choice, activating choice B
 (equity enters household wealth). "Done" (conservative milestone):
   * capital_market=False is bit-identical to v5 (regression);
   * MONEY (A5) conserves through equity trading AND through a bubble+crash;
   * SHARES conserve exactly (Σ holdings == float) every tick;
   * the market is LIVE in a healthy economy (nonzero turnover, price tracks book);
-  * choice 乙 works: household wealth includes a fluctuating equity component;
+  * choice B works: household wealth includes a fluctuating equity component;
   * fundamental limit: w_chartist=0 => price stays near book (no runaway);
   * bubble is REACHABLE: large w_chartist => price detaches from book, and money still
     conserves through the crash (a wealth boom-bust with zero money created/destroyed).
@@ -35,7 +35,7 @@ def _run(cfg):
 
 
 def test_regression_bit_identical_off():
-    """capital_market=False reproduces v5 exactly (equity phase + 乙 term vanish)."""
+    """capital_market=False reproduces v5 exactly (equity phase and choice-B term vanish)."""
     base = Economy(Config.v5(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=300, seed=0)).run()
     off = Economy(Config.v5(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=300, seed=0,
                             capital_market=False)).run()
@@ -67,7 +67,7 @@ def test_market_is_live():
 
 
 def test_choice_yi_wealth_includes_equity():
-    """乙: household wealth now carries a nonzero, varying equity component."""
+    """Choice B: household wealth carries a nonzero, varying equity component."""
     econ, recs = _run(Config.v6(n_firms_c=NC, n_firms_k=NK, n_households=NH, n_ticks=800, seed=0))
     shares = [r["equity_wealth_share"] for r in recs[-300:]]
     assert np.mean(shares) > 0.01, "equity is not a meaningful part of wealth"

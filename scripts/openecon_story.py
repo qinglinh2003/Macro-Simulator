@@ -88,7 +88,11 @@ def main():
         cs = [cagr(gm, max(a, 365), b) for a, b in D]
         rows.append([nm] + [f"{100*c:+.1f}%" if np.isfinite(c) else "--" for c in cs]
                     + [f"{np.nanmean(g[-365:]):.0f}"])
-    table("实际 GDP 年化增速(按十年)", ["economy", "Y1-10", "Y11-20", "Y21-30", "末期水平"], rows)
+    table(
+        "Annualized real GDP growth by decade",
+        ["economy", "Y1-10", "Y11-20", "Y21-30", "terminal level"],
+        rows,
+    )
 
     # 2. inflation by decade (fixed basket)
     rows = []
@@ -97,7 +101,11 @@ def main():
         cs = [cagr(p, a, b) for a, b in D]
         rows.append([nm] + [f"{100*c:+.1f}%" if np.isfinite(c) else "--" for c in cs]
                     + [f"{p[-1]:.2f}"])
-    table("CPI(固定篮)年化通胀(按十年)", ["economy", "Y1-10", "Y11-20", "Y21-30", "末期指数"], rows)
+    table(
+        "Annualized fixed-basket CPI inflation by decade",
+        ["economy", "Y1-10", "Y11-20", "Y21-30", "terminal index"],
+        rows,
+    )
 
     # 3. unemployment + policy rate by decade
     rows = []
@@ -108,7 +116,14 @@ def main():
         zlb = 100 * np.nanmean(r_ < 1e-9)
         first0 = np.argmax(np.convolve((r_ < 1e-9).astype(float), np.ones(365)/365, 'valid') > 0.99)
         rows.append([nm] + us + [f"{zlb:.0f}%", f"{first0/365:.1f}y" if zlb > 1 else "--"])
-    table("失业率(十年均值)与 ZLB", ["economy", "U Y1-10", "U Y11-20", "U Y21-30", "利率贴零时间占比", "首次持续贴零"], rows)
+    table(
+        "Decade-average unemployment and the zero lower bound",
+        [
+            "economy", "U Y1-10", "U Y11-20", "U Y21-30",
+            "share at ZLB", "first sustained ZLB",
+        ],
+        rows,
+    )
 
     # 4. demography
     rows = []
@@ -120,7 +135,14 @@ def main():
         mig = world.get(f"migrant_stock_{i}", np.zeros(T))[-1]
         rows.append([nm, f"{a0:.0f}", f"{a1:.0f}", f"{100*(a1/a0-1):+.0f}%",
                      f"{100*ch0:.0f}%→{100*ch1:.0f}%", f"{mig:.0f}"])
-    table("人口三十年", ["economy", "初始", "末期", "增幅", "儿童占比变化", "末期移民存量"], rows)
+    table(
+        "Population over thirty years",
+        [
+            "economy", "initial", "terminal", "change",
+            "child-share change", "terminal migrant stock",
+        ],
+        rows,
+    )
 
     # 5. external position
     rows = []
@@ -134,7 +156,14 @@ def main():
         flip_y = f"{flip[0]/365:.1f}y" if len(flip) else "--"
         rows.append([nm, f"{nfa[-1]:.2e}", f"{np.nanmean(ca[-365:]):+.1f}",
                      f"{np.nanmean(rem[-365:]):.1f}", flip_y])
-    table("对外头寸(末期)", ["economy", "NFA", "经常账户(末年均)", "侨汇(末年均)", "NFA 变号时点"], rows)
+    table(
+        "Terminal external position",
+        [
+            "economy", "NFA", "last-year mean current account",
+            "last-year mean remittances", "NFA sign-flip time",
+        ],
+        rows,
+    )
 
     # 6. FX
     rows = []
@@ -143,8 +172,12 @@ def main():
         rows.append([nm, f"{e[0]:.3f}", f"{e[T//3]:.3f}", f"{e[2*T//3]:.3f}", f"{e[-1]:.3f}",
                      f"{100*(e[-1]/e[0]-1):+.0f}%"])
     peg_ok = world.get("peg_intact", np.array([np.nan]))
-    print(f"\npeg_intact 全程为真比例: {100*np.nanmean(peg_ok):.1f}%")
-    table("汇率 e_i(对外币价格;涨=贬值)", ["economy", "t0", "10y", "20y", "30y", "总变动"], rows)
+    print(f"\nShare of time with peg_intact true: {100*np.nanmean(peg_ok):.1f}%")
+    table(
+        "Exchange rate e_i (foreign currency price; increase means depreciation)",
+        ["economy", "t0", "10y", "20y", "30y", "total change"],
+        rows,
+    )
 
     # ---------------- figures ----------------
     figdir = seed_dir.parent / "report_figs"
