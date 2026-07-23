@@ -55,7 +55,8 @@ func _run() -> void:
 	menu._policy_seat = "cb"
 	menu._render()
 	await process_frame
-	var annual_rate := _line_edit(menu, "1.99% 年化")
+	var annual_rate := _line_edit(
+		menu, menu._format("wizard.value.annual_rate", 1.99))
 	assert(annual_rate != null)
 	annual_rate.text_submitted.emit("4.00")
 	await process_frame

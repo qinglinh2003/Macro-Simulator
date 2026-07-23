@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StartMenuScript := preload("res://scripts/start_menu.gd")
+const LocaleCatalogScript := preload("res://scripts/localization.gd")
 
 
 func _init() -> void:
@@ -16,8 +17,8 @@ func _run() -> void:
 	menu._render()
 	await process_frame
 
-	assert(_has_label(menu, "Profile 按基线映射"))
-	assert(_has_label(menu, "企业随人口缩放"))
+	assert(_has_label(menu, LocaleCatalogScript.text("wizard.mapping.profile")))
+	assert(_has_label(menu, LocaleCatalogScript.text("wizard.mapping.population")))
 	assert(menu._profile_mapping_enabled)
 	assert(menu._population_mapping_enabled)
 

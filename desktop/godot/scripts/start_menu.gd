@@ -412,10 +412,10 @@ func _wizard_header() -> Control:
 	panel.add_theme_stylebox_override("panel", _sb(PAPER, LINE2, 0, 10))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 14)
 	panel.add_child(row)
-	row.add_child(_button("← 首页", func() -> void:
+	row.add_child(_button("@wizard.home", func() -> void:
 		_screen = "home"; _render(), false, 13, true))
 	row.add_child(_v_rule(26))
-	row.add_child(_label("新建模拟", 15, INK, true))
+	row.add_child(_label("@wizard.title", 15, INK, true))
 	row.add_child(_label("NEW SIMULATION", 11, INK3, false, true))
 	row.add_child(_h_spacer())
 	row.add_child(_button("⚙", func() -> void:
@@ -429,7 +429,7 @@ func _step_navigation() -> Control:
 	panel.add_theme_stylebox_override("panel", _sb(PANEL, LINE2, 0, 14))
 	var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 5); panel.add_child(col)
 	var km := MarginContainer.new(); km.add_theme_constant_override("margin_left", 8); km.add_theme_constant_override("margin_bottom", 6)
-	km.add_child(_label("配置流程", 10, INK3, false, true)); col.add_child(km)
+	km.add_child(_label("@wizard.flow", 10, INK3, false, true)); col.add_child(km)
 	for index in STEP_META.size():
 		var number := index + 1
 		var active := number == _step
@@ -449,7 +449,7 @@ func _step_navigation() -> Control:
 		col.add_child(button)
 	col.add_child(_v_spacer())
 	var note := _panel(Color("eef2f7"), LINE2, 10, 10)
-	var nt := _label("配置分五类真相：结构、初始政策、世界、席位、客户端设置——互不混淆。", 11, INK2)
+	var nt := _label("@wizard.truths", 11, INK2)
 	nt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; note.add_child(nt); col.add_child(note)
 	return panel
 
@@ -462,8 +462,8 @@ func _page_heading(parent: VBoxContainer, title: String, subtitle: String) -> vo
 
 func _step_scenario(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 720
-	_page_heading(parent, "场景", "选择本局开始后进入世界的外生冲击。")
-	parent.add_child(_kicker("SCENARIO · 场景"))
+	_page_heading(parent, "@wizard.scenario.title", "@wizard.scenario.desc")
+	parent.add_child(_kicker("@wizard.scenario.kicker"))
 	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 8); parent.add_child(list)
 	for raw: Dictionary in SCENARIOS:
 		var item := raw
@@ -477,7 +477,7 @@ func _step_scenario(parent: VBoxContainer) -> void:
 		row.add_child(_label("◉" if active else "○", 20, TEAL if active else INK3))
 		var words := VBoxContainer.new(); words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var title_row := HBoxContainer.new(); title_row.add_theme_constant_override("separation", 8); title_row.add_child(_label(str(item["name"]), 14, INK, true))
-		if bool(item["reduced"]): title_row.add_child(_chip("约化 · 未校准", AMBER, AMBER_BG, AMBER_BD))
+		if bool(item["reduced"]): title_row.add_child(_chip(_text("@wizard.scenario.reduced"), AMBER, AMBER_BG, AMBER_BD))
 		words.add_child(title_row); words.add_child(_label(str(item["desc"]), 11, Color("68788b"))); row.add_child(words)
 		var meta := VBoxContainer.new(); meta.add_child(_label(str(item["caps"]), 11, INK2, false, true)); meta.add_child(_label(str(item["duration"]), 10, MUTED, false, true)); row.add_child(meta)
 		list.add_child(b)
@@ -485,23 +485,23 @@ func _step_scenario(parent: VBoxContainer) -> void:
 
 func _step_world(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 760
-	_page_heading(parent, "世界设置", "设置世界日历与跨境机制。每个国家的代理规模在下一步单独配置。")
+	_page_heading(parent, "@wizard.world.title", "@wizard.world.desc")
 	var top := GridContainer.new(); top.columns = 2; top.add_theme_constant_override("h_separation", 12); top.add_theme_constant_override("v_separation", 12); parent.add_child(top)
-	top.add_child(_counter_card("国家数量", "1 – 8 · 默认 3", str(_countries.size()), _remove_country, _add_country))
+	top.add_child(_counter_card("@wizard.world.country_count", "@wizard.world.country_count_hint", str(_countries.size()), _remove_country, _add_country))
 	top.add_child(_seed_card())
 	var duration_m := MarginContainer.new(); duration_m.add_theme_constant_override("margin_top", 12); duration_m.add_child(_duration_card()); parent.add_child(duration_m)
-	var cross_m := MarginContainer.new(); cross_m.add_theme_constant_override("margin_top", 18); cross_m.add_theme_constant_override("margin_bottom", 8); cross_m.add_child(_kicker("CROSS-BORDER · 跨境机制")); parent.add_child(cross_m)
+	var cross_m := MarginContainer.new(); cross_m.add_theme_constant_override("margin_top", 18); cross_m.add_theme_constant_override("margin_bottom", 8); cross_m.add_child(_kicker("@wizard.cross_border.kicker")); parent.add_child(cross_m)
 	var toggles := GridContainer.new(); toggles.columns = 2; toggles.add_theme_constant_override("h_separation", 9); toggles.add_theme_constant_override("v_separation", 9); parent.add_child(toggles)
-	toggles.add_child(_toggle_card("国际贸易", "World 贸易与汇率传导", _trade, func() -> void: _trade = not _trade; _render()))
-	toggles.add_child(_toggle_card("跨境资本", "资本流动与外部结算", _capital, func() -> void: _capital = not _capital; _render()))
-	toggles.add_child(_toggle_card("人口迁移", "工资驱动的跨境迁移", _migration, func() -> void: _migration = not _migration; _render()))
-	toggles.add_child(_toggle_card("跨境汇款", "依赖迁移机制", _migration, func() -> void: _migration = not _migration; _render()))
-	var adv := _button(("▼" if _cross_open else "▶") + "  跨境高级参数    10 项 · 高级", func() -> void: _cross_open = not _cross_open; _render(), false, 12, true)
+	toggles.add_child(_toggle_card("@wizard.cross_border.trade", "@wizard.cross_border.trade_desc", _trade, func() -> void: _trade = not _trade; _render()))
+	toggles.add_child(_toggle_card("@wizard.cross_border.capital", "@wizard.cross_border.capital_desc", _capital, func() -> void: _capital = not _capital; _render()))
+	toggles.add_child(_toggle_card("@wizard.cross_border.migration", "@wizard.cross_border.migration_desc", _migration, func() -> void: _migration = not _migration; _render()))
+	toggles.add_child(_toggle_card("@wizard.cross_border.remittances", "@wizard.cross_border.remittances_desc", _migration, func() -> void: _migration = not _migration; _render()))
+	var adv := _button(("▼" if _cross_open else "▶") + _text("@wizard.cross_border.advanced"), func() -> void: _cross_open = not _cross_open; _render(), false, 12, true)
 	var am := MarginContainer.new(); am.add_theme_constant_override("margin_top", 12); am.add_child(adv); parent.add_child(am)
 	if _cross_open:
 		var ap := _panel(PANEL, LINE2, 11, 8); parent.add_child(ap)
 		var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 6); grid.add_theme_constant_override("v_separation", 6); ap.add_child(grid)
-		for field: Array in [["汇率调整", "fx_lambda", "0.05"], ["汇率摩擦", "fx_friction", "0.03"], ["贸易汇率上限", "fx_trade_cap", "0.15"], ["资本流动强度", "capital_mobility", "1.00"], ["资本调整", "capital_adjust", "0.20"], ["迁移速度", "migration_rate", "0.02"], ["迁移份额上限", "migration_max_share", "0.25"], ["汇回份额", "remittance_share", "0.20"], ["工资平滑", "wage_smoothing", "0.02"], ["挂钩初始储备", "peg_reserves0", "5,000"]]:
+		for field: Array in [["@wizard.field.fx_lambda", "fx_lambda", "0.05"], ["@wizard.field.fx_friction", "fx_friction", "0.03"], ["@wizard.field.fx_trade_cap", "fx_trade_cap", "0.15"], ["@wizard.field.capital_mobility", "capital_mobility", "1.00"], ["@wizard.field.capital_adjust", "capital_adjust", "0.20"], ["@wizard.field.migration_rate", "migration_rate", "0.02"], ["@wizard.field.migration_max_share", "migration_max_share", "0.25"], ["@wizard.field.remittance_share", "remittance_share", "0.20"], ["@wizard.field.wage_smoothing", "wage_smoothing", "0.02"], ["@wizard.field.peg_reserves0", "peg_reserves0", "5,000"]]:
 			grid.add_child(_mini_field(str(field[0]), str(field[1]), str(field[2])))
 
 
@@ -517,7 +517,7 @@ func _counter_card(title: String, note: String, value: String, dec: Callable, in
 func _seed_card() -> Control:
 	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); p.add_child(v)
-	v.add_child(_label("随机种子", 12, INK2)); v.add_child(_label("0 – 2,147,483,647 · 可复现", 10, MUTED, false, true))
+	v.add_child(_label("@wizard.seed", 12, INK2)); v.add_child(_label("@wizard.seed_hint", 10, MUTED, false, true))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8)
 	var edit := LineEdit.new(); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.text = str(_seed); edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 15); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE, 9, 8)); edit.text_submitted.connect(func(text: String) -> void: _apply_seed(text)); edit.focus_exited.connect(func() -> void: _apply_seed(edit.text)); row.add_child(edit)
 	row.add_child(_square_button("🎲", func() -> void: _seed = randi_range(0, 2147483647); _render(), 38)); row.add_child(_square_button("⧉", func() -> void: DisplayServer.clipboard_set(str(_seed)), 38)); v.add_child(row)
@@ -532,17 +532,17 @@ func _apply_seed(text: String) -> void:
 func _duration_card() -> Control:
 	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v)
-	var title := HBoxContainer.new(); title.add_child(_label("模拟日历", 12, INK2)); title.add_child(_h_spacer()); title.add_child(_chip("1 tick = 1 天", TEAL_DK, TEAL_BG, TEAL_BD)); v.add_child(title)
-	v.add_child(_label("开始日期", 10, INK3))
+	var title := HBoxContainer.new(); title.add_child(_label("@wizard.calendar", 12, INK2)); title.add_child(_h_spacer()); title.add_child(_chip(_text("@wizard.one_tick_day"), TEAL_DK, TEAL_BG, TEAL_BD)); v.add_child(title)
+	v.add_child(_label("@wizard.start_date", 10, INK3))
 	v.add_child(_date_fields(_start_date, _apply_start_date_component))
-	var duration_head := HBoxContainer.new(); duration_head.add_child(_label("运行期限", 10, INK3)); duration_head.add_child(_h_spacer()); duration_head.add_child(_label("Gregorian 自然日历", 9, MUTED, false, true)); v.add_child(duration_head)
+	var duration_head := HBoxContainer.new(); duration_head.add_child(_label("@wizard.run_duration", 10, INK3)); duration_head.add_child(_h_spacer()); duration_head.add_child(_label("@wizard.gregorian", 9, MUTED, false, true)); v.add_child(duration_head)
 	var flow := HFlowContainer.new(); flow.add_theme_constant_override("h_separation", 6); flow.add_theme_constant_override("v_separation", 6)
-	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["custom", "自定义"], ["inf", "无限"]]:
+	for d: Array in [["1y", "@wizard.duration.1y"], ["5y", "@wizard.duration.5y"], ["10y", "@wizard.duration.10y"], ["custom", "@wizard.duration.custom"], ["inf", "@wizard.duration.infinite"]]:
 		var id := str(d[0]); flow.add_child(_select_chip(str(d[1]), _duration == id, func() -> void: _select_duration(id)))
 	v.add_child(flow)
 	if _duration == "custom":
 		var modes := HBoxContainer.new(); modes.add_theme_constant_override("separation", 6)
-		for mode: Array in [["end_date", "结束年月日"], ["ticks", "直接输入 tick"]]:
+		for mode: Array in [["end_date", "@wizard.duration.end_date"], ["ticks", "@wizard.duration.ticks"]]:
 			var mode_id := str(mode[0]); var mode_chip := _select_chip(str(mode[1]), _duration_input_mode == mode_id, func() -> void: _duration_input_mode = mode_id; _render()); mode_chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL; modes.add_child(mode_chip)
 		v.add_child(modes)
 		if _duration_input_mode == "end_date":
@@ -555,7 +555,7 @@ func _duration_card() -> Control:
 
 func _date_fields(parts: Dictionary, callback: Callable) -> Control:
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6)
-	for field: Array in [["年", "year", 74], ["月", "month", 54], ["日", "day", 54]]:
+	for field: Array in [["@wizard.date.year", "year", 74], ["@wizard.date.month", "month", 54], ["@wizard.date.day", "day", 54]]:
 		var box := VBoxContainer.new(); box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation", 3)
 		var edit := LineEdit.new(); edit.text = str(parts[str(field[1])]); edit.custom_minimum_size = Vector2(int(field[2]), 34); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.alignment = HORIZONTAL_ALIGNMENT_CENTER; edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 13); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE2, 8, 7))
 		var key := str(field[1])
@@ -568,7 +568,7 @@ func _date_fields(parts: Dictionary, callback: Callable) -> Control:
 func _duration_tick_field() -> Control:
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8)
 	var edit := LineEdit.new(); edit.text = str(_custom_duration_ticks); edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; edit.custom_minimum_size.y = 36; edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 14); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE2, 8, 7)); edit.text_submitted.connect(_apply_duration_ticks); edit.focus_exited.connect(func() -> void: _apply_duration_ticks(edit.text)); row.add_child(edit)
-	row.add_child(_label("tick / 天", 11, INK2, false, true))
+	row.add_child(_label("@wizard.tick_day", 11, INK2, false, true))
 	return row
 
 
@@ -663,8 +663,8 @@ func _end_date() -> Dictionary:
 
 func _duration_note() -> String:
 	if _duration == "inf":
-		return "%s 起 · 不设终局日期" % _date_iso(_start_date)
-	return "%s → %s · %d tick（含闰日）" % [_date_iso(_start_date), _date_iso(_end_date()), int(_duration_ticks_value())]
+		return _format("wizard.duration.open", _date_iso(_start_date))
+	return _format("wizard.duration.range", [_date_iso(_start_date), _date_iso(_end_date()), int(_duration_ticks_value())])
 
 
 func _toggle_card(title: String, note: String, on: bool, callback: Callable) -> Control:
@@ -694,27 +694,27 @@ func _mini_field(title: String, internal: String, value: String) -> Control:
 func _step_countries(parent: VBoxContainer) -> void:
 	var row := HBoxContainer.new(); row.size_flags_vertical = Control.SIZE_EXPAND_FILL; row.add_theme_constant_override("separation", 16); parent.add_child(row)
 	var left := VBoxContainer.new(); left.custom_minimum_size = Vector2(250, 0); left.add_theme_constant_override("separation", 8); row.add_child(left)
-	var lh := HBoxContainer.new(); lh.add_child(_kicker("国家 · %d" % _countries.size())); lh.add_child(_h_spacer()); lh.add_child(_button("＋ 新增", _add_country, false, 11)); left.add_child(lh)
+	var lh := HBoxContainer.new(); lh.add_child(_kicker(_format("wizard.countries.kicker", _countries.size()))); lh.add_child(_h_spacer()); lh.add_child(_button("@wizard.countries.add", _add_country, false, 11)); left.add_child(lh)
 	for i in _countries.size(): left.add_child(_country_card(i))
-	var note := _label("按稳定 country ID 维护引用；删除会列出受影响的 peg / 制裁 / 场景目标。", 10, MUTED); note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; left.add_child(note)
+	var note := _label("@wizard.countries.stable_ids", 10, MUTED); note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; left.add_child(note)
 	var editor := VBoxContainer.new(); editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL; editor.add_theme_constant_override("separation", 10); row.add_child(editor)
 	var c: Dictionary = _countries[_selected_country]
 	var identity := HBoxContainer.new(); identity.add_theme_constant_override("separation", 12)
 	var flag := PanelContainer.new(); flag.custom_minimum_size = Vector2(44, 44); flag.add_theme_stylebox_override("panel", _sb(c["color"], c["color"], 11, 0)); var fc := CenterContainer.new(); flag.add_child(fc); fc.add_child(_label(str(c["code"]), 11, Color.WHITE, true, true)); identity.add_child(flag)
-	var idwords := VBoxContainer.new(); idwords.size_flags_horizontal = Control.SIZE_EXPAND_FILL; idwords.add_child(_label(str(c["name"]), 19, INK, true)); idwords.add_child(_label("%s · 高生产率核心经济体" % str(c["code"]), 11, INK3, false, true)); identity.add_child(idwords)
-	identity.add_child(_button("应用到所有国家", func() -> void: _apply_profile_all(), false, 11))
-	identity.add_child(_button("恢复 Profile", func() -> void:
+	var idwords := VBoxContainer.new(); idwords.size_flags_horizontal = Control.SIZE_EXPAND_FILL; idwords.add_child(_label(str(c["name"]), 19, INK, true)); idwords.add_child(_label(_format("wizard.countries.core_economy", str(c["code"])), 11, INK3, false, true)); identity.add_child(idwords)
+	identity.add_child(_button("@wizard.countries.apply_all", func() -> void: _apply_profile_all(), false, 11))
+	identity.add_child(_button("@wizard.countries.restore_profile", func() -> void:
 		_select_profile(c, str(c["profile"]))
 		_render(), false, 11))
 	if _countries.size() > 1:
-		identity.add_child(_button("删除", _delete_selected_country, false, 11))
+		identity.add_child(_button("@wizard.countries.delete", _delete_selected_country, false, 11))
 	editor.add_child(identity)
-	editor.add_child(_kicker("COUNTRY PROFILE · 创世覆盖（非政策）"))
+	editor.add_child(_kicker("@wizard.countries.profile_kicker"))
 	var profiles := GridContainer.new(); profiles.columns = 3; profiles.add_theme_constant_override("h_separation", 8); profiles.add_theme_constant_override("v_separation", 8); editor.add_child(profiles)
 	for pid in PROFILES.keys(): profiles.add_child(_profile_card(str(pid)))
 	editor.add_child(_profile_mapping_controls())
-	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("初始人口  %d" % _agent_population(c), 11, INK2)); statrow.add_child(_label("家庭账户  创世匹配派生", 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
-	editor.add_child(_kicker("结构能力"))
+	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label(_format("wizard.countries.initial_population", _agent_population(c)), 11, INK2)); statrow.add_child(_label("@wizard.countries.households", 11, INK2)); statrow.add_child(_label(_format("wizard.countries.production_firms", _firm_count(c)), 11, INK2)); editor.add_child(stats)
+	editor.add_child(_kicker("@wizard.countries.structure"))
 	for group: Dictionary in STRUCT_GROUPS:
 		var gh := HBoxContainer.new(); gh.add_child(_label(str(group["name"]), 12, Color("3a4956"), true)); gh.add_child(_h_rule()); editor.add_child(gh)
 		var fields := GridContainer.new(); fields.columns = 2; fields.add_theme_constant_override("h_separation", 7); fields.add_theme_constant_override("v_separation", 7); editor.add_child(fields)
@@ -728,9 +728,9 @@ func _country_card(index: int) -> Control:
 	_fill_inset(col, 10)
 	var head := HBoxContainer.new(); head.add_theme_constant_override("separation", 7); head.add_child(_dot(c["color"], 8)); head.add_child(_label(str(c["name"]), 13, INK, true)); head.add_child(_h_spacer())
 	if index == _player_country:
-		head.add_child(_label("◆ 玩家", 9, TEAL))
+		head.add_child(_label("@wizard.countries.player", 9, TEAL))
 	col.add_child(head)
-	var meta := HBoxContainer.new(); meta.add_child(_label(_text(str(PROFILES[str(c["profile"])]["name"])), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label("%d 人口" % _agent_population(c), 9, MUTED, false, true)); col.add_child(meta)
+	var meta := HBoxContainer.new(); meta.add_child(_label(_text(str(PROFILES[str(c["profile"])]["name"])), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label(_format("wizard.countries.population", _agent_population(c)), 9, MUTED, false, true)); col.add_child(meta)
 	return b
 
 
@@ -748,16 +748,16 @@ func _profile_mapping_controls() -> Control:
 	row.add_theme_constant_override("separation", 16)
 	panel.add_child(row)
 	row.add_child(_mapping_switch(
-		"Profile 按基线映射",
-		"用修改后的对称基线，按各 Profile 的相对倍率换算",
+		"@wizard.mapping.profile",
+		"@wizard.mapping.profile_desc",
 		_profile_mapping_enabled,
 		func() -> void:
 			_profile_mapping_enabled = not _profile_mapping_enabled
 			_render()))
 	row.add_child(_v_rule(34))
 	row.add_child(_mapping_switch(
-		"企业随人口缩放",
-		"人口变化时保持各类企业的人口密度；银行数不联动",
+		"@wizard.mapping.population",
+		"@wizard.mapping.population_desc",
 		_population_mapping_enabled,
 		func() -> void: _toggle_population_mapping()))
 	return panel
@@ -788,7 +788,7 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 			_render()))
 	elif kind == "select":
 		var option := OptionButton.new()
-		for choice: Array in [["exogenous", "外生漂移"], ["learning", "内生学习"]]:
+		for choice: Array in [["exogenous", "@wizard.choice.tfp_exogenous"], ["learning", "@wizard.choice.tfp_learning"]]:
 			option.add_item(_text(str(choice[1])))
 			option.set_item_metadata(option.item_count - 1, choice[0])
 			if str(overrides.get(key, "exogenous")) == str(choice[0]):
@@ -1167,28 +1167,28 @@ func _country_manifest_overrides(country: Dictionary) -> Dictionary:
 
 func _step_government(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 820
-	_page_heading(parent, "政府与 Controller 席位", "选择玩家国家与你持有的席位。其他国家默认无 Controller——政策冻结在开局状态，而不是 AI。")
-	parent.add_child(_kicker("玩家国家")); var countries := HFlowContainer.new(); countries.add_theme_constant_override("h_separation", 8); countries.add_theme_constant_override("v_separation", 8); parent.add_child(countries)
+	_page_heading(parent, "@wizard.government.title", "@wizard.government.desc")
+	parent.add_child(_kicker("@wizard.government.player_country")); var countries := HFlowContainer.new(); countries.add_theme_constant_override("h_separation", 8); countries.add_theme_constant_override("v_separation", 8); parent.add_child(countries)
 	for i in _countries.size():
 		var c: Dictionary = _countries[i]; var idx := i; var b := _select_chip("■  %s  %s" % [str(c["code"]), str(c["name"])], i == _player_country, func() -> void: _player_country = idx; _render()); b.add_theme_color_override("font_color", c["color"] if i == _player_country else INK2); countries.add_child(b)
-	var sm := MarginContainer.new(); sm.add_theme_constant_override("margin_top", 18); sm.add_theme_constant_override("margin_bottom", 8); sm.add_child(_kicker("%s · 五个政策席位" % str(_countries[_player_country]["name"]))); parent.add_child(sm)
+	var sm := MarginContainer.new(); sm.add_theme_constant_override("margin_top", 18); sm.add_theme_constant_override("margin_bottom", 8); sm.add_child(_kicker(_format("wizard.government.five_seats", str(_countries[_player_country]["name"])))); parent.add_child(sm)
 	var seatlist := VBoxContainer.new(); seatlist.add_theme_constant_override("separation", 8); parent.add_child(seatlist)
 	for seat: Dictionary in SEATS: seatlist.add_child(_seat_row(seat))
-	var note := _label("你持有 %d / 5 个人类席位；其余由所选 Controller 自动执行。" % _human_seat_count(), 11, INK3); var nm := MarginContainer.new(); nm.add_theme_constant_override("margin_top", 6); nm.add_child(note); parent.add_child(nm)
+	var note := _label(_format("wizard.government.seat_count", _human_seat_count()), 11, INK3); var nm := MarginContainer.new(); nm.add_theme_constant_override("margin_top", 6); nm.add_child(note); parent.add_child(nm)
 	if _countries.size() > 1:
-		var om := MarginContainer.new(); om.add_theme_constant_override("margin_top", 18); om.add_theme_constant_override("margin_bottom", 8); om.add_child(_kicker("其他国家")); parent.add_child(om)
+		var om := MarginContainer.new(); om.add_theme_constant_override("margin_top", 18); om.add_theme_constant_override("margin_bottom", 8); om.add_child(_kicker("@wizard.government.other_countries")); parent.add_child(om)
 		var others := GridContainer.new(); others.columns = 2; others.add_theme_constant_override("h_separation", 9); others.add_theme_constant_override("v_separation", 9); parent.add_child(others)
 		for i in _countries.size():
 			if i != _player_country:
 				others.add_child(_frozen_country(_countries[i]))
-	var rm := MarginContainer.new(); rm.add_theme_constant_override("margin_top", 18); rm.add_theme_constant_override("margin_bottom", 8); rm.add_child(_kicker("运行方式")); parent.add_child(rm)
+	var rm := MarginContainer.new(); rm.add_theme_constant_override("margin_top", 18); rm.add_theme_constant_override("margin_bottom", 8); rm.add_child(_kicker("@wizard.government.run_mode")); parent.add_child(rm)
 	var modes := HBoxContainer.new(); modes.add_theme_constant_override("separation", 9); parent.add_child(modes)
-	for mode: Array in [["interactive", "交互", "人类会议无限等待（默认）"], ["realtime", "实时", "墙钟倒计时，超时不动作"], ["batch", "批量", "需全部自动 Occupant"]]:
+	for mode: Array in [["interactive", "@wizard.mode.interactive", "@wizard.mode.interactive_desc"], ["realtime", "@wizard.mode.realtime", "@wizard.mode.realtime_desc"], ["batch", "@wizard.mode.batch", "@wizard.mode.batch_desc"]]:
 		var id := str(mode[0]); var locked := id == "batch" and _human_seat_count() > 0; var p := _mode_card(str(mode[1]), str(mode[2]), _run_mode == id, locked, func() -> void: _run_mode = id; _render()); modes.add_child(p)
-	var cal := _button(("▼" if _calendar_open else "▶") + "  制度决策日历    普通模式为自然语言摘要", func() -> void: _calendar_open = not _calendar_open; _render(), false, 12, true); var cm := MarginContainer.new(); cm.add_theme_constant_override("margin_top", 12); cm.add_child(cal); parent.add_child(cm)
+	var cal := _button(("▼" if _calendar_open else "▶") + _text("@wizard.government.calendar"), func() -> void: _calendar_open = not _calendar_open; _render(), false, 12, true); var cm := MarginContainer.new(); cm.add_theme_constant_override("margin_top", 12); cm.add_child(cal); parent.add_child(cm)
 	if _calendar_open:
 		var cp := _panel(PANEL, LINE2, 11, 11); var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 7); cp.add_child(cv)
-		for line: Array in [["货币立场 · 流动性操作", "约每 1.5 月", "45 天"], ["财政 · 债务 · 宏观审慎 · 贸易迁移 · 外汇 · 能源操作", "每季度", "91 天"], ["税收转移 · 结构法律 · 能源结构", "每年", "365 天"]]:
+		for line: Array in [["@wizard.calendar.monetary", "@wizard.calendar.month_half", "@wizard.calendar.45_days"], ["@wizard.calendar.quarterly_groups", "@wizard.calendar.quarterly", "@wizard.calendar.91_days"], ["@wizard.calendar.annual_groups", "@wizard.calendar.annual", "@wizard.calendar.365_days"]]:
 			var lr := HBoxContainer.new()
 			lr.add_child(_label(str(line[0]), 11, Color("3a4956")))
 			lr.add_child(_h_spacer())
@@ -1214,7 +1214,7 @@ func _seat_row(seat: Dictionary) -> Control:
 
 
 func _frozen_country(country: Dictionary) -> Control:
-	var p := _panel(PANEL, LINE, 10, 10); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); p.add_child(row); row.add_child(_dot(country["color"], 9)); var v := VBoxContainer.new(); v.add_child(_label(str(country["name"]), 13, INK, true)); v.add_child(_label("无 Controller · 政策自开局起保持不变", 10, INK2)); row.add_child(v); return p
+	var p := _panel(PANEL, LINE, 10, 10); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 10); p.add_child(row); row.add_child(_dot(country["color"], 9)); var v := VBoxContainer.new(); v.add_child(_label(str(country["name"]), 13, INK, true)); v.add_child(_label("@wizard.government.no_controller", 10, INK2)); row.add_child(v); return p
 
 
 func _mode_card(title: String, note: String, active: bool, locked: bool, callback: Callable) -> Control:
@@ -1231,11 +1231,11 @@ func _human_seat_count() -> int:
 
 func _step_policy(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 800
-	_page_heading(parent, "初始政策", "按 国家 → 席位 → 决策组组织；当前全部旋钮由 Policy Registry 实时生成。仅改动项进入差异摘要。")
+	_page_heading(parent, "@wizard.policy.title", "@wizard.policy.desc")
 	var selectors := HBoxContainer.new(); selectors.add_theme_constant_override("separation", 8); parent.add_child(selectors)
 	var country_opt := OptionButton.new()
 	for i in _countries.size():
-		country_opt.add_item(str(_countries[i]["name"]) + (" · 玩家" if i == _player_country else ""))
+		country_opt.add_item(str(_countries[i]["name"]) + (_text("@wizard.policy.player_suffix") if i == _player_country else ""))
 	country_opt.select(_policy_country)
 	country_opt.item_selected.connect(func(index: int) -> void: _policy_country = index; _render())
 	selectors.add_child(country_opt)
@@ -1248,8 +1248,8 @@ func _step_policy(parent: VBoxContainer) -> void:
 		th.add_child(b)
 	selectors.add_child(tabs)
 	var filters := HBoxContainer.new(); filters.add_theme_constant_override("separation", 8); var fm := MarginContainer.new(); fm.add_theme_constant_override("margin_top", 10); fm.add_theme_constant_override("margin_bottom", 13); fm.add_child(filters); parent.add_child(fm)
-	var search := LineEdit.new(); search.size_flags_horizontal = Control.SIZE_EXPAND_FILL; search.text = _policy_search; search.placeholder_text = "搜索中文名 / 内部名…"; search.add_theme_stylebox_override("normal", _sb(PANEL, LINE, 8, 7)); search.text_submitted.connect(func(text: String) -> void: _policy_search = text.strip_edges(); _render()); filters.add_child(search)
-	for fil: Array in [["all", "全部"], ["changed", "只看已改"], ["mine", "本席位"]]:
+	var search := LineEdit.new(); search.size_flags_horizontal = Control.SIZE_EXPAND_FILL; search.text = _policy_search; search.placeholder_text = _text("@wizard.policy.search"); search.add_theme_stylebox_override("normal", _sb(PANEL, LINE, 8, 7)); search.text_submitted.connect(func(text: String) -> void: _policy_search = text.strip_edges(); _render()); filters.add_child(search)
+	for fil: Array in [["all", "@wizard.filter.all"], ["changed", "@wizard.filter.changed"], ["mine", "@wizard.filter.seat"]]:
 		var id := str(fil[0])
 		filters.add_child(_select_chip(str(fil[1]), _policy_filter == id, func() -> void: _policy_filter = id; _render()))
 	var found := 0
@@ -1268,7 +1268,7 @@ func _step_policy(parent: VBoxContainer) -> void:
 		for lev: Array in visible_levers:
 			lv.add_child(_policy_row(lev))
 	if found == 0:
-		var empty := _label("无匹配杠杆——调整搜索或筛选。", 13, MUTED); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; var em := MarginContainer.new(); em.add_theme_constant_override("margin_top", 40); em.add_child(empty); parent.add_child(em)
+		var empty := _label("@wizard.policy.no_match", 13, MUTED); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; var em := MarginContainer.new(); em.add_theme_constant_override("margin_top", 40); em.add_child(empty); parent.add_child(em)
 
 
 func _policy_groups_for_seat(seat: String) -> Array:
@@ -1327,12 +1327,12 @@ func _schema_policy_kind(raw: Dictionary, fallback: Array) -> String:
 func _policy_row(lever: Array) -> Control:
 	var name := str(lever[0]); var id := str(lever[1]); var kind := str(lever[2]); var base: Variant = lever[3]; var step := float(lever[4]); var meta: Dictionary = lever[5] if lever.size() > 5 else {}; var key := _policy_key(id); var changed := _policy_values.has(key); var value: Variant = _policy_values.get(key, base)
 	var p := _panel(BLUE_BG if changed else PAPER, BLUE_BD if changed else LINE, 10, 9); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row)
-	var words := VBoxContainer.new(); words.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var nh := HBoxContainer.new(); nh.add_child(_label(name, 13, INK)); nh.add_child(_chip("本国覆盖" if changed else "继承预设", BLUE if changed else INK2, BLUE_BG if changed else Color("eef2f7"), Color(0, 0, 0, 0))); words.add_child(nh); words.add_child(_label(id, 9, MUTED, false, true)); row.add_child(words)
+	var words := VBoxContainer.new(); words.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var nh := HBoxContainer.new(); nh.add_child(_label(name, 13, INK)); nh.add_child(_chip(_text("@wizard.policy.local_override" if changed else "@wizard.policy.inherited"), BLUE if changed else INK2, BLUE_BG if changed else Color("eef2f7"), Color(0, 0, 0, 0))); words.add_child(nh); words.add_child(_label(id, 9, MUTED, false, true)); row.add_child(words)
 	if kind == "bool":
 		row.add_child(_switch_button(bool(value), func() -> void:
 			_set_policy_bool(id, key, not bool(value), meta)))
 	elif kind in ["regime", "fx", "ration"]:
-		var opts: Array = [["exogenous", "外生"], ["taylor", "泰勒"], ["manual", "手动"]] if kind == "regime" else ([["float", "浮动"], ["peg", "盯住"]] if kind == "fx" else [["market", "市场"], ["household_first", "居民优先"], ["industry_first", "产业优先"]])
+		var opts: Array = [["exogenous", "@wizard.choice.exogenous"], ["taylor", "@wizard.choice.taylor"], ["manual", "@wizard.choice.manual"]] if kind == "regime" else ([["float", "@wizard.choice.float"], ["peg", "@wizard.choice.peg"]] if kind == "fx" else [["market", "@wizard.choice.market"], ["household_first", "@wizard.choice.household_first"], ["industry_first", "@wizard.choice.industry_first"]])
 		var seg := HBoxContainer.new(); seg.add_theme_constant_override("separation", 2)
 		for opt: Array in opts:
 			var ov := str(opt[0])
@@ -1404,11 +1404,11 @@ func _policy_row(lever: Array) -> Control:
 		var nullable_controls := HBoxContainer.new()
 		nullable_controls.add_theme_constant_override("separation", 5)
 		if id != "manual_policy_rate":
-			nullable_controls.add_child(_select_chip("不限", value == null, func() -> void:
+			nullable_controls.add_child(_select_chip("@wizard.value.unlimited", value == null, func() -> void:
 				_policy_values[key] = null
 				_render()))
 		if value == null:
-			nullable_controls.add_child(_button("设定", func() -> void:
+			nullable_controls.add_child(_button("@wizard.value.set", func() -> void:
 				var candidate := float(meta.get("minimum", 0.0)) + step
 				_policy_values[key] = minf(candidate, float(meta.get("maximum", candidate)))
 				_render(), false, 11))
@@ -1456,8 +1456,11 @@ func _policy_value(lever: String, fallback: Variant) -> Variant: return _policy_
 
 
 func _apply_policy_number(key: String, kind: String, text: String, meta: Dictionary) -> void:
-	var normalized := text.strip_edges().replace("% 年化", "").replace(
-		"%", "").replace("×", "").replace("天", "").strip_edges()
+	var normalized := text.strip_edges().replace(
+		_text("@wizard.value.annual_suffix"), ""
+	).replace("%", "").replace("×", "").replace(
+		_text("@wizard.value.day_suffix"), ""
+	).strip_edges()
 	if not normalized.is_valid_float():
 		_render()
 		return
@@ -1481,15 +1484,15 @@ func _apply_policy_number(key: String, kind: String, text: String, meta: Diction
 
 func _policy_format(kind: String, value: Variant, meta: Dictionary = {}) -> String:
 	if value == null:
-		return "未设置"
+		return _text("@wizard.value.unset")
 	var display_format := str(meta.get("display_format", ""))
 	if display_format == "percent":
 		var pct := float(value) * 100.0
 		return ("%.4f%%" if absf(pct) < 0.1 and absf(pct) > 0.0 else "%.2f%%") % pct
 	if display_format == "multiplier": return "%.2f×" % float(value)
-	if display_format == "days": return "%d 天" % roundi(float(value))
+	if display_format == "days": return _format("wizard.value.days", roundi(float(value)))
 	if kind == "annual_rate":
-		return "%.2f%% 年化" % ((pow(1.0 + float(value), 365.0) - 1.0) * 100.0)
+		return _format("wizard.value.annual_rate", (pow(1.0 + float(value), 365.0) - 1.0) * 100.0)
 	if kind == "percent": return "%.1f%%" % (float(value) * 100.0)
 	if kind == "integer": return "%d" % roundi(float(value))
 	if absf(float(meta.get("control_scale", 1.0))) < 0.001:
@@ -1499,14 +1502,14 @@ func _policy_format(kind: String, value: Variant, meta: Dictionary = {}) -> Stri
 
 func _step_review(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 900
-	_page_heading(parent, "建国与运行清单", "最终值按解析顺序解释来源。请复核后启动。")
+	_page_heading(parent, "@wizard.review.title", "@wizard.review.desc")
 	var banners := HBoxContainer.new(); banners.add_theme_constant_override("separation", 9); parent.add_child(banners)
-	banners.add_child(_validation_card("✓", "协议完整", "引擎严格校验", GREEN, GREEN_BG, GREEN_BD))
-	banners.add_child(_validation_card("✓", "配置已绑定", "不是界面预览", GREEN, GREEN_BG, GREEN_BD))
-	banners.add_child(_validation_card("ℹ", "可复现", "清单带版本与种子", BLUE, BLUE_BG, BLUE_BD))
+	banners.add_child(_validation_card("✓", "@wizard.review.protocol_complete", "@wizard.review.engine_validation", GREEN, GREEN_BG, GREEN_BD))
+	banners.add_child(_validation_card("✓", "@wizard.review.config_bound", "@wizard.review.not_preview", GREEN, GREEN_BG, GREEN_BD))
+	banners.add_child(_validation_card("ℹ", "@wizard.review.reproducible", "@wizard.review.versioned_seed", BLUE, BLUE_BG, BLUE_BD))
 	if not _launch_error.is_empty():
 		var error_box := _panel(RED_BG, RED_BD, 9, 10)
-		var error_text := _label("引擎拒绝了这份配置：%s" % _launch_error, 12, RED)
+		var error_text := _label(_format("wizard.review.rejected", _launch_error), 12, RED)
 		error_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		error_box.add_child(error_text)
 		parent.add_child(error_box)
@@ -1514,13 +1517,13 @@ func _step_review(parent: VBoxContainer) -> void:
 	var scenario := _scenario_name()
 	var country_rows: Array = []
 	for c: Dictionary in _countries:
-		country_rows.append([str(c["name"]), "%s · %d 人口" % [_text(str(PROFILES[str(c["profile"])]["name"])), _agent_population(c)]])
-	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["开始日期", _date_iso(_start_date)], ["运行期限", _duration_label()], ["结束日期", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
-	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
-	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
-	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "启动时原子应用"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))
-	manifest.add_child(_manifest_card("SCENARIO · 场景", RED, [["场景", scenario], ["校准", "约化 / 原型" if _scenario != "sandbox" else "—"], ["ShockTape", "已绑定"]]))
-	manifest.add_child(_manifest_card("REPRODUCIBILITY · 可复现", Color("3f6db2"), [["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["配置归属", "后端当前生产配置"], ["协议", "desktop v3"]]))
+		country_rows.append([str(c["name"]), "%s · %s" % [_text(str(PROFILES[str(c["profile"])]["name"])), _format("wizard.countries.population", _agent_population(c))]])
+	manifest.add_child(_manifest_card("@wizard.manifest.world", BLUE, [["@wizard.field.country_count", str(_countries.size())], ["@wizard.start_date", _date_iso(_start_date)], ["@wizard.run_duration", _duration_label()], ["@wizard.field.end_date", "@wizard.field.no_end" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["@wizard.field.cross_border", _cross_label()]]))
+	manifest.add_child(_manifest_card("@wizard.manifest.countries", TEAL, country_rows))
+	manifest.add_child(_manifest_card("@wizard.manifest.government", PURPLE, [["@wizard.field.player_country", str(_countries[_player_country]["name"])], ["@wizard.field.human_seats", "%d / 5" % _human_seat_count()], ["@wizard.field.meeting_mode", _run_mode], ["@wizard.field.other_countries", _format("wizard.field.frozen_countries", _countries.size() - 1)]]))
+	manifest.add_child(_manifest_card("@wizard.manifest.policy", AMBER, [["@wizard.field.relative_preset", _format("wizard.field.change_count", _policy_values.size())], ["@wizard.field.application_state", "@wizard.field.atomic_launch"], ["@wizard.field.monetary_regime", str(_policy_value("monetary_regime", "taylor"))], ["@wizard.field.fx_regime", str(_policy_value("fx_regime", "float"))]]))
+	manifest.add_child(_manifest_card("@wizard.manifest.scenario", RED, [["@wizard.field.scenario", scenario], ["@wizard.field.calibration", "@wizard.field.reduced_prototype" if _scenario != "sandbox" else "—"], ["ShockTape", "@wizard.field.shock_tape_bound"]]))
+	manifest.add_child(_manifest_card("@wizard.manifest.reproducibility", Color("3f6db2"), [["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["@wizard.field.config_authority", "@wizard.field.backend_config"], ["@wizard.field.protocol", "desktop v3"]]))
 
 
 func _validation_card(icon: String, title: String, sub: String, fg: Color, bg: Color, border: Color) -> Control:
@@ -1552,16 +1555,16 @@ func _manifest_card(title: String, accent: Color, rows: Array) -> Control:
 
 func _summary_panel() -> Control:
 	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(322, 0); p.add_theme_stylebox_override("panel", _sb(PANEL, LINE2, 0, 14)); var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 12); p.add_child(col)
-	var head := HBoxContainer.new(); head.add_child(_kicker("本局摘要")); head.add_child(_h_spacer()); head.add_child(_dot(GREEN, 6)); head.add_child(_label("协议已接入", 10, GREEN)); col.add_child(head)
-	col.add_child(_summary_section("场景", [["场景", _scenario_name()]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["开始", _date_iso(_start_date)], ["期限", _duration_label()], ["结束", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	var head := HBoxContainer.new(); head.add_child(_kicker("@wizard.summary.title")); head.add_child(_h_spacer()); head.add_child(_dot(GREEN, 6)); head.add_child(_label("@wizard.summary.connected", 10, GREEN)); col.add_child(head)
+	col.add_child(_summary_section("@wizard.summary.scenario", [["@wizard.field.scenario", _scenario_name()]])); col.add_child(_summary_section("@wizard.summary.world", [["@wizard.field.country_count", str(_countries.size())], ["@wizard.summary.start", _date_iso(_start_date)], ["@wizard.summary.duration", _duration_label()], ["@wizard.summary.end", "@wizard.field.no_end" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["@wizard.field.cross_border", _cross_label()]]))
 	var cr: Array = []
 	for c: Dictionary in _countries.slice(0, 4):
 		cr.append([str(c["code"]), _text(str(PROFILES[str(c["profile"])]["name"]))])
-	col.add_child(_summary_section("国家", cr))
-	col.add_child(_summary_section("政府", [["玩家国", str(_countries[_player_country]["name"])], ["人类席位", "%d/5" % _human_seat_count()], ["模式", _run_mode]]))
-	col.add_child(_summary_section("政策", [["改动", "%d 项" % _policy_values.size()]]))
+	col.add_child(_summary_section("@wizard.summary.countries", cr))
+	col.add_child(_summary_section("@wizard.summary.government", [["@wizard.summary.player", str(_countries[_player_country]["name"])], ["@wizard.field.human_seats", "%d/5" % _human_seat_count()], ["@wizard.summary.mode", _run_mode]]))
+	col.add_child(_summary_section("@wizard.summary.policy", [["@wizard.summary.changes", _format("wizard.summary.change_count", _policy_values.size())]]))
 	col.add_child(_v_spacer())
-	var protocol := _label("国家、Profile、世界、场景、席位与初始政策\n全部写入 NewGameSpec v1", 10, GREEN, false, true); protocol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; col.add_child(protocol); return p
+	var protocol := _label("@wizard.summary.protocol", 10, GREEN, false, true); protocol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; col.add_child(protocol); return p
 
 
 func _summary_section(title: String, rows: Array) -> Control:
@@ -1587,7 +1590,7 @@ func _summary_section(title: String, rows: Array) -> Control:
 
 
 func _wizard_footer() -> Control:
-	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(0, 60); p.add_theme_stylebox_override("panel", _sb(PAPER, LINE2, 0, 12)); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); row.add_child(_button("返回", _go_back, false, 13)); row.add_child(_h_spacer())
+	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(0, 60); p.add_theme_stylebox_override("panel", _sb(PAPER, LINE2, 0, 12)); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); row.add_child(_button("@wizard.nav.back", _go_back, false, 13)); row.add_child(_h_spacer())
 	var dots := HBoxContainer.new(); dots.add_theme_constant_override("separation", 6)
 	for i in 6:
 		var bar := ColorRect.new()
@@ -1595,10 +1598,10 @@ func _wizard_footer() -> Control:
 		bar.custom_minimum_size = Vector2(22 if i + 1 == _step else 6, 6)
 		dots.add_child(bar)
 	row.add_child(dots)
-	row.add_child(_label("第 %d / 6 步" % _step, 11, INK3, false, true))
+	row.add_child(_label(_format("wizard.nav.step", _step), 11, INK3, false, true))
 	row.add_child(_h_spacer())
-	if _step == 6: row.add_child(_button("▶  启动模拟", _begin_launch, true, 14))
-	else: row.add_child(_button("下一步 →", func() -> void: _step += 1; _render(), true, 14))
+	if _step == 6: row.add_child(_button("@wizard.nav.launch", _begin_launch, true, 14))
+	else: row.add_child(_button("@wizard.nav.next", func() -> void: _step += 1; _render(), true, 14))
 	return p
 
 
@@ -1633,8 +1636,8 @@ func _advance_launch() -> void:
 
 
 func _build_launch(parent: Control) -> void:
-	var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(center); var col := VBoxContainer.new(); col.custom_minimum_size.x = 440; col.add_theme_constant_override("separation", 10); center.add_child(col); var h := HBoxContainer.new(); h.alignment = BoxContainer.ALIGNMENT_CENTER; h.add_theme_constant_override("separation", 12); h.add_child(_label("◌", 25, TEAL, true)); h.add_child(_label("正在建立世界", 19, INK, true)); var hm := MarginContainer.new(); hm.add_theme_constant_override("margin_bottom", 20); hm.add_child(h); col.add_child(hm)
-	var defs: Array = [["创建 %d 个经济体" % _countries.size(), "%d 初始人口" % _total_population_seed()], ["绑定场景 ShockTape", _scenario_name()], ["分配政策席位", "%d 人类" % _human_seat_count()], ["派生 RNG 子流", "seed %d" % _seed]]
+	var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(center); var col := VBoxContainer.new(); col.custom_minimum_size.x = 440; col.add_theme_constant_override("separation", 10); center.add_child(col); var h := HBoxContainer.new(); h.alignment = BoxContainer.ALIGNMENT_CENTER; h.add_theme_constant_override("separation", 12); h.add_child(_label("◌", 25, TEAL, true)); h.add_child(_label("@wizard.launch.building", 19, INK, true)); var hm := MarginContainer.new(); hm.add_theme_constant_override("margin_bottom", 20); hm.add_child(h); col.add_child(hm)
+	var defs: Array = [[_format("wizard.launch.economies", _countries.size()), _format("wizard.launch.population", _total_population_seed())], ["@wizard.launch.scenario", _scenario_name()], ["@wizard.launch.seats", _format("wizard.launch.humans", _human_seat_count())], ["@wizard.launch.rng", "seed %d" % _seed]]
 	for i in defs.size(): var done := i < _launch_progress; var active := i == _launch_progress; var p := _panel(PAPER, TEAL_BD if active else LINE2, 10, 10); p.modulate.a = 1.0 if done or active else 0.5; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); var mark := _chip("✓" if done else ("·" if active else ""), Color.WHITE, GREEN if done else (TEAL if active else LINE), Color(0, 0, 0, 0)); row.add_child(mark); var text := _label(str(defs[i][0]), 13, INK); text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text); row.add_child(_label(str(defs[i][1]), 11, MUTED, false, true)); col.add_child(p)
 
 
@@ -1656,10 +1659,10 @@ func _draft_manifest() -> Dictionary:
 
 func _build_settings(parent: Control) -> void:
 	var shade := ColorRect.new(); shade.color = Color(0.086, 0.137, 0.204, 0.34); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(shade); var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.add_child(center); var panel := _panel(PAPER, LINE, 16, 0); panel.custom_minimum_size = Vector2(880, 650); center.add_child(panel); var shell := VBoxContainer.new(); panel.add_child(shell)
-	var headp := MarginContainer.new(); headp.add_theme_constant_override("margin_left", 20); headp.add_theme_constant_override("margin_right", 20); headp.add_theme_constant_override("margin_top", 14); headp.add_theme_constant_override("margin_bottom", 14); var head := HBoxContainer.new(); head.add_theme_constant_override("separation", 10); headp.add_child(head); head.add_child(_label("设置", 16, INK, true)); head.add_child(_label("客户端偏好 · 不写入经济 Config", 11, INK3, false, true)); head.add_child(_h_spacer()); head.add_child(_square_button("×", func() -> void: _settings_open = false; _render(), 30)); shell.add_child(headp); shell.add_child(_h_line())
+	var headp := MarginContainer.new(); headp.add_theme_constant_override("margin_left", 20); headp.add_theme_constant_override("margin_right", 20); headp.add_theme_constant_override("margin_top", 14); headp.add_theme_constant_override("margin_bottom", 14); var head := HBoxContainer.new(); head.add_theme_constant_override("separation", 10); headp.add_child(head); head.add_child(_label("@settings.title", 16, INK, true)); head.add_child(_label("@settings.subtitle", 11, INK3, false, true)); head.add_child(_h_spacer()); head.add_child(_square_button("×", func() -> void: _settings_open = false; _render(), 30)); shell.add_child(headp); shell.add_child(_h_line())
 	var bodym := MarginContainer.new(); bodym.size_flags_vertical = Control.SIZE_EXPAND_FILL; bodym.add_theme_constant_override("margin_left", 20); bodym.add_theme_constant_override("margin_right", 20); bodym.add_theme_constant_override("margin_top", 18); bodym.add_theme_constant_override("margin_bottom", 18); var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 16); grid.add_theme_constant_override("v_separation", 16); bodym.add_child(grid); shell.add_child(bodym)
-	for group: Array in [["显示", [["全屏", "toggle", false], ["UI 缩放", "value", "100%"], ["界面密度", "value", "舒适"]]], ["语言与数字", [["语言", "value", "简体中文"], ["数字缩写", "toggle", true]]], ["可访问性", [["色觉安全色板", "toggle", false], ["减少动效", "toggle", false], ["高对比度", "toggle", true]]], ["游戏流", [["默认交互模式", "value", "交互"], ["实时决策时限", "value", "30 s"], ["开局暂停", "toggle", true]]], ["存档", [["自动存档", "toggle", true], ["保留份数", "value", "10"]]], ["开发者", [["显示内部字段名", "toggle", true], ["音频", "value", "待实现"]]]]: grid.add_child(_settings_group(str(group[0]), group[1]))
-	shell.add_child(_h_line()); var footm := MarginContainer.new(); footm.add_theme_constant_override("margin_left", 20); footm.add_theme_constant_override("margin_right", 20); footm.add_theme_constant_override("margin_top", 12); footm.add_theme_constant_override("margin_bottom", 12); var foot := HBoxContainer.new(); foot.add_child(_label("⟳ 分辨率 / 语言更改需要重启", 10, AMBER, false, true)); foot.add_child(_h_spacer()); foot.add_child(_button("还原默认", func() -> void: pass, false, 12)); foot.add_child(_button("应用", func() -> void: _settings_open = false; _render(), true, 12)); footm.add_child(foot); shell.add_child(footm)
+	for group: Array in [["@settings.group.display", [["@settings.fullscreen", "toggle", false], ["@settings.ui_scale", "value", "100%"], ["@settings.density", "value", "@settings.comfortable"]]], ["@settings.group.language", [["@settings.language", "value", "@settings.language.zh_cn"], ["@settings.number_abbreviation", "toggle", true]]], ["@settings.group.accessibility", [["@settings.color_safe", "toggle", false], ["@settings.reduce_motion", "toggle", false], ["@settings.high_contrast", "toggle", true]]], ["@settings.group.flow", [["@settings.default_mode", "value", "@settings.mode.interactive"], ["@settings.realtime_limit", "value", "30 s"], ["@settings.pause_on_start", "toggle", true]]], ["@settings.group.saves", [["@settings.autosave", "toggle", true], ["@settings.keep_count", "value", "10"]]], ["@settings.group.developer", [["@settings.show_internal", "toggle", true], ["@settings.audio", "value", "@settings.not_implemented"]]]]: grid.add_child(_settings_group(str(group[0]), group[1]))
+	shell.add_child(_h_line()); var footm := MarginContainer.new(); footm.add_theme_constant_override("margin_left", 20); footm.add_theme_constant_override("margin_right", 20); footm.add_theme_constant_override("margin_top", 12); footm.add_theme_constant_override("margin_bottom", 12); var foot := HBoxContainer.new(); foot.add_child(_label("@settings.restart", 10, AMBER, false, true)); foot.add_child(_h_spacer()); foot.add_child(_button("@settings.restore", func() -> void: pass, false, 12)); foot.add_child(_button("@settings.apply", func() -> void: _settings_open = false; _render(), true, 12)); footm.add_child(foot); shell.add_child(footm)
 
 
 func _settings_group(title: String, items: Array) -> Control:
@@ -1695,10 +1698,10 @@ func _scenario_name() -> String:
 
 func _duration_label() -> String:
 	if _duration == "inf":
-		return "无限"
-	var prefix: String = str({"1y": "1 年", "5y": "5 年", "10y": "10 年", "custom": "自定义"}.get(_duration, "自定义"))
-	return "%s · %d 天" % [prefix, int(_duration_ticks_value())]
-func _cross_label() -> String: return " · ".join(["贸易" if _trade else "", "资本" if _capital else "", "迁移" if _migration else ""].filter(func(x: String) -> bool: return not x.is_empty()))
+		return _text("@wizard.duration.infinite")
+	var prefix: String = _text(str({"1y": "@wizard.duration.1y", "5y": "@wizard.duration.5y", "10y": "@wizard.duration.10y", "custom": "@wizard.duration.custom"}.get(_duration, "@wizard.duration.custom")))
+	return "%s · %s" % [prefix, _format("wizard.value.days", int(_duration_ticks_value()))]
+func _cross_label() -> String: return " · ".join([_text("@wizard.cross.trade") if _trade else "", _text("@wizard.cross.capital") if _capital else "", _text("@wizard.cross.migration") if _migration else ""].filter(func(x: String) -> bool: return not x.is_empty()))
 func _total_population_seed() -> int:
 	var total := 0
 	for country: Dictionary in _countries:
@@ -1733,6 +1736,10 @@ func _button(text: String, callback: Callable, primary := false, size := 12, fla
 
 func _text(value: String) -> String:
 	return LocaleCatalogScript.resolve(value)
+
+
+func _format(key: String, values: Variant) -> String:
+	return LocaleCatalogScript.format(key, values)
 
 
 func _square_button(text: String, callback: Callable, side: int) -> Button:
