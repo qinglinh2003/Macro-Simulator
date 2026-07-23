@@ -1,0 +1,93 @@
+schema_version: m0-invariant-source-v1
+rows:
+  - id: invariant.ledger.deposit-conservation
+    source_path: macro_sim/core/ledger.py
+    source_symbol: Ledger.assert_conserved
+    scope: economy
+    cadence: tick
+    comparison: exact_or_registered_residual
+    owner_milestone: m2
+  - id: invariant.ledger.nonnegative-balances
+    source_path: macro_sim/core/ledger.py
+    source_symbol: Ledger.assert_non_negative
+    scope: economy
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m2
+  - id: invariant.ledger.reserve-conservation
+    source_path: macro_sim/core/ledger.py
+    source_symbol: Ledger.assert_reserves_conserved
+    scope: economy
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m2
+  - id: invariant.securities.issuer-holder-identities
+    source_path: macro_sim/systems/securities.py
+    source_symbol: assert_securities_identities
+    scope: economy
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m6
+  - id: invariant.housing.stock-and-title
+    source_path: macro_sim/housing/registry.py
+    source_symbol: HousingRegistry.assert_invariants
+    scope: economy
+    cadence: tick
+    comparison: exact
+    owner_milestone: m8
+  - id: invariant.demography.financial-claims
+    source_path: macro_sim/demographics/economic_bridge.py
+    source_symbol: DemographicEconomicBridge.assert_all_claim_identities
+    scope: economy
+    cadence: configured
+    comparison: registered_tolerance
+    owner_milestone: m7
+  - id: invariant.labor.stock-flow
+    source_path: macro_sim/labor/accounting.py
+    source_symbol: LaborAccounts.assert_identity
+    scope: economy
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m7
+  - id: invariant.world.dealer-flow-passthrough
+    source_path: macro_sim/world/fx.py
+    source_symbol: FXDealer.assert_flow_is_passthrough
+    scope: world
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m9
+  - id: invariant.world.current-account-sum
+    source_path: macro_sim/world/world.py
+    source_symbol: World._dealer_update
+    scope: world
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m9
+  - id: invariant.world.nfa-revaluation
+    source_path: macro_sim/world/world.py
+    source_symbol: World._dealer_update
+    scope: world
+    cadence: tick
+    comparison: registered_tolerance
+    owner_milestone: m9
+  - id: invariant.controller.event-hash-chain
+    source_path: macro_sim/controllers/events.py
+    source_symbol: EventStream.verify
+    scope: controller
+    cadence: replay
+    comparison: exact
+    owner_milestone: m10
+  - id: invariant.shock.event-hash-chain
+    source_path: macro_sim/shocks/engine.py
+    source_symbol: ShockEventStream.verify
+    scope: shock
+    cadence: replay
+    comparison: exact
+    owner_milestone: m9
+  - id: invariant.controller.world-policy-fingerprint
+    source_path: macro_sim/controllers/transaction.py
+    source_symbol: world_policy_fingerprint
+    scope: controller
+    cadence: transaction
+    comparison: exact
+    owner_milestone: m10

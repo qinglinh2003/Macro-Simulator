@@ -1,0 +1,162 @@
+schema_version: m0-phase-source-v1
+rows:
+  - id: phase.boundary.control
+    phase_code: B0
+    order: 0
+    scope: session
+    name: ControlBoundaryLatch
+    source_path: macro_sim/controllers/session.py
+    source_symbol: ControlledSimulationSession.advance
+    snapshot_before: prior_committed
+    snapshot_after: tick_open
+    owner_milestone: m10
+  - id: phase.economy.open-books
+    phase_code: E0
+    order: 10
+    scope: economy
+    name: OpenBooks
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: tick_open
+    snapshot_after: books_open
+    owner_milestone: m4
+  - id: phase.economy.open-financial-system
+    phase_code: E1
+    order: 20
+    scope: economy
+    name: OpenFinancialSystem
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: books_open
+    snapshot_after: financial_open
+    owner_milestone: m5
+  - id: phase.economy.open-real-economy
+    phase_code: E2
+    order: 30
+    scope: economy
+    name: OpenRealEconomy
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: financial_open
+    snapshot_after: real_open
+    owner_milestone: m4
+  - id: phase.economy.population-boundary
+    phase_code: E3
+    order: 40
+    scope: economy
+    name: PopulationBoundary
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: real_open
+    snapshot_after: post_population_pre_plan
+    owner_milestone: m7
+  - id: phase.economy.plan-and-finance
+    phase_code: E4
+    order: 50
+    scope: economy
+    name: PlanAndFinance
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: post_population_pre_plan
+    snapshot_after: planned
+    owner_milestone: m4
+  - id: phase.economy.produce-and-trade-domestic
+    phase_code: E5
+    order: 60
+    scope: economy
+    name: ProduceAndTradeDomestic
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_pre_settlement_phases
+    snapshot_before: planned
+    snapshot_after: pre_dealer
+    owner_milestone: m4
+  - id: phase.world.external-settlement-seam
+    phase_code: W0
+    order: 70
+    scope: world
+    name: ExternalSettlementSeam
+    source_path: macro_sim/world/world.py
+    source_symbol: World._coupling_barrier
+    snapshot_before: pre_dealer
+    snapshot_after: external_reserved
+    owner_milestone: m9
+  - id: phase.world.dealer-settlement
+    phase_code: W.DealerSettlement
+    order: 80
+    scope: world
+    name: DealerSettlement
+    source_path: macro_sim/world/world.py
+    source_symbol: World._dealer_update
+    snapshot_before: external_reserved
+    snapshot_after: post_dealer
+    owner_milestone: m9
+  - id: phase.economy.settle-domestic
+    phase_code: E6
+    order: 90
+    scope: economy
+    name: SettleDomestic
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_settlement_and_commit_phases
+    snapshot_before: post_dealer
+    snapshot_after: domestic_settled
+    owner_milestone: m4
+  - id: phase.economy.close-institutions
+    phase_code: E7
+    order: 100
+    scope: economy
+    name: CloseInstitutions
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._run_settlement_and_commit_phases
+    snapshot_before: domestic_settled
+    snapshot_after: institutions_closed
+    owner_milestone: m5
+  - id: phase.economy.validate-and-measure
+    phase_code: E8
+    order: 110
+    scope: economy
+    name: ValidateAndMeasure
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._phase5_check_and_record
+    snapshot_before: institutions_closed
+    snapshot_after: provisional_measured
+    owner_milestone: m10
+  - id: phase.world.validate-global
+    phase_code: W.ValidateGlobal
+    order: 120
+    scope: world
+    name: ValidateGlobal
+    source_path: macro_sim/world/world.py
+    source_symbol: World._dealer_update
+    snapshot_before: provisional_measured
+    snapshot_after: globally_validated
+    owner_milestone: m9
+  - id: phase.economy.stage-local-commit
+    phase_code: E9
+    order: 130
+    scope: economy
+    name: StageLocalCommit
+    source_path: macro_sim/economy.py
+    source_symbol: Economy._commit_cross_tick_state
+    snapshot_before: globally_validated
+    snapshot_after: local_staged
+    owner_milestone: m4
+  - id: phase.world.commit-boundary
+    phase_code: W.CommitBoundary
+    order: 140
+    scope: world
+    name: CommitBoundary
+    source_path: macro_sim/world/world.py
+    source_symbol: World.step
+    snapshot_before: local_staged
+    snapshot_after: committed
+    owner_milestone: m9
+  - id: phase.world.publish
+    phase_code: W.Publish
+    order: 150
+    scope: session
+    name: Publish
+    source_path: macro_sim/controllers/session.py
+    source_symbol: ControlledSimulationSession.advance
+    snapshot_before: committed
+    snapshot_after: published
+    owner_milestone: m10

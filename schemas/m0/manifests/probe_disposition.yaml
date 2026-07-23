@@ -1,0 +1,44 @@
+schema_version: m0-probe-disposition-v1
+rows:
+  - id: probe.economy.deep
+    source_path: macro_sim/diagnostics/probes.py
+    source_symbol: DeepProbeCollector
+    disposition: typed_privileged
+    snapshot_epoch: committed
+    cadence: diagnostic
+    owner_milestone: m10
+  - id: probe.world.deep
+    source_path: macro_sim/diagnostics/world_probes.py
+    source_symbol: WorldProbeCollector
+    disposition: typed_privileged
+    snapshot_epoch: committed
+    cadence: diagnostic
+    owner_milestone: m10
+  - id: probe.reporting.dashboard
+    source_path: macro_sim/reporting/diagnostics.py
+    source_symbol: plot_dashboard
+    disposition: derived_from_snapshot
+    snapshot_epoch: published
+    cadence: report
+    owner_milestone: m10
+  - id: probe.diagnostics.runner
+    source_path: macro_sim/diagnostics/runner.py
+    source_symbol: run_diagnostic_suite
+    disposition: python_oracle_only
+    snapshot_epoch: published
+    cadence: scenario
+    owner_milestone: m10
+  - id: probe.empirical.runner
+    source_path: macro_sim/diagnostics/empirical.py
+    source_symbol: diagnose_empirical_fit
+    disposition: derived_from_snapshot
+    snapshot_epoch: published
+    cadence: report
+    owner_milestone: m10
+  - id: probe.open-economy.portrait
+    source_path: scripts/openecon_portrait.py
+    source_symbol: main
+    disposition: python_oracle_only
+    snapshot_epoch: published
+    cadence: scenario
+    owner_milestone: m10

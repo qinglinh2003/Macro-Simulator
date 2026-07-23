@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macro-simulator.local/schemas/m0/inventory.schema.json",
+  "title": "M0 generated inventory",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "family",
+    "oracle_commit",
+    "generator_version",
+    "rows",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "m0-inventory-v1"
+    },
+    "family": {
+      "type": "string"
+    },
+    "oracle_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "generator_version": {
+      "type": "string"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "source_path",
+          "source_symbol",
+          "status",
+          "owner_milestone"
+        ]
+      }
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

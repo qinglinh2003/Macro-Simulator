@@ -1,0 +1,78 @@
+schema_version: m0-m4-vertical-manifest-v1
+verticals:
+  - id: m4.v0
+    name: cash_loop
+    description: Minimal household-firm cash, labor, production, and goods loop.
+    capabilities:
+      required: []
+      supported:
+        - consumption_rationed_signal
+        - labor_matching
+      rejected:
+        - bank_enabled
+        - bonds
+        - capital_market
+        - demographics_enabled
+        - energy_enabled
+        - government
+        - housing_enabled
+    stores:
+      - account
+      - household
+      - consumption_firm
+      - employment
+      - goods_inventory
+    phases:
+      - phase.economy.open-books
+      - phase.economy.open-real-economy
+      - phase.economy.plan-and-finance
+      - phase.economy.produce-and-trade-domestic
+      - phase.economy.settle-domestic
+      - phase.economy.validate-and-measure
+      - phase.economy.stage-local-commit
+    metrics:
+      - metric.economy.real_output
+      - metric.economy.price_index
+      - metric.economy.unemployment_rate
+      - metric.economy.total_money
+      - metric.economy.conservation_drift
+    invariants:
+      - invariant.ledger.deposit-conservation
+      - invariant.ledger.nonnegative-balances
+    rng_policy: disabled_or_materialized
+    benchmark_scenario: m4_v0_cash_loop
+  - id: m4.v1
+    name: capital_fiscal
+    description: V0 plus capital goods, technology, taxation, and basic spending.
+    extends: m4.v0
+    capabilities:
+      required:
+        - government
+      supported:
+        - capital_market
+        - government
+      rejected:
+        - bank_enabled
+        - bonds
+        - demographics_enabled
+        - energy_enabled
+        - housing_enabled
+    stores:
+      - capital_firm
+      - physical_capital
+      - treasury_account
+    phases:
+      - phase.economy.open-real-economy
+      - phase.economy.plan-and-finance
+      - phase.economy.produce-and-trade-domestic
+      - phase.economy.settle-domestic
+      - phase.economy.validate-and-measure
+    metrics:
+      - metric.economy.aggregate_capital
+      - metric.economy.gov_spending
+      - metric.economy.tax_total
+    invariants:
+      - invariant.ledger.deposit-conservation
+      - invariant.ledger.nonnegative-balances
+    rng_policy: disabled_or_materialized
+    benchmark_scenario: m4_v1_capital_fiscal

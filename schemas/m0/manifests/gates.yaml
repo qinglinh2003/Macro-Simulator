@@ -24,3 +24,58 @@ gates:
     repetitions: 1
     seeds: []
     threshold_ref: null
+  - id: inventory.check
+    class: pr
+    command:
+      - uv
+      - run
+      - python
+      - scripts/cpp_migration/generate_inventory.py
+      - --check
+    cwd: .
+    dependencies:
+      - framework.tests
+    timeout_seconds: 120
+    owner: migration
+    artifacts:
+      - schemas/m0/hashes.lock.json
+    fixture_ids: []
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds: []
+    threshold_ref: null
+  - id: inventory.tests
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/test_policy_inventory.py
+      - tests/test_policy_registry.py
+      - tests/test_external_policy.py
+      - tests/test_shocks_v27.py
+      - tests/test_controller_specs_hardening.py
+      - tests/test_controller_observation.py
+      - tests/test_desktop_new_game.py
+      - tests/migration/m0/test_inventory_generation.py
+      - tests/migration/m0/test_inventory_contracts.py
+      - tests/migration/m0/test_module_disposition.py
+      - tests/migration/m0/test_probe_disposition.py
+    cwd: .
+    dependencies:
+      - inventory.check
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids: []
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds: []
+    threshold_ref: null

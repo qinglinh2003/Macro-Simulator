@@ -47,7 +47,11 @@ def test_checked_manifest_loads_and_lists_framework_gate():
     root = Path(__file__).resolve().parents[3]
     manifest = load_gate_manifest(root / "schemas/m0/manifests/gates.yaml")
     assert manifest.oracle_commit == ORACLE
-    assert [gate.id for gate in manifest.gates] == ["framework.tests"]
+    assert [gate.id for gate in manifest.gates] == [
+        "framework.tests",
+        "inventory.check",
+        "inventory.tests",
+    ]
 
 
 def test_duplicate_gate_id_is_rejected(tmp_path: Path):
