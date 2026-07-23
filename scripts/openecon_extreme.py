@@ -26,7 +26,10 @@ def scenario(name):
     # acceptance variants: <base>fix15 / <base>fix20 = base scenario + the
     # campaign construction/price fix package at ask-floor 1.5 / 2.0
     floor = None
-    if name.endswith("fix15"):
+    fullfix = False
+    if name.endswith("fullfix"):
+        name, floor, fullfix = name[:-7], 2.0, True
+    elif name.endswith("fix15"):
         name, floor = name[:-5], 1.5
     elif name.endswith("fix20"):
         name, floor = name[:-5], 2.0
@@ -35,6 +38,10 @@ def scenario(name):
         for p in overrides:
             p.update(FIX_PACKAGE)
             p["housing_ask_floor_wage_share"] = floor
+    if fullfix:
+        # the COMPLETE campaign fix set: construction/price package + dealer
+        # spread + clearing-union mutualization (acceptance for the whole arc)
+        wo.update(fx_spread=0.005, fx_loss_mutualization=True)
     return n, pops, years, overrides, wo
 
 def _scenario_base(name):
