@@ -128,6 +128,34 @@ def test_legacy_new_game_without_start_date_uses_original_genesis_date() -> None
     assert NewGameSpec.from_mapping(request).start_date == "2000-01-01"
 
 
+def test_country_counts_replace_the_legacy_global_performance_selector() -> None:
+    request = NewGameSpec.default().to_dict()
+    request.pop("performance_scale")
+    request["countries"][0]["overrides"] = {
+        "n_households": 91,
+        "n_firms_c": 14,
+        "n_firms_k": 5,
+        "n_firms_e": 3,
+        "n_builders": 6,
+        "n_banks": 3,
+        "demographics_population": 91,
+    }
+
+    spec = NewGameSpec.from_mapping(request)
+    config = spec.configs()[0]
+
+    assert spec.performance_scale == "fast"
+    assert (
+        config.n_households,
+        config.n_firms_c,
+        config.n_firms_k,
+        config.n_firms_e,
+        config.n_builders,
+        config.n_banks,
+        config.demographics_population,
+    ) == (91, 14, 5, 3, 6, 3, 91)
+
+
 def test_playable_preset_activates_every_completed_gameplay_domain() -> None:
     cfg = NewGameSpec.default().configs()[0]
     for flag in (

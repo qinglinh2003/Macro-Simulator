@@ -5,6 +5,7 @@ const StartMenuScript := preload("res://scripts/start_menu.gd")
 
 func _init() -> void:
 	var menu := StartMenuScript.new()
+	menu._reset_defaults()
 	menu._start_date = {"year": 2000, "month": 1, "day": 1}
 	menu._duration = "5y"
 	assert(menu._duration_ticks_value() == 1827)
@@ -20,6 +21,12 @@ func _init() -> void:
 	assert(menu._date_iso(menu._end_date()) == "2024-03-02")
 	assert(menu._draft_manifest()["start_date"] == "2024-02-29")
 	assert(menu._draft_manifest()["duration"] == 2)
+	assert(not menu._draft_manifest().has("performance_scale"))
+	var scale: Dictionary = menu._draft_manifest()["countries"][0]["overrides"]
+	assert(scale["n_households"] == 80)
+	assert(scale["demographics_population"] == 80)
+	assert(scale["n_firms_c"] == 12)
+	assert(scale["n_builders"] == 5)
 
 	menu._duration = "inf"
 	assert(menu._duration_ticks_value() == null)

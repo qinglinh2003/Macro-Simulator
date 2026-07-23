@@ -166,7 +166,8 @@ OCCUPANT_TYPES = frozenset(
 )
 
 CONFIG_OVERRIDE_FIELDS = frozenset({
-    "n_firms_c", "n_firms_k", "n_firms_e", "n_banks",
+    "n_households", "n_firms_c", "n_firms_k", "n_firms_e", "n_builders", "n_banks",
+    "demographics_population",
     "a", "alpha", "tfp_law",
     "bank_enabled", "interbank", "bonds", "capital_market",
     "per_firm_equity", "household_credit",
@@ -380,7 +381,14 @@ class CountrySpec:
                 if raw not in {"exogenous", "learning"}:
                     raise ValueError("tfp_law must be exogenous or learning")
                 normalized[key] = raw
-            elif key in {"n_firms_c", "n_firms_k", "n_firms_e", "n_banks"}:
+            elif key == "demographics_population":
+                normalized[key] = _strict_int(
+                    f"countries[{index}].overrides.{key}", raw, low=0, high=100_000
+                )
+            elif key in {
+                "n_households", "n_firms_c", "n_firms_k",
+                "n_firms_e", "n_builders", "n_banks",
+            }:
                 normalized[key] = _strict_int(
                     f"countries[{index}].overrides.{key}", raw, low=1, high=100_000
                 )
@@ -468,10 +476,10 @@ class NewGameSpec:
             raise TypeError("new_game spec must be an object")
         expected = {
             "schema_version", "seed", "scenario", "duration",
-            "performance_scale", "world", "countries", "player_country",
+            "world", "countries", "player_country",
             "run_mode", "seats", "initial_policy_overrides",
         }
-        allowed = expected | {"model_id", "start_date"}
+        allowed = expected | {"model_id", "start_date", "performance_scale"}
         if not expected <= set(value) or not set(value) <= allowed:
             raise ValueError(
                 "new_game spec fields differ; "
@@ -520,7 +528,9 @@ class NewGameSpec:
             raise ValueError(
                 "start_date plus duration exceeds the Gregorian calendar"
             ) from exc
-        performance_scale = value["performance_scale"]
+        # New clients submit final agent counts per country.  This preset is
+        # retained only as a fallback for legacy sparse manifests.
+        performance_scale = value.get("performance_scale", "fast")
         if performance_scale not in PERFORMANCE_PRESETS:
             raise ValueError(f"unsupported performance scale {performance_scale!r}")
 

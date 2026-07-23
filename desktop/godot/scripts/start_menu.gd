@@ -36,6 +36,9 @@ const GREEN_BD := Color("9ddcb8")
 const SECONDS_PER_DAY := 86_400
 const MIN_START_YEAR := 1900
 const MAX_START_YEAR := 2200
+const COUNTRY_SCALE_FIELDS := [
+	"n_households", "n_firms_c", "n_firms_k", "n_firms_e", "n_builders", "n_banks",
+]
 
 const STEP_META := [
 	["场景", "SCENARIO"], ["世界设置", "WORLD"],
@@ -84,7 +87,7 @@ const SEAT_SCHEMA_KEYS := {
 }
 
 const STRUCT_GROUPS := [
-	{"name": "规模", "fields": [["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["银行数", "n_banks", "step"]]},
+	{"name": "规模", "fields": [["人口 / 家庭基数", "n_households", "step"], ["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["建造企业", "n_builders", "step"], ["银行数", "n_banks", "step"]]},
 	{"name": "生产", "fields": [["基础生产率", "a", "step"], ["资本份额", "alpha", "step"], ["TFP 法则", "tfp_law", "select"]]},
 	{"name": "金融结构", "fields": [["银行系统", "bank_enabled", "toggle"], ["银行间市场", "interbank", "toggle"], ["政府债券", "bonds", "toggle"], ["资本市场", "capital_market", "toggle"], ["逐企业股票", "per_firm_equity", "toggle"], ["家庭信贷", "household_credit", "toggle"]]},
 	{"name": "住房", "fields": [["住房登记", "housing_enabled", "toggle"], ["住房市场", "housing_market_enabled", "toggle"], ["按揭", "mortgage_enabled", "toggle"], ["租赁", "housing_rental_enabled", "toggle"], ["住房建造", "housing_construction_enabled", "toggle"]]},
@@ -126,7 +129,6 @@ var _duration := "5y"
 var _duration_input_mode := "end_date"
 var _custom_duration_ticks := 1_827
 var _start_date := {"year": 2000, "month": 1, "day": 1}
-var _perf_scale := "fast"
 var _trade := true
 var _capital := true
 var _migration := true
@@ -447,12 +449,11 @@ func _step_scenario(parent: VBoxContainer) -> void:
 
 func _step_world(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 760
-	_page_heading(parent, "世界设置", "世界统一的规模、日历与跨境机制。单国世界将禁用需要交易对手的能力。")
+	_page_heading(parent, "世界设置", "设置世界日历与跨境机制。每个国家的代理规模在下一步单独配置。")
 	var top := GridContainer.new(); top.columns = 2; top.add_theme_constant_override("h_separation", 12); top.add_theme_constant_override("v_separation", 12); parent.add_child(top)
 	top.add_child(_counter_card("国家数量", "1 – 8 · 默认 3", str(_countries.size()), _remove_country, _add_country))
 	top.add_child(_seed_card())
-	top.add_child(_duration_card())
-	top.add_child(_performance_card())
+	var duration_m := MarginContainer.new(); duration_m.add_theme_constant_override("margin_top", 12); duration_m.add_child(_duration_card()); parent.add_child(duration_m)
 	var cross_m := MarginContainer.new(); cross_m.add_theme_constant_override("margin_top", 18); cross_m.add_theme_constant_override("margin_bottom", 8); cross_m.add_child(_kicker("CROSS-BORDER · 跨境机制")); parent.add_child(cross_m)
 	var toggles := GridContainer.new(); toggles.columns = 2; toggles.add_theme_constant_override("h_separation", 9); toggles.add_theme_constant_override("v_separation", 9); parent.add_child(toggles)
 	toggles.add_child(_toggle_card("国际贸易", "World 贸易与汇率传导", _trade, func() -> void: _trade = not _trade; _render()))
@@ -630,15 +631,6 @@ func _duration_note() -> String:
 	return "%s → %s · %d tick（含闰日）" % [_date_iso(_start_date), _date_iso(_end_date()), int(_duration_ticks_value())]
 
 
-func _performance_card() -> Control:
-	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v); v.add_child(_label("性能规模", 12, INK2))
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6)
-	for s: Array in [["fast", "快速"], ["standard", "标准"]]:
-		var id := str(s[0]); var chip := _select_chip(str(s[1]), _perf_scale == id, func() -> void: _perf_scale = id; _render()); chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(chip)
-	v.add_child(row); v.add_child(_label("80 户 · 12+4+2 企业 · 2 银行（当前原型）" if _perf_scale == "fast" else "200 户 · 30+10+4 企业 · 4 银行", 10, INK3, false, true)); return p
-
-
 func _toggle_card(title: String, note: String, on: bool, callback: Callable) -> Control:
 	var b := Button.new(); b.custom_minimum_size = Vector2(0, 56); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; b.add_theme_stylebox_override("normal", _sb(PAPER, TEAL_BD if on else LINE, 10, 9)); b.add_theme_stylebox_override("hover", _sb(PAPER, TEAL, 10, 8)); b.pressed.connect(callback)
 	var row := HBoxContainer.new(); row.mouse_filter = Control.MOUSE_FILTER_IGNORE; row.add_theme_constant_override("separation", 11); b.add_child(row); row.add_child(_switch_visual(on))
@@ -682,7 +674,7 @@ func _step_countries(parent: VBoxContainer) -> void:
 	editor.add_child(_kicker("COUNTRY PROFILE · 创世覆盖（非政策）"))
 	var profiles := GridContainer.new(); profiles.columns = 3; profiles.add_theme_constant_override("h_separation", 8); profiles.add_theme_constant_override("v_separation", 8); editor.add_child(profiles)
 	for pid in PROFILES.keys(): profiles.add_child(_profile_card(str(pid)))
-	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("最终家庭数  %d" % _households(c), 11, INK2)); statrow.add_child(_label("初始人口  %d（派生）" % roundi(_households(c) * 2.3), 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
+	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("初始人口  %d" % _agent_population(c), 11, INK2)); statrow.add_child(_label("家庭账户  创世派生", 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
 	editor.add_child(_kicker("结构能力"))
 	for group: Dictionary in STRUCT_GROUPS:
 		var gh := HBoxContainer.new(); gh.add_child(_label(str(group["name"]), 12, Color("3a4956"), true)); gh.add_child(_h_rule()); editor.add_child(gh)
@@ -699,7 +691,7 @@ func _country_card(index: int) -> Control:
 	if index == _player_country:
 		head.add_child(_label("◆ 玩家", 9, TEAL))
 	col.add_child(head)
-	var meta := HBoxContainer.new(); meta.add_child(_label(str(PROFILES[str(c["profile"])]["name"]), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label("%d 户" % _households(c), 9, MUTED, false, true)); col.add_child(meta)
+	var meta := HBoxContainer.new(); meta.add_child(_label(str(PROFILES[str(c["profile"])]["name"]), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label("%d 人口" % _agent_population(c), 9, MUTED, false, true)); col.add_child(meta)
 	return b
 
 
@@ -753,10 +745,12 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 
 func _structure_default(key: String, profile: String = "symmetric") -> float:
 	var counts := {
-		"n_firms_c": 12.0 if _perf_scale == "fast" else 30.0,
-		"n_firms_k": 4.0 if _perf_scale == "fast" else 10.0,
-		"n_firms_e": 2.0 if _perf_scale == "fast" else 4.0,
-		"n_banks": 2.0 if _perf_scale == "fast" else 4.0,
+		"n_households": 80.0 * float(PROFILES.get(profile, PROFILES["symmetric"])["scale"]),
+		"n_firms_c": 12.0,
+		"n_firms_k": 4.0,
+		"n_firms_e": 2.0,
+		"n_builders": 5.0,
+		"n_banks": 2.0,
 	}
 	if counts.has(key):
 		return float(counts[key])
@@ -776,7 +770,7 @@ func _firm_count(country: Dictionary) -> int:
 	if bool(overrides.get("energy_enabled", true)):
 		total += int(overrides.get("n_firms_e", _structure_default("n_firms_e")))
 	if bool(overrides.get("housing_construction_enabled", true)):
-		total += 5
+		total += int(overrides.get("n_builders", _structure_default("n_builders")))
 	return total
 
 
@@ -891,9 +885,21 @@ func _apply_profile_all() -> void:
 	_render()
 
 
-func _households(country: Dictionary) -> int:
-	var base := 80 if _perf_scale == "fast" else 200
-	return roundi(base * float(PROFILES[str(country["profile"])]["scale"]))
+func _agent_population(country: Dictionary) -> int:
+	var overrides: Dictionary = country["overrides"]
+	return int(overrides.get(
+		"n_households", roundi(_structure_default(
+			"n_households", str(country["profile"])))))
+
+
+func _country_manifest_overrides(country: Dictionary) -> Dictionary:
+	var result: Dictionary = (country["overrides"] as Dictionary).duplicate(true)
+	var profile := str(country["profile"])
+	for key: String in COUNTRY_SCALE_FIELDS:
+		result[key] = int(result.get(key, roundi(_structure_default(key, profile))))
+	result["demographics_population"] = int(result["n_households"]) \
+		if bool(result.get("demographics_enabled", true)) else 0
+	return result
 
 
 func _step_government(parent: VBoxContainer) -> void:
@@ -1215,7 +1221,7 @@ func _step_review(parent: VBoxContainer) -> void:
 	var scenario := _scenario_name()
 	var country_rows: Array = []
 	for c: Dictionary in _countries:
-		country_rows.append([str(c["name"]), "%s · %d 户" % [str(PROFILES[str(c["profile"])]["name"]), _households(c)]])
+		country_rows.append([str(c["name"]), "%s · %d 人口" % [str(PROFILES[str(c["profile"])]["name"]), _agent_population(c)]])
 	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["开始日期", _date_iso(_start_date)], ["运行期限", _duration_label()], ["结束日期", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
@@ -1335,7 +1341,7 @@ func _advance_launch() -> void:
 
 func _build_launch(parent: Control) -> void:
 	var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(center); var col := VBoxContainer.new(); col.custom_minimum_size.x = 440; col.add_theme_constant_override("separation", 10); center.add_child(col); var h := HBoxContainer.new(); h.alignment = BoxContainer.ALIGNMENT_CENTER; h.add_theme_constant_override("separation", 12); h.add_child(_label("◌", 25, TEAL, true)); h.add_child(_label("正在建立世界", 19, INK, true)); var hm := MarginContainer.new(); hm.add_theme_constant_override("margin_bottom", 20); hm.add_child(h); col.add_child(hm)
-	var defs: Array = [["创建 %d 个经济体" % _countries.size(), "%d 户" % _total_households()], ["绑定场景 ShockTape", _scenario_name()], ["分配政策席位", "%d 人类" % _human_seat_count()], ["派生 RNG 子流", "seed %d" % _seed]]
+	var defs: Array = [["创建 %d 个经济体" % _countries.size(), "%d 初始人口" % _total_population_seed()], ["绑定场景 ShockTape", _scenario_name()], ["分配政策席位", "%d 人类" % _human_seat_count()], ["派生 RNG 子流", "seed %d" % _seed]]
 	for i in defs.size(): var done := i < _launch_progress; var active := i == _launch_progress; var p := _panel(PAPER, TEAL_BD if active else LINE2, 10, 10); p.modulate.a = 1.0 if done or active else 0.5; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); var mark := _chip("✓" if done else ("·" if active else ""), Color.WHITE, GREEN if done else (TEAL if active else LINE), Color(0, 0, 0, 0)); row.add_child(mark); var text := _label(str(defs[i][0]), 13, INK); text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text); row.add_child(_label(str(defs[i][1]), 11, MUTED, false, true)); col.add_child(p)
 
 
@@ -1346,9 +1352,9 @@ func _draft_manifest() -> Dictionary:
 	for country: Dictionary in _countries:
 		countries.append({"name": str(country["name"]), "code": str(country["code"]),
 			"profile": str(country["profile"]),
-			"overrides": (country["overrides"] as Dictionary).duplicate(true)})
+			"overrides": _country_manifest_overrides(country)})
 	return {"schema_version": 1, "seed": _seed, "start_date": _date_iso(_start_date),
-		"scenario": _scenario, "duration": _duration_ticks_value(), "performance_scale": _perf_scale,
+		"scenario": _scenario, "duration": _duration_ticks_value(),
 		"world": world,
 		"countries": countries, "player_country": _player_country,
 		"run_mode": _run_mode, "seats": _seat_occupants.duplicate(true),
@@ -1400,10 +1406,10 @@ func _duration_label() -> String:
 	var prefix: String = str({"1y": "1 年", "5y": "5 年", "10y": "10 年", "custom": "自定义"}.get(_duration, "自定义"))
 	return "%s · %d 天" % [prefix, int(_duration_ticks_value())]
 func _cross_label() -> String: return " · ".join(["贸易" if _trade else "", "资本" if _capital else "", "迁移" if _migration else ""].filter(func(x: String) -> bool: return not x.is_empty()))
-func _total_households() -> int:
+func _total_population_seed() -> int:
 	var total := 0
 	for country: Dictionary in _countries:
-		total += _households(country)
+		total += _agent_population(country)
 	return total
 
 
