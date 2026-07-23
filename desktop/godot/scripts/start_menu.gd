@@ -37,7 +37,7 @@ const SECONDS_PER_DAY := 86_400
 const MIN_START_YEAR := 1900
 const MAX_START_YEAR := 2200
 const COUNTRY_SCALE_FIELDS := [
-	"n_households", "n_firms_c", "n_firms_k", "n_firms_e", "n_builders", "n_banks",
+	"n_firms_c", "n_firms_k", "n_firms_e", "n_builders", "n_banks",
 ]
 
 const STEP_META := [
@@ -87,7 +87,7 @@ const SEAT_SCHEMA_KEYS := {
 }
 
 const STRUCT_GROUPS := [
-	{"name": "规模", "fields": [["人口 / 家庭基数", "n_households", "step"], ["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["建造企业", "n_builders", "step"], ["银行数", "n_banks", "step"]]},
+	{"name": "规模", "fields": [["初始人口", "demographics_population", "step"], ["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["建造企业", "n_builders", "step"], ["银行数", "n_banks", "step"]]},
 	{"name": "生产", "fields": [["基础生产率", "a", "step"], ["资本份额", "alpha", "step"], ["TFP 法则", "tfp_law", "select"]]},
 	{"name": "金融结构", "fields": [["银行系统", "bank_enabled", "toggle"], ["银行间市场", "interbank", "toggle"], ["政府债券", "bonds", "toggle"], ["资本市场", "capital_market", "toggle"], ["逐企业股票", "per_firm_equity", "toggle"], ["家庭信贷", "household_credit", "toggle"]]},
 	{"name": "住房", "fields": [["住房登记", "housing_enabled", "toggle"], ["住房市场", "housing_market_enabled", "toggle"], ["按揭", "mortgage_enabled", "toggle"], ["租赁", "housing_rental_enabled", "toggle"], ["住房建造", "housing_construction_enabled", "toggle"]]},
@@ -674,7 +674,7 @@ func _step_countries(parent: VBoxContainer) -> void:
 	editor.add_child(_kicker("COUNTRY PROFILE · 创世覆盖（非政策）"))
 	var profiles := GridContainer.new(); profiles.columns = 3; profiles.add_theme_constant_override("h_separation", 8); profiles.add_theme_constant_override("v_separation", 8); editor.add_child(profiles)
 	for pid in PROFILES.keys(): profiles.add_child(_profile_card(str(pid)))
-	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("初始人口  %d" % _agent_population(c), 11, INK2)); statrow.add_child(_label("家庭账户  创世派生", 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
+	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("初始人口  %d" % _agent_population(c), 11, INK2)); statrow.add_child(_label("家庭账户  创世匹配派生", 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
 	editor.add_child(_kicker("结构能力"))
 	for group: Dictionary in STRUCT_GROUPS:
 		var gh := HBoxContainer.new(); gh.add_child(_label(str(group["name"]), 12, Color("3a4956"), true)); gh.add_child(_h_rule()); editor.add_child(gh)
@@ -725,27 +725,48 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 	else:
 		var value := float(overrides.get(key, _structure_default(
 			key, str(country["profile"]))))
-		var step := 1.0 if key.begins_with("n_") else 0.05
+		var step := 1.0 if _is_structure_integer(key) else 0.05
 		row.add_child(_mini_stepper(_format_small(value),
 			func() -> void:
-				var floor := 2.0 if key == "n_firms_c" \
-					else (1.0 if key.begins_with("n_") \
-					else (0.05 if key in ["a", "alpha", "necessity_share0"] else 0.0))
-				var next := maxf(floor, value - step)
-				overrides[key] = roundi(next) if key.begins_with("n_") else next
-				_render(),
+				_set_structure_number(overrides, key, value - step),
 			func() -> void:
-				var next := value + step
-				if key in ["alpha", "necessity_share0"]:
-					next = minf(0.95, next)
-				overrides[key] = roundi(next) if key.begins_with("n_") else next
-				_render()))
+				_set_structure_number(overrides, key, value + step),
+			func(text: String) -> void:
+				_apply_structure_number(overrides, key, text)))
 	return p
+
+
+func _is_structure_integer(key: String) -> bool:
+	return key.begins_with("n_") or key == "demographics_population"
+
+
+func _set_structure_number(overrides: Dictionary, key: String, value: float) -> void:
+	var minimum := 2.0 if key == "n_firms_c" \
+		else (1.0 if _is_structure_integer(key) \
+		else (0.05 if key in ["a", "alpha", "necessity_share0"] else 0.0))
+	var maximum := 100_000.0 if _is_structure_integer(key) \
+		else (0.95 if key in ["alpha", "necessity_share0"] else INF)
+	var normalized := clampf(value, minimum, maximum)
+	overrides[key] = roundi(normalized) if _is_structure_integer(key) else normalized
+	_render()
+
+
+func _apply_structure_number(overrides: Dictionary, key: String, text: String) -> void:
+	var normalized := text.strip_edges()
+	if _is_structure_integer(key):
+		if normalized.is_valid_int():
+			_set_structure_number(overrides, key, float(normalized.to_int()))
+		else:
+			_render()
+	elif normalized.is_valid_float():
+		_set_structure_number(overrides, key, normalized.to_float())
+	else:
+		_render()
 
 
 func _structure_default(key: String, profile: String = "symmetric") -> float:
 	var counts := {
-		"n_households": 80.0 * float(PROFILES.get(profile, PROFILES["symmetric"])["scale"]),
+		"demographics_population": 80.0 * float(PROFILES.get(profile, PROFILES["symmetric"])["scale"]),
 		"n_firms_c": 12.0,
 		"n_firms_k": 4.0,
 		"n_firms_e": 2.0,
@@ -888,8 +909,8 @@ func _apply_profile_all() -> void:
 func _agent_population(country: Dictionary) -> int:
 	var overrides: Dictionary = country["overrides"]
 	return int(overrides.get(
-		"n_households", roundi(_structure_default(
-			"n_households", str(country["profile"])))))
+		"demographics_population", roundi(_structure_default(
+			"demographics_population", str(country["profile"])))))
 
 
 func _country_manifest_overrides(country: Dictionary) -> Dictionary:
@@ -897,7 +918,10 @@ func _country_manifest_overrides(country: Dictionary) -> Dictionary:
 	var profile := str(country["profile"])
 	for key: String in COUNTRY_SCALE_FIELDS:
 		result[key] = int(result.get(key, roundi(_structure_default(key, profile))))
-	result["demographics_population"] = int(result["n_households"]) \
+	var population := int(result.get("demographics_population",
+		roundi(_structure_default("demographics_population", profile))))
+	result["n_households"] = population
+	result["demographics_population"] = population \
 		if bool(result.get("demographics_enabled", true)) else 0
 	return result
 
@@ -1091,7 +1115,7 @@ func _policy_row(lever: Array) -> Control:
 								_policy_values[_policy_key("peg_anchor")] = i
 								break
 				_render()))
-			row.add_child(seg)
+		row.add_child(seg)
 	elif kind == "choice":
 		var generic_options := OptionButton.new()
 		for raw_choice: Variant in meta.get("choices", []):
@@ -1156,7 +1180,9 @@ func _policy_row(lever: Array) -> Control:
 					_render(),
 				func() -> void:
 					_policy_values[key] = minf(float(meta.get("maximum", INF)), float(value) + step)
-					_render()))
+					_render(),
+				func(text: String) -> void:
+					_apply_policy_number(key, "number", text, meta)))
 		row.add_child(nullable_controls)
 	else:
 		row.add_child(_mini_stepper(_policy_format(kind, value, meta),
@@ -1167,7 +1193,9 @@ func _policy_row(lever: Array) -> Control:
 			func() -> void:
 				var next := minf(float(meta.get("maximum", INF)), float(value) + step)
 				_policy_values[key] = roundi(next) if kind == "integer" else next
-				_render()))
+				_render(),
+			func(text: String) -> void:
+				_apply_policy_number(key, kind, text, meta)))
 	return p
 
 
@@ -1186,6 +1214,32 @@ func _set_policy_bool(id: String, key: String, next: bool, meta: Dictionary) -> 
 
 func _policy_key(lever: String) -> String: return "%d.%s.%s" % [_policy_country, _policy_seat, lever]
 func _policy_value(lever: String, fallback: Variant) -> Variant: return _policy_values.get(_policy_key(lever), fallback)
+
+
+func _apply_policy_number(key: String, kind: String, text: String, meta: Dictionary) -> void:
+	var normalized := text.strip_edges().replace("% 年化", "").replace(
+		"%", "").replace("×", "").replace("天", "").strip_edges()
+	if not normalized.is_valid_float():
+		_render()
+		return
+	var value := normalized.to_float()
+	var display_format := str(meta.get("display_format", ""))
+	if display_format == "percent" or kind == "percent":
+		value /= 100.0
+	elif kind == "annual_rate":
+		if value <= -100.0:
+			_render()
+			return
+		value = pow(1.0 + value / 100.0, 1.0 / 365.0) - 1.0
+	value = clampf(
+		value,
+		float(meta.get("minimum", -INF)),
+		float(meta.get("maximum", INF)),
+	)
+	_policy_values[key] = roundi(value) if kind == "integer" else value
+	_render()
+
+
 func _policy_format(kind: String, value: Variant, meta: Dictionary = {}) -> String:
 	if value == null:
 		return "未设置"
@@ -1454,8 +1508,14 @@ func _switch_button(on: bool, callback: Callable) -> Button:
 	var b := Button.new(); b.text = "    ●" if on else "●"; b.custom_minimum_size = Vector2(38, 22); b.add_theme_font_size_override("font_size", 14); b.add_theme_color_override("font_color", Color.WHITE); b.add_theme_stylebox_override("normal", _sb(TEAL if on else Color("cdd7e2"), TEAL if on else Color("cdd7e2"), 11, 2)); b.pressed.connect(callback); return b
 
 
-func _mini_stepper(value: String, dec: Callable, inc: Callable) -> Control:
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 2); row.add_child(_square_button("−", dec, 28)); var l := _label(value, 12, INK, false, true); l.custom_minimum_size.x = 58; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; row.add_child(l); row.add_child(_square_button("＋", inc, 28)); return row
+func _mini_stepper(value: String, dec: Callable, inc: Callable, commit := Callable()) -> Control:
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 2); row.add_child(_square_button("−", dec, 28))
+	if commit.is_valid():
+		var edit := LineEdit.new(); edit.text = value; edit.custom_minimum_size = Vector2(78, 28); edit.alignment = HORIZONTAL_ALIGNMENT_CENTER; edit.add_theme_font_override("font", _mono); edit.add_theme_font_size_override("font_size", 12); edit.add_theme_color_override("font_color", INK); edit.add_theme_color_override("caret_color", TEAL); edit.add_theme_stylebox_override("normal", _sb(PANEL, LINE2, 7, 5)); edit.text_submitted.connect(func(text: String) -> void: commit.call(text)); edit.focus_exited.connect(func() -> void: commit.call(edit.text)); row.add_child(edit)
+	else:
+		var l := _label(value, 12, INK, false, true); l.custom_minimum_size.x = 58; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; row.add_child(l)
+	row.add_child(_square_button("＋", inc, 28))
+	return row
 
 
 func _format_small(value: float) -> String: return "%d" % roundi(value) if is_equal_approx(value, roundf(value)) else "%.2f" % value

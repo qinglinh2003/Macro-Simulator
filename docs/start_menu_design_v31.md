@@ -160,10 +160,10 @@ base_seed 为各经济体派生独立随机流
 | `peg_reserves0` | 新挂钩启动时注入的初始外汇储备，≥0；World 结构参数 | 5000 |
 | `periods_per_year` | World 年化尺度，>0 | 引擎默认 12；见第 12.1 节阻断项 |
 
-性能规模不再是世界级输入。人口/家庭基数、消费品企业、资本品企业、能源企业、建造企业
-和银行的最终数量都在“国家配置”逐国显示、编辑并写入 `CountrySpec.overrides`。人口系统
-开启时，该基数是明确的初始人口数，家庭账户由创世关系派生；人口系统关闭时，它才直接
-表示家庭账户数。Profile 只负责生成这些字段的建议初值；玩家修改后即成为该国的明确最终值。后端仍读取旧清单中的
+性能规模不再是世界级输入。初始人口、消费品企业、资本品企业、能源企业、建造企业和银行
+的最终数量都在“国家配置”逐国显示、编辑并写入 `CountrySpec.overrides`。玩家只设置初始
+人口；家庭账户由创世阶段的婚姻、亲属和家庭匹配算法派生，不提供“目标家庭数”输入。
+Profile 只负责生成这些字段的建议初值；玩家修改后即成为该国的明确最终值。后端仍读取旧清单中的
 `performance_scale`，但它只对缺少逐国数量的旧存档提供兼容基线，新 Godot 客户端不再提交。
 
 不要向玩家暴露 `couple`：它是由贸易、资本、迁移或汇率挂钩自动推导的内部能力。构造器的旧 `peg/peg_economy/peg_anchor` 也不要放在这里；开局汇率制度属于每个国家的“初始政策”。
@@ -203,14 +203,16 @@ Profile 是“基准 Config 的创世覆盖”，不是政策预设，也不是�
 
 | Profile | 实际生效的覆盖 | 对玩家的诚实说明 |
 |---|---|---|
-| `symmetric` | 生产率 ×1.00；家庭账户数 ×1.00 | 对称基线 |
-| `advanced` | `a` ×1.20；家庭账户数 ×1.00 | 高生产率经济体 |
-| `developing` | `a` ×0.75；家庭账户数 ×1.50；`necessity_share0=0.65` | 较大的账户规模、较低生产率；必需品倾向只有在消费分层启用时才生效 |
-| `entrepot` | `a` ×1.15；家庭账户数 ×0.40 | 小型高生产率；土地稀缺和开放度尚未建模，标“实验性” |
-| `petrostate` | `a` ×0.85；家庭账户数 ×0.80 | 当前没有石油出口禀赋覆盖，标“实验性 / 资源特征待实现” |
+| `symmetric` | 生产率 ×1.00；初始人口建议 ×1.00 | 对称基线 |
+| `advanced` | `a` ×1.20；初始人口建议 ×1.00 | 高生产率经济体 |
+| `developing` | `a` ×0.75；初始人口建议 ×1.50；`necessity_share0=0.65` | 较大的初始人口、较低生产率；必需品倾向只有在消费分层启用时才生效 |
+| `entrepot` | `a` ×1.15；初始人口建议 ×0.40 | 小型高生产率；土地稀缺和开放度尚未建模，标“实验性” |
+| `petrostate` | `a` ×0.85；初始人口建议 ×0.80 | 当前没有石油出口禀赋覆盖，标“实验性 / 资源特征待实现” |
 | `custom` | 无自动覆盖 | 完全自定义；从当前最终值创建 |
 
-Profile 的规模目前只乘 `n_households`，不会同步乘企业数量，也不会覆盖非零的 `demographics_population`。只有 `demographics_population=0` 时，人口内核才按经济家庭账户创世。设计稿应将最终家庭数、初始人口和企业数分别列出，避免“规模 ×1.5”被误读为所有规模量都同比扩大。
+引擎 Profile 的历史 `scale` 仍以 `n_households` 为基准；新游戏客户端把这个倍率解释为
+初始人口建议，并同时写入 `demographics_population`。家庭账户不在清单中预估，必须由
+创世匹配的实际结果决定。Profile 的规模倍率不会同步放大企业或银行数量。
 
 #### 普通玩家可调整的国家结构
 
@@ -218,9 +220,9 @@ Profile 的规模目前只乘 `n_households`，不会同步乘企业数量，也
 
 | 分组 | 可配置内容 | 对应字段 / 说明 |
 |---|---|---|
-| 规模 | 家庭数、消费品 / 资本品 / 能源企业数、银行数 | `n_households`, `n_firms_c`, `n_firms_k`, `n_firms_e`, `n_banks` |
+| 规模 | 初始人口、消费品 / 资本品 / 能源 / 建造企业数、银行数 | `demographics_population`, `n_firms_c`, `n_firms_k`, `n_firms_e`, `n_builders`, `n_banks`；`n_households` 仅作为后端兼容基数同步写入，不对玩家显示 |
 | 生产 | 基础劳动生产率、资本 / 能源部门生产率、资本份额、TFP 法则 | `a`, `a_K`, `a_E`, `alpha`, `tfp_law` |
-| 人口 | 人口系统、初始人口、生命周期消费、TFR、死亡率尺度 | `demographics_enabled`, `demographics_population`, `demographic_lifecycle_consumption`, `demographics_tfr`, `demographics_mortality_scale` |
+| 人口 | 人口系统、生命周期消费、TFR、死亡率尺度 | `demographics_enabled`, `demographic_lifecycle_consumption`, `demographics_tfr`, `demographics_mortality_scale` |
 | 产业结构 | 必需品 / 奢侈品分层、必需品消费占比、企业占比、能源部门 | `consumption_strata`, `necessity_share0`, `n_firm_share`, `energy_enabled` |
 | 金融结构 | 银行、多银行、银行间市场、债券、股票、家庭信贷 | `bank_enabled`, `n_banks`, `interbank`, `bonds`, `capital_market`, `per_firm_equity`, `household_credit` |
 | 公共部门 | 政府、国民账户指标 | `government`, `national_accounts_metrics`；货币制度不设独立的“央行存在”能力旗，直接在初始 Policy 选择 |
@@ -228,6 +230,10 @@ Profile 的规模目前只乘 `n_households`，不会同步乘企业数量，也
 | 劳动力 | 即期 / 持久匹配、摩擦、参与率、个人效率 | `labor_matching`, `labor_matching_friction`, `labor_participation`, `labor_person_efficiency` |
 | 企业生态 | 企业退出进入、企业规模增长、产业切换 | `firm_dynamics`, `gibrat_growth`, `sector_switching` |
 | 观测与民生 | 贫困 / 匮乏仪表、家庭转移 | `deprivation_gauges`, `family_transfers` |
+
+所有数值字段统一使用“减号 + 可编辑数值框 + 加号”。整数规模字段拒绝小数；连续参数接受
+小数。回车或失焦提交，越界值按字段合法范围截断，非法文本恢复当前值。加减按钮只负责
+常用步长微调，不能成为唯一输入方式。
 
 每一个主开关都应显示它会解锁的子系统。关闭一个已经被其他能力依赖的主开关时，先展示依赖树，再让玩家选择“同时关闭依赖项”或取消。
 
