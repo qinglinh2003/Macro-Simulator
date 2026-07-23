@@ -24,6 +24,10 @@ SECTOR_ALIASES = {
 }
 SECTORS = frozenset({
     "consumption", "necessity", "luxury", "capital", "energy", "public",
+    # CAMPAIGN BUG FIX: builders sell "housing" -- any world with construction
+    # crashed at the first planning tick of any productivity/labor shock because
+    # sector_for_firm could not normalize the builder sector.
+    "housing",
 })
 
 

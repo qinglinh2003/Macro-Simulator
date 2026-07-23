@@ -211,6 +211,13 @@ class World:
         capital: bool = False,
         fx_lambda: float = 0.05,
         fx_friction: float = 0.03,
+        fx_spread: float = 0.0,       # DEALER-BLEED FIX A: bid-ask on PRIVATE settlement
+                                      # conversions (trade payout, remittances); the margin
+                                      # stays in dealer inventory = market-making revenue.
+                                      # 0.0 = legacy zero-spread = bit-identical.
+        fx_loss_mutualization: bool = False,   # DEALER-BLEED FIX C: annual pro-rata
+                                      # settlement of realized dealer losses against member
+                                      # fiscal accounts (clearing-union). False = legacy.
         fx_trade_cap: float = 0.15,
         capital_mobility: float = 0.0,
         capital_adjust: float = 0.1,
@@ -377,6 +384,10 @@ class World:
         self.periods_per_year = periods_per_year
         self.fx_lambda = fx_lambda
         self.fx_friction = fx_friction
+        assert 0.0 <= fx_spread < 0.1, "fx_spread must be in [0, 0.1)"
+        self.fx_spread = fx_spread
+        self.fx_loss_mutualization = bool(fx_loss_mutualization)
+        self._conversion_volume = [0.0] * len(configs)   # numeraire, per economy (mutualization key)
         self.fx_trade_cap = fx_trade_cap
         self._factor_income: List[float] = [0.0] * self.n
         self._factor_income_cash: List[float] = [0.0] * self.n
@@ -782,6 +793,7 @@ class World:
         ExternalPolicy (B5a). Runs at construction and at the top of every
         coupling barrier: mutations to econ.external_policy anywhere in a tick
         all take effect together at the next barrier."""
+        self._fx_spread_margin_tick = 0.0   # per-tick declared dealer margin (numeraire)
         eps = [e.external_policy for e in self.economies]
 
         # ---- PREPARE (pure): build every derived value into locals ----
@@ -853,6 +865,43 @@ class World:
         self.guest_worker_return = guest_worker_return
         self.sanctions = sanctions
         self._reconcile_peg_states(eps)
+        self._settle_dealer_mutualization()
+
+    def _settle_dealer_mutualization(self) -> None:
+        """DEALER-BLEED FIX C (clearing-union): once a year, a NEGATIVE dealer net
+        worth is settled pro-rata by conversion volume against member fiscal
+        accounts -- the residual cost of running the exchange-rate system becomes
+        an explicit, conserving national expense instead of an unbounded leak."""
+        if (
+            not self.fx_loss_mutualization
+            or self.dealer is None
+            or self.t == 0
+            or self.t % 365 != 0
+        ):
+            return
+        nw = self.dealer.net_worth_numeraire(self.rates)
+        if nw >= -1e-9:
+            self._conversion_volume = [0.0] * self.n
+            return
+        loss = -nw
+        vol_total = sum(self._conversion_volume)
+        from macro_sim.world.fx import DEALER_ID
+        for i, econ in enumerate(self.economies):
+            share = (
+                self._conversion_volume[i] / vol_total if vol_total > 1e-12
+                else 1.0 / self.n
+            )
+            levy_num = loss * share
+            fiscal = getattr(econ, "_fiscal", None)
+            if fiscal is None or not econ.ledger.has_account(fiscal):
+                continue
+            levy_local = levy_num * self.rates.e[i]        # numeraire -> currency i
+            if levy_local > 1e-12:
+                econ.ledger.transfer(fiscal, DEALER_ID, levy_local)
+                econ._fx_mutualization_paid = (
+                    getattr(econ, "_fx_mutualization_paid", 0.0) + levy_local
+                )
+        self._conversion_volume = [0.0] * self.n
 
     def _validate_peg_constraints(self, eps) -> None:
         """P0 joint peg constraints -- PURE checks, called before any commit write
@@ -1046,7 +1095,10 @@ class World:
 
         # HARD GATE (pre-grope, so no revaluation contaminates it): the dealer is a
         # passthrough ⇒ its numéraire FLOW ≡ 0 — the multilateral BoP identity.
-        self.dealer.assert_flow_is_passthrough(inv0, e0)
+        self.dealer.assert_flow_is_passthrough(
+            inv0, e0,
+            expected_flow=getattr(self, "_fx_spread_margin_tick", 0.0),
+        )
         grope_rates(self, grope_signal)       # NOW move the rates (every flow has settled)
         self.dealer.book_revaluation(e0, self.rates)   # the only source of net-worth change
 

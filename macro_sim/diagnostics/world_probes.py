@@ -43,7 +43,13 @@ def _reserve_nfa_adjustment(
     """
 
     adjustment = [0.0] * n
-    if peg and n > 1 and reserve != 0.0:
+    # CAMPAIGN FIX (peg-break reconciliation): the gate keys on the ASSET, not
+    # the regime flag. At the break tick the forced float flips world.peg False
+    # AFTER the final defense drain flowed; and a floated CB retains its reserve
+    # balance (the asset survives the regime, per World.reserves). Gating on
+    # `peg` dropped the reserve leg exactly when it mattered -- every fix-
+    # acceptance portrait failed nfa_ca_valuation on the break tick.
+    if n > 1 and reserve != 0.0:
         value = reserve / max(_EPS, e[anchor])
         adjustment[0] += value
         adjustment[anchor] -= value
@@ -351,7 +357,7 @@ class WorldProbeCollector:
             n, post_reserves - pre_reserves, pre_e, peg=peg, anchor=anchor,
         )
         reserve_revaluation = [0.0] * n
-        if peg and n > 1 and post_reserves != 0.0:
+        if n > 1 and post_reserves != 0.0:   # asset-keyed, not regime-keyed (see above)
             reserve_revaluation = _reserve_nfa_adjustment(
                 n, post_reserves, post_e, peg=peg, anchor=anchor,
             )

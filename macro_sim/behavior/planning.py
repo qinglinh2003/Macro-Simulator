@@ -198,7 +198,8 @@ def unit_cost(
 
 # -- target inventory & production (B-plan) -------------------------------------
 
-def plan_production(firm: Firm, gap_close: float = 1.0) -> None:
+def plan_production(firm: Firm, gap_close: float = 1.0,
+                    inventory: float | None = None) -> None:
     """I*_{f,t} = phi d^e ;  y*_{f,t} = max(0, d^e + gap_close (I* - I_{f,t-1}))  (§7.2).
 
     firm.inventory is still the end-of-(t-1) stock at planning time.
@@ -209,7 +210,8 @@ def plan_production(firm: Firm, gap_close: float = 1.0) -> None:
     the daily-calibrated economy ran at a 2% labor fill rate before this throttle existed.
     """
     firm.target_inventory = firm.phi * firm.demand_expected
-    gap = firm.target_inventory - firm.inventory
+    inv = firm.inventory if inventory is None else inventory
+    gap = firm.target_inventory - inv
     firm.production_target = max(0.0, firm.demand_expected + gap_close * gap)
 
 

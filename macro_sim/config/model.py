@@ -211,6 +211,15 @@ class Config:
     n_builders: int = 5
     builder_productivity: float = 0.002     # dwelling units per labor-tick (~1.4 worker-years/unit)
     builder_demand_seed: float = 0.005      # cold-start expected dwelling demand per tick
+    # CAMPAIGN FIX (construction stall): builder demand discovery is a CLOSED loop
+    # (expectations only update from own sales, sales are capped by expectation-led
+    # production), so the cold-start floor is also a permanent ceiling and price/rent
+    # signals never reach housing supply -- every campaign world built ~5 units in 30y.
+    # gain > 0 lets the profitable-floor SCALE with the price/unit-cost margin:
+    # floor = seed * (1 + gain * (price/unit_cost - 1)). 0.0 = off = bit-identical.
+    builder_demand_price_gain: float = 0.0
+    builder_inventory_buffer: float = 0.0   # finished-unsold units a builder may hold and keep working (0 = legacy one-at-a-time)
+    builder_land_fee_credit: bool = False   # CAMPAIGN FIX leg 3: the land fee may be BORROWED at completion (a development-loan drawdown; off = legacy cash-only)
     land_fee_share: float = 0.2             # land fee = share x price x (stock/stock0)^convexity
     land_convexity: float = 1.0
     housing_permits: int = 50               # dwellings mintable per year (zoning quota; live Policy lever)
@@ -776,6 +785,7 @@ class Config:
     # This pays deposit_rate x deposit each tick as a real bank->depositor transfer, booked against
     # bank profit so a net-interest-margin squeeze becomes possible. 0 => bit-identical.
     deposit_rate: float = 0.0             # per-tick contractual interest paid on household deposits
+    deposit_interest_arrears: bool = False  # CAMPAIGN FIX: unpaid deposit interest becomes a tracked IOU (off = legacy silent default)
 
     # ======================================================================
     # v9.2 -- remove the fixed-nominal-startup money NON-NEUTRALITY (DESIGNDOC §30). New firms enter with a
@@ -830,6 +840,12 @@ class Config:
     # buyers still queuing lifts the reference house price by this step (the symmetric
     # branch to housing_ask_decay). 0.0 = legacy = bit-identical; frontier opts into 0.03.
     housing_demand_step: float = 0.0
+    # CAMPAIGN FIX (floorless prices): asks decay 3%/session with an EPS floor, so
+    # glut worlds ratchet to literal 0.00 (X5 China; X6 Germany 0.21) and every
+    # downstream ratio degenerates. Wage-anchored floor mirrors the v24 rent floor:
+    # ask >= share x w_firm0 x 365 (a multiple of one annual genesis wage).
+    # 0.0 = off = bit-identical.
+    housing_ask_floor_wage_share: float = 0.0
     # v24 A2-index (chained fixed-basket instability): clamp each basket item's price to
     # [base/cap, base*cap] WITHIN one chain window when computing the fixed-basket level.
     # A single pathological item otherwise enters the chain permanently at every rebase.
@@ -1204,6 +1220,7 @@ class Config:
         return PlanningConfig(
             theta_wage=self.theta_wage,
             inventory_gap_close=self.inventory_gap_close,
+            builder_inventory_buffer=self.builder_inventory_buffer,
             delta=self.delta,
             wage_indexation=self.wage_indexation,
             theta_price=self.theta_price,
@@ -1831,6 +1848,7 @@ class Config:
         assert 0.0 <= self.rental_vacancy_deadband < 1.0, "rental_vacancy_deadband must be in [0, 1)"
         assert self.rental_rent_floor_wage_share >= 0.0, "rental_rent_floor_wage_share must be >= 0"
         assert self.housing_demand_step >= 0.0, "housing_demand_step must be >= 0"
+        assert self.housing_ask_floor_wage_share >= 0.0, "housing_ask_floor_wage_share must be >= 0"
         assert self.cpi_item_link_cap == 0.0 or self.cpi_item_link_cap > 1.0, \
             "cpi_item_link_cap must be 0 (off) or > 1"
         assert self.lifecycle_alpha_income >= 0.0 and self.lifecycle_alpha_wealth_draw >= 0.0, "lifecycle alphas must be >= 0"

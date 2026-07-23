@@ -151,6 +151,14 @@ def _remit(world, host: int, origin: int, amount_host: float):
             he._outward_remittance_tax_revenue += out_tax
             collected -= out_tax
     amount_origin = collected * world.rates.bilateral(origin, host)   # curr_host → curr_origin
+    # DEALER-BLEED FIX A: remittance conversion pays out at mid x (1 - spread)
+    spread = getattr(world, "fx_spread", 0.0)
+    if spread > 0.0:
+        world._conversion_volume[host] += collected / max(1e-12, world.rates.e[host])
+        world._fx_spread_margin_tick = getattr(
+            world, "_fx_spread_margin_tick", 0.0
+        ) + amount_origin * spread / max(1e-12, world.rates.e[origin])
+        amount_origin *= 1.0 - spread
     oe = world.economies[origin]
     tax = 0.0
     fiscal = getattr(oe, "_fiscal", None)

@@ -92,7 +92,8 @@ class FXDealer:
         inv = self.inventory()
         return sum(rates.to_numeraire(inv[i], i) for i in range(len(inv)))
 
-    def assert_flow_is_passthrough(self, inv0, e0, tol: float = 1e-6) -> float:
+    def assert_flow_is_passthrough(self, inv0, e0, tol: float = 1e-6,
+                                   expected_flow: float = 0.0) -> float:
         """**The open-economy hard gate — the multilateral BoP / passthrough identity.**
 
         The dealer is a zero-spread intermediary: every cross-border transaction credits it
@@ -112,7 +113,10 @@ class FXDealer:
         self.last_gate_inventory = list(inv1)
         flow = sum((inv1[i] - inv0[i]) / e0[i] for i in range(len(inv1)))
         scale = max(1.0, sum(abs(inv1[i]) / e0[i] for i in range(len(inv1))))
-        if abs(flow) > tol * scale:
+        # DEALER-BLEED FIX A: with a declared bid-ask spread the dealer's tick flow
+        # equals its DECLARED margin -- explicit, bounded revenue, not a leak. Any
+        # deviation beyond the declaration still fails exactly as before.
+        if abs(flow - expected_flow) > tol * scale:
             raise BalanceOfPaymentsError(
                 f"dealer flow is not a passthrough (multilateral BoP violated): "
                 f"flow={flow!r} numéraire (tol={tol * scale:.3e}) — a cross-border payload "

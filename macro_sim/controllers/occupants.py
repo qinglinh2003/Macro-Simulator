@@ -89,7 +89,7 @@ class ScheduledOccupant:
         return _proposal(context, f"scheduled:{context.boundary_tick}", actions, "scheduled")
 
 
-_HEURISTIC_RULES = frozenset({"hold", "inflation_targeting"})
+_HEURISTIC_RULES = frozenset({"hold", "inflation_targeting", "countercyclical_fiscal"})
 
 
 @dataclass(frozen=True)
@@ -150,6 +150,38 @@ class HeuristicOccupant:
                 if rate.maximum is not None:
                     value = min(float(rate.maximum), value)
                 actions = (PolicyAction("manual_policy_rate", value),)
+        elif self.rule_name == "countercyclical_fiscal":
+            # deficit target leans against released unemployment: above u_high ->
+            # one notch of stimulus, below u_low -> one notch of consolidation.
+            if hasattr(context.observation, "values") and not isinstance(context.observation, dict):
+                values = context.observation.values()
+            else:
+                obs = context.observation.to_dict() if hasattr(context.observation, "to_dict") \
+                    else context.observation
+                values = obs.get("values", obs) if isinstance(obs, dict) else {}
+            u = values.get("unemployment_rate")
+            u_high = self.parameters.get("u_high", 0.10)
+            u_low = self.parameters.get("u_low", 0.05)
+            notch = self.parameters.get("notch", 0.005)
+            permitted = {item.lever: item for item in context.permitted_actions}
+            tgt = permitted.get("gov_deficit_target")
+            if u is None or tgt is None or not tgt.allowed or tgt.current_value is None:
+                actions = ()
+            else:
+                cur = float(tgt.current_value)
+                if float(u) > u_high:
+                    value = cur + notch
+                elif float(u) < u_low:
+                    value = cur - notch
+                else:
+                    value = cur
+                if tgt.minimum is not None:
+                    value = max(float(tgt.minimum), value)
+                if tgt.maximum is not None:
+                    value = min(float(tgt.maximum), value)
+                actions = () if abs(value - cur) < 1e-12 else (
+                    (PolicyAction("gov_deficit_target", value),)
+                )
         else:
             raise ValueError(f"unknown heuristic rule: {self.rule_name}")
         return _proposal(context, f"heuristic:{self.rule_name}", actions, self.rule_name)
