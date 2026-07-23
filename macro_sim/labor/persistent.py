@@ -854,6 +854,13 @@ def _run_fractional_hours_labor_phase(econ: Any) -> None:
                 # the labour head-flow identity. The FTE change was already recorded above.
                 lm.separate_second(person_id)
             elif cash_blocked and lm.suspension_enabled:
+                # Suspension is person-scoped: a suspended worker is excluded from every
+                # active roster.  Retire any second contract explicitly so its remaining
+                # hours leave both the roster and the FTE journal at the same boundary.
+                # Otherwise the stock drops silently while only the primary hours are
+                # recorded above.
+                dropped_second = lm.separate_second(person_id)
+                _record_fte_change(accounts, -dropped_second)
                 lm.suspended[person_id] = Suspension(
                     firm_id=firm.id, since_tick=econ.t, wage_at=max(firm.wage, EPS),
                 )

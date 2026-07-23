@@ -12,6 +12,7 @@ from macro_sim.config import Config
 from macro_sim.diagnostics.models import RunSpec
 from macro_sim.diagnostics.scenarios import build_frontier_config, root_cause_matrix
 from macro_sim.economy import Economy
+from macro_sim.labor.persistent import run_persistent_labor_phase
 
 
 def _active_jobs(econ):
@@ -241,3 +242,48 @@ def test_fractional_head_and_fte_flow_gates_have_teeth_across_ticks(field, messa
     )
     with pytest.raises(AssertionError, match=message):
         econ.step()
+
+
+def test_primary_suspension_retires_second_contract_and_its_fte():
+    econ = Economy(Config.v13(
+        seed=7, n_households=20, demographics_population=80,
+        n_firms_c=8, n_firms_k=2, n_banks=1, n_ticks=20,
+        labor_matching="persistent", labor_fractional_hours=True,
+        labor_second_job=False, labor_matching_friction=False,
+        labor_relationship_wages=False, labor_person_efficiency=False,
+        labor_suspension=True, churn_annual=0.0,
+    ))
+    for _ in range(4):
+        econ.step()
+
+    lm = econ.labor_market
+    accounts = econ.labor_accounts
+    candidate = next(
+        pid for pid, job in lm.jobs.items()
+        if pid not in lm.suspended and job.hours < 0.9
+    )
+    primary = next(firm for firm in econ.firms if firm.id == lm.jobs[candidate].firm_id)
+    secondary = next(firm for firm in econ.firms if firm.id != primary.id)
+    second_hours = min(0.2, lm.residual_hours(candidate))
+    assert second_hours > 0.0
+    lm.hire_second(
+        candidate, secondary.id, econ.demographic_state.current_date,
+        wage=max(secondary.wage, 1e-12), hours=second_hours,
+    )
+    accounts.private_fte_inflows_total += second_hours
+    accounts.observe_persistent(econ, lm)
+
+    primary_cash = econ.ledger.balance(primary.id)
+    if primary_cash > 0.0:
+        econ.ledger.transfer(primary.id, econ._fiscal, primary_cash)
+    primary.labor_demand_eff = max(1.0, lm.active_effective(primary.id))
+    secondary.labor_demand_eff = max(
+        secondary.labor_demand_eff, lm.active_effective(secondary.id)
+    )
+
+    run_persistent_labor_phase(econ)
+    accounts.observe_persistent(econ, lm)
+
+    assert candidate in lm.suspended
+    assert candidate not in lm.second_jobs
+    assert candidate not in lm.rosters.get(secondary.id, ())
