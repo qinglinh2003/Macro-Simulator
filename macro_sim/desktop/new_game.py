@@ -419,7 +419,6 @@ class NewGameSpec:
     def default(cls, *, seed: int = 7) -> "NewGameSpec":
         return cls.from_mapping({
             "schema_version": NEW_GAME_SCHEMA_VERSION,
-            "model_id": PLAYABLE_MODEL_ID,
             "seed": seed,
             "scenario": "sandbox",
             "duration": "5y",
@@ -461,22 +460,24 @@ class NewGameSpec:
         if not isinstance(value, Mapping):
             raise TypeError("new_game spec must be an object")
         expected = {
-            "schema_version", "model_id", "seed", "scenario", "duration",
+            "schema_version", "seed", "scenario", "duration",
             "performance_scale", "world", "countries", "player_country",
             "run_mode", "seats", "initial_policy_overrides",
         }
-        if set(value) != expected:
+        allowed = expected | {"model_id"}
+        if not expected <= set(value) or not set(value) <= allowed:
             raise ValueError(
                 "new_game spec fields differ; "
                 f"missing={sorted(expected - set(value))}, "
-                f"extra={sorted(set(value) - expected)}"
+                f"extra={sorted(set(value) - allowed)}"
             )
         schema_version = _strict_int(
             "schema_version", value["schema_version"],
             low=NEW_GAME_SCHEMA_VERSION, high=NEW_GAME_SCHEMA_VERSION,
         )
-        if value["model_id"] != PLAYABLE_MODEL_ID:
-            raise ValueError(f"unsupported model_id {value['model_id']!r}")
+        # model_id is response provenance, never a client-side selector.  Older
+        # saved request envelopes may still echo it; every new run deliberately
+        # resolves to the backend's current production model.
         seed = _strict_int("seed", value["seed"], low=0, high=2_147_483_647)
         scenario = value["scenario"]
         if scenario not in {"sandbox", "oil", "gfc", "pandemic", "disaster"}:

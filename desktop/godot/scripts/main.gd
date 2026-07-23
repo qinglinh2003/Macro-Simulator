@@ -785,7 +785,7 @@ func _on_response(response: Dictionary) -> void:
 		var manifest: Dictionary = payload.get("new_game", {})
 		if _new_game_pending \
 				and str(_active_command.get("command", "")) == "new_game" \
-				and manifest.get("spec", {}) == _new_game_draft:
+				and _new_game_response_matches_draft(manifest):
 			_new_game_pending = false
 			_reset_client_for_new_game(payload)
 			_outbox.append({"command": "get_schema"})
@@ -909,6 +909,18 @@ func _index_schema() -> void:
 			var name := str(lever.get("name"))
 			_lever_info[name] = lever
 			_lever_group[name] = str(lever.get("decision_group", ""))
+
+
+func _new_game_response_matches_draft(manifest: Dictionary) -> bool:
+	# The backend adds provenance such as model_id to the normalized response.
+	# Match only fields the client actually submitted so backend upgrades remain
+	# transparent to this frontend.
+	var normalized: Dictionary = manifest.get("spec", {})
+	for raw_key: Variant in _new_game_draft.keys():
+		var key := str(raw_key)
+		if not normalized.has(key) or normalized[key] != _new_game_draft[key]:
+			return false
+	return true
 
 
 func _start_menu_policy_schemas() -> Dictionary:

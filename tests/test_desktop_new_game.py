@@ -30,6 +30,15 @@ def test_contract_round_trips_and_identifies_the_playable_model() -> None:
     assert restored.model_id == "current_playable_v1"
 
 
+def test_backend_resolves_the_current_model_without_a_client_selector() -> None:
+    request = NewGameSpec.default(seed=29).to_dict()
+    request.pop("model_id")
+    assert NewGameSpec.from_mapping(request).model_id == "current_playable_v1"
+
+    request["model_id"] = "historical-client-value"
+    assert NewGameSpec.from_mapping(request).model_id == "current_playable_v1"
+
+
 def test_playable_preset_activates_every_completed_gameplay_domain() -> None:
     cfg = NewGameSpec.default().configs()[0]
     for flag in (

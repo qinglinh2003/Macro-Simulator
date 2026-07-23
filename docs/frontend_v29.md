@@ -270,8 +270,9 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 
 - 协议升级为 desktop v3；`new_game` 接收严格的 `NewGameSpec v1`，并在快照
   回传规范化清单、模型 ID、合同 hash、终局状态和剩余自然日。
-- 产品模型 ID 为 `current_playable_v1`。`Config.v124` 仅是历史研究谱系；
-  实际开局从日频 `Config.v13` 出发，显式组合所有已完成玩法能力。
+- 玩家不再选择或提交 model。每次新游戏由 Python 后端绑定当前生产配置；
+  内部 `model_id` 只作为响应中的复现元数据，不是前端选项。当前生产配置从
+  日频 `Config.v13` 出发，显式组合所有已完成玩法能力。
 - 国家数、名称/代码、Profile、玩家国和玩家国五席均为动态；所有硬编码
   `PLAYER_ECONOMY` / 三国 snapshot 路径已移除。
 - 场景库、World 十项高级参数、1/5/10 年及无限时长、快速/标准规模和初始

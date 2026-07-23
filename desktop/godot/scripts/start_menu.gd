@@ -35,7 +35,7 @@ const GREEN_BG := Color("e3f4ea")
 const GREEN_BD := Color("9ddcb8")
 
 const STEP_META := [
-	["场景与模式", "SCENARIO"], ["世界设置", "WORLD"],
+	["场景", "SCENARIO"], ["世界设置", "WORLD"],
 	["国家配置", "COUNTRIES"], ["政府与席位", "GOVERNMENT"],
 	["初始政策", "POLICY"], ["检查并开始", "REVIEW"],
 ]
@@ -371,7 +371,6 @@ func _wizard_header() -> Control:
 	row.add_child(_label("新建模拟", 15, INK, true))
 	row.add_child(_label("NEW SIMULATION", 11, INK3, false, true))
 	row.add_child(_h_spacer())
-	row.add_child(_chip("CURRENT PLAYABLE v1", GREEN, GREEN_BG, GREEN_BD))
 	row.add_child(_button("⚙", func() -> void:
 		_settings_open = true; _render(), false, 15))
 	return panel
@@ -416,7 +415,7 @@ func _page_heading(parent: VBoxContainer, title: String, subtitle: String) -> vo
 
 func _step_scenario(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 720
-	_page_heading(parent, "场景与基础模型", "选择外生冲击场景。所有场景都运行在同一套完整可玩模型上。")
+	_page_heading(parent, "场景", "选择本局开始后进入世界的外生冲击。")
 	parent.add_child(_kicker("SCENARIO · 场景"))
 	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 8); parent.add_child(list)
 	for raw: Dictionary in SCENARIOS:
@@ -435,17 +434,6 @@ func _step_scenario(parent: VBoxContainer) -> void:
 		words.add_child(title_row); words.add_child(_label(str(item["desc"]), 11, Color("68788b"))); row.add_child(words)
 		var meta := VBoxContainer.new(); meta.add_child(_label(str(item["caps"]), 11, INK2, false, true)); meta.add_child(_label(str(item["duration"]), 10, MUTED, false, true)); row.add_child(meta)
 		list.add_child(b)
-	var sp := MarginContainer.new(); sp.add_theme_constant_override("margin_top", 20); sp.add_child(_kicker("BASE MODEL · 基础模型")); parent.add_child(sp)
-	var models := HBoxContainer.new(); models.add_theme_constant_override("separation", 9); parent.add_child(models)
-	models.add_child(_model_card("当前可玩模型", "v14–v31 已完成系统的生产组合", true))
-	models.add_child(_model_card("历史校准谱系", "Config.v124 仅供研究复现", false))
-
-
-func _model_card(title: String, subtitle: String, active: bool) -> Control:
-	var p := _panel(TEAL_BG if active else PAPER, TEAL_BD if active else LINE, 11, 12)
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var v := VBoxContainer.new(); v.add_child(_label(title, 13, INK, true)); v.add_child(_label(subtitle, 11, Color("68788b"))); p.add_child(v)
-	return p
 
 
 func _step_world(parent: VBoxContainer) -> void:
@@ -1095,7 +1083,7 @@ func _step_review(parent: VBoxContainer) -> void:
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
 	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "启动时原子应用"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))
 	manifest.add_child(_manifest_card("SCENARIO · 场景", RED, [["场景", scenario], ["校准", "约化 / 原型" if _scenario != "sandbox" else "—"], ["ShockTape", "已绑定"]]))
-	manifest.add_child(_manifest_card("REPRODUCIBILITY · 可复现", Color("3f6db2"), [["模型版本", "current_playable_v1"], ["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["协议", "desktop v3"]]))
+	manifest.add_child(_manifest_card("REPRODUCIBILITY · 可复现", Color("3f6db2"), [["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["配置归属", "后端当前生产配置"], ["协议", "desktop v3"]]))
 
 
 func _validation_card(icon: String, title: String, sub: String, fg: Color, bg: Color, border: Color) -> Control:
@@ -1128,7 +1116,7 @@ func _manifest_card(title: String, accent: Color, rows: Array) -> Control:
 func _summary_panel() -> Control:
 	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(322, 0); p.add_theme_stylebox_override("panel", _sb(PANEL, LINE2, 0, 14)); var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 12); p.add_child(col)
 	var head := HBoxContainer.new(); head.add_child(_kicker("本局摘要")); head.add_child(_h_spacer()); head.add_child(_dot(GREEN, 6)); head.add_child(_label("协议已接入", 10, GREEN)); col.add_child(head)
-	col.add_child(_summary_section("场景", [["场景", _scenario_name()], ["模型", "当前可玩模型"]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	col.add_child(_summary_section("场景", [["场景", _scenario_name()]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	var cr: Array = []
 	for c: Dictionary in _countries.slice(0, 4):
 		cr.append([str(c["code"]), str(PROFILES[str(c["profile"])]["name"])])
@@ -1221,7 +1209,7 @@ func _draft_manifest() -> Dictionary:
 		countries.append({"name": str(country["name"]), "code": str(country["code"]),
 			"profile": str(country["profile"]),
 			"overrides": (country["overrides"] as Dictionary).duplicate(true)})
-	return {"schema_version": 1, "model_id": "current_playable_v1", "seed": _seed,
+	return {"schema_version": 1, "seed": _seed,
 		"scenario": _scenario, "duration": _duration, "performance_scale": _perf_scale,
 		"world": world,
 		"countries": countries, "player_country": _player_country,

@@ -406,6 +406,7 @@ def test_ndjson_transport_contains_request_failure(runtime: SimulationRuntime) -
             assert recovered["snapshot"]["tick"] == 0
 
             spec = NewGameSpec.default(seed=123).to_dict()
+            spec.pop("model_id")
             spec["countries"] = spec["countries"][:1]
             spec["run_mode"] = "batch"
             spec["seats"] = {seat: "null" for seat in spec["seats"]}
