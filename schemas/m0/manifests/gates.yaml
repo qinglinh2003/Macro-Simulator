@@ -79,3 +79,61 @@ gates:
     repetitions: 1
     seeds: []
     threshold_ref: null
+  - id: trace.tests
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/test_conservation.py
+      - tests/test_world_container.py
+      - tests/test_controller_phase_replay_hardening.py
+      - tests/migration/m0/test_phase_registry.py
+      - tests/migration/m0/test_phase_trace.py
+      - tests/migration/m0/test_trace_is_passive.py
+      - tests/migration/m0/test_rng_inventory.py
+    cwd: .
+    dependencies:
+      - inventory.tests
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - scenario.config.versions-v124-yaml
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 0
+    threshold_ref: null
+  - id: trace.repeatability
+    class: nightly
+    command:
+      - uv
+      - run
+      - python
+      - scripts/cpp_migration/export_phase_trace.py
+      - --fixture
+      - refactor_v124
+      - --repeat
+      - "3"
+      - --require-byte-identical
+    cwd: .
+    dependencies:
+      - trace.tests
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - scenario.config.versions-v124-yaml
+    platform_profiles:
+      - any
+    process_count: 3
+    thread_count: 1
+    repetitions: 3
+    seeds:
+      - 0
+    threshold_ref: null

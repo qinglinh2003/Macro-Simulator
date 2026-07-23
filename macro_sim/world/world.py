@@ -15,6 +15,15 @@ from dataclasses import replace
 from typing import Any, List
 
 from macro_sim.config import Config
+from macro_sim.core.phase_trace import emit_phase_trace
+from macro_sim.core.phases import (
+    BOUNDARY_CONTROL,
+    WORLD_COMMIT_BOUNDARY,
+    WORLD_DEALER_SETTLEMENT,
+    WORLD_EXTERNAL_SETTLEMENT_SEAM,
+    WORLD_PUBLISH,
+    WORLD_VALIDATE_GLOBAL,
+)
 from macro_sim.economy import Economy
 from macro_sim.world.capital import (
     CBRES_ID,
@@ -761,12 +770,15 @@ class World:
         self._validate_domains()
         if self.shock_engine is not None:
             self.shock_engine.begin_tick(self.t, self.economies, world=self)
+        emit_phase_trace(self, BOUNDARY_CONTROL)
         self._coupling_barrier()                              # thin central barrier (moves no money)
         if not self.couple:
             # Preserve the ordinary closed-economy path, including the N=1 byte-identity
             # contract.  There is no reason to expose the coupling seam without a dealer.
             recs = [econ.step() for econ in self.economies]
             self.t += 1
+            emit_phase_trace(self, WORLD_COMMIT_BOUNDARY)
+            emit_phase_trace(self, WORLD_PUBLISH)
             return recs
 
         # Snapshot the dealer's position + rates BEFORE any cross-border money moves.
@@ -783,9 +795,14 @@ class World:
         # subsidies, and any peg-reserve swap therefore enter the SAME period's accounts.
         for econ in self.economies:
             econ._run_pre_settlement_phases()
+        emit_phase_trace(self, WORLD_EXTERNAL_SETTLEMENT_SEAM)
         self._dealer_update()
+        emit_phase_trace(self, WORLD_DEALER_SETTLEMENT)
+        emit_phase_trace(self, WORLD_VALIDATE_GLOBAL)
         recs = [econ._run_settlement_and_commit_phases() for econ in self.economies]
         self.t += 1
+        emit_phase_trace(self, WORLD_COMMIT_BOUNDARY)
+        emit_phase_trace(self, WORLD_PUBLISH)
         return recs
 
     def _commit_external_policies(self) -> None:

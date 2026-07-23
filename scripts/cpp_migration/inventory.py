@@ -46,6 +46,7 @@ from macro_sim.controllers.session import (
 )
 from macro_sim.core.external_policy import ExternalPolicy
 from macro_sim.core.policy import Policy
+from macro_sim.core.phases import PHASES
 from macro_sim.core.policy_control_specs import CONTROL_SPECS
 from macro_sim.core.policy_registry import (
     Bool,
@@ -809,6 +810,24 @@ def _load_rows_manifest(name: str) -> tuple[list[dict[str, Any]], dict[str, Any]
 
 def build_phases_inventory() -> dict[str, Any]:
     source_rows, raw = _load_rows_manifest("phases.yaml")
+    runtime_by_id = {phase.id: phase for phase in PHASES}
+    source_by_id = {row["id"]: row for row in source_rows}
+    if set(runtime_by_id) != set(source_by_id):
+        raise SchemaError("phase manifest and runtime registry contain different IDs")
+    for phase_id, phase in runtime_by_id.items():
+        row = source_by_id[phase_id]
+        expected = (phase.code, phase.ordinal, phase.scope, phase.snapshot_epoch)
+        actual = (
+            row.get("phase_code"),
+            row.get("order"),
+            row.get("scope"),
+            row.get("snapshot_after"),
+        )
+        if actual != expected:
+            raise SchemaError(
+                f"{phase_id}: runtime/manifest phase mismatch "
+                f"(runtime={expected!r}, manifest={actual!r})"
+            )
     rows = [
         base_row(
             row.pop("id"),
@@ -826,8 +845,8 @@ def build_phases_inventory() -> dict[str, Any]:
         metadata={
             "source_schema_version": raw["schema_version"],
             "phase_count": len(rows),
-            "explicit_runtime_constants": False,
-            "runtime_instrumentation_work_package": "m0-03",
+            "explicit_runtime_constants": True,
+            "runtime_instrumentation_work_package": "complete",
         },
     )
 

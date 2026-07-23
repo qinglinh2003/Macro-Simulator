@@ -20,6 +20,25 @@ from typing import Any, Dict, List
 from macro_sim.behavior.planning import diversify_mpc
 from macro_sim.config import Config
 from macro_sim.core.ledger import Ledger
+from macro_sim.core.phase_trace import (
+    emit_phase_trace,
+    phase_trace_world_managed,
+)
+from macro_sim.core.phases import (
+    BOUNDARY_CONTROL,
+    ECONOMY_CLOSE_INSTITUTIONS,
+    ECONOMY_OPEN_BOOKS,
+    ECONOMY_OPEN_FINANCIAL_SYSTEM,
+    ECONOMY_OPEN_REAL_ECONOMY,
+    ECONOMY_PLAN_AND_FINANCE,
+    ECONOMY_POPULATION_BOUNDARY,
+    ECONOMY_PRODUCE_AND_TRADE_DOMESTIC,
+    ECONOMY_SETTLE_DOMESTIC,
+    ECONOMY_STAGE_LOCAL_COMMIT,
+    ECONOMY_VALIDATE_AND_MEASURE,
+    WORLD_COMMIT_BOUNDARY,
+    WORLD_PUBLISH,
+)
 from macro_sim.core.policy import Policy, PolicySeed
 from macro_sim.core.state import SimulationState
 from macro_sim.demographics import Phase0VitalRates, create_genesis_population
@@ -622,8 +641,14 @@ class Economy:
         """
         if self.shock_engine is not None and self.shock_engine.current_tick != self.t:
             self.shock_engine.begin_tick(self.t, [self])
+        if not phase_trace_world_managed(self):
+            emit_phase_trace(self, BOUNDARY_CONTROL)
         self._run_pre_settlement_phases()
-        return self._run_settlement_and_commit_phases()
+        record = self._run_settlement_and_commit_phases()
+        if not phase_trace_world_managed(self):
+            emit_phase_trace(self, WORLD_COMMIT_BOUNDARY)
+            emit_phase_trace(self, WORLD_PUBLISH)
+        return record
 
     def _run_pre_settlement_phases(self) -> None:
         """Run a tick through goods and capital-goods markets.
@@ -653,16 +678,19 @@ class Economy:
         # foreclosures booked earlier in the same settlement window.
         self._writeoffs = 0.0
         reset_bank_realized_pnl(self)     # open realized bank P&L before coupons/deaths/credit flows
+        emit_phase_trace(self, ECONOMY_OPEN_BOOKS)
         set_policy_rate(self)             # v10: set this tick's policy rate (off ⇒ frozen r_interest)
         if self.cfg.interbank and len(self.banks) > 1:   # v11.4: begin this tick's intraday reserve tracking
             run_deposit_competition(self)                # depositors migrate toward higher deposit rates
             self.ledger.reset_intraday(list(self._bank_ids) + ["CLEARING", "CB"])
         run_omo_phase(self)               # v12.4 only; CB drains/injects reserves BEFORE payments (no-op off)
+        emit_phase_trace(self, ECONOMY_OPEN_FINANCIAL_SYSTEM)
         # v9.1: the public-capital productivity factor for this tick (from last tick's K_pub). γ=0 ⇒ 1.0.
         self._pubcap_factor = ((1.0 + self.public_capital / self.K_ref) ** self.cfg.public_capital_gamma
                                if self.cfg.public_capital_gamma > 0.0 else 1.0)
         self.technology.step(self)        # v19: advance Z(t) before planning/production (inert off)
         run_bill_maturity_phase(self)     # v12.1 only; one-period bills mature to deposits BEFORE planning (no-op off)
+        emit_phase_trace(self, ECONOMY_OPEN_REAL_ECONOMY)
         if self.demographic_kernel is not None:
             # The kernel window mutates people (deaths/marriages/guardianship moves), so the bridge
             # falls back to live scans inside it; afterwards the state is frozen for the rest of the
@@ -673,9 +701,11 @@ class Economy:
             self._run_demographic_household_transitions()
             self.demographic_bridge.administer_estates(self.t)   # probate: escheat parked estates, settle empty households
             self.demographic_bridge.refresh_people_index()
+        emit_phase_trace(self, ECONOMY_POPULATION_BOUNDARY)
         run_planning_phase(self)
         apply_gibrat_shock(self)          # v8.1 only; multiplicative market-share drift (no-op off)
         run_credit_phase(self)            # v3 only; no-op when banks disabled
+        emit_phase_trace(self, ECONOMY_PLAN_AND_FINANCE)
         run_labor_phase(self)             # hiring only (production split out, trunk refactor)
         # [ANCHOR: post-labor] -- v17 inserts the energy market phase here
         run_energy_phase(self)            # v17.0 only; firms buy energy before producing (no-op off)
@@ -684,6 +714,7 @@ class Economy:
         run_family_transfer_phase(self)   # v18.4 only; kin top-ups before goods (no-op off)
         run_goods_phase(self)
         run_capital_goods_phase(self)     # v2 only; no-op when capital disabled
+        emit_phase_trace(self, ECONOMY_PRODUCE_AND_TRADE_DOMESTIC)
 
     def _run_settlement_and_commit_phases(self) -> dict:
         """Close an already-cleared tick and commit its authoritative snapshot."""
@@ -701,6 +732,7 @@ class Economy:
             run_settlement_phase(self)
             run_debt_service_phase(self)  # v3 only; no-op when banks disabled
             run_housing_market_phase(self)  # v15.1 only; monthly resale sessions (no-op off)
+        emit_phase_trace(self, ECONOMY_SETTLE_DOMESTIC)
         run_firm_demographics_phase(self) # v4 only; C-firm bankruptcy + entry
         run_sector_switching_phase(self)  # v18.5 only; firms retool between N/L sectors (no-op off)
         run_equity_phase(self)            # v6 only; equity market (no-op when disabled)
@@ -713,7 +745,9 @@ class Economy:
         finalize_bank_pnl(self)           # net realized income/losses, then dividends + valuation
         run_bank_entry_phase(self)        # v11.5 only; de-novo bank entry when banking is profitable (no-op off)
         run_bill_issuance_phase(self)     # v12.1 only; Treasury re-issues bills from end-of-tick idle (no-op off)
+        emit_phase_trace(self, ECONOMY_CLOSE_INSTITUTIONS)
         rec = self._phase5_check_and_record()
+        emit_phase_trace(self, ECONOMY_VALIDATE_AND_MEASURE)
         if self.demographic_bridge is not None:
             # feed the macro->demography signal AFTER metrics: rec carries the multiplier the
             # kernel used this tick; an annual rollover here reaches the kernel next tick
@@ -734,6 +768,7 @@ class Economy:
                 labor=rec.get("employment", 0.0),
             )
         self._commit_cross_tick_state()
+        emit_phase_trace(self, ECONOMY_STAGE_LOCAL_COMMIT)
         self.t += 1
         return rec
 

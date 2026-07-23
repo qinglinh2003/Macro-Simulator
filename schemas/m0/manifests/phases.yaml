@@ -90,6 +90,16 @@ rows:
     snapshot_before: external_reserved
     snapshot_after: post_dealer
     owner_milestone: m9
+  - id: phase.world.validate-global
+    phase_code: W.ValidateGlobal
+    order: 85
+    scope: world
+    name: ValidateGlobal
+    source_path: macro_sim/world/world.py
+    source_symbol: World._dealer_update
+    snapshot_before: post_dealer
+    snapshot_after: globally_validated
+    owner_milestone: m9
   - id: phase.economy.settle-domestic
     phase_code: E6
     order: 90
@@ -97,7 +107,7 @@ rows:
     name: SettleDomestic
     source_path: macro_sim/economy.py
     source_symbol: Economy._run_settlement_and_commit_phases
-    snapshot_before: post_dealer
+    snapshot_before: globally_validated
     snapshot_after: domestic_settled
     owner_milestone: m4
   - id: phase.economy.close-institutions
@@ -120,16 +130,6 @@ rows:
     snapshot_before: institutions_closed
     snapshot_after: provisional_measured
     owner_milestone: m10
-  - id: phase.world.validate-global
-    phase_code: W.ValidateGlobal
-    order: 120
-    scope: world
-    name: ValidateGlobal
-    source_path: macro_sim/world/world.py
-    source_symbol: World._dealer_update
-    snapshot_before: provisional_measured
-    snapshot_after: globally_validated
-    owner_milestone: m9
   - id: phase.economy.stage-local-commit
     phase_code: E9
     order: 130
@@ -137,7 +137,7 @@ rows:
     name: StageLocalCommit
     source_path: macro_sim/economy.py
     source_symbol: Economy._commit_cross_tick_state
-    snapshot_before: globally_validated
+    snapshot_before: provisional_measured
     snapshot_after: local_staged
     owner_milestone: m4
   - id: phase.world.commit-boundary
