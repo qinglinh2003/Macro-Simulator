@@ -41,6 +41,18 @@ def load_policy_explanations(
         payload: Any = json.load(handle)
     if not isinstance(payload, dict):
         raise ValueError("policy explanation catalog must be an object")
+    style_resource = files("macro_sim").joinpath(
+        "data", "locales", locale, "policy_explanation_style.json"
+    )
+    with style_resource.open("r", encoding="utf-8") as handle:
+        style_payload: Any = json.load(handle)
+    if not isinstance(style_payload, dict):
+        raise ValueError("policy explanation style rules are malformed")
+    forbidden_terms = style_payload.get("forbidden_meaning_terms", [])
+    if not isinstance(forbidden_terms, list) or any(
+        not isinstance(term, str) or not term for term in forbidden_terms
+    ):
+        raise ValueError("policy explanation style rules are malformed")
 
     result: dict[str, PolicyExplanation] = {}
     for lever, raw in payload.items():
@@ -54,6 +66,10 @@ def load_policy_explanations(
                for name in EXPLANATION_FIELDS):
             raise ValueError(
                 f"policy explanation {lever!r} fields must be non-empty strings"
+            )
+        if any(term in raw["meaning"] for term in forbidden_terms):
+            raise ValueError(
+                f"policy explanation {lever!r} meaning violates locale style rules"
             )
         result[lever] = PolicyExplanation(
             meaning=raw["meaning"],
