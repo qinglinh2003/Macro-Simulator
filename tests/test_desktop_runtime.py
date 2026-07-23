@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from macro_sim.desktop import SimulationRuntime
+from macro_sim.desktop import NewGameSpec, SimulationRuntime
 from macro_sim.desktop.runtime import PANEL_METRIC_NAMES, WORLD_METRIC_NAMES
 from macro_sim.desktop.server import _Server
 
@@ -186,6 +186,7 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
     assert len({firm["firm_id"] for firm in items}) == len(items)
     assert {firm["sector"] for firm in items} == {
         "必需消费", "可选消费", "资本品", "能源",
+        "住房建设",
     }
 
     for firm in items:
@@ -403,6 +404,25 @@ def test_ndjson_transport_contains_request_failure(runtime: SimulationRuntime) -
             assert recovered["request_id"] == "good:1"
             assert recovered["ok"] is True
             assert recovered["snapshot"]["tick"] == 0
+
+            spec = NewGameSpec.default(seed=123).to_dict()
+            spec["countries"] = spec["countries"][:1]
+            spec["run_mode"] = "batch"
+            spec["seats"] = {seat: "null" for seat in spec["seats"]}
+            stream.write(
+                json.dumps({
+                    "request_id": "new:1",
+                    "command": "new_game",
+                    "spec": spec,
+                }).encode()
+                + b"\n"
+            )
+            stream.flush()
+            created = json.loads(stream.readline())
+            assert created["request_id"] == "new:1"
+            assert created["ok"] is True
+            assert created["snapshot"]["new_game"]["spec"]["seed"] == 123
+            assert len(created["snapshot"]["world"]["countries"]) == 1
             connection.shutdown(socket.SHUT_RDWR)
     finally:
         server.shutdown()
@@ -415,7 +435,7 @@ def test_get_schema_covers_all_seats(runtime: SimulationRuntime) -> None:
     # protocol v1 compatibility surface
     assert schema["seat"] == "treasury"
     assert isinstance(schema["levers"], list) and len(schema["levers"]) == 35
-    # protocol v2: every seat, 102 levers total
+    # protocol v2+ compatibility: every seat, 102 levers total
     seats = schema["seats"]
     counts = {seat: len(payload["levers"]) for seat, payload in seats.items()}
     assert counts == {

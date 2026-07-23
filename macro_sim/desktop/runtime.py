@@ -4,25 +4,33 @@ The adapter deliberately owns no policy logic.  It translates small JSON command
 into the existing controller and shock APIs so the desktop client cannot mutate the
 engine behind their validation, timing, or audit trails.
 
-v29.1: the interactive run is a 3-economy coupled world (trade + capital +
-migration, dealer-routed FX).  The player holds all five seats of economy 0;
-economies 1-2 run unmanned (no decision contexts, frozen genesis policy).
+Protocol v3 accepts a versioned :class:`NewGameSpec`: country count, profiles,
+world couplings, scenario, duration, scale and every policy-seat occupant are
+constructed by the engine rather than merely previewed in the client.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
 import math
+from pathlib import Path
 from typing import Any
 
 from macro_sim.config import Config
 from macro_sim.controllers import (
     ControlledSimulationSession,
     ControllerService,
+    HeuristicOccupant,
     HumanQueueOccupant,
+    NullOccupant,
+    RandomFuzzOccupant,
+    RLOccupant,
+    ScheduledOccupant,
 )
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.protocol import canonical_value
+from macro_sim.core.policy_registry import EconomySet, apply_action_batch
 from macro_sim.core.policy_registry import REGISTRY
+from macro_sim.desktop.new_game import NewGameSpec
 from macro_sim.shocks import ShockSpec, get_shock_engine
 from macro_sim.systems.banking import (
     bank_economic_capital,
@@ -32,18 +40,28 @@ from macro_sim.systems.banking import (
 )
 from macro_sim.systems.firm_balance_sheet import firm_balance_sheet
 from macro_sim.world import World
-from macro_sim.world.country import ADVANCED, DEVELOPING, PETROSTATE
-
-
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 SERIES_LIMIT = 160
-PLAYER_ECONOMY = 0
-
-COUNTRIES = (
-    {"name": "奥雷利亚", "latin": "AURELIA", "profile": ADVANCED},
-    {"name": "博尔维亚", "latin": "BORVIA", "profile": DEVELOPING},
-    {"name": "佩特罗尼亚", "latin": "PETRONIA", "profile": PETROSTATE},
+BUILTIN_RL_ARTIFACT = (
+    Path(__file__).resolve().parents[1]
+    / "rl" / "artifacts" / "fiscal_stabilization_v1.msrl"
 )
+BUILTIN_RL_ARTIFACT_SHA256 = (
+    "1cfc9b0f3b0d2f18ea9b54bbc4130ff447936cbb685aa14e01dd35ef28d107e6"
+)
+
+
+class _FiscalStabilizationPolicy:
+    """Route the single-group model across a complete Treasury seat safely."""
+
+    def __init__(self, policy: Any) -> None:
+        self.policy = policy
+
+    def __call__(self, context):
+        if context.decision_group != "fiscal_stance":
+            return ()
+        return self.policy(context)
+
 
 # Per-economy series kept for every economy (world comparison + scorecard).
 WORLD_METRIC_NAMES = (
@@ -77,7 +95,7 @@ WORLD_METRIC_NAMES = (
 
 # Rich economic and structural series kept for the player economy's 指标全景 panels.
 # Grouping/labels live in the client; the runtime just serializes the keys.
-# Every key verified present in the v124 desktop config's records.
+# Every key is verified present in the current playable preset's records.
 PANEL_METRIC_NAMES = (
     # real economy
     "real_output", "real_consumption", "aggregate_capital",
@@ -186,44 +204,62 @@ class SimulationRuntime:
         self.service: ControllerService
         self.reset(seed=seed)
 
-    def reset(self, *, seed: int | None = None) -> dict[str, Any]:
-        if seed is not None:
-            self._seed = _integer("seed", seed, minimum=0, maximum=2_147_483_647)
-        # The desktop world uses the daily demographic economy and the existing
-        # person-level labor market.  Without these flags a visually rich labor
-        # page would have to fabricate age/sex/sector records from household FTEs.
-        base = Config.v13(
-            n_households=80,
-            n_firms_c=12,
-            n_firms_k=4,
-            n_ticks=100_000,
-            seed=self._seed,
-            energy_enabled=True,
-            energy_household=True,
-            consumption_strata=True,
-            labor_matching="persistent",
-            labor_matching_friction=True,
-            labor_relationship_wages=True,
-            labor_job_ladder=True,
-            labor_person_efficiency=True,
-            labor_participation=True,
-        )
-        configs = [spec["profile"].apply(base) for spec in COUNTRIES]
-        self.world = World(
-            configs,
-            base_seed=self._seed,
-            trade=True,
-            capital=True,
-            migration=True,
-            capital_mobility=1.0,
-            capital_adjust=0.2,
-        )
-        self.session = ControlledSimulationSession(self.world, run_mode="interactive")
-        for seat in SEATS:
-            self.session.assign_seat(
-                PLAYER_ECONOMY, seat, HumanQueueOccupant(), actor="desktop_prototype"
+    def reset(
+        self, *, seed: int | None = None,
+        spec: Mapping[str, Any] | NewGameSpec | None = None,
+    ) -> dict[str, Any]:
+        if spec is None:
+            normalized = NewGameSpec.default(
+                seed=self._seed if seed is None else _integer(
+                    "seed", seed, minimum=0, maximum=2_147_483_647
+                )
             )
-        self.service = ControllerService(self.session)
+        elif isinstance(spec, NewGameSpec):
+            normalized = spec
+        else:
+            normalized = NewGameSpec.from_mapping(spec)
+        if seed is not None and spec is not None and normalized.seed != seed:
+            raise ValueError("new_game seed and spec.seed disagree")
+        countries = [
+            {"name": item.name, "latin": item.code, "profile": item.profile}
+            for item in normalized.countries
+        ]
+        configs = normalized.configs()
+        world_options = dict(normalized.world)
+        world = World(
+            configs,
+            base_seed=normalized.seed,
+            periods_per_year=365.0,
+            shocks=normalized.shock_tape(),
+            **world_options,
+        )
+        self._apply_initial_policy(world, normalized)
+        session = ControlledSimulationSession(
+            world, run_mode=normalized.run_mode
+        )
+        for index, seat in enumerate(SEATS):
+            occupant = self._occupant(
+                normalized.seats[seat], seat=seat, seed=normalized.seed + index + 1
+            )
+            session.assign_seat(
+                normalized.player_country, seat, occupant, actor="desktop_new_game"
+            )
+        service = ControllerService(session)
+        # Open the initial decision window (or execute the first fully automatic
+        # boundary) before publishing any of the new roots.  Auto-occupant and
+        # first-tick failures are therefore transactional too.
+        initial_result = session.advance()
+
+        # Commit only after the complete contract, configs, world and seat roster
+        # have constructed successfully.  A rejected start-menu draft therefore
+        # cannot leave the current run half-reset.
+        self._new_game_spec = normalized
+        self._seed = normalized.seed
+        self.player_economy = normalized.player_country
+        self._countries = countries
+        self.world = world
+        self.session = session
+        self.service = service
         self._proposal_sequence = 0
         self._shock_sequence = 0
         self._panel_history: list[dict[str, float | int]] = []
@@ -234,10 +270,66 @@ class SimulationRuntime:
         self._pending_verdict_pid: str | None = None
         self._stock_market_history: list[dict[str, Any]] = []
         self._record_stock_market_point(0)
-        # Open tick-zero decision windows immediately so the UI has something real
-        # to operate rather than inventing a separate frontend policy form.
-        self.session.advance()
+        if initial_result.status == "advanced":
+            self._record_result(initial_result.records)
         return self.snapshot()
+
+    @staticmethod
+    def _apply_initial_policy(world: World, spec: NewGameSpec) -> None:
+        grouped: dict[int, list[tuple[str, Any]]] = {}
+        for key, value in spec.initial_policy_overrides.items():
+            raw_economy, _seat, lever_name = key.split(".", 2)
+            if lever_name not in REGISTRY:
+                raise ValueError(f"unknown initial policy lever {lever_name!r}")
+            lever = REGISTRY[lever_name]
+            if isinstance(lever.validation, EconomySet) and isinstance(
+                value, (list, tuple)
+            ):
+                value = frozenset(value)
+            grouped.setdefault(int(raw_economy), []).append((lever_name, value))
+        for economy_id, actions in grouped.items():
+            apply_action_batch(
+                world.economies[economy_id],
+                actions,
+                actor="new_game",
+            )
+        if grouped and hasattr(world, "_commit_external_policies"):
+            # Genesis still observes the same joint peg/sanctions constraints as
+            # an in-run controller transaction.  The World is not published until
+            # this succeeds, so a bad graph cannot leak into the active game.
+            world._commit_external_policies()
+        for economy in world.economies:
+            economy.ledger.assert_conserved()
+            economy.ledger.assert_non_negative()
+
+    @staticmethod
+    def _occupant(kind: str, *, seat: str, seed: int):
+        if kind == "human":
+            return HumanQueueOccupant()
+        if kind == "null":
+            return NullOccupant()
+        if kind == "fuzz":
+            return RandomFuzzOccupant(seed=seed)
+        if kind == "scheduled":
+            return ScheduledOccupant({})
+        if kind == "rl":
+            if seat != "treasury":
+                raise ValueError(
+                    "the built-in fiscal_stabilization_v1 RL policy is Treasury-only"
+                )
+            from macro_sim.rl import load_artifact_bundle
+            artifact = load_artifact_bundle(
+                BUILTIN_RL_ARTIFACT, deterministic=True
+            )
+            if artifact.artifact_sha256 != BUILTIN_RL_ARTIFACT_SHA256:
+                raise RuntimeError("built-in RL artifact does not match its pinned hash")
+            return RLOccupant(policy=_FiscalStabilizationPolicy(artifact.policy))
+        rule = (
+            "inflation_targeting" if seat == "central_bank"
+            else "fiscal_stabilizer" if seat == "treasury"
+            else "hold"
+        )
+        return HeuristicOccupant(rule_name=rule)
 
     def handle(self, command: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(command, Mapping):
@@ -248,6 +340,9 @@ class SimulationRuntime:
         if name in {"hello", "snapshot"}:
             return self.snapshot()
         if name == "new_game":
+            raw_spec = command.get("spec")
+            if raw_spec is not None:
+                return self.reset(spec=raw_spec)
             seed = command.get("seed", self._seed)
             return self.reset(seed=seed)
         if name == "advance":
@@ -269,7 +364,9 @@ class SimulationRuntime:
 
     def schema(self) -> dict[str, Any]:
         seats = {
-            seat: dict(self.service.policy_schema(economy_id=PLAYER_ECONOMY, seat=seat))
+            seat: dict(self.service.policy_schema(
+                economy_id=self.player_economy, seat=seat
+            ))
             for seat in SEATS
         }
         return {
@@ -278,13 +375,15 @@ class SimulationRuntime:
             # protocol v1 clients read a flat treasury schema
             "levers": seats["treasury"]["levers"],
             "seat": "treasury",
-            "economy_id": PLAYER_ECONOMY,
+            "economy_id": self.player_economy,
             "schema_version": seats["treasury"]["schema_version"],
         }
 
     def advance(self, ticks: int) -> dict[str, Any]:
         advanced = 0
         while advanced < ticks:
+            if self._run_complete():
+                break
             result = self.session.advance()
             if result.status == "awaiting_human":
                 break
@@ -297,6 +396,8 @@ class SimulationRuntime:
     def resolve_context(
         self, context_id: str, actions: list[Mapping[str, Any]]
     ) -> dict[str, Any]:
+        if self._run_complete():
+            raise ValueError("simulation duration has ended")
         if context_id not in self.session.missing_context_ids:
             raise ValueError("context is not awaiting a desktop decision")
         context = self.session.coordinator.contexts[context_id]
@@ -328,6 +429,10 @@ class SimulationRuntime:
             self._record_result(result.records)
         return self.snapshot()
 
+    def _run_complete(self) -> bool:
+        horizon = self._new_game_spec.duration_ticks
+        return horizon is not None and self.session.boundary_tick >= horizon
+
     def trigger_shock(self) -> dict[str, Any]:
         self._shock_sequence += 1
         start_tick = self.session.boundary_tick + 1
@@ -358,7 +463,10 @@ class SimulationRuntime:
         tick = self.session.boundary_tick
         # Player-economy structural panel point.
         panel_point: dict[str, float | int] = {"tick": tick}
-        player_row = rows[PLAYER_ECONOMY] if len(rows) > PLAYER_ECONOMY else rows[0]
+        player_row = (
+            rows[self.player_economy]
+            if len(rows) > self.player_economy else rows[0]
+        )
         for name in PANEL_METRIC_NAMES:
             panel_point[name] = _finite_number(player_row.get(name))
         self._panel_history.append(panel_point)
@@ -402,7 +510,7 @@ class SimulationRuntime:
 
     def _stock_quotes(self) -> list[dict[str, Any]]:
         """Small quote surface used to build a chain-linked all-share index."""
-        econ = self.world.economies[PLAYER_ECONOMY]
+        econ = self.world.economies[self.player_economy]
         quotes: list[dict[str, Any]] = []
         for firm in getattr(econ, "c_firms", ()):
             shares = max(0.0, _finite_number(getattr(firm, "shares_outstanding", 0.0)))
@@ -491,14 +599,14 @@ class SimulationRuntime:
         corporate_turnover = _finite_number(
             (player_row or {}).get(
                 "equity_turnover", getattr(
-                    self.world.economies[PLAYER_ECONOMY], "_equity_turnover", 0.0
+                    self.world.economies[self.player_economy], "_equity_turnover", 0.0
                 )
             )
         )
         bank_turnover = _finite_number(
             (player_row or {}).get(
                 "bank_stock_turnover", getattr(
-                    self.world.economies[PLAYER_ECONOMY], "_bank_equity_turnover", 0.0
+                    self.world.economies[self.player_economy], "_bank_equity_turnover", 0.0
                 )
             )
         )
@@ -542,7 +650,7 @@ class SimulationRuntime:
         merged: dict[str, dict[str, Any]] = {}
         meta: dict[str, Any] = {}
         for seat in SEATS:
-            observation = self.session._observation(PLAYER_ECONOMY, seat, 0)
+            observation = self.session._observation(self.player_economy, seat, 0)
             payload = (
                 observation.to_dict()
                 if hasattr(observation, "to_dict")
@@ -589,7 +697,7 @@ class SimulationRuntime:
 
     def _panel_details(self) -> dict[str, Any]:
         """Read-only micro aggregates for visualizations that scalar records cannot express."""
-        econ = self.world.economies[PLAYER_ECONOMY]
+        econ = self.world.economies[self.player_economy]
         state = getattr(econ, "demographic_state", None)
         people = [
             person for person in getattr(state, "people", ())
@@ -664,7 +772,12 @@ class SimulationRuntime:
             firm_sector[str(firm.id)] = "资本品"
         for firm in getattr(econ, "e_firms", ()):
             firm_sector[str(firm.id)] = "能源"
-        sector_order = ("必需消费", "可选消费", "消费品", "资本品", "能源")
+        for firm in getattr(econ, "firms", ()):
+            if str(getattr(firm, "sells", "")) == "housing":
+                firm_sector[str(firm.id)] = "住房建设"
+        sector_order = (
+            "必需消费", "可选消费", "消费品", "资本品", "能源", "住房建设"
+        )
         sector_hours = {label: 0.0 for label in sector_order}
         if lm is not None:
             for job in list(active_primary.values()) + list(active_secondary.values()):
@@ -706,6 +819,10 @@ class SimulationRuntime:
             ("消费品", [f for f in getattr(econ, "c_firms", ()) if not getattr(f, "consumption_sector", "")]),
             ("资本品", list(getattr(econ, "k_firms", ()))),
             ("能源", list(getattr(econ, "e_firms", ()))),
+            ("住房建设", [
+                f for f in getattr(econ, "firms", ())
+                if str(getattr(f, "sells", "")) == "housing"
+            ]),
         ):
             if not firms:
                 continue
@@ -773,7 +890,7 @@ class SimulationRuntime:
 
     def _firm_snapshot(self) -> dict[str, Any]:
         """Current operating, financial, workforce and ownership books by firm."""
-        econ = self.world.economies[PLAYER_ECONOMY]
+        econ = self.world.economies[self.player_economy]
         state = getattr(econ, "demographic_state", None)
         people = [
             person for person in getattr(state, "people", ())
@@ -802,6 +919,9 @@ class SimulationRuntime:
             elif firm_id in k_ids:
                 sector = "资本品"
                 sector_code = "capital"
+            elif str(getattr(firm, "sells", "")) == "housing":
+                sector = "住房建设"
+                sector_code = "housing"
             elif consumption_sector == "necessity":
                 sector = "必需消费"
                 sector_code = "necessity"
@@ -1133,7 +1253,7 @@ class SimulationRuntime:
 
     def _stock_market_snapshot(self, firm_snapshot: Mapping[str, Any]) -> dict[str, Any]:
         """All-share market board built only from traded model securities."""
-        econ = self.world.economies[PLAYER_ECONOMY]
+        econ = self.world.economies[self.player_economy]
         listings: list[dict[str, Any]] = []
         for firm in firm_snapshot.get("items", []):
             equity = firm.get("equity", {})
@@ -1345,7 +1465,7 @@ class SimulationRuntime:
 
     def _household_snapshot(self) -> dict[str, Any]:
         """Current household and person balance sheets for the household explorer."""
-        econ = self.world.economies[PLAYER_ECONOMY]
+        econ = self.world.economies[self.player_economy]
         state = getattr(econ, "demographic_state", None)
         bridge = getattr(econ, "demographic_bridge", None)
         if state is None or bridge is None:
@@ -1648,7 +1768,7 @@ class SimulationRuntime:
         household_snapshot = self._household_snapshot()
         firm_snapshot = self._firm_snapshot()
         stock_market_snapshot = self._stock_market_snapshot(firm_snapshot)
-        player_economy = self.world.economies[PLAYER_ECONOMY]
+        player_economy = self.world.economies[self.player_economy]
         policy_values = {
             name: getattr(
                 player_economy.external_policy
@@ -1661,6 +1781,27 @@ class SimulationRuntime:
         }
         return {
             "protocol_version": PROTOCOL_VERSION,
+            "new_game": {
+                "schema_version": self._new_game_spec.schema_version,
+                "model_id": self._new_game_spec.model_id,
+                "contract_hash": self._new_game_spec.contract_hash,
+                "controller_assets": {
+                    "fiscal_stabilization_v1": {
+                        "sha256": BUILTIN_RL_ARTIFACT_SHA256,
+                        "seat": "treasury",
+                    },
+                },
+                "spec": self._new_game_spec.to_dict(),
+                "duration_ticks": self._new_game_spec.duration_ticks,
+                "run_complete": self._run_complete(),
+                "remaining_ticks": (
+                    None if self._new_game_spec.duration_ticks is None else max(
+                        0,
+                        self._new_game_spec.duration_ticks
+                        - self.session.boundary_tick,
+                    )
+                ),
+            },
             "observation": self._merged_observation(),
             "last_verdict": self._last_verdict,
             "tick": self.session.boundary_tick,
@@ -1676,16 +1817,16 @@ class SimulationRuntime:
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}
-                    for spec in COUNTRIES
+                    for spec in self._countries
                 ],
-                "player_economy": PLAYER_ECONOMY,
+                "player_economy": self.player_economy,
                 "latest": _jsonable(latest_world),
                 "history": _jsonable(self._world_history),
             },
             "contexts": contexts,
-            "pending": self.service.pending(economy_id=PLAYER_ECONOMY),
+            "pending": self.service.pending(economy_id=self.player_economy),
             "shock_bulletins": self.service.shock_bulletins(
-                economy_id=PLAYER_ECONOMY, seat="treasury"
+                economy_id=self.player_economy, seat="treasury"
             )["shock_bulletins"],
             "active_shocks": active_shocks,
             "events": list(self.session.events.events[-30:]),

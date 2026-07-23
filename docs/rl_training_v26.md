@@ -211,3 +211,30 @@ The complete pre-registered gate passed: every corrected lower bound was above
 zero and every paired win rate exceeded the threshold. This establishes the
 learning and deployment benchmark for this one real-engine task; it is not a
 claim of general macroeconomic optimality or external validity.
+
+## 8. Desktop built-in artifact refresh — 2026-07-23
+
+Shock and population releases upgraded the institutional observation contract
+from v1 to v2. The learning-gate artifact above correctly failed closed against
+that new schema, so it was not force-loaded or silently padded.
+
+The desktop branch trained a fresh `fiscal_stabilization_v1` policy on the
+current v2 contract:
+
+- 20 PPO updates, 7,840 decision samples and 116,800 simulated days;
+- artifact SHA-256
+  `1cfc9b0f3b0d2f18ea9b54bbc4130ff447936cbb685aa14e01dd35ef28d107e6`;
+- context contract
+  `9649f19990d977641c0c4a8d78edb408d548135ae75f66c2faf519f626daa0d6`;
+- action contract
+  `5cfb69b9d17fb365ceae9b4f7f44661920371385b6cf9024f22041dd0fd304cb`.
+
+It completed a 365-day, three-country GFC desktop run as the live Treasury
+`RLOccupant`. The portable file is pinned under
+`macro_sim/rl/artifacts/fiscal_stabilization_v1.msrl`; non-fiscal Treasury
+decision groups are routed to hold, and the model only acts on its trained
+`fiscal_stance` group.
+
+This refresh is a deployment-compatibility and playability gate. The full
+20-seed superiority test in §7 has not yet been repeated for the v2 artifact, so
+the older result must not be attributed to this new hash.

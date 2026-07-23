@@ -135,9 +135,11 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 
 ### 4.3 会话生命周期
 
-- 新开局:`new_game(seed, scenario)` → scenario 选择器(P1:场景库 = 冲击 tape 预设,GFC/油危机/疫情)
+- 新开局:`new_game(spec=NewGameSpec v1)` → 版本化清单一次性创建模型、国家、
+  Profile、World、场景、席位和初始政策
 - 存档/读档:后端有完整 checkpoint 系统(.msim,含 session/policy/pending/事件游标)——**协议需新增 save/load 命令**(见 §5 缺口)
-- 席位选择:开局时选(经济体 × 席位)组合,其余席位指派占用者(hold / 启发式 / 将来 RL artifact)——**协议需新增 assign_seat 命令**
+- 席位选择:开局时为玩家国五席分配 Human / Null / Heuristic / RL 接口 /
+  Scheduled / RandomFuzz；局中换手仍需新增 `assign_seat` 命令
 
 ---
 
@@ -150,7 +152,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 → {"command": "new_game", "seed": 7}                          ← 重置+快照
 → {"command": "advance", "ticks": 1..100}                     ← 推进;停在人类决策则提前返回,带 advanced_ticks
 → {"command": "resolve_context", "context_id", "actions": [{"lever","value"}]}
-→ {"command": "trigger_shock"}                                ← (原型硬编码生产率冲击)
+→ {"command": "trigger_shock"}                                ← (开发者即时冲击；开局场景使用 ShockTape)
 响应:{"ok": true, "request_id", ...snapshot} | {"ok": false, "error"}
 快照含:tick、指标短历史(160 点环形)、待决 contexts、事件流尾部
 ```
@@ -184,7 +186,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 2. 杠杆:仅数值输入框 → 全类型控件 + permitted/成本/冷却/向导
 3. 单席单国 → 席位选择 + 多经济体世界视图
 4. 无存档 / 场景 / 事件时间线 / 紧急横幅
-5. 冲击:硬编码按钮 → 场景库 + schedule_shock
+5. 冲击:开局场景库已接 ShockTape；任意局中冲击编辑器仍需 `schedule_shock`
 6. 视觉:未设计(本轮 claude.ai design 的主战场)
 
 ## 7. 工具链备注(给开发侧)
@@ -257,6 +259,28 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
   `_TAB=stocks` 验证股市终端；`_CRISIS=1` 展示居中的紧急会议遮罩)。
 
 **已知边界(v30 候选)**
-- 三国均为玩家可见,但只有 0 号经济体可操控;assign_seat/save/load/schedule_shock 协议未开。
+- 国家数和玩家国现为动态；只有所选玩家国的五席可配置 Controller。局中
+  `assign_seat`、`save/load` 和任意 `schedule_shock` 协议仍未开放。
 - 贸易为 per-economy 向量(dealer 路由无双边矩阵),关系图为枢纽辐射而非国对国连线(诚实呈现)。
 - 世界 tab 当前采用跨国快照;公报世界序列(exchange_rate/nfa/…)已在磁贴信道可用但未单独成板。
+
+## §9 v31.1 新游戏闭环（2026-07-23）
+
+本节覆盖上面的 v29/v30 历史边界：
+
+- 协议升级为 desktop v3；`new_game` 接收严格的 `NewGameSpec v1`，并在快照
+  回传规范化清单、模型 ID、合同 hash、终局状态和剩余自然日。
+- 产品模型 ID 为 `current_playable_v1`。`Config.v124` 仅是历史研究谱系；
+  实际开局从日频 `Config.v13` 出发，显式组合所有已完成玩法能力。
+- 国家数、名称/代码、Profile、玩家国和玩家国五席均为动态；所有硬编码
+  `PLAYER_ECONOMY` / 三国 snapshot 路径已移除。
+- 场景库、World 十项高级参数、1/5/10 年及无限时长、快速/标准规模和初始
+  Policy 都进入真实引擎；初始政策页直接读取 Registry 的 102 项 schema，
+  不再维护前端手写子集。非法组合在 Python 侧阻断，失败不会替换当前运行。
+- Human / Null / Heuristic / Scheduled / RandomFuzz 均可指派；Treasury 的 RL
+  选项加载按当前 Observation Schema v2 重训的
+  `fiscal_stabilization_v1.msrl`，其余四席不显示不兼容的 RL 选项。Scheduled
+  尚无脚本编辑器时明确标注空计划。
+- 新游戏成功后客户端清空旧提案、选择和公报缓存，并重新抓取所选玩家国的
+  Policy schema；失败则回到检查页显示引擎错误。
+- 尚未落地的存档读取、自定义场景文件选择和 artifact 选择不再以假入口出现。

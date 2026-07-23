@@ -1,16 +1,27 @@
 # 开始菜单与新游戏配置设计规格 v31
 
-**状态**：设计基线已冻结；Godot 表现层已开始按 `docs/design/start_menu_v31.dc.html` 落地，后端新游戏协议仍待扩展
+**状态**：设计基线已冻结；`NewGameSpec v1`、当前可玩模型组合和 Godot
+端到端启动链路已于 2026-07-23 落地
 **目标读者**：Claude.ai Design、后续 Godot 实现者、模拟引擎维护者  
 **设计基线**：沿用 v29/v30 的浅色宏观政策终端风格，目标画布 1440×900，最低 1280×800
 
 > 请基于本文设计一个可交互的桌面游戏开始菜单与“新建模拟”流程。它不是网页后台，也不是科研参数表，而是一款金融财经 / 宏观模拟经营游戏的原生桌面入口。HTML 只是视觉与交互原型，最终会在 Godot 中复现。
 
-## 0. 实施说明（2026-07-22）
+## 0. 实施说明（2026-07-23）
 
 - Claude Design 产出的原始交互稿已原样纳入 `docs/design/start_menu_v31.dc.html`，作为后续视觉回归基线。
 - Godot 实现位于 `desktop/godot/scripts/start_menu.gd`，覆盖首页、六步新游戏向导、右侧摘要、设置弹窗和启动进度；主指挥室仍由 `main.gd` 负责。
-- 当前桌面 worker 的 `new_game` 只接受 `seed`。Godot 会保存完整开局草稿并在检查页明确提示协议边界，启动时只提交 seed；在新协议落地前，不得把国家、场景、席位或初始政策显示为已经注入引擎。
+- 桌面 worker 的 `new_game` 现接收严格、版本化的 `NewGameSpec v1`。Godot
+  提交国家、Profile、结构覆盖、World 参数、场景、时长、性能规模、玩家国、
+  五个席位和初始 Policy；Python 校验成功后才原子替换当前运行。
+- 普通游戏不再把历史工厂名 `Config.v124` 当作产品版本展示。当前产品模型为
+  `current_playable_v1`：它以日频 `Config.v13` 为校准起点，显式打开后续已经
+  完成的住房、人口、劳动力、能源、消费分层、企业/银行完整账、国民账户、
+  货币传导和技术漂移等系统。
+- `CountryProfile` 的人口、TFP 和能源轴已经接入真实 Config；Entrepot 与
+  Petrostate 不再是纯占位文案。
+- 当前没有存档读取协议，因此首页已移除虚假的“最近自动存档 / 载入存档”入口；
+  待存档合同真正落地后再恢复。
 - 自动视觉回归可用 `MACRO_SIM_CAPTURE_START_STEP=1..6` 直达各步骤；原主界面截图使用 `MACRO_SIM_SKIP_START_MENU=1`。
 
 ## 1. 这次设计要解决什么
@@ -95,7 +106,7 @@ base_seed 为各经济体派生独立随机流
 
 ### 4.3 Claude 原型的默认开局状态
 
-为了让设计稿直接呈现一个真实的填充态，使用当前桌面原型的开局作为 mock：自由沙盒、3 国、seed 7、快速规模、贸易 / 资本 / 迁移开启、交互模式、开局暂停；奥雷利亚使用 Advanced，博尔维亚使用 Developing，佩特罗尼亚使用 Petrostate。玩家控制奥雷利亚五席，另外两国明确显示“政策冻结 / 无 Controller”，不能显示成 AI。Petrostate 卡显示一条“资源国特征尚未完整建模”的警告。
+为了让设计稿直接呈现一个真实的填充态，使用当前桌面原型的开局作为 mock：自由沙盒、3 国、seed 7、快速规模、贸易 / 资本 / 迁移开启、交互模式、开局暂停；奥雷利亚使用 Advanced，博尔维亚使用 Developing，佩特罗尼亚使用 Petrostate。玩家控制奥雷利亚五席，另外两国明确显示“政策冻结 / 无 Controller”，不能显示成 AI。Petrostate 的能源生产率轴已接入；资源禀赋、主权财富基金等尚未实现的维度不作虚构。
 
 ## 5. 各步骤的具体设计
 
@@ -180,7 +191,9 @@ base_seed 为各经济体派生独立随机流
 - 货币显示名、三字母代码和符号；
 - 一句国家简介，可选。
 
-当前引擎仍把货币写成 `CUR{i}`，桌面协议也硬编码三国。因此这里设计的是新游戏清单所需元数据；后续实现必须先扩展协议，不能只在 Godot 本地伪装名称。
+引擎内部账户仍以 `CUR{i}` 作为稳定标识；国家名称、代码、数量和玩家国已经
+进入 `NewGameSpec` 与桌面快照，不再硬编码为三国。货币显示名将来可以独立
+增加，但不能改变账本身份。
 
 #### CountryProfile
 
@@ -231,7 +244,9 @@ Profile 的规模目前只乘 `n_households`，不会同步乘企业数量，也
 | 预定脚本 | 研究模式 | `ScheduledOccupant`；从可审计提案计划运行 |
 | 随机探索 | 仅实验室 | `RandomFuzzOccupant`；明确标注不是真实主义 AI |
 
-重要：当前桌面原型只把 0 号经济体五席全部分配给人类，其他国家没有 Controller，等价于初始政策冻结；它还不能把“其他国家”诚实显示为 AI。设计可以表现最终目标，但 Godot 落地前必须补齐 `assign_seat` 和新游戏协议。
+当前新游戏会为所选玩家国的五席逐一分配 Human / Null / Heuristic / RL
+接口 / Scheduled / RandomFuzz；其他国家仍明确为无 Controller、政策冻结，
+不会伪装成 AI。局中席位换手不属于本轮入口，未来另加 `assign_seat` 协议。
 
 运行方式：
 
@@ -451,11 +466,9 @@ HTML 中可以使用本地 mock state，但交互与状态关系要完整；不�
 - 固定篮子 CPI 需要国民账户指标；在 `exogenous` 货币制度下它不会产生主动利率响应。财政使用国民账户 GDP 需要国民账户指标 + 政府；
 - 单国世界不应启用需要交易对手的贸易、迁移、资本跨境关系或 peg。
 
-### 12.1 实施前必须裁决的日历 / 校准问题
+### 12.1 已裁决的日历 / 校准合同
 
-当前桌面 runtime 使用 `Config.v124`，该预设仍含抽象周期尺度的利率与调整速度；界面和 Controller 日历却按 `365 tick = 1 年` 展示。同时 `World.periods_per_year` 未显式传值，保留默认 12。仓库里的 `Config.v13` 才是明确的“一 tick = 一日”校准预设。
-
-因此新游戏实现前必须冻结一个一致合同：
+当前可玩模型已经统一为：
 
 ```text
 界面日历
@@ -466,22 +479,28 @@ HTML 中可以使用本地 mock state，但交互与状态关系要完整；不�
 = 场景 duration 的解释
 ```
 
-推荐普通模式只提供“日历日（365 tick / 年）”，并迁移到经验收的日频基线；旧周期模型留在研究模式。在这个裁决完成前，Claude 设计稿可以显示“日历日制”，但 Godot / runtime 不应假装该选项已经真正接通。
+具体实现是 `Config.v13(..., n_ticks=duration)` 加
+`World(periods_per_year=365.0)`；Controller 日历和场景持续时间沿用自然日。
+历史 Config 工厂仅用于研究复现，不再进入普通新游戏选择器。
 
-## 13. 当前实现差距（供后续 Godot 复现排期）
+## 13. 当前实现边界
 
-本文是目标规格，当前代码尚不支持完整开局：
+已经闭合的链路：
 
-1. `new_game` 协议只接收 `seed`；国家数量、Config、Profile、World、Controller、ShockTape 都是硬编码；
-2. 国家名称与 Profile 固定为奥雷利亚 / Advanced、博尔维亚 / Developing、佩特罗尼亚 / Petrostate；
-3. 引擎 `World` 支持任意非空国家列表，但桌面 snapshot 和界面按三国假设，需要真正泛化；
-4. 只有玩家国五席 Human，其他国家没有 Controller；
-5. `assign_seat`、场景导入、存档读取、设置持久化尚未开放为桌面协议；
-6. Profile 目前只有三条真实轴，Entrepot / Petrostate 的名称语义还没有对应的贸易开放度和资源禀赋；
-7. 国家显示元数据和货币名还没有权威的运行清单对象；
-8. 需要新增 `NewGameSpec`（或等价版本化结构）、严格校验、canonical JSON 与配置 hash，Godot 只提交该结构，不自行拼装引擎对象。
+1. 1–8 国、Profile、逐国 Config 覆盖、玩家国和动态国家元数据；
+2. 贸易 / 资本 / 迁移与十项 World 参数；
+3. 沙盒、石油禁运、金融危机、大流行、自然灾害 ShockTape；
+4. Human、Null、Heuristic、Scheduled、RandomFuzz 均进入真实席位；Treasury
+   可加载内置 `fiscal_stabilization_v1` RL artifact；
+5. 初始 Policy 页与局内政策台都读取同一 Registry schema，102 个杠杆均可
+   编辑；开局原子应用并执行联合 peg / sanctions 校验；
+6. 1 / 5 / 10 年与无限时长、快速 / 标准规模、合同 hash 和确定性随机种子；
+7. 被拒绝的清单不会破坏当前运行，错误会回到检查页显示。
 
-后续复现顺序应为：先从 Claude HTML 固定视觉与交互状态，再定义版本化 `NewGameSpec` 和校验响应，最后将 Godot 表单绑定到协议。不得先在 Godot 写一套只改外观、不改变真实 World 的假菜单。
+尚未显示在产品 UI 的能力不伪装成可用入口：自定义 ShockTape 文件导入、训练
+artifact 选择器、带内容的 Scheduled 脚本编辑器、存档读取和设置持久化。底层
+接口仍保留；这些入口在各自端到端合同完成后再开放。当前内置 RL artifact
+只对训练过的 Treasury 席位开放，其他席位不会降级成伪 RL。
 
 ## 14. 验收标准
 

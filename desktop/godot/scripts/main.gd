@@ -599,6 +599,7 @@ const RANK_METRICS := [
 
 var _client
 var _outbox: Array = []
+var _active_command: Dictionary = {}
 var _snapshot: Dictionary = {}
 var _schemas: Dictionary = {}          # seat -> schema dict
 var _lever_info: Dictionary = {}       # lever -> lever dict (all seats merged)
@@ -651,6 +652,7 @@ var _crisis_was_visible := false
 var _scroll_mem: Dictionary = {}        # key -> scroll_vertical
 var _start_menu: Control
 var _new_game_draft: Dictionary = {}
+var _new_game_pending := false
 
 
 func _ready() -> void:
@@ -743,12 +745,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_start_menu_launch(config: Dictionary) -> void:
 	_playing = false
-	var draft: Dictionary = config.get("draft", {})
+	_outbox.clear()
+	var draft: Dictionary = config.get("spec", {})
 	_new_game_draft = draft.duplicate(true)
 	_mode = str(draft.get("run_mode", "interactive"))
-	if _mode not in ["interactive", "realtime"]:
+	if _mode not in ["interactive", "realtime", "batch"]:
 		_mode = "interactive"
-	_send({"command": "new_game", "seed": int(config.get("seed", 7))})
+	_new_game_pending = true
+	_send({"command": "new_game", "spec": draft})
 
 
 # ================= 通信 =================
@@ -760,7 +764,8 @@ func _send(command: Dictionary) -> void:
 func _pump() -> void:
 	if _client == null or _client.busy or _outbox.is_empty():
 		return
-	_client.send_command(_outbox.pop_front())
+	_active_command = _outbox.pop_front()
+	_client.send_command(_active_command)
 
 
 func _on_connected() -> void:
@@ -774,7 +779,16 @@ func _on_response(response: Dictionary) -> void:
 	if payload.has("seats") and payload.has("levers"):
 		_schemas = payload.get("seats", {})
 		_index_schema()
+		if _start_menu != null and _start_menu.has_method("set_policy_schemas"):
+			_start_menu.call("set_policy_schemas", _start_menu_policy_schemas())
 	else:
+		var manifest: Dictionary = payload.get("new_game", {})
+		if _new_game_pending \
+				and str(_active_command.get("command", "")) == "new_game" \
+				and manifest.get("spec", {}) == _new_game_draft:
+			_new_game_pending = false
+			_reset_client_for_new_game(payload)
+			_outbox.append({"command": "get_schema"})
 		_snapshot = payload
 		_ingest_releases()
 		_cache_permitted()
@@ -812,12 +826,52 @@ func _on_response(response: Dictionary) -> void:
 			var path := _capture_path
 			_capture_path = ""
 			_capture(path)
+	_active_command.clear()
 	_pump()
 
 
+func _reset_client_for_new_game(payload: Dictionary) -> void:
+	_edits.clear()
+	_cart.clear()
+	_perm_cache.clear()
+	_release_hist.clear()
+	_last_release_at.clear()
+	_scroll_mem.clear()
+	_active_seat = "treasury"
+	_active_group = ""
+	_expanded_lever = ""
+	_search = ""
+	_policy_scope = "meeting"
+	_tab = "focus"
+	_goto_panel_group = ""
+	_household_selected = -1
+	_person_selected = -1
+	_household_search = ""
+	_firm_selected = ""
+	_firm_search = ""
+	_stock_selected = ""
+	_stock_search = ""
+	_score_country = int(
+		(payload.get("world", {}) as Dictionary).get("player_economy", 0)
+	)
+	_last_toasted = ""
+	_confirm.clear()
+	_demo_crisis = false
+	_crisis_dismissed = ""
+	_last_tab = ""
+	_last_seat = ""
+	_last_page = ""
+
+
 func _on_request_failed(message: String) -> void:
+	var failed_new_game := str(_active_command.get("command", "")) == "new_game"
+	if _new_game_pending and failed_new_game:
+		_new_game_pending = false
+		if _start_menu != null and _start_menu.has_method("restore_after_launch_error"):
+			_start_menu.call("restore_after_launch_error", message)
 	_show_verdict({"status": "rejected", "reason_code": message,
 		"decision_id": "err:%d" % Time.get_ticks_msec()})
+	_active_command.clear()
 	_pump()
 	if not _capture_path.is_empty() and _outbox.is_empty() and not _client.busy:
 		var path := _capture_path
@@ -855,6 +909,26 @@ func _index_schema() -> void:
 			var name := str(lever.get("name"))
 			_lever_info[name] = lever
 			_lever_group[name] = str(lever.get("decision_group", ""))
+
+
+func _start_menu_policy_schemas() -> Dictionary:
+	var result: Dictionary = _schemas.duplicate(true)
+	for seat: String in result.keys():
+		for lever: Dictionary in result[seat].get("levers", []):
+			var name := str(lever.get("name", ""))
+			var group := str(lever.get("decision_group", "other"))
+			lever["display_name"] = _cn(name)
+			lever["display_group"] = str(GROUP_CN.get(group, group))
+			if PERCENT_LEVERS.has(name):
+				lever["display_format"] = "percent"
+			elif MULTIPLIER_LEVERS.has(name):
+				lever["display_format"] = "multiplier"
+			elif DAY_LEVERS.has(name):
+				lever["display_format"] = "days"
+			var choice_labels: Dictionary = CHOICE_CN.get(name, {})
+			if not choice_labels.is_empty():
+				lever["display_choices"] = choice_labels
+	return result
 
 
 func _seat_pages(seat: String) -> Array:

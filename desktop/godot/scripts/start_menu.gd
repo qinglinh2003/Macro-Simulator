@@ -1,8 +1,7 @@
 extends Control
 ## Start Menu v31 — Godot reproduction of docs/design/start_menu_v31.dc.html.
-## This layer owns presentation and draft configuration only.  The desktop
-## worker currently accepts only `seed` in new_game; unsupported draft fields
-## remain visible in the review instead of being silently treated as applied.
+## Every visible simulation option is serialized into NewGameSpec v1 and
+## validated by the Python engine before the current run is replaced.
 
 signal launch_requested(config: Dictionary)
 signal continue_requested
@@ -47,15 +46,14 @@ const SCENARIOS := [
 	{"id": "gfc", "name": "全球金融危机", "desc": "信贷供给、需求与生产率受冲击", "caps": "银行体系", "duration": "365 天", "reduced": true},
 	{"id": "pandemic", "name": "大流行", "desc": "劳动、生产率、需求、信贷及可选贸易受冲击", "caps": "银行体系", "duration": "365 天", "reduced": true},
 	{"id": "disaster", "name": "自然灾害", "desc": "一次性资本损失，加暂时生产率与劳动冲击", "caps": "无需额外能力", "duration": "30 天", "reduced": true},
-	{"id": "import", "name": "导入场景", "desc": "读取经校验的 ShockTape JSON", "caps": "由文件声明", "duration": "自定义", "reduced": false},
 ]
 
 const PROFILES := {
 	"symmetric": {"name": "对称基线", "desc": "对称基线，无自动覆盖偏离", "scale": 1.0, "prod": 1.0, "nec": 0.50},
-	"advanced": {"name": "发达", "desc": "高生产率经济体 (a ×1.20)", "scale": 1.0, "prod": 1.2, "nec": 0.50},
-	"developing": {"name": "发展中", "desc": "账户 ×1.5、生产率 ×0.75", "scale": 1.5, "prod": 0.75, "nec": 0.65},
-	"entrepot": {"name": "转口港", "desc": "小型高生产率；开放度未建模", "scale": 0.4, "prod": 1.15, "nec": 0.50, "experimental": true},
-	"petrostate": {"name": "资源国", "desc": "暂无石油出口禀赋覆盖", "scale": 0.8, "prod": 0.85, "nec": 0.50, "experimental": true},
+	"advanced": {"name": "发达", "desc": "高生产率、低生育、低死亡率", "scale": 1.0, "prod": 1.2, "nec": 0.50},
+	"developing": {"name": "发展中", "desc": "大型年轻人口、追赶增长、必需品偏高", "scale": 1.5, "prod": 0.75, "nec": 0.65},
+	"entrepot": {"name": "转口港", "desc": "小型高效、低生育、能源效率偏低", "scale": 0.4, "prod": 1.15, "nec": 0.50},
+	"petrostate": {"name": "资源国", "desc": "能源生产率高、总体生产率偏低", "scale": 0.8, "prod": 0.85, "nec": 0.50},
 	"custom": {"name": "自定义", "desc": "从当前最终值创建并继续覆盖", "scale": 1.0, "prod": 1.0, "nec": 0.50},
 }
 
@@ -73,15 +71,20 @@ const SEATS := [
 
 const OCCUPANTS := [
 	["human", "人类玩家"], ["null", "固定不动作 (Null)"],
-	["heuristic", "启发式 fiscal-v3"], ["rl", "RL 模型 (需 artifact)"],
-	["scheduled", "预定脚本"], ["fuzz", "随机探索 (实验室)"],
+	["heuristic", "启发式稳定器"], ["rl", "RL · 财政稳定 v1（已训练）"],
+	["scheduled", "预定脚本（空计划）"], ["fuzz", "随机探索"],
 ]
+
+const SEAT_SCHEMA_KEYS := {
+	"cb": "central_bank", "treasury": "treasury", "regulator": "regulator",
+	"external": "external_affairs", "energy": "energy",
+}
 
 const STRUCT_GROUPS := [
 	{"name": "规模", "fields": [["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["银行数", "n_banks", "step"]]},
 	{"name": "生产", "fields": [["基础生产率", "a", "step"], ["资本份额", "alpha", "step"], ["TFP 法则", "tfp_law", "select"]]},
 	{"name": "金融结构", "fields": [["银行系统", "bank_enabled", "toggle"], ["银行间市场", "interbank", "toggle"], ["政府债券", "bonds", "toggle"], ["资本市场", "capital_market", "toggle"], ["逐企业股票", "per_firm_equity", "toggle"], ["家庭信贷", "household_credit", "toggle"]]},
-	{"name": "住房", "fields": [["住房市场", "housing_market_enabled", "toggle"], ["按揭", "mortgage_enabled", "toggle"], ["租赁", "housing_rental_enabled", "toggle"], ["住房建造", "housing_construction_enabled", "toggle"]]},
+	{"name": "住房", "fields": [["住房登记", "housing_enabled", "toggle"], ["住房市场", "housing_market_enabled", "toggle"], ["按揭", "mortgage_enabled", "toggle"], ["租赁", "housing_rental_enabled", "toggle"], ["住房建造", "housing_construction_enabled", "toggle"]]},
 	{"name": "人口与产业", "fields": [["人口系统", "demographics_enabled", "toggle"], ["必需/奢侈分层", "consumption_strata", "toggle"], ["必需品占比", "necessity_share0", "step"], ["能源部门", "energy_enabled", "toggle"], ["政府", "government", "toggle"], ["国民账户指标", "national_accounts_metrics", "toggle"]]},
 ]
 
@@ -92,7 +95,7 @@ const POLICY_PREVIEW := {
 		{"group": "债务管理", "id": "debt_management", "levers": [["债券融资占比", "bond_finance_frac", "percent", 0.60, 0.05], ["债券期限", "bond_maturity", "integer", 20, 1.0]]},
 	],
 	"cb": [
-		{"group": "货币立场", "id": "monetary_stance", "levers": [["货币制度", "monetary_regime", "regime", "taylor", 0], ["手动政策利率", "manual_policy_rate", "percent", 0.035, 0.0025], ["通胀目标", "inflation_target", "percent", 0.02, 0.0025], ["泰勒 φπ", "taylor_phi_pi", "number", 1.5, 0.1]]},
+		{"group": "货币立场", "id": "monetary_stance", "levers": [["货币制度", "monetary_regime", "regime", "taylor", 0], ["手动政策利率", "manual_policy_rate", "annual_rate", 0.000134, 0.000027], ["通胀目标", "inflation_target", "annual_rate", 0.000054, 0.000027], ["泰勒 φπ", "taylor_phi_pi", "number", 1.5, 0.1]]},
 		{"group": "流动性操作", "id": "liquidity_operations", "levers": [["公开市场操作", "omo", "bool", true, 1.0], ["准备金下限", "reserve_floor_frac", "percent", 0.10, 0.005]]},
 		{"group": "外汇操作", "id": "fx_operations", "levers": [["汇率制度", "fx_regime", "fx", "float", 0], ["锚定经济体", "peg_anchor", "anchor", "", 0], ["资本管制", "capital_control", "percent", 0.0, 0.05]]},
 	],
@@ -113,10 +116,8 @@ var _mono: SystemFont
 var _surface: Control
 var _screen := "home"
 var _step := 1
-var _research := false
 var _settings_open := false
 var _scenario := "sandbox"
-var _scenario_caps_applied: Dictionary = {}
 var _seed := 7
 var _duration := "5y"
 var _perf_scale := "fast"
@@ -140,8 +141,10 @@ var _policy_seat := "treasury"
 var _policy_filter := "all"
 var _policy_search := ""
 var _policy_values: Dictionary = {}
+var _policy_schemas: Dictionary = {}
 var _settings_values: Dictionary = {}
 var _launch_progress := 0
+var _launch_error := ""
 var _launch_timer: Timer
 
 
@@ -177,6 +180,14 @@ func _reset_defaults() -> void:
 	]
 	for seat: Dictionary in SEATS:
 		_seat_occupants[str(seat["id"])] = "human"
+
+
+func set_policy_schemas(value: Dictionary) -> void:
+	## The engine Registry is authoritative.  POLICY_PREVIEW is only the
+	## disconnected-start fallback while the desktop process is connecting.
+	_policy_schemas = value.duplicate(true)
+	if is_inside_tree() and visible:
+		_render()
 
 
 func _country_record(index: int, profile: String = "symmetric") -> Dictionary:
@@ -270,40 +281,16 @@ func _build_home(parent: Control) -> void:
 	var menu := VBoxContainer.new()
 	menu.add_theme_constant_override("separation", 14)
 	menu_wrap.add_child(menu)
-	menu.add_child(_continue_card())
 	var choices := VBoxContainer.new()
 	choices.add_theme_constant_override("separation", 9)
 	choices.add_child(_home_choice("＋", "新建模拟", "六步配置世界、国家与席位", func() -> void:
 		_screen = "wizard"; _step = 1; _render(), true))
-	choices.add_child(_home_choice("⤓", "载入存档", "3 个存档 · 最近 今天 14:22", func() -> void:
-		_screen = "wizard"; _step = 1; _render()))
 	choices.add_child(_home_choice("⚙", "设置", "显示、语言、游戏流、存档", func() -> void:
 		_settings_open = true; _render()))
 	choices.add_child(_home_choice("⏻", "退出", "关闭指挥室", func() -> void:
 		get_tree().quit()))
 	menu.add_child(choices)
 	menu_wrap.add_child(_v_spacer())
-
-
-func _continue_card() -> Control:
-	var panel := _panel(PAPER, LINE, 14, 18)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 11)
-	panel.add_child(col)
-	var kicker := HBoxContainer.new()
-	kicker.add_theme_constant_override("separation", 8)
-	kicker.add_child(_dot(GREEN, 7))
-	kicker.add_child(_label("最近自动存档", 10, Color("68788b"), false, true))
-	col.add_child(kicker)
-	col.add_child(_label("奥雷利亚 · 自由沙盒", 17, INK, true))
-	var detail := _label("模拟日期 第 3 年 · 第 2 季 · 第 35 天\n3 国 · seed 7 · 交互模式 · 存档于 今天 14:22\nschema v31 · 兼容", 12, INK2, false, true)
-	detail.add_theme_constant_override("line_spacing", 4)
-	col.add_child(detail)
-	var cont := _button("继续游戏 →", func() -> void:
-		continue_requested.emit(); hide(), true, 15)
-	cont.custom_minimum_size = Vector2(0, 43)
-	col.add_child(cont)
-	return panel
 
 
 func _home_choice(icon: String, title: String, subtitle: String,
@@ -384,16 +371,7 @@ func _wizard_header() -> Control:
 	row.add_child(_label("新建模拟", 15, INK, true))
 	row.add_child(_label("NEW SIMULATION", 11, INK3, false, true))
 	row.add_child(_h_spacer())
-	var modes := PanelContainer.new(); modes.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 9, 2))
-	var mh := HBoxContainer.new(); mh.add_theme_constant_override("separation", 2); modes.add_child(mh)
-	for spec: Array in [[false, "普通"], [true, "研究"]]:
-		var chosen: bool = spec[0]
-		var b := _button(str(spec[1]), func() -> void:
-			_research = chosen; _render(), false, 12, _research != chosen)
-		if _research == chosen:
-			b.add_theme_stylebox_override("normal", _sb(PAPER, PAPER, 7, 5))
-		mh.add_child(b)
-	row.add_child(modes)
+	row.add_child(_chip("CURRENT PLAYABLE v1", GREEN, GREEN_BG, GREEN_BD))
 	row.add_child(_button("⚙", func() -> void:
 		_settings_open = true; _render(), false, 15))
 	return panel
@@ -438,7 +416,7 @@ func _page_heading(parent: VBoxContainer, title: String, subtitle: String) -> vo
 
 func _step_scenario(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 720
-	_page_heading(parent, "场景与基础模型", "选择外生冲击场景与校准模型。历史场景均为约化模型，选择后需确认其建议启用的能力。")
+	_page_heading(parent, "场景与基础模型", "选择外生冲击场景。所有场景都运行在同一套完整可玩模型上。")
 	parent.add_child(_kicker("SCENARIO · 场景"))
 	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 8); parent.add_child(list)
 	for raw: Dictionary in SCENARIOS:
@@ -457,25 +435,10 @@ func _step_scenario(parent: VBoxContainer) -> void:
 		words.add_child(title_row); words.add_child(_label(str(item["desc"]), 11, Color("68788b"))); row.add_child(words)
 		var meta := VBoxContainer.new(); meta.add_child(_label(str(item["caps"]), 11, INK2, false, true)); meta.add_child(_label(str(item["duration"]), 10, MUTED, false, true)); row.add_child(meta)
 		list.add_child(b)
-	if _scenario not in ["sandbox", "import"] and not bool(_scenario_caps_applied.get(_scenario, false)):
-		var requirement := _panel(AMBER_BG, AMBER_BD, 11, 12)
-		var requirement_col := VBoxContainer.new()
-		requirement_col.add_theme_constant_override("separation", 8)
-		requirement.add_child(requirement_col)
-		requirement_col.add_child(_label("⚠  「%s」建议启用对应模型能力" % _scenario_name(), 12, Color("7a5111"), true))
-		var capability_note := "能源部门 + World 贸易层" if _scenario == "oil" else "银行体系"
-		requirement_col.add_child(_label(capability_note + " · 场景不会静默修改国家结构", 11, Color("7a5111")))
-		requirement_col.add_child(_button("应用建议能力", func() -> void:
-			_scenario_caps_applied[_scenario] = true
-			_render(), true, 12))
-		var requirement_margin := MarginContainer.new()
-		requirement_margin.add_theme_constant_override("margin_top", 12)
-		requirement_margin.add_child(requirement)
-		parent.add_child(requirement_margin)
 	var sp := MarginContainer.new(); sp.add_theme_constant_override("margin_top", 20); sp.add_child(_kicker("BASE MODEL · 基础模型")); parent.add_child(sp)
 	var models := HBoxContainer.new(); models.add_theme_constant_override("separation", 9); parent.add_child(models)
-	models.add_child(_model_card("稳定 v124", "当前完整模型与推荐校准", true))
-	models.add_child(_model_card("研究分支", "允许实验性 Profile 与 Occupant", _research))
+	models.add_child(_model_card("当前可玩模型", "v14–v31 已完成系统的生产组合", true))
+	models.add_child(_model_card("历史校准谱系", "Config.v124 仅供研究复现", false))
 
 
 func _model_card(title: String, subtitle: String, active: bool) -> Control:
@@ -536,7 +499,7 @@ func _duration_card() -> Control:
 	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v); v.add_child(_label("运行时长", 12, INK2))
 	var flow := HFlowContainer.new(); flow.add_theme_constant_override("h_separation", 6); flow.add_theme_constant_override("v_separation", 6)
-	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["inf", "无限"], ["custom", "自定义"]]:
+	for d: Array in [["1y", "1 年"], ["5y", "5 年"], ["10y", "10 年"], ["inf", "无限"]]:
 		var id := str(d[0]); flow.add_child(_select_chip(str(d[1]), _duration == id, func() -> void: _duration = id; _render()))
 	v.add_child(flow); v.add_child(_label("自然日历 · 5 年共 1,825 天" if _duration == "5y" else "自然日历 · 每年 365 天", 10, INK3, false, true)); return p
 
@@ -545,7 +508,7 @@ func _performance_card() -> Control:
 	var p := _panel(PAPER, LINE, 12, 14); p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 9); p.add_child(v); v.add_child(_label("性能规模", 12, INK2))
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6)
-	for s: Array in [["fast", "快速"], ["standard", "标准"], ["custom", "自定义"]]:
+	for s: Array in [["fast", "快速"], ["standard", "标准"]]:
 		var id := str(s[0]); var chip := _select_chip(str(s[1]), _perf_scale == id, func() -> void: _perf_scale = id; _render()); chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(chip)
 	v.add_child(row); v.add_child(_label("80 户 · 12+4+2 企业 · 2 银行（当前原型）" if _perf_scale == "fast" else "200 户 · 30+10+4 企业 · 4 银行", 10, INK3, false, true)); return p
 
@@ -593,7 +556,7 @@ func _step_countries(parent: VBoxContainer) -> void:
 	editor.add_child(_kicker("COUNTRY PROFILE · 创世覆盖（非政策）"))
 	var profiles := GridContainer.new(); profiles.columns = 3; profiles.add_theme_constant_override("h_separation", 8); profiles.add_theme_constant_override("v_separation", 8); editor.add_child(profiles)
 	for pid in PROFILES.keys(): profiles.add_child(_profile_card(str(pid)))
-	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("最终家庭数  %d" % _households(c), 11, INK2)); statrow.add_child(_label("初始人口  %d（派生）" % roundi(_households(c) * 2.3), 11, INK2)); statrow.add_child(_label("企业数  18", 11, INK2)); editor.add_child(stats)
+	var stats := _panel(PANEL, LINE2, 9, 9); var statrow := HBoxContainer.new(); statrow.add_theme_constant_override("separation", 16); stats.add_child(statrow); statrow.add_child(_label("最终家庭数  %d" % _households(c), 11, INK2)); statrow.add_child(_label("初始人口  %d（派生）" % roundi(_households(c) * 2.3), 11, INK2)); statrow.add_child(_label("生产企业  %d" % _firm_count(c), 11, INK2)); editor.add_child(stats)
 	editor.add_child(_kicker("结构能力"))
 	for group: Dictionary in STRUCT_GROUPS:
 		var gh := HBoxContainer.new(); gh.add_child(_label(str(group["name"]), 12, Color("3a4956"), true)); gh.add_child(_h_rule()); editor.add_child(gh)
@@ -617,7 +580,7 @@ func _country_card(index: int) -> Control:
 func _profile_card(pid: String) -> Control:
 	var c: Dictionary = _countries[_selected_country]; var p: Dictionary = PROFILES[pid]; var active := str(c["profile"]) == pid
 	var b := Button.new(); b.custom_minimum_size = Vector2(176, 74); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; b.add_theme_stylebox_override("normal", _sb(TEAL_BG if active else PAPER, TEAL_BD if active else LINE, 10, 9)); b.pressed.connect(func() -> void: c["profile"] = pid; c["overrides"] = {}; _render())
-	var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(_label(str(p["name"]) + (" · 实验性" if bool(p.get("experimental", false)) else ""), 13, INK, true)); var d := _label(str(p["desc"]), 10, Color("68788b")); d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d.max_lines_visible = 2; d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; v.add_child(d); _fill_inset(v, 10); b.add_child(v); return b
+	var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(_label(str(p["name"]), 13, INK, true)); var d := _label(str(p["desc"]), 10, Color("68788b")); d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d.max_lines_visible = 2; d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; v.add_child(d); _fill_inset(v, 10); b.add_child(v); return b
 
 
 func _structure_field(country: Dictionary, field: Array) -> Control:
@@ -626,27 +589,174 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 9); p.add_child(row)
 	var text := VBoxContainer.new(); text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; text.add_child(_label(str(field[0]), 12, INK)); text.add_child(_label(key, 9, MUTED, false, true)); row.add_child(text)
 	if kind == "toggle":
-		var value := bool(overrides.get(key, true)); row.add_child(_switch_button(value, func() -> void: overrides[key] = not value; _render()))
+		var value := bool(overrides.get(key, true)); row.add_child(_switch_button(value, func() -> void:
+			_set_structure_toggle(overrides, key, not value)
+			_render()))
 	elif kind == "select":
-		var option := OptionButton.new(); option.add_item("漂移"); option.add_item("学习"); option.add_item("无"); option.add_theme_font_size_override("font_size", 11); row.add_child(option)
+		var option := OptionButton.new()
+		for choice: Array in [["exogenous", "外生漂移"], ["learning", "内生学习"]]:
+			option.add_item(str(choice[1]))
+			option.set_item_metadata(option.item_count - 1, choice[0])
+			if str(overrides.get(key, "exogenous")) == str(choice[0]):
+				option.select(option.item_count - 1)
+		option.item_selected.connect(func(index: int) -> void:
+			overrides[key] = str(option.get_item_metadata(index))
+			_render())
+		option.add_theme_font_size_override("font_size", 11)
+		row.add_child(option)
 	else:
-		var value := float(overrides.get(key, 1.0 if key == "a" else 12.0)); row.add_child(_mini_stepper(_format_small(value), func() -> void: overrides[key] = maxf(0.0, value - 1.0); _render(), func() -> void: overrides[key] = value + 1.0; _render()))
+		var value := float(overrides.get(key, _structure_default(
+			key, str(country["profile"]))))
+		var step := 1.0 if key.begins_with("n_") else 0.05
+		row.add_child(_mini_stepper(_format_small(value),
+			func() -> void:
+				var floor := 2.0 if key == "n_firms_c" \
+					else (1.0 if key.begins_with("n_") \
+					else (0.05 if key in ["a", "alpha", "necessity_share0"] else 0.0))
+				var next := maxf(floor, value - step)
+				overrides[key] = roundi(next) if key.begins_with("n_") else next
+				_render(),
+			func() -> void:
+				var next := value + step
+				if key in ["alpha", "necessity_share0"]:
+					next = minf(0.95, next)
+				overrides[key] = roundi(next) if key.begins_with("n_") else next
+				_render()))
 	return p
+
+
+func _structure_default(key: String, profile: String = "symmetric") -> float:
+	var counts := {
+		"n_firms_c": 12.0 if _perf_scale == "fast" else 30.0,
+		"n_firms_k": 4.0 if _perf_scale == "fast" else 10.0,
+		"n_firms_e": 2.0 if _perf_scale == "fast" else 4.0,
+		"n_banks": 2.0 if _perf_scale == "fast" else 4.0,
+	}
+	if counts.has(key):
+		return float(counts[key])
+	if key == "a":
+		return float(PROFILES.get(profile, PROFILES["symmetric"])["prod"])
+	if key == "alpha":
+		return 0.3
+	if key == "necessity_share0":
+		return float(PROFILES.get(profile, PROFILES["symmetric"])["nec"])
+	return 1.0
+
+
+func _firm_count(country: Dictionary) -> int:
+	var overrides: Dictionary = country["overrides"]
+	var total := int(overrides.get("n_firms_c", _structure_default("n_firms_c")))
+	total += int(overrides.get("n_firms_k", _structure_default("n_firms_k")))
+	if bool(overrides.get("energy_enabled", true)):
+		total += int(overrides.get("n_firms_e", _structure_default("n_firms_e")))
+	if bool(overrides.get("housing_construction_enabled", true)):
+		total += 5
+	return total
+
+
+func _set_structure_toggle(overrides: Dictionary, key: String, enabled: bool) -> void:
+	overrides[key] = enabled
+	var dependants := {
+		"bank_enabled": ["interbank", "bonds", "per_firm_equity",
+			"household_credit", "government"],
+		"government": ["bonds", "housing_construction_enabled"],
+		"capital_market": ["per_firm_equity"],
+		"housing_enabled": ["housing_market_enabled", "mortgage_enabled",
+			"housing_rental_enabled", "housing_construction_enabled"],
+		"housing_market_enabled": ["mortgage_enabled",
+			"housing_rental_enabled", "housing_construction_enabled"],
+	}
+	var requirements := {
+		"interbank": ["bank_enabled"],
+		"bonds": ["bank_enabled", "government"],
+		"per_firm_equity": ["capital_market", "bank_enabled"],
+		"household_credit": ["bank_enabled"],
+		"government": ["bank_enabled"],
+		"housing_market_enabled": ["housing_enabled"],
+		"mortgage_enabled": ["housing_market_enabled", "housing_enabled",
+			"bank_enabled"],
+		"housing_rental_enabled": ["housing_market_enabled", "housing_enabled"],
+		"housing_construction_enabled": ["housing_market_enabled",
+			"housing_enabled", "government", "bank_enabled"],
+	}
+	if not enabled:
+		for dependant: Variant in dependants.get(key, []):
+			_set_structure_toggle(overrides, str(dependant), false)
+	else:
+		for requirement: Variant in requirements.get(key, []):
+			_set_structure_toggle(overrides, str(requirement), true)
 
 
 func _add_country() -> void:
 	if _countries.size() >= 8: return
-	_countries.append(_country_record(_countries.size())); _render()
+	var used: Dictionary = {}
+	for country: Dictionary in _countries:
+		used[str(country["code"])] = true
+	for index in COUNTRY_CODES.size():
+		if not used.has(COUNTRY_CODES[index]):
+			_countries.append(_country_record(index))
+			break
+	_render()
 
 
 func _remove_country() -> void:
 	if _countries.size() <= 1: return
-	_countries.pop_back(); _selected_country = mini(_selected_country, _countries.size() - 1); _player_country = mini(_player_country, _countries.size() - 1); _render()
+	_remove_country_at(_countries.size() - 1)
 
 
 func _delete_selected_country() -> void:
 	if _countries.size() <= 1: return
-	_countries.remove_at(_selected_country); _selected_country = 0; _player_country = mini(_player_country, _countries.size() - 1); _render()
+	_remove_country_at(_selected_country)
+
+
+func _remove_country_at(removed: int) -> void:
+	var broken_pegs: Dictionary = {}
+	for raw_key: Variant in _policy_values.keys():
+		var key := str(raw_key)
+		var parts := key.split(".", true, 2)
+		if parts.size() == 3 and str(parts[2]) == "peg_anchor" \
+				and _policy_values[key] is int \
+				and int(_policy_values[key]) == removed:
+			broken_pegs[int(parts[0])] = true
+	var remapped: Dictionary = {}
+	for raw_key: Variant in _policy_values.keys():
+		var key := str(raw_key)
+		var parts := key.split(".", true, 2)
+		if parts.size() != 3:
+			continue
+		var economy_id := int(parts[0])
+		if economy_id == removed:
+			continue
+		var lever := str(parts[2])
+		var value: Variant = _policy_values[key]
+		if lever == "peg_anchor":
+			if value is int and int(value) == removed:
+				continue
+			if value is int and int(value) > removed:
+				value = int(value) - 1
+		elif lever == "sanctions_imposed_on" and value is Array:
+			var targets: Array = []
+			for raw_target: Variant in value:
+				var target := int(raw_target)
+				if target != removed:
+					targets.append(target - 1 if target > removed else target)
+			value = targets
+		if broken_pegs.has(economy_id) and lever == "fx_regime":
+			value = "float"
+		var new_economy := economy_id - 1 if economy_id > removed else economy_id
+		remapped["%d.%s.%s" % [new_economy, str(parts[1]), lever]] = value
+	_policy_values = remapped
+	_countries.remove_at(removed)
+	if _player_country == removed:
+		_player_country = 0
+	elif _player_country > removed:
+		_player_country -= 1
+	if _policy_country == removed:
+		_policy_country = 0
+	elif _policy_country > removed:
+		_policy_country -= 1
+	_selected_country = mini(removed, _countries.size() - 1)
+	_render()
 
 
 func _apply_profile_all() -> void:
@@ -669,7 +779,7 @@ func _step_government(parent: VBoxContainer) -> void:
 	var sm := MarginContainer.new(); sm.add_theme_constant_override("margin_top", 18); sm.add_theme_constant_override("margin_bottom", 8); sm.add_child(_kicker("%s · 五个政策席位" % str(_countries[_player_country]["name"]))); parent.add_child(sm)
 	var seatlist := VBoxContainer.new(); seatlist.add_theme_constant_override("separation", 8); parent.add_child(seatlist)
 	for seat: Dictionary in SEATS: seatlist.add_child(_seat_row(seat))
-	var note := _label("你持有 %d / 5 个人类席位；其余为自动 Occupant。RL / 预定 / 随机需研究模式。" % _human_seat_count(), 11, INK3); var nm := MarginContainer.new(); nm.add_theme_constant_override("margin_top", 6); nm.add_child(note); parent.add_child(nm)
+	var note := _label("你持有 %d / 5 个人类席位；其余由所选 Controller 自动执行。" % _human_seat_count(), 11, INK3); var nm := MarginContainer.new(); nm.add_theme_constant_override("margin_top", 6); nm.add_child(note); parent.add_child(nm)
 	if _countries.size() > 1:
 		var om := MarginContainer.new(); om.add_theme_constant_override("margin_top", 18); om.add_theme_constant_override("margin_bottom", 8); om.add_child(_kicker("其他国家")); parent.add_child(om)
 		var others := GridContainer.new(); others.columns = 2; others.add_theme_constant_override("h_separation", 9); others.add_theme_constant_override("v_separation", 9); parent.add_child(others)
@@ -678,8 +788,8 @@ func _step_government(parent: VBoxContainer) -> void:
 				others.add_child(_frozen_country(_countries[i]))
 	var rm := MarginContainer.new(); rm.add_theme_constant_override("margin_top", 18); rm.add_theme_constant_override("margin_bottom", 8); rm.add_child(_kicker("运行方式")); parent.add_child(rm)
 	var modes := HBoxContainer.new(); modes.add_theme_constant_override("separation", 9); parent.add_child(modes)
-	for mode: Array in [["interactive", "交互", "人类会议无限等待（默认）"], ["realtime", "实时", "墙钟倒计时，超时不动作"], ["batch", "批量", "需全部自动 Occupant"], ["replay", "回放", "由存档 / 事件带决定"]]:
-		var id := str(mode[0]); var locked := id == "replay" or (id == "batch" and _human_seat_count() > 0); var p := _mode_card(str(mode[1]), str(mode[2]), _run_mode == id, locked, func() -> void: _run_mode = id; _render()); modes.add_child(p)
+	for mode: Array in [["interactive", "交互", "人类会议无限等待（默认）"], ["realtime", "实时", "墙钟倒计时，超时不动作"], ["batch", "批量", "需全部自动 Occupant"]]:
+		var id := str(mode[0]); var locked := id == "batch" and _human_seat_count() > 0; var p := _mode_card(str(mode[1]), str(mode[2]), _run_mode == id, locked, func() -> void: _run_mode = id; _render()); modes.add_child(p)
 	var cal := _button(("▼" if _calendar_open else "▶") + "  制度决策日历    普通模式为自然语言摘要", func() -> void: _calendar_open = not _calendar_open; _render(), false, 12, true); var cm := MarginContainer.new(); cm.add_theme_constant_override("margin_top", 12); cm.add_child(cal); parent.add_child(cm)
 	if _calendar_open:
 		var cp := _panel(PANEL, LINE2, 11, 11); var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 7); cp.add_child(cv)
@@ -696,10 +806,16 @@ func _step_government(parent: VBoxContainer) -> void:
 func _seat_row(seat: Dictionary) -> Control:
 	var p := _panel(PAPER, LINE, 11, 10); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); row.add_child(_dot(seat["color"], 9)); var name := _label(str(seat["name"]), 14, INK, true); name.custom_minimum_size.x = 96; row.add_child(name); var groups := _label(str(seat["groups"]), 10, MUTED, false, true); groups.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(groups)
 	var option := OptionButton.new(); option.custom_minimum_size.x = 190; option.add_theme_font_size_override("font_size", 12)
+	var sid := str(seat["id"])
 	for occ: Array in OCCUPANTS:
-		if not _research and str(occ[0]) in ["rl", "scheduled", "fuzz"]: continue
+		if str(occ[0]) == "rl" and sid != "treasury":
+			continue
 		option.add_item(str(occ[1])); option.set_item_metadata(option.item_count - 1, occ[0]); if str(_seat_occupants.get(str(seat["id"]), "human")) == str(occ[0]): option.select(option.item_count - 1)
-	var sid := str(seat["id"]); option.item_selected.connect(func(index: int) -> void: _seat_occupants[sid] = str(option.get_item_metadata(index)); _render()); row.add_child(option); return p
+	option.item_selected.connect(func(index: int) -> void:
+		_seat_occupants[sid] = str(option.get_item_metadata(index))
+		if _run_mode == "batch" and str(_seat_occupants[sid]) == "human":
+			_run_mode = "interactive"
+		_render()); row.add_child(option); return p
 
 
 func _frozen_country(country: Dictionary) -> Control:
@@ -720,7 +836,7 @@ func _human_seat_count() -> int:
 
 func _step_policy(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 800
-	_page_heading(parent, "初始政策", "按 国家 → 席位 → 决策组 组织，全部继承模型预设；最终实现将由 Policy Registry schema 生成。仅改动项进入差异摘要。")
+	_page_heading(parent, "初始政策", "按 国家 → 席位 → 决策组组织；当前全部旋钮由 Policy Registry 实时生成。仅改动项进入差异摘要。")
 	var selectors := HBoxContainer.new(); selectors.add_theme_constant_override("separation", 8); parent.add_child(selectors)
 	var country_opt := OptionButton.new()
 	for i in _countries.size():
@@ -742,7 +858,7 @@ func _step_policy(parent: VBoxContainer) -> void:
 		var id := str(fil[0])
 		filters.add_child(_select_chip(str(fil[1]), _policy_filter == id, func() -> void: _policy_filter = id; _render()))
 	var found := 0
-	for raw: Dictionary in POLICY_PREVIEW.get(_policy_seat, []):
+	for raw: Dictionary in _policy_groups_for_seat(_policy_seat):
 		var group := raw; var visible_levers: Array = []
 		for lev: Array in group["levers"]:
 			var key := _policy_key(str(lev[1])); var changed := _policy_values.has(key)
@@ -760,39 +876,199 @@ func _step_policy(parent: VBoxContainer) -> void:
 		var empty := _label("无匹配杠杆——调整搜索或筛选。", 13, MUTED); empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; var em := MarginContainer.new(); em.add_theme_constant_override("margin_top", 40); em.add_child(empty); parent.add_child(em)
 
 
+func _policy_groups_for_seat(seat: String) -> Array:
+	var schema_key := str(SEAT_SCHEMA_KEYS.get(seat, seat))
+	var raw_levers: Array = _policy_schemas.get(schema_key, {}).get("levers", [])
+	if raw_levers.is_empty():
+		return POLICY_PREVIEW.get(seat, [])
+	var preview: Dictionary = {}
+	for fallback_group: Dictionary in POLICY_PREVIEW.get(seat, []):
+		for fallback_lever: Array in fallback_group["levers"]:
+			preview[str(fallback_lever[1])] = fallback_lever
+	var groups: Array = []
+	var group_indexes: Dictionary = {}
+	for raw: Dictionary in raw_levers:
+		var id := str(raw.get("name", ""))
+		var fallback: Array = preview.get(id, [])
+		var label := str(raw.get("display_name", fallback[0] if not fallback.is_empty() else id))
+		var group_id := str(raw.get("decision_group", "other"))
+		if not group_indexes.has(group_id):
+			group_indexes[group_id] = groups.size()
+			groups.append({"group": str(raw.get("display_group", group_id)),
+				"id": group_id, "levers": []})
+		var kind := _schema_policy_kind(raw, fallback)
+		var current: Variant = raw.get("current_value")
+		if current == null and not fallback.is_empty() and not bool(raw.get("nullable", false)):
+			current = fallback[3]
+		var step: Variant = raw.get("control_scale")
+		if step == null:
+			step = raw.get("max_step")
+		if step == null and not fallback.is_empty():
+			step = fallback[4]
+		if step == null:
+			step = 1.0
+		var row: Array = [label, id, kind, current, float(step), raw]
+		(groups[int(group_indexes[group_id])]["levers"] as Array).append(row)
+	return groups
+
+
+func _schema_policy_kind(raw: Dictionary, fallback: Array) -> String:
+	var id := str(raw.get("name", ""))
+	if id == "monetary_regime":
+		return "regime"
+	if id == "fx_regime":
+		return "fx"
+	if id == "energy_rationing":
+		return "ration"
+	if id == "peg_anchor":
+		return "anchor"
+	if bool(raw.get("nullable", false)) and str(raw.get("value_kind", "")) == "number":
+		return "nullable_number"
+	if not fallback.is_empty() and str(fallback[2]) in ["annual_rate", "percent"]:
+		return str(fallback[2])
+	return str(raw.get("value_kind", "number"))
+
+
 func _policy_row(lever: Array) -> Control:
-	var name := str(lever[0]); var id := str(lever[1]); var kind := str(lever[2]); var base: Variant = lever[3]; var step := float(lever[4]); var key := _policy_key(id); var changed := _policy_values.has(key); var value: Variant = _policy_values.get(key, base)
+	var name := str(lever[0]); var id := str(lever[1]); var kind := str(lever[2]); var base: Variant = lever[3]; var step := float(lever[4]); var meta: Dictionary = lever[5] if lever.size() > 5 else {}; var key := _policy_key(id); var changed := _policy_values.has(key); var value: Variant = _policy_values.get(key, base)
 	var p := _panel(BLUE_BG if changed else PAPER, BLUE_BD if changed else LINE, 10, 9); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row)
 	var words := VBoxContainer.new(); words.size_flags_horizontal = Control.SIZE_EXPAND_FILL; var nh := HBoxContainer.new(); nh.add_child(_label(name, 13, INK)); nh.add_child(_chip("本国覆盖" if changed else "继承预设", BLUE if changed else INK2, BLUE_BG if changed else Color("eef2f7"), Color(0, 0, 0, 0))); words.add_child(nh); words.add_child(_label(id, 9, MUTED, false, true)); row.add_child(words)
-	if kind == "bool": row.add_child(_switch_button(bool(value), func() -> void: _policy_values[key] = not bool(value); _render()))
+	if kind == "bool":
+		row.add_child(_switch_button(bool(value), func() -> void:
+			_set_policy_bool(id, key, not bool(value), meta)))
 	elif kind in ["regime", "fx", "ration"]:
 		var opts: Array = [["exogenous", "外生"], ["taylor", "泰勒"], ["manual", "手动"]] if kind == "regime" else ([["float", "浮动"], ["peg", "盯住"]] if kind == "fx" else [["market", "市场"], ["household_first", "居民优先"], ["industry_first", "产业优先"]])
 		var seg := HBoxContainer.new(); seg.add_theme_constant_override("separation", 2)
 		for opt: Array in opts:
 			var ov := str(opt[0])
-			seg.add_child(_select_chip(str(opt[1]), str(value) == ov, func() -> void: _policy_values[key] = ov; _render()))
-		row.add_child(seg)
+			if id == "fx_regime" and ov == "peg" and _countries.size() <= 1:
+				continue
+			seg.add_child(_select_chip(str(opt[1]), str(value) == ov, func() -> void:
+				_policy_values[key] = ov
+				if id == "monetary_regime":
+					if ov == "manual":
+						_policy_values[_policy_key("manual_policy_rate")] = 0.000134
+					else:
+						_policy_values.erase(_policy_key("manual_policy_rate"))
+				elif id == "fx_regime":
+					if ov == "float":
+						_policy_values.erase(_policy_key("peg_anchor"))
+					elif not _policy_values.has(_policy_key("peg_anchor")):
+						for i in _countries.size():
+							if i != _policy_country:
+								_policy_values[_policy_key("peg_anchor")] = i
+								break
+				_render()))
+			row.add_child(seg)
+	elif kind == "choice":
+		var generic_options := OptionButton.new()
+		for raw_choice: Variant in meta.get("choices", []):
+			var choice := str(raw_choice)
+			generic_options.add_item(str(meta.get("display_choices", {}).get(choice, choice)))
+			generic_options.set_item_metadata(generic_options.item_count - 1, choice)
+			if str(value) == choice:
+				generic_options.select(generic_options.item_count - 1)
+		generic_options.item_selected.connect(func(index: int) -> void:
+			_policy_values[key] = generic_options.get_item_metadata(index)
+			_render())
+		row.add_child(generic_options)
 	elif kind == "anchor":
-		var op := OptionButton.new(); op.add_item("— 选锚（浮动国）—")
-		op.set_item_metadata(0, "")
+		var op := OptionButton.new()
+		var current_anchor: Variant = _policy_values.get(key, null)
 		for i in _countries.size():
 			if i != _policy_country:
 				op.add_item(str(_countries[i]["name"]))
 				op.set_item_metadata(op.item_count - 1, i)
+				if current_anchor == i:
+					op.select(op.item_count - 1)
 		op.item_selected.connect(func(index: int) -> void:
 			_policy_values[key] = op.get_item_metadata(index)
 			_render())
 		row.add_child(op)
+	elif kind == "economy_set":
+		var targets: Array = value.duplicate() if value is Array else []
+		var target_flow := HFlowContainer.new()
+		target_flow.add_theme_constant_override("h_separation", 5)
+		target_flow.add_theme_constant_override("v_separation", 5)
+		for i in _countries.size():
+			if i == _policy_country:
+				continue
+			var economy_id := i
+			target_flow.add_child(_select_chip(str(_countries[i]["code"]),
+				targets.has(economy_id), func() -> void:
+					var next_targets: Array = targets.duplicate()
+					if next_targets.has(economy_id):
+						next_targets.erase(economy_id)
+					else:
+						next_targets.append(economy_id)
+						next_targets.sort()
+					_policy_values[key] = next_targets
+					_render()))
+		row.add_child(target_flow)
+	elif kind == "nullable_number":
+		var nullable_controls := HBoxContainer.new()
+		nullable_controls.add_theme_constant_override("separation", 5)
+		if id != "manual_policy_rate":
+			nullable_controls.add_child(_select_chip("不限", value == null, func() -> void:
+				_policy_values[key] = null
+				_render()))
+		if value == null:
+			nullable_controls.add_child(_button("设定", func() -> void:
+				var candidate := float(meta.get("minimum", 0.0)) + step
+				_policy_values[key] = minf(candidate, float(meta.get("maximum", candidate)))
+				_render(), false, 11))
+		else:
+			nullable_controls.add_child(_mini_stepper(_policy_format("number", value, meta),
+				func() -> void:
+					_policy_values[key] = maxf(float(meta.get("minimum", -INF)), float(value) - step)
+					_render(),
+				func() -> void:
+					_policy_values[key] = minf(float(meta.get("maximum", INF)), float(value) + step)
+					_render()))
+		row.add_child(nullable_controls)
 	else:
-		row.add_child(_mini_stepper(_policy_format(kind, value), func() -> void: _policy_values[key] = maxf(0.0, float(value) - step); _render(), func() -> void: _policy_values[key] = float(value) + step; _render()))
+		row.add_child(_mini_stepper(_policy_format(kind, value, meta),
+			func() -> void:
+				var next := maxf(float(meta.get("minimum", -INF)), float(value) - step)
+				_policy_values[key] = roundi(next) if kind == "integer" else next
+				_render(),
+			func() -> void:
+				var next := minf(float(meta.get("maximum", INF)), float(value) + step)
+				_policy_values[key] = roundi(next) if kind == "integer" else next
+				_render()))
 	return p
+
+
+func _set_policy_bool(id: String, key: String, next: bool, meta: Dictionary) -> void:
+	if next:
+		for raw_parent: Variant in meta.get("enabled_if", []):
+			_policy_values[_policy_key(str(raw_parent))] = true
+	else:
+		var schema_key := str(SEAT_SCHEMA_KEYS.get(_policy_seat, _policy_seat))
+		for raw: Dictionary in _policy_schemas.get(schema_key, {}).get("levers", []):
+			if id in raw.get("enabled_if", []):
+				_policy_values.erase(_policy_key(str(raw.get("name", ""))))
+	_policy_values[key] = next
+	_render()
 
 
 func _policy_key(lever: String) -> String: return "%d.%s.%s" % [_policy_country, _policy_seat, lever]
 func _policy_value(lever: String, fallback: Variant) -> Variant: return _policy_values.get(_policy_key(lever), fallback)
-func _policy_format(kind: String, value: Variant) -> String:
+func _policy_format(kind: String, value: Variant, meta: Dictionary = {}) -> String:
+	if value == null:
+		return "未设置"
+	var display_format := str(meta.get("display_format", ""))
+	if display_format == "percent":
+		var pct := float(value) * 100.0
+		return ("%.4f%%" if absf(pct) < 0.1 and absf(pct) > 0.0 else "%.2f%%") % pct
+	if display_format == "multiplier": return "%.2f×" % float(value)
+	if display_format == "days": return "%d 天" % roundi(float(value))
+	if kind == "annual_rate":
+		return "%.2f%% 年化" % ((pow(1.0 + float(value), 365.0) - 1.0) * 100.0)
 	if kind == "percent": return "%.1f%%" % (float(value) * 100.0)
 	if kind == "integer": return "%d" % roundi(float(value))
+	if absf(float(meta.get("control_scale", 1.0))) < 0.001:
+		return "%.5f" % float(value)
 	return "%.3f" % float(value)
 
 
@@ -800,8 +1076,15 @@ func _step_review(parent: VBoxContainer) -> void:
 	parent.custom_minimum_size.x = 900
 	_page_heading(parent, "建国与运行清单", "最终值按解析顺序解释来源。请复核后启动。")
 	var banners := HBoxContainer.new(); banners.add_theme_constant_override("separation", 9); parent.add_child(banners)
-	banners.add_child(_validation_card("✓", "0 错误", "阻断启动", GREEN, GREEN_BG, GREEN_BD)); banners.add_child(_validation_card("⚠", "1 警告", "允许启动", AMBER, AMBER_BG, AMBER_BD)); banners.add_child(_validation_card("ℹ", "1 信息", "仅提示", BLUE, BLUE_BG, BLUE_BD))
-	var wm := MarginContainer.new(); wm.add_theme_constant_override("margin_top", 12); wm.add_theme_constant_override("margin_bottom", 12); var warning := _panel(AMBER_BG, AMBER_BD, 9, 9); var wr := HBoxContainer.new(); wr.add_theme_constant_override("separation", 9); warning.add_child(wr); wr.add_child(_label("⚠", 13, AMBER)); var wt := _label("当前桌面 new_game 协议只消费 seed；国家、场景、席位和初始政策已进入清单，但暂不伪装为已注入引擎。", 12, Color("7a5111")); wt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; wt.size_flags_horizontal = Control.SIZE_EXPAND_FILL; wr.add_child(wt); wr.add_child(_label("PROTOCOL", 9, MUTED, false, true)); wm.add_child(warning); parent.add_child(wm)
+	banners.add_child(_validation_card("✓", "协议完整", "引擎严格校验", GREEN, GREEN_BG, GREEN_BD))
+	banners.add_child(_validation_card("✓", "配置已绑定", "不是界面预览", GREEN, GREEN_BG, GREEN_BD))
+	banners.add_child(_validation_card("ℹ", "可复现", "清单带版本与种子", BLUE, BLUE_BG, BLUE_BD))
+	if not _launch_error.is_empty():
+		var error_box := _panel(RED_BG, RED_BD, 9, 10)
+		var error_text := _label("引擎拒绝了这份配置：%s" % _launch_error, 12, RED)
+		error_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		error_box.add_child(error_text)
+		parent.add_child(error_box)
 	var manifest := GridContainer.new(); manifest.columns = 2; manifest.add_theme_constant_override("h_separation", 12); manifest.add_theme_constant_override("v_separation", 12); parent.add_child(manifest)
 	var scenario := _scenario_name()
 	var country_rows: Array = []
@@ -810,9 +1093,9 @@ func _step_review(parent: VBoxContainer) -> void:
 	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["日历", "每年 365 天"], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
-	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "等待新游戏协议"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))
-	manifest.add_child(_manifest_card("SCENARIO · 场景", RED, [["场景", scenario], ["校准", "约化 / 原型" if _scenario != "sandbox" else "—"], ["ShockTape", "等待新游戏协议"]]))
-	manifest.add_child(_manifest_card("REPRODUCIBILITY · 可复现", Color("3f6db2"), [["模型版本", "Config.v124"], ["schema", "v31"], ["base_seed", "%d → +i×1e6" % _seed], ["协议", "desktop v2 · seed only"]]))
+	manifest.add_child(_manifest_card("POLICY · 初始政策", AMBER, [["相对预设", "%d 项改动" % _policy_values.size()], ["注入状态", "启动时原子应用"], ["货币制度", str(_policy_value("monetary_regime", "taylor"))], ["汇率制度", str(_policy_value("fx_regime", "float"))]]))
+	manifest.add_child(_manifest_card("SCENARIO · 场景", RED, [["场景", scenario], ["校准", "约化 / 原型" if _scenario != "sandbox" else "—"], ["ShockTape", "已绑定"]]))
+	manifest.add_child(_manifest_card("REPRODUCIBILITY · 可复现", Color("3f6db2"), [["模型版本", "current_playable_v1"], ["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["协议", "desktop v3"]]))
 
 
 func _validation_card(icon: String, title: String, sub: String, fg: Color, bg: Color, border: Color) -> Control:
@@ -844,8 +1127,8 @@ func _manifest_card(title: String, accent: Color, rows: Array) -> Control:
 
 func _summary_panel() -> Control:
 	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(322, 0); p.add_theme_stylebox_override("panel", _sb(PANEL, LINE2, 0, 14)); var col := VBoxContainer.new(); col.add_theme_constant_override("separation", 12); p.add_child(col)
-	var head := HBoxContainer.new(); head.add_child(_kicker("本局摘要")); head.add_child(_h_spacer()); head.add_child(_dot(AMBER, 6)); head.add_child(_label("协议待接", 10, AMBER)); col.add_child(head)
-	col.add_child(_summary_section("场景", [["场景", _scenario_name()], ["模型", "稳定 v124"]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
+	var head := HBoxContainer.new(); head.add_child(_kicker("本局摘要")); head.add_child(_h_spacer()); head.add_child(_dot(GREEN, 6)); head.add_child(_label("协议已接入", 10, GREEN)); col.add_child(head)
+	col.add_child(_summary_section("场景", [["场景", _scenario_name()], ["模型", "当前可玩模型"]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["时长", _duration_label()], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	var cr: Array = []
 	for c: Dictionary in _countries.slice(0, 4):
 		cr.append([str(c["code"]), str(PROFILES[str(c["profile"])]["name"])])
@@ -853,7 +1136,7 @@ func _summary_panel() -> Control:
 	col.add_child(_summary_section("政府", [["玩家国", str(_countries[_player_country]["name"])], ["人类席位", "%d/5" % _human_seat_count()], ["模式", _run_mode]]))
 	col.add_child(_summary_section("政策", [["改动", "%d 项" % _policy_values.size()]]))
 	col.add_child(_v_spacer())
-	var protocol := _label("当前 worker 仅接收 seed\n其余配置等待 new_game v31", 10, AMBER, false, true); protocol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; col.add_child(protocol); return p
+	var protocol := _label("国家、Profile、世界、场景、席位与初始政策\n全部写入 NewGameSpec v1", 10, GREEN, false, true); protocol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; col.add_child(protocol); return p
 
 
 func _summary_section(title: String, rows: Array) -> Control:
@@ -903,14 +1186,23 @@ func _go_back() -> void:
 
 
 func _begin_launch() -> void:
-	_screen = "launching"; _launch_progress = 0; _launch_timer.start(); _render()
+	_screen = "launching"; _launch_progress = 0; _launch_error = ""; _launch_timer.start(); _render()
+
+
+func restore_after_launch_error(message: String) -> void:
+	_launch_timer.stop()
+	_launch_error = message
+	_screen = "wizard"
+	_step = 6
+	show()
+	_render()
 
 
 func _advance_launch() -> void:
 	_launch_progress += 1
 	if _launch_progress >= 4:
 		_launch_timer.stop()
-		launch_requested.emit({"seed": _seed, "draft": _draft_manifest()})
+		launch_requested.emit({"spec": _draft_manifest()})
 		hide()
 	else: _render()
 
@@ -922,9 +1214,17 @@ func _build_launch(parent: Control) -> void:
 
 
 func _draft_manifest() -> Dictionary:
-	return {"scenario": _scenario, "duration": _duration, "performance_scale": _perf_scale,
-		"world": {"trade": _trade, "capital": _capital, "migration": _migration},
-		"countries": _countries.duplicate(true), "player_country": _player_country,
+	var world := {"trade": _trade, "capital": _capital, "migration": _migration}
+	world.merge(_cross_values, true)
+	var countries: Array = []
+	for country: Dictionary in _countries:
+		countries.append({"name": str(country["name"]), "code": str(country["code"]),
+			"profile": str(country["profile"]),
+			"overrides": (country["overrides"] as Dictionary).duplicate(true)})
+	return {"schema_version": 1, "model_id": "current_playable_v1", "seed": _seed,
+		"scenario": _scenario, "duration": _duration, "performance_scale": _perf_scale,
+		"world": world,
+		"countries": countries, "player_country": _player_country,
 		"run_mode": _run_mode, "seats": _seat_occupants.duplicate(true),
 		"initial_policy_overrides": _policy_values.duplicate(true)}
 
@@ -968,7 +1268,7 @@ func _scenario_name() -> String:
 	return "自由沙盒"
 
 
-func _duration_label() -> String: return {"1y": "1 年", "5y": "5 年", "10y": "10 年", "inf": "无限", "custom": "自定义"}.get(_duration, _duration)
+func _duration_label() -> String: return {"1y": "1 年", "5y": "5 年", "10y": "10 年", "inf": "无限"}.get(_duration, _duration)
 func _cross_label() -> String: return " · ".join(["贸易" if _trade else "", "资本" if _capital else "", "迁移" if _migration else ""].filter(func(x: String) -> bool: return not x.is_empty()))
 func _total_households() -> int:
 	var total := 0

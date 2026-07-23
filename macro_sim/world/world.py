@@ -925,10 +925,13 @@ class World:
                 reserve_account_id=f"CBRES:{i}",
                 reserve_scale=float(p.peg_reserve_scale),
             )
-            if self.rates is not None and self.t > 0:
+            if self.rates is not None:
                 # A same-barrier handover temporarily has the old peg's orderly-exit
                 # state and the new active state side by side.  Do not let the legacy
                 # single-peg accessor send the new war chest to the old CBRES account.
+                # This also covers a NewGameSpec policy installed at boundary zero:
+                # unlike the legacy constructor peg, it did not pass through the
+                # earlier genesis-reserve branch.
                 seed_reserves(self, self._peg_reserves0, pegger=i)
 
     def _coupling_barrier(self) -> None:

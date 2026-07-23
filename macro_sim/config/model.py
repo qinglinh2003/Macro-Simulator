@@ -1868,6 +1868,8 @@ class Config:
         )
         assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
         assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
+        assert not (self.housing_construction_enabled and not self.government), \
+            "construction genesis requires the fiscal account that seeds builders"
         assert self.housing_signal_burnin_years >= 1, "housing signal burn-in must be >= 1 year"
         assert self.housing_leave_elasticity >= 0.0 and self.housing_fertility_elasticity >= 0.0, "housing coupling elasticities must be >= 0"
         assert 0.0 < self.housing_leave_mult_lo <= 1.0 <= self.housing_leave_mult_hi, "leave multiplier bounds must bracket 1.0"

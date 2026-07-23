@@ -23,7 +23,8 @@ SECTOR_ALIASES = {
     "e": "energy",
 }
 SECTORS = frozenset({
-    "consumption", "necessity", "luxury", "capital", "energy", "public",
+    "consumption", "necessity", "luxury", "capital", "energy", "housing",
+    "public",
 })
 
 
