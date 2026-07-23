@@ -1,0 +1,26 @@
+schema_version: m0-gate-manifest-v1
+oracle_commit: c0adcf1f8ea7f69cad28b92e27c9a4509dfdac23
+gates:
+  - id: framework.tests
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_canonical_artifacts.py
+      - tests/migration/m0/test_gate_manifest.py
+      - tests/migration/m0/test_rebaseline_guard.py
+    cwd: .
+    dependencies: []
+    timeout_seconds: 120
+    owner: migration
+    artifacts: []
+    fixture_ids: []
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds: []
+    threshold_ref: null

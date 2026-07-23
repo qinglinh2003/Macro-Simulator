@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macro-simulator.local/schemas/m0/rebaseline-proposal.schema.json",
+  "title": "M0 rebaseline proposal",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "new_oracle_commit",
+    "current_commit",
+    "reason",
+    "reason_sha256",
+    "before",
+    "after",
+    "changed_paths",
+    "application"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "m0-rebaseline-proposal-v1"
+    },
+    "old_oracle_commit": {
+      "type": ["string", "null"]
+    },
+    "new_oracle_commit": {
+      "type": "string"
+    },
+    "current_commit": {
+      "type": "string"
+    },
+    "dirty": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "before": {
+      "$ref": "#/$defs/tree"
+    },
+    "after": {
+      "$ref": "#/$defs/tree"
+    },
+    "changed_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "environment": {
+      "type": "object"
+    },
+    "application": {
+      "type": "object",
+      "required": ["automatic", "review_required", "checked_files_modified"],
+      "properties": {
+        "automatic": {
+          "const": false
+        },
+        "review_required": {
+          "const": true
+        },
+        "checked_files_modified": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tree": {
+      "type": "object",
+      "required": ["root", "files", "aggregate_sha256"],
+      "properties": {
+        "root": {
+          "type": ["string", "null"]
+        },
+        "files": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "aggregate_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
