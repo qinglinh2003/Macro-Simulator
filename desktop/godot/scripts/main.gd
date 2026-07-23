@@ -2487,6 +2487,12 @@ func _lever_meaning_text(lever: Dictionary) -> String:
 	return definition
 
 
+func _lever_definition_context_text(lever: Dictionary) -> String:
+	return "模型口径 · 这项旋钮直接作用于%s，改变的是该环节的规则或约束，不等同于最终宏观结果。\n控制形式 · %s。\n生效方式 · %s。" % [
+		_lever_channel_text(lever), _lever_kind_description(lever),
+		_lever_semantics_text(lever)]
+
+
 func _lever_effect_text(lever: Dictionary) -> String:
 	var name := str(lever.get("name", ""))
 	var label := _cn(name)
@@ -2534,7 +2540,8 @@ func _lever_watch_text(lever: Dictionary) -> String:
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
 	return "%s  ·  当前 %s\n\n政策定义\n%s\n\n政策传导\n%s\n\n决策权衡\n%s\n\n点击打开完整政策简报" % [
 		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
-		_tooltip_wrap(_lever_meaning_text(lever)),
+		_tooltip_wrap("%s\n%s" % [
+			_lever_meaning_text(lever), _lever_definition_context_text(lever)]),
 		_tooltip_wrap(_lever_effect_text(lever)),
 		_tooltip_wrap(_lever_tradeoffs_text(lever))]
 
@@ -2546,6 +2553,9 @@ func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
 	for index in text.length():
 		var character := text.substr(index, 1)
 		result += character
+		if character == "\n":
+			column = 0
+			continue
 		column += 1
 		var punctuation := "，；。！？、".contains(character)
 		if (column >= preferred_width and punctuation) or column >= preferred_width + 8:
@@ -2663,33 +2673,35 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var lever: Dictionary = lever_raw
 	var seat_color := _seat_color(str(lever.get("owner_role", "")))
 
-	# Hero: one calm, high-contrast anchor before the denser decision material.
+	# Hero: a light, restrained definition block before the denser decision material.
 	var hero := PanelContainer.new()
-	hero.add_theme_stylebox_override("panel", _sb(Color("142a3a"), Color("29495c"), 11, 15, 5))
+	hero.add_theme_stylebox_override("panel", _sb(Color("f0f4f8"), Color("ccd7e1"), 11, 15, 3))
 	var hero_row := HBoxContainer.new()
 	hero_row.add_theme_constant_override("separation", 16)
 	hero.add_child(hero_row)
 	var current_col := VBoxContainer.new()
 	current_col.custom_minimum_size.x = 185
 	current_col.add_theme_constant_override("separation", 5)
-	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("91a8b7"), true))
+	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("6d8092"), true))
 	current_col.add_child(_lbl(_lever_value_text(lever, current), 23,
-		seat_color.lightened(0.18), true))
+		seat_color.darkened(0.05), true))
 	var seat_chip := _chip(
-		_seat_name(str(lever.get("owner_role", ""))), Color("c8dbe5"),
-		Color("203b4b"), Color("3c5c6d"), 9)
+		_seat_name(str(lever.get("owner_role", ""))), seat_color.darkened(0.12),
+		Color.WHITE, seat_color.lightened(0.5), 9)
 	seat_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	current_col.add_child(seat_chip)
 	hero_row.add_child(current_col)
 	var hero_divider := ColorRect.new()
-	hero_divider.color = Color("365363")
+	hero_divider.color = Color("d2dce6")
 	hero_divider.custom_minimum_size = Vector2(1, 0)
 	hero_row.add_child(hero_divider)
 	var meaning_col := VBoxContainer.new()
 	meaning_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meaning_col.add_theme_constant_override("separation", 5)
-	meaning_col.add_child(_lbl("POLICY DEFINITION · 政策定义", 9, Color("91a8b7"), true))
-	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("edf5f7"), true))
+	meaning_col.add_child(_lbl("POLICY DEFINITION · 政策定义", 9, Color("6d8092"), true))
+	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("263b4d"), true))
+	meaning_col.add_child(_brief_text(
+		_lever_definition_context_text(lever), 11, Color("52697c")))
 	hero_row.add_child(meaning_col)
 	content.add_child(hero)
 
