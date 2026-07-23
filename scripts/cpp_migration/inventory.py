@@ -1284,6 +1284,13 @@ def _desktop_commands() -> set[str]:
         for comparator in node.comparators:
             if isinstance(comparator, ast.Constant) and isinstance(comparator.value, str):
                 result.add(comparator.value)
+            elif isinstance(comparator, (ast.Set, ast.Tuple, ast.List)):
+                result.update(
+                    item.value
+                    for item in comparator.elts
+                    if isinstance(item, ast.Constant)
+                    and isinstance(item.value, str)
+                )
     return result
 
 
@@ -1344,6 +1351,8 @@ def build_desktop_protocol_inventory() -> dict[str, Any]:
 
 
 def build_scenarios_inventory() -> dict[str, Any]:
+    import json
+
     rows: list[dict[str, Any]] = []
     for path in sorted((REPO_ROOT / "configs").rglob("*.yaml")):
         relative = path.relative_to(REPO_ROOT).as_posix()
@@ -1402,10 +1411,57 @@ def build_scenarios_inventory() -> dict[str, Any]:
             "m11",
         )
     )
+    fixture_path = REPO_ROOT / "tests/fixtures/m0/manifests/fixtures.json"
+    if fixture_path.is_file():
+        fixture_manifest = json.loads(fixture_path.read_text(encoding="utf-8"))
+        for fixture in fixture_manifest["rows"]:
+            rows.append(
+                base_row(
+                    fixture["id"],
+                    "migration_fixture",
+                    "schemas/m0/manifests/fixtures.yaml",
+                    fixture["id"],
+                    "m0",
+                    tier=fixture["tier"],
+                    deterministic=fixture["deterministic"],
+                    duration_ticks=fixture["duration_ticks"],
+                    config_contract_sha256=fixture["config_contract_sha256"],
+                    genesis_contract_sha256=fixture["genesis_contract_sha256"],
+                    gate_classes=fixture["gate_classes"],
+                )
+            )
+    benchmark_raw = yaml.safe_load(
+        (REPO_ROOT / "schemas/m0/manifests/benchmark_scenarios.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for scenario in benchmark_raw["scenarios"]:
+        rows.append(
+            base_row(
+                f"scenario.benchmark.{slug(scenario['id'])}",
+                "benchmark_scenario",
+                "schemas/m0/manifests/benchmark_scenarios.yaml",
+                scenario["id"],
+                "m0",
+                workload_kind=scenario["kind"],
+                resource_gate=scenario["gate"],
+                population=scenario["population"],
+                economy_count=scenario["economies"],
+                duration_ticks=scenario["ticks"],
+                scenario_contract_sha256=sha256_bytes(
+                    canonical_json_bytes(normalize(scenario))
+                ),
+            )
+        )
     return payload(
         "scenarios",
         rows,
-        metadata={"scenario_count": len(rows)},
+        metadata={
+            "scenario_count": len(rows),
+            "migration_fixture_count": sum(
+                row["kind"] == "migration_fixture" for row in rows
+            ),
+        },
     )
 
 

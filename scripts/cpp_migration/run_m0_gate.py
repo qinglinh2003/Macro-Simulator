@@ -17,6 +17,7 @@ from scripts.cpp_migration.gates import (  # noqa: E402
     run_gates,
     select_gates,
 )
+from scripts.cpp_migration.comparator import repeatability_tree_digest  # noqa: E402
 
 
 DEFAULT_MANIFEST = REPO_ROOT / "schemas" / "m0" / "manifests" / "gates.yaml"
@@ -29,6 +30,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
     parser.add_argument("--only", action="append", default=[])
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="run the selected gate graph repeatedly and audit normalized evidence",
+    )
     parser.add_argument("--list", action="store_true", help="validate and list selected gates")
     return parser
 
@@ -46,7 +53,31 @@ def main(argv: list[str] | None = None) -> int:
             for gate in gates:
                 print(f"{gate.id}\t{gate.gate_class}\t{' '.join(gate.command)}")
             return 0
-        summary = run_gates(manifest, gates, artifact_root=args.artifact_root)
+        if args.repeat < 1:
+            raise M0Error("--repeat must be positive")
+        if args.repeat == 1:
+            summary = run_gates(manifest, gates, artifact_root=args.artifact_root)
+        else:
+            summaries = []
+            roots = []
+            for repetition in range(args.repeat):
+                root = args.artifact_root / f"run-{repetition + 1:03d}"
+                roots.append(root)
+                summaries.append(run_gates(manifest, gates, artifact_root=root))
+            statuses = {item["status"] for item in summaries}
+            digests = [repeatability_tree_digest(root) for root in roots]
+            summary = summaries[-1]
+            if statuses != {"passed"} or len(set(digests)) != 1:
+                summary = {
+                    **summary,
+                    "status": "failed",
+                    "repeatability_digests": digests,
+                }
+            else:
+                summary = {
+                    **summary,
+                    "repeatability_digests": digests,
+                }
     except M0Error as exc:
         print(f"M0 gate error: {exc}", file=sys.stderr)
         return 2

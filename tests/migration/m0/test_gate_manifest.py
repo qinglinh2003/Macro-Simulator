@@ -51,6 +51,18 @@ def test_checked_manifest_loads_and_lists_framework_gate():
         "framework.tests",
         "inventory.check",
         "inventory.tests",
+        "trace.tests",
+        "trace.repeatability",
+        "fixtures.contracts",
+        "fixtures.integration",
+        "benchmark.smoke",
+        "acceptance.tests",
+        "clients.contracts",
+        "clients.integration",
+        "milestone.references",
+        "milestone.desktop-smoke",
+        "milestone.full-regression",
+        "milestone.freeze",
     ]
 
 

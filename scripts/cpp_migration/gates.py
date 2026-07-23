@@ -284,6 +284,20 @@ def run_gates(
     git = git_metadata()
     results: list[dict[str, Any]] = []
     failed: set[str] = set()
+
+    def failure_class(gate_id: str) -> str:
+        prefix = gate_id.split(".", 1)[0]
+        return {
+            "framework": "schema_contract",
+            "inventory": "inventory",
+            "trace": "determinism",
+            "fixtures": "semantic",
+            "benchmark": "performance",
+            "acceptance": "statistical",
+            "clients": "client",
+            "milestone": "tool_error",
+        }.get(prefix, "tool_error")
+
     for gate in gates:
         blocked_by = [item for item in gate.dependencies if item in failed]
         if blocked_by:
@@ -315,7 +329,9 @@ def run_gates(
                 "status": status,
                 "returncode": completed.returncode,
                 "duration_ns": duration_ns,
-                "failure_class": None if status == "passed" else "tool_error",
+                "failure_class": (
+                    None if status == "passed" else failure_class(gate.id)
+                ),
                 "stdout": completed.stdout,
                 "stderr": completed.stderr,
             }

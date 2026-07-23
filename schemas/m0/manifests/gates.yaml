@@ -137,3 +137,292 @@ gates:
     seeds:
       - 0
     threshold_ref: null
+  - id: fixtures.contracts
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_fixture_manifests.py
+      - tests/migration/m0/test_fixture_determinism.py
+    cwd: .
+    dependencies:
+      - trace.tests
+    timeout_seconds: 300
+    owner: migration
+    artifacts:
+      - tests/fixtures/m0/manifests/fixtures.json
+      - tests/fixtures/m0/tapes/bundle.json
+    fixture_ids:
+      - fixture.f0.refactor-tripwires
+      - fixture.f4.world-n2
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 0
+      - 100
+    threshold_ref: null
+  - id: fixtures.integration
+    class: nightly
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/test_refactor_golden_baseline.py
+      - tests/test_policy_effectiveness.py
+      - tests/test_shocks_v27.py
+      - tests/test_checkpoint.py
+      - tests/test_controller_terminal_human_replay.py
+      - tests/test_rl_model_deployment.py
+      - tests/test_desktop_runtime.py
+    cwd: .
+    dependencies:
+      - fixtures.contracts
+      - trace.repeatability
+    timeout_seconds: 600
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - fixture.f0.refactor-tripwires
+      - fixture.f5.policy-semantics
+      - fixture.f6.shock-semantics
+      - fixture.f7.controller-lifecycle
+      - fixture.f8.rl-contract
+      - fixture.f9.desktop-flow
+      - fixture.f10.persistence
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 0
+    threshold_ref: null
+  - id: benchmark.smoke
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_benchmark_runner.py
+    cwd: .
+    dependencies:
+      - fixtures.contracts
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - fixture.f0.refactor-tripwires
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 0
+    threshold_ref: null
+  - id: acceptance.tests
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_tolerance_registry.py
+      - tests/migration/m0/test_artifact_comparator.py
+      - tests/migration/m0/test_statistical_registry.py
+      - tests/migration/m0/test_semantic_panels.py
+    cwd: .
+    dependencies:
+      - benchmark.smoke
+    timeout_seconds: 180
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - fixture.f5.policy-semantics
+      - fixture.f6.shock-semantics
+      - fixture.f11.stochastic-panels
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 1101
+      - 1102
+      - 1103
+    threshold_ref: schemas/m0/manifests/tolerances.yaml
+  - id: clients.contracts
+    class: pr
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_probe_disposition.py
+      - tests/migration/m0/test_module_disposition.py
+      - tests/migration/m0/test_client_traces.py
+      - tests/migration/m0/test_document_reconciliation.py
+    cwd: .
+    dependencies:
+      - acceptance.tests
+    timeout_seconds: 180
+    owner: migration
+    artifacts:
+      - tests/fixtures/m0/clients/contracts.json
+      - docs/design/current/module-map.md
+    fixture_ids:
+      - fixture.f7.controller-lifecycle
+      - fixture.f8.rl-contract
+      - fixture.f9.desktop-flow
+      - fixture.f10.persistence
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 7
+    threshold_ref: null
+  - id: clients.integration
+    class: nightly
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/test_v23_diagnostics.py
+      - tests/test_world_diagnostics.py
+      - tests/test_controller_longrun.py
+      - tests/test_rl_envs.py
+      - tests/test_rl_model_deployment.py
+      - tests/test_desktop_runtime.py
+    cwd: .
+    dependencies:
+      - clients.contracts
+      - fixtures.integration
+    timeout_seconds: 600
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - fixture.f7.controller-lifecycle
+      - fixture.f8.rl-contract
+      - fixture.f9.desktop-flow
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 7
+    threshold_ref: null
+  - id: milestone.references
+    class: milestone
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - tests/migration/m0/test_benchmark_references.py
+    cwd: .
+    dependencies:
+      - benchmark.smoke
+    timeout_seconds: 180
+    owner: migration
+    artifacts:
+      - benchmarks/results/m0/reference/tiny_refactor_v124.json
+      - benchmarks/results/m0/reference/full_playable_10k.json
+      - benchmarks/results/m0/reference/m4_v0_cash_loop.json
+      - benchmarks/results/m0/reference/m4_v1_capital_fiscal.json
+    fixture_ids:
+      - fixture.f0.refactor-tripwires
+      - fixture.f1.cash-loop
+      - fixture.f2.capital-fiscal
+      - fixture.f3.full-playable
+    platform_profiles:
+      - reference
+    process_count: 3
+    thread_count: 1
+    repetitions: 3
+    seeds:
+      - 0
+      - 204
+      - 205
+      - 206
+    threshold_ref: null
+  - id: milestone.desktop-smoke
+    class: milestone
+    command:
+      - uv
+      - run
+      - python
+      - scripts/desktop_smoke.py
+    cwd: .
+    dependencies:
+      - clients.integration
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids:
+      - fixture.f9.desktop-flow
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds:
+      - 7
+    threshold_ref: null
+  - id: milestone.full-regression
+    class: milestone
+    command:
+      - uv
+      - run
+      - pytest
+      - -q
+      - -n
+      - "6"
+    cwd: .
+    dependencies:
+      - clients.integration
+      - milestone.references
+    timeout_seconds: 1800
+    owner: migration
+    artifacts: []
+    fixture_ids: []
+    platform_profiles:
+      - any
+    process_count: 6
+    thread_count: 1
+    repetitions: 1
+    seeds: []
+    threshold_ref: null
+  - id: milestone.freeze
+    class: milestone
+    command:
+      - uv
+      - run
+      - python
+      - scripts/cpp_migration/final_audit.py
+      - --require-clean
+    cwd: .
+    dependencies:
+      - milestone.desktop-smoke
+      - milestone.full-regression
+    timeout_seconds: 300
+    owner: migration
+    artifacts: []
+    fixture_ids: []
+    platform_profiles:
+      - any
+    process_count: 1
+    thread_count: 1
+    repetitions: 1
+    seeds: []
+    threshold_ref: null
