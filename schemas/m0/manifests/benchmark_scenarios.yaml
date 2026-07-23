@@ -1,0 +1,17 @@
+schema_version: python-benchmark-scenarios-v1
+scenarios:
+  - {id: tiny_refactor_v124, kind: economy, config_factory: v124, population: 80, firms_c: 8, firms_k: 4, banks: 1, economies: 1, ticks: 80, warmup_ticks: 0, seed: 0, gate: pr}
+  - {id: small_closed_daily, kind: economy, config_factory: v124, population: 100, firms_c: 14, firms_k: 6, banks: 2, economies: 1, ticks: 365, warmup_ticks: 5, seed: 201, gate: pr}
+  - {id: medium_closed_daily, kind: economy, config_factory: v124, population: 500, firms_c: 70, firms_k: 30, banks: 8, economies: 1, ticks: 365, warmup_ticks: 5, seed: 202, gate: nightly}
+  - {id: large_closed_daily, kind: economy, config_factory: v124, population: 1000, firms_c: 140, firms_k: 60, banks: 8, economies: 1, ticks: 365, warmup_ticks: 5, seed: 203, gate: nightly}
+  - {id: full_playable_10k, kind: economy, config_factory: v124, population: 10000, firms_c: 525, firms_k: 225, banks: 8, economies: 1, ticks: 365, warmup_ticks: 5, seed: 204, gate: milestone}
+  - {id: m4_v0_cash_loop, kind: economy, config_factory: base, population: 5000, firms_c: 750, firms_k: 0, banks: 1, economies: 1, ticks: 365, warmup_ticks: 5, seed: 205, gate: milestone}
+  - {id: m4_v1_capital_fiscal, kind: economy, config_factory: v13, population: 5000, firms_c: 525, firms_k: 225, banks: 1, economies: 1, ticks: 365, warmup_ticks: 5, seed: 206, gate: milestone}
+  - {id: world_three_country, kind: world, config_factory: v124, population: 300, firms_c: 42, firms_k: 18, banks: 4, economies: 3, ticks: 365, warmup_ticks: 5, seed: 207, gate: nightly}
+  - {id: rl_fiscal_v1_episode, kind: rl, config_factory: v13, population: 40, firms_c: 15, firms_k: 8, banks: 2, economies: 1, ticks: 730, warmup_ticks: 0, seed: 208, gate: nightly}
+  - {id: desktop_e2e, kind: desktop, config_factory: v124, population: 95, firms_c: 12, firms_k: 4, banks: 2, economies: 3, ticks: 30, warmup_ticks: 0, seed: 209, gate: milestone}
+  - {id: checkpoint_full, kind: checkpoint, config_factory: v124, population: 1000, firms_c: 140, firms_k: 60, banks: 8, economies: 1, ticks: 180, warmup_ticks: 5, seed: 210, gate: milestone}
+  - {id: marriage_400_3200, kind: economy, config_factory: v124, population: 400, firms_c: 56, firms_k: 24, banks: 4, economies: 1, ticks: 30, warmup_ticks: 2, seed: 211, gate: nightly, scale_points: [400, 800, 1600, 3200]}
+  - {id: employer_roster_scale, kind: economy, config_factory: v124, population: 1600, firms_c: 224, firms_k: 96, banks: 8, economies: 1, ticks: 30, warmup_ticks: 2, seed: 212, gate: nightly}
+  - {id: history_ten_year, kind: economy, config_factory: v124, population: 100, firms_c: 14, firms_k: 6, banks: 2, economies: 1, ticks: 3650, warmup_ticks: 5, seed: 213, gate: nightly}
+  - {id: world_scale_2_256, kind: world, config_factory: v124, population: 20, firms_c: 3, firms_k: 1, banks: 1, economies: 2, ticks: 10, warmup_ticks: 1, seed: 214, gate: manual, scale_points: [2, 4, 8, 16, 64, 256]}
