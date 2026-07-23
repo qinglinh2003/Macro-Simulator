@@ -2274,6 +2274,10 @@ Required CI profiles:
 
 ### M0 — Freeze observable contracts
 
+Detailed execution sequence, artifact layout, commands, and package-level exit
+gates are defined in
+[`cpp_engine_m0_execution_plan_v33.md`](cpp_engine_m0_execution_plan_v33.md).
+
 Deliver:
 
 - machine-readable inventory of config, capabilities, policies, shocks, metrics,
