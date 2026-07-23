@@ -1801,13 +1801,37 @@ func _build_overlays() -> void:
 	_n["modal_panel"] = mp
 	modal_center.add_child(mp)
 	var mv := VBoxContainer.new()
-	mv.add_theme_constant_override("separation", 10)
+	mv.add_theme_constant_override("separation", 12)
 	mp.add_child(mv)
+	var modal_head := HBoxContainer.new()
+	modal_head.add_theme_constant_override("separation", 12)
+	mv.add_child(modal_head)
+	var head_copy := VBoxContainer.new()
+	head_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_copy.add_theme_constant_override("separation", 3)
+	modal_head.add_child(head_copy)
+	var eyebrow := _lbl("POLICY INTELLIGENCE · 政策决策档案", 9, Color("748496"), true)
+	_n["modal_eyebrow"] = eyebrow
+	head_copy.add_child(eyebrow)
 	var mtitle := _lbl("", 15, INK)
 	mtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mtitle.clip_text = false
 	_n["modal_title"] = mtitle
-	mv.add_child(mtitle)
+	head_copy.add_child(mtitle)
+	var top_close := Button.new()
+	top_close.text = "×"
+	top_close.flat = true
+	top_close.custom_minimum_size = Vector2(34, 34)
+	top_close.add_theme_font_size_override("font_size", 20)
+	top_close.add_theme_color_override("font_color", Color("6c7a89"))
+	top_close.add_theme_color_override("font_hover_color", Color("24384a"))
+	top_close.add_theme_stylebox_override("hover", _sb(Color("e8edf3"), Color("d3dce5"), 17, 4))
+	top_close.pressed.connect(func() -> void:
+		_confirm = {}
+		_render())
+	_n["modal_top_close"] = top_close
+	modal_head.add_child(top_close)
+	mv.add_child(_hrule())
 	var mb := _lbl("", 12, Color("45535f"))
 	mb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mb.custom_minimum_size = Vector2(400, 0)
@@ -1825,13 +1849,18 @@ func _build_overlays() -> void:
 	policy_content.add_theme_constant_override("separation", 12)
 	_n["modal_policy_content"] = policy_content
 	policy_scroll.add_child(policy_content)
-	var mnote := _lbl("", 11, AMBER, true)
+	var note_panel := PanelContainer.new()
+	note_panel.add_theme_stylebox_override("panel", _sb(Color("f6f8fa"), Color("dbe2e9"), 8, 8))
+	_n["modal_note_panel"] = note_panel
+	var mnote := _lbl("", 10, Color("6b7785"), true)
 	mnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_n["modal_note"] = mnote
-	mv.add_child(mnote)
+	note_panel.add_child(mnote)
+	mv.add_child(note_panel)
 	var mrow := HBoxContainer.new()
 	mrow.add_theme_constant_override("separation", 9)
 	mrow.alignment = BoxContainer.ALIGNMENT_END
+	_n["modal_actions"] = mrow
 	var modal_cancel := _btn("取消", func() -> void:
 		_confirm = {}
 		_render())
@@ -1929,19 +1958,27 @@ func _render() -> void:
 	(_n["modal"] as Control).visible = not _confirm.is_empty()
 	if not _confirm.is_empty():
 		var read_only := bool(_confirm.get("read_only", false))
+		(_n["modal_panel"] as PanelContainer).add_theme_stylebox_override("panel",
+			_sb(Color("f7f9fb"), Color("b8c4d0"), 14, 18, 12) if read_only
+			else _sb(Color("f6f8fb"), Color("cdd7e2"), 14, 18))
 		(_n["modal_panel"] as Control).custom_minimum_size = Vector2(
-			860 if read_only else 440, 0)
+			880 if read_only else 440, 0)
 		(_n["modal_body"] as Label).custom_minimum_size = Vector2(
 			400, 0)
 		(_n["modal_body"] as Control).visible = not read_only
 		(_n["modal_policy"] as Control).visible = read_only
 		(_n["modal_title"] as Label).add_theme_font_size_override(
-			"font_size", 18 if read_only else 15)
-		(_n["modal_cancel"] as Button).text = "关闭" if read_only else "取消"
+			"font_size", 20 if read_only else 15)
+		(_n["modal_eyebrow"] as Control).visible = read_only
+		(_n["modal_top_close"] as Control).visible = read_only
+		(_n["modal_actions"] as Control).visible = not read_only
+		(_n["modal_cancel"] as Button).text = "取消"
 		(_n["modal_confirm"] as Button).visible = not read_only
 		_set_text("modal_title", str(_confirm.get("title", "")))
 		_set_text("modal_body", str(_confirm.get("body", "")))
 		_set_text("modal_note", str(_confirm.get("note", "")))
+		(_n["modal_note_panel"] as Control).visible = not str(
+			_confirm.get("note", "")).is_empty()
 		if read_only:
 			_render_policy_brief(
 				_confirm.get("lever", {}), _confirm.get("current"))
@@ -2495,7 +2532,7 @@ func _lever_watch_text(lever: Dictionary) -> String:
 
 
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
-	return "%s  ·  当前 %s\n\n政策定义\n%s\n\n调整会怎样\n%s\n\n主要取舍\n%s\n\n点击打开完整政策简报" % [
+	return "%s  ·  当前 %s\n\n政策定义\n%s\n\n政策传导\n%s\n\n决策权衡\n%s\n\n点击打开完整政策简报" % [
 		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
 		_tooltip_wrap(_lever_meaning_text(lever)),
 		_tooltip_wrap(_lever_effect_text(lever)),
@@ -2588,7 +2625,8 @@ func _brief_panel(title: String, text: String, accent: Color,
 		background: Color = Color.WHITE) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_theme_stylebox_override("panel", _sb(background, accent.lightened(0.55), 11, 12, 4))
+	panel.add_theme_stylebox_override("panel", _sb(
+		background, Color("d7e0e8"), 10, 13, 2))
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 7)
 	panel.add_child(content)
@@ -2604,8 +2642,8 @@ func _brief_panel(title: String, text: String, accent: Color,
 func _brief_rule_card(title: String, value: String, accent: Color) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.custom_minimum_size = Vector2(0, 76)
-	panel.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), Color("dce4ed"), 9, 10))
+	panel.custom_minimum_size = Vector2(0, 68)
+	panel.add_theme_stylebox_override("panel", _sb(Color.WHITE, Color("d9e1e9"), 8, 11))
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 5)
 	panel.add_child(content)
@@ -2625,53 +2663,58 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var lever: Dictionary = lever_raw
 	var seat_color := _seat_color(str(lever.get("owner_role", "")))
 
-	# Hero: the current state and a plain-language answer to “what is this?”.
+	# Hero: one calm, high-contrast anchor before the denser decision material.
 	var hero := PanelContainer.new()
-	hero.add_theme_stylebox_override("panel", _sb(Color("eef4fb"), Color("c8d8ec"), 12, 14, 4))
+	hero.add_theme_stylebox_override("panel", _sb(Color("142a3a"), Color("29495c"), 11, 15, 5))
 	var hero_row := HBoxContainer.new()
 	hero_row.add_theme_constant_override("separation", 16)
 	hero.add_child(hero_row)
 	var current_col := VBoxContainer.new()
 	current_col.custom_minimum_size.x = 185
 	current_col.add_theme_constant_override("separation", 5)
-	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("647b92"), true))
-	current_col.add_child(_lbl(_lever_value_text(lever, current), 22, seat_color, true))
+	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("91a8b7"), true))
+	current_col.add_child(_lbl(_lever_value_text(lever, current), 23,
+		seat_color.lightened(0.18), true))
 	var seat_chip := _chip(
-		_seat_name(str(lever.get("owner_role", ""))), seat_color,
-		Color(1, 1, 1, 0.7), seat_color.lightened(0.5), 9)
+		_seat_name(str(lever.get("owner_role", ""))), Color("c8dbe5"),
+		Color("203b4b"), Color("3c5c6d"), 9)
 	seat_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	current_col.add_child(seat_chip)
 	hero_row.add_child(current_col)
+	var hero_divider := ColorRect.new()
+	hero_divider.color = Color("365363")
+	hero_divider.custom_minimum_size = Vector2(1, 0)
+	hero_row.add_child(hero_divider)
 	var meaning_col := VBoxContainer.new()
 	meaning_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meaning_col.add_theme_constant_override("separation", 5)
-	meaning_col.add_child(_lbl("政策定义", 10, Color("647b92"), true))
-	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("25394c"), true))
+	meaning_col.add_child(_lbl("POLICY DEFINITION · 政策定义", 9, Color("91a8b7"), true))
+	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("edf5f7"), true))
 	hero_row.add_child(meaning_col)
 	content.add_child(hero)
 
 	# Decision first: mechanism and trade-off are the two things a player needs before touching a lever.
 	var decision_row := HBoxContainer.new()
 	decision_row.add_theme_constant_override("separation", 12)
-	decision_row.add_child(_brief_panel("调整会怎样", _lever_effect_text(lever),
-		Color("2e6fd0"), Color("f7faff")))
-	decision_row.add_child(_brief_panel("主要取舍", _lever_tradeoffs_text(lever),
-		AMBER, Color("fffbf2")))
+	decision_row.add_child(_brief_panel("POLICY TRANSMISSION · 政策传导", _lever_effect_text(lever),
+		Color("386b9d"), Color.WHITE))
+	decision_row.add_child(_brief_panel("DECISION TRADE-OFF · 决策权衡", _lever_tradeoffs_text(lever),
+		Color("9b6e2c"), Color.WHITE))
 	content.add_child(decision_row)
 
 	var watch_panel := PanelContainer.new()
-	watch_panel.add_theme_stylebox_override("panel", _sb(Color("f1f8f6"), Color("c9e2dc"), 10, 11))
+	watch_panel.add_theme_stylebox_override("panel", _sb(Color("f3f7f7"), Color("d5e1e0"), 9, 11))
 	var watch_col := VBoxContainer.new()
 	watch_col.add_theme_constant_override("separation", 7)
 	watch_panel.add_child(watch_col)
-	watch_col.add_child(_lbl("建议观察 · 调整后不要只看一个数字", 10, TEAL_DK, true))
+	watch_col.add_child(_lbl("MONITOR · 建议观察", 9, Color("4a6f70"), true))
 	var watch_flow := HFlowContainer.new()
 	watch_flow.add_theme_constant_override("h_separation", 6)
 	watch_flow.add_theme_constant_override("v_separation", 6)
 	for raw_metric in _lever_watch_text(lever).split("、", false):
 		var metric := str(raw_metric).strip_edges()
 		if not metric.is_empty():
-			watch_flow.add_child(_chip(metric, TEAL_DK, Color.WHITE, Color("bcded7"), 9))
+			watch_flow.add_child(_chip(metric, Color("355d5f"), Color.WHITE, Color("cbdcdb"), 9))
 	watch_col.add_child(watch_flow)
 	content.add_child(watch_panel)
 
@@ -2680,20 +2723,23 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	rule_heading.add_child(_lbl("EXECUTION · 执行规则", 10, INK3, true))
 	rule_heading.add_child(_hrule())
 	content.add_child(rule_heading)
-	var rules := HBoxContainer.new()
-	rules.add_theme_constant_override("separation", 8)
-	rules.add_child(_brief_rule_card("可选范围", _lever_kind_description(lever), BLUE))
-	rules.add_child(_brief_rule_card("实施时间", _lever_timing_text(lever), TEAL_DK))
-	rules.add_child(_brief_rule_card("调整节奏", _lever_adjustment_text(lever), PURPLE))
-	rules.add_child(_brief_rule_card("行政成本", _lever_cost_text(lever), AMBER))
+	var rules := GridContainer.new()
+	rules.columns = 2
+	rules.add_theme_constant_override("h_separation", 8)
+	rules.add_theme_constant_override("v_separation", 8)
+	var rule_accent := Color("536b7e")
+	rules.add_child(_brief_rule_card("可选范围", _lever_kind_description(lever), rule_accent))
+	rules.add_child(_brief_rule_card("实施时间", _lever_timing_text(lever), rule_accent))
+	rules.add_child(_brief_rule_card("调整节奏", _lever_adjustment_text(lever), rule_accent))
+	rules.add_child(_brief_rule_card("行政成本", _lever_cost_text(lever), rule_accent))
 	content.add_child(rules)
 
 	var execution := HBoxContainer.new()
 	execution.add_theme_constant_override("separation", 12)
 	execution.add_child(_brief_panel("生效方式", _lever_semantics_text(lever),
-		Color("58708a"), Color("f8fafc")))
+		Color("58708a"), Color.WHITE))
 	execution.add_child(_brief_panel("前置条件", _lever_conditions_text(lever),
-		Color("58708a"), Color("f8fafc")))
+		Color("58708a"), Color.WHITE))
 	content.add_child(execution)
 	content.add_child(_brief_panel("条件与例外", _lever_boundary_text(lever),
 		Color("9a6b10"), Color("fffaf0")))
@@ -2710,7 +2756,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 
 func _show_lever_info(lever: Dictionary, current: Variant) -> void:
 	_confirm = {
-		"title": "POLICY BRIEF · %s" % _cn(str(lever.get("name", ""))),
+		"title": _cn(str(lever.get("name", ""))),
 		"body": "",
 		"note": "模型说明只描述直接机制，不保证政策结果；时滞、经济状态和其他政策可能改变最终效果。",
 		"lever": lever,
