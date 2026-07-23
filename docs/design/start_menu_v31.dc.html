@@ -799,7 +799,7 @@ class Component extends DCLogic {
     // launching
     launchProg: 0,
     // settings
-    settings: { fullscreen: false, uiScale: '100%', density: '舒适', lang: '简体中文', numAbbr: true, colorSafe: false, reduceMotion: false, highContrast: true, autosave: true, tutorial: true, godMode: false, internalNames: true },
+    settings: { fullscreen: false, uiScale: '100%', density: '舒适', lang: '简体中文', numAbbr: true, colorSafe: false, reduceMotion: false, highContrast: true, autosave: true, tutorial: true, internalNames: true },
   };
 
   // ---------------- static data ----------------
@@ -1388,7 +1388,7 @@ class Component extends DCLogic {
       { name: '可访问性', items: [{ label: '色觉安全色板', isToggle: true, ...setToggle('colorSafe') }, { label: '减少动效', isToggle: true, ...setToggle('reduceMotion') }, { label: '高对比度', isToggle: true, ...setToggle('highContrast'), hasNote: true, note: '不只靠颜色表达风险' }] },
       { name: '游戏流', items: [{ label: '默认交互模式', isValue: true, value: '交互' }, { label: '实时决策时限', isValue: true, value: '30 s' }, { label: '开局暂停', isToggle: true, ...setToggle('startPaused') }] },
       { name: '存档', items: [{ label: '自动存档', isToggle: true, ...setToggle('autosave'), hasNote: true, note: '仅在完成的 tick 边界保存' }, { label: '保留份数', isValue: true, value: '10' }] },
-      { name: '开发者', items: [{ label: '上帝视角(真值)', isToggle: true, ...setToggle('godMode') }, { label: '显示内部字段名', isToggle: true, ...setToggle('internalNames') }, { label: '音频', isValue: true, value: '待实现' }] },
+      { name: '开发者', items: [{ label: '显示内部字段名', isToggle: true, ...setToggle('internalNames') }, { label: '音频', isValue: true, value: '待实现' }] },
     ];
 
     const footDots = stepMeta.map(m => ({ w: S.step === m.n ? '22px' : '6px', bg: S.step === m.n ? '#0f9d90' : (S.step > m.n ? '#9ad9d0' : '#d3dce6') }));

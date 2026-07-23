@@ -55,7 +55,7 @@ const TILE_SPEC := [
 	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true, "kind": "pp"},
 ]
 
-# 八维核心指标:每个经济维度只选一个权威公报序列,不读取逐 tick 真值。
+# 八维核心指标:每个经济维度只选一个权威公报序列,不读取未发布的逐日状态。
 const CORE_DIMENSION_SPEC := [
 	{"id": "real_output", "dimension": "增长", "metric": "实际产出", "group": "实体经济", "color": TEAL},
 	{"id": "unemployment_rate", "dimension": "就业", "metric": "失业率", "group": "劳动力", "color": AMBER},
@@ -436,7 +436,7 @@ const POLICY_HELP := {
 }
 
 
-# 指标全景:9 组 × 6 键(上帝视角,逐 tick 真值;键名与后端 records 一致)
+# 指标全景:9 组 × 6 键(经济运行与结构明细;键名与后端 records 一致)
 # fmt: pct=份额%, pt=每tick利率%, idx=指数, num=水平量
 const PANEL_GROUPS := [
 	{"name": "实体经济", "color": TEAL, "items": [
@@ -614,7 +614,6 @@ var _perm_cache: Dictionary = {}       # lever -> last permitted action(会议�
 var _release_hist: Dictionary = {}     # sid -> [{v, at}]
 var _playing := false
 var _speed := 5
-var _god := false
 var _mode := "interactive"
 var _tab := "focus"
 var _rank_by := "score"
@@ -734,8 +733,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_1, KEY_2, KEY_3, KEY_4:
 			_speed = SPEEDS[key.keycode - KEY_1]
 			_render()
-		KEY_G:
-			(_n["god_cb"] as Button).button_pressed = not _god
 		KEY_N:
 			_advance_to_next_decision()
 		KEY_ESCAPE:
@@ -1453,16 +1450,6 @@ func _build_header(shell: VBoxContainer) -> void:
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
 	h.add_child(modes_wrap)
-	var god := Button.new()
-	god.toggle_mode = true
-	god.text = "上帝模式"
-	god.tooltip_text = "上帝模式\n显示每日即时真值，不再等待统计公报\n快捷键：G"
-	god.add_theme_font_size_override("font_size", 12)
-	god.toggled.connect(func(v: bool) -> void:
-		_god = v
-		_render())
-	_n["god_cb"] = god
-	h.add_child(god)
 	h.add_child(_vdiv())
 	var transport := PanelContainer.new()
 	transport.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 4))
@@ -1897,16 +1884,6 @@ func _render() -> void:
 	else:
 		playb.add_theme_stylebox_override("normal", _sb(TEAL_BG, Color("59b7a8"), 8, 7))
 		playb.add_theme_color_override("font_color", TEAL_DK)
-	var godb := _n["god_cb"] as Button
-	if _god:
-		godb.add_theme_stylebox_override("normal", _sb(
-			Color(0.478, 0.31, 0.816, 0.14), PURPLE, 20, 6))
-		godb.add_theme_color_override("font_color", Color("5a36a8"))
-		godb.text = "◉ 上帝模式"
-	else:
-		godb.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 20, 6))
-		godb.add_theme_color_override("font_color", Color("586a7b"))
-		godb.text = "○ 上帝模式"
 	for m in ["interactive", "realtime"]:
 		var mb := _n["mode_" + m] as Button
 		if m == _mode:
@@ -1933,10 +1910,10 @@ func _render() -> void:
 			tb.add_theme_color_override("font_color", Color("586a7b"))
 	_set_text("tabnote", {
 		"focus": "基于已发布公报的跨指标判断",
-		"households": "微观家庭 · 成员与资产负债真值",
-		"firms": "微观企业 · 经营、账表、员工与股权真值",
+		"households": "微观家庭 · 成员、资产负债与消费",
+		"firms": "微观企业 · 经营、账表、员工与股权",
 		"stocks": "每日收盘行情 · 企业股与银行股",
-		"panels": "上帝视角 · 每日真值",
+		"panels": "经济运行 · 多维指标与结构分解",
 		"world": "多国耦合 · 贸易 / 资本 / 移民",
 	}.get(_tab, ""))
 	(_n["filter"] as Button).text = {
@@ -1989,7 +1966,6 @@ func _render_tiles() -> void:
 	for c in row.get_children():
 		c.queue_free()
 	var by_id := _releases_by_id()
-	var truth: Dictionary = _snapshot.get("metrics", {})
 	var t := int(_snapshot.get("tick", 0))
 	for spec: Dictionary in TILE_SPEC:
 		var sid := str(spec["id"])
@@ -2072,11 +2048,6 @@ func _render_tiles() -> void:
 				_cal_short(int(rel.get("released_at_tick", 0))), t - ref_end], 9, INK3, true)
 			rline.clip_text = true
 			v.add_child(rline)
-			if _god and truth.has(sid):
-				var gl := _lbl("真值 " + _fmt_series(sid, float(truth.get(sid, 0.0)))
-					+ " ·(调试)", 9, PURPLE, true)
-				gl.clip_text = true
-				v.add_child(gl)
 		else:
 			var wait_row := HBoxContainer.new()
 			wait_row.add_theme_constant_override("separation", 6)
@@ -3624,7 +3595,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 	tools.add_theme_constant_override("separation", 6)
 	toolbar.add_child(tools)
 	tools.add_child(_lbl("家庭微观档案", 11, INK))
-	tools.add_child(_chip("MICRODATA · 实时真值", Color("5a36a8"),
+	tools.add_child(_chip("MICRODATA · 家庭账册", Color("5a36a8"),
 		Color("f3effc"), Color("d8ccf0"), 8))
 	tools.add_child(_spacer_h())
 	var search := LineEdit.new()
@@ -4314,7 +4285,7 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 		"逐人持仓 · 不与家庭账户重复")
 	parent.add_child(_firm_equity_panel(equity))
 
-	_firm_section_head(parent, "MODEL STATE · 行为、技术参数与退出信号", "只读模型真值")
+	_firm_section_head(parent, "MODEL STATE · 行为、技术参数与退出信号", "只读结构参数与状态信号")
 	var parameter_panels := HBoxContainer.new()
 	parameter_panels.add_theme_constant_override("separation", 7)
 	parameter_panels.add_child(_firm_data_panel("BEHAVIOR · 行为参数", [
@@ -4845,7 +4816,7 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 
 
 func _macro_brief() -> Dictionary:
-	## 只综合已发布公报与公开政策状态；不读取未发布真值来判断经济相位。
+	## 只综合已发布公报与公开政策状态；不读取未发布数据来判断经济相位。
 	var releases := _releases_by_id()
 	var now := int(_snapshot.get("tick", 0))
 	var coverage := 0
@@ -5148,7 +5119,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_name, "")), 10, INK2))
 	header_row.add_child(heading)
 	header_row.add_child(_spacer_h())
-	header_row.add_child(_chip("GOD VIEW · 每日真值", group_color.darkened(0.18),
+	header_row.add_child(_chip("ECONOMY · 结构与趋势", group_color.darkened(0.18),
 		Color(group_color.r, group_color.g, group_color.b, 0.08),
 		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
 	col.add_child(header)

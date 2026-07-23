@@ -12,7 +12,7 @@
 
 ### 1.1 公报层(玩家默认所见 —— 这是游戏性的核心)
 
-`InstitutionObservation`:**不是引擎真值**,是统计局按发布日历延迟发布的序列。当前 schema v2 共 42 个序列(30 个基础观测 + 12 个冲击观测；权威表:`docs/controller_observations_v26.md`),每条含:窗口、频率、滞后、访问级、缺失原因。摘录骨架:
+`InstitutionObservation`:**不是未发布的引擎状态**,是统计局按发布日历延迟发布的序列。当前 schema v2 共 42 个序列(30 个基础观测 + 12 个冲击观测；权威表:`docs/controller_observations_v26.md`),每条含:窗口、频率、滞后、访问级、缺失原因。摘录骨架:
 
 | 组 | 序列(单位) | 频率/滞后(tick) | 访问级 |
 |---|---|---|---|
@@ -160,7 +160,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 | 命令 | 作用 | 后端支撑(已存在) |
 |---|---|---|
 | `get_schema(seat)` | 席位杠杆表+校验域+成本+文案键 → 前端自动生成表单 | registry 全量数据 ✅ |
-| `get_observation(economy, seat)` | 公报制观测(替代现在的引擎真值指标!) | ObservationService ✅ |
+| `get_observation(economy, seat)` | 公报制观测(替代未发布的引擎指标) | ObservationService ✅ |
 | `assign_seat(economy, seat, occupant)` | 席位分配/换手 | session.assign_seat ✅ |
 | `save(path)` / `load(path)` / `list_saves` | 存档 | checkpoint 系统 ✅ |
 | `schedule_shock(spec)` | 场景注入(替代硬编码按钮) | world.schedule_shock ✅ |
@@ -168,7 +168,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 | `get_events(after_seq)` | 事件流增量拉取 | 规范事件流 ✅ |
 | `set_mode(interactive/realtime, deadline)` | 运行模式 | 编排层 ✅ |
 
-**重要**:v28 原型直接推引擎真值指标(METRIC_NAMES 六项)——**本设计要求换成公报层**,真值只在"上帝模式"调试开关下可见(默认关,防 RL/人类信息不对等)。
+**重要**:v28 原型曾直接推送未发布的引擎指标(METRIC_NAMES 六项)。现设计要求顶栏权威指标只读取公报层，且不提供绕过发布时间的界面开关，避免 RL 与人类玩家之间产生信息不对等。家庭、企业和结构分析页使用各自明确的玩法数据集，不得回流冒充统计公报。
 
 ### 5.3 判决与错误语义
 
@@ -180,7 +180,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 
 ## 6. 现原型(v28)与本设计的差距清单
 
-1. 指标层:引擎真值 → **公报制**(最大的玩法差距)
+1. 顶栏指标层:未发布引擎指标 → **公报制**(最大的玩法差距)
 2. 杠杆:仅数值输入框 → 全类型控件 + permitted/成本/冷却/向导
 3. 单席单国 → 席位选择 + 多经济体世界视图
 4. 无存档 / 场景 / 事件时间线 / 紧急横幅
@@ -240,7 +240,7 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
   「本次不动」全过。实时模式 = 播放中自动通过非紧急会议。
 - 中央六 tab:宏观焦点(公报诚实信道)/ 家庭(家庭—成员主从浏览)/
   企业(企业—经营/财务/员工/股权主从浏览)/ 股市(全市场指数、宽度、板块、逐证券
-  行情和企业详情深链)/ 指标全景(9×6 真值 spark)/ 世界视图
+  行情和企业详情深链)/ 指标全景(9×6 经济运行与结构指标)/ 世界视图
   (三国卡 + 可切指标排名 + 6 指标三色对比 + 枢纽辐射关系图 + e/NFA/CA/移民/汇款条图)。
 - 股市图表只展示引擎实际提供的每日成交/收盘价序列；模型当前没有日内
   open/high/low/close、成交量明细或订单簿，因此不合成 K 线、盘口和虚假日内波动。
@@ -259,4 +259,4 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 **已知边界(v30 候选)**
 - 三国均为玩家可见,但只有 0 号经济体可操控;assign_seat/save/load/schedule_shock 协议未开。
 - 贸易为 per-economy 向量(dealer 路由无双边矩阵),关系图为枢纽辐射而非国对国连线(诚实呈现)。
-- 世界 tab 数据为上帝视角;公报世界序列(exchange_rate/nfa/…)已在磁贴信道可用但未单独成板。
+- 世界 tab 当前采用跨国快照;公报世界序列(exchange_rate/nfa/…)已在磁贴信道可用但未单独成板。

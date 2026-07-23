@@ -65,14 +65,6 @@
       </sc-for>
     </div>
 
-    <!-- god mode -->
-    <button onClick="{{ toggleGod }}" style="display:flex;align-items:center;gap:7px;background:{{ godBg }};border:1px solid {{ godBorder }};border-radius:9px;padding:6px 11px;font-size:12px;color:{{ godFg }};cursor:pointer;" title="显示引擎真值(信息不对等调试)">
-      <span style="width:26px;height:15px;border-radius:9px;background:{{ godTrackBg }};position:relative;display:inline-block;transition:.15s;">
-        <span style="position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#ffffff;transition:.15s;transform:{{ godKnob }};"></span>
-      </span>
-      上帝模式
-    </button>
-
     <div style="width:1px;height:30px;background:#dbe2ea;"></div>
 
     <!-- transport -->
@@ -112,9 +104,6 @@
               <span style="width:5px;height:5px;border-radius:50%;background:{{ t.staleColor }};"></span>
               <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#647585;">滞后 {{ t.staleStr }}</span>
             </div>
-          </sc-if>
-          <sc-if value="{{ t.showGod }}" hint-placeholder-val="{{ false }}">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#7a4fd0;">真值 {{ t.god }} ·（调试）</div>
           </sc-if>
           <span style="position:absolute;top:9px;right:10px;width:6px;height:6px;border-radius:50%;background:{{ t.staleColor }};" title="{{ t.staleTitle }}"></span>
         </sc-if>
@@ -644,7 +633,7 @@
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:940},&quot;initialSeat&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;treasury&quot;,&quot;options&quot;:[&quot;treasury&quot;,&quot;central_bank&quot;,&quot;external&quot;,&quot;energy&quot;,&quot;regulator&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;interactive&quot;,&quot;options&quot;:[&quot;interactive&quot;,&quot;realtime&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;bulletinDetail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;完整&quot;,&quot;options&quot;:[&quot;完整&quot;,&quot;简洁&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;公报&quot;},&quot;showGodMode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;调试&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:940},&quot;initialSeat&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;treasury&quot;,&quot;options&quot;:[&quot;treasury&quot;,&quot;central_bank&quot;,&quot;external&quot;,&quot;energy&quot;,&quot;regulator&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;interactive&quot;,&quot;options&quot;:[&quot;interactive&quot;,&quot;realtime&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;bulletinDetail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;完整&quot;,&quot;options&quot;:[&quot;完整&quot;,&quot;简洁&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;公报&quot;}}">
 class Component extends DCLogic {
   state = {
     seat: this.props.initialSeat || 'treasury',
@@ -655,7 +644,6 @@ class Component extends DCLogic {
     awaiting: true,
     nextMeeting: 856,
     mode: this.props.mode || 'interactive',
-    god: !!this.props.showGodMode,
     detail: this.props.bulletinDetail || '完整',
     filterMine: false,
     crisis: false,
@@ -764,14 +752,14 @@ class Component extends DCLogic {
 
   tilesRaw() {
     return [
-      { k: 'out', label: '实际产出 · GDP', val: '123.4', delta: '+1.2%', up: true, color: '#0f9d90', freq: 30, lag: 7, access: 'public', arr: [117, 118, 120, 121, 122, 122.5, 123, 123.4], god: '124.1' },
-      { k: 'un', label: '失业率', val: '5.80%', delta: '−0.2pp', up: false, color: '#c17d16', freq: 7, lag: 2, access: 'public', arr: [6.2, 6.1, 6.0, 5.95, 5.9, 5.85, 5.82, 5.8], god: '5.71%' },
-      { k: 'inf', label: '通胀(年化)', val: '+1.9%', delta: '+0.3pp', up: true, color: '#7a4fd0', freq: 7, lag: 2, access: 'public', arr: [1.2, 1.3, 1.5, 1.6, 1.7, 1.8, 1.85, 1.9], god: '+2.1%' },
-      { k: 'px', label: '物价指数', val: '1.024', delta: '+0.1%', up: true, color: '#2f6fd0', freq: 7, lag: 2, access: 'public', arr: [1.018, 1.019, 1.02, 1.021, 1.022, 1.023, 1.0235, 1.024], god: '1.026' },
-      { k: 'rate', label: '政策利率', val: '3.50%', delta: '持平', up: null, color: '#0f9d90', freq: 1, lag: 0, access: 'public', arr: [3.0, 3.0, 3.25, 3.25, 3.5, 3.5, 3.5, 3.5], god: '3.50%' },
-      { k: 'def', label: '赤字 / GDP', val: '3.1%', delta: '+0.2pp', up: true, color: '#c17d16', freq: 30, lag: 7, access: 'public', arr: [2.6, 2.7, 2.8, 2.9, 2.9, 3.0, 3.05, 3.1], god: '3.3%' },
-      { k: 'res', label: '银行准备金', val: '812.4', delta: '+0.4%', up: true, color: '#1f9d63', freq: 1, lag: 0, access: 'operational', arr: [790, 795, 800, 805, 808, 810, 811, 812.4], god: '815.0' },
-      { k: 'pov', label: '贫困率', val: '12.4%', delta: '−0.3pp', up: false, color: '#7a4fd0', freq: 30, lag: 7, access: 'public', arr: [13.1, 13, 12.9, 12.8, 12.7, 12.6, 12.5, 12.4], god: '12.2%' },
+      { k: 'out', label: '实际产出 · GDP', val: '123.4', delta: '+1.2%', up: true, color: '#0f9d90', freq: 30, lag: 7, access: 'public', arr: [117, 118, 120, 121, 122, 122.5, 123, 123.4] },
+      { k: 'un', label: '失业率', val: '5.80%', delta: '−0.2pp', up: false, color: '#c17d16', freq: 7, lag: 2, access: 'public', arr: [6.2, 6.1, 6.0, 5.95, 5.9, 5.85, 5.82, 5.8] },
+      { k: 'inf', label: '通胀(年化)', val: '+1.9%', delta: '+0.3pp', up: true, color: '#7a4fd0', freq: 7, lag: 2, access: 'public', arr: [1.2, 1.3, 1.5, 1.6, 1.7, 1.8, 1.85, 1.9] },
+      { k: 'px', label: '物价指数', val: '1.024', delta: '+0.1%', up: true, color: '#2f6fd0', freq: 7, lag: 2, access: 'public', arr: [1.018, 1.019, 1.02, 1.021, 1.022, 1.023, 1.0235, 1.024] },
+      { k: 'rate', label: '政策利率', val: '3.50%', delta: '持平', up: null, color: '#0f9d90', freq: 1, lag: 0, access: 'public', arr: [3.0, 3.0, 3.25, 3.25, 3.5, 3.5, 3.5, 3.5] },
+      { k: 'def', label: '赤字 / GDP', val: '3.1%', delta: '+0.2pp', up: true, color: '#c17d16', freq: 30, lag: 7, access: 'public', arr: [2.6, 2.7, 2.8, 2.9, 2.9, 3.0, 3.05, 3.1] },
+      { k: 'res', label: '银行准备金', val: '812.4', delta: '+0.4%', up: true, color: '#1f9d63', freq: 1, lag: 0, access: 'operational', arr: [790, 795, 800, 805, 808, 810, 811, 812.4] },
+      { k: 'pov', label: '贫困率', val: '12.4%', delta: '−0.3pp', up: false, color: '#7a4fd0', freq: 30, lag: 7, access: 'public', arr: [13.1, 13, 12.9, 12.8, 12.7, 12.6, 12.5, 12.4] },
     ];
   }
 
@@ -923,7 +911,6 @@ class Component extends DCLogic {
   closeVerdict() { this.setState({ verdict: null }); }
   confirmYes() { const f = this.state.confirm && this.state.confirm.onYes; this.setState({ confirm: null }); if (f) f(); }
   confirmNo() { this.setState({ confirm: null }); }
-  toggleGod() { this.setState(s => ({ god: !s.god })); }
   toggleCrisis() { this.setState(s => ({ crisis: !s.crisis })); }
   toggleFilter() { this.setState(s => ({ filterMine: !s.filterMine })); }
 
@@ -945,7 +932,6 @@ class Component extends DCLogic {
       staleStr: stale + ' 天', staleTitle: '距参考期 ' + stale + ' 天',
       releaseStr: '发布 t' + pub + ' · 参考期止 t' + ref + ' · 距今 ' + stale + '天',
       detailFull: S.detail === '完整', detailBrief: S.detail !== '完整',
-      showGod: S.god && has, god: t.god,
     };
   }
 
@@ -1093,9 +1079,6 @@ class Component extends DCLogic {
       nextReleaseStr: nextIn + ' 天',
       awaiting: S.awaiting, awaitingLabel: S.mode === 'realtime' ? '等待决策 · 实时倒计时 00:24' : '等待决策',
       modeChips,
-      toggleGod: () => this.toggleGod(),
-      godBg: S.god ? '#efe9fb' : '#f6f8fb', godBorder: S.god ? '#cdbdf0' : '#d3dce6', godFg: S.god ? '#7a4fd0' : '#586a7b',
-      godTrackBg: S.god ? '#b79ee8' : '#d3dce6', godKnob: S.god ? 'translateX(11px)' : 'translateX(0)',
       step: () => this.step(),
       playToggle: () => this.playToggle(),
       playLabel: S.playing ? '暂停' : '播放',

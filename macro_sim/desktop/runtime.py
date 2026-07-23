@@ -75,7 +75,7 @@ WORLD_METRIC_NAMES = (
     "spr_stock",
 )
 
-# Rich god-view series kept for the player economy only (指标全景 panels).
+# Rich economic and structural series kept for the player economy's 指标全景 panels.
 # Grouping/labels live in the client; the runtime just serializes the keys.
 # Every key verified present in the v124 desktop config's records.
 PANEL_METRIC_NAMES = (
@@ -356,7 +356,7 @@ class SimulationRuntime:
         if not rows:
             return
         tick = self.session.boundary_tick
-        # player-economy god-view panel point
+        # Player-economy structural panel point.
         panel_point: dict[str, float | int] = {"tick": tick}
         player_row = rows[PLAYER_ECONOMY] if len(rows) > PLAYER_ECONOMY else rows[0]
         for name in PANEL_METRIC_NAMES:
