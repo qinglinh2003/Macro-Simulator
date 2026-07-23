@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from macro_sim.core.policy_explanations import POLICY_EXPLANATIONS
 from macro_sim.core.policy_registry import (
     Bool,
     Choices,
@@ -78,7 +79,8 @@ class ControllerService:
             )
             row: dict[str, Any] = {
                 "name": name,
-                "current_value": getattr(holder, name),
+                "current_value": canonical_value(getattr(holder, name)),
+                "player_help": POLICY_EXPLANATIONS[name].to_dict(),
                 "scope": lever.scope,
                 "owner_role": lever.owner_role,
                 "decision_group": lever.decision_group,

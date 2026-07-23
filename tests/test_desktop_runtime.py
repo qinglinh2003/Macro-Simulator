@@ -428,15 +428,19 @@ def test_get_schema_covers_all_seats(runtime: SimulationRuntime) -> None:
     sample = seats["central_bank"]["levers"][0]
     for key in (
         "name", "decision_group", "implementation_lag", "min_hold_ticks",
-        "read_point", "state_notes", "shadowed_by",
+        "read_point", "state_notes", "shadowed_by", "player_help",
     ):
         assert key in sample
+    assert set(sample["player_help"]) == {
+        "meaning", "mechanics", "tradeoffs", "watch",
+    }
     snapshot = runtime.snapshot()
     assert set(snapshot["policy_values"]) == {
         lever["name"]
         for seat in seats.values()
         for lever in seat["levers"]
     }
+    assert snapshot["policy_values"]["sanctions_imposed_on"] == []
 
 
 def test_merged_observation_includes_restricted_series(runtime: SimulationRuntime) -> None:

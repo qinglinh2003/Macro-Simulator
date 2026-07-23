@@ -33,6 +33,9 @@
 - **每杠杆**:当前生效值、待生效值+自然生效日期(pending 队列)、上次修改日期、下次可调日期(min_hold 冷却)、本季剩余行政容量
 - `get_schema` 同步提供 `current_value / read_point / state_notes / shadowed_by`;快照另带完整
   `policy_values`,保证不在会议窗口时浏览政策说明仍能显示实时生效值
+- 102 个杠杆全部提供同源的 `player_help`：`meaning`（通俗定义）、`mechanics`（模型
+  传导）、`tradeoffs`（决策取舍）和 `watch`（建议观察指标）。说明由政策模块维护，
+  Godot、未来网页客户端和人类/RL 控制界面不得各自猜测或复制政策语义
 - **permitted_actions**:每杠杆是否可动 + **机器可读的禁止原因**(缺能力/冷却中/越权/超界)——前端据此灰化控件并显示原因 tooltip
 - **成本预览**:调整成本(fixed+L1+L2 over control_scale)、admin_weight、cost_class
 - 权威杠杆表:`docs/controller_levers_v26.md`(102 行 × 席位/类型/时滞/冷却/紧急白名单/control_scale)
@@ -98,9 +101,10 @@ world_records 每 tick:汇率向量 e_i、双边贸易(import/export value+volum
 **通用规则**:
 - 只渲染 `permitted_actions` 允许的;禁止的灰化 + 原因(这些原因后端给机器码,前端配文案表)
 - 每杠杆展示 implementation_lag(「通过后 91 天生效」)与 min_hold(「下次可调:第 X 天」)
-- 每杠杆名称旁放置 `ⓘ`:悬停显示定义与主要作用的简明摘要;点击打开只读详情,
-  展示实时值、定义、传导方向、类型/范围、管理席位、实施时滞、最短持有期、单次步长、
-  成本、紧急权限、前置条件及遮蔽关系。说明只陈述模型机制,不承诺确定的经济结果
+- 每杠杆名称旁放置 `ⓘ`:悬停依次显示当前值、通俗定义、传导与主要取舍;点击打开
+  可滚动的政策简报。简报按玩家决策顺序组织：当前生效值与「政策定义」→「调整会怎样」
+  与「主要取舍」→ 建议观察指标 → 类型/范围、管理席位、实施时滞、最短持有期、单次
+  步长、成本、紧急权限、前置条件及遮蔽关系。说明只陈述模型机制,不承诺确定结果
 - 紧急会议中:只亮 emergency=✓ 白名单,其余锁定,显示紧急成本溢价
 - **提案是原子批**:购物车里的动作一起过/一起拒(Coordinator 保证);UI 不做逐个提交
 
@@ -244,8 +248,9 @@ BOUNDARY_START ──(有到期人类决策上下文)──▶ AWAITING_HUMAN �
 - 危机遮罩:白名单编辑直接装篮提交;空编辑=本次不动,玩家不会被困。
 - 时间语言:除顶栏 `tick N` 参考值外,公报发布、事件、政策时滞/冷却、企业状态、图表窗口
   与股市行情全部使用年/季/日或“天”的自然时间表达;内部协议和存档仍以 tick 为权威索引。
-- 政策说明:`get_schema` 的 registry 元数据 + 快照 `policy_values` 驱动每张旋钮卡的 `ⓘ`;
-  悬停给出定义/作用摘要,点击打开完整只读说明,不复制一套前端政策状态。
+- 政策说明:`get_schema` 的 registry 元数据、完整 `player_help` + 快照 `policy_values`
+  驱动每张旋钮卡的 `ⓘ`;悬停给出定义/传导/取舍摘要,点击打开分层的只读政策简报，
+  不复制一套前端政策状态或文案。
 - 截图验证:`MACRO_SIM_CAPTURE_PATH/_TICKS/_TAB/_SEAT/_CRISIS/_HOUSEHOLD/_PERSON/_FIRM/_POLICY_INFO`
   (按目标 tick 推进,会议中自动 pass；人物与企业参数可复现双向深链后的定位状态；
   `_TAB=stocks` 验证股市终端；`_CRISIS=1` 展示居中的紧急会议遮罩)。

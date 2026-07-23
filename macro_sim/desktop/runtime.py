@@ -1672,7 +1672,7 @@ class SimulationRuntime:
             "households": _jsonable(household_snapshot),
             "firms": _jsonable(firm_snapshot),
             "stock_market": _jsonable(stock_market_snapshot),
-            "policy_values": _jsonable(policy_values),
+            "policy_values": _jsonable(canonical_value(policy_values)),
             "world": {
                 "countries": [
                     {"name": spec["name"], "latin": spec["latin"]}

@@ -1804,6 +1804,8 @@ func _build_overlays() -> void:
 	mv.add_theme_constant_override("separation", 10)
 	mp.add_child(mv)
 	var mtitle := _lbl("", 15, INK)
+	mtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mtitle.clip_text = false
 	_n["modal_title"] = mtitle
 	mv.add_child(mtitle)
 	var mb := _lbl("", 12, Color("45535f"))
@@ -1811,7 +1813,20 @@ func _build_overlays() -> void:
 	mb.custom_minimum_size = Vector2(400, 0)
 	_n["modal_body"] = mb
 	mv.add_child(mb)
+	var policy_scroll := ScrollContainer.new()
+	policy_scroll.visible = false
+	policy_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	policy_scroll.custom_minimum_size = Vector2(810, 520)
+	_n["modal_policy"] = policy_scroll
+	mv.add_child(policy_scroll)
+	var policy_content := VBoxContainer.new()
+	policy_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	policy_content.custom_minimum_size.x = 790
+	policy_content.add_theme_constant_override("separation", 12)
+	_n["modal_policy_content"] = policy_content
+	policy_scroll.add_child(policy_content)
 	var mnote := _lbl("", 11, AMBER, true)
+	mnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_n["modal_note"] = mnote
 	mv.add_child(mnote)
 	var mrow := HBoxContainer.new()
@@ -1915,14 +1930,21 @@ func _render() -> void:
 	if not _confirm.is_empty():
 		var read_only := bool(_confirm.get("read_only", false))
 		(_n["modal_panel"] as Control).custom_minimum_size = Vector2(
-			700 if read_only else 440, 0)
+			860 if read_only else 440, 0)
 		(_n["modal_body"] as Label).custom_minimum_size = Vector2(
-			650 if read_only else 400, 330 if read_only else 0)
+			400, 0)
+		(_n["modal_body"] as Control).visible = not read_only
+		(_n["modal_policy"] as Control).visible = read_only
+		(_n["modal_title"] as Label).add_theme_font_size_override(
+			"font_size", 18 if read_only else 15)
 		(_n["modal_cancel"] as Button).text = "关闭" if read_only else "取消"
 		(_n["modal_confirm"] as Button).visible = not read_only
 		_set_text("modal_title", str(_confirm.get("title", "")))
 		_set_text("modal_body", str(_confirm.get("body", "")))
 		_set_text("modal_note", str(_confirm.get("note", "")))
+		if read_only:
+			_render_policy_brief(
+				_confirm.get("lever", {}), _confirm.get("current"))
 
 
 func _render_tiles() -> void:
@@ -2400,11 +2422,12 @@ func _lever_channel_text(lever: Dictionary) -> String:
 	}.get(group, "相关部门的预算约束与行为规则")
 
 
-func _lever_definition_text(lever: Dictionary, current: Variant) -> String:
+func _lever_meaning_text(lever: Dictionary) -> String:
 	var name := str(lever.get("name", ""))
 	var label := _cn(name)
+	var player_help: Dictionary = lever.get("player_help", {})
 	var help: Dictionary = POLICY_HELP.get(name, {})
-	var definition := str(help.get("definition", ""))
+	var definition := str(player_help.get("meaning", help.get("definition", "")))
 	if definition.is_empty():
 		if name.begins_with("tax_") or label.ends_with("税率"):
 			definition = "“%s”规定相关计税基数向政府缴纳的比例。" % label
@@ -2424,14 +2447,15 @@ func _lever_definition_text(lever: Dictionary, current: Variant) -> String:
 		else:
 			definition = "“%s”是模型中直接控制%s的政策参数。" % [
 				label, _lever_channel_text(lever)]
-	return "%s 当前值为 %s。" % [definition, _lever_value_text(lever, current)]
+	return definition
 
 
 func _lever_effect_text(lever: Dictionary) -> String:
 	var name := str(lever.get("name", ""))
 	var label := _cn(name)
+	var player_help: Dictionary = lever.get("player_help", {})
 	var help: Dictionary = POLICY_HELP.get(name, {})
-	var effect := str(help.get("effect", ""))
+	var effect := str(player_help.get("mechanics", help.get("effect", "")))
 	if not effect.is_empty():
 		return effect
 	if name.begins_with("tax_") or label.ends_with("税率"):
@@ -2454,10 +2478,28 @@ func _lever_effect_text(lever: Dictionary) -> String:
 		_lever_channel_text(lever)
 
 
+func _lever_tradeoffs_text(lever: Dictionary) -> String:
+	var player_help: Dictionary = lever.get("player_help", {})
+	var text := str(player_help.get("tradeoffs", ""))
+	if not text.is_empty():
+		return text
+	return "这项政策没有脱离情景的唯一最优值。调整前应同时比较目标改善、财政或金融成本，以及对其他部门的间接影响。"
+
+
+func _lever_watch_text(lever: Dictionary) -> String:
+	var player_help: Dictionary = lever.get("player_help", {})
+	var text := str(player_help.get("watch", ""))
+	if not text.is_empty():
+		return text
+	return "实际产出、就业、物价、财政与金融稳定"
+
+
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
-	return "定义\n%s\n\n作用\n%s\n\n点击打开完整政策说明" % [
-		_tooltip_wrap(_lever_definition_text(lever, current)),
-		_tooltip_wrap(_lever_effect_text(lever))]
+	return "%s  ·  当前 %s\n\n政策定义\n%s\n\n调整会怎样\n%s\n\n主要取舍\n%s\n\n点击打开完整政策简报" % [
+		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
+		_tooltip_wrap(_lever_meaning_text(lever)),
+		_tooltip_wrap(_lever_effect_text(lever)),
+		_tooltip_wrap(_lever_tradeoffs_text(lever))]
 
 
 func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
@@ -2475,28 +2517,41 @@ func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
 	return result.trim_suffix("\n")
 
 
-func _lever_info_body(lever: Dictionary, current: Variant) -> String:
+func _lever_timing_text(lever: Dictionary) -> String:
 	var lag := int(lever.get("implementation_lag", 0))
+	return "即时生效" if lag <= 0 else "通过后 %d 天生效" % lag
+
+
+func _lever_adjustment_text(lever: Dictionary) -> String:
 	var hold := int(lever.get("min_hold_ticks", 0))
 	var scale: Variant = lever.get("control_scale")
 	var max_step: Variant = lever.get("max_step")
-	var timing := "即时生效" if lag <= 0 else "通过后 %d 天生效" % lag
 	var adjustment := "无固定数值档位"
 	if scale != null:
 		adjustment = "建议单档 %s" % _lever_value_text(lever, scale)
 	if max_step != null:
 		adjustment += "；单次最多变动 %s" % _lever_value_text(lever, max_step)
-	var semantics: String = str({
+	return "%s；调整后至少保持 %d 天" % [adjustment, hold]
+
+
+func _lever_semantics_text(lever: Dictionary) -> String:
+	return str({
 		"immediate": "生效后从下一自然日的相关计算开始使用新值",
 		"new-contracts-only": "只影响生效后新签合同，既有存量合同不会被追溯改写",
 		"state-transition": "属于制度迁移，生效时会执行一次状态与账本衔接",
 	}.get(str(lever.get("semantics", "immediate")), "按注册表规定的生效语义执行"))
+
+
+func _lever_conditions_text(lever: Dictionary) -> String:
 	var requirements: Array = []
 	for capability in lever.get("requires", []):
 		requirements.append(str(CAPABILITY_CN.get(str(capability), capability)))
 	for prerequisite in lever.get("enabled_if", []):
 		requirements.append("政策“%s”已启用" % _cn(str(prerequisite)))
-	var conditions: String = "无额外前置条件" if requirements.is_empty() else "、".join(requirements)
+	return "无额外前置条件" if requirements.is_empty() else "需要：%s" % "、".join(requirements)
+
+
+func _lever_boundary_text(lever: Dictionary) -> String:
 	var shadowed: Array = []
 	for raw_shadow in lever.get("shadowed_by", []):
 		var token := str(raw_shadow)
@@ -2505,30 +2560,161 @@ func _lever_info_body(lever: Dictionary, current: Variant) -> String:
 			shadowed.append("零利率下限或政策利率上限")
 		else:
 			shadowed.append(_cn(base) if LEVER_CN.has(base) else token)
-	var boundary := "未登记规则覆盖关系"
 	if not shadowed.is_empty():
-		boundary = "可能被“%s”等优先规则覆盖，届时调整可能暂不改变结果" % "、".join(shadowed)
-	elif not str(lever.get("state_notes", "")).is_empty():
-		boundary = "注册表标记了条件性生效边界，应结合对应指标确认实际传导"
+		return "可能被“%s”等优先规则覆盖；覆盖期间即使改变数值，也可能暂时看不到结果。" % "、".join(shadowed)
+	if not str(lever.get("state_notes", "")).is_empty():
+		return "这项政策具有情景或状态条件，只有相关市场、合同或危机实际出现时，效果才会进入数据。"
+	return "没有登记会直接遮蔽该政策的上层规则；最终幅度仍取决于当时的家庭、企业和金融状态。"
+
+
+func _lever_cost_text(lever: Dictionary) -> String:
 	var cost_cn: String = {
 		"regime_switch": "制度切换", "major": "重大调整",
 		"ordinary": "常规调整", "operational": "日常操作",
 	}.get(str(lever.get("cost_class", "ordinary")), "常规调整")
-	return "定义\n%s\n\n作用与传导\n%s\n\n规则与约束\n• 管理：%s · %s\n• 取值：%s\n• 时点：%s；调整后至少保持 %d 天\n• 调整：%s\n• 生效语义：%s\n• 前置条件：%s\n• 条件边界：%s\n• 行政成本：%.1f（%s）\n• 紧急会议：%s" % [
-		_lever_definition_text(lever, current), _lever_effect_text(lever),
+	return "%.1f · %s" % [float(lever.get("admin_weight", 0.0)), cost_cn]
+
+
+func _brief_text(text: String, size: int = 12, color: Color = INK2,
+		bold: bool = false) -> Label:
+	var label := _lbl(text, size, color, bold)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_constant_override("line_spacing", 3)
+	return label
+
+
+func _brief_panel(title: String, text: String, accent: Color,
+		background: Color = Color.WHITE) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", _sb(background, accent.lightened(0.55), 11, 12, 4))
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 7)
+	panel.add_child(content)
+	var heading := HBoxContainer.new()
+	heading.add_theme_constant_override("separation", 7)
+	heading.add_child(_dot(accent, 7))
+	heading.add_child(_lbl(title, 10, accent.darkened(0.18), true))
+	content.add_child(heading)
+	content.add_child(_brief_text(text, 12, Color("384b5d")))
+	return panel
+
+
+func _brief_rule_card(title: String, value: String, accent: Color) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(0, 76)
+	panel.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), Color("dce4ed"), 9, 10))
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	panel.add_child(content)
+	content.add_child(_lbl(title, 9, accent, true))
+	content.add_child(_brief_text(value, 11, Color("405365"), true))
+	return panel
+
+
+func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
+	var content := _n["modal_policy_content"] as VBoxContainer
+	for child in content.get_children():
+		content.remove_child(child)
+		child.queue_free()
+	if not lever_raw is Dictionary or (lever_raw as Dictionary).is_empty():
+		content.add_child(_brief_text("政策资料暂不可用。", 12, INK3))
+		return
+	var lever: Dictionary = lever_raw
+	var seat_color := _seat_color(str(lever.get("owner_role", "")))
+
+	# Hero: the current state and a plain-language answer to “what is this?”.
+	var hero := PanelContainer.new()
+	hero.add_theme_stylebox_override("panel", _sb(Color("eef4fb"), Color("c8d8ec"), 12, 14, 4))
+	var hero_row := HBoxContainer.new()
+	hero_row.add_theme_constant_override("separation", 16)
+	hero.add_child(hero_row)
+	var current_col := VBoxContainer.new()
+	current_col.custom_minimum_size.x = 185
+	current_col.add_theme_constant_override("separation", 5)
+	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("647b92"), true))
+	current_col.add_child(_lbl(_lever_value_text(lever, current), 22, seat_color, true))
+	var seat_chip := _chip(
+		_seat_name(str(lever.get("owner_role", ""))), seat_color,
+		Color(1, 1, 1, 0.7), seat_color.lightened(0.5), 9)
+	seat_chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	current_col.add_child(seat_chip)
+	hero_row.add_child(current_col)
+	var meaning_col := VBoxContainer.new()
+	meaning_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	meaning_col.add_theme_constant_override("separation", 5)
+	meaning_col.add_child(_lbl("政策定义", 10, Color("647b92"), true))
+	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("25394c"), true))
+	hero_row.add_child(meaning_col)
+	content.add_child(hero)
+
+	# Decision first: mechanism and trade-off are the two things a player needs before touching a lever.
+	var decision_row := HBoxContainer.new()
+	decision_row.add_theme_constant_override("separation", 12)
+	decision_row.add_child(_brief_panel("调整会怎样", _lever_effect_text(lever),
+		Color("2e6fd0"), Color("f7faff")))
+	decision_row.add_child(_brief_panel("主要取舍", _lever_tradeoffs_text(lever),
+		AMBER, Color("fffbf2")))
+	content.add_child(decision_row)
+
+	var watch_panel := PanelContainer.new()
+	watch_panel.add_theme_stylebox_override("panel", _sb(Color("f1f8f6"), Color("c9e2dc"), 10, 11))
+	var watch_col := VBoxContainer.new()
+	watch_col.add_theme_constant_override("separation", 7)
+	watch_panel.add_child(watch_col)
+	watch_col.add_child(_lbl("建议观察 · 调整后不要只看一个数字", 10, TEAL_DK, true))
+	var watch_flow := HFlowContainer.new()
+	watch_flow.add_theme_constant_override("h_separation", 6)
+	watch_flow.add_theme_constant_override("v_separation", 6)
+	for raw_metric in _lever_watch_text(lever).split("、", false):
+		var metric := str(raw_metric).strip_edges()
+		if not metric.is_empty():
+			watch_flow.add_child(_chip(metric, TEAL_DK, Color.WHITE, Color("bcded7"), 9))
+	watch_col.add_child(watch_flow)
+	content.add_child(watch_panel)
+
+	var rule_heading := HBoxContainer.new()
+	rule_heading.add_theme_constant_override("separation", 8)
+	rule_heading.add_child(_lbl("EXECUTION · 执行规则", 10, INK3, true))
+	rule_heading.add_child(_hrule())
+	content.add_child(rule_heading)
+	var rules := HBoxContainer.new()
+	rules.add_theme_constant_override("separation", 8)
+	rules.add_child(_brief_rule_card("可选范围", _lever_kind_description(lever), BLUE))
+	rules.add_child(_brief_rule_card("实施时间", _lever_timing_text(lever), TEAL_DK))
+	rules.add_child(_brief_rule_card("调整节奏", _lever_adjustment_text(lever), PURPLE))
+	rules.add_child(_brief_rule_card("行政成本", _lever_cost_text(lever), AMBER))
+	content.add_child(rules)
+
+	var execution := HBoxContainer.new()
+	execution.add_theme_constant_override("separation", 12)
+	execution.add_child(_brief_panel("生效方式", _lever_semantics_text(lever),
+		Color("58708a"), Color("f8fafc")))
+	execution.add_child(_brief_panel("前置条件", _lever_conditions_text(lever),
+		Color("58708a"), Color("f8fafc")))
+	content.add_child(execution)
+	content.add_child(_brief_panel("条件与例外", _lever_boundary_text(lever),
+		Color("9a6b10"), Color("fffaf0")))
+
+	var emergency_text := "可在紧急会议中使用，紧急实施滞后为 %s。" % (
+		"即时" if lever.get("emergency_implementation_lag") == null
+		else "%d 天" % int(lever.get("emergency_implementation_lag", 0))) \
+		if bool(lever.get("emergency", false)) else "不在紧急政策白名单，只能通过常规会议调整。"
+	content.add_child(_brief_text("权限 · %s · %s\n%s" % [
 		_seat_name(str(lever.get("owner_role", ""))),
 		str(GROUP_CN.get(str(lever.get("decision_group", "")),
-			lever.get("decision_group", "政策"))),
-		_lever_kind_description(lever), timing, hold, adjustment, semantics,
-		conditions, boundary, float(lever.get("admin_weight", 0.0)), cost_cn,
-		"可使用紧急授权" if bool(lever.get("emergency", false)) else "不在紧急白名单"]
+			lever.get("decision_group", "政策"))), emergency_text], 10, INK3))
 
 
 func _show_lever_info(lever: Dictionary, current: Variant) -> void:
 	_confirm = {
 		"title": "POLICY BRIEF · %s" % _cn(str(lever.get("name", ""))),
-		"body": _lever_info_body(lever, current),
-		"note": "说明描述模型中的直接机制，不承诺宏观结果；请结合当期公报与情景判断。",
+		"body": "",
+		"note": "模型说明只描述直接机制，不保证政策结果；时滞、经济状态和其他政策可能改变最终效果。",
+		"lever": lever,
+		"current": current,
 		"read_only": true,
 	}
 	_render()

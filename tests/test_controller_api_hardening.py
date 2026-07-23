@@ -7,6 +7,7 @@ from macro_sim.controllers.api import ControllerService
 from macro_sim.controllers.occupants import NullOccupant
 from macro_sim.controllers.session import ControlledSimulationSession
 from macro_sim.economy import Economy
+from macro_sim.core.policy_explanations import POLICY_EXPLANATIONS
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.world import World
 
@@ -56,6 +57,12 @@ def test_policy_schema_distinguishes_integer_nullable_and_dynamic_reference_type
         "gov_deficit_target>0",
     ]
     assert "state_notes" in treasury["gov_consumption_share"]
+    assert treasury["gov_consumption_share"]["player_help"] == {
+        "meaning": POLICY_EXPLANATIONS["gov_consumption_share"].meaning,
+        "mechanics": POLICY_EXPLANATIONS["gov_consumption_share"].mechanics,
+        "tradeoffs": POLICY_EXPLANATIONS["gov_consumption_share"].tradeoffs,
+        "watch": POLICY_EXPLANATIONS["gov_consumption_share"].watch,
+    }
 
     central_bank = {
         row["name"]: row
@@ -72,6 +79,18 @@ def test_policy_schema_distinguishes_integer_nullable_and_dynamic_reference_type
     assert external["sanctions_imposed_on"]["value_kind"] == "economy_set"
     assert external["sanctions_imposed_on"]["choices"] == [1]
     assert external["sanctions_imposed_on"]["nullable"] is False
+    assert external["sanctions_imposed_on"]["current_value"] == []
+
+
+def test_every_registered_policy_has_complete_player_help():
+    assert set(POLICY_EXPLANATIONS) == set(REGISTRY)
+    for name, explanation in POLICY_EXPLANATIONS.items():
+        values = explanation.to_dict()
+        assert set(values) == {"meaning", "mechanics", "tradeoffs", "watch"}
+        assert all(
+            isinstance(text, str) and len(text.strip()) >= 10
+            for text in values.values()
+        ), name
 
 
 def test_bare_economy_schema_excludes_structurally_absent_external_levers():
