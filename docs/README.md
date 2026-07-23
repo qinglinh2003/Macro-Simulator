@@ -19,6 +19,9 @@ This directory keeps long-form project documentation out of the repository root.
   desktop start-menu and new-game specification covering country profiles, the
   complete Config/initial-Policy surfaces, World coupling, controllers, shocks,
   validation, and client settings.
+- [`cpp_engine_refactor_v33.md`](cpp_engine_refactor_v33.md) — measured C++20
+  engine architecture, complete module disposition, interoperability contracts,
+  staged migration, and semantic/performance acceptance gates.
 - [`../archive/`](../archive/README.md) — archived scripts and other pre-refactor reference material.
 - [`../artifacts/`](../artifacts/README.md) — generated/reference images and small experiment artifacts.
 
