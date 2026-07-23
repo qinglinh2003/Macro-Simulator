@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macro-simulator.local/schemas/m0/statistical-panels.schema.json",
+  "title": "M0 frozen statistical equivalence panels",
+  "type": "object",
+  "required": ["schema_version", "family_wise_alpha", "correction", "rows"],
+  "properties": {
+    "schema_version": {"const": "m0-statistical-panels-v1"},
+    "family_wise_alpha": {"const": 0.05},
+    "correction": {"const": "holm"},
+    "rows": {"type": "array", "minItems": 1}
+  },
+  "additionalProperties": false
+}

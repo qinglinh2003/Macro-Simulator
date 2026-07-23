@@ -1,0 +1,8 @@
+schema_version: m0-comparator-cases-v1
+cases:
+  - {id: comparator.exact-pass, path: "$.tick", expected: 10, actual: 10, outcome: pass, failure_reason: null}
+  - {id: comparator.exact-fail, path: "$.tick", expected: 10, actual: 11, outcome: fail, failure_reason: numeric_mismatch}
+  - {id: comparator.numeric-pass, path: "$.selected_state.policy_rate", expected: 0.01, actual: 0.0100000000005, outcome: pass, failure_reason: null}
+  - {id: comparator.numeric-fail, path: "$.selected_state.policy_rate", expected: 0.01, actual: 0.0101, outcome: fail, failure_reason: numeric_mismatch}
+  - {id: comparator.event-window-pass, path: "$.events[*].tick", expected: 50, actual: 51, outcome: pass, failure_reason: null}
+  - {id: comparator.unknown-fail, path: "$.unregistered.value", expected: 1.0, actual: 1.0, outcome: fail, failure_reason: unknown_tolerance}
