@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macro-simulator.local/schemas/m0/fixture-manifest.schema.json",
+  "title": "M0 deterministic fixture manifest",
+  "type": "object",
+  "required": ["schema_version", "rows", "aggregate_sha256"],
+  "properties": {
+    "schema_version": {"const": "m0-fixture-manifest-v1"},
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "tier",
+          "config_contract_sha256",
+          "initial_policy_sha256",
+          "initial_external_policy_sha256",
+          "genesis_contract_sha256",
+          "trace_projection"
+        ]
+      }
+    },
+    "aggregate_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}

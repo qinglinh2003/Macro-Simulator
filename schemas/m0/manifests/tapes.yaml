@@ -1,0 +1,98 @@
+schema_version: m0-tape-source-v1
+calendar_start: "2000-01-01"
+policy:
+  - transaction_id: tape-policy-central-bank-001
+    decision_date: "2000-01-31"
+    reference_tick: 30
+    economy_id: 0
+    seat: central_bank
+    group: monetary_stance
+    emergency: true
+    actions:
+      - {lever: monetary_regime, value: manual}
+      - {lever: manual_policy_rate, value: 0.0001}
+    declared_lag_ticks: 0
+    expected_effective_date: "2000-01-31"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+  - transaction_id: tape-policy-energy-001
+    decision_date: "2000-02-10"
+    reference_tick: 40
+    economy_id: 0
+    seat: energy
+    group: energy_operations
+    emergency: false
+    actions:
+      - {lever: spr_target_units, value: 10000.0}
+    declared_lag_ticks: 7
+    expected_effective_date: "2000-02-17"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+  - transaction_id: tape-policy-external-001
+    decision_date: "2000-02-20"
+    reference_tick: 50
+    economy_id: 0
+    counterparty_economy_id: 1
+    seat: external_affairs
+    group: trade_and_migration
+    emergency: false
+    actions:
+      - {lever: tariff, value: 0.05}
+    declared_lag_ticks: 14
+    expected_effective_date: "2000-03-05"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+  - transaction_id: tape-policy-regulator-001
+    decision_date: "2000-03-01"
+    reference_tick: 60
+    economy_id: 0
+    seat: regulator
+    group: macroprudential
+    emergency: false
+    actions:
+      - {lever: mortgage_dsti_cap, value: 0.425}
+    declared_lag_ticks: 7
+    expected_effective_date: "2000-03-08"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+  - transaction_id: tape-policy-treasury-001
+    decision_date: "2000-03-11"
+    reference_tick: 70
+    economy_id: 0
+    seat: treasury
+    group: fiscal_stance
+    emergency: false
+    actions:
+      - {lever: gov_deficit_target, value: 0.005}
+    declared_lag_ticks: 7
+    expected_effective_date: "2000-03-18"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+shock:
+  name: m0-all-default-kinds
+  schema_version: 1
+  specs:
+    - {shock_id: m0-productivity, kind: productivity, start_tick: 10, magnitude: 0.1, target: {economy_ids: [0], sectors: [consumption]}, duration_ticks: 8, ramp_in_ticks: 2, ramp_out_ticks: 2, announcement_tick: 8, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: real-side, tags: [m0], schema_version: 1}
+    - {shock_id: m0-labor, kind: labor_availability, start_tick: 20, magnitude: 0.08, target: {economy_ids: [0], sectors: []}, duration_ticks: 6, ramp_in_ticks: 0, ramp_out_ticks: 2, announcement_tick: 19, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: real-side, tags: [m0], schema_version: 1}
+    - {shock_id: m0-energy, kind: energy_capacity, start_tick: 30, magnitude: 0.15, target: {economy_ids: [0], sectors: [energy]}, duration_ticks: 10, ramp_in_ticks: 2, ramp_out_ticks: 3, announcement_tick: 27, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: supply, tags: [m0], schema_version: 1}
+    - {shock_id: m0-demand, kind: household_demand, start_tick: 40, magnitude: 0.12, target: {economy_ids: [0], sectors: []}, duration_ticks: 9, ramp_in_ticks: 0, ramp_out_ticks: 3, announcement_tick: 40, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: demand, tags: [m0], schema_version: 1}
+    - {shock_id: m0-import, kind: import_capacity, start_tick: 50, magnitude: 0.2, target: {economy_ids: [0], sectors: []}, duration_ticks: 7, ramp_in_ticks: 0, ramp_out_ticks: 2, announcement_tick: 48, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: external, tags: [m0], schema_version: 1}
+    - {shock_id: m0-export, kind: export_capacity, start_tick: 50, magnitude: 0.18, target: {economy_ids: [1], sectors: []}, duration_ticks: 7, ramp_in_ticks: 0, ramp_out_ticks: 2, announcement_tick: 48, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: external, tags: [m0], schema_version: 1}
+    - {shock_id: m0-credit, kind: credit_supply, start_tick: 60, magnitude: 0.25, target: {economy_ids: [0], sectors: []}, duration_ticks: 12, ramp_in_ticks: 2, ramp_out_ticks: 4, announcement_tick: 55, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: finance, tags: [m0], schema_version: 1}
+    - {shock_id: m0-destruction, kind: capital_destruction, start_tick: 70, magnitude: 0.1, target: {economy_ids: [0], sectors: [capital]}, duration_ticks: 1, ramp_in_ticks: 0, ramp_out_ticks: 0, announcement_tick: 65, visibility: public, roles: [], source: m0_fixture, calibration_note: "", correlation_group: disaster, tags: [m0], schema_version: 1}
+action:
+  - action_id: m0-controller-hold
+    task_id: fiscal_stabilization_v1
+    natural_date: "2000-01-01"
+    reference_tick: 0
+    action: [1]
+    expected_direction: hold
+  - action_id: m0-controller-expand
+    task_id: fiscal_stabilization_v1
+    natural_date: "2000-01-08"
+    reference_tick: 7
+    action: [2]
+    expected_direction: up
+realization:
+  - realization_id: m0-economy-main-uniform-001
+    stream_id: rng.stream.case-macro_sim-economy-economy-init.self-rng
+    natural_date: "2000-01-01"
+    reference_tick: 0
+    distribution: uniform
+    parameters: [0.0, 1.0]
+    value: 0.5811521325045647

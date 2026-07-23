@@ -1,0 +1,123 @@
+schema_version: m0-fixture-source-v1
+rows:
+  - id: fixture.f0.refactor-tripwires
+    tier: F0
+    purpose: Behavior-preserving version tripwires.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 8, n_firms_k: 4, n_households: 80, n_ticks: 80, seed: 0}
+    duration_ticks: 80
+    expected_artifact: tests/fixtures/m0/expected/refactor_v124.json
+    evidence_tests: [tests/test_refactor_golden_baseline.py]
+    gate_classes: [pr, nightly, milestone]
+  - id: fixture.f1.cash-loop
+    tier: F1
+    purpose: Minimal deterministic household-firm cash loop.
+    deterministic: true
+    config_factory: base
+    config_overrides: {n_firms: 4, n_households: 24, n_ticks: 30, seed: 101}
+    duration_ticks: 30
+    expected_artifact: null
+    evidence_tests: [tests/test_conservation.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f2.capital-fiscal
+    tier: F2
+    purpose: Capital goods and basic fiscal vertical slice.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 6, n_firms_k: 2, n_households: 40, n_ticks: 60, seed: 102}
+    duration_ticks: 60
+    expected_artifact: null
+    evidence_tests: [tests/test_policy_effectiveness.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f3.full-playable
+    tier: F3
+    purpose: Current single-economy playable profile.
+    deterministic: false
+    config_factory: v124
+    config_overrides: {n_firms_c: 12, n_firms_k: 4, n_households: 95, n_ticks: 90, seed: 103}
+    duration_ticks: 90
+    expected_artifact: null
+    evidence_tests: [tests/test_desktop_new_game.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f4.world-n2
+    tier: F4
+    purpose: Coupled two-economy World boundary.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 4, n_firms_k: 2, n_households: 24, n_ticks: 10, seed: 100}
+    duration_ticks: 10
+    expected_artifact: tests/fixtures/m0/expected/world_n2.json
+    evidence_tests: [tests/test_world_container.py, tests/test_world_fx.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f5.policy-semantics
+    tier: F5
+    purpose: Representative immediate, new-contract, and transition policy paths.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 6, n_firms_k: 2, n_households: 40, n_ticks: 90, seed: 105}
+    duration_ticks: 90
+    expected_artifact: null
+    evidence_tests: [tests/test_policy_effectiveness.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f6.shock-semantics
+    tier: F6
+    purpose: All registered shock kinds and lifecycle transitions.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 6, n_firms_k: 2, n_households: 40, n_ticks: 90, seed: 106}
+    duration_ticks: 90
+    expected_artifact: null
+    evidence_tests: [tests/test_shocks_v27.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f7.controller-lifecycle
+    tier: F7
+    purpose: Human, scripted, emergency, replay, and terminal controller paths.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 4, n_firms_k: 2, n_households: 24, n_ticks: 90, seed: 107}
+    duration_ticks: 90
+    expected_artifact: null
+    evidence_tests: [tests/test_controller_terminal_human_replay.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f8.rl-contract
+    tier: F8
+    purpose: Deployed fiscal stabilization reset, action, step, and terminal contract.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 4, n_firms_k: 2, n_households: 24, n_ticks: 90, seed: 108}
+    duration_ticks: 90
+    expected_artifact: null
+    evidence_tests: [tests/test_rl_model_deployment.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f9.desktop-flow
+    tier: F9
+    purpose: New game, policy action, save/load, and main-menu desktop flow.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 4, n_firms_k: 2, n_households: 24, n_ticks: 30, seed: 109}
+    duration_ticks: 30
+    expected_artifact: null
+    evidence_tests: [tests/test_desktop_runtime.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f10.persistence
+    tier: F10
+    purpose: Direct versus fresh-process checkpoint continuation.
+    deterministic: true
+    config_factory: v124
+    config_overrides: {n_firms_c: 4, n_firms_k: 2, n_households: 24, n_ticks: 40, seed: 110}
+    duration_ticks: 40
+    expected_artifact: null
+    evidence_tests: [tests/test_checkpoint.py]
+    gate_classes: [nightly, milestone]
+  - id: fixture.f11.stochastic-panels
+    tier: F11
+    purpose: Frozen seed panels for demographic and market realizations.
+    deterministic: false
+    config_factory: v124
+    config_overrides: {n_firms_c: 6, n_firms_k: 2, n_households: 40, n_ticks: 365, seed: 1101}
+    duration_ticks: 365
+    seed_panel: [1101, 1102, 1103, 1105, 1108, 1113, 1121, 1134]
+    expected_artifact: null
+    evidence_tests: [tests/test_demographic_phase0_validation.py]
+    gate_classes: [milestone]
