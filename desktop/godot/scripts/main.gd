@@ -1,13 +1,14 @@
 extends Control
-## 宏观指挥室 v30.2 — 政策工作台交互优化。
-## 前端零经济逻辑;三国耦合世界,玩家持 0 号经济体全部 5 个席位(102 旋钮全落地)。
+## Macro Command v30.2. The desktop is a presentation and command surface;
+## the simulation engine remains the sole authority for economic behavior.
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
 const StartMenuScript = preload("res://scripts/start_menu.gd")
+const LocaleCatalogScript = preload("res://scripts/localization.gd")
 
 const SPEEDS := [1, 5, 15, 60]
 
-# ---- 设计系统(设计稿原色) ----
+# ---- Design system ----
 const GROUND := Color("e9edf2")
 const PANEL := Color("fbfcfd")
 const PANEL2 := Color("f1f4f8")
@@ -36,7 +37,7 @@ const GREEN := Color("1f9d63")
 
 const ECON_COLORS := [Color("0f9d90"), Color("c17d16"), Color("2f6fd0")]
 
-# 公报磁贴(诚实信道:发布日历 + 时滞 + 缺失显式化)
+# Release tiles preserve publication calendars, lag, and explicit missingness.
 const TILE_TO_GROUP := {
 	"real_output": "实体经济", "unemployment_rate": "劳动力",
 	"inflation": "价格与货币", "price_index": "价格与货币",
@@ -55,7 +56,7 @@ const TILE_SPEC := [
 	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true, "kind": "pp"},
 ]
 
-# 八维核心指标:每个经济维度只选一个权威公报序列,不读取未发布的逐日状态。
+# Each core dimension uses one authoritative released series.
 const CORE_DIMENSION_SPEC := [
 	{"id": "real_output", "dimension": "增长", "metric": "实际产出", "group": "实体经济", "color": TEAL},
 	{"id": "unemployment_rate", "dimension": "就业", "metric": "失业率", "group": "劳动力", "color": AMBER},
@@ -84,7 +85,7 @@ const GROUP_CN := {
 	"energy_structure": "能源结构",
 }
 
-# 政策值只做呈现层转换；提交仍使用 Registry 给出的 canonical 值。
+# Choice labels are presentation-only; submissions use Registry canonical values.
 const CHOICE_CN := {
 	"monetary_regime": {"exogenous": "外生利率", "taylor": "泰勒规则", "manual": "手动设定"},
 	"fx_regime": {"float": "浮动汇率", "peg": "联系汇率"},
@@ -1487,7 +1488,7 @@ func _sb(bg: Color, border: Color, radius: int, margin: int,
 
 func _lbl(text: String, size: int, color: Color, mono := false) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = LocaleCatalogScript.resolve(text)
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	if mono:
@@ -1534,7 +1535,7 @@ func _hrule() -> Control:
 
 func _btn(text: String, cb: Callable, primary := false) -> Button:
 	var b := Button.new()
-	b.text = text
+	b.text = LocaleCatalogScript.resolve(text)
 	b.pressed.connect(cb)
 	if primary:
 		b.add_theme_stylebox_override("normal", _sb(TEAL_BG, Color("59b7a8"), 8, 7))
@@ -1568,7 +1569,7 @@ func _apply_cursors(node: Node) -> void:
 
 func _set_text(key: String, text: String) -> void:
 	if _n.has(key) and is_instance_valid(_n[key]):
-		(_n[key] as Label).text = text
+		(_n[key] as Label).text = LocaleCatalogScript.resolve(text)
 
 
 func _fmt_val(kind: String, v: float) -> String:

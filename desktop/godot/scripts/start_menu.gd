@@ -3,6 +3,8 @@ extends Control
 ## Every visible simulation option is serialized into NewGameSpec v1 and
 ## validated by the Python engine before the current run is replaced.
 
+const LocaleCatalogScript := preload("res://scripts/localization.gd")
+
 signal launch_requested(config: Dictionary)
 signal continue_requested
 
@@ -44,44 +46,48 @@ const POPULATION_LINKED_FIELDS := [
 ]
 
 const STEP_META := [
-	["场景", "SCENARIO"], ["世界设置", "WORLD"],
-	["国家配置", "COUNTRIES"], ["政府与席位", "GOVERNMENT"],
-	["初始政策", "POLICY"], ["检查并开始", "REVIEW"],
+	["@step.scenario", "SCENARIO"], ["@step.world", "WORLD"],
+	["@step.countries", "COUNTRIES"], ["@step.government", "GOVERNMENT"],
+	["@step.policy", "POLICY"], ["@step.review", "REVIEW"],
 ]
 
 const SCENARIOS := [
-	{"id": "sandbox", "name": "自由沙盒", "desc": "无预设 ShockTape，结果完全由模拟与玩家行为产生", "caps": "无需额外能力", "duration": "开放期限", "reduced": false},
-	{"id": "oil", "name": "石油禁运", "desc": "能源产能与进口能力同时受限", "caps": "能源 + 贸易", "duration": "180 天", "reduced": true},
-	{"id": "gfc", "name": "全球金融危机", "desc": "信贷供给、需求与生产率受冲击", "caps": "银行体系", "duration": "365 天", "reduced": true},
-	{"id": "pandemic", "name": "大流行", "desc": "劳动、生产率、需求、信贷及可选贸易受冲击", "caps": "银行体系", "duration": "365 天", "reduced": true},
-	{"id": "disaster", "name": "自然灾害", "desc": "一次性资本损失，加暂时生产率与劳动冲击", "caps": "无需额外能力", "duration": "30 天", "reduced": true},
+	{"id": "sandbox", "name": "@scenario.sandbox.name", "desc": "@scenario.sandbox.desc", "caps": "@scenario.sandbox.caps", "duration": "@scenario.sandbox.duration", "reduced": false},
+	{"id": "oil", "name": "@scenario.oil.name", "desc": "@scenario.oil.desc", "caps": "@scenario.oil.caps", "duration": "@scenario.oil.duration", "reduced": true},
+	{"id": "gfc", "name": "@scenario.gfc.name", "desc": "@scenario.gfc.desc", "caps": "@scenario.gfc.caps", "duration": "@scenario.gfc.duration", "reduced": true},
+	{"id": "pandemic", "name": "@scenario.pandemic.name", "desc": "@scenario.pandemic.desc", "caps": "@scenario.pandemic.caps", "duration": "@scenario.pandemic.duration", "reduced": true},
+	{"id": "disaster", "name": "@scenario.disaster.name", "desc": "@scenario.disaster.desc", "caps": "@scenario.disaster.caps", "duration": "@scenario.disaster.duration", "reduced": true},
 ]
 
 const PROFILES := {
-	"symmetric": {"name": "对称基线", "desc": "对称基线，无自动覆盖偏离", "scale": 1.0, "prod": 1.0, "nec": 0.50},
-	"advanced": {"name": "发达", "desc": "高生产率、低生育、低死亡率", "scale": 1.0, "prod": 1.2, "nec": 0.50},
-	"developing": {"name": "发展中", "desc": "大型年轻人口、追赶增长、必需品偏高", "scale": 1.5, "prod": 0.75, "nec": 0.65},
-	"entrepot": {"name": "转口港", "desc": "小型高效、低生育、能源效率偏低", "scale": 0.4, "prod": 1.15, "nec": 0.50},
-	"petrostate": {"name": "资源国", "desc": "能源生产率高、总体生产率偏低", "scale": 0.8, "prod": 0.85, "nec": 0.50},
-	"custom": {"name": "自定义", "desc": "从当前最终值创建并继续覆盖", "scale": 1.0, "prod": 1.0, "nec": 0.50},
+	"symmetric": {"name": "@profile.symmetric.name", "desc": "@profile.symmetric.desc", "scale": 1.0, "prod": 1.0, "nec": 0.50},
+	"advanced": {"name": "@profile.advanced.name", "desc": "@profile.advanced.desc", "scale": 1.0, "prod": 1.2, "nec": 0.50},
+	"developing": {"name": "@profile.developing.name", "desc": "@profile.developing.desc", "scale": 1.5, "prod": 0.75, "nec": 0.65},
+	"entrepot": {"name": "@profile.entrepot.name", "desc": "@profile.entrepot.desc", "scale": 0.4, "prod": 1.15, "nec": 0.50},
+	"petrostate": {"name": "@profile.petrostate.name", "desc": "@profile.petrostate.desc", "scale": 0.8, "prod": 0.85, "nec": 0.50},
+	"custom": {"name": "@profile.custom.name", "desc": "@profile.custom.desc", "scale": 1.0, "prod": 1.0, "nec": 0.50},
 }
 
-const COUNTRY_NAMES := ["奥雷利亚", "博尔维亚", "佩特罗尼亚", "卡兰迪亚", "梅里迪", "诺瓦尼亚", "塞拉菲", "图兰"]
+const COUNTRY_NAMES := [
+	"@country.aurelia", "@country.borvia", "@country.petronia",
+	"@country.calandria", "@country.meridi", "@country.novania",
+	"@country.seraphi", "@country.turan",
+]
 const COUNTRY_CODES := ["AUR", "BOL", "PET", "KAL", "MER", "NOV", "SER", "TUR"]
 const COUNTRY_COLORS := [Color("0f9d90"), Color("2f6fd0"), Color("7a4fd0"), Color("c17d16"), Color("1f9d63"), Color("d24a34"), Color("3f6db2"), Color("0c8579")]
 
 const SEATS := [
-	{"id": "cb", "name": "央行", "color": Color("2f6fd0"), "groups": "monetary · liquidity · fx (24)"},
-	{"id": "treasury", "name": "财政部", "color": Color("0f9d90"), "groups": "fiscal · tax · debt (35)"},
-	{"id": "regulator", "name": "金融监管", "color": Color("7a4fd0"), "groups": "macropru · structural (28)"},
-	{"id": "external", "name": "对外事务", "color": Color("3f6db2"), "groups": "trade · migration (9)"},
-	{"id": "energy", "name": "能源", "color": Color("c17d16"), "groups": "operations · structure (6)"},
+	{"id": "cb", "name": "@seat.central_bank", "color": Color("2f6fd0"), "groups": "monetary · liquidity · fx (24)"},
+	{"id": "treasury", "name": "@seat.treasury", "color": Color("0f9d90"), "groups": "fiscal · tax · debt (35)"},
+	{"id": "regulator", "name": "@seat.regulator", "color": Color("7a4fd0"), "groups": "macropru · structural (28)"},
+	{"id": "external", "name": "@seat.external", "color": Color("3f6db2"), "groups": "trade · migration (9)"},
+	{"id": "energy", "name": "@seat.energy", "color": Color("c17d16"), "groups": "operations · structure (6)"},
 ]
 
 const OCCUPANTS := [
-	["human", "人类玩家"], ["null", "固定不动作 (Null)"],
-	["heuristic", "启发式稳定器"], ["rl", "RL · 财政稳定 v1（已训练）"],
-	["scheduled", "预定脚本（空计划）"], ["fuzz", "随机探索"],
+	["human", "@occupant.human"], ["null", "@occupant.null"],
+	["heuristic", "@occupant.heuristic"], ["rl", "@occupant.rl"],
+	["scheduled", "@occupant.scheduled"], ["fuzz", "@occupant.fuzz"],
 ]
 
 const SEAT_SCHEMA_KEYS := {
@@ -90,27 +96,27 @@ const SEAT_SCHEMA_KEYS := {
 }
 
 const STRUCT_GROUPS := [
-	{"name": "规模", "fields": [["初始人口", "demographics_population", "step"], ["消费品企业", "n_firms_c", "step"], ["资本品企业", "n_firms_k", "step"], ["能源企业", "n_firms_e", "step"], ["建造企业", "n_builders", "step"], ["银行数", "n_banks", "step"]]},
-	{"name": "生产", "fields": [["基础生产率", "a", "step"], ["资本份额", "alpha", "step"], ["TFP 法则", "tfp_law", "select"]]},
-	{"name": "金融结构", "fields": [["银行系统", "bank_enabled", "toggle"], ["银行间市场", "interbank", "toggle"], ["政府债券", "bonds", "toggle"], ["资本市场", "capital_market", "toggle"], ["逐企业股票", "per_firm_equity", "toggle"], ["家庭信贷", "household_credit", "toggle"]]},
-	{"name": "住房", "fields": [["住房登记", "housing_enabled", "toggle"], ["住房市场", "housing_market_enabled", "toggle"], ["按揭", "mortgage_enabled", "toggle"], ["租赁", "housing_rental_enabled", "toggle"], ["住房建造", "housing_construction_enabled", "toggle"]]},
-	{"name": "人口与产业", "fields": [["人口系统", "demographics_enabled", "toggle"], ["必需/奢侈分层", "consumption_strata", "toggle"], ["必需品占比", "necessity_share0", "step"], ["能源部门", "energy_enabled", "toggle"], ["政府", "government", "toggle"], ["国民账户指标", "national_accounts_metrics", "toggle"]]},
+	{"name": "@structure.scale", "fields": [["@field.initial_population", "demographics_population", "step"], ["@field.consumer_firms", "n_firms_c", "step"], ["@field.capital_firms", "n_firms_k", "step"], ["@field.energy_firms", "n_firms_e", "step"], ["@field.builders", "n_builders", "step"], ["@field.banks", "n_banks", "step"]]},
+	{"name": "@structure.production", "fields": [["@field.base_productivity", "a", "step"], ["@field.capital_share", "alpha", "step"], ["@field.tfp_law", "tfp_law", "select"]]},
+	{"name": "@structure.finance", "fields": [["@field.banking_system", "bank_enabled", "toggle"], ["@field.interbank_market", "interbank", "toggle"], ["@field.government_bonds", "bonds", "toggle"], ["@field.capital_market", "capital_market", "toggle"], ["@field.per_firm_equity", "per_firm_equity", "toggle"], ["@field.household_credit", "household_credit", "toggle"]]},
+	{"name": "@structure.housing", "fields": [["@field.housing_registry", "housing_enabled", "toggle"], ["@field.housing_market", "housing_market_enabled", "toggle"], ["@field.mortgages", "mortgage_enabled", "toggle"], ["@field.rental_market", "housing_rental_enabled", "toggle"], ["@field.housing_construction", "housing_construction_enabled", "toggle"]]},
+	{"name": "@structure.population_industry", "fields": [["@field.demographics", "demographics_enabled", "toggle"], ["@field.consumption_strata", "consumption_strata", "toggle"], ["@field.necessity_share", "necessity_share0", "step"], ["@field.energy_sector", "energy_enabled", "toggle"], ["@field.government", "government", "toggle"], ["@field.national_accounts", "national_accounts_metrics", "toggle"]]},
 ]
 
 const POLICY_PREVIEW := {
 	"treasury": [
-		{"group": "财政立场", "id": "fiscal_stance", "levers": [["政府消费份额", "gov_consumption_share", "number", 0.18, 0.005], ["赤字目标 / GDP", "gov_deficit_target", "percent", 0.03, 0.005], ["福利替代率", "benefit_replacement", "percent", 0.40, 0.02], ["就业保障", "job_guarantee", "bool", false, 1.0]]},
-		{"group": "税收与转移", "id": "tax_and_transfers", "levers": [["所得税率", "tax_income_rate", "percent", 0.22, 0.01], ["消费税率", "tax_consumption_rate", "percent", 0.15, 0.01], ["能源补贴率", "energy_subsidy_rate", "percent", 0.08, 0.01]]},
-		{"group": "债务管理", "id": "debt_management", "levers": [["债券融资占比", "bond_finance_frac", "percent", 0.60, 0.05], ["债券期限", "bond_maturity", "integer", 20, 1.0]]},
+		{"group": "@policy_group.fiscal_stance", "id": "fiscal_stance", "levers": [["@policy.gov_consumption_share", "gov_consumption_share", "number", 0.18, 0.005], ["@policy.gov_deficit_target", "gov_deficit_target", "percent", 0.03, 0.005], ["@policy.benefit_replacement", "benefit_replacement", "percent", 0.40, 0.02], ["@policy.job_guarantee", "job_guarantee", "bool", false, 1.0]]},
+		{"group": "@policy_group.tax_transfers", "id": "tax_and_transfers", "levers": [["@policy.tax_income_rate", "tax_income_rate", "percent", 0.22, 0.01], ["@policy.tax_consumption_rate", "tax_consumption_rate", "percent", 0.15, 0.01], ["@policy.energy_subsidy_rate", "energy_subsidy_rate", "percent", 0.08, 0.01]]},
+		{"group": "@policy_group.debt_management", "id": "debt_management", "levers": [["@policy.bond_finance_frac", "bond_finance_frac", "percent", 0.60, 0.05], ["@policy.bond_maturity", "bond_maturity", "integer", 20, 1.0]]},
 	],
 	"cb": [
-		{"group": "货币立场", "id": "monetary_stance", "levers": [["货币制度", "monetary_regime", "regime", "taylor", 0], ["手动政策利率", "manual_policy_rate", "annual_rate", 0.000134, 0.000027], ["通胀目标", "inflation_target", "annual_rate", 0.000054, 0.000027], ["泰勒 φπ", "taylor_phi_pi", "number", 1.5, 0.1]]},
-		{"group": "流动性操作", "id": "liquidity_operations", "levers": [["公开市场操作", "omo", "bool", true, 1.0], ["准备金下限", "reserve_floor_frac", "percent", 0.10, 0.005]]},
-		{"group": "外汇操作", "id": "fx_operations", "levers": [["汇率制度", "fx_regime", "fx", "float", 0], ["锚定经济体", "peg_anchor", "anchor", "", 0], ["资本管制", "capital_control", "percent", 0.0, 0.05]]},
+		{"group": "@policy_group.monetary_stance", "id": "monetary_stance", "levers": [["@policy.monetary_regime", "monetary_regime", "regime", "taylor", 0], ["@policy.manual_policy_rate", "manual_policy_rate", "annual_rate", 0.000134, 0.000027], ["@policy.inflation_target", "inflation_target", "annual_rate", 0.000054, 0.000027], ["@policy.taylor_phi_pi", "taylor_phi_pi", "number", 1.5, 0.1]]},
+		{"group": "@policy_group.liquidity", "id": "liquidity_operations", "levers": [["@policy.omo", "omo", "bool", true, 1.0], ["@policy.reserve_floor_frac", "reserve_floor_frac", "percent", 0.10, 0.005]]},
+		{"group": "@policy_group.fx", "id": "fx_operations", "levers": [["@policy.fx_regime", "fx_regime", "fx", "float", 0], ["@policy.peg_anchor", "peg_anchor", "anchor", "", 0], ["@policy.capital_control", "capital_control", "percent", 0.0, 0.05]]},
 	],
-	"regulator": [{"group": "宏观审慎", "id": "macroprudential", "levers": [["银行杠杆上限", "bank_leverage_cap", "integer", 12, 1.0], ["按揭 LTV 上限", "mortgage_ltv_cap", "percent", 0.85, 0.05], ["家庭信贷上限", "hh_credit_limit", "percent", 0.40, 0.05]]}, {"group": "结构法律", "id": "structural_law", "levers": [["家庭破产", "household_bankruptcy", "bool", true, 1.0], ["银行处置基金", "bank_resolution_fund", "bool", true, 1.0]]}],
-	"external": [{"group": "贸易与迁移", "id": "trade_and_migration", "levers": [["关税率", "tariff", "percent", 0.05, 0.01], ["进口配额", "import_quota", "number", 1.0, 0.05], ["移民上限", "immigration_cap", "percent", 0.25, 0.05], ["出口补贴", "export_subsidy", "percent", 0.0, 0.01]]}],
-	"energy": [{"group": "能源操作", "id": "energy_operations", "levers": [["能源配给", "energy_rationing", "ration", "market", 0], ["能源限价", "energy_price_cap", "number", 0.0, 0.1], ["国企成本定价", "soe_price_at_cost", "bool", false, 1.0]]}, {"group": "能源结构", "id": "energy_structure", "levers": [["国企 e-firm", "soe_efirm", "bool", false, 1.0]]}],
+	"regulator": [{"group": "@policy_group.macroprudential", "id": "macroprudential", "levers": [["@policy.bank_leverage_cap", "bank_leverage_cap", "integer", 12, 1.0], ["@policy.mortgage_ltv_cap", "mortgage_ltv_cap", "percent", 0.85, 0.05], ["@policy.hh_credit_limit", "hh_credit_limit", "percent", 0.40, 0.05]]}, {"group": "@policy_group.structural_law", "id": "structural_law", "levers": [["@policy.household_bankruptcy", "household_bankruptcy", "bool", true, 1.0], ["@policy.bank_resolution_fund", "bank_resolution_fund", "bool", true, 1.0]]}],
+	"external": [{"group": "@policy_group.trade_migration", "id": "trade_and_migration", "levers": [["@policy.tariff", "tariff", "percent", 0.05, 0.01], ["@policy.import_quota", "import_quota", "number", 1.0, 0.05], ["@policy.immigration_cap", "immigration_cap", "percent", 0.25, 0.05], ["@policy.export_subsidy", "export_subsidy", "percent", 0.0, 0.01]]}],
+	"energy": [{"group": "@policy_group.energy_operations", "id": "energy_operations", "levers": [["@policy.energy_rationing", "energy_rationing", "ration", "market", 0], ["@policy.energy_price_cap", "energy_price_cap", "number", 0.0, 0.1], ["@policy.soe_price_at_cost", "soe_price_at_cost", "bool", false, 1.0]]}, {"group": "@policy_group.energy_structure", "id": "energy_structure", "levers": [["@policy.soe_efirm", "soe_efirm", "bool", false, 1.0]]}],
 }
 
 class _DotGrid extends Control:
@@ -223,7 +229,7 @@ func open_home(can_continue := true) -> void:
 
 
 func _country_record(index: int, profile: String = "symmetric") -> Dictionary:
-	return {"name": COUNTRY_NAMES[index], "code": COUNTRY_CODES[index],
+	return {"name": _text(COUNTRY_NAMES[index]), "code": COUNTRY_CODES[index],
 		"color": COUNTRY_COLORS[index], "profile": profile, "overrides": {},
 		"baseline_overrides": {}, "firm_population_ratios": {}}
 
@@ -283,7 +289,7 @@ func _build_home(parent: Control) -> void:
 	lockup.add_child(mark)
 	lockup.add_child(_label("MACRO COMMAND", 12, Color("68788b"), true, true))
 	brand_top.add_child(lockup)
-	var title := _label("宏观\n指挥室", 62, INK, true)
+	var title := _label("@app.title", 62, INK, true)
 	title.add_theme_constant_override("line_spacing", -4)
 	var title_margin := MarginContainer.new()
 	title_margin.add_theme_constant_override("margin_top", 36)
@@ -298,13 +304,13 @@ func _build_home(parent: Control) -> void:
 	accent_margin.add_theme_constant_override("margin_bottom", 19)
 	accent_margin.add_child(accent)
 	brand_top.add_child(accent_margin)
-	var intro := _label("多经济体宏观政策模拟。你是坐在席位上的决策者——一切修改走提案，一切危机走冲击。引擎是唯一权威。", 15, INK2)
+	var intro := _label("@app.intro", 15, INK2)
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	intro.custom_minimum_size = Vector2(420, 0)
 	brand_top.add_child(intro)
 	brand.add_child(brand_top)
 	brand.add_child(_v_spacer())
-	var build := _label("BUILD   dev · v30 UI · v31 新游戏规格\nENGINE  World + ControlledSimulationSession + ControllerService\n© Republic Simulation Works · 单机本地", 11, INK3, false, true)
+	var build := _label("@app.build", 11, INK3, false, true)
 	build.add_theme_constant_override("line_spacing", 7)
 	brand.add_child(build)
 	var menu_wrap := VBoxContainer.new()
@@ -317,14 +323,18 @@ func _build_home(parent: Control) -> void:
 	var choices := VBoxContainer.new()
 	choices.add_theme_constant_override("separation", 9)
 	if _can_continue:
-		choices.add_child(_home_choice("▶", "继续模拟", "返回当前世界与未完成的政策工作", func() -> void:
+		choices.add_child(_home_choice(
+			"▶", "@menu.continue", "@menu.continue_hint", func() -> void:
 			continue_requested.emit()
 			hide(), true))
-	choices.add_child(_home_choice("＋", "新建模拟", "六步配置世界、国家与席位", func() -> void:
+	choices.add_child(_home_choice(
+		"＋", "@menu.new", "@menu.new_hint", func() -> void:
 		_screen = "wizard"; _step = 1; _render(), not _can_continue))
-	choices.add_child(_home_choice("⚙", "设置", "显示、语言、游戏流、存档", func() -> void:
+	choices.add_child(_home_choice(
+		"⚙", "@menu.settings", "@menu.settings_hint", func() -> void:
 		_settings_open = true; _render()))
-	choices.add_child(_home_choice("⏻", "退出", "关闭指挥室", func() -> void:
+	choices.add_child(_home_choice(
+		"⏻", "@menu.quit", "@menu.quit_hint", func() -> void:
 		get_tree().quit()))
 	menu.add_child(choices)
 	menu_wrap.add_child(_v_spacer())
@@ -720,7 +730,7 @@ func _country_card(index: int) -> Control:
 	if index == _player_country:
 		head.add_child(_label("◆ 玩家", 9, TEAL))
 	col.add_child(head)
-	var meta := HBoxContainer.new(); meta.add_child(_label(str(PROFILES[str(c["profile"])]["name"]), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label("%d 人口" % _agent_population(c), 9, MUTED, false, true)); col.add_child(meta)
+	var meta := HBoxContainer.new(); meta.add_child(_label(_text(str(PROFILES[str(c["profile"])]["name"])), 10, INK2, false, true)); meta.add_child(_h_spacer()); meta.add_child(_label("%d 人口" % _agent_population(c), 9, MUTED, false, true)); col.add_child(meta)
 	return b
 
 
@@ -779,7 +789,7 @@ func _structure_field(country: Dictionary, field: Array) -> Control:
 	elif kind == "select":
 		var option := OptionButton.new()
 		for choice: Array in [["exogenous", "外生漂移"], ["learning", "内生学习"]]:
-			option.add_item(str(choice[1]))
+			option.add_item(_text(str(choice[1])))
 			option.set_item_metadata(option.item_count - 1, choice[0])
 			if str(overrides.get(key, "exogenous")) == str(choice[0]):
 				option.select(option.item_count - 1)
@@ -1195,7 +1205,7 @@ func _seat_row(seat: Dictionary) -> Control:
 	for occ: Array in OCCUPANTS:
 		if str(occ[0]) == "rl" and sid != "treasury":
 			continue
-		option.add_item(str(occ[1])); option.set_item_metadata(option.item_count - 1, occ[0]); if str(_seat_occupants.get(str(seat["id"]), "human")) == str(occ[0]): option.select(option.item_count - 1)
+		option.add_item(_text(str(occ[1]))); option.set_item_metadata(option.item_count - 1, occ[0]); if str(_seat_occupants.get(str(seat["id"]), "human")) == str(occ[0]): option.select(option.item_count - 1)
 	option.item_selected.connect(func(index: int) -> void:
 		_seat_occupants[sid] = str(option.get_item_metadata(index))
 		if _run_mode == "batch" and str(_seat_occupants[sid]) == "human":
@@ -1248,7 +1258,7 @@ func _step_policy(parent: VBoxContainer) -> void:
 		for lev: Array in group["levers"]:
 			var key := _policy_key(str(lev[1])); var changed := _policy_values.has(key)
 			if _policy_filter == "changed" and not changed: continue
-			if not _policy_search.is_empty() and not str(lev[0]).contains(_policy_search) and not str(lev[1]).contains(_policy_search): continue
+			if not _policy_search.is_empty() and not _text(str(lev[0])).contains(_policy_search) and not str(lev[1]).contains(_policy_search): continue
 			if str(lev[1]) == "manual_policy_rate" and str(_policy_value("monetary_regime", "taylor")) != "manual": continue
 			if str(lev[1]) == "peg_anchor" and str(_policy_value("fx_regime", "float")) != "peg": continue
 			visible_levers.append(lev)
@@ -1504,7 +1514,7 @@ func _step_review(parent: VBoxContainer) -> void:
 	var scenario := _scenario_name()
 	var country_rows: Array = []
 	for c: Dictionary in _countries:
-		country_rows.append([str(c["name"]), "%s · %d 人口" % [str(PROFILES[str(c["profile"])]["name"]), _agent_population(c)]])
+		country_rows.append([str(c["name"]), "%s · %d 人口" % [_text(str(PROFILES[str(c["profile"])]["name"])), _agent_population(c)]])
 	manifest.add_child(_manifest_card("WORLD · 世界", BLUE, [["国家数", str(_countries.size())], ["开始日期", _date_iso(_start_date)], ["运行期限", _duration_label()], ["结束日期", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	manifest.add_child(_manifest_card("COUNTRIES · 国家", TEAL, country_rows))
 	manifest.add_child(_manifest_card("GOVERNMENT · 政府", PURPLE, [["玩家国家", str(_countries[_player_country]["name"])], ["人类席位", "%d / 5" % _human_seat_count()], ["会议模式", _run_mode], ["他国", "%d 国政策冻结" % (_countries.size() - 1)]]))
@@ -1546,7 +1556,7 @@ func _summary_panel() -> Control:
 	col.add_child(_summary_section("场景", [["场景", _scenario_name()]])); col.add_child(_summary_section("世界", [["国家", str(_countries.size())], ["开始", _date_iso(_start_date)], ["期限", _duration_label()], ["结束", "无终局" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["跨境", _cross_label()]]))
 	var cr: Array = []
 	for c: Dictionary in _countries.slice(0, 4):
-		cr.append([str(c["code"]), str(PROFILES[str(c["profile"])]["name"])])
+		cr.append([str(c["code"]), _text(str(PROFILES[str(c["profile"])]["name"]))])
 	col.add_child(_summary_section("国家", cr))
 	col.add_child(_summary_section("政府", [["玩家国", str(_countries[_player_country]["name"])], ["人类席位", "%d/5" % _human_seat_count()], ["模式", _run_mode]]))
 	col.add_child(_summary_section("政策", [["改动", "%d 项" % _policy_values.size()]]))
@@ -1679,8 +1689,8 @@ func _settings_group(title: String, items: Array) -> Control:
 func _scenario_name() -> String:
 	for scenario: Dictionary in SCENARIOS:
 		if str(scenario["id"]) == _scenario:
-			return str(scenario["name"])
-	return "自由沙盒"
+			return _text(str(scenario["name"]))
+	return _text("@scenario.sandbox.name")
 
 
 func _duration_label() -> String:
@@ -1708,7 +1718,7 @@ func _panel(bg: Color, border: Color, radius: int, padding: int) -> PanelContain
 
 func _label(text: String, size: int, color: Color, bold := false, mono := false) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = _text(text)
 	l.add_theme_font_override("font", _mono if mono else _sans)
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
@@ -1718,7 +1728,11 @@ func _label(text: String, size: int, color: Color, bold := false, mono := false)
 
 
 func _button(text: String, callback: Callable, primary := false, size := 12, flat := false) -> Button:
-	var b := Button.new(); b.text = text; b.add_theme_font_override("font", _sans); b.add_theme_font_size_override("font_size", size); b.add_theme_color_override("font_color", Color.WHITE if primary else INK2); b.add_theme_stylebox_override("normal", _sb(TEAL if primary else (Color(0, 0, 0, 0) if flat else PANEL2), TEAL_DK if primary else (Color(0, 0, 0, 0) if flat else LINE), 9, 8)); b.add_theme_stylebox_override("hover", _sb(TEAL_DK if primary else PAPER, TEAL_DK if primary else TEAL, 9, 7)); b.pressed.connect(callback); return b
+	var b := Button.new(); b.text = _text(text); b.add_theme_font_override("font", _sans); b.add_theme_font_size_override("font_size", size); b.add_theme_color_override("font_color", Color.WHITE if primary else INK2); b.add_theme_stylebox_override("normal", _sb(TEAL if primary else (Color(0, 0, 0, 0) if flat else PANEL2), TEAL_DK if primary else (Color(0, 0, 0, 0) if flat else LINE), 9, 8)); b.add_theme_stylebox_override("hover", _sb(TEAL_DK if primary else PAPER, TEAL_DK if primary else TEAL, 9, 7)); b.pressed.connect(callback); return b
+
+
+func _text(value: String) -> String:
+	return LocaleCatalogScript.resolve(value)
 
 
 func _square_button(text: String, callback: Callable, side: int) -> Button:

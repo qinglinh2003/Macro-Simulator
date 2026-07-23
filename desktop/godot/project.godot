@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="Macro Command — 宏观指挥室"
+config/name="Macro Command"
 run/main_scene="res://scenes/main.tscn"
 
 [display]
