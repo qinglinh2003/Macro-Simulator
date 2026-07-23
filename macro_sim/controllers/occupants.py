@@ -89,7 +89,14 @@ class ScheduledOccupant:
         return _proposal(context, f"scheduled:{context.boundary_tick}", actions, "scheduled")
 
 
-_HEURISTIC_RULES = frozenset({"hold", "inflation_targeting", "countercyclical_fiscal"})
+_HEURISTIC_RULES = frozenset(
+    {
+        "hold",
+        "inflation_targeting",
+        "countercyclical_fiscal",
+        "fiscal_stabilizer",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -180,7 +187,65 @@ class HeuristicOccupant:
                 if tgt.maximum is not None:
                     value = min(float(tgt.maximum), value)
                 actions = () if abs(value - cur) < 1e-12 else (
+                    PolicyAction("gov_deficit_target", value),
+                )
+        elif self.rule_name == "fiscal_stabilizer":
+            if hasattr(context.observation, "to_dict"):
+                observation = context.observation.to_dict()
+            else:
+                observation = context.observation
+            releases = (
+                observation.get("releases", ())
+                if isinstance(observation, Mapping) else ()
+            )
+            released = {
+                item.get("series_id"): item.get("value")
+                for item in releases
+                if isinstance(item, Mapping)
+                and item.get("missing_reason") is None
+                and isinstance(item.get("series_id"), str)
+            }
+            unemployment = released.get("unemployment_rate")
+            inflation = released.get("inflation")
+            permitted = {item.lever: item for item in context.permitted_actions}
+            deficit = permitted.get("gov_deficit_target")
+            if (
+                unemployment is None or inflation is None or deficit is None
+                or not deficit.allowed or deficit.current_value is None
+            ):
+                actions = ()
+            else:
+                unemployment_enter = self.parameters.get(
+                    "unemployment_enter", 0.10
+                )
+                unemployment_exit = self.parameters.get(
+                    "unemployment_exit", 0.06
+                )
+                inflation_ceiling = self.parameters.get(
+                    "inflation_ceiling", 0.01
+                )
+                inflation_emergency = self.parameters.get(
+                    "inflation_emergency", 0.02
+                )
+                step = float(deficit.control_scale or deficit.max_step or 0.005)
+                value = float(deficit.current_value)
+                if (
+                    float(unemployment) > unemployment_enter
+                    and float(inflation) < inflation_ceiling
+                ):
+                    value += step
+                elif (
+                    float(unemployment) < unemployment_exit
+                    or float(inflation) > inflation_emergency
+                ):
+                    value -= step
+                if deficit.minimum is not None:
+                    value = max(float(deficit.minimum), value)
+                if deficit.maximum is not None:
+                    value = min(float(deficit.maximum), value)
+                actions = (
                     (PolicyAction("gov_deficit_target", value),)
+                    if value != float(deficit.current_value) else ()
                 )
         else:
             raise ValueError(f"unknown heuristic rule: {self.rule_name}")

@@ -36,7 +36,7 @@ class Household:
     spent: float = 0.0             # realized goods spending this tick (<= budget, <= deposits)
     necessity_spent: float = 0.0   # v18.1: of `spent`, the part on necessities (0 when split off)
 
-    # -- v6 capital market (choice 乙): equity holdings + smoothed equity wealth --------
+    # -- v6 capital market (choice B): equity holdings + smoothed equity wealth ----------
     shares: float = 0.0            # units of the aggregate equity index held (NOT money; v6 mode)
     equity_value_ema: float = 0.0  # smoothed equity value feeding B1 consumption (blast-radius
                                    # throttle: consume out of slow-moving, not bubble-spiking, wealth)

@@ -491,20 +491,20 @@ def debt_service_amounts(debt: float, deposits: float, r: float, amort: float):
     return principal, interest
 
 
-# -- B1: consumption out of expected income and wealth (choice 甲) ---------------
+# -- B1: consumption out of expected income and wealth (choice A) ----------------
 
 def plan_consumption(hh: Household, deposits_prev: float, equity_wealth: float = 0.0,
                      curvature: float = 1.0, wealth_ref: float = 1.0) -> None:
     """Desired nominal consumption budget C_{h,t} = alpha1 Y^e + alpha2 D_{t-1} (§7.2).
 
-    Choice (甲): wealth V_h = D_h, so the wealth term is just deposits. This is a
+    Choice A: wealth V_h = D_h, so the wealth term is just deposits. This is a
     *budget*, capped later by LIVE deposits in the goods market (A4) -- it may
     exceed this tick's wage income by dipping into the alpha2 wealth channel, and
     that is intended (do NOT clamp it to current income). Unspent budget stays as
     deposits (= saving).
     """
     # v6 wealth EFFECT: equity value (already weighted by cfg.wealth_effect at the call site,
-    # and smoothed) enters the B1 wealth term. This is SEPARATE from choice 乙's wealth
+    # and smoothed) enters the B1 wealth term. This is SEPARATE from choice B's wealth
     # ACCOUNTING (metrics): the effect is off (equity_wealth=0) by default because it amplifies
     # the §9 drain (§16). 0 pre-v6 and when wealth_effect=0 -> bit-identical.
     wealth = deposits_prev + equity_wealth

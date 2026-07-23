@@ -17,6 +17,7 @@ def test_profile_applies_axes():
     p = CountryProfile("x", productivity=1.5, scale=2.0, necessity_tilt=0.7)
     cfg = p.apply(base)
     assert cfg.a == base.a * 1.5
+    assert cfg.a_K == base.a_K * 1.5
     assert cfg.n_households == base.n_households * 2
     assert cfg.necessity_share0 == 0.7
 

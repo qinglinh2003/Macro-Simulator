@@ -124,7 +124,14 @@ def initialize_genesis_marriages(state: SocialState, rng: np.random.Generator) -
         if partner is None:
             continue
         years = int(rng.integers(1, 16))
-        start = state.current_date.replace(year=state.current_date.year - years)
+        target_year = state.current_date.year - years
+        try:
+            start = state.current_date.replace(year=target_year)
+        except ValueError:
+            # A simulation may legitimately begin on February 29.  Existing
+            # marriages projected into a common year use the standard
+            # anniversary convention of February 28.
+            start = date(target_year, 2, 28)
         person.marriage_start_date = start
         partner.marriage_start_date = start
         person.marriage_count = max(1, person.marriage_count)

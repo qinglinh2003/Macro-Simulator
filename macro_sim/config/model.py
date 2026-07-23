@@ -19,6 +19,7 @@ That count is the parsimony target we protect (spec §7.4 read-out).
 
 from __future__ import annotations
 
+from datetime import date
 import functools
 from dataclasses import dataclass, field
 
@@ -56,6 +57,7 @@ class Config:
     # -- horizon & reproducibility -----------------------------------------
     n_ticks: int = 500
     seed: int = 0                    # single seed feeds ALL randomness (§7.6)
+    simulation_start_date: str = "2000-01-01"  # ISO Gregorian genesis date
 
     # -- production (scale: a is a unit normalization) ---------------------
     a: float = 1.0                   # labor productivity, units/worker/tick -- scale
@@ -87,7 +89,7 @@ class Config:
     omega: float = 0.02             # wage-raise step on labor shortage -- FREE
     theta_wage: float = 0.15        # rewage probability / tick -- anchored (wage-rigidity data)
 
-    # -- consumption (B1), choice (甲): V_h = D_h --------------------------
+    # -- consumption (B1), choice A: V_h = D_h -----------------------------
     alpha1: float = 0.8             # MPC out of expected income -- anchored; 0<alpha2<alpha1<1
     alpha2: float = 0.05            # propensity out of wealth (deposits) -- anchored
     demographics_enabled: bool = False  # v13 Phase 1: attach the demographic kernel to the economy
@@ -328,7 +330,7 @@ class Config:
                                     # have low MPC -- the realistic causality (wealth→MPC), and a
                                     # HOMOGENEOUS rule, so inequality emerges not assumed (§16.7). -- FREE
 
-    # -- settlement / dividends (choice 甲) --------------------------------
+    # -- settlement / dividends (choice A) ---------------------------------
     rho: float = 0.5                # dividend payout ratio of positive profit -- anchored
     # Full cash-basis firm income statement.  Off keeps the historical
     # EBITDA-like ``Firm.profit`` and phase order exactly; the production
@@ -550,7 +552,7 @@ class Config:
     # Households split wealth between deposits (safe, earns r) and the index (a claim on total
     # C-firm net worth). Price gropes on notional excess demand (no auctioneer); trades are
     # pro-rata rationed so shares AND money conserve. Demand = fundamentalist (value-price,
-    # stabilising) + chartist (price trend, the BUBBLE knob). Activates choice 乙 (equity enters
+    # stabilising) + chartist (price trend, the BUBBLE knob). Activates choice B (equity enters
     # household wealth). capital_market=False => v5 bit-identical.
     # ======================================================================
     capital_market: bool = False    # v6 master switch (equity index + portfolio choice)
@@ -561,7 +563,7 @@ class Config:
     theta_equity: float = 0.30      # target equity share of household wealth -- FREE
     trend_lambda: float = 0.3       # adaptive momentum speed on index returns -- anchored (~lambda_d)
     wealth_effect: float = 0.0      # weight of (smoothed) equity value in B1 consumption. 0 =
-                                    # equity affects WEALTH ACCOUNTING (乙, for T8) but NOT
+                                    # equity affects WEALTH ACCOUNTING (choice B, for T8) but NOT
                                     # consumption -- the stable core. >0 turns on the wealth-effect
                                     # demand channel, which amplifies the §9 drain (§16). -- FREE
     equity_ema_lambda: float = 0.1  # equity-wealth smoothing for the wealth effect -- FREE (throttle)
@@ -651,7 +653,7 @@ class Config:
     # ======================================================================
     # v8.4 -- dividends flow to shareholders PRO-RATA (DESIGNDOC §26). In the per-firm regime we track
     # who owns what (h.holdings[f.id]) yet pay dividends EQUALLY per capita -- an accounting
-    # inconsistency inherited from the v6 aggregate-index era ("choice 甲 homogeneity"). Pro-rata is
+    # inconsistency inherited from the v6 aggregate-index era ("choice A homogeneity"). Pro-rata is
     # the correctness fix: each firm's payout goes to ITS holders in proportion to their shares, so
     # a non-owner earns zero dividend income and the cash-flow return to equity is differential (like
     # the capital-gains channel already is). pro_rata_dividends=False => equal split => bit-identical.
@@ -1429,7 +1431,7 @@ class Config:
     @classmethod
     def v6(cls, **overrides) -> "Config":
         """v6: capital market (§16). v4 PLUS a single aggregate equity index and household
-        portfolio choice, activating choice 乙 (equity enters household wealth). Ships near the
+        portfolio choice, activating choice B (equity enters household wealth). Ships near the
         FUNDAMENTAL regime (w_chartist small) so the first economy is stable; Config.v6_bubble()
         raises the chartist weight to summon bubbles once the core is trusted. Note: v6 does NOT
         inherit v5's diseconomy (dis_slope=0) -- the equity layer is studied on the plain v4 base;
@@ -1825,6 +1827,12 @@ class Config:
 
     def _validate(self) -> None:
         """Guard the axiom-forced relations up front (fail loud, not silently)."""
+        try:
+            date.fromisoformat(self.simulation_start_date)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(
+                "simulation_start_date must be an ISO Gregorian date (YYYY-MM-DD)"
+            ) from exc
         assert self.a > 0, "productivity a must be > 0 (spec §8.1 degenerate guard)"
         assert self.w_firm0 > 0, "initial wage must be > 0 before w/a and floor(D/w)"
         assert 0 < self.alpha2 < self.alpha1 < 1, "B1 requires 0 < alpha2 < alpha1 < 1"
@@ -1886,6 +1894,8 @@ class Config:
         )
         assert not (self.housing_rental_enabled and not self.housing_market_enabled), "rentals require the resale market"
         assert not (self.housing_construction_enabled and not self.housing_market_enabled), "construction requires the resale market"
+        assert not (self.housing_construction_enabled and not self.government), \
+            "construction genesis requires the fiscal account that seeds builders"
         assert self.housing_signal_burnin_years >= 1, "housing signal burn-in must be >= 1 year"
         assert self.housing_leave_elasticity >= 0.0 and self.housing_fertility_elasticity >= 0.0, "housing coupling elasticities must be >= 0"
         assert 0.0 < self.housing_leave_mult_lo <= 1.0 <= self.housing_leave_mult_hi, "leave multiplier bounds must bracket 1.0"

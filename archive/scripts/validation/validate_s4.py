@@ -169,4 +169,4 @@ print("Both misses are structural, not noise, and neither is caused by the v5 an
       "clean Zipf slope; capital stock is even flatter. Needs idiosyncratic multiplicative\n"
       "growth. T8: household wealth is too EQUAL (Gini ~0.12) -- agents are homogeneous\n"
       "(MPC/return heterogeneity deferred in §5) and equity is not attributed to households\n"
-      "(choice 甲). Both point at specific, already-documented next increments.")
+      "(choice A). Both point at specific, already-documented next increments.")

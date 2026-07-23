@@ -1046,6 +1046,9 @@ def default_observation_spec() -> ObservationSpec:
         F("avg_wage", "avg_wage", unit="currency_per_tick", aggregation="mean",
           window_ticks=7, frequency_ticks=7, publication_lag_ticks=2,
           normalization_scale=1.0),
+        F("population_alive", "population_alive", unit="persons", aggregation="last",
+          window_ticks=30, frequency_ticks=30, publication_lag_ticks=7,
+          normalization_scale=1_000.0),
         F("poverty_rate", "poverty_rate", unit="share", aggregation="mean",
           window_ticks=30, frequency_ticks=30, publication_lag_ticks=7,
           normalization_scale=0.1),
@@ -1166,7 +1169,7 @@ def default_observation_spec() -> ObservationSpec:
         F("oracle_daily_output", "real_output", access_class="oracle",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=100.0),
-    ))
+    ), schema_version=2)
 
 
 DEFAULT_OBSERVATION_SPEC = default_observation_spec()

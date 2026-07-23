@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #e9edf2; }
+  a { color: #0f9d90; text-decoration: none; }
+  a:hover { color: #0c8579; }
+  select { -webkit-appearance: none; appearance: none; outline: none; }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #dde4ec; border-radius: 6px; border: 2px solid #e9edf2; }
+  ::-webkit-scrollbar-thumb:hover { background: #aab8c6; }
+  @keyframes om-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes om-fresh { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
+  @keyframes om-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+</style>
+</helmet>
+
+<div style="height:100vh;min-height:820px;width:100%;min-width:1360px;background:radial-gradient(1400px 700px at 72% -10%, #ffffff 0%, #e9edf2 60%);font-family:'Open Sans',system-ui,-apple-system,'Segoe UI',sans-serif;color:#2a3948;font-size:14px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+
+  <!-- ======================= HEADER ======================= -->
+  <div style="flex:none;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dbe2ea;border-radius:13px;padding:0 16px;height:60px;display:flex;align-items:center;gap:16px;">
+    <div style="display:flex;align-items:baseline;gap:9px;">
+      <span style="font-size:17px;font-weight:700;color:#16232f;letter-spacing:0.01em;">宏观指挥室</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.12em;color:#68788b;">MACRO&nbsp;COMMAND&nbsp;·&nbsp;v29</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:#e2f4f1;border:1px solid #9ad9d0;border-radius:20px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:#0f9d90;box-shadow:0 0 8px #0f9d90;animation:om-pulse 2.4s ease-in-out infinite;"></span>
+      <span style="font-size:12px;color:#0f9d90;letter-spacing:0.04em;">引擎在线</span>
+    </div>
+
+    <div style="width:1px;height:30px;background:#dbe2ea;"></div>
+
+    <!-- time: game calendar primary, tick secondary -->
+    <div style="display:flex;flex-direction:column;gap:1px;" title="{{ tickTitle }}">
+      <span style="font-size:16px;color:#16232f;font-weight:600;letter-spacing:0.01em;">{{ calStr }}</span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#68788b;">{{ tickStr }}&nbsp;&nbsp;·&nbsp;&nbsp;下次公报 {{ nextReleaseStr }}</span>
+    </div>
+
+    <sc-if value="{{ awaiting }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:7px;padding:5px 11px;background:#fbf0dc;border:1px solid #ecd3a0;border-radius:20px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:#c17d16;box-shadow:0 0 8px #c17d16;animation:om-pulse 1.4s ease-in-out infinite;"></span>
+        <span style="font-size:12px;color:#c17d16;">{{ awaitingLabel }}</span>
+      </div>
+    </sc-if>
+
+    <span style="flex:1;"></span>
+
+    <!-- mode -->
+    <div style="display:flex;background:#f6f8fb;border:1px solid #d3dce6;border-radius:9px;padding:2px;">
+      <sc-for list="{{ modeChips }}" as="m" hint-placeholder-count="2">
+        <button onClick="{{ m.onPick }}" style="border:none;border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer;background:{{ m.bg }};color:{{ m.fg }};">{{ m.label }}</button>
+      </sc-for>
+    </div>
+
+    <div style="width:1px;height:30px;background:#dbe2ea;"></div>
+
+    <!-- transport -->
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button onClick="{{ step }}" style="background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#2a3948;padding:7px 11px;font-size:13px;cursor:pointer;" style-hover="border-color:#0f9d90;">步进</button>
+      <button onClick="{{ playToggle }}" style="background:{{ playBg }};border:1px solid {{ playBorder }};border-radius:8px;color:{{ playFg }};padding:7px 16px;font-size:13px;font-weight:600;cursor:{{ playCursor }};min-width:74px;">{{ playLabel }}</button>
+      <div style="display:flex;background:#f6f8fb;border:1px solid #d3dce6;border-radius:8px;overflow:hidden;">
+        <sc-for list="{{ speedChips }}" as="s" hint-placeholder-count="4">
+          <button onClick="{{ s.onPick }}" style="border:none;border-right:1px solid #e6ebf1;padding:7px 9px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer;background:{{ s.bg }};color:{{ s.fg }};">{{ s.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= A · MACRO COCKPIT (BULLETIN TILES) ======================= -->
+  <div style="flex:none;display:grid;grid-template-columns:repeat(8,1fr);gap:9px;">
+    <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="8">
+      <div style="position:relative;background:linear-gradient(180deg,#ffffff,#f5f7fb);border:1px solid #dde4ec;border-radius:12px;padding:11px 12px 10px;min-height:118px;display:flex;flex-direction:column;gap:6px;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:{{ t.dotColor }};"></span>
+          <span style="font-size:11px;letter-spacing:0.03em;color:#5e6f81;line-height:1.1;">{{ t.label }}</span>
+        </div>
+
+        <sc-if value="{{ t.hasData }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:{{ t.color }};line-height:1;letter-spacing:-0.01em;">{{ t.valueStr }}</span>
+            <span style="font-size:12px;color:{{ t.deltaColor }};">{{ t.delta }}</span>
+          </div>
+          <svg viewBox="0 0 92 26" preserveAspectRatio="none" style="width:100%;height:24px;display:block;overflow:visible;">
+            <polyline points="{{ t.spark }}" fill="none" stroke="{{ t.color }}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"></polyline>
+          </svg>
+          <sc-if value="{{ t.detailFull }}" hint-placeholder-val="{{ true }}">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#71808f;line-height:1.35;">{{ t.releaseStr }}</div>
+          </sc-if>
+          <sc-if value="{{ t.detailBrief }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:5px;margin-top:auto;">
+              <span style="width:5px;height:5px;border-radius:50%;background:{{ t.staleColor }};"></span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#647585;">滞后 {{ t.staleStr }}</span>
+            </div>
+          </sc-if>
+          <span style="position:absolute;top:9px;right:10px;width:6px;height:6px;border-radius:50%;background:{{ t.staleColor }};" title="{{ t.staleTitle }}"></span>
+        </sc-if>
+
+        <sc-if value="{{ t.missing }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:4px 0;">
+            <span style="font-size:13px;color:#68788b;">暂无数据</span>
+            <span style="font-size:10.5px;color:#849098;line-height:1.35;">{{ t.missingReason }}</span>
+            <div style="height:22px;border:1px dashed #dde4ec;border-radius:5px;margin-top:2px;position:relative;overflow:hidden;">
+              <div style="position:absolute;inset:0;width:40%;background:linear-gradient(90deg,transparent,#c9d6e4aa,transparent);animation:om-sweep 2.6s linear infinite;"></div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ======================= MAIN 3-COLUMN ======================= -->
+  <div style="flex:1;display:flex;gap:10px;min-height:0;">
+
+    <!-- ============ B · SEAT WORKBENCH ============ -->
+    <div style="width:428px;flex:none;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dde4ec;border-radius:13px;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+      <!-- seat switcher -->
+      <div style="flex:none;padding:12px 13px 10px;border-bottom:1px solid #e6ebf1;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#71808f;margin-bottom:8px;">SEAT · 席位工作台</div>
+        <div style="display:flex;gap:5px;">
+          <sc-for list="{{ seatChips }}" as="s" hint-placeholder-count="5">
+            <button onClick="{{ s.onPick }}" style="position:relative;border:1px solid {{ s.border }};background:{{ s.bg }};color:{{ s.fg }};border-radius:8px;padding:7px 8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;flex:none;">
+              <span style="width:6px;height:6px;border-radius:2px;background:{{ s.accent }};"></span>{{ s.name }}
+              <sc-if value="{{ s.beta }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#68788b;border:1px solid #d3dce6;border-radius:4px;padding:0 3px;">β</span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <span style="font-size:15px;color:#16232f;font-weight:600;">{{ seatName }}</span>
+          <span style="font-size:11px;color:#647585;border:1px solid #d3dce6;border-radius:5px;padding:1px 6px;">{{ seatRole }}</span>
+          <span style="flex:1;"></span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#71808f;">行政容量 {{ adminCap }}</span>
+        </div>
+      </div>
+
+      <!-- wizard banner -->
+      <sc-if value="{{ hasWizard }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;margin:10px 12px 0;padding:9px 11px;background:linear-gradient(180deg,#e6effb,#eef3fb);border:1px solid #b6d1f2;border-radius:9px;">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+            <span style="font-size:11px;color:#2f6fd0;letter-spacing:0.04em;">联合迁移向导</span>
+            <sc-for list="{{ wizardSteps }}" as="w" hint-placeholder-count="2">
+              <span style="font-size:10.5px;padding:1px 7px;border-radius:10px;background:{{ w.bg }};color:{{ w.fg }};border:1px solid {{ w.border }};">{{ w.label }}</span>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:#33424f;line-height:1.4;">{{ wizardText }}</div>
+        </div>
+      </sc-if>
+
+      <!-- lever groups (scroll) -->
+      <div style="flex:1;overflow-y:auto;padding:10px 12px 12px;display:flex;flex-direction:column;gap:14px;min-height:0;">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#71808f;">{{ g.name }}</span>
+              <span style="flex:1;height:1px;background:#e6ebf1;"></span>
+            </div>
+
+            <sc-for list="{{ g.levers }}" as="lev" hint-placeholder-count="2">
+              <div style="border:1px solid {{ lev.cardBorder }};border-radius:10px;padding:10px 11px;background:{{ lev.cardBg }};display:flex;flex-direction:column;gap:8px;">
+                <!-- title row -->
+                <div style="display:flex;align-items:center;gap:7px;">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{ lev.dot }};flex:none;"></span>
+                  <span style="font-size:13.5px;color:#16232f;font-weight:500;">{{ lev.name }}</span>
+                  <sc-if value="{{ lev.isInt }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#647585;border:1px solid #dde4ec;border-radius:4px;padding:0 4px;">整数</span></sc-if>
+                  <span style="flex:1;"></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:{{ lev.costColor }};border:1px solid {{ lev.costBorder }};border-radius:5px;padding:1px 6px;">{{ lev.costStr }}</span>
+                </div>
+
+                <!-- CONTROLS (permitted) -->
+                <sc-if value="{{ lev.permitted }}" hint-placeholder-val="{{ true }}">
+
+                  <!-- stepper -->
+                  <sc-if value="{{ lev.isStep }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex;align-items:stretch;gap:7px;">
+                      <button onClick="{{ lev.onDec }}" style="width:38px;flex:none;background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3f5060;font-size:19px;cursor:pointer;" style-hover="border-color:#0f9d90;color:#fff;">−</button>
+                      <div style="flex:1;background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;padding:5px 11px;display:flex;flex-direction:column;justify-content:center;">
+                        <div style="display:flex;align-items:baseline;gap:7px;">
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:19px;color:#16232f;">{{ lev.valueStr }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ lev.changeColor }};">{{ lev.deltaFromBase }}</span>
+                        </div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#71808f;">档 {{ lev.stepStr }} · 域 {{ lev.rangeStr }}</div>
+                      </div>
+                      <button onClick="{{ lev.onInc }}" style="width:38px;flex:none;background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3f5060;font-size:19px;cursor:pointer;" style-hover="border-color:#0f9d90;color:#fff;">＋</button>
+                    </div>
+                  </sc-if>
+
+                  <!-- nullable -->
+                  <sc-if value="{{ lev.isNullable }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:9px;">
+                      <button onClick="{{ lev.onToggleNull }}" style="display:flex;align-items:center;gap:7px;background:transparent;border:none;cursor:pointer;padding:0;">
+                        <span style="width:34px;height:19px;border-radius:11px;background:{{ lev.nullTrack }};position:relative;display:inline-block;">
+                          <span style="position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#ffffff;transition:.15s;transform:{{ lev.nullKnob }};"></span>
+                        </span>
+                        <span style="font-size:12px;color:{{ lev.nullLabelColor }};">{{ lev.nullLabel }}</span>
+                      </button>
+                    </div>
+                    <sc-if value="{{ lev.nullEnabled }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:stretch;gap:7px;">
+                        <button onClick="{{ lev.onDec }}" style="width:38px;flex:none;background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3f5060;font-size:19px;cursor:pointer;" style-hover="border-color:#0f9d90;">−</button>
+                        <div style="flex:1;background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;padding:5px 11px;">
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;color:#16232f;">{{ lev.valueStr }}</div>
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#71808f;">档 {{ lev.stepStr }} · 域 {{ lev.rangeStr }}</div>
+                        </div>
+                        <button onClick="{{ lev.onInc }}" style="width:38px;flex:none;background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3f5060;font-size:19px;cursor:pointer;" style-hover="border-color:#0f9d90;">＋</button>
+                      </div>
+                    </sc-if>
+                  </sc-if>
+
+                  <!-- bool -->
+                  <sc-if value="{{ lev.isBool }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ lev.onToggleBool }}" style="display:flex;align-items:center;gap:9px;background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;padding:8px 11px;cursor:pointer;" style-hover="border-color:#0f9d90;">
+                      <span style="width:38px;height:21px;border-radius:12px;background:{{ lev.boolTrack }};position:relative;display:inline-block;">
+                        <span style="position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#ffffff;transition:.15s;transform:{{ lev.boolKnob }};"></span>
+                      </span>
+                      <span style="font-size:13px;color:{{ lev.boolColor }};">{{ lev.boolLabel }}</span>
+                      <span style="flex:1;"></span>
+                      <span style="font-size:10px;color:#9a7a2e;border:1px solid #ecd3a0;border-radius:4px;padding:1px 5px;">状态迁移</span>
+                    </button>
+                  </sc-if>
+
+                  <!-- segmented -->
+                  <sc-if value="{{ lev.isSeg }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;background:#f1f4f8;border:1px solid #d3dce6;border-radius:8px;padding:3px;gap:3px;">
+                      <sc-for list="{{ lev.options }}" as="opt" hint-placeholder-count="3">
+                        <button onClick="{{ opt.onPick }}" style="flex:1;border:none;border-radius:6px;padding:7px 4px;font-size:12px;cursor:pointer;background:{{ opt.bg }};color:{{ opt.fg }};">{{ opt.label }}</button>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+
+                  <!-- economyId -->
+                  <sc-if value="{{ lev.isEcoId }}" hint-placeholder-val="{{ false }}">
+                    <select onChange="{{ lev.onAnchorChange }}" style="background:#f1f4f8;border:1px solid #cdd7e2;border-radius:8px;color:#1c2b39;font-size:13px;padding:9px 12px;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,#5e6f81 50%),linear-gradient(135deg,#5e6f81 50%,transparent 50%);background-position:calc(100% - 18px) 19px,calc(100% - 13px) 19px;background-size:5px 5px;background-repeat:no-repeat;">
+                      <option value="">— 选择锚定经济体 —</option>
+                      <sc-for list="{{ lev.anchorOptions }}" as="a" hint-placeholder-count="4">
+                        <option value="{{ a.id }}">{{ a.name }}</option>
+                      </sc-for>
+                    </select>
+                  </sc-if>
+
+                  <!-- economySet (sanctions) -->
+                  <sc-if value="{{ lev.isEcoSet }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:5px;">
+                      <sc-for list="{{ lev.sanctionRows }}" as="row" hint-placeholder-count="4">
+                        <button onClick="{{ row.onToggle }}" style="display:flex;align-items:center;gap:9px;background:{{ row.bg }};border:1px solid {{ row.border }};border-radius:7px;padding:7px 9px;cursor:pointer;text-align:left;">
+                          <span style="width:16px;height:16px;border-radius:4px;border:1px solid {{ row.boxBorder }};background:{{ row.boxBg }};flex:none;position:relative;">
+                            <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#ffffff;">{{ row.check }}</span>
+                          </span>
+                          <span style="width:20px;height:14px;border-radius:3px;overflow:hidden;display:inline-flex;flex:none;">
+                            <span style="width:50%;background:{{ row.flagA }};"></span><span style="width:50%;background:{{ row.flagB }};"></span>
+                          </span>
+                          <span style="font-size:12.5px;color:#23323f;">{{ row.name }}</span>
+                          <span style="flex:1;"></span>
+                          <sc-if value="{{ row.mutual }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#cc5a44;border:1px solid #f0bcae;border-radius:4px;padding:1px 5px;">对方亦制裁我</span></sc-if>
+                        </button>
+                      </sc-for>
+                      <div style="font-size:10.5px;color:#71808f;line-height:1.4;padding-left:2px;">OR 语义 · 解除 ≠ 对方解封;双向状态各自独立</div>
+                    </div>
+                  </sc-if>
+
+                </sc-if>
+
+                <!-- LOCKED -->
+                <sc-if value="{{ lev.locked }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:9px;background:#f5f7fb;border:1px dashed #d3dce6;border-radius:8px;padding:9px 11px;">
+                    <span style="font-size:11px;color:#647585;border:1px solid #d3dce6;border-radius:5px;padding:1px 6px;">锁定</span>
+                    <span style="font-size:12px;color:#586a7b;line-height:1.35;">{{ lev.lockReason }}</span>
+                  </div>
+                </sc-if>
+
+                <!-- meta -->
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#68788b;">{{ lev.lagStr }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#68788b;">{{ lev.holdStr }}</span>
+                  <sc-if value="{{ lev.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;color:#647585;">{{ lev.note }}</span></sc-if>
+                </div>
+
+                <!-- pending -->
+                <sc-if value="{{ lev.hasPending }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:8px;background:#e2f4f1;border:1px solid #9ad9d0;border-radius:7px;padding:6px 9px;">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#0f9d90;">待生效队列</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#0c8579;">{{ lev.pendingValue }}</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:11px;color:#2a9184;">{{ lev.pendingWhen }}</span>
+                  </div>
+                </sc-if>
+
+                <!-- action -->
+                <sc-if value="{{ lev.showAdd }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ lev.onAdd }}" style="align-self:flex-start;background:#e2f4f1;border:1px solid #59b7a8;border-radius:7px;color:#0c8579;font-size:12px;padding:6px 13px;cursor:pointer;" style-hover="background:#d3ede8;border-color:#0f9d90;">加入提案 ＋</button>
+                </sc-if>
+                <sc-if value="{{ lev.showInCart }}" hint-placeholder-val="{{ false }}">
+                  <span style="align-self:flex-start;font-size:11.5px;color:#0f9d90;">✓ 已在提案篮</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- proposal cart footer -->
+      <div style="flex:none;border-top:1px solid #e6ebf1;background:#f5f7fb;padding:11px 12px;display:flex;flex-direction:column;gap:9px;">
+        <sc-if value="{{ hasVerdict }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:9px;align-items:flex-start;background:{{ verdict.bg }};border:1px solid {{ verdict.border }};border-radius:9px;padding:9px 11px;">
+            <span style="font-size:16px;color:{{ verdict.color }};line-height:1.2;">{{ verdict.icon }}</span>
+            <div style="flex:1;">
+              <div style="font-size:12.5px;color:{{ verdict.color }};font-weight:600;">{{ verdict.title }}</div>
+              <div style="font-size:11px;color:#526475;margin-top:2px;">{{ verdict.sub }}</div>
+            </div>
+            <button onClick="{{ closeVerdict }}" style="background:transparent;border:none;color:#68788b;font-size:15px;cursor:pointer;line-height:1;">×</button>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#71808f;">提案篮 · 原子批</span>
+          <span style="font-size:11px;color:#647585;">{{ cartCountStr }}</span>
+          <span style="flex:1;"></span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#647585;">预留成本 {{ cartCostStr }}</span>
+        </div>
+
+        <sc-if value="{{ cartEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:11.5px;color:#7a8593;padding:2px 0 1px;">尚无动作。调整杠杆后「加入提案」,一起提交、一起裁决。</div>
+        </sc-if>
+        <sc-for list="{{ cart }}" as="c" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:8px;background:#ffffff;border:1px solid #dde4ec;border-radius:7px;padding:6px 9px;">
+            <span style="font-size:12px;color:#23323f;">{{ c.name }}</span>
+            <span style="flex:1;"></span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#586a7b;">{{ c.from }}</span>
+            <span style="color:#0f9d90;font-size:11px;">→</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#0c8579;">{{ c.to }}</span>
+            <button onClick="{{ c.onRemove }}" style="background:transparent;border:none;color:#68788b;font-size:14px;cursor:pointer;line-height:1;margin-left:2px;">×</button>
+          </div>
+        </sc-for>
+
+        <div style="display:flex;gap:8px;">
+          <button onClick="{{ submit }}" style="flex:1;background:{{ submitBg }};border:1px solid {{ submitBorder }};border-radius:8px;color:{{ submitFg }};font-size:13px;font-weight:600;padding:9px;cursor:{{ submitCursor }};">提交提案</button>
+          <button onClick="{{ noChange }}" style="flex:none;background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3a4956;font-size:13px;padding:9px 16px;cursor:pointer;" style-hover="border-color:#0f9d90;">本次不动</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ CENTER · TABS ============ -->
+    <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;">
+      <div style="flex:none;display:flex;gap:6px;">
+        <sc-for list="{{ tabChips }}" as="tab" hint-placeholder-count="2">
+          <button onClick="{{ tab.onPick }}" style="background:{{ tab.bg }};border:1px solid {{ tab.border }};border-radius:9px;color:{{ tab.fg }};font-size:13px;padding:8px 16px;cursor:pointer;">{{ tab.label }}</button>
+        </sc-for>
+        <span style="flex:1;"></span>
+        <div style="display:flex;align-items:center;gap:7px;padding:0 4px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#71808f;">X 轴 = 发布时间(非参考期)</span>
+        </div>
+      </div>
+
+      <!-- FOCUS CHART -->
+      <sc-if value="{{ tabFocus }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:none;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dde4ec;border-radius:13px;padding:14px 16px;display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;">
+            <span style="font-size:14px;color:#16232f;font-weight:600;">宏观焦点 · 公报序列</span>
+            <span style="flex:1;"></span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="width:16px;height:3px;background:#0f9d90;border-radius:2px;"></span><span style="font-size:11.5px;color:#4a5a6b;">实际产出</span></span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="width:16px;height:3px;background:#c17d16;border-radius:2px;"></span><span style="font-size:11.5px;color:#4a5a6b;">失业率</span></span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="width:16px;height:3px;background:#7a4fd0;border-radius:2px;"></span><span style="font-size:11.5px;color:#4a5a6b;">通胀</span></span>
+          </div>
+          <div style="height:300px;">
+            <svg viewBox="0 0 620 250" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block;font-family:'IBM Plex Mono',monospace;">
+              <line x1="46" y1="34" x2="600" y2="34" stroke="#e6ebf1"></line>
+              <line x1="46" y1="72.5" x2="600" y2="72.5" stroke="#e6ebf1"></line>
+              <line x1="46" y1="111" x2="600" y2="111" stroke="#e6ebf1"></line>
+              <line x1="46" y1="149.5" x2="600" y2="149.5" stroke="#e6ebf1"></line>
+              <line x1="46" y1="188" x2="600" y2="188" stroke="#dde4ec"></line>
+              <text x="40" y="38" text-anchor="end" font-size="9" fill="#71808f">145</text>
+              <text x="40" y="115" text-anchor="end" font-size="9" fill="#71808f">123</text>
+              <text x="40" y="191" text-anchor="end" font-size="9" fill="#71808f">101</text>
+              <!-- shock band -->
+              <rect x="366" y="34" width="36" height="154" fill="#d24a34" opacity="0.08"></rect>
+              <line x1="384" y1="34" x2="384" y2="188" stroke="#d24a34" stroke-opacity="0.5" stroke-dasharray="3 3"></line>
+              <text x="388" y="46" font-size="9.5" fill="#cc5a44">石油禁运 −45%</text>
+              <text x="388" y="58" font-size="8.5" fill="#9a6a5e">预告 → 生效</text>
+              <polyline fill="none" stroke="#0f9d90" stroke-width="2.4" stroke-linejoin="round" points="46.0,165.9 59.5,156.5 73.0,147.3 86.5,138.8 100.0,131.2 113.6,124.7 127.1,119.6 140.6,115.9 154.1,113.6 167.6,112.8 181.1,113.4 194.6,115.2 208.1,117.9 221.7,121.4 235.2,125.3 248.7,129.2 262.2,133.0 275.7,136.2 289.2,138.7 302.7,140.0 316.2,140.1 329.8,139.4 343.3,140.4 356.8,149.5 370.3,170.5 383.8,188.0 397.3,177.4 410.8,142.0 424.3,107.7 437.9,86.9 451.4,74.6 464.9,65.2 478.4,57.0 491.9,49.7 505.4,43.8 518.9,39.1 532.4,36.0 546.0,34.3 559.5,34.0 573.0,35.0 586.5,37.2 600.0,40.3"></polyline>
+              <polyline fill="none" stroke="#c17d16" stroke-width="1.8" stroke-linejoin="round" opacity="0.92" points="46.0,47.1 59.5,41.3 73.0,37.2 86.5,34.7 100.0,34.0 113.6,35.1 127.1,37.9 140.6,42.4 154.1,48.5 167.6,56.0 181.1,64.9 194.6,74.8 208.1,85.7 221.7,97.2 235.2,109.2 248.7,121.3 262.2,133.3 275.7,144.9 289.2,156.0 302.7,166.2 316.2,175.4 329.8,183.0 343.3,188.0 356.8,186.6 370.3,171.6 383.8,137.9 397.3,96.1 410.8,73.1 424.3,86.2 437.9,121.5 451.4,151.6 464.9,163.5 478.4,161.4 491.9,152.8 505.4,141.9 518.9,130.1 532.4,118.1 546.0,106.0 559.5,94.1 573.0,82.7 586.5,72.1 600.0,62.4"></polyline>
+              <polyline fill="none" stroke="#7a4fd0" stroke-width="1.8" stroke-linejoin="round" opacity="0.92" points="46.0,128.8 59.5,112.7 73.0,97.1 86.5,82.3 100.0,68.9 113.6,57.3 127.1,47.8 140.6,40.6 154.1,35.9 167.6,34.0 181.1,34.8 194.6,38.4 208.1,44.6 221.7,53.2 235.2,64.1 248.7,76.8 262.2,91.0 275.7,106.3 289.2,122.3 302.7,138.5 316.2,154.3 329.8,169.1 343.3,181.4 356.8,188.0 370.3,183.4 383.8,162.5 397.3,127.5 410.8,93.7 424.3,81.4 437.9,98.8 451.4,133.4 464.9,164.5 478.4,180.1 491.9,180.3 505.4,171.0 518.9,157.2 532.4,141.7 546.0,125.6 559.5,109.5 573.0,94.0 586.5,79.5 600.0,66.5"></polyline>
+              <text x="46" y="205" font-size="9" fill="#71808f">第2年·Q3</text>
+              <text x="230" y="205" font-size="9" fill="#71808f">第2年·Q4</text>
+              <text x="410" y="205" font-size="9" fill="#71808f">第3年·Q1</text>
+              <text x="565" y="205" font-size="9" fill="#71808f">第3年·Q2</text>
+              <text x="600" y="223" text-anchor="end" font-size="9" fill="#849098">发布时间 →</text>
+            </svg>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid #e6ebf1;padding-top:9px;">
+            <span style="font-size:11px;color:#5e6f81;">t 时刻仅显示 released_at ≤ t 的公报</span>
+            <span style="color:#d3dce6;">·</span>
+            <span style="font-size:11px;color:#5e6f81;">缺失显式化,禁止零填 / 前值补</span>
+            <span style="color:#d3dce6;">·</span>
+            <span style="font-size:11px;color:#5e6f81;">365 tick = 1 年</span>
+          </div>
+        </div>
+        <div style="flex:1;min-height:130px;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dde4ec;border-radius:13px;padding:12px 14px;display:flex;flex-direction:column;gap:9px;">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#71808f;">SERIES · 公报小图(近 8 期发布)</div>
+          <div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;min-height:0;">
+            <sc-for list="{{ smallMultiples }}" as="m" hint-placeholder-count="4">
+              <div style="background:#f5f7fb;border:1px solid #e6ebf1;border-radius:10px;padding:10px 11px;display:flex;flex-direction:column;gap:5px;">
+                <div style="display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:{{ m.color }};"></span><span style="font-size:11px;color:#516375;">{{ m.label }}</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;color:{{ m.color }};">{{ m.value }}</div>
+                <svg viewBox="0 0 120 32" preserveAspectRatio="none" style="width:100%;height:30px;display:block;"><polyline points="{{ m.spark }}" fill="none" stroke="{{ m.color }}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"></polyline></svg>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#71808f;">{{ m.release }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- WORLD VIEW -->
+      <sc-if value="{{ tabWorld }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;overflow-y:auto;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dde4ec;border-radius:13px;padding:14px 16px;display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:14px;color:#16232f;font-weight:600;">世界视图 · {{ econCount }} 经济体</span>
+            <span style="font-size:11px;color:#647585;">点击他国 → 仅 public 级只读</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:10px;">
+            <sc-for list="{{ worldCards }}" as="e" hint-placeholder-count="5">
+              <button onClick="{{ e.onSelect }}" style="text-align:left;background:{{ e.bg }};border:1px solid {{ e.border }};border-radius:11px;padding:11px 12px;cursor:pointer;display:flex;flex-direction:column;gap:9px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="width:24px;height:16px;border-radius:4px;overflow:hidden;display:inline-flex;flex:none;border:1px solid #0000001f;">
+                    <span style="width:50%;background:{{ e.flagA }};"></span><span style="width:50%;background:{{ e.flagB }};"></span>
+                  </span>
+                  <span style="font-size:13px;color:#16232f;font-weight:600;">{{ e.name }}</span>
+                  <span style="flex:1;"></span>
+                  <sc-if value="{{ e.self }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:#0f9d90;border:1px solid #9ad9d0;border-radius:4px;padding:1px 5px;">本国</span></sc-if>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <div><div style="font-size:9.5px;color:#5e6f81;">GDP</div><div style="font-family:'IBM Plex Mono',monospace;font-size:15px;color:#23323f;">{{ e.gdp }}</div></div>
+                  <div><div style="font-size:9.5px;color:#5e6f81;">失业</div><div style="font-family:'IBM Plex Mono',monospace;font-size:15px;color:#c17d16;">{{ e.un }}</div></div>
+                  <div><div style="font-size:9.5px;color:#5e6f81;">通胀</div><div style="font-family:'IBM Plex Mono',monospace;font-size:15px;color:#7a4fd0;">{{ e.inf }}</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;border-top:1px solid #00000016;padding-top:7px;">
+                  <span style="font-size:10px;color:#5e6f81;">汇率(对本国)</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#3f6db2;">{{ e.fx }}</span>
+                  <span style="flex:1;"></span>
+                  <span style="font-size:9.5px;color:{{ e.noteColor }};">{{ e.note }}</span>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:12px;">
+            <!-- trade flows -->
+            <div style="background:#f5f7fb;border:1px solid #e6ebf1;border-radius:11px;padding:12px;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#71808f;margin-bottom:6px;">TRADE · 有向贸易流(粗细 = 额)</div>
+              <svg viewBox="0 0 380 200" preserveAspectRatio="xMidYMid meet" style="width:100%;height:180px;display:block;font-family:'Open Sans',sans-serif;">
+                <polyline points="120,72 250,72" fill="none" stroke="#0f9d90" stroke-opacity="0.7" stroke-width="5"></polyline>
+                <polygon points="250,72 239,67 239,77" fill="#0f9d90"></polygon>
+                <polyline points="250,128 120,128" fill="none" stroke="#2f6fd0" stroke-opacity="0.7" stroke-width="3"></polyline>
+                <polygon points="120,128 131,123 131,133" fill="#2f6fd0"></polygon>
+                <polyline points="190,150 190,96" fill="none" stroke="#c17d16" stroke-opacity="0.7" stroke-width="2.4"></polyline>
+                <polygon points="190,96 185,107 195,107" fill="#c17d16"></polygon>
+                <g>
+                  <rect x="40" y="80" width="80" height="40" rx="9" fill="#e6effb" stroke="#0f9d90"></rect>
+                  <text x="80" y="104" text-anchor="middle" font-size="12" fill="#16232f">共和国 01</text>
+                </g>
+                <g>
+                  <rect x="250" y="52" width="90" height="40" rx="9" fill="#eef2f7" stroke="#2f6fd0"></rect>
+                  <text x="295" y="76" text-anchor="middle" font-size="12" fill="#16232f">联邦邦 02</text>
+                </g>
+                <g>
+                  <rect x="250" y="108" width="90" height="40" rx="9" fill="#eef2f7" stroke="#7a4fd0"></rect>
+                  <text x="295" y="132" text-anchor="middle" font-size="12" fill="#16232f">海峡共和 03</text>
+                </g>
+                <g>
+                  <rect x="145" y="150" width="90" height="38" rx="9" fill="#eef2f7" stroke="#c17d16"></rect>
+                  <text x="190" y="173" text-anchor="middle" font-size="12" fill="#16232f">北方联盟 04</text>
+                </g>
+              </svg>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;">
+                <span style="font-size:10.5px;color:#5e6f81;">净移民 <span style="font-family:'IBM Plex Mono',monospace;color:#0c8579;">+12.3k</span> → 本国</span>
+                <span style="font-size:10.5px;color:#5e6f81;">ΣNFA <span style="font-family:'IBM Plex Mono',monospace;color:#3f6db2;">≈ 0.0</span></span>
+                <span style="font-size:10.5px;color:#5e6f81;">关税收入 <span style="font-family:'IBM Plex Mono',monospace;color:#3f6db2;">3.1</span></span>
+              </div>
+            </div>
+
+            <!-- fx matrix -->
+            <div style="background:#f5f7fb;border:1px solid #e6ebf1;border-radius:11px;padding:12px;">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#71808f;margin-bottom:8px;">FX · 汇率向量 e_i(对本国)</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{ fxRows }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:9px;">
+                    <span style="width:20px;height:14px;border-radius:3px;overflow:hidden;display:inline-flex;flex:none;">
+                      <span style="width:50%;background:{{ f.flagA }};"></span><span style="width:50%;background:{{ f.flagB }};"></span>
+                    </span>
+                    <span style="font-size:11.5px;color:#3a4956;width:74px;">{{ f.name }}</span>
+                    <div style="flex:1;height:7px;background:#e7ecf2;border-radius:4px;overflow:hidden;">
+                      <div style="height:100%;width:{{ f.barW }};background:{{ f.barColor }};border-radius:4px;"></div>
+                    </div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#23323f;width:48px;text-align:right;">{{ f.fx }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-size:10px;color:#71808f;margin-top:10px;line-height:1.4;">储备与 dealer 净值有界(修复后)· 汇率对本国基准归一 1.000</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ============ C · EVENT TIMELINE ============ -->
+    <div style="width:344px;flex:none;background:linear-gradient(180deg,#ffffff,#f6f8fb);border:1px solid #dde4ec;border-radius:13px;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+      <div style="flex:none;padding:12px 13px 10px;border-bottom:1px solid #e6ebf1;display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:#71808f;">EVENTS · 时间线</span>
+        <span style="flex:1;"></span>
+        <button onClick="{{ toggleFilter }}" style="background:{{ filterBg }};border:1px solid {{ filterBorder }};border-radius:7px;color:{{ filterFg }};font-size:11px;padding:5px 10px;cursor:pointer;">{{ filterLabel }}</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:11px 12px;display:flex;flex-direction:column;gap:8px;min-height:0;">
+        <!-- pinned shock -->
+        <sc-for list="{{ pinnedEvents }}" as="ev" hint-placeholder-count="1">
+          <div style="background:linear-gradient(180deg,#fbe3db,#fdeee9);border:1px solid #f0bcae;border-radius:10px;padding:10px 11px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#d24a34;box-shadow:0 0 7px #d24a34;animation:om-pulse 1.6s ease-in-out infinite;"></span>
+              <span style="font-size:10.5px;color:#cc5a44;letter-spacing:0.05em;">{{ ev.tag }}</span>
+              <span style="flex:1;"></span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9a6a5e;">{{ ev.tick }}</span>
+            </div>
+            <div style="font-size:13px;color:#8a3a2c;line-height:1.35;">{{ ev.text }}</div>
+            <div style="font-size:11px;color:#9a6a5e;margin-top:3px;">{{ ev.day }}</div>
+          </div>
+        </sc-for>
+
+        <sc-for list="{{ listEvents }}" as="ev" hint-placeholder-count="8">
+          <div style="display:flex;gap:9px;">
+            <div style="flex:none;display:flex;flex-direction:column;align-items:center;padding-top:3px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:{{ ev.color }};flex:none;"></span>
+              <span style="flex:1;width:1px;background:#dbe2ea;margin-top:3px;"></span>
+            </div>
+            <div style="flex:1;padding-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:7px;">
+                <span style="font-size:10px;color:{{ ev.color }};letter-spacing:0.03em;">{{ ev.tag }}</span>
+                <sc-if value="{{ ev.mine }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;color:#0f9d90;border:1px solid #9ad9d0;border-radius:4px;padding:0 4px;">我</span></sc-if>
+                <span style="flex:1;"></span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#71808f;">{{ ev.tick }}</span>
+              </div>
+              <div style="font-size:12.5px;color:#33424f;line-height:1.35;margin-top:2px;">{{ ev.text }}</div>
+              <div style="font-size:10px;color:#71808f;margin-top:1px;">{{ ev.day }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= E · CRISIS BANNER (overlay) ======================= -->
+  <sc-if value="{{ crisis }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:60;background:rgba(22,35,52,0.38);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding-top:70px;">
+      <div style="width:min(1080px,92vw);background:linear-gradient(180deg,#fff4f1,#fdeae4);border:1px solid #e79b86;border-radius:16px;box-shadow:0 30px 90px rgba(22,45,80,0.16);overflow:hidden;">
+        <div style="background:linear-gradient(90deg,#fbe3db,#fff4f1);padding:14px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #f0bcae;">
+          <span style="width:10px;height:10px;border-radius:50%;background:#d24a34;box-shadow:0 0 12px #d24a34;animation:om-pulse 1.1s ease-in-out infinite;"></span>
+          <span style="font-size:17px;font-weight:700;color:#7a2418;letter-spacing:0.02em;">紧急会议 · 触发器:reserve_floor_breach_share &gt; 0.25</span>
+          <span style="flex:1;"></span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#cc5a44;">倒计时 {{ crisisCountdown }}</span>
+          <button onClick="{{ toggleCrisis }}" style="background:#fbe3db;border:1px solid #e79b86;border-radius:8px;color:#b05c4b;font-size:13px;padding:7px 14px;cursor:pointer;">离开横幅</button>
+        </div>
+        <div style="padding:16px 18px;display:grid;grid-template-columns:1fr 1.1fr;gap:16px;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#9a6a5e;margin-bottom:9px;">相关公报快照</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;gap:9px;background:#fdeee9;border:1px solid #f0bcae;border-radius:8px;padding:9px 11px;">
+                <span style="font-size:12px;color:#7a3327;flex:1;">准备金触底占比</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;color:#d24a34;">0.27</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;background:#fdeee9;border:1px solid #f0bcae;border-radius:8px;padding:9px 11px;">
+                <span style="font-size:12px;color:#7a3327;flex:1;">濒危银行数</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;color:#d24a34;">4</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;background:#fdeee9;border:1px solid #f0bcae;border-radius:8px;padding:9px 11px;">
+                <span style="font-size:12px;color:#7a3327;flex:1;">政策利率</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;color:#8a3a2c;">3.50%</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#9a6a5e;">紧急白名单杠杆</span>
+              <span style="font-size:10px;color:#a0691f;border:1px solid #ecd3a0;border-radius:4px;padding:1px 6px;">溢价 ×1.8</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <sc-for list="{{ crisisLevers }}" as="cl" hint-placeholder-count="2">
+                <div style="background:#fdeee9;border:1px solid #f0bcae;border-radius:9px;padding:9px 11px;">
+                  <div style="font-size:12.5px;color:#6b2317;margin-bottom:6px;">{{ cl.name }}</div>
+                  <div style="display:flex;align-items:stretch;gap:7px;">
+                    <button onClick="{{ cl.onDec }}" style="width:36px;flex:none;background:#fbe3db;border:1px solid #e79b86;border-radius:7px;color:#b05c4b;font-size:18px;cursor:pointer;">−</button>
+                    <div style="flex:1;background:#fff6f3;border:1px solid #f0bcae;border-radius:7px;padding:5px 10px;display:flex;align-items:center;">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#6b2317;">{{ cl.valueStr }}</span>
+                    </div>
+                    <button onClick="{{ cl.onInc }}" style="width:36px;flex:none;background:#fbe3db;border:1px solid #e79b86;border-radius:7px;color:#b05c4b;font-size:18px;cursor:pointer;">＋</button>
+                  </div>
+                </div>
+              </sc-for>
+              <button onClick="{{ toggleCrisis }}" style="background:#d24a34;border:1px solid #c23f2a;border-radius:9px;color:#fff;font-size:14px;font-weight:600;padding:11px;cursor:pointer;" style-hover="background:#c23f2a;">提交紧急处置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ======================= CONFIRM MODAL ======================= -->
+  <sc-if value="{{ hasConfirm }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:70;background:rgba(22,35,52,0.38);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;">
+      <div style="width:min(440px,90vw);background:linear-gradient(180deg,#eef3fb,#f6f8fb);border:1px solid #cdd7e2;border-radius:14px;padding:18px 19px;box-shadow:0 24px 70px rgba(22,45,80,0.16);">
+        <div style="font-size:16px;font-weight:600;color:#16232f;margin-bottom:9px;">{{ confirmTitle }}</div>
+        <div style="font-size:13px;color:#45535f;line-height:1.55;">{{ confirmBody }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#c17d16;margin-top:10px;">{{ confirmNote }}</div>
+        <div style="display:flex;gap:9px;margin-top:16px;justify-content:flex-end;">
+          <button onClick="{{ confirmNo }}" style="background:#eef2f7;border:1px solid #cdd7e2;border-radius:8px;color:#3a4956;font-size:13px;padding:9px 16px;cursor:pointer;">取消</button>
+          <button onClick="{{ confirmYes }}" style="background:#e2f4f1;border:1px solid #59b7a8;border-radius:8px;color:#0c8579;font-size:13px;font-weight:600;padding:9px 18px;cursor:pointer;" style-hover="background:#d3ede8;">确认</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- crisis trigger (demo affordance) -->
+  <sc-if value="{{ showCrisisTrigger }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ toggleCrisis }}" style="position:fixed;right:18px;bottom:16px;z-index:50;background:linear-gradient(180deg,#fbe3db,#fdeee9);border:1px solid #e79b86;border-radius:10px;color:#cc5a44;font-size:12px;padding:9px 14px;cursor:pointer;box-shadow:0 8px 24px rgba(22,45,80,0.12);" style-hover="border-color:#c23f2a;">▲ 模拟紧急会议</button>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1520,&quot;height&quot;:940},&quot;initialSeat&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;treasury&quot;,&quot;options&quot;:[&quot;treasury&quot;,&quot;central_bank&quot;,&quot;external&quot;,&quot;energy&quot;,&quot;regulator&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;interactive&quot;,&quot;options&quot;:[&quot;interactive&quot;,&quot;realtime&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;初始状态&quot;},&quot;bulletinDetail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;完整&quot;,&quot;options&quot;:[&quot;完整&quot;,&quot;简洁&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;公报&quot;}}">
+class Component extends DCLogic {
+  state = {
+    seat: this.props.initialSeat || 'treasury',
+    tab: 'focus',
+    tick: 856,
+    playing: false,
+    speed: 5,
+    awaiting: true,
+    nextMeeting: 856,
+    mode: this.props.mode || 'interactive',
+    detail: this.props.bulletinDetail || '完整',
+    filterMine: false,
+    crisis: false,
+    crisisT: 45,
+    confirm: null,
+    verdict: null,
+    wizard: null,
+    cart: [],
+    vals: {},
+    enabled: {},
+    choice: {},
+    sanctions: { e02: true },
+    worldSel: 'e03',
+    events: [
+      { pin: true, tag: '冲击预告', tick: 't=920', day: '预告 · 第3年·Q3', text: '石油禁运 · 能源产能 −45%', mine: true },
+      { tag: 'open', tick: 't=856', day: '第3年·Q2·35天', text: '财政部会议召开 · 等待决策', mine: true, color: '#0f9d90' },
+      { tag: 'public', tick: 't=849', day: '第3年·Q2·28天', text: '公报发布 · 失业率 5.80%(参考期止 t847)', mine: false, color: '#2f6fd0' },
+      { tag: 'committed', tick: 't=842', day: '第3年·Q2·21天', text: '提案生效 · 政府消费份额 0.180', mine: true, color: '#1f9d63' },
+      { tag: 'accepted_pending', tick: 't=835', day: '第3年·Q2·14天', text: '提案受理 · 生效于 t863', mine: true, color: '#0f9d90' },
+      { tag: 'rejected', tick: 't=828', day: '第3年·Q2·07天', text: '提案被拒 · reason=min_hold(冷却未到)', mine: true, color: '#d24a34' },
+      { tag: 'accepted_noop', tick: 't=821', day: '第3年·Q2·01天', text: '本次不动 · 空动作已入日志', mine: true, color: '#586a7b' },
+      { tag: 'seat', tick: 't=810', day: '第3年·Q1·80天', text: '席位交接 · 财政部占用者换手', mine: false, color: '#7a4fd0' },
+      { tag: 'system', tick: 't=802', day: '第3年·Q1·72天', text: 'peg 崩溃 · 强制浮动(海峡共和 03)', mine: false, color: '#c17d16' },
+    ],
+  };
+
+  // ---------- static data ----------
+  econs() {
+    return [
+      { id: 'e01', name: '共和国 01', self: true, a: '#0f9d90', b: '#1f5f7a', gdp: '123.4', un: '5.8%', inf: '+1.9%', fx: '1.000', note: '本国 · 全量', noteColor: '#0f9d90' },
+      { id: 'e02', name: '联邦邦 02', a: '#2f6fd0', b: '#24435f', gdp: '98.7', un: '7.1%', inf: '+3.2%', fx: '0.862', note: 'public', noteColor: '#647585' },
+      { id: 'e03', name: '海峡共和 03', a: '#7a4fd0', b: '#3a2f52', gdp: '141.2', un: '4.3%', inf: '+0.8%', fx: '1.241', note: '强制浮动', noteColor: '#c17d16' },
+      { id: 'e04', name: '北方联盟 04', a: '#c17d16', b: '#4d3a1c', gdp: '76.5', un: '9.4%', inf: '+5.6%', fx: '0.613', note: 'public', noteColor: '#647585' },
+      { id: 'e05', name: '南屿 05', a: '#1f9d63', b: '#16513c', gdp: '112.0', un: '6.0%', inf: '+2.4%', fx: '1.031', note: 'public', noteColor: '#647585' },
+    ];
+  }
+
+  seats() {
+    return [
+      { id: 'treasury', name: '财政部', role: '财政 · public', accent: '#0f9d90', beta: false, cap: '7 / 10' },
+      { id: 'central_bank', name: '央行', role: '货币 · operational', accent: '#2f6fd0', beta: false, cap: '5 / 8' },
+      { id: 'external', name: '外部/贸易', role: '对外 · external', accent: '#c17d16', beta: true, cap: '4 / 6' },
+      { id: 'energy', name: '能源', role: '能源 · public', accent: '#1f9d63', beta: true, cap: '3 / 5' },
+      { id: 'regulator', name: '监管', role: '金融监管 · operational', accent: '#7a4fd0', beta: true, cap: '4 / 6' },
+    ];
+  }
+
+  defs(seat) {
+    const D = {
+      treasury: [
+        { name: '政府支出与赤字', levers: [
+          { id: 'gov_consumption_share', name: '政府消费份额', kind: 'step', value: 0.18, step: 0.005, min: 0.05, max: 0.35, fmt: 'dec3', lag: 7, cost: 2.1, cc: '中', pending: { v: 0.185, day: '第3年·Q2·42天' }, hold: '下次可调 即时' },
+          { id: 'gov_deficit_target', name: '赤字目标 / GDP', kind: 'step', value: 0.03, step: 0.005, min: -0.02, max: 0.10, fmt: 'pct1', lag: 30, cost: 1.6, cc: '低', hold: '下次可调 即时' },
+        ]},
+        { name: '税收', levers: [
+          { id: 'income_tax_rate', name: '所得税率', kind: 'step', value: 0.22, step: 0.01, min: 0, max: 0.60, fmt: 'pct0', lag: 91, cost: 3.8, cc: '高', hold: '下次可调 第3年·Q3·12天' },
+          { id: 'vat_rate', name: '增值税率', kind: 'step', value: 0.15, step: 0.01, min: 0, max: 0.30, fmt: 'pct0', lag: 91, cost: 3.5, cc: '高', permitted: false, reason: '冷却中(min_hold)· 下次可调 第3年·Q2·49天' },
+        ]},
+        { name: '福利与就业', levers: [
+          { id: 'benefit_replacement_rate', name: '福利替代率', kind: 'step', value: 0.40, step: 0.02, min: 0, max: 0.90, fmt: 'pct0', lag: 30, cost: 2.4, cc: '中', hold: '下次可调 即时' },
+          { id: 'benefit_income_floor', name: '收入下限', kind: 'nullable', value: 0.12, enabled: true, step: 0.01, min: 0, max: 0.40, fmt: 'pct0', lag: 30, cost: 3.0, cc: '高', note: 'None→值 为制度引入', hold: '下次可调 即时' },
+          { id: 'jg_slots_cap', name: '就业保障名额上限', kind: 'step', integer: true, value: 1200000, step: 50000, min: 0, max: 5000000, fmt: 'int', lag: 30, cost: 2.0, cc: '中', hold: '下次可调 即时' },
+        ]},
+        { name: '国有部门', levers: [
+          { id: 'soe_efirm', name: '国企 e-firm 模式', kind: 'bool', value: false, stateTransition: true, lag: 91, cost: 4.2, cc: '高', note: '不可逆状态迁移', hold: '下次可调 第4年·Q1' },
+        ]},
+      ],
+      central_bank: [
+        { name: '货币制度', levers: [
+          { id: 'monetary_regime', name: '货币制度', kind: 'seg', value: '泰勒规则', options: ['泰勒规则', '手动', '盯利率'], lag: 0, cost: 3.0, cc: '高', hold: '下次可调 即时' },
+          { id: 'manual_policy_rate', name: '手动政策利率', kind: 'step', value: 0.035, step: 0.0025, min: 0, max: 0.15, fmt: 'rate', lag: 0, cost: 1.2, cc: '低', note: '配合「手动」制度生效', hold: '下次可调 即时' },
+        ]},
+        { name: '政策工具', levers: [
+          { id: 'reserve_requirement', name: '准备金率', kind: 'step', value: 0.10, step: 0.005, min: 0, max: 0.30, fmt: 'pct1', lag: 7, cost: 1.8, cc: '中', hold: '下次可调 即时' },
+          { id: 'corridor_width', name: '利率走廊宽度', kind: 'step', value: 0.010, step: 0.0025, min: 0, max: 0.05, fmt: 'rate', lag: 0, cost: 0.9, cc: '低', hold: '下次可调 即时' },
+        ]},
+        { name: '汇率制度', levers: [
+          { id: 'fx_regime', name: '汇率制度', kind: 'seg', value: '自由浮动', options: ['自由浮动', '管理浮动', '盯住'], lag: 0, cost: 3.6, cc: '高', hold: '下次可调 即时' },
+          { id: 'peg_anchor', name: '锚定经济体', kind: 'ecoId', value: '', lag: 0, cost: 1.0, cc: '低', note: '与汇率制度向导联动', hold: '下次可调 即时' },
+        ]},
+      ],
+      external: [
+        { name: '关税与资本', levers: [
+          { id: 'tariff_rate', name: '关税率', kind: 'step', value: 0.05, step: 0.01, min: 0, max: 0.40, fmt: 'pct0', lag: 30, cost: 2.2, cc: '中', hold: '下次可调 即时' },
+          { id: 'capital_control', name: '资本管制强度', kind: 'nullable', value: 0.10, enabled: false, step: 0.02, min: 0, max: 0.60, fmt: 'pct0', lag: 30, cost: 2.8, cc: '高', note: 'None→值 为制度引入', hold: '下次可调 即时' },
+        ]},
+        { name: '制裁', levers: [
+          { id: 'sanctions_set', name: '制裁经济体集合', kind: 'ecoSet', lag: 0, cost: 2.5, cc: '中', hold: '下次可调 即时' },
+        ]},
+      ],
+      energy: [
+        { name: '配给与补贴', levers: [
+          { id: 'energy_rationing', name: '能源配给制', kind: 'seg', value: '无', options: ['无', '优先配给', '轮流限电'], lag: 0, cost: 3.2, cc: '高', note: '状态迁移影响生产', hold: '下次可调 即时' },
+          { id: 'energy_subsidy', name: '能源补贴率', kind: 'step', value: 0.08, step: 0.01, min: 0, max: 0.40, fmt: 'pct0', lag: 7, cost: 1.9, cc: '中', hold: '下次可调 即时' },
+        ]},
+      ],
+      regulator: [
+        { name: '审慎工具', levers: [
+          { id: 'capital_buffer', name: '逆周期资本缓冲', kind: 'step', value: 0.025, step: 0.0025, min: 0, max: 0.10, fmt: 'pct1', lag: 30, cost: 2.0, cc: '中', hold: '下次可调 即时' },
+          { id: 'lcr_floor', name: '流动性覆盖率下限', kind: 'step', value: 1.00, step: 0.05, min: 0.5, max: 2.0, fmt: 'dec2', lag: 30, cost: 1.7, cc: '中', hold: '下次可调 即时' },
+        ]},
+      ],
+    };
+    return D[seat] || [];
+  }
+
+  tilesRaw() {
+    return [
+      { k: 'out', label: '实际产出 · GDP', val: '123.4', delta: '+1.2%', up: true, color: '#0f9d90', freq: 30, lag: 7, access: 'public', arr: [117, 118, 120, 121, 122, 122.5, 123, 123.4] },
+      { k: 'un', label: '失业率', val: '5.80%', delta: '−0.2pp', up: false, color: '#c17d16', freq: 7, lag: 2, access: 'public', arr: [6.2, 6.1, 6.0, 5.95, 5.9, 5.85, 5.82, 5.8] },
+      { k: 'inf', label: '通胀(年化)', val: '+1.9%', delta: '+0.3pp', up: true, color: '#7a4fd0', freq: 7, lag: 2, access: 'public', arr: [1.2, 1.3, 1.5, 1.6, 1.7, 1.8, 1.85, 1.9] },
+      { k: 'px', label: '物价指数', val: '1.024', delta: '+0.1%', up: true, color: '#2f6fd0', freq: 7, lag: 2, access: 'public', arr: [1.018, 1.019, 1.02, 1.021, 1.022, 1.023, 1.0235, 1.024] },
+      { k: 'rate', label: '政策利率', val: '3.50%', delta: '持平', up: null, color: '#0f9d90', freq: 1, lag: 0, access: 'public', arr: [3.0, 3.0, 3.25, 3.25, 3.5, 3.5, 3.5, 3.5] },
+      { k: 'def', label: '赤字 / GDP', val: '3.1%', delta: '+0.2pp', up: true, color: '#c17d16', freq: 30, lag: 7, access: 'public', arr: [2.6, 2.7, 2.8, 2.9, 2.9, 3.0, 3.05, 3.1] },
+      { k: 'res', label: '银行准备金', val: '812.4', delta: '+0.4%', up: true, color: '#1f9d63', freq: 1, lag: 0, access: 'operational', arr: [790, 795, 800, 805, 808, 810, 811, 812.4] },
+      { k: 'pov', label: '贫困率', val: '12.4%', delta: '−0.3pp', up: false, color: '#7a4fd0', freq: 30, lag: 7, access: 'public', arr: [13.1, 13, 12.9, 12.8, 12.7, 12.6, 12.5, 12.4] },
+    ];
+  }
+
+  // ---------- helpers ----------
+  cv(d) { return this.state.vals[d.id] !== undefined ? this.state.vals[d.id] : d.value; }
+  ce(d) { return this.state.enabled[d.id] !== undefined ? this.state.enabled[d.id] : d.enabled; }
+  cc(d) { return this.state.choice[d.id] !== undefined ? this.state.choice[d.id] : d.value; }
+  clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+  snap(v, s) { return Math.round(v / s) * s; }
+  fmt(d, v) {
+    if (v === '' || v === undefined || v === null) return '未设定';
+    if (d.fmt === 'pct0') return (v * 100).toFixed(0) + '%';
+    if (d.fmt === 'pct1') return (v * 100).toFixed(1) + '%';
+    if (d.fmt === 'rate') return (v * 100).toFixed(2) + '%';
+    if (d.fmt === 'dec3') return v.toFixed(3);
+    if (d.fmt === 'dec2') return v.toFixed(2);
+    if (d.fmt === 'int') return Math.round(v).toLocaleString('en-US');
+    return String(v);
+  }
+  cal(tick) {
+    const y = Math.floor(tick / 365) + 1;
+    const doy = tick % 365;
+    const q = Math.min(4, Math.floor(doy / 91.25) + 1);
+    const d = Math.floor(doy - (q - 1) * 91.25) + 1;
+    return { y, q, d };
+  }
+  findDef(id) {
+    for (const g of this.defs(this.state.seat)) for (const l of g.levers) if (l.id === id) return l;
+    return null;
+  }
+
+  // ---------- transport ----------
+  tickAdvance() {
+    this.setState(s => {
+      if (s.crisis || !s.playing) return {};
+      let t = s.tick + s.speed, playing = s.playing, awaiting = s.awaiting;
+      if (t >= s.nextMeeting) {
+        t = s.nextMeeting; playing = false; awaiting = true;
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+      }
+      return { tick: t, playing, awaiting };
+    });
+  }
+  playToggle() {
+    if (this.state.playing) { this.pause(); return; }
+    if (this.state.awaiting || this.state.crisis) return;
+    if (this._timer) clearInterval(this._timer);
+    this._timer = setInterval(() => this.tickAdvance(), 650);
+    this.setState({ playing: true });
+  }
+  pause() { if (this._timer) { clearInterval(this._timer); this._timer = null; } this.setState({ playing: false }); }
+  step() { if (this.state.awaiting || this.state.crisis) return; this.setState(s => ({ tick: s.tick + 1 })); }
+  componentWillUnmount() { if (this._timer) clearInterval(this._timer); }
+
+  // ---------- lever interactions ----------
+  stepLever(d, dir) {
+    const cur = this.cv(d);
+    let nv = this.clamp(this.snap(cur + dir * d.step, d.step), d.min, d.max);
+    if (d.integer) nv = Math.round(nv);
+    this.setState(s => ({ vals: { ...s.vals, [d.id]: nv } }));
+  }
+  toggleNull(d) {
+    const en = this.ce(d);
+    if (!en) {
+      this.setState({ confirm: { title: '制度引入确认', body: '启用「' + d.name + '」是一次制度引入(None → 数值),将按更高成本类计费并改变制度分支。确认引入?', note: '成本类 · 高 · 通过后 ' + d.lag + ' 天生效', onYes: () => this.setState(s => ({ enabled: { ...s.enabled, [d.id]: true } })) } });
+    } else {
+      this.setState(s => ({ enabled: { ...s.enabled, [d.id]: false } }));
+    }
+  }
+  toggleBool(d) {
+    if (d.stateTransition) {
+      this.setState({ confirm: { title: '状态迁移确认', body: '切换「' + d.name + '」属不可逆状态迁移(STATE_TRANSITION),将产生更高行政成本并进入新制度分支。确认迁移?', note: '成本类 · 高 · 通过后 ' + d.lag + ' 天生效', onYes: () => this.reallyBool(d) } });
+    } else this.reallyBool(d);
+  }
+  reallyBool(d) { this.setState(s => ({ vals: { ...s.vals, [d.id]: !this.cv(d) } })); }
+  pickChoice(d, o) {
+    this.setState(s => {
+      const choice = { ...s.choice, [d.id]: o };
+      let wizard = s.wizard;
+      if (d.id === 'monetary_regime') wizard = o === '手动' ? { leverId: 'manual_policy_rate', text: '切至「手动」须同批设定「手动政策利率」并一起加入提案。', steps: ['① 选择制度', '② 设定利率'], active: 1 } : (s.wizard && s.wizard.leverId === 'manual_policy_rate' ? null : s.wizard);
+      if (d.id === 'fx_regime') wizard = o === '盯住' ? { leverId: 'peg_anchor', text: '第 1 步「盯住」已选 → 第 2 步:在下方选择锚定经济体(排除本国)。', steps: ['① 选择制度', '② 选择锚'], active: 1 } : (s.wizard && s.wizard.leverId === 'peg_anchor' ? null : s.wizard);
+      return { choice, wizard };
+    });
+  }
+  setAnchor(d, val) { this.setState(s => ({ choice: { ...s.choice, [d.id]: val }, wizard: (s.wizard && s.wizard.leverId === 'peg_anchor' && val) ? null : s.wizard })); }
+  toggleSanction(id) { this.setState(s => ({ sanctions: { ...s.sanctions, [id]: !s.sanctions[id] } })); }
+
+  // ---------- cart ----------
+  changed(d) {
+    if (d.kind === 'step') return this.cv(d) !== d.value;
+    if (d.kind === 'nullable') return this.ce(d) !== d.enabled || (this.ce(d) && this.cv(d) !== d.value);
+    if (d.kind === 'bool') return this.cv(d) !== d.value;
+    if (d.kind === 'seg' || d.kind === 'ecoId') return this.cc(d) !== d.value;
+    if (d.kind === 'ecoSet') { const cur = this.sancIds().join(','); return cur !== 'e02'; }
+    return false;
+  }
+  sancIds() { return Object.keys(this.state.sanctions).filter(k => this.state.sanctions[k]).sort(); }
+  toStr(d) {
+    if (d.kind === 'step') return this.fmt(d, this.cv(d));
+    if (d.kind === 'nullable') return this.ce(d) ? this.fmt(d, this.cv(d)) : '不设(None)';
+    if (d.kind === 'bool') return this.cv(d) ? '启用' : '停用';
+    if (d.kind === 'seg') return this.cc(d);
+    if (d.kind === 'ecoId') { const e = this.econs().find(x => x.id === this.cc(d)); return e ? e.name : '未选择'; }
+    if (d.kind === 'ecoSet') { const ids = this.sancIds(); return ids.length ? ids.map(i => (this.econs().find(x => x.id === i) || {}).name).join('、') : '空集'; }
+    return '';
+  }
+  fromStr(d) {
+    if (d.kind === 'step') return this.fmt(d, d.value);
+    if (d.kind === 'nullable') return d.enabled ? this.fmt(d, d.value) : '不设';
+    if (d.kind === 'bool') return d.value ? '启用' : '停用';
+    if (d.kind === 'seg' || d.kind === 'ecoId') { const e = this.econs().find(x => x.id === d.value); return e ? e.name : d.value || '未选择'; }
+    if (d.kind === 'ecoSet') return '联邦邦 02';
+    return '';
+  }
+  effDay(d) { if (!d.lag) return '即时生效'; const c = this.cal(this.state.tick + d.lag); return '生效 第' + c.y + '年·Q' + c.q + '·' + c.d + '天'; }
+  addToCart(d) {
+    this.setState(s => {
+      const cart = s.cart.filter(c => c.id !== d.id);
+      cart.push({ id: d.id, name: d.name, from: this.fromStr(d), to: this.toStr(d), cost: d.cost, eff: this.effDay(d), onRemove: () => this.removeCart(d.id) });
+      return { cart, wizard: (s.wizard && s.wizard.leverId === d.id) ? null : s.wizard };
+    });
+  }
+  removeCart(id) { this.setState(s => ({ cart: s.cart.filter(c => c.id !== id) })); }
+  submit() {
+    if (!this.state.cart.length) return;
+    const cost = this.state.cart.reduce((a, c) => a + c.cost, 0);
+    const eff = this.state.cart[this.state.cart.length - 1].eff;
+    this.setState(s => {
+      const evs = s.cart.map(c => ({ tag: 'accepted_pending', tick: 't=' + s.tick, day: '刚刚', text: '受理 · ' + c.name + ' → ' + c.to, mine: true, color: '#0f9d90' }));
+      evs.unshift({ tag: 'committed', tick: 't=' + s.tick, day: '刚刚', text: '提案批准 · ' + s.cart.length + ' 项原子批', mine: true, color: '#1f9d63' });
+      const rest = s.events.filter(e => !e.pin);
+      const pin = s.events.filter(e => e.pin);
+      return {
+        verdict: { type: 'accepted_pending', count: s.cart.length, cost: cost, eff: eff },
+        cart: [], awaiting: false, nextMeeting: s.tick + 28, wizard: null,
+        events: [...pin, ...evs, ...rest],
+      };
+    });
+  }
+  noChange() {
+    this.setState(s => {
+      const rest = s.events.filter(e => !e.pin), pin = s.events.filter(e => e.pin);
+      return {
+        verdict: { type: 'noop' }, awaiting: false, nextMeeting: s.tick + 28,
+        events: [...pin, { tag: 'accepted_noop', tick: 't=' + s.tick, day: '刚刚', text: '本次不动 · 空动作已入日志', mine: true, color: '#586a7b' }, ...rest],
+      };
+    });
+  }
+  closeVerdict() { this.setState({ verdict: null }); }
+  confirmYes() { const f = this.state.confirm && this.state.confirm.onYes; this.setState({ confirm: null }); if (f) f(); }
+  confirmNo() { this.setState({ confirm: null }); }
+  toggleCrisis() { this.setState(s => ({ crisis: !s.crisis })); }
+  toggleFilter() { this.setState(s => ({ filterMine: !s.filterMine })); }
+
+  // ---------- view models ----------
+  tileVM(t) {
+    const S = this.state, tick = S.tick;
+    const has = t.access === 'public' || (t.access === 'operational' && (S.seat === 'central_bank' || S.seat === 'regulator'));
+    const pub = t.freq * Math.floor(tick / t.freq);
+    const ref = pub - t.lag;
+    const stale = Math.max(0, tick - ref);
+    const staleColor = stale <= 2 ? '#1f9d63' : stale <= 20 ? '#c17d16' : '#586a7b';
+    const arr = t.arr, mn = Math.min(...arr), mx = Math.max(...arr), d = (mx - mn) || 1;
+    const spark = arr.map((v, i) => (2 + (88 - 4) * i / (arr.length - 1)).toFixed(1) + ',' + (24 - 2 - (v - mn) / d * (26 - 4)).toFixed(1)).join(' ');
+    const dc = t.up === null ? '#586a7b' : (t.k === 'un' || t.k === 'pov' || t.k === 'inf' || t.k === 'def') ? (t.up ? '#d24a34' : '#1f9d63') : (t.up ? '#1f9d63' : '#d24a34');
+    return {
+      k: t.k, label: t.label, valueStr: t.val, delta: t.delta, deltaColor: dc, color: t.color, dotColor: t.color,
+      hasData: has, missing: !has, missingReason: '(仅央行 / 监管席可见 · operational)',
+      spark, staleColor,
+      staleStr: stale + ' 天', staleTitle: '距参考期 ' + stale + ' 天',
+      releaseStr: '发布 t' + pub + ' · 参考期止 t' + ref + ' · 距今 ' + stale + '天',
+      detailFull: S.detail === '完整', detailBrief: S.detail !== '完整',
+    };
+  }
+
+  leverVM(d) {
+    const S = this.state;
+    const isStep = d.kind === 'step', isNull = d.kind === 'nullable', isBool = d.kind === 'bool', isSeg = d.kind === 'seg', isEcoId = d.kind === 'ecoId', isEcoSet = d.kind === 'ecoSet';
+    let permitted = d.permitted !== false, reason = d.reason;
+    if (d.id === 'peg_anchor') { const fx = this.cc(this.findDef('fx_regime') || { id: 'fx_regime', value: '自由浮动' }); permitted = fx === '盯住'; if (!permitted) reason = '需先将「汇率制度」切换至「盯住」(联合迁移向导)'; }
+    const changed = this.changed(d);
+    const inCart = S.cart.some(c => c.id === d.id);
+    const costColor = d.cc === '高' ? '#c17d16' : d.cc === '中' ? '#3f6db2' : '#5e6f81';
+    const costBorder = d.cc === '高' ? '#ecd3a0' : '#d3dce6';
+    const vm = {
+      id: d.id, name: d.name, permitted, locked: !permitted, lockReason: reason,
+      isStep, isNullable: isNull, isBool, isSeg, isEcoId, isEcoSet, isInt: !!d.integer,
+      dot: changed ? '#0f9d90' : '#d3dce6',
+      cardBorder: inCart ? '#59b7a8' : '#e2e8ef', cardBg: inCart ? '#e6f5f0' : '#ffffff',
+      costStr: '成本 ' + (d.cost || 0).toFixed(1) + ' · ' + d.cc, costColor, costBorder,
+      lagStr: d.lag ? '通过后 ' + d.lag + ' 天生效' : '即时生效',
+      holdStr: d.hold || '',
+      hasNote: !!d.note, note: d.note || '',
+      showAdd: permitted && changed && !inCart, showInCart: inCart,
+    };
+    if (isStep || isNull) {
+      vm.valueStr = this.fmt(d, this.cv(d));
+      vm.stepStr = d.integer ? d.step.toLocaleString('en-US') : String(d.step);
+      vm.rangeStr = this.fmt(d, d.min) + ' – ' + this.fmt(d, d.max);
+      vm.onInc = () => this.stepLever(d, 1); vm.onDec = () => this.stepLever(d, -1);
+      const delta = this.cv(d) - d.value;
+      vm.deltaFromBase = Math.abs(delta) < 1e-9 ? '' : (delta > 0 ? '▲' : '▼');
+      vm.changeColor = delta > 0 ? '#1f9d63' : '#d24a34';
+    }
+    if (isNull) {
+      const en = this.ce(d);
+      vm.nullEnabled = en; vm.onToggleNull = () => this.toggleNull(d);
+      vm.nullTrack = en ? '#59b7a8' : '#d3dce6'; vm.nullKnob = en ? 'translateX(15px)' : 'translateX(0)';
+      vm.nullLabel = en ? '已启用' : '不设(None)'; vm.nullLabelColor = en ? '#0c8579' : '#586a7b';
+    }
+    if (isBool) {
+      const on = this.cv(d);
+      vm.onToggleBool = () => this.toggleBool(d);
+      vm.boolTrack = on ? '#59b7a8' : '#d3dce6'; vm.boolKnob = on ? 'translateX(17px)' : 'translateX(0)';
+      vm.boolLabel = on ? '已启用 · e-firm' : '停用(传统国企)'; vm.boolColor = on ? '#0c8579' : '#3a4956';
+    }
+    if (isSeg) {
+      const cur = this.cc(d);
+      vm.options = d.options.map(o => ({ label: o, bg: o === cur ? '#e2f4f1' : 'transparent', fg: o === cur ? '#0c8579' : '#4a5a6b', onPick: () => this.pickChoice(d, o) }));
+    }
+    if (isEcoId) {
+      vm.anchorOptions = this.econs().filter(e => !e.self);
+      vm.onAnchorChange = (e) => this.setAnchor(d, e.target.value);
+    }
+    if (isEcoSet) {
+      vm.sanctionRows = this.econs().filter(e => !e.self).map(e => {
+        const on = !!S.sanctions[e.id];
+        return { id: e.id, name: e.name, flagA: e.a, flagB: e.b, onToggle: () => this.toggleSanction(e.id),
+          bg: on ? '#fdeee9' : '#f1f4f8', border: on ? '#f0bcae' : '#d3dce6',
+          boxBg: on ? '#d24a34' : 'transparent', boxBorder: on ? '#d24a34' : '#cdd7e2', check: on ? '✓' : '',
+          mutual: on && (e.id === 'e02' || e.id === 'e04') };
+      });
+    }
+    if (d.pending) { vm.hasPending = true; vm.pendingValue = this.fmt(d, d.pending.v); vm.pendingWhen = '生效 ' + d.pending.day; }
+    return vm;
+  }
+
+  smallMultiplesVM() {
+    return ['out', 'un', 'inf', 'rate'].map(k => {
+      const t = this.tilesRaw().find(x => x.k === k);
+      const arr = t.arr, mn = Math.min(...arr), mx = Math.max(...arr), d = (mx - mn) || 1;
+      const spark = arr.map((v, i) => (2 + 116 * i / (arr.length - 1)).toFixed(1) + ',' + (30 - (v - mn) / d * 27).toFixed(1)).join(' ');
+      const pub = t.freq * Math.floor(this.state.tick / t.freq), ref = pub - t.lag, stale = Math.max(0, this.state.tick - ref);
+      return { label: t.label.split(' · ')[0], value: t.val, color: t.color, spark, release: '发布 t' + pub + ' · 滞后 ' + stale + 'd' };
+    });
+  }
+
+  renderVals() {
+    const S = this.state;
+    const c = this.cal(S.tick);
+    const seat = this.seats().find(s => s.id === S.seat) || this.seats()[0];
+
+    // header
+    const modeChips = [{ id: 'interactive', label: '交互' }, { id: 'realtime', label: '实时' }].map(m => ({
+      label: m.label, onPick: () => this.setState({ mode: m.id }),
+      bg: S.mode === m.id ? '#e2f4f1' : 'transparent', fg: S.mode === m.id ? '#0c8579' : '#586a7b',
+    }));
+    const speedChips = [1, 5, 15, 60].map(n => ({
+      label: n + '×', onPick: () => this.setState({ speed: n }),
+      bg: S.speed === n ? '#e6effb' : 'transparent', fg: S.speed === n ? '#3f6db2' : '#647585',
+    }));
+    // next release across visible tiles
+    const vis = this.tilesRaw().filter(t => t.access === 'public' || (S.seat === 'central_bank' || S.seat === 'regulator'));
+    const nextIn = Math.min(...vis.map(t => t.freq * Math.floor(S.tick / t.freq) + t.freq - S.tick));
+
+    // seats
+    const seatChips = this.seats().map(s => ({
+      name: s.name, accent: s.accent, beta: s.beta, onPick: () => this.setState({ seat: s.id, wizard: null }),
+      bg: s.id === S.seat ? '#e6effb' : '#f1f4f8', border: s.id === S.seat ? '#b6d1f2' : '#d3dce6',
+      fg: s.id === S.seat ? '#1c4a8f' : '#516375',
+    }));
+
+    // levers
+    const groups = this.defs(S.seat).map(g => ({ name: g.name, levers: g.levers.map(l => this.leverVM(l)) }));
+
+    // wizard
+    const wizardSteps = S.wizard ? S.wizard.steps.map((s, i) => ({
+      label: s, bg: i + 1 === S.wizard.active ? '#e6effb' : 'transparent',
+      fg: i + 1 === S.wizard.active ? '#2f6fd0' : '#68788b', border: i + 1 === S.wizard.active ? '#b6d1f2' : '#d3dce6',
+    })) : [];
+
+    // cart
+    const cartCost = S.cart.reduce((a, x) => a + x.cost, 0);
+    const submitOk = S.cart.length > 0;
+    const verdict = S.verdict ? this.verdictVM(S.verdict) : null;
+
+    // events
+    const pinnedEvents = S.events.filter(e => e.pin);
+    let listEvents = S.events.filter(e => !e.pin);
+    if (S.filterMine) listEvents = listEvents.filter(e => e.mine);
+
+    // world
+    const worldCards = this.econs().map(e => ({
+      name: e.name, self: !!e.self, flagA: e.a, flagB: e.b, gdp: e.gdp, un: e.un, inf: e.inf, fx: e.fx, note: e.note, noteColor: e.noteColor,
+      onSelect: () => this.setState({ worldSel: e.id }),
+      bg: e.id === S.worldSel ? '#e6effb' : '#f5f7fb', border: e.id === S.worldSel ? '#b6d1f2' : '#e6ebf1',
+    }));
+    const fxRows = this.econs().filter(e => !e.self).map(e => {
+      const v = parseFloat(e.fx);
+      return { name: e.name, flagA: e.a, flagB: e.b, fx: e.fx, barW: this.clamp(v / 1.6 * 100, 6, 100).toFixed(0) + '%', barColor: v >= 1 ? '#1f9d63' : '#c17d16' };
+    });
+
+    // crisis quick levers
+    const rr = this.findDef('reserve_requirement') || { id: 'reserve_requirement', value: 0.10, step: 0.005, min: 0, max: 0.3, fmt: 'pct1', integer: false };
+    const gc = this.findDef('gov_consumption_share') || { id: 'gov_consumption_share', value: 0.18, step: 0.005, min: 0.05, max: 0.35, fmt: 'dec3', integer: false };
+    const crisisLevers = [
+      { name: '准备金率(紧急)', valueStr: this.fmt(rr, this.cv(rr)), onInc: () => this.stepLever(rr, 1), onDec: () => this.stepLever(rr, -1) },
+      { name: '政府消费份额(紧急)', valueStr: this.fmt(gc, this.cv(gc)), onInc: () => this.stepLever(gc, 1), onDec: () => this.stepLever(gc, -1) },
+    ];
+
+    const playBlocked = S.awaiting || S.crisis;
+
+    return {
+      // header
+      calStr: '第 ' + c.y + ' 年 · 第 ' + c.q + ' 季 · 第 ' + c.d + ' 天',
+      tickStr: 't = ' + S.tick, tickTitle: 'tick ' + S.tick + ' · 365 tick = 1 年',
+      nextReleaseStr: nextIn + ' 天',
+      awaiting: S.awaiting, awaitingLabel: S.mode === 'realtime' ? '等待决策 · 实时倒计时 00:24' : '等待决策',
+      modeChips,
+      step: () => this.step(),
+      playToggle: () => this.playToggle(),
+      playLabel: S.playing ? '暂停' : '播放',
+      playBg: playBlocked ? '#eef1f5' : (S.playing ? '#fbf0dc' : '#e2f4f1'),
+      playBorder: playBlocked ? '#dde4ec' : (S.playing ? '#ecd3a0' : '#59b7a8'),
+      playFg: playBlocked ? '#849098' : (S.playing ? '#c17d16' : '#0c8579'),
+      playCursor: playBlocked ? 'not-allowed' : 'pointer',
+      speedChips,
+
+      // tiles
+      tiles: this.tilesRaw().map(t => this.tileVM(t)),
+
+      // seat / workbench
+      seatChips, seatName: seat.name, seatRole: seat.role, adminCap: seat.cap,
+      hasWizard: !!S.wizard, wizardText: S.wizard ? S.wizard.text : '', wizardSteps,
+      groups,
+
+      // cart
+      cart: S.cart, cartEmpty: S.cart.length === 0,
+      cartCountStr: S.cart.length + ' 项',
+      cartCostStr: cartCost.toFixed(1),
+      submit: () => this.submit(), noChange: () => this.noChange(),
+      submitBg: submitOk ? '#e2f4f1' : '#eef1f5', submitBorder: submitOk ? '#59b7a8' : '#dde4ec',
+      submitFg: submitOk ? '#0c8579' : '#849098', submitCursor: submitOk ? 'pointer' : 'not-allowed',
+      hasVerdict: !!verdict, verdict, closeVerdict: () => this.closeVerdict(),
+
+      // tabs / center
+      tabChips: [{ id: 'focus', label: '宏观焦点' }, { id: 'world', label: '世界视图' }].map(t => ({
+        label: t.label, onPick: () => this.setState({ tab: t.id }),
+        bg: S.tab === t.id ? '#e6effb' : '#ffffff', border: S.tab === t.id ? '#b6d1f2' : '#dde4ec', fg: S.tab === t.id ? '#1c4a8f' : '#586a7b',
+      })),
+      tabFocus: S.tab === 'focus', tabWorld: S.tab === 'world',
+      smallMultiples: this.smallMultiplesVM(),
+      econCount: this.econs().length, worldCards, fxRows,
+
+      // timeline
+      toggleFilter: () => this.toggleFilter(),
+      filterLabel: S.filterMine ? '仅我的席位' : '全部事件',
+      filterBg: S.filterMine ? '#e6effb' : '#f1f4f8', filterBorder: S.filterMine ? '#b6d1f2' : '#d3dce6', filterFg: S.filterMine ? '#3f6db2' : '#586a7b',
+      pinnedEvents, listEvents,
+
+      // crisis + confirm
+      crisis: S.crisis, toggleCrisis: () => this.toggleCrisis(),
+      crisisCountdown: '00:' + String(S.crisisT).padStart(2, '0'), crisisLevers,
+      showCrisisTrigger: !S.crisis,
+      hasConfirm: !!S.confirm,
+      confirmTitle: S.confirm ? S.confirm.title : '', confirmBody: S.confirm ? S.confirm.body : '', confirmNote: S.confirm ? S.confirm.note : '',
+      confirmYes: () => this.confirmYes(), confirmNo: () => this.confirmNo(),
+    };
+  }
+
+  verdictVM(v) {
+    if (v.type === 'accepted_pending') return { icon: '✓', title: '提案受理 · accepted_pending', sub: v.count + ' 项原子批 · 预留成本 ' + v.cost.toFixed(1) + ' · ' + v.eff, color: '#1f9d63', bg: '#e3f4ea', border: '#59b7a8' };
+    if (v.type === 'noop') return { icon: '○', title: '本次不动 · accepted_noop', sub: '空动作已记录并落条至时间线', color: '#526475', bg: '#eef1f5', border: '#d3dce6' };
+    return { icon: '✕', title: '提案被拒 · rejected', sub: v.reason || 'reason_code 已返回,请刷新重试', color: '#d24a34', bg: '#fdeee9', border: '#f0bcae' };
+  }
+}
+</script>
+</body>
+</html>

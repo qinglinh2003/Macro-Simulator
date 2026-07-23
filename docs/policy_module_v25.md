@@ -200,6 +200,7 @@ frozen)**: delete in favour of each economy's own peg choice in ExternalPolicy; 
 the §5.1 multi-pegger / cyclic-peg / anchor-switch ruling; migration note mandatory.
 
 **Structure / genesis / scale** (immutable by nature): n_households, n_firms, n_ticks, seed,
+simulation_start_date,
 a, n_firms_c, n_firms_k, n_firms_e, n_banks, n_builders, d_household0, d_firm0, d_cfirm0,
 d_kfirm0, d_efirm0, d_bank0, p_firm0, p_kfirm0, p_efirm0, w_firm0, inv_firm0, inv_kfirm0,
 mu_firm0, demand_e_firm0, startup_deposits, startup_capital, float_shares, shares_per_firm,
@@ -389,8 +390,10 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   new-contracts-only | restates-stock | state-transition) **each binding a concrete
   `handler_id`/`transition_spec` — an enum tag with no handler is invalid; filled
   per-lever** · **capability dependency** (e.g. OMO requires bonds+banking) · **the unique
-  runtime read-point** (metrics must read the same source). One declaration = validation +
-  random domain + RL action space + frontend form. World-level policies are OWNED by each
+  runtime read-point** (metrics must read the same source) · **player_help**（全部 102 个杠杆
+  均含通俗定义、模型传导、决策取舍和建议观察指标；由政策模块统一维护，前端不自行猜测）。
+  One declaration = validation +
+  random domain + RL action space + frontend form + player-facing explanation. World-level policies are OWNED by each
   economy's PolicyState; the World applies them via the NORMATIVE execution order:
   **collect from all economies → validate jointly → commit atomically at the coupling
   barrier** (no one-tick skew from per-economy ordering).
