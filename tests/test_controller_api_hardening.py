@@ -7,7 +7,10 @@ from macro_sim.controllers.api import ControllerService
 from macro_sim.controllers.occupants import NullOccupant
 from macro_sim.controllers.session import ControlledSimulationSession
 from macro_sim.economy import Economy
-from macro_sim.core.policy_explanations import POLICY_EXPLANATIONS
+from macro_sim.core.policy_explanations import (
+    POLICY_EXPLANATIONS,
+    load_policy_explanations,
+)
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.world import World
 
@@ -98,6 +101,11 @@ def test_every_registered_policy_has_complete_player_help():
             marker in explanation.meaning
             for marker in ("旋钮", "控制形式", "生效方式", "注册表")
         ), name
+
+
+def test_policy_explanation_catalog_rejects_an_unsupported_locale():
+    with pytest.raises(ValueError, match="unsupported policy explanation locale"):
+        load_policy_explanations("unsupported")
 
 
 def test_bare_economy_schema_excludes_structurally_absent_external_levers():
