@@ -63,7 +63,7 @@ const CORE_DIMENSION_SPEC := [
 	{"id": "gov_deficit_to_gdp", "dimension": "财政", "metric": "赤字/GDP", "group": "财政", "color": BLUE},
 	{"id": "credit_to_gdp", "dimension": "金融", "metric": "信贷/GDP", "group": "银行与信贷", "color": TEAL_DK},
 	{"id": "poverty_rate", "dimension": "民生", "metric": "贫困率", "group": "分配与福利", "color": GREEN},
-	{"id": "population_alive", "dimension": "人口", "metric": "总人口", "group": "人口与企业", "color": Color("b0641f")},
+	{"id": "population_alive", "dimension": "人口", "metric": "总人口", "group": "人口社会", "color": Color("b0641f")},
 	{"id": "current_account", "dimension": "外部", "metric": "经常账户", "tab": "world", "color": Color("4a6fa5")},
 ]
 
@@ -141,12 +141,15 @@ const DAY_LEVERS := {
 
 const CAPABILITY_CN := {
 	"bank_enabled": "银行体系", "bank_realized_pnl": "银行完整损益",
-	"bonds": "国债市场", "consumption_strata": "必需品 / 奢侈品分层",
+	"bonds": "国债市场", "capital_market": "资本市场",
+	"consumption_strata": "必需品 / 奢侈品分层",
+	"demographics_enabled": "人口系统",
 	"energy_enabled": "能源部门", "energy_household": "居民能源消费",
 	"government": "政府财政账户", "household_credit": "家庭信贷",
 	"housing_construction_enabled": "住房建造", "housing_enabled": "住房登记",
 	"housing_market_enabled": "住房交易市场", "interbank": "银行间市场",
 	"margin_credit": "保证金信贷", "mortgage_enabled": "住房按揭",
+	"national_accounts_metrics": "国民账户",
 	"omo": "公开市场操作", "soe_efirm": "国有能源企业",
 	"coupling": "跨境耦合", "multiple_economies": "多国世界",
 	"trade": "国际贸易", "capital": "跨境资本", "migration": "跨境迁移",
@@ -436,13 +439,20 @@ const POLICY_HELP := {
 }
 
 
-# 指标全景:9 组 × 6 键(经济运行与结构明细;键名与后端 records 一致)
+# 指标全景：所有已启用玩家领域各有独立页签；键名与后端 records 一致。
 # fmt: pct=份额%, pt=每tick利率%, idx=指数, num=水平量
 const PANEL_GROUPS := [
 	{"name": "实体经济", "color": TEAL, "items": [
 		["real_output", "实际产出", "num"], ["real_consumption", "实际消费", "num"],
 		["aggregate_capital", "资本存量", "num"], ["investment_spending", "投资支出", "num"],
 		["inventory_to_sales", "库存/销售", "idx"], ["production_realization_rate", "生产实现率", "pct"]]},
+	{"name": "国民账户", "color": Color("286f9f"), "requires": "national_accounts_metrics", "items": [
+		["gdp_nominal_expenditure_reconciled", "名义 GDP", "num"],
+		["gdp_real_expenditure_reconciled", "实际 GDP", "num"],
+		["gdp_deflator", "GDP 平减指数", "idx"],
+		["gdp_nominal_household_consumption", "居民消费", "num"],
+		["gdp_nominal_fixed_capital_formation", "资本形成", "num"],
+		["gdp_nominal_net_exports", "净出口", "num"]]},
 	{"name": "劳动力", "color": AMBER, "items": [
 		["unemployment_rate", "失业率", "pct"], ["u_natural", "自然失业率", "pct"],
 		["underemployed_share", "不充分就业", "pct"], ["vacancies_unfilled", "未填补岗位", "num"],
@@ -455,40 +465,71 @@ const PANEL_GROUPS := [
 		["gov_debt", "政府债务", "num"], ["gov_deficit", "财政赤字", "num"],
 		["tax_total", "税收总额", "num"], ["gov_spending", "政府支出", "num"],
 		["benefit_paid", "转移支付", "num"], ["gov_debt_to_gdp", "债务/GDP", "pct"]]},
-	{"name": "银行与信贷", "color": TEAL_DK, "items": [
+	{"name": "银行与信贷", "color": TEAL_DK, "requires": "bank_enabled", "items": [
 		["total_credit", "信贷总量", "num"], ["bank_capital", "银行资本", "num"],
 		["bank_deposit_total", "存款总额", "num"], ["writeoffs", "坏账核销", "num"],
 		["total_debt_service_ratio", "偿债比率", "pct"], ["interbank_rate", "同业利率", "pt"]]},
-	{"name": "资本市场", "color": Color("4a6fa5"), "items": [
+	{"name": "债务与风险", "color": Color("a35454"), "requires": "bank_enabled", "items": [
+		["household_debt_total", "家庭债务", "num"],
+		["firm_debt_total", "企业债务", "num"],
+		["debt_service_to_nominal_gdp", "偿债/GDP", "pct"],
+		["household_interest_arrears_closing", "家庭利息拖欠", "num"],
+		["bank_realized_credit_losses", "银行信用损失", "num"],
+		["hh_bankruptcies", "家庭破产", "num"]]},
+	{"name": "资本市场", "color": Color("4a6fa5"), "requires": "capital_market", "items": [
 		["equity_market_cap", "股票市值", "num"], ["tobin_q_mean", "托宾 Q", "idx"],
 		["equity_wealth_share", "股权财富占比", "pct"], ["equity_turnover", "换手率", "idx"],
 		["equity_ownership_gini", "持股基尼", "idx"], ["hh_wealth_gini_incl_equity", "财富基尼(含股)", "idx"]]},
-	{"name": "能源", "color": Color("b0641f"), "items": [
+	{"name": "住房市场", "color": Color("8a6b50"), "requires": "housing_enabled", "items": [
+		["house_price", "住房价格", "num"], ["homeowner_share", "自有住房率", "pct"],
+		["housing_pti_ratio", "房价收入比", "idx"],
+		["housing_sales_session", "本期成交", "num"],
+		["mortgage_balance_total", "按揭余额", "num"],
+		["rent_burden_ratio", "租金负担率", "pct"]]},
+	{"name": "能源", "color": Color("b0641f"), "requires": "energy_enabled", "items": [
 		["energy_price", "能源价格", "idx"], ["energy_produced", "能源产量", "num"],
 		["energy_used", "能源消耗", "num"], ["energy_stock_total", "能源库存", "num"],
 		["energy_cost_share", "能源成本占比", "pct"], ["spr_stock", "战略储备", "num"]]},
+	{"name": "外部部门", "color": Color("4a6fa5"), "items": [
+		["e", "汇率", "idx"], ["nfa", "净对外资产", "num"],
+		["current_account", "经常账户", "num"], ["import_value", "进口额", "num"],
+		["export_delivered_volume", "出口交付", "num"],
+		["remittances", "跨境汇款", "num"]]},
 	{"name": "分配与福利", "color": Color("8a5fc0"), "items": [
 		["poverty_rate", "贫困率", "pct"], ["income_gini", "收入基尼", "idx"],
 		["hh_wealth_gini", "财富基尼", "idx"], ["wage_p90_p10_ratio", "工资 P90/P10", "idx"],
 		["welfare_log", "对数福利", "idx"], ["savings_rate", "储蓄率", "pct"]]},
-	{"name": "人口与企业", "color": Color("2a8a68"), "items": [
-		["population_alive", "总人口", "num"], ["working_age_share", "劳龄占比", "pct"],
-		["avg_household_size", "户均规模", "idx"], ["births", "当日出生", "num"],
-		["deaths", "当日死亡", "num"], ["firm_count_c", "消费品企业数", "num"]]},
+	{"name": "人口社会", "color": Color("2a8a68"), "requires": "demographics_enabled", "items": [
+		["population_alive", "总人口", "num"],
+		["net_population_growth_rate_annualized", "人口自然增长率", "pct"],
+		["birth_rate_per_1000_annualized", "粗出生率", "per_thousand"],
+		["death_rate_per_1000_annualized", "粗死亡率", "per_thousand"],
+		["dependency_ratio", "总抚养比", "pct"],
+		["avg_household_size", "户均规模", "idx"]]},
+	{"name": "企业生态", "color": Color("3e7d68"), "items": [
+		["firm_count_c", "消费品企业", "num"], ["births", "企业进入", "num"],
+		["deaths", "企业退出", "num"], ["n_firms_producing", "生产中企业", "num"],
+		["sector_switches", "产业切换", "num"],
+		["firm_size_top_share_output", "头部产出份额", "pct"]]},
 ]
 
 # 每个指标页签使用独立的信息架构。标量历史来自 records，人口、劳动和企业截面
 # 来自 desktop runtime 的只读微观聚合；行业名称严格对应模型中的真实部门。
 const PANEL_DESCRIPTIONS := {
 	"实体经济": "需求、供给与资本形成的同步状态",
+	"国民账户": "支出法总量、行业产出与三种核算口径的一致性",
 	"劳动力": "就业松弛、岗位缺口与工资脉冲",
 	"价格与货币": "价格压力、货币立场与购买力",
 	"财政": "收支流量、债务存量与财政空间",
 	"银行与信贷": "信用扩张、银行缓冲与偿付压力",
+	"债务与风险": "家庭与企业杠杆、拖欠、破产和信用损失",
 	"资本市场": "市场规模、估值活跃度与所有权分布",
+	"住房市场": "住房存量、交易、按揭、租赁与建设供给",
 	"能源": "供需平衡、价格成本与安全库存",
+	"外部部门": "汇率、贸易、跨境资产、迁移与汇款",
 	"分配与福利": "贫困、储蓄、福利与不平等结构",
-	"人口与企业": "人口基础、自然变动与企业生态",
+	"人口社会": "人口结构、家庭形成、自然变动与代际负担",
+	"企业生态": "企业进入退出、经营覆盖、集中度与产业切换",
 }
 
 const PANEL_CHARTS := {
@@ -502,6 +543,49 @@ const PANEL_CHARTS := {
 			"items": [["aggregate_capital", "资本存量", "num", BLUE],
 				["investment_spending", "投资支出", "num", AMBER],
 				["real_output", "实际产出", "num", TEAL]]},
+	],
+	"国民账户": [
+		{"type": "line", "title": "GDP · 名义与实际总量", "note": "期初指数=100", "indexed": true,
+			"items": [["gdp_nominal_expenditure_reconciled", "名义 GDP", "num", BLUE],
+				["gdp_real_expenditure_reconciled", "实际 GDP", "num", TEAL],
+				["gdp_deflator", "平减指数", "idx", PURPLE]]},
+		{"type": "columns", "title": "EXPENDITURE · 支出法构成", "note": "C + I + G + NX",
+			"items": [["gdp_nominal_household_consumption", "居民消费 C", "num", TEAL],
+				["gdp_nominal_fixed_capital_formation", "资本形成 I", "num", BLUE],
+				["gdp_nominal_government_consumption", "政府消费 G", "num", PURPLE],
+				["gdp_nominal_net_exports", "净出口 NX", "num", AMBER]]},
+		{"type": "columns", "title": "SECTORS · 行业总产出", "note": "当期名义总产出",
+			"items": [["gdp_nominal_gross_output_c", "消费品", "num", TEAL],
+				["gdp_nominal_gross_output_k", "资本品", "num", BLUE],
+				["gdp_nominal_gross_output_e", "能源", "num", AMBER],
+				["gdp_nominal_gross_output_housing", "住房建设", "num", Color("8a6b50")]]},
+		{"type": "line", "title": "RECONCILIATION · 核算质量", "note": "三种核算口径原始差额占比",
+			"items": [["gdp_nominal_three_approach_raw_spread_share", "原始差额率", "pct", RED]]},
+		{"type": "line", "title": "APPROACHES · 三种 GDP 口径", "note": "名义值 · 支出法 / 收入法 / 生产法",
+			"items": [["gdp_nominal_expenditure_reconciled", "支出法", "num", BLUE],
+				["gdp_nominal_income_reconciled", "收入法", "num", PURPLE],
+				["gdp_nominal_production", "生产法", "num", TEAL]]},
+		{"type": "columns", "title": "INCOME · 收入法构成", "note": "雇员报酬、营业盈余与产品税净额",
+			"items": [["gdp_nominal_compensation_of_employees", "雇员报酬", "num", BLUE],
+				["gdp_nominal_accrued_gross_operating_surplus", "营业盈余", "num", TEAL],
+				["gdp_nominal_net_product_taxes_observed", "产品税净额", "num", AMBER]]},
+		{"type": "columns", "title": "CAPITAL FORMATION · 资本形成明细", "note": "私人、公共、住宅与机器设备",
+			"items": [["gdp_nominal_private_fixed_capital_formation", "私人投资", "num", TEAL],
+				["gdp_nominal_public_fixed_capital_formation", "公共投资", "num", BLUE],
+				["gdp_nominal_residential_fixed_capital_formation", "住宅投资", "num", Color("8a6b50")],
+				["gdp_nominal_machinery_fixed_capital_formation", "机器设备", "num", PURPLE]]},
+		{"type": "line", "title": "TRADE & INVENTORY · 外贸与库存", "note": "名义流量",
+			"items": [["gdp_nominal_exports", "出口", "num", TEAL],
+				["gdp_nominal_imports", "进口", "num", BLUE],
+				["gdp_nominal_inventory_change", "存货变动", "num", AMBER]]},
+		{"type": "line", "title": "REAL EXPENDITURE · 实际支出构成", "note": "剔除价格变化后的 C / I / G / NX",
+			"items": [["gdp_real_household_consumption", "居民消费 C", "num", TEAL],
+				["gdp_real_fixed_capital_formation", "资本形成 I", "num", BLUE],
+				["gdp_real_government_consumption", "政府消费 G", "num", PURPLE],
+				["gdp_real_net_exports", "净出口 NX", "num", AMBER]]},
+		{"type": "line", "title": "TRADE VOLUME · 实际进出口", "note": "以共同基期价格计量",
+			"items": [["gdp_real_exports", "实际出口", "num", TEAL],
+				["gdp_real_imports", "实际进口", "num", BLUE]]},
 	],
 	"劳动力": [
 		{"type": "employment_sectors", "title": "SECTORS · 部门就业结构", "note": "主业+第二职业 FTE"},
@@ -544,6 +628,39 @@ const PANEL_CHARTS := {
 				["household_debt_total_observed", "居民", "num", BLUE],
 				["new_loans_total", "本期新增", "num", GREEN],
 				["bank_realized_credit_losses", "信用损失", "num", RED]]},
+		{"type": "columns", "title": "SYSTEM · 银行体系结构", "note": "机构、同业交易与传染损失",
+			"items": [["banks_alive", "存续银行", "num", TEAL],
+				["bank_births", "新设", "num", GREEN],
+				["bank_deaths", "退出", "num", AMBER],
+				["n_bank_failures", "失败", "num", RED],
+				["interbank_volume", "同业成交", "num", BLUE],
+				["interbank_contagion_loss", "传染损失", "num", PURPLE]]},
+	],
+	"债务与风险": [
+		{"type": "line", "title": "LEVERAGE · 债务存量", "note": "家庭与企业",
+			"items": [["household_debt_total", "家庭债务", "num", BLUE],
+				["firm_debt_total", "企业债务", "num", TEAL]]},
+		{"type": "line", "title": "SERVICE · 偿债与拖欠", "note": "当期压力",
+			"items": [["household_contractual_debt_service_due", "合同应偿", "num", BLUE],
+				["household_debt_service_reserved", "已预留偿债", "num", GREEN],
+				["household_interest_arrears_closing", "期末拖欠", "num", RED],
+				["bank_realized_credit_losses", "银行损失", "num", AMBER]]},
+		{"type": "bars", "title": "CONCENTRATION · 债务集中度", "note": "Gini 与前10%份额",
+			"items": [["household_debt_gini", "家庭债务 Gini", "idx", BLUE],
+				["household_debt_top10_share", "家庭前10%", "pct", PURPLE],
+				["firm_debt_gini", "企业债务 Gini", "idx", TEAL],
+				["firm_debt_top10_share", "企业前10%", "pct", AMBER]]},
+		{"type": "columns", "title": "DISTRESS · 风险事件", "note": "新增信贷、破产与偿债率",
+			"items": [["new_loans", "新增贷款", "num", GREEN],
+				["hh_bankruptcies", "家庭破产", "num", RED],
+				["debt_service_to_nominal_gdp", "偿债/GDP", "pct", AMBER],
+				["total_debt_service_to_nominal_gdp", "总偿债/GDP", "pct", PURPLE]]},
+		{"type": "line", "title": "ARREARS LEDGER · 家庭利息拖欠账", "note": "期初、核销、商品预留与期末存量",
+			"items": [["household_interest_arrears_opening", "期初拖欠", "num", AMBER],
+				["household_interest_arrears_extinguished", "已消除", "num", GREEN],
+				["household_interest_arrears_in_goods_reservation", "商品预留", "num", BLUE],
+				["household_interest_arrears_closing", "期末拖欠", "num", RED],
+				["household_interest_arrears_stock_flow_residual", "账流差额", "num", PURPLE]]},
 	],
 	"资本市场": [
 		{"type": "firm_bubbles", "title": "VALUATION MAP · 企业估值分布", "note": "横轴 Q · 纵轴投资 · 气泡=市值"},
@@ -556,17 +673,59 @@ const PANEL_CHARTS := {
 				["equity_ownership_gini", "持股基尼", "idx", PURPLE],
 				["hh_wealth_gini_incl_equity", "财富基尼", "idx", BLUE]]},
 	],
+	"住房市场": [
+		{"type": "line", "title": "PRICE · 房价、租金与负担", "note": "期初指数=100", "indexed": true,
+			"items": [["house_price", "住房价格", "num", Color("8a6b50")],
+				["rent_level", "租金水平", "num", TEAL],
+				["housing_pti_ratio", "房价收入比", "idx", AMBER],
+				["rent_burden_ratio", "租金负担", "pct", PURPLE]]},
+		{"type": "columns", "title": "LIQUIDITY · 交易流动性", "note": "挂牌、成交与在市时间",
+			"items": [["housing_listings", "挂牌", "num", BLUE],
+				["housing_sales_session", "本期成交", "num", GREEN],
+				["housing_tom", "平均在市期", "num", AMBER],
+				["housing_forced_share", "强制出售", "pct", RED]]},
+		{"type": "columns", "title": "MORTGAGE · 按揭与处置", "note": "存量、发放与法拍",
+			"items": [["mortgage_count", "按揭笔数", "num", BLUE],
+				["mortgage_balance_total", "按揭余额", "num", TEAL],
+				["mortgage_originated_tick", "本期发放", "num", GREEN],
+				["foreclosures_total", "累计法拍", "num", RED]]},
+		{"type": "bars", "title": "TENURE · 居住与租赁结构", "note": "自有、租赁、空置与房东",
+			"items": [["homeowner_share", "自有住房率", "pct", TEAL],
+				["tenant_share", "租户占比", "pct", BLUE],
+				["rental_vacancies", "出租空置", "num", AMBER],
+				["landlord_count", "房东家庭", "num", PURPLE]]},
+		{"type": "columns", "title": "SUPPLY · 住房建设供给", "note": "竣工、在建、库存与许可",
+			"items": [["dwellings_built_total", "累计竣工", "num", GREEN],
+				["builder_wip_units", "在建工程", "num", BLUE],
+				["builder_inventory_units", "待售库存", "num", AMBER],
+				["permits_used_year", "年度许可使用", "num", PURPLE],
+				["builder_employment", "建造就业", "num", TEAL]]},
+	],
 	"能源": [
 		{"type": "energy_flow", "title": "FLOW · 能源平衡", "note": "生产 → 销售/使用 → 库存"},
 		{"type": "line", "title": "COST · 价格与成本", "note": "期初指数=100", "indexed": true,
 			"items": [["energy_price", "能源价格", "idx", Color("b0641f")],
 				["energy_cost_share", "能源成本占比", "pct", RED],
-				["energy_capacity_utilization", "产能利用率", "pct", TEAL]]},
+				["e_capacity_utilization", "产能利用率", "pct", TEAL]]},
 		{"type": "columns", "title": "SECURITY · 供给与库存", "note": "能源实物量",
 			"items": [["energy_produced", "产量", "num", GREEN],
 				["energy_used", "消耗", "num", AMBER],
 				["energy_stock_total", "商业库存", "num", BLUE],
 				["spr_stock", "战略储备", "num", PURPLE]]},
+	],
+	"外部部门": [
+		{"type": "line", "title": "TRADE · 进口与出口", "note": "交易与交付规模",
+			"items": [["import_value", "进口额", "num", BLUE],
+				["export_delivered_volume", "出口交付", "num", TEAL]]},
+		{"type": "line", "title": "BALANCE · 经常账户与净资产", "note": "本国口径",
+			"items": [["current_account", "经常账户", "num", AMBER],
+				["nfa", "净对外资产", "num", PURPLE]]},
+		{"type": "line", "title": "FX · 汇率轨迹", "note": "本币/共同计价单位 · 期初=100", "indexed": true,
+			"items": [["e", "汇率", "idx", Color("4a6fa5")]]},
+		{"type": "columns", "title": "MOBILITY · 人口与汇款", "note": "跨境人口存量与资金流",
+			"items": [["migrant_stock", "移民存量", "num", TEAL],
+				["remittances", "跨境汇款", "num", BLUE],
+				["tariff_rev", "关税收入", "num", AMBER]]},
 	],
 	"分配与福利": [
 		{"type": "lorenz", "title": "LORENZ · 收入与正净财富分布", "note": "越贴近对角线越均等"},
@@ -576,12 +735,47 @@ const PANEL_CHARTS := {
 				["bottom10_consumption", "底部10%消费", "num", BLUE]]},
 		{"type": "deciles", "title": "DECILES · 十分位资源份额", "note": "收入与消费各组占比"},
 	],
-	"人口与企业": [
+	"人口社会": [
 		{"type": "pyramid", "title": "AGE · 人口金字塔", "note": "男左女右 · 当前存活人口"},
-		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每日人数",
-			"items": [["births", "出生", "num", TEAL],
-				["deaths", "死亡", "num", RED]]},
-		{"type": "sector_matrix", "title": "BUSINESS · 企业部门生态", "note": "企业数 · 产销 · 用工"},
+		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每日事件",
+			"items": [["births_tick", "出生", "num", TEAL],
+				["deaths_tick", "死亡", "num", RED],
+				["marriages_tick", "结婚", "num", BLUE],
+				["divorces_tick", "离婚", "num", AMBER]]},
+		{"type": "columns", "title": "DEPENDENCY · 年龄与抚养结构", "note": "人数与抚养比",
+			"items": [["child_population", "儿童", "num", BLUE],
+				["working_age_population", "劳龄人口", "num", TEAL],
+				["elder_population", "老年人口", "num", PURPLE],
+				["dependency_ratio", "总抚养比", "pct", AMBER]]},
+		{"type": "line", "title": "RATES · 人口率", "note": "年化自然增长与每千人粗率",
+			"items": [["net_population_growth_rate_annualized", "自然增长率", "pct", GREEN],
+				["birth_rate_per_1000_annualized", "粗出生率", "per_thousand", TEAL],
+				["death_rate_per_1000_annualized", "粗死亡率", "per_thousand", RED]]},
+		{"type": "bars", "title": "GENERATIONS · 代际人口结构", "note": "儿童、成年人和老年人口占比",
+			"items": [["child_share", "儿童", "pct", BLUE],
+				["adult_share", "成年人", "pct", TEAL],
+				["elder_share", "老年人", "pct", PURPLE]]},
+		{"type": "columns", "title": "CONSUMPTION · 代际消费中位数", "note": "按个人年龄组统计",
+			"items": [["child_median_consumption", "儿童", "num", BLUE],
+				["adult_median_consumption", "成年人", "num", TEAL],
+				["elder_median_consumption", "老年人", "num", PURPLE]]},
+	],
+	"企业生态": [
+		{"type": "sector_matrix", "title": "SECTORS · 企业部门生态", "note": "企业数 · 产销 · 用工"},
+		{"type": "line", "title": "DEMOGRAPHY · 企业进入退出", "note": "当期企业事件与存量",
+			"items": [["firm_count_c", "消费品企业", "num", TEAL],
+				["births", "企业进入", "num", GREEN],
+				["deaths", "企业退出", "num", RED]]},
+		{"type": "columns", "title": "ACTIVITY · 经营覆盖", "note": "生产、销售与融资",
+			"items": [["n_firms_producing", "生产中", "num", TEAL],
+				["n_firms_selling", "销售中", "num", BLUE],
+				["n_firms_borrowing", "借款企业", "num", AMBER],
+				["sector_switches", "产业切换", "num", PURPLE]]},
+		{"type": "bars", "title": "CONCENTRATION · 企业规模结构", "note": "产出集中度与 Pareto 斜率",
+			"items": [["firm_size_gini_output", "规模 Gini", "idx", PURPLE],
+				["firm_size_top_share_output", "头部产出份额", "pct", AMBER],
+				["firm_size_pareto_slope", "Pareto 斜率", "idx", BLUE],
+				["sector_switch_capital", "切换重置资本", "num", RED]]},
 	],
 }
 
@@ -1383,6 +1577,8 @@ func _fmt_val(kind: String, v: float) -> String:
 			return "%.1f%%" % (v * 100.0)
 		"pt":
 			return "%.2f%%/日" % (v * 100.0)
+		"per_thousand":
+			return "%.2f‰" % v
 		"idx":
 			return "%.3f" % v if absf(v) < 10.0 else "%.2f" % v
 		_:
@@ -5256,12 +5452,27 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 		Color(group_color.r, group_color.g, group_color.b, 0.08),
 		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
 	col.add_child(header)
+	var requirement := str(active_group.get("requires", ""))
+	var capabilities: Dictionary = _snapshot.get("capabilities", {})
+	if not requirement.is_empty() and not bool(capabilities.get(requirement, false)):
+		var disabled := PanelContainer.new()
+		disabled.add_theme_stylebox_override("panel", _sb(
+			Color("f6f8fa"), Color("d8e0e8"), 11, 16))
+		var disabled_text := _lbl(
+			"该经济体未启用「%s」能力，因此本页没有可解释的运行指标。" %
+			str(CAPABILITY_CN.get(requirement, requirement)), 11, INK2)
+		disabled_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		disabled.add_child(disabled_text)
+		col.add_child(disabled)
+		return
 	var series: Array = _snapshot.get("series", [])
 	var latest: Dictionary = _snapshot.get("metrics", {})
 	var details: Dictionary = _snapshot.get("panel_details", {})
 	_render_panel_kpis(col, active_group, latest, series)
 	var charts: Array = PANEL_CHARTS.get(group_name, [])
-	if charts.size() >= 2:
+	if charts.size() == 1:
+		col.add_child(_panel_chart(charts[0], latest, series, group_color, details))
+	elif charts.size() >= 2:
 		var chart_row := HBoxContainer.new()
 		chart_row.add_theme_constant_override("separation", 10)
 		for chart_index in 2:
@@ -5270,8 +5481,9 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 			chart_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			chart_row.add_child(chart_panel)
 		col.add_child(chart_row)
-	if charts.size() >= 3:
-		col.add_child(_panel_chart(charts[2], latest, series, group_color, details))
+	for chart_index in range(2, charts.size()):
+		col.add_child(_panel_chart(
+			charts[chart_index], latest, series, group_color, details))
 
 
 func _render_panel_kpis(parent: VBoxContainer, group: Dictionary,
@@ -5350,6 +5562,8 @@ func _panel_delta(kind: String, previous: float, current: float) -> String:
 	var arrow := "▲" if delta > 0.0 else "▼"
 	if kind in ["pct", "pt"]:
 		return "%s %.2fpp" % [arrow, absf(delta) * 100.0]
+	if kind == "per_thousand":
+		return "%s %.2f‰" % [arrow, absf(delta)]
 	if absf(previous) > 1e-9:
 		return "%s %.1f%%" % [arrow, absf(delta / previous) * 100.0]
 	return "%s %s" % [arrow, _fmt_val(kind, absf(delta))]

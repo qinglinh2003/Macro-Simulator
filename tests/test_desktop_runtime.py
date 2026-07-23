@@ -7,7 +7,12 @@ import threading
 import pytest
 
 from macro_sim.desktop import NewGameSpec, SimulationRuntime
-from macro_sim.desktop.runtime import PANEL_METRIC_NAMES, WORLD_METRIC_NAMES
+from macro_sim.desktop.runtime import (
+    PANEL_METRIC_NAMES,
+    PANEL_WORLD_METRIC_NAMES,
+    WORLD_METRIC_NAMES,
+)
+from macro_sim.economy import Economy
 from macro_sim.desktop.server import _Server
 
 
@@ -70,7 +75,7 @@ def test_pass_then_advance_runs_real_engine(runtime: SimulationRuntime) -> None:
     assert snapshot["awaiting_human"] in (True, False)
     assert len(snapshot["series"]) >= 1
     assert snapshot["metrics"]["real_output"] > 0
-    for name in PANEL_METRIC_NAMES:
+    for name in PANEL_METRIC_NAMES + PANEL_WORLD_METRIC_NAMES:
         assert name in snapshot["metrics"]
 
 
@@ -124,6 +129,29 @@ def test_panel_details_are_real_micro_aggregates(runtime: SimulationRuntime) -> 
         assert len(distribution[name]["deciles"]) == 10
         assert len(distribution[name]["lorenz"]) == 11
         assert distribution[name]["lorenz"][0] == 0.0
+
+
+def test_panel_catalog_covers_current_playable_records_and_domains() -> None:
+    cfg = NewGameSpec.default(seed=11).configs()[0]
+    record = Economy(cfg).run(1)[-1]
+    assert set(PANEL_METRIC_NAMES) <= set(record)
+    assert {
+        "house_price", "housing_sales_session", "mortgage_balance_total",
+        "rent_level", "builder_wip_units", "births_tick", "marriages_tick",
+        "gdp_nominal_expenditure_reconciled", "household_debt_total",
+        "firm_size_gini_output",
+    } <= set(PANEL_METRIC_NAMES)
+
+
+def test_panel_world_metrics_project_player_economy(runtime: SimulationRuntime) -> None:
+    snapshot = _pass_all_contexts(runtime)
+    player = snapshot["world"]["player_economy"]
+    latest = snapshot["world"]["latest"]
+    for name in PANEL_WORLD_METRIC_NAMES:
+        raw = latest[name]
+        expected = raw[player] if isinstance(raw, list) else raw
+        assert snapshot["metrics"][name] == pytest.approx(float(expected))
+    assert all(snapshot["capabilities"].values())
 
 
 def test_household_explorer_reconciles_members_and_balance_sheets(

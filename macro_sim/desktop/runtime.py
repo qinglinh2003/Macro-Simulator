@@ -137,11 +137,78 @@ PANEL_METRIC_NAMES = (
     "household_credit_share", "new_loans_total", "bank_realized_credit_losses",
     "tobin_q_dispersion", "n_firms_q_above_1", "investment_q_corr",
     "energy_sold", "energy_unfilled", "energy_coverage_mean",
-    "energy_capacity_utilization", "energy_flow_gap", "e_hhi",
+    "e_capacity_utilization", "energy_flow_gap", "e_hhi",
     "poverty_gap", "bottom10_consumption", "median_real_household_income",
     "household_underwater_share", "person_income_gini", "person_wealth_gini",
     "child_dependency_ratio", "elder_dependency_ratio",
     "n_firms_necessity", "n_firms_luxury",
+    # national accounts -- player-facing reconciled aggregates, not audit internals
+    "gdp_deflator", "gdp_nominal_expenditure_reconciled",
+    "gdp_real_expenditure_reconciled", "gdp_nominal_household_consumption",
+    "gdp_nominal_government_consumption", "gdp_nominal_fixed_capital_formation",
+    "gdp_nominal_net_exports", "gdp_nominal_gross_output_c",
+    "gdp_nominal_gross_output_k", "gdp_nominal_gross_output_e",
+    "gdp_nominal_gross_output_housing", "gdp_real_household_consumption",
+    "gdp_real_government_consumption", "gdp_real_fixed_capital_formation",
+    "gdp_real_net_exports", "gdp_nominal_three_approach_raw_spread_share",
+    "gdp_nominal_income_reconciled", "gdp_nominal_production",
+    "gdp_nominal_compensation_of_employees",
+    "gdp_nominal_accrued_gross_operating_surplus",
+    "gdp_nominal_net_product_taxes_observed", "gdp_nominal_exports",
+    "gdp_nominal_imports", "gdp_nominal_inventory_change",
+    "gdp_nominal_private_fixed_capital_formation",
+    "gdp_nominal_public_fixed_capital_formation",
+    "gdp_nominal_residential_fixed_capital_formation",
+    "gdp_nominal_machinery_fixed_capital_formation",
+    "gdp_real_exports", "gdp_real_imports",
+    # housing registry, resale, mortgages, affordability, building and rent
+    "dwellings_total", "dwellings_fiscal", "homeowner_share", "house_price",
+    "housing_listings", "housing_sales_session", "housing_sales_total",
+    "housing_tom", "housing_forced_share", "transfer_tax_paid",
+    "property_tax_paid", "mortgage_count", "mortgage_balance_total",
+    "mortgage_originated_tick", "mortgage_originated_total",
+    "foreclosures_total", "housing_pti_ratio", "rent_burden_ratio",
+    "leave_home_mult", "housing_fertility_mult", "dwellings_built_total",
+    "land_fee_paid_total", "builder_employment", "builder_inventory_units",
+    "builder_wip_units", "permits_used_year", "tenancy_count",
+    "rental_vacancies", "rent_level", "rental_yield",
+    "housing_safe_asset_return_annual", "rent_paid_total",
+    "evictions_total", "tenant_share", "landlord_count",
+    # demographic/social flows and age structure
+    "child_population", "adult_population", "working_age_population",
+    "elder_population", "dependency_ratio", "marriages_tick",
+    "divorces_tick", "births_tick", "deaths_tick",
+    "birth_rate_per_1000_annualized", "death_rate_per_1000_annualized",
+    "net_population_growth_rate_annualized",
+    "child_share", "adult_share", "elder_share",
+    "child_median_consumption", "adult_median_consumption",
+    "elder_median_consumption",
+    # enterprise ecology
+    "firm_size_gini_output", "firm_size_pareto_slope",
+    "firm_size_top_share_output", "n_firms_producing", "n_firms_selling",
+    "n_firms_borrowing", "sector_switches", "sector_switch_capital",
+    # household/firm debt distribution and financial distress
+    "household_debt_total", "household_debt_per_capita",
+    "household_debt_gini", "household_debt_top10_share",
+    "firm_debt_gini", "firm_debt_top10_share", "debt_service_ratio",
+    "debt_service_to_nominal_gdp", "total_debt_service_to_nominal_gdp",
+    "household_interest_arrears_closing",
+    "household_contractual_debt_service_due",
+    "household_debt_service_reserved", "new_loans", "hh_bankruptcies",
+    "household_interest_arrears_opening",
+    "household_interest_arrears_extinguished",
+    "household_interest_arrears_in_goods_reservation",
+    "household_interest_arrears_stock_flow_residual",
+    # bank population and interbank stress
+    "banks_alive", "bank_births", "bank_deaths", "n_bank_failures",
+    "interbank_volume", "interbank_contagion_loss",
+)
+
+# These live on the World record rather than an individual Economy record.  They
+# are projected to the selected player economy when a panel point is committed.
+PANEL_WORLD_METRIC_NAMES = (
+    "e", "nfa", "current_account", "migrant_stock", "remittances",
+    "import_value", "export_delivered_volume", "tariff_rev", "peg_intact",
 )
 
 METRIC_NAMES = WORLD_METRIC_NAMES + (
@@ -469,8 +536,6 @@ class SimulationRuntime:
         )
         for name in PANEL_METRIC_NAMES:
             panel_point[name] = _finite_number(player_row.get(name))
-        self._panel_history.append(panel_point)
-        del self._panel_history[:-SERIES_LIMIT]
         self._record_stock_market_point(tick, player_row)
         flow_counter_names = (
             "labor_hires_total", "labor_churn_seps_total",
@@ -505,6 +570,18 @@ class SimulationRuntime:
             if isinstance(latest, dict):
                 for key in WORLD_RECORD_KEYS:
                     world_point[key] = _jsonable(latest.get(key))
+                for name in PANEL_WORLD_METRIC_NAMES:
+                    raw_value = latest.get(name)
+                    if isinstance(raw_value, (list, tuple)):
+                        raw_value = (
+                            raw_value[self.player_economy]
+                            if self.player_economy < len(raw_value) else 0.0
+                        )
+                    panel_point[name] = _finite_number(raw_value)
+        for name in PANEL_WORLD_METRIC_NAMES:
+            panel_point.setdefault(name, 0.0)
+        self._panel_history.append(panel_point)
+        del self._panel_history[:-SERIES_LIMIT]
         self._world_history.append(world_point)
         del self._world_history[:-SERIES_LIMIT]
 
@@ -1727,7 +1804,7 @@ class SimulationRuntime:
         latest_panel = self._panel_history[-1] if self._panel_history else {"tick": 0}
         metrics = {
             name: _finite_number(latest_panel.get(name))
-            for name in PANEL_METRIC_NAMES
+            for name in PANEL_METRIC_NAMES + PANEL_WORLD_METRIC_NAMES
         }
         shock_engine = get_shock_engine(self.world)
         shock_events = []
@@ -1810,6 +1887,17 @@ class SimulationRuntime:
             "metrics": metrics,
             "series": list(self._panel_history),
             "panel_details": _jsonable(self._panel_details()),
+            "capabilities": {
+                name: bool(getattr(player_economy.cfg, name, False))
+                for name in (
+                    "national_accounts_metrics", "demographics_enabled",
+                    "housing_enabled", "housing_market_enabled",
+                    "mortgage_enabled", "housing_rental_enabled",
+                    "housing_construction_enabled", "firm_dynamics",
+                    "sector_switching", "bank_enabled", "household_credit",
+                    "capital_market", "energy_enabled",
+                )
+            },
             "households": _jsonable(household_snapshot),
             "firms": _jsonable(firm_snapshot),
             "stock_market": _jsonable(stock_market_snapshot),
