@@ -84,6 +84,8 @@ add_library(
         src/core/genesis.cpp
         src/core/invariants.cpp
         src/core/transaction.cpp
+        src/simulation/m4.cpp
+        src/simulation/m4_checkpoint.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -170,6 +172,11 @@ if(MACRO_SIM_BUILD_TESTS)
     target_link_libraries(macro_sim_m2_c_smoke PRIVATE macro_sim_c)
     macro_sim_project_options(macro_sim_m2_c_smoke)
     add_test(NAME macro_sim.m2_c_abi COMMAND macro_sim_m2_c_smoke)
+
+    add_executable(macro_sim_m4_c_smoke tests/m4_c_smoke.c)
+    target_link_libraries(macro_sim_m4_c_smoke PRIVATE macro_sim_c)
+    macro_sim_project_options(macro_sim_m4_c_smoke)
+    add_test(NAME macro_sim.m4_c_abi COMMAND macro_sim_m4_c_smoke)
 
     add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
@@ -267,6 +274,21 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m3_market_tests
     )
 
+    add_executable(
+        macro_sim_m4_tick_tests
+        tests/m4_tick_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m4_tick_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m4_tick_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m4_tick_tests)
+    add_test(
+        NAME macro_sim.m4_tick
+        COMMAND macro_sim_m4_tick_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
@@ -298,6 +320,44 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m3_python_oracle
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m4_python_oracle
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m4/differential_oracle.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m4_python_oracle
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m4_fresh_process_checkpoint
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m4/fresh_process_checkpoint.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m4_fresh_process_checkpoint
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m4_stochastic_panel
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m4/stochastic_panel.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --envelopes
+                "${PROJECT_SOURCE_DIR}/schemas/m4/stochastic_envelopes.json"
+        )
+        set_tests_properties(
+            macro_sim.m4_stochastic_panel
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -324,6 +384,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     )
     macro_sim_project_options(macro_sim_m3_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m3_benchmarks)
+
+    add_executable(
+        macro_sim_m4_benchmarks
+        benchmarks/m4_tick_benchmark.cpp
+    )
+    target_link_libraries(
+        macro_sim_m4_benchmarks
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m4_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m4_benchmarks)
 endif()
 
 install(

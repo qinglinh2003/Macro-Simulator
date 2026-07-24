@@ -1,25 +1,29 @@
-name: Native M3 pure algorithms
+name: Native M4 first tick
 
 on:
   push:
     branches:
       - refactor/cpp-m3-v33
+      - refactor/cpp-m4-v33
       - refactor/cpp-engine-v33
   pull_request:
     paths:
       - ".github/workflows/native.yml"
       - "CMakeLists.txt"
       - "CMakePresets.json"
+      - "macro_sim/**/*.py"
       - "native/**"
       - "pyproject.toml"
       - "schemas/m0/**"
       - "schemas/m1/**"
       - "schemas/m2/**"
       - "schemas/m3/**"
+      - "schemas/m4/**"
       - "tests/native/**"
       - "tools/m1/**"
       - "tools/m2/**"
       - "tools/m3/**"
+      - "tools/m4/**"
       - "uv.lock"
   workflow_dispatch:
 
@@ -67,32 +71,32 @@ jobs:
         run: choco install ccache ninja --no-progress -y
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
-      - name: Verify M3 contracts and frozen evidence
-        run: uv run python tools/m3/check.py --skip-build
+      - name: Verify M4 contracts and current playable target
+        run: uv run python tools/m4/check.py --skip-build
       - name: Configure native release
-        run: uv run cmake --preset m3-release
+        run: uv run cmake --preset m4-release
       - name: Build native release
-        run: uv run cmake --build --preset m3-release
+        run: uv run cmake --build --preset m4-release
       - name: Test native release
-        run: uv run ctest --preset m3-release
+        run: uv run ctest --preset m4-release
       - name: Verify installed C package
         run: >-
           uv run python tools/m1/installed_c_smoke.py
-          --build-dir build/native/m3-release
-          --prefix build/install/m3-ci
-      - name: Verify M3 matching complexity budget
+          --build-dir build/native/m4-release
+          --prefix build/install/m4-ci
+      - name: Verify M4 tick performance budget
         run: >-
-          uv run python tools/m3/performance_gate.py
-          --build-dir build/native/m3-release
-          --repetitions 9
+          uv run python tools/m4/performance_gate.py
+          --budget schemas/m4/performance_budget.json
+          --build-dir build/native/m4-release
       - name: Build wheel and source distribution
         run: |
           uv build --wheel
           uv build --sdist
       - name: Verify isolated wheel
-        run: uv run python tools/m3/wheel_smoke.py --wheel-dir dist
+        run: uv run python tools/m4/wheel_smoke.py --wheel-dir dist
       - name: Verify source artifact offline inputs
-        run: uv run python tools/m3/source_artifact_smoke.py --sdist-dir dist
+        run: uv run python tools/m4/source_artifact_smoke.py --sdist-dir dist
       - name: Upload native artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +107,10 @@ jobs:
             schemas/m1/native_sbom.spdx.json
             schemas/m2/performance_budget.json
             schemas/m3/performance_budget.json
+            schemas/m4/current_engine_target.json
+            schemas/m4/performance_budget.json
+            schemas/m4/reference_performance.json
+            schemas/m4/stochastic_envelopes.json
           if-no-files-found: error
 
   sanitizers:
@@ -135,8 +143,8 @@ jobs:
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
       - name: Configure sanitizer build
-        run: uv run cmake --preset m3-asan
+        run: uv run cmake --preset m4-asan
       - name: Build sanitizer targets
-        run: uv run cmake --build --preset m3-asan
+        run: uv run cmake --build --preset m4-asan
       - name: Run sanitizer tests
-        run: uv run ctest --preset m3-asan
+        run: uv run ctest --preset m4-asan

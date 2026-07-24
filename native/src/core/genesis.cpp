@@ -1,5 +1,6 @@
 #include "macro_sim/core/root_state.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -22,11 +23,42 @@ namespace {
     if (!std::isfinite(spec.aggregate_opening_money.value())
         || spec.aggregate_opening_money.value() < 0.0
         || !std::isfinite(spec.aggregate_opening_capital.value())
-        || spec.aggregate_opening_capital.value() < 0.0) {
+        || spec.aggregate_opening_capital.value() < 0.0
+        || !std::isfinite(spec.household_opening_money.value())
+        || spec.household_opening_money.value() < 0.0
+        || !std::isfinite(spec.firm_opening_money.value())
+        || spec.firm_opening_money.value() < 0.0) {
         return Status(
             ErrorCode::invalid_argument,
             "genesis stocks must be finite and nonnegative"
         );
+    }
+    const auto firm_count =
+        spec.consumption_firms + spec.capital_firms;
+    if (firm_count < spec.consumption_firms) {
+        return Status(ErrorCode::out_of_range, "firm count overflows");
+    }
+    if (spec.use_per_agent_endowments) {
+        const double expected =
+            static_cast<double>(spec.households)
+                * spec.household_opening_money.value()
+            + static_cast<double>(firm_count)
+                * spec.firm_opening_money.value();
+        const double scale = std::max(
+            1.0,
+            std::max(
+                std::abs(expected),
+                std::abs(spec.aggregate_opening_money.value())
+            )
+        );
+        if (!std::isfinite(expected)
+            || std::abs(expected - spec.aggregate_opening_money.value())
+                > 1.0e-12 * scale) {
+            return Status(
+                ErrorCode::invalid_argument,
+                "per-agent endowments do not match aggregate opening money"
+            );
+        }
     }
     const bool is_v1 =
         spec.vertical == GenesisVertical::m4_v1_capital_fiscal;
@@ -44,11 +76,15 @@ namespace {
             "M4 V0 does not contain capital firms or physical capital"
         );
     }
+    const auto capital_recipients =
+        spec.opening_capital_to_consumption_firms
+        ? spec.consumption_firms
+        : spec.capital_firms;
     if (spec.aggregate_opening_capital.value() > 0.0
-        && spec.capital_firms == 0) {
+        && capital_recipients == 0) {
         return Status(
             ErrorCode::invalid_argument,
-            "opening capital requires at least one capital firm"
+            "opening capital requires a recipient firm"
         );
     }
     std::set<std::uint64_t> counter_streams;
@@ -90,6 +126,8 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
     if (!validation.ok()) {
         return validation;
     }
+    const auto firm_count =
+        spec.consumption_firms + spec.capital_firms;
 
     RootState state;
     state.economy = spec.economy;
@@ -186,6 +224,19 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
     }
     state.institutions.dealer_account = *dealer_result.get_if();
 
+    if (spec.use_per_agent_endowments) {
+        auto clearing_result = create_institution_account(
+            state,
+            AccountKind::clearing,
+            OwnerKind::institution,
+            institutional_node
+        );
+        if (!clearing_result.ok()) {
+            return clearing_result.status();
+        }
+        state.institutions.clearing_account = *clearing_result.get_if();
+    }
+
     if (spec.government) {
         auto treasury_result = create_institution_account(
             state,
@@ -200,9 +251,13 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         state.institutions.treasury_account = *treasury_result.get_if();
     }
 
-    const double household_base =
-        spec.aggregate_opening_money.value()
-        / static_cast<double>(spec.households);
+    const double household_total = spec.use_per_agent_endowments
+        ? static_cast<double>(spec.households)
+            * spec.household_opening_money.value()
+        : spec.aggregate_opening_money.value();
+    const double household_base = spec.use_per_agent_endowments
+        ? spec.household_opening_money.value()
+        : household_total / static_cast<double>(spec.households);
     double assigned_money = 0.0;
     std::vector<HouseholdId> household_ids;
     household_ids.reserve(static_cast<std::size_t>(spec.households));
@@ -218,7 +273,7 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         const auto* bank = state.banks.get(bank_ids[bank_index]);
         const double opening =
             index + 1 == spec.households
-            ? spec.aggregate_opening_money.value() - assigned_money
+            ? household_total - assigned_money
             : household_base;
         assigned_money += opening;
         auto account_result = state.postings.create_account(
@@ -239,20 +294,29 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         household_ids.push_back(household_receipt.id);
     }
 
-    const auto firm_count = spec.consumption_firms + spec.capital_firms;
+    const auto capital_count = spec.opening_capital_to_consumption_firms
+        ? spec.consumption_firms
+        : spec.capital_firms;
     const double capital_base =
-        spec.capital_firms == 0
+        capital_count == 0
         ? 0.0
         : spec.aggregate_opening_capital.value()
-            / static_cast<double>(spec.capital_firms);
+            / static_cast<double>(capital_count);
     double assigned_capital = 0.0;
+    double assigned_firm_money = 0.0;
     for (std::uint64_t index = 0; index < firm_count; ++index) {
         const bool is_capital = index >= spec.consumption_firms;
+        const bool receives_capital =
+            spec.opening_capital_to_consumption_firms
+            ? !is_capital
+            : is_capital;
         double opening_capital = 0.0;
-        if (is_capital) {
-            const auto capital_index = index - spec.consumption_firms;
+        if (receives_capital) {
+            const auto capital_index = spec.opening_capital_to_consumption_firms
+                ? index
+                : index - spec.consumption_firms;
             opening_capital =
-                capital_index + 1 == spec.capital_firms
+                capital_index + 1 == capital_count
                 ? spec.aggregate_opening_capital.value() - assigned_capital
                 : capital_base;
             assigned_capital += opening_capital;
@@ -274,6 +338,15 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
             index % spec.settlement_banks
         );
         const auto* bank = state.banks.get(bank_ids[bank_index]);
+        double opening_money = 0.0;
+        if (spec.use_per_agent_endowments) {
+            opening_money =
+                index + 1 == firm_count
+                ? spec.aggregate_opening_money.value()
+                    - household_total - assigned_firm_money
+                : spec.firm_opening_money.value();
+            assigned_firm_money += opening_money;
+        }
         auto account_result = state.postings.create_account(
             AccountKey{
                 AccountKind::deposit,
@@ -282,7 +355,7 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
                 state.currency,
                 bank->settlement_node,
             },
-            Money(0.0)
+            Money(opening_money)
         );
         if (!account_result.ok()) {
             return account_result.status();

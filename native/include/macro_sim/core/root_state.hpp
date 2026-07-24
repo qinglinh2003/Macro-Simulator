@@ -14,6 +14,7 @@ struct InstitutionRegistry final {
     AccountId dealer_account{};
     AccountId rounding_residual_account{};
     AccountId treasury_account{};
+    AccountId clearing_account{};
 };
 
 struct RootState final {
@@ -53,6 +54,10 @@ struct GenesisSpec final {
     Capital aggregate_opening_capital{};
     std::uint64_t seed{0};
     std::vector<std::uint64_t> named_counter_streams;
+    bool use_per_agent_endowments{false};
+    Money household_opening_money{};
+    Money firm_opening_money{};
+    bool opening_capital_to_consumption_firms{false};
 };
 
 [[nodiscard]] Result<RootState> build_genesis(const GenesisSpec& spec);

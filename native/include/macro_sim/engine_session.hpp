@@ -12,6 +12,7 @@
 #include "macro_sim/core/transaction.hpp"
 #include "macro_sim/error.hpp"
 #include "macro_sim/ids.hpp"
+#include "macro_sim/simulation/m4.hpp"
 #include "macro_sim/units.hpp"
 
 namespace macro_sim {
@@ -42,7 +43,25 @@ public:
     [[nodiscard]] bool initialized() const noexcept;
     [[nodiscard]] core::RootState* root() noexcept;
     [[nodiscard]] const core::RootState* root() const noexcept;
+    [[nodiscard]] const simulation::M4Runtime* simulation_runtime()
+        const noexcept;
+    [[nodiscard]] const simulation::M4TickScratch* tick_scratch()
+        const noexcept;
     [[nodiscard]] Status initialize(const core::GenesisSpec& spec);
+    [[nodiscard]] Status initialize_simulation(
+        const simulation::M4SimulationSpec& spec
+    );
+    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_ticks(
+        std::uint64_t count,
+        const simulation::M4AdvanceOptions& options
+    );
+    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_ticks(
+        std::uint64_t count
+    );
+    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_tick(
+        const simulation::M4AdvanceOptions& options
+    );
+    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_tick();
     [[nodiscard]] Result<core::TransactionReceipt> apply(
         const core::SettlementBatch& batch
     );
@@ -58,6 +77,8 @@ private:
     Tick tick_{};
     SessionState state_{SessionState::ready};
     std::unique_ptr<core::RootState> root_;
+    std::unique_ptr<simulation::M4Runtime> simulation_runtime_;
+    std::unique_ptr<simulation::M4TickScratch> tick_scratch_;
 };
 
 }  // namespace macro_sim

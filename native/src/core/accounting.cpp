@@ -202,6 +202,10 @@ std::size_t PostingBook::size() const noexcept {
     return accounts_.size();
 }
 
+std::vector<AccountRecord>& PostingBook::records() noexcept {
+    return accounts_;
+}
+
 const std::vector<AccountRecord>& PostingBook::records() const noexcept {
     return accounts_;
 }

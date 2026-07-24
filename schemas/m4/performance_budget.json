@@ -1,0 +1,18 @@
+{
+  "absolute_p95_ns": 16700000,
+  "matched_python_median_ns": 1273848538,
+  "maximum_allocations_per_day": 0,
+  "maximum_native_to_python_ratio": 0.2,
+  "maximum_scaling_ratio": 2.6,
+  "p0": {
+    "capital_firms": 225,
+    "consumption_firms": 525,
+    "households": 5000,
+    "measured_days": 365,
+    "seed": 206,
+    "warmup_days": 5
+  },
+  "python_baseline_provenance": "frozen M0 m4_v1_capital_fiscal benchmark",
+  "require_stable_scratch_capacity": true,
+  "schema_version": "m4-performance-budget-v1"
+}

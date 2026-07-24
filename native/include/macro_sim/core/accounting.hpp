@@ -48,6 +48,7 @@ public:
     [[nodiscard]] Money total_deposits() const noexcept;
     [[nodiscard]] double total_roundoff_drift() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] std::vector<AccountRecord>& records() noexcept;
     [[nodiscard]] const std::vector<AccountRecord>& records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     [[nodiscard]] Status validate_nonnegative(double tolerance) const noexcept;

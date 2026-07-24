@@ -1,0 +1,27 @@
+{
+  "half": {
+    "capital_firms": 112,
+    "consumption_firms": 263,
+    "days": 365,
+    "households": 2500,
+    "maximum_allocations_per_day": 0,
+    "median_ns": 170791,
+    "p95_ns": 231084,
+    "scratch_after": 10391319209699696179,
+    "scratch_before": 10391319209699696179
+  },
+  "p0": {
+    "capital_firms": 225,
+    "consumption_firms": 525,
+    "days": 365,
+    "households": 5000,
+    "maximum_allocations_per_day": 0,
+    "median_ns": 318584,
+    "p95_ns": 339417,
+    "scratch_after": 1296388445514788972,
+    "scratch_before": 1296388445514788972
+  },
+  "platform": "macOS arm64 AppleClang release build",
+  "scaling_ratio": 1.86534,
+  "schema_version": "m4-tick-benchmark-v1"
+}

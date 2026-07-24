@@ -19,13 +19,14 @@ The authoritative product model is:
 - `NewGameSpec.world` for open-economy configuration;
 - the current policy, shock, controller, release, desktop, and RL contracts.
 
-Historical factories such as `v124` remain useful only as low-cost regression
+Historical configuration factories remain useful only as low-cost regression
 tripwires. They do not define native completeness. In particular, they cannot
 be used as the full-playable, desktop, controller, shock, persistence, or
 release oracle.
 
-The M0 source manifest incorrectly labels several product-facing fixtures as
-`v124`. M4 does not silently inherit that defect. It freezes a new
+The M0 source manifest incorrectly labels several product-facing fixtures with
+a historical configuration factory. M4 does not silently inherit that defect.
+It freezes a new
 `current_engine_target` contract from the production builder and records the
 old entries as superseded fixture metadata. The immutable historical M0
 artifacts remain available for audit.
@@ -46,7 +47,11 @@ native owner milestone:
 | native policy inference, desktop worker, packaging, cutover | M11 |
 
 No production cutover is permitted before the full current playable contract
-is covered.
+is covered. The generated target contract also assigns every one of the 61
+currently enabled playable overrides to exactly one native owner milestone;
+generation fails when an override is added, removed, or left unowned. It hashes
+the complete current `macro_sim` product source, Godot integration source, and
+active base/calibration inputs instead of a selected historical subset.
 
 ## 2. Outcome
 
@@ -223,8 +228,8 @@ The milestone workload is one V1 economy with:
 - 365 measured days after five warm-up days;
 - seed 206.
 
-The benchmark compares native V1 with the matched Python V1 subset, not with
-`v124` and not with the full current playable engine.
+The benchmark compares native V1 with the matched Python V1 subset, not with a
+historical factory and not with the full current playable engine.
 
 Required:
 
@@ -296,7 +301,7 @@ Exit:
 
 - the contract is generated from `current_playable_v1`;
 - every production override and World capability has one native owner;
-- only F0 classifies `v124` as an intentional historical target;
+- only F0 retains an intentional historical factory tripwire;
 - CI fails if the production builder changes without refreshing the contract.
 
 ### M4-01 — Tick state and scratch

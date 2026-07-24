@@ -67,7 +67,8 @@ uint32_t macro_sim_abi_version(void) {
 
 uint64_t macro_sim_capabilities(void) {
     return MACRO_SIM_CAPABILITY_M2_ACCOUNTING
-        | MACRO_SIM_CAPABILITY_M3_ALGORITHMS;
+        | MACRO_SIM_CAPABILITY_M3_ALGORITHMS
+        | MACRO_SIM_CAPABILITY_M4_TICK;
 }
 
 const char* macro_sim_engine_version(void) {
@@ -463,6 +464,117 @@ macro_sim_status macro_sim_m2_checkpoint_load(
         session->engine.restore_checkpoint(
             std::span<const std::uint8_t>(checkpoint, checkpoint_size)
         )
+    );
+}
+
+macro_sim_status macro_sim_m4_genesis(
+    macro_sim_session* session,
+    const macro_sim_m4_genesis_options* options
+) {
+    if (session == nullptr || options == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and M4 genesis options are required"
+        );
+    }
+    if (options->struct_size != sizeof(macro_sim_m4_genesis_options)
+        || options->vertical > MACRO_SIM_M4_CAPITAL_FISCAL
+        || options->matching_protocol > MACRO_SIM_M4_MATCH_PRICE_SORTED
+        || options->stochastic > 1 || options->reserved != 0) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "M4 genesis options are invalid"
+        );
+    }
+    macro_sim::simulation::M4SimulationSpec spec;
+    spec.vertical =
+        static_cast<macro_sim::simulation::M4Vertical>(options->vertical);
+    spec.economy = macro_sim::EconomyId(options->economy_id);
+    spec.currency = macro_sim::CurrencyId(options->currency_id);
+    spec.market_protocol =
+        static_cast<macro_sim::algorithms::MatchingProtocol>(
+            options->matching_protocol
+        );
+    spec.stochastic = options->stochastic != 0;
+    spec.households = options->households;
+    spec.consumption_firms = options->consumption_firms;
+    spec.capital_firms = options->capital_firms;
+    spec.seed = options->seed;
+    spec.requested_capabilities = options->requested_capabilities;
+    return status(session->engine.initialize_simulation(spec));
+}
+
+macro_sim_status macro_sim_m4_advance(
+    macro_sim_session* session,
+    uint64_t tick_count,
+    macro_sim_m4_advance_result* output
+) {
+    if (session == nullptr || output == nullptr
+        || output->struct_size != sizeof(macro_sim_m4_advance_result)
+        || output->metrics.struct_size != sizeof(macro_sim_m4_metrics)) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and initialized M4 result are required"
+        );
+    }
+    const auto result = session->engine.advance_ticks(tick_count);
+    if (!result.ok()) {
+        return status(result.status());
+    }
+    const auto& value = *result.get_if();
+    const auto& metrics = value.metrics;
+    output->reserved = 0;
+    output->first_tick = value.first_tick.value();
+    output->next_tick = value.next_tick.value();
+    output->advanced_ticks = value.advanced_ticks;
+    output->scratch_capacity_signature =
+        value.scratch_capacity_signature;
+    output->transfer_count = value.transfer_count;
+    output->trade_count = value.trade_count;
+    output->metrics.reserved = 0;
+    output->metrics.tick = metrics.tick.value();
+    output->metrics.real_output = metrics.real_output;
+    output->metrics.nominal_output = metrics.nominal_output;
+    output->metrics.price_index = metrics.price_index;
+    output->metrics.unemployment_rate = metrics.unemployment_rate;
+    output->metrics.total_money = metrics.total_money;
+    output->metrics.conservation_drift = metrics.conservation_drift;
+    output->metrics.aggregate_capital = metrics.aggregate_capital;
+    output->metrics.household_consumption =
+        metrics.household_consumption;
+    output->metrics.wages_paid = metrics.wages_paid;
+    output->metrics.firm_profit = metrics.firm_profit;
+    output->metrics.tax_total = metrics.tax_total;
+    output->metrics.government_spending = metrics.government_spending;
+    output->metrics.government_deficit = metrics.government_deficit;
+    output->metrics.public_capital = metrics.public_capital;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m4_state_digest(
+    const macro_sim_session* session,
+    uint8_t* output,
+    size_t output_size
+) {
+    return macro_sim_m2_state_digest(session, output, output_size);
+}
+
+macro_sim_status macro_sim_m4_checkpoint_save(
+    const macro_sim_session* session,
+    macro_sim_owned_buffer* output
+) {
+    return macro_sim_m2_checkpoint_save(session, output);
+}
+
+macro_sim_status macro_sim_m4_checkpoint_load(
+    macro_sim_session* session,
+    const uint8_t* checkpoint,
+    size_t checkpoint_size
+) {
+    return macro_sim_m2_checkpoint_load(
+        session,
+        checkpoint,
+        checkpoint_size
     );
 }
 

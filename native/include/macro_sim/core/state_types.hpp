@@ -56,6 +56,7 @@ enum class AccountKind : std::uint8_t {
     central_bank = 3,
     dealer = 4,
     rounding_residual = 5,
+    clearing = 6,
 };
 
 struct AccountKey final {
@@ -71,6 +72,11 @@ struct AccountKey final {
 enum class FirmSector : std::uint8_t {
     consumption = 0,
     capital = 1,
+};
+
+enum class FirmTechnology : std::uint8_t {
+    linear = 0,
+    cobb_douglas = 1,
 };
 
 enum class AssetKind : std::uint8_t {
@@ -89,6 +95,14 @@ struct AssetKey final {
 
 struct HouseholdComponent final {
     AccountId primary_account{};
+    double income_propensity{0.8};
+    double wealth_propensity{0.05};
+    double income_adjustment{0.3};
+    double income_expected{0.0};
+    double income_realized{0.0};
+    double consumption_budget{0.0};
+    double spent{0.0};
+    double labor_sold{0.0};
 };
 
 struct FirmComponent final {
@@ -97,6 +111,28 @@ struct FirmComponent final {
     Goods goods_inventory{};
     Capital physical_capital{};
     double productivity{1.0};
+    FirmTechnology technology{FirmTechnology::linear};
+    double total_factor_productivity{1.0};
+    double capital_share{0.3};
+    double capital_output_ratio{0.0};
+    double investment_adjustment{0.0};
+    double capital_depreciation{0.0};
+    double demand_adjustment{0.3};
+    double inventory_ratio{0.75};
+    double markup_adjustment{0.05};
+    double markup_minimum{0.0};
+    double markup_maximum{1.0};
+    double shortage_adjustment{0.02};
+    double dividend_payout{0.5};
+    Price posted_price{Price(1.2)};
+    Money posted_wage{Money(1.0)};
+    double markup{0.2};
+    double demand_expected{10.0};
+    double target_inventory_previous{0.0};
+    double labor_demand_previous{0.0};
+    double hired_previous{0.0};
+    double sales_previous{0.0};
+    double rationed_previous{0.0};
 };
 
 struct BankComponent final {

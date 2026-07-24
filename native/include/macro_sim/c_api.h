@@ -13,6 +13,9 @@ extern "C" {
 #define MACRO_SIM_ABI_VERSION 1u
 #define MACRO_SIM_CAPABILITY_M2_ACCOUNTING (UINT64_C(1) << 0)
 #define MACRO_SIM_CAPABILITY_M3_ALGORITHMS (UINT64_C(1) << 1)
+#define MACRO_SIM_CAPABILITY_M4_TICK (UINT64_C(1) << 2)
+#define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
+#define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
 typedef enum macro_sim_error_code {
     MACRO_SIM_OK = 0,
@@ -126,6 +129,64 @@ typedef struct macro_sim_owned_buffer {
     size_t size;
 } macro_sim_owned_buffer;
 
+typedef enum macro_sim_m4_vertical {
+    MACRO_SIM_M4_CASH_LOOP = 0,
+    MACRO_SIM_M4_CAPITAL_FISCAL = 1
+} macro_sim_m4_vertical;
+
+typedef enum macro_sim_m4_matching_protocol {
+    MACRO_SIM_M4_MATCH_SAMPLED = 0,
+    MACRO_SIM_M4_MATCH_PREFERENTIAL = 1,
+    MACRO_SIM_M4_MATCH_PRICE_SORTED = 2
+} macro_sim_m4_matching_protocol;
+
+typedef struct macro_sim_m4_genesis_options {
+    uint32_t struct_size;
+    uint32_t vertical;
+    uint64_t economy_id;
+    uint32_t currency_id;
+    uint32_t matching_protocol;
+    uint32_t stochastic;
+    uint32_t reserved;
+    uint64_t households;
+    uint64_t consumption_firms;
+    uint64_t capital_firms;
+    uint64_t seed;
+    uint64_t requested_capabilities;
+} macro_sim_m4_genesis_options;
+
+typedef struct macro_sim_m4_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t tick;
+    double real_output;
+    double nominal_output;
+    double price_index;
+    double unemployment_rate;
+    double total_money;
+    double conservation_drift;
+    double aggregate_capital;
+    double household_consumption;
+    double wages_paid;
+    double firm_profit;
+    double tax_total;
+    double government_spending;
+    double government_deficit;
+    double public_capital;
+} macro_sim_m4_metrics;
+
+typedef struct macro_sim_m4_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t scratch_capacity_signature;
+    uint64_t transfer_count;
+    uint64_t trade_count;
+    macro_sim_m4_metrics metrics;
+} macro_sim_m4_advance_result;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -184,6 +245,29 @@ MACRO_SIM_C_API macro_sim_status macro_sim_m2_checkpoint_save(
     macro_sim_owned_buffer* output
 );
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_checkpoint_load(
+    macro_sim_session* session,
+    const uint8_t* checkpoint,
+    size_t checkpoint_size
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m4_genesis(
+    macro_sim_session* session,
+    const macro_sim_m4_genesis_options* options
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m4_advance(
+    macro_sim_session* session,
+    uint64_t tick_count,
+    macro_sim_m4_advance_result* output
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m4_state_digest(
+    const macro_sim_session* session,
+    uint8_t* output,
+    size_t output_size
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_save(
+    const macro_sim_session* session,
+    macro_sim_owned_buffer* output
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_load(
     macro_sim_session* session,
     const uint8_t* checkpoint,
     size_t checkpoint_size

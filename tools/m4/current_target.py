@@ -14,6 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "schemas/m4/current_engine_target.json"
 NEW_GAME = ROOT / "macro_sim/desktop/new_game.py"
+CONFIG_MODEL = ROOT / "macro_sim/config/model.py"
 
 MILESTONE_COVERAGE = {
     "m4": [
@@ -74,16 +75,87 @@ MILESTONE_COVERAGE = {
     ],
 }
 
-TARGET_SOURCES = (
-    "macro_sim/config/model.py",
-    "macro_sim/desktop/new_game.py",
-    "macro_sim/desktop/runtime.py",
-    "macro_sim/economy.py",
-    "macro_sim/world/world.py",
-    "macro_sim/core/policy_registry.py",
-    "macro_sim/controllers/coordinator.py",
-    "macro_sim/shocks/engine.py",
+PLAYABLE_OVERRIDE_OWNERS = {
+    "a_K": "m4",
+    "bank_realized_pnl": "m5",
+    "bank_relationship_lock_in": "m5",
+    "benefit_income_floor": "m5",
+    "bond_maturity_bucket": "m6",
+    "capital_annual_clock": "m6",
+    "capital_clock_demand_smoothing": "m6",
+    "capital_firm_entry": "m6",
+    "capital_rationed_signal": "m6",
+    "capital_service_min_utilization": "m6",
+    "capital_service_pricing": "m6",
+    "cb_uses_fixed_basket_cpi": "m5",
+    "claims_reconcile_interval": "m6",
+    "consumption_rationed_signal": "m4",
+    "consumption_strata": "m7",
+    "cpi_item_link_cap": "m10",
+    "demographic_lifecycle_consumption": "m7",
+    "demographics_enabled": "m7",
+    "deprivation_gauges": "m7",
+    "energy_enabled": "m8",
+    "energy_hoarding_beta": "m8",
+    "energy_household": "m8",
+    "energy_mortality_gamma": "m8",
+    "family_transfers": "m7",
+    "fertility_income_elasticity": "m7",
+    "fertility_rank_gradient": "m7",
+    "firm_full_pnl": "m6",
+    "firm_subscale_exit": "m6",
+    "fiscal_uses_national_accounts_gdp": "m5",
+    "household_interest_arrears": "m5",
+    "housing_construction_enabled": "m8",
+    "housing_demand_step": "m8",
+    "housing_enabled": "m8",
+    "housing_fertility_elasticity": "m8",
+    "housing_leave_elasticity": "m8",
+    "housing_market_enabled": "m8",
+    "housing_rental_enabled": "m8",
+    "housing_wealth_effect": "m8",
+    "labor_fractional_hours": "m7",
+    "labor_job_ladder": "m7",
+    "labor_matching": "m7",
+    "labor_matching_friction": "m7",
+    "labor_participation": "m7",
+    "labor_person_efficiency": "m7",
+    "labor_relationship_wages": "m7",
+    "labor_second_job": "m7",
+    "labor_suspension": "m7",
+    "ledger_rel_tol": "m2",
+    "marriage_assortativity": "m7",
+    "monetary_direct_transmission": "m5",
+    "mortality_income_elasticity": "m7",
+    "mortality_rank_gradient": "m7",
+    "mortgage_enabled": "m8",
+    "mortgage_underwriting": "m8",
+    "national_accounts_metrics": "m10",
+    "priced_firm_balance_sheet": "m6",
+    "rental_rent_floor_wage_share": "m8",
+    "rental_vacancy_deadband": "m8",
+    "sector_switching": "m7",
+    "tfp_drift_rate": "m4",
+    "unified_bank_rwa": "m5",
+}
+
+TARGET_SOURCE_ROOTS = (
+    ROOT / "macro_sim",
+    ROOT / "desktop/godot",
 )
+TARGET_SOURCE_FILES = (
+    ROOT / "configs/base.yaml",
+    ROOT / "configs/calibrations/daily_tick.yaml",
+)
+TARGET_SOURCE_SUFFIXES = {
+    ".gd",
+    ".godot",
+    ".json",
+    ".py",
+    ".tscn",
+    ".yaml",
+    ".yml",
+}
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -108,6 +180,22 @@ def file_digest(relative: str) -> dict[str, Any]:
     }
 
 
+def target_source_paths() -> tuple[str, ...]:
+    paths = set(TARGET_SOURCE_FILES)
+    for root in TARGET_SOURCE_ROOTS:
+        paths.update(
+            path
+            for path in root.rglob("*")
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.suffix in TARGET_SOURCE_SUFFIXES
+        )
+    return tuple(
+        path.relative_to(ROOT).as_posix()
+        for path in sorted(paths)
+    )
+
+
 def assigned_literal(module: ast.Module, name: str) -> Any:
     for statement in module.body:
         if isinstance(statement, (ast.Assign, ast.AnnAssign)):
@@ -126,15 +214,38 @@ def assigned_literal(module: ast.Module, name: str) -> Any:
     raise RuntimeError(f"cannot find literal assignment {name}")
 
 
+def config_field_count() -> int:
+    tree = ast.parse(CONFIG_MODEL.read_text(encoding="utf-8"))
+    config = next(
+        (
+            statement
+            for statement in tree.body
+            if isinstance(statement, ast.ClassDef)
+            and statement.name == "Config"
+        ),
+        None,
+    )
+    if config is None:
+        raise RuntimeError("cannot find the current Config dataclass")
+    return sum(
+        isinstance(statement, ast.AnnAssign)
+        for statement in config.body
+    )
+
+
 def inventory_metadata(name: str) -> dict[str, Any]:
     value = json.loads(
         (ROOT / f"schemas/m0/inventory/{name}.json").read_text(
             encoding="utf-8"
         )
     )
+    metadata = dict(value["metadata"])
+    # Product-target evidence describes the current builder. Historical
+    # sampling labels belong to regression fixtures, not engine capabilities.
+    metadata.pop("sampling_profiles", None)
     return {
         "aggregate_sha256": sha256(canonical_bytes(value)).hexdigest(),
-        "metadata": value["metadata"],
+        "metadata": metadata,
         "row_count": len(value["rows"]),
     }
 
@@ -147,7 +258,14 @@ def build_target() -> dict[str, Any]:
         raise RuntimeError("unexpected current playable model ID")
     if not isinstance(overrides, dict) or not overrides:
         raise RuntimeError("current playable overrides are absent")
-    sources = [file_digest(path) for path in TARGET_SOURCES]
+    if set(overrides) != set(PLAYABLE_OVERRIDE_OWNERS):
+        missing = sorted(set(overrides).difference(PLAYABLE_OVERRIDE_OWNERS))
+        stale = sorted(set(PLAYABLE_OVERRIDE_OWNERS).difference(overrides))
+        raise RuntimeError(
+            f"playable override ownership is stale: missing={missing}, "
+            f"removed={stale}"
+        )
+    sources = [file_digest(path) for path in target_source_paths()]
     source_hashes = {item["path"]: item["sha256"] for item in sources}
     inventories = {
         name: inventory_metadata(name)
@@ -165,21 +283,23 @@ def build_target() -> dict[str, Any]:
             "shocks",
         )
     }
-    config_field_count = inventories["config"]["metadata"][
+    current_config_field_count = config_field_count()
+    inventoried_config_field_count = inventories["config"]["metadata"][
         "root_config_field_count"
     ]
+    if current_config_field_count != inventoried_config_field_count:
+        raise RuntimeError(
+            "current Config fields no longer match the complete inventory: "
+            f"{current_config_field_count} != "
+            f"{inventoried_config_field_count}"
+        )
     return {
-        "config_field_count": config_field_count,
-        "historical_factory_policy": {
-            "full_product_target": False,
-            "permitted_use": "historical_regression_tripwire",
-            "retained_fixture": "fixture.f0.refactor-tripwires",
-            "symbol": "Config.v124",
-        },
+        "config_field_count": current_config_field_count,
         "inventory": inventories,
         "milestone_coverage": MILESTONE_COVERAGE,
         "playable_feature_overrides": overrides,
         "playable_feature_override_count": len(overrides),
+        "playable_feature_override_owners": PLAYABLE_OVERRIDE_OWNERS,
         "playable_model_id": model_id,
         "product_builder": "macro_sim.desktop.new_game.NewGameSpec.configs",
         "production_cutover_milestone": "m11",

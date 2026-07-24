@@ -126,6 +126,127 @@ nb::dict snapshot_to_python(const macro_sim::core::RootState& state) {
     return output;
 }
 
+nb::dict m4_metrics_to_python(
+    const macro_sim::simulation::M4Metrics& metrics
+) {
+    nb::dict output;
+    output["tick"] = metrics.tick.value();
+    output["real_output"] = metrics.real_output;
+    output["nominal_output"] = metrics.nominal_output;
+    output["price_index"] = metrics.price_index;
+    output["unemployment_rate"] = metrics.unemployment_rate;
+    output["total_money"] = metrics.total_money;
+    output["conservation_drift"] = metrics.conservation_drift;
+    output["aggregate_capital"] = metrics.aggregate_capital;
+    output["household_consumption"] = metrics.household_consumption;
+    output["wages_paid"] = metrics.wages_paid;
+    output["firm_profit"] = metrics.firm_profit;
+    output["tax_total"] = metrics.tax_total;
+    output["government_spending"] = metrics.government_spending;
+    output["government_deficit"] = metrics.government_deficit;
+    output["public_capital"] = metrics.public_capital;
+    return output;
+}
+
+nb::dict m4_result_to_python(
+    const macro_sim::simulation::M4AdvanceResult& result
+) {
+    nb::dict output;
+    output["first_tick"] = result.first_tick.value();
+    output["next_tick"] = result.next_tick.value();
+    output["advanced_ticks"] = result.advanced_ticks;
+    output["scratch_capacity_signature"] =
+        result.scratch_capacity_signature;
+    output["transfer_count"] = result.transfer_count;
+    output["trade_count"] = result.trade_count;
+    output["metrics"] = m4_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m4_snapshot_to_python(
+    const macro_sim::EngineSession& session
+) {
+    if (session.root() == nullptr || session.simulation_runtime() == nullptr) {
+        throw std::runtime_error(
+            "invalid_handle: session has no active simulation"
+        );
+    }
+    nb::list households;
+    session.root()->households.for_each_alive(
+        [&households](
+            macro_sim::HouseholdId id,
+            const macro_sim::core::HouseholdComponent& household
+        ) {
+            nb::dict item;
+            item["id"] = id.value();
+            item["account"] = household.primary_account.value();
+            item["income_expected"] = household.income_expected;
+            item["income_realized"] = household.income_realized;
+            item["consumption_budget"] = household.consumption_budget;
+            item["spent"] = household.spent;
+            item["labor_sold"] = household.labor_sold;
+            households.append(std::move(item));
+        }
+    );
+    nb::list firms;
+    session.root()->firms.for_each_alive(
+        [&firms](
+            macro_sim::FirmId id,
+            const macro_sim::core::FirmComponent& firm
+        ) {
+            nb::dict item;
+            item["id"] = id.value();
+            item["sector"] = static_cast<std::uint8_t>(firm.sector);
+            item["account"] = firm.primary_account.value();
+            item["inventory"] = firm.goods_inventory.value();
+            item["capital"] = firm.physical_capital.value();
+            item["price"] = firm.posted_price.value();
+            item["wage"] = firm.posted_wage.value();
+            item["expected_demand"] = firm.demand_expected;
+            item["previous_sales"] = firm.sales_previous;
+            firms.append(std::move(item));
+        }
+    );
+    nb::list balances;
+    for (const auto& account : session.root()->postings.records()) {
+        balances.append(account.balance.value());
+    }
+    nb::dict output;
+    const auto digest = session.digest();
+    require_status(digest.status());
+    output["digest"] = digest.get_if()->hex();
+    output["tick"] = session.tick().value();
+    output["households"] = std::move(households);
+    output["firms"] = std::move(firms);
+    output["balances"] = std::move(balances);
+    output["technology_index"] =
+        session.simulation_runtime()->technology_index;
+    output["public_capital"] =
+        session.simulation_runtime()->public_capital;
+    nb::list rng_counter;
+    for (const auto value : session.simulation_runtime()->rng_counter) {
+        rng_counter.append(value);
+    }
+    output["rng_counter"] = std::move(rng_counter);
+    nb::list phase_trace;
+    for (const auto& phase :
+         session.simulation_runtime()->last_phase_trace) {
+        nb::dict item;
+        item["phase"] = static_cast<std::uint8_t>(phase.phase);
+        item["money_total"] = phase.money_total;
+        item["goods_total"] = phase.goods_total;
+        item["capital_total"] = phase.capital_total;
+        item["transfer_count"] = phase.transfer_count;
+        item["trade_count"] = phase.trade_count;
+        phase_trace.append(std::move(item));
+    }
+    output["phase_trace"] = std::move(phase_trace);
+    output["metrics"] = m4_metrics_to_python(
+        session.simulation_runtime()->last_metrics
+    );
+    return output;
+}
+
 }  // namespace
 
 NB_MODULE(_native, module) {
@@ -175,6 +296,85 @@ NB_MODULE(_native, module) {
         .value(
             "M4_V1_CAPITAL_FISCAL",
             macro_sim::core::GenesisVertical::m4_v1_capital_fiscal
+        );
+    nb::enum_<macro_sim::simulation::M4Vertical>(module, "M4Vertical")
+        .value(
+            "CASH_LOOP",
+            macro_sim::simulation::M4Vertical::cash_loop
+        )
+        .value(
+            "CAPITAL_FISCAL",
+            macro_sim::simulation::M4Vertical::capital_fiscal
+        );
+    nb::enum_<macro_sim::algorithms::MatchingProtocol>(
+        module,
+        "MatchingProtocol"
+    )
+        .value(
+            "SAMPLED",
+            macro_sim::algorithms::MatchingProtocol::sampled
+        )
+        .value(
+            "PREFERENTIAL",
+            macro_sim::algorithms::MatchingProtocol::preferential
+        )
+        .value(
+            "PRICE_SORTED",
+            macro_sim::algorithms::MatchingProtocol::price_sorted
+        );
+    nb::class_<macro_sim::simulation::M4SimulationSpec>(
+        module,
+        "M4SimulationSpec"
+    )
+        .def(nb::init<>())
+        .def_rw(
+            "vertical",
+            &macro_sim::simulation::M4SimulationSpec::vertical
+        )
+        .def_prop_rw(
+            "economy_id",
+            [](const macro_sim::simulation::M4SimulationSpec& spec) {
+                return spec.economy.value();
+            },
+            [](macro_sim::simulation::M4SimulationSpec& spec,
+               std::uint64_t value) {
+                spec.economy = macro_sim::EconomyId(value);
+            }
+        )
+        .def_prop_rw(
+            "currency_id",
+            [](const macro_sim::simulation::M4SimulationSpec& spec) {
+                return spec.currency.value();
+            },
+            [](macro_sim::simulation::M4SimulationSpec& spec,
+               std::uint32_t value) {
+                spec.currency = macro_sim::CurrencyId(value);
+            }
+        )
+        .def_rw(
+            "households",
+            &macro_sim::simulation::M4SimulationSpec::households
+        )
+        .def_rw(
+            "consumption_firms",
+            &macro_sim::simulation::M4SimulationSpec::consumption_firms
+        )
+        .def_rw(
+            "capital_firms",
+            &macro_sim::simulation::M4SimulationSpec::capital_firms
+        )
+        .def_rw("seed", &macro_sim::simulation::M4SimulationSpec::seed)
+        .def_rw(
+            "requested_capabilities",
+            &macro_sim::simulation::M4SimulationSpec::requested_capabilities
+        )
+        .def_rw(
+            "stochastic",
+            &macro_sim::simulation::M4SimulationSpec::stochastic
+        )
+        .def_rw(
+            "market_protocol",
+            &macro_sim::simulation::M4SimulationSpec::market_protocol
         );
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")
         .value("HOUSEHOLD", macro_sim::core::OwnerKind::household)
@@ -417,6 +617,34 @@ NB_MODULE(_native, module) {
                 require_status(session.initialize(spec));
             },
             nb::arg("spec")
+        )
+        .def(
+            "initialize_simulation",
+            [](macro_sim::EngineSession& session,
+               const macro_sim::simulation::M4SimulationSpec& spec) {
+                require_status(session.initialize_simulation(spec));
+            },
+            nb::arg("spec")
+        )
+        .def(
+            "advance_ticks",
+            [](macro_sim::EngineSession& session,
+               std::uint64_t count,
+               bool capture_phase_trace) {
+                macro_sim::simulation::M4AdvanceOptions options;
+                options.capture_phase_trace = capture_phase_trace;
+                const auto result = session.advance_ticks(count, options);
+                require_status(result.status());
+                return m4_result_to_python(*result.get_if());
+            },
+            nb::arg("count"),
+            nb::arg("capture_phase_trace") = false
+        )
+        .def(
+            "simulation_snapshot",
+            [](const macro_sim::EngineSession& session) {
+                return m4_snapshot_to_python(session);
+            }
         )
         .def(
             "apply_batch",

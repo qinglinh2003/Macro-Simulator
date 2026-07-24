@@ -1307,7 +1307,7 @@ Result<RootState> CheckpointCodec::decode_state(
         const auto id = read_id<AccountId>(reader);
         const auto kind = read_enum<AccountKind>(
             reader,
-            static_cast<std::uint8_t>(AccountKind::rounding_residual)
+            static_cast<std::uint8_t>(AccountKind::clearing)
         );
         const auto account_economy = read_id<EconomyId>(reader);
         const auto owner = read_owner(reader);

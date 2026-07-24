@@ -1,0 +1,34 @@
+{
+  "fixture": {
+    "capital_firms": 4,
+    "consumption_firms": 12,
+    "days": 60,
+    "households": 80,
+    "seed_end_exclusive": 1032,
+    "seed_start": 1000
+  },
+  "metrics": {
+    "nominal_output": {
+      "maximum": [35.0, 40.0],
+      "mean": [35.0, 40.0],
+      "minimum": [35.0, 40.0]
+    },
+    "price_index": {
+      "maximum": [1.19, 1.21],
+      "mean": [1.19, 1.21],
+      "minimum": [1.19, 1.21]
+    },
+    "tax_total": {
+      "maximum": [11.0, 13.0],
+      "mean": [11.0, 13.0],
+      "minimum": [11.0, 13.0]
+    },
+    "unemployment_rate": {
+      "maximum": [0.7, 0.82],
+      "mean": [0.7, 0.82],
+      "minimum": [0.7, 0.82]
+    }
+  },
+  "minimum_distinct_digests": 24,
+  "schema_version": "m4-stochastic-envelopes-v1"
+}
