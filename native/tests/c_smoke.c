@@ -22,11 +22,14 @@ int main(void) {
     if (macro_sim_abi_version() != MACRO_SIM_ABI_VERSION) {
         return 1;
     }
-    if (strcmp(macro_sim_engine_version(), "0.2.0-m2") != 0) {
+    if (strcmp(macro_sim_engine_version(), "0.3.0-m3") != 0) {
         return 2;
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M2_ACCOUNTING) == 0) {
         return 9;
+    }
+    if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M3_ALGORITHMS) == 0) {
+        return 10;
     }
     if (macro_sim_session_create(&options, &session).code != MACRO_SIM_OK) {
         return 3;

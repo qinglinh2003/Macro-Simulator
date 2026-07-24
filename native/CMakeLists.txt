@@ -73,6 +73,11 @@ endfunction()
 add_library(
     macro_sim_core
     STATIC
+        src/algorithms/behavior.cpp
+        src/algorithms/market.cpp
+        src/algorithms/shock_overlay.cpp
+        src/algorithms/valuation.cpp
+        src/algorithms/vital_rates.cpp
         src/core/accounting.cpp
         src/core/checkpoint.cpp
         src/core/digest.cpp
@@ -232,6 +237,36 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m2_checkpoint_tests
     )
 
+    add_executable(
+        macro_sim_m3_equation_tests
+        tests/m3_equation_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m3_equation_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m3_equation_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m3_equation_tests)
+    add_test(
+        NAME macro_sim.m3_equations
+        COMMAND macro_sim_m3_equation_tests
+    )
+
+    add_executable(
+        macro_sim_m3_market_tests
+        tests/m3_market_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m3_market_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m3_market_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m3_market_tests)
+    add_test(
+        NAME macro_sim.m3_markets
+        COMMAND macro_sim_m3_market_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
@@ -249,6 +284,20 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m2_python_oracle
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m3_python_oracle
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m3/differential_oracle.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --random-cases
+                "200"
+        )
+        set_tests_properties(
+            macro_sim.m3_python_oracle
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -264,6 +313,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     target_link_libraries(macro_sim_m2_benchmarks PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_m2_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m2_benchmarks)
+
+    add_executable(
+        macro_sim_m3_benchmarks
+        benchmarks/m3_market_benchmark.cpp
+    )
+    target_link_libraries(
+        macro_sim_m3_benchmarks
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m3_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m3_benchmarks)
 endif()
 
 install(

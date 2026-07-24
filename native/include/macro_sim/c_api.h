@@ -12,6 +12,7 @@ extern "C" {
 
 #define MACRO_SIM_ABI_VERSION 1u
 #define MACRO_SIM_CAPABILITY_M2_ACCOUNTING (UINT64_C(1) << 0)
+#define MACRO_SIM_CAPABILITY_M3_ALGORITHMS (UINT64_C(1) << 1)
 
 typedef enum macro_sim_error_code {
     MACRO_SIM_OK = 0,

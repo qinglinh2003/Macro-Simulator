@@ -1,0 +1,68 @@
+{
+  "entries": [
+    {
+      "channel": "productivity",
+      "duration_ticks": null,
+      "economy": 2,
+      "magnitude": 0.1,
+      "ramp_in_ticks": 0,
+      "ramp_out_ticks": 0,
+      "sector": "consumption",
+      "shock_id": "a-productivity",
+      "start_tick": 3
+    },
+    {
+      "channel": "household_demand",
+      "duration_ticks": 4,
+      "economy": null,
+      "magnitude": 0.2,
+      "ramp_in_ticks": 2,
+      "ramp_out_ticks": 2,
+      "sector": "all",
+      "shock_id": "b-demand",
+      "start_tick": 5
+    },
+    {
+      "channel": "productivity",
+      "duration_ticks": null,
+      "economy": 2,
+      "magnitude": -0.5,
+      "ramp_in_ticks": 0,
+      "ramp_out_ticks": 0,
+      "sector": "necessity",
+      "shock_id": "c-productivity",
+      "start_tick": 3
+    }
+  ],
+  "queries": [
+    {
+      "channel": "productivity",
+      "economy": 2,
+      "expected_factor": 1.35,
+      "sector": "necessity",
+      "tick": 3
+    },
+    {
+      "channel": "productivity",
+      "economy": 1,
+      "expected_factor": 1.0,
+      "sector": "necessity",
+      "tick": 3
+    },
+    {
+      "channel": "household_demand",
+      "economy": 1,
+      "expected_factor": 0.9,
+      "sector": "all",
+      "tick": 5
+    },
+    {
+      "channel": "household_demand",
+      "economy": 1,
+      "expected_factor": 1.0,
+      "sector": "all",
+      "tick": 9
+    }
+  ],
+  "schema_version": "m3-shock-fixtures-v1"
+}

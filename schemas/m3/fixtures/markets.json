@@ -1,0 +1,71 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "allocated": 4.0,
+        "offer_id": 2,
+        "price_sorts": 0,
+        "preferential_weight_builds": 0,
+        "quantity": 4.0,
+        "spent": 8.0
+      },
+      "protocol": "sampled",
+      "sample_size": 2
+    },
+    {
+      "expected": {
+        "allocated": 4.0,
+        "offer_id": 2,
+        "price_sorts": 0,
+        "preferential_weight_builds": 1,
+        "quantity": 4.0,
+        "spent": 8.0
+      },
+      "protocol": "preferential",
+      "sample_size": 2
+    },
+    {
+      "expected": {
+        "allocated": 4.0,
+        "offer_id": 2,
+        "price_sorts": 1,
+        "preferential_weight_builds": 0,
+        "quantity": 4.0,
+        "spent": 8.0
+      },
+      "protocol": "price_sorted",
+      "sample_size": 2
+    }
+  ],
+  "inputs": {
+    "key": [
+      7,
+      11
+    ],
+    "offers": [
+      {
+        "attractiveness": 1.0,
+        "offer_id": 1,
+        "price": 4.0,
+        "seller": 20,
+        "stock": 2.0
+      },
+      {
+        "attractiveness": 2.0,
+        "offer_id": 2,
+        "price": 2.0,
+        "seller": 30,
+        "stock": 5.0
+      }
+    ],
+    "orders": [
+      {
+        "budget": 20.0,
+        "buyer": 10,
+        "demand": 4.0,
+        "order_id": 1
+      }
+    ]
+  },
+  "schema_version": "m3-market-fixtures-v1"
+}

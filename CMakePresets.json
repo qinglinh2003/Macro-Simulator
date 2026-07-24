@@ -77,6 +77,22 @@
     {
       "name": "m2-benchmark",
       "inherits": "m1-benchmark"
+    },
+    {
+      "name": "m3-debug",
+      "inherits": "m2-debug"
+    },
+    {
+      "name": "m3-release",
+      "inherits": "m2-release"
+    },
+    {
+      "name": "m3-asan",
+      "inherits": "m2-asan"
+    },
+    {
+      "name": "m3-benchmark",
+      "inherits": "m2-benchmark"
     }
   ],
   "buildPresets": [
@@ -119,6 +135,22 @@
     {
       "name": "m2-benchmark",
       "configurePreset": "m2-benchmark"
+    },
+    {
+      "name": "m3-debug",
+      "configurePreset": "m3-debug"
+    },
+    {
+      "name": "m3-release",
+      "configurePreset": "m3-release"
+    },
+    {
+      "name": "m3-asan",
+      "configurePreset": "m3-asan"
+    },
+    {
+      "name": "m3-benchmark",
+      "configurePreset": "m3-benchmark"
     }
   ],
   "testPresets": [
@@ -174,6 +206,32 @@
     {
       "name": "m2-asan",
       "configurePreset": "m2-asan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m3-debug",
+      "configurePreset": "m3-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m3-release",
+      "configurePreset": "m3-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m3-asan",
+      "configurePreset": "m3-asan",
       "filter": {
         "exclude": {
           "label": "python-binding"

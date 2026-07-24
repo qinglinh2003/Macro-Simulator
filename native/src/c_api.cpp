@@ -66,7 +66,8 @@ uint32_t macro_sim_abi_version(void) {
 }
 
 uint64_t macro_sim_capabilities(void) {
-    return MACRO_SIM_CAPABILITY_M2_ACCOUNTING;
+    return MACRO_SIM_CAPABILITY_M2_ACCOUNTING
+        | MACRO_SIM_CAPABILITY_M3_ALGORITHMS;
 }
 
 const char* macro_sim_engine_version(void) {

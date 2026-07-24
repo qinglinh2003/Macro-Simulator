@@ -14,6 +14,7 @@
 #include "macro_sim/generated/contracts.hpp"
 #include "macro_sim/rng.hpp"
 #include "macro_sim/version.hpp"
+#include "python_m3_bindings.hpp"
 
 namespace nb = nanobind;
 
@@ -133,6 +134,7 @@ NB_MODULE(_native, module) {
     module.def("engine_version", []() {
         return std::string(macro_sim::engine_version());
     });
+    macro_sim::python_m3::bind(module);
     module.def(
         "validate_scalar",
         [](std::string_view contract_id, nb::object value) {
