@@ -51,7 +51,8 @@ is covered. The generated target contract also assigns every one of the 61
 currently enabled playable overrides to exactly one native owner milestone;
 generation fails when an override is added, removed, or left unowned. It hashes
 the complete current `macro_sim` product source, Godot integration source, and
-active base/calibration inputs instead of a selected historical subset.
+active base/calibration inputs instead of a selected historical subset, and it
+requires every current source file to retain an explicit migration owner.
 
 ## 2. Outcome
 

@@ -32,6 +32,13 @@ def validate_contracts() -> None:
         item["path"]
         for item in target["sources"]
     }
+    if any(
+        not item.get("owner_milestone")
+        for item in target["sources"]
+    ):
+        raise AssertionError(
+            "a current product source has no native migration owner"
+        )
     required_sources = {
         "macro_sim/config/model.py",
         "macro_sim/controllers/coordinator.py",

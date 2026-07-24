@@ -171,10 +171,11 @@ def canonical_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def file_digest(relative: str) -> dict[str, Any]:
+def file_digest(relative: str, owner_milestone: str) -> dict[str, Any]:
     content = (ROOT / relative).read_bytes()
     return {
         "byte_count": len(content),
+        "owner_milestone": owner_milestone,
         "path": relative,
         "sha256": sha256(content).hexdigest(),
     }
@@ -233,6 +234,22 @@ def config_field_count() -> int:
     )
 
 
+def module_owners() -> dict[str, str]:
+    value = json.loads(
+        (ROOT / "schemas/m0/inventory/modules.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    owners = {
+        row["source_path"]: row["owner_milestone"]
+        for row in value["rows"]
+        if row["status"] == "active"
+    }
+    if len(owners) != len(value["rows"]):
+        raise RuntimeError("module inventory has duplicate or inactive rows")
+    return owners
+
+
 def inventory_metadata(name: str) -> dict[str, Any]:
     value = json.loads(
         (ROOT / f"schemas/m0/inventory/{name}.json").read_text(
@@ -265,8 +282,18 @@ def build_target() -> dict[str, Any]:
             f"playable override ownership is stale: missing={missing}, "
             f"removed={stale}"
         )
-    sources = [file_digest(path) for path in target_source_paths()]
-    source_hashes = {item["path"]: item["sha256"] for item in sources}
+    source_paths = target_source_paths()
+    owners = module_owners()
+    missing_owners = sorted(set(source_paths).difference(owners))
+    if missing_owners:
+        raise RuntimeError(
+            f"current product sources have no migration owner: "
+            f"{missing_owners}"
+        )
+    sources = [
+        file_digest(path, owners[path])
+        for path in source_paths
+    ]
     inventories = {
         name: inventory_metadata(name)
         for name in (
@@ -305,7 +332,7 @@ def build_target() -> dict[str, Any]:
         "production_cutover_milestone": "m11",
         "schema_version": "m4-current-engine-target-v1",
         "source_aggregate_sha256": sha256(
-            canonical_bytes(source_hashes)
+            canonical_bytes(sources)
         ).hexdigest(),
         "sources": sources,
         "supersedes_m0_fixture_factory_labels": [

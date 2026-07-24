@@ -21,8 +21,9 @@ The executable target contract is generated from:
 
 `schemas/m4/current_engine_target.json` records 370 root configuration fields,
 61 currently enabled playable overrides, 165 current product source files, and
-a unique native owner milestone for every override. Generation fails if the
-production builder changes without updating ownership.
+a native owner milestone for every source and every override. Generation fails
+if the production builder or product source set changes without updating
+ownership.
 
 M4 does not claim that the complete engine is native. The remaining current
 domains are mandatory work:
