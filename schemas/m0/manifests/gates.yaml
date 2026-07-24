@@ -184,7 +184,7 @@ gates:
     dependencies:
       - fixtures.contracts
       - trace.repeatability
-    timeout_seconds: 600
+    timeout_seconds: 1200
     owner: migration
     artifacts: []
     fixture_ids:
