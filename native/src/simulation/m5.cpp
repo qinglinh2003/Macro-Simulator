@@ -2259,9 +2259,13 @@ public:
     M5Extension(
         M5Runtime& runtime,
         M5TickScratch& scratch,
-        const M5AdvanceOptions& options
+        const M5AdvanceOptions& options,
+        M5TickExtension* extension
     ) noexcept
-        : runtime_(runtime), scratch_(scratch), options_(options) {}
+        : runtime_(runtime),
+          scratch_(scratch),
+          options_(options),
+          extension_(extension) {}
 
     ~M5Extension() override {
         if (tick_active_) {
@@ -2274,7 +2278,7 @@ public:
         M4Runtime& real_runtime,
         M4TickScratch& real,
         Tick tick,
-        PhiloxRng&
+        PhiloxRng& rng
     ) override {
         tick_open_runtime_ = runtime_;
         tick_active_ = true;
@@ -2299,12 +2303,24 @@ public:
         if (!status.ok()) {
             return status;
         }
-        return run_omo(
+        status = run_omo(
             state,
             runtime_,
             real,
             scratch_,
             tick
+        );
+        if (!status.ok() || extension_ == nullptr) {
+            return status;
+        }
+        return extension_->prepare_tick(
+            state,
+            real_runtime,
+            real,
+            runtime_,
+            scratch_,
+            tick,
+            rng
         );
     }
 
@@ -2313,9 +2329,9 @@ public:
         M4Runtime& real_runtime,
         M4TickScratch& real,
         Tick tick,
-        PhiloxRng&
+        PhiloxRng& rng
     ) override {
-        return run_credit(
+        auto status = run_credit(
             state,
             real_runtime,
             real,
@@ -2323,67 +2339,101 @@ public:
             scratch_,
             tick
         );
+        if (!status.ok() || extension_ == nullptr) {
+            return status;
+        }
+        return extension_->after_planning(
+            state,
+            real_runtime,
+            real,
+            runtime_,
+            scratch_,
+            tick,
+            rng
+        );
     }
 
     Status before_settlement(
         const core::RootState& state,
-        M4Runtime&,
+        M4Runtime& real_runtime,
         M4TickScratch& real,
-        Tick,
-        PhiloxRng&
+        Tick tick,
+        PhiloxRng& rng
     ) override {
-        if (!runtime_.rules.full_firm_pnl) {
-            return Status::success();
+        auto status = Status::success();
+        if (runtime_.rules.full_firm_pnl) {
+            status = service_debt(
+                state,
+                runtime_,
+                real,
+                scratch_,
+                true
+            );
+            if (status.ok()) {
+                status = close_legacy_bank_payout(
+                    state,
+                    runtime_,
+                    real,
+                    scratch_
+                );
+            }
         }
-        auto status = service_debt(
-            state,
-            runtime_,
-            real,
-            scratch_,
-            true
-        );
-        if (!status.ok()) {
+        if (!status.ok() || extension_ == nullptr) {
             return status;
         }
-        return close_legacy_bank_payout(
+        return extension_->before_settlement(
             state,
-            runtime_,
+            real_runtime,
             real,
-            scratch_
+            runtime_,
+            scratch_,
+            tick,
+            rng
         );
     }
 
     Status after_settlement(
         const core::RootState& state,
-        M4Runtime&,
+        M4Runtime& real_runtime,
         M4TickScratch& real,
-        Tick,
-        PhiloxRng&
+        Tick tick,
+        PhiloxRng& rng
     ) override {
-        if (runtime_.rules.full_firm_pnl) {
-            return Status::success();
+        auto status = Status::success();
+        if (!runtime_.rules.full_firm_pnl) {
+            status = service_debt(
+                state,
+                runtime_,
+                real,
+                scratch_,
+                false
+            );
+            if (status.ok()) {
+                status = close_legacy_bank_payout(
+                    state,
+                    runtime_,
+                    real,
+                    scratch_
+                );
+            }
         }
-        auto status = service_debt(
-            state,
-            runtime_,
-            real,
-            scratch_,
-            false
-        );
-        if (!status.ok()) {
+        if (!status.ok() || extension_ == nullptr) {
             return status;
         }
-        return close_legacy_bank_payout(
+        return extension_->after_settlement(
             state,
-            runtime_,
+            real_runtime,
             real,
-            scratch_
+            runtime_,
+            scratch_,
+            tick,
+            rng
         );
     }
 
     Status close_institutions(
         const core::RootState& state,
-        M4Runtime&,
+        M4Runtime& real_runtime,
         M4TickScratch& real,
         Tick tick,
         PhiloxRng& rng
@@ -2421,6 +2471,20 @@ public:
                 return status;
             }
         }
+        if (extension_ != nullptr) {
+            status = extension_->before_bank_resolution(
+                state,
+                real_runtime,
+                real,
+                runtime_,
+                scratch_,
+                tick,
+                rng
+            );
+            if (!status.ok()) {
+                return status;
+            }
+        }
         status = resolve_insolvent_banks(
             state,
             runtime_,
@@ -2439,6 +2503,20 @@ public:
         );
         if (!status.ok()) {
             return status;
+        }
+        if (extension_ != nullptr) {
+            status = extension_->close_institutions(
+                state,
+                real_runtime,
+                real,
+                runtime_,
+                scratch_,
+                tick,
+                rng
+            );
+            if (!status.ok()) {
+                return status;
+            }
         }
         scratch_.working_metrics_.total_loan_principal =
             std::accumulate(
@@ -2469,18 +2547,29 @@ public:
 
     Status validate(
         const core::RootState& state,
-        const M4Runtime&,
+        const M4Runtime& real_runtime,
         const M4TickScratch& real,
-        Tick
+        Tick tick
     ) const override {
-        return validate_projection(state, real, scratch_);
+        const auto status = validate_projection(state, real, scratch_);
+        if (!status.ok() || extension_ == nullptr) {
+            return status;
+        }
+        return extension_->validate(
+            state,
+            real_runtime,
+            real,
+            runtime_,
+            scratch_,
+            tick
+        );
     }
 
     void commit(
         core::RootState& state,
-        M4Runtime&,
+        M4Runtime& real_runtime,
         M4TickScratch& real,
-        Tick,
+        Tick closed_tick,
         const M4Metrics& metrics
     ) noexcept override {
         for (auto& account : state.postings.records()) {
@@ -2515,6 +2604,17 @@ public:
         }
         runtime_.previous_unemployment = metrics.unemployment_rate;
         runtime_.last_metrics = scratch_.working_metrics_;
+        if (extension_ != nullptr) {
+            extension_->commit(
+                state,
+                real_runtime,
+                real,
+                runtime_,
+                scratch_,
+                closed_tick,
+                runtime_.last_metrics
+            );
+        }
         tick_active_ = false;
     }
 
@@ -2522,6 +2622,7 @@ private:
     M5Runtime& runtime_;
     M5TickScratch& scratch_;
     const M5AdvanceOptions& options_;
+    M5TickExtension* extension_{nullptr};
     M5Runtime tick_open_runtime_{};
     bool tick_active_{false};
 };
@@ -2934,7 +3035,9 @@ Result<M5Initialization> build_m5_genesis(
     };
 }
 
-Result<M5AdvanceResult> advance_m5_ticks(
+namespace {
+
+Result<M5AdvanceResult> advance_m5_ticks_impl(
     core::RootState& state,
     M4Runtime& real_economy_runtime,
     M4TickScratch& real_economy_scratch,
@@ -2942,6 +3045,7 @@ Result<M5AdvanceResult> advance_m5_ticks(
     M5TickScratch& scratch,
     Tick& tick,
     std::uint64_t count,
+    M5TickExtension* tick_extension,
     const M5AdvanceOptions& options
 ) {
     if (count == 0) {
@@ -2966,7 +3070,12 @@ Result<M5AdvanceResult> advance_m5_ticks(
             "M5 cannot advance an invalid state"
         );
     }
-    M5Extension extension(runtime, scratch, options);
+    M5Extension extension(
+        runtime,
+        scratch,
+        options,
+        tick_extension
+    );
     auto result = advance_ticks_extended(
         state,
         real_economy_runtime,
@@ -2989,6 +3098,55 @@ Result<M5AdvanceResult> advance_m5_ticks(
         base.transfer_count,
         base.trade_count,
     };
+}
+
+}  // namespace
+
+Result<M5AdvanceResult> advance_m5_ticks(
+    core::RootState& state,
+    M4Runtime& real_economy_runtime,
+    M4TickScratch& real_economy_scratch,
+    M5Runtime& runtime,
+    M5TickScratch& scratch,
+    Tick& tick,
+    std::uint64_t count,
+    const M5AdvanceOptions& options
+) {
+    return advance_m5_ticks_impl(
+        state,
+        real_economy_runtime,
+        real_economy_scratch,
+        runtime,
+        scratch,
+        tick,
+        count,
+        nullptr,
+        options
+    );
+}
+
+Result<M5AdvanceResult> advance_m5_ticks_extended(
+    core::RootState& state,
+    M4Runtime& real_economy_runtime,
+    M4TickScratch& real_economy_scratch,
+    M5Runtime& runtime,
+    M5TickScratch& scratch,
+    Tick& tick,
+    std::uint64_t count,
+    M5TickExtension& extension,
+    const M5AdvanceOptions& options
+) {
+    return advance_m5_ticks_impl(
+        state,
+        real_economy_runtime,
+        real_economy_scratch,
+        runtime,
+        scratch,
+        tick,
+        count,
+        &extension,
+        options
+    );
 }
 
 }  // namespace macro_sim::simulation
