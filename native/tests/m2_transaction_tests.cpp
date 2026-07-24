@@ -22,6 +22,9 @@ using macro_sim::core::LoanTerms;
 using macro_sim::core::OwnerId;
 using macro_sim::core::RootState;
 using macro_sim::core::SettlementTransaction;
+using macro_sim::core::SettlementBatch;
+using macro_sim::core::TransferCommand;
+using macro_sim::core::WorldTransaction;
 
 [[nodiscard]] RootState make_state() {
     GenesisSpec spec;
@@ -191,6 +194,45 @@ void test_nested_transaction_is_rejected_without_releasing_owner() {
     assert(!state.transaction_active);
 }
 
+void test_world_transaction_restores_every_root_on_late_failure() {
+    auto first_state = make_state();
+    auto second_state = make_state();
+    const auto first_before = macro_sim::core::state_digest(first_state);
+    const auto second_before = macro_sim::core::state_digest(second_state);
+    const auto first_source = account_for(first_state, HouseholdId(1));
+    const auto first_destination = account_for(first_state, HouseholdId(2));
+    const auto second_source = account_for(second_state, HouseholdId(1));
+    const auto second_destination = account_for(second_state, HouseholdId(2));
+
+    SettlementBatch first_batch;
+    first_batch.transfers.push_back(
+        TransferCommand{
+            first_source,
+            first_destination,
+            Money(20.0),
+        }
+    );
+    SettlementBatch failing_batch;
+    failing_batch.transfers.push_back(
+        TransferCommand{
+            second_source,
+            second_destination,
+            Money(101.0),
+        }
+    );
+
+    WorldTransaction world;
+    assert(world.add(first_state, std::move(first_batch)).ok());
+    assert(world.add(second_state, std::move(failing_batch)).ok());
+    const auto result = world.commit();
+    assert(!result.ok());
+    assert(result.status().code() == macro_sim::ErrorCode::insufficient_funds);
+    assert(macro_sim::core::state_digest(first_state) == first_before);
+    assert(macro_sim::core::state_digest(second_state) == second_before);
+    assert(!first_state.transaction_active);
+    assert(!second_state.transaction_active);
+}
+
 }  // namespace
 
 int main() {
@@ -199,5 +241,6 @@ int main() {
     test_invalid_batch_restores_exact_digest();
     test_every_fault_ordinal_restores_exact_digest();
     test_nested_transaction_is_rejected_without_releasing_owner();
+    test_world_transaction_restores_every_root_on_late_failure();
     return 0;
 }

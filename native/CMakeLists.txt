@@ -66,6 +66,7 @@ add_library(
     macro_sim_core
     STATIC
         src/core/accounting.cpp
+        src/core/checkpoint.cpp
         src/core/digest.cpp
         src/core/genesis.cpp
         src/core/invariants.cpp
@@ -85,7 +86,10 @@ target_include_directories(
 target_include_directories(
     macro_sim_core
     SYSTEM
-    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/picosha2"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/vendor/flatbuffers/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/vendor/picosha2"
 )
 macro_sim_project_options(macro_sim_core)
 
@@ -149,6 +153,11 @@ if(MACRO_SIM_BUILD_TESTS)
     macro_sim_project_options(macro_sim_c_smoke)
     add_test(NAME macro_sim.c_abi COMMAND macro_sim_c_smoke)
 
+    add_executable(macro_sim_m2_c_smoke tests/m2_c_smoke.c)
+    target_link_libraries(macro_sim_m2_c_smoke PRIVATE macro_sim_c)
+    macro_sim_project_options(macro_sim_m2_c_smoke)
+    add_test(NAME macro_sim.m2_c_abi COMMAND macro_sim_m2_c_smoke)
+
     add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_rng_tests)
@@ -186,6 +195,45 @@ if(MACRO_SIM_BUILD_TESTS)
         NAME macro_sim.m2_transaction
         COMMAND macro_sim_m2_transaction_tests
     )
+
+    add_executable(
+        macro_sim_m2_checkpoint_tests
+        tests/m2_checkpoint_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m2_checkpoint_tests
+        PRIVATE macro_sim_core
+    )
+    target_include_directories(
+        macro_sim_m2_checkpoint_tests
+        SYSTEM
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
+    )
+    macro_sim_project_options(macro_sim_m2_checkpoint_tests)
+    target_compile_definitions(
+        macro_sim_m2_checkpoint_tests
+        PRIVATE MACRO_SIM_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    )
+    add_test(
+        NAME macro_sim.m2_checkpoint
+        COMMAND macro_sim_m2_checkpoint_tests
+    )
+
+    if(TARGET _native)
+        add_test(
+            NAME macro_sim.m2_python_oracle
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m2/differential_oracle.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --seeds
+                "100"
+                --operations-per-seed
+                "100"
+        )
+    endif()
 endif()
 
 if(MACRO_SIM_BUILD_BENCHMARKS)

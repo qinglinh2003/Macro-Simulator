@@ -102,6 +102,7 @@ void append_root(DigestWriter& writer, const RootState& state) {
     writer.text("macro-sim-m2-state-digest-v1");
     append_id(writer, state.economy);
     writer.u32(state.currency.value());
+    writer.u64(state.seed);
     writer.f64(state.genesis_money.value());
     writer.f64(state.accounting_tolerance);
 

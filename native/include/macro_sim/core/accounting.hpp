@@ -14,6 +14,7 @@
 
 namespace macro_sim::core {
 
+class CheckpointCodec;
 class SettlementTransaction;
 
 struct AccountRecord final {
@@ -47,6 +48,7 @@ public:
     [[nodiscard]] Status validate_nonnegative(double tolerance) const noexcept;
 
 private:
+    friend class CheckpointCodec;
     friend class SettlementTransaction;
 
     struct MutationResult final {
@@ -94,6 +96,7 @@ public:
     [[nodiscard]] Status validate_finite() const noexcept;
 
 private:
+    friend class CheckpointCodec;
     friend class SettlementTransaction;
 
     struct MutationResult final {
@@ -152,6 +155,7 @@ public:
     [[nodiscard]] Status validate_finite() const noexcept;
 
 private:
+    friend class CheckpointCodec;
     friend class SettlementTransaction;
 
     struct CreateResult final {
@@ -206,6 +210,7 @@ public:
     [[nodiscard]] Status validate_shares(double tolerance) const;
 
 private:
+    friend class CheckpointCodec;
     friend class SettlementTransaction;
 
     struct MutationResult final {
@@ -229,13 +234,15 @@ private:
 
 class NamedCounterBook final {
 public:
+    [[nodiscard]] Status declare(std::uint64_t stream_id);
     [[nodiscard]] std::uint64_t value(std::uint64_t stream_id) const noexcept;
     [[nodiscard]] bool contains(std::uint64_t stream_id) const noexcept;
-    [[nodiscard]] std::uint64_t increment(std::uint64_t stream_id);
+    [[nodiscard]] Result<std::uint64_t> increment(std::uint64_t stream_id);
     [[nodiscard]] const std::vector<std::pair<std::uint64_t, std::uint64_t>>&
     records() const noexcept;
 
 private:
+    friend class CheckpointCodec;
     friend class SettlementTransaction;
     void set_unchecked(std::uint64_t stream_id, std::uint64_t value);
     void erase_unchecked(std::uint64_t stream_id) noexcept;

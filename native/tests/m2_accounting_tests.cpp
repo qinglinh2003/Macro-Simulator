@@ -33,6 +33,7 @@ void test_v0_genesis_is_deterministic_and_balanced() {
         Money(100.0),
         Capital(0.0),
         91,
+        {3, 7},
     };
     auto first = take_state(macro_sim::core::build_genesis(spec));
     auto second = take_state(macro_sim::core::build_genesis(spec));
@@ -44,6 +45,9 @@ void test_v0_genesis_is_deterministic_and_balanced() {
     assert(first.reserves.size() == 2);
     assert(first.ownership.size() == 2);
     assert(first.institutions.treasury_account.valid() == false);
+    assert(first.seed == 91);
+    assert(first.named_counters.contains(3));
+    assert(first.named_counters.contains(7));
     assert(first.postings.total_deposits() == Money(100.0));
     assert(first.reserves.total_reserves() == Money(100.0));
     assert(first.reserves.reserve_stock() == Money(100.0));
@@ -69,6 +73,7 @@ void test_v1_genesis_has_capital_and_treasury() {
         Money(12.0),
         Capital(9.0),
         3,
+        {},
     };
     auto state = take_state(macro_sim::core::build_genesis(spec));
 

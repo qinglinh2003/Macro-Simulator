@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <set>
 #include <utility>
 
 namespace macro_sim::core {
@@ -50,6 +51,15 @@ namespace {
             "opening capital requires at least one capital firm"
         );
     }
+    std::set<std::uint64_t> counter_streams;
+    for (const auto stream : spec.named_counter_streams) {
+        if (stream == 0 || !counter_streams.insert(stream).second) {
+            return Status(
+                ErrorCode::invalid_argument,
+                "counter stream declarations must be unique and nonzero"
+            );
+        }
+    }
     return Status::success();
 }
 
@@ -84,7 +94,14 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
     RootState state;
     state.economy = spec.economy;
     state.currency = spec.currency;
+    state.seed = spec.seed;
     state.genesis_money = spec.aggregate_opening_money;
+    for (const auto stream : spec.named_counter_streams) {
+        const auto declared = state.named_counters.declare(stream);
+        if (!declared.ok()) {
+            return declared;
+        }
+    }
 
     std::vector<BankId> bank_ids;
     bank_ids.reserve(static_cast<std::size_t>(spec.settlement_banks));

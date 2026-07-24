@@ -42,9 +42,31 @@ namespace {
     };
 }
 
+[[nodiscard]] bool account_matches(
+    const RootState& state,
+    AccountId account_id,
+    OwnerId owner,
+    AccountKind kind
+) noexcept {
+    const auto* account = state.postings.get(account_id);
+    return account != nullptr && account->open && account->key.owner == owner
+        && account->key.kind == kind
+        && account->key.economy == state.economy
+        && account->key.currency == state.currency
+        && state.reserves.contains(account->key.settlement_node);
+}
+
 }  // namespace
 
 InvariantReport run_invariants(const RootState& state) noexcept {
+    if (!state.economy.valid() || !state.currency.valid()
+        || !std::isfinite(state.genesis_money.value())
+        || !std::isfinite(state.accounting_tolerance)
+        || state.accounting_tolerance < 0.0
+        || !std::isfinite(state.reserves.reserve_stock().value())
+        || !std::isfinite(state.reserves.reserve_stock_roundoff_drift())) {
+        return failure(InvariantId::finite_state);
+    }
     if (!state.postings.validate_finite().ok()
         || !state.reserves.validate_finite().ok()
         || !state.loans.validate_finite().ok()) {
@@ -62,6 +84,104 @@ InvariantReport run_invariants(const RootState& state) noexcept {
     );
     if (!finite_components) {
         return failure(InvariantId::finite_state);
+    }
+
+    bool canonical_references = true;
+    state.households.for_each_alive(
+        [&state, &canonical_references](
+            HouseholdId id,
+            const HouseholdComponent& household
+        ) {
+            canonical_references =
+                canonical_references
+                && account_matches(
+                    state,
+                    household.primary_account,
+                    OwnerId::household(id),
+                    AccountKind::deposit
+                );
+        }
+    );
+    state.firms.for_each_alive(
+        [&state, &canonical_references](
+            FirmId id,
+            const FirmComponent& firm
+        ) {
+            canonical_references =
+                canonical_references
+                && account_matches(
+                    state,
+                    firm.primary_account,
+                    OwnerId::firm(id),
+                    AccountKind::deposit
+                )
+                && firm.goods_inventory.value() >= 0.0
+                && firm.physical_capital.value() >= 0.0
+                && firm.productivity >= 0.0;
+        }
+    );
+    state.banks.for_each_alive(
+        [&state, &canonical_references](
+            BankId id,
+            const BankComponent& bank
+        ) {
+            const auto* reserve = state.reserves.get(bank.settlement_node);
+            canonical_references =
+                canonical_references
+                && reserve != nullptr && reserve->bank == id
+                && account_matches(
+                    state,
+                    bank.cash_account,
+                    OwnerId::bank(id),
+                    AccountKind::bank_cash
+                );
+        }
+    );
+    for (const auto& account : state.postings.records()) {
+        canonical_references =
+            canonical_references && account.id.valid()
+            && account.key.economy == state.economy
+            && account.key.currency == state.currency
+            && owner_exists(state, account.key.owner)
+            && state.reserves.contains(account.key.settlement_node);
+    }
+    for (const auto& reserve : state.reserves.records()) {
+        canonical_references =
+            canonical_references
+            && state.banks.get(reserve.bank) != nullptr;
+    }
+    canonical_references =
+        canonical_references
+        && account_matches(
+            state,
+            state.institutions.central_bank_account,
+            OwnerId::institutional(OwnerKind::central_bank),
+            AccountKind::central_bank
+        )
+        && account_matches(
+            state,
+            state.institutions.dealer_account,
+            OwnerId::institutional(OwnerKind::dealer),
+            AccountKind::dealer
+        )
+        && account_matches(
+            state,
+            state.institutions.rounding_residual_account,
+            OwnerId::institutional(OwnerKind::rounding_residual),
+            AccountKind::rounding_residual
+        );
+    if (state.institutions.treasury_account.valid()) {
+        canonical_references =
+            canonical_references
+            && account_matches(
+                state,
+                state.institutions.treasury_account,
+                OwnerId::institutional(OwnerKind::treasury),
+                AccountKind::treasury
+            );
+    }
+    if (!canonical_references) {
+        return failure(InvariantId::canonical_references);
     }
 
     const auto nonnegative = state.postings.validate_nonnegative(
@@ -133,6 +253,9 @@ InvariantReport run_invariants(const RootState& state) noexcept {
             continue;
         }
         if (!owner_exists(state, lot.owner)) {
+            return failure(InvariantId::ownership_lots);
+        }
+        if (lot.asset.economy != state.economy || lot.asset.value == 0) {
             return failure(InvariantId::ownership_lots);
         }
         if (lot.asset.kind == AssetKind::firm_equity

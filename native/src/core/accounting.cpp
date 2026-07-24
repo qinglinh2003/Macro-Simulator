@@ -559,6 +559,29 @@ void OwnershipBook::restore_unchecked(
     lot.active = previous.old_active;
 }
 
+Status NamedCounterBook::declare(std::uint64_t stream_id) {
+    if (stream_id == 0) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "counter stream ID must be nonzero"
+        );
+    }
+    const auto found = std::lower_bound(
+        counters_.begin(),
+        counters_.end(),
+        stream_id,
+        [](const auto& item, std::uint64_t id) { return item.first < id; }
+    );
+    if (found != counters_.end() && found->first == stream_id) {
+        return Status(
+            ErrorCode::already_exists,
+            "counter stream is already declared"
+        );
+    }
+    counters_.insert(found, {stream_id, 0});
+    return Status::success();
+}
+
 std::uint64_t NamedCounterBook::value(std::uint64_t stream_id) const noexcept {
     const auto found = std::lower_bound(
         counters_.begin(),
@@ -581,8 +604,17 @@ bool NamedCounterBook::contains(std::uint64_t stream_id) const noexcept {
     return found != counters_.end() && found->first == stream_id;
 }
 
-std::uint64_t NamedCounterBook::increment(std::uint64_t stream_id) {
+Result<std::uint64_t> NamedCounterBook::increment(std::uint64_t stream_id) {
+    if (stream_id == 0) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "counter stream ID must be nonzero"
+        );
+    }
     const auto previous = value(stream_id);
+    if (previous == std::numeric_limits<std::uint64_t>::max()) {
+        return Status(ErrorCode::out_of_range, "named counter overflow");
+    }
     set_unchecked(stream_id, previous + 1);
     return previous;
 }

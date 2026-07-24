@@ -15,8 +15,9 @@ enum class InvariantId : std::uint8_t {
     nonnegative_balances = 1,
     deposit_conservation = 2,
     reserve_conservation = 3,
-    loan_ownership = 4,
-    ownership_lots = 5,
+    canonical_references = 4,
+    loan_ownership = 5,
+    ownership_lots = 6,
 };
 
 [[nodiscard]] constexpr std::string_view invariant_id_name(
@@ -31,6 +32,8 @@ enum class InvariantId : std::uint8_t {
             return "invariant.ledger.deposit-conservation";
         case InvariantId::reserve_conservation:
             return "invariant.ledger.reserve-conservation";
+        case InvariantId::canonical_references:
+            return "invariant.m2.canonical-references";
         case InvariantId::loan_ownership:
             return "invariant.m2.loan-ownership";
         case InvariantId::ownership_lots:

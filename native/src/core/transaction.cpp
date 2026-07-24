@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "macro_sim/core/checkpoint.hpp"
 #include "macro_sim/core/invariants.hpp"
 
 namespace macro_sim::core {
@@ -208,6 +209,73 @@ Status SettlementTransaction::increment_counter(
         );
     }
     counter_increments_.push_back({stream_id, amount});
+    return Status::success();
+}
+
+Status SettlementTransaction::append(const SettlementBatch& batch) {
+    for (const auto& command : batch.transfers) {
+        const auto status =
+            transfer(command.source, command.destination, command.amount);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.reserve_transfers) {
+        const auto status =
+            move_reserves(
+                command.source,
+                command.destination,
+                command.amount
+            );
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.reserve_issues) {
+        const auto status =
+            issue_reserves(command.destination, command.amount);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.originations) {
+        const auto status =
+            originate_loan(
+                command.lender,
+                command.borrower,
+                command.borrower_account,
+                command.amount,
+                command.terms
+            );
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.repayments) {
+        const auto status =
+            repay_loan(
+                command.loan,
+                command.payer_account,
+                command.amount
+            );
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.ownership_mutations) {
+        const auto status =
+            mutate_ownership(command.lot, command.owner, command.share);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    for (const auto& command : batch.counter_increments) {
+        const auto status =
+            increment_counter(command.stream_id, command.amount);
+        if (!status.ok()) {
+            return status;
+        }
+    }
     return Status::success();
 }
 
@@ -728,6 +796,93 @@ TransactionState SettlementTransaction::transaction_state() const noexcept {
 
 std::uint64_t SettlementTransaction::next_fault_ordinal() const noexcept {
     return current_fault_ordinal_;
+}
+
+Status WorldTransaction::add(
+    RootState& root,
+    SettlementBatch batch,
+    std::optional<std::uint64_t> fault_ordinal
+) {
+    if (committed_) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "world transaction is already committed"
+        );
+    }
+    if (root.transaction_active) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "root already has an active transaction"
+        );
+    }
+    const auto duplicate = std::find_if(
+        entries_.begin(),
+        entries_.end(),
+        [&root](const Entry& entry) { return entry.root == &root; }
+    );
+    if (duplicate != entries_.end()) {
+        return Status(
+            ErrorCode::already_exists,
+            "root is already present in the world transaction"
+        );
+    }
+    entries_.push_back({&root, std::move(batch), fault_ordinal});
+    return Status::success();
+}
+
+Result<WorldTransactionReceipt> WorldTransaction::commit() {
+    if (committed_) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "world transaction is already committed"
+        );
+    }
+    if (entries_.empty()) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "world transaction has no roots"
+        );
+    }
+
+    std::vector<std::vector<std::uint8_t>> checkpoints;
+    checkpoints.reserve(entries_.size());
+    for (const auto& entry : entries_) {
+        const auto checkpoint = save_checkpoint(*entry.root);
+        if (!checkpoint.ok()) {
+            return checkpoint.status();
+        }
+        checkpoints.push_back(*checkpoint.get_if());
+    }
+
+    WorldTransactionReceipt world_receipt;
+    world_receipt.roots.reserve(entries_.size());
+    for (const auto& entry : entries_) {
+        SettlementTransaction transaction(
+            *entry.root,
+            entry.fault_ordinal
+        );
+        const auto appended = transaction.append(entry.batch);
+        Result<TransactionReceipt> receipt =
+            appended.ok()
+            ? transaction.commit()
+            : Result<TransactionReceipt>(appended);
+        if (!receipt.ok()) {
+            for (std::size_t index = 0; index < entries_.size(); ++index) {
+                auto restored = load_checkpoint(checkpoints[index]);
+                if (!restored.ok()) {
+                    return Status(
+                        ErrorCode::internal_error,
+                        "world rollback checkpoint could not be restored"
+                    );
+                }
+                *entries_[index].root = std::move(*restored.get_if());
+            }
+            return receipt.status();
+        }
+        world_receipt.roots.push_back(*receipt.get_if());
+    }
+    committed_ = true;
+    return world_receipt;
 }
 
 }  // namespace macro_sim::core

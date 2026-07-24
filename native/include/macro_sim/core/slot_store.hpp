@@ -12,6 +12,8 @@
 
 namespace macro_sim::core {
 
+class CheckpointCodec;
+
 struct SlotHandle final {
     std::uint32_t index{std::numeric_limits<std::uint32_t>::max()};
     std::uint32_t generation{std::numeric_limits<std::uint32_t>::max()};
@@ -268,6 +270,8 @@ public:
     }
 
 private:
+    friend class CheckpointCodec;
+
     std::vector<Slot> slots_;
     std::vector<SlotHandle> id_to_handle_{SlotHandle{}};
     std::vector<std::uint32_t> free_slots_;

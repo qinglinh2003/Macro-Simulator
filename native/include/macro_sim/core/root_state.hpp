@@ -1,6 +1,8 @@
 #ifndef MACRO_SIM_CORE_ROOT_STATE_HPP
 #define MACRO_SIM_CORE_ROOT_STATE_HPP
 
+#include <vector>
+
 #include "macro_sim/core/accounting.hpp"
 #include "macro_sim/core/slot_store.hpp"
 #include "macro_sim/core/state_types.hpp"
@@ -17,6 +19,7 @@ struct InstitutionRegistry final {
 struct RootState final {
     EconomyId economy{};
     CurrencyId currency{};
+    std::uint64_t seed{0};
     Money genesis_money{};
     double accounting_tolerance{1.0e-8};
     bool transaction_active{false};
@@ -49,6 +52,7 @@ struct GenesisSpec final {
     Money aggregate_opening_money{Money(100.0)};
     Capital aggregate_opening_capital{};
     std::uint64_t seed{0};
+    std::vector<std::uint64_t> named_counter_streams;
 };
 
 [[nodiscard]] Result<RootState> build_genesis(const GenesisSpec& spec);
