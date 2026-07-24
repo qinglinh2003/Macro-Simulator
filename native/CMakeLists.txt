@@ -65,6 +65,11 @@ endfunction()
 add_library(
     macro_sim_core
     STATIC
+        src/core/accounting.cpp
+        src/core/digest.cpp
+        src/core/genesis.cpp
+        src/core/invariants.cpp
+        src/core/transaction.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -76,6 +81,11 @@ target_include_directories(
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_include_directories(
+    macro_sim_core
+    SYSTEM
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/picosha2"
 )
 macro_sim_project_options(macro_sim_core)
 
@@ -143,6 +153,39 @@ if(MACRO_SIM_BUILD_TESTS)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_rng_tests)
     add_test(NAME macro_sim.rng COMMAND macro_sim_rng_tests)
+
+    add_executable(macro_sim_m2_store_tests tests/m2_store_tests.cpp)
+    target_link_libraries(macro_sim_m2_store_tests PRIVATE macro_sim_core)
+    macro_sim_project_options(macro_sim_m2_store_tests)
+    add_test(NAME macro_sim.m2_store COMMAND macro_sim_m2_store_tests)
+
+    add_executable(
+        macro_sim_m2_accounting_tests
+        tests/m2_accounting_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m2_accounting_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m2_accounting_tests)
+    add_test(
+        NAME macro_sim.m2_accounting
+        COMMAND macro_sim_m2_accounting_tests
+    )
+
+    add_executable(
+        macro_sim_m2_transaction_tests
+        tests/m2_transaction_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m2_transaction_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m2_transaction_tests)
+    add_test(
+        NAME macro_sim.m2_transaction
+        COMMAND macro_sim_m2_transaction_tests
+    )
 endif()
 
 if(MACRO_SIM_BUILD_BENCHMARKS)

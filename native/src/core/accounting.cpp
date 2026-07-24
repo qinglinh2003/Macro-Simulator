@@ -1,0 +1,624 @@
+#include "macro_sim/core/accounting.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace macro_sim::core {
+namespace {
+
+struct RoundedAdd final {
+    double value{0.0};
+    double error{0.0};
+};
+
+class NeumaierAccumulator final {
+public:
+    void add(double value) noexcept {
+        const double next = sum_ + value;
+        if (std::abs(sum_) >= std::abs(value)) {
+            correction_ += (sum_ - next) + value;
+        } else {
+            correction_ += (value - next) + sum_;
+        }
+        sum_ = next;
+    }
+
+    [[nodiscard]] double value() const noexcept {
+        return sum_ + correction_;
+    }
+
+private:
+    double sum_{0.0};
+    double correction_{0.0};
+};
+
+[[nodiscard]] RoundedAdd add_with_roundoff(double old, double delta) noexcept {
+    const double value = old + delta;
+    if (!std::isfinite(value)) {
+        return {value, 0.0};
+    }
+    const double correction = std::fma(-1.0, value, old) + delta;
+    return {value, -correction};
+}
+
+template <typename Record, typename Id>
+[[nodiscard]] Record* sequential_get(
+    std::vector<Record>& records,
+    Id id
+) noexcept {
+    if (!id.valid() || id.value() == 0) {
+        return nullptr;
+    }
+    const auto index = static_cast<std::size_t>(id.value() - 1);
+    if (index >= records.size()) {
+        return nullptr;
+    }
+    return &records[index];
+}
+
+template <typename Record, typename Id>
+[[nodiscard]] const Record* sequential_get(
+    const std::vector<Record>& records,
+    Id id
+) noexcept {
+    if (!id.valid() || id.value() == 0) {
+        return nullptr;
+    }
+    const auto index = static_cast<std::size_t>(id.value() - 1);
+    if (index >= records.size()) {
+        return nullptr;
+    }
+    return &records[index];
+}
+
+}  // namespace
+
+double neumaier_sum(std::span<const double> values) noexcept {
+    NeumaierAccumulator accumulator;
+    for (const double value : values) {
+        accumulator.add(value);
+    }
+    return accumulator.value();
+}
+
+Result<AccountId> PostingBook::create_account(
+    AccountKey key,
+    Money opening_balance,
+    bool allow_negative
+) {
+    const double opening = opening_balance.value();
+    if (!key.economy.valid() || !key.currency.valid() || !key.owner.valid()
+        || !key.settlement_node.valid()) {
+        return Status(ErrorCode::invalid_argument, "invalid account key");
+    }
+    if (!std::isfinite(opening) || (!allow_negative && opening < 0.0)) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "opening balance must be finite and permitted"
+        );
+    }
+    const auto duplicate = std::find_if(
+        accounts_.begin(),
+        accounts_.end(),
+        [&key](const AccountRecord& account) {
+            return account.open && account.key == key;
+        }
+    );
+    if (duplicate != accounts_.end()) {
+        return Status(ErrorCode::already_exists, "account key already exists");
+    }
+    if (accounts_.size() >= std::numeric_limits<std::uint64_t>::max() - 1) {
+        return Status(ErrorCode::out_of_range, "account ID space exhausted");
+    }
+    const auto id = AccountId(
+        static_cast<std::uint64_t>(accounts_.size()) + 1
+    );
+    accounts_.push_back(
+        AccountRecord{id, key, opening_balance, 0.0, allow_negative, true}
+    );
+    return id;
+}
+
+Status PostingBook::close_account(AccountId id) {
+    auto* account = get(id);
+    if (account == nullptr || !account->open) {
+        return Status(ErrorCode::not_found, "account is not open");
+    }
+    if (account->balance.value() != 0.0) {
+        return Status(
+            ErrorCode::contract_violation,
+            "nonzero account cannot be closed"
+        );
+    }
+    account->open = false;
+    return Status::success();
+}
+
+bool PostingBook::contains(AccountId id) const noexcept {
+    const auto* account = get(id);
+    return account != nullptr && account->open;
+}
+
+AccountRecord* PostingBook::get(AccountId id) noexcept {
+    return sequential_get(accounts_, id);
+}
+
+const AccountRecord* PostingBook::get(AccountId id) const noexcept {
+    return sequential_get(accounts_, id);
+}
+
+Result<Money> PostingBook::balance(AccountId id) const noexcept {
+    const auto* account = get(id);
+    if (account == nullptr || !account->open) {
+        return Status(ErrorCode::not_found, "account is not open");
+    }
+    return account->balance;
+}
+
+Money PostingBook::total_deposits() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& account : accounts_) {
+        if (account.open) {
+            accumulator.add(account.balance.value());
+        }
+    }
+    return Money(accumulator.value());
+}
+
+double PostingBook::total_roundoff_drift() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& account : accounts_) {
+        accumulator.add(account.roundoff_drift);
+    }
+    return accumulator.value();
+}
+
+std::size_t PostingBook::size() const noexcept {
+    return accounts_.size();
+}
+
+const std::vector<AccountRecord>& PostingBook::records() const noexcept {
+    return accounts_;
+}
+
+Status PostingBook::validate_finite() const noexcept {
+    for (const auto& account : accounts_) {
+        if (!std::isfinite(account.balance.value())
+            || !std::isfinite(account.roundoff_drift)) {
+            return Status(ErrorCode::invariant_violation, "non-finite account");
+        }
+    }
+    return Status::success();
+}
+
+Status PostingBook::validate_nonnegative(double tolerance) const noexcept {
+    for (const auto& account : accounts_) {
+        if (account.open && !account.allow_negative
+            && account.balance.value() < -tolerance) {
+            return Status(
+                ErrorCode::insufficient_funds,
+                "account balance is below the allowed tolerance"
+            );
+        }
+    }
+    return Status::success();
+}
+
+PostingBook::MutationResult PostingBook::apply_delta_unchecked(
+    AccountId id,
+    double delta
+) noexcept {
+    auto& account = accounts_[static_cast<std::size_t>(id.value() - 1)];
+    const MutationResult previous{
+        account.balance.value(),
+        account.roundoff_drift,
+    };
+    const auto addition = add_with_roundoff(previous.old_balance, delta);
+    account.balance = Money(addition.value);
+    account.roundoff_drift += addition.error;
+    return previous;
+}
+
+void PostingBook::restore_unchecked(
+    AccountId id,
+    const MutationResult& previous
+) noexcept {
+    auto& account = accounts_[static_cast<std::size_t>(id.value() - 1)];
+    account.balance = Money(previous.old_balance);
+    account.roundoff_drift = previous.old_roundoff_drift;
+}
+
+Result<SettlementNodeId> ReserveBook::create_position(
+    BankId bank,
+    Money opening_balance
+) {
+    if (!bank.valid() || !std::isfinite(opening_balance.value())) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "reserve position requires a valid bank and finite balance"
+        );
+    }
+    if (positions_.size() >= std::numeric_limits<std::uint64_t>::max() - 1) {
+        return Status(
+            ErrorCode::out_of_range,
+            "settlement node ID space exhausted"
+        );
+    }
+    const auto node = SettlementNodeId(
+        static_cast<std::uint64_t>(positions_.size()) + 1
+    );
+    positions_.push_back(ReserveRecord{node, bank, opening_balance, 0.0});
+    static_cast<void>(apply_stock_delta_unchecked(opening_balance.value()));
+    return node;
+}
+
+bool ReserveBook::contains(SettlementNodeId node) const noexcept {
+    return get(node) != nullptr;
+}
+
+ReserveRecord* ReserveBook::get(SettlementNodeId node) noexcept {
+    return sequential_get(positions_, node);
+}
+
+const ReserveRecord* ReserveBook::get(SettlementNodeId node) const noexcept {
+    return sequential_get(positions_, node);
+}
+
+Result<Money> ReserveBook::balance(SettlementNodeId node) const noexcept {
+    const auto* position = get(node);
+    if (position == nullptr) {
+        return Status(ErrorCode::not_found, "reserve position is absent");
+    }
+    return position->balance;
+}
+
+Money ReserveBook::total_reserves() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& position : positions_) {
+        accumulator.add(position.balance.value());
+    }
+    return Money(accumulator.value());
+}
+
+Money ReserveBook::reserve_stock() const noexcept {
+    return reserve_stock_;
+}
+
+double ReserveBook::reserve_stock_roundoff_drift() const noexcept {
+    return reserve_stock_roundoff_drift_;
+}
+
+double ReserveBook::total_roundoff_drift() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& position : positions_) {
+        accumulator.add(position.roundoff_drift);
+    }
+    return accumulator.value();
+}
+
+std::size_t ReserveBook::size() const noexcept {
+    return positions_.size();
+}
+
+const std::vector<ReserveRecord>& ReserveBook::records() const noexcept {
+    return positions_;
+}
+
+Status ReserveBook::validate_finite() const noexcept {
+    for (const auto& position : positions_) {
+        if (!std::isfinite(position.balance.value())
+            || !std::isfinite(position.roundoff_drift)) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "non-finite reserve position"
+            );
+        }
+    }
+    return Status::success();
+}
+
+ReserveBook::MutationResult ReserveBook::apply_delta_unchecked(
+    SettlementNodeId node,
+    double delta
+) noexcept {
+    auto& position = positions_[static_cast<std::size_t>(node.value() - 1)];
+    const MutationResult previous{
+        position.balance.value(),
+        position.roundoff_drift,
+    };
+    const auto addition = add_with_roundoff(previous.old_balance, delta);
+    position.balance = Money(addition.value);
+    position.roundoff_drift += addition.error;
+    return previous;
+}
+
+void ReserveBook::restore_unchecked(
+    SettlementNodeId node,
+    const MutationResult& previous
+) noexcept {
+    auto& position = positions_[static_cast<std::size_t>(node.value() - 1)];
+    position.balance = Money(previous.old_balance);
+    position.roundoff_drift = previous.old_roundoff_drift;
+}
+
+ReserveBook::MutationResult ReserveBook::apply_stock_delta_unchecked(
+    double delta
+) noexcept {
+    const MutationResult previous{
+        reserve_stock_.value(),
+        reserve_stock_roundoff_drift_,
+    };
+    const auto addition = add_with_roundoff(previous.old_balance, delta);
+    reserve_stock_ = Money(addition.value);
+    reserve_stock_roundoff_drift_ += addition.error;
+    return previous;
+}
+
+void ReserveBook::restore_stock_unchecked(
+    const MutationResult& previous
+) noexcept {
+    reserve_stock_ = Money(previous.old_balance);
+    reserve_stock_roundoff_drift_ = previous.old_roundoff_drift;
+}
+
+bool LoanBook::contains(LoanId id) const noexcept {
+    return get(id) != nullptr;
+}
+
+LoanRecord* LoanBook::get(LoanId id) noexcept {
+    return sequential_get(loans_, id);
+}
+
+const LoanRecord* LoanBook::get(LoanId id) const noexcept {
+    return sequential_get(loans_, id);
+}
+
+Money LoanBook::total_principal() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& loan : loans_) {
+        if (loan.active) {
+            accumulator.add(loan.principal.value());
+        }
+    }
+    return Money(accumulator.value());
+}
+
+double LoanBook::total_roundoff_drift() const noexcept {
+    NeumaierAccumulator accumulator;
+    for (const auto& loan : loans_) {
+        accumulator.add(loan.roundoff_drift);
+    }
+    return accumulator.value();
+}
+
+std::size_t LoanBook::size() const noexcept {
+    return loans_.size();
+}
+
+const std::vector<LoanRecord>& LoanBook::records() const noexcept {
+    return loans_;
+}
+
+Status LoanBook::validate_finite() const noexcept {
+    for (const auto& loan : loans_) {
+        if (!std::isfinite(loan.principal.value())
+            || !std::isfinite(loan.roundoff_drift)
+            || loan.principal.value() < 0.0) {
+            return Status(ErrorCode::invariant_violation, "invalid loan");
+        }
+    }
+    return Status::success();
+}
+
+LoanBook::CreateResult LoanBook::create_unchecked(
+    BankId lender,
+    OwnerId borrower,
+    AccountId borrower_account,
+    Money principal,
+    LoanTerms terms
+) {
+    const auto id = LoanId(static_cast<std::uint64_t>(loans_.size()) + 1);
+    loans_.push_back(
+        LoanRecord{
+            id,
+            lender,
+            borrower,
+            borrower_account,
+            principal,
+            0.0,
+            terms,
+            principal.value() != 0.0,
+        }
+    );
+    return CreateResult{id};
+}
+
+void LoanBook::rollback_create_unchecked(LoanId id) noexcept {
+    if (!loans_.empty() && loans_.back().id == id) {
+        loans_.pop_back();
+    }
+}
+
+LoanBook::MutationResult LoanBook::apply_principal_delta_unchecked(
+    LoanId id,
+    double delta
+) noexcept {
+    auto& loan = loans_[static_cast<std::size_t>(id.value() - 1)];
+    const MutationResult previous{
+        loan.principal.value(),
+        loan.roundoff_drift,
+        loan.active,
+    };
+    const auto addition = add_with_roundoff(previous.old_principal, delta);
+    loan.principal = Money(addition.value);
+    loan.roundoff_drift += addition.error;
+    loan.active = addition.value != 0.0;
+    return previous;
+}
+
+void LoanBook::restore_unchecked(
+    LoanId id,
+    const MutationResult& previous
+) noexcept {
+    auto& loan = loans_[static_cast<std::size_t>(id.value() - 1)];
+    loan.principal = Money(previous.old_principal);
+    loan.roundoff_drift = previous.old_roundoff_drift;
+    loan.active = previous.old_active;
+}
+
+Result<OwnershipLotId> OwnershipBook::create_lot(
+    AssetKey asset,
+    OwnerId owner,
+    double share
+) {
+    if (!asset.economy.valid() || asset.value == 0 || !owner.valid()
+        || !std::isfinite(share) || share <= 0.0 || share > 1.0) {
+        return Status(ErrorCode::invalid_argument, "invalid ownership lot");
+    }
+    const auto id = OwnershipLotId(
+        static_cast<std::uint64_t>(lots_.size()) + 1
+    );
+    lots_.push_back(OwnershipLot{id, asset, owner, share, true});
+    return id;
+}
+
+bool OwnershipBook::contains(OwnershipLotId id) const noexcept {
+    const auto* lot = get(id);
+    return lot != nullptr && lot->active;
+}
+
+OwnershipLot* OwnershipBook::get(OwnershipLotId id) noexcept {
+    return sequential_get(lots_, id);
+}
+
+const OwnershipLot* OwnershipBook::get(OwnershipLotId id) const noexcept {
+    return sequential_get(lots_, id);
+}
+
+std::size_t OwnershipBook::size() const noexcept {
+    return lots_.size();
+}
+
+const std::vector<OwnershipLot>& OwnershipBook::records() const noexcept {
+    return lots_;
+}
+
+Status OwnershipBook::validate_shares(double tolerance) const {
+    std::vector<AssetKey> assets;
+    for (const auto& lot : lots_) {
+        if (lot.active) {
+            assets.push_back(lot.asset);
+        }
+    }
+    std::sort(assets.begin(), assets.end());
+    assets.erase(std::unique(assets.begin(), assets.end()), assets.end());
+    for (const auto& asset : assets) {
+        std::vector<double> shares;
+        for (const auto& lot : lots_) {
+            if (lot.active && lot.asset == asset) {
+                if (!std::isfinite(lot.share) || lot.share <= 0.0) {
+                    return Status(
+                        ErrorCode::invariant_violation,
+                        "invalid ownership share"
+                    );
+                }
+                shares.push_back(lot.share);
+            }
+        }
+        if (std::abs(neumaier_sum(shares) - 1.0) > tolerance) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "ownership shares do not sum to one"
+            );
+        }
+    }
+    return Status::success();
+}
+
+OwnershipBook::MutationResult OwnershipBook::mutate_unchecked(
+    OwnershipLotId id,
+    OwnerId owner,
+    double share
+) noexcept {
+    auto& lot = lots_[static_cast<std::size_t>(id.value() - 1)];
+    const MutationResult previous{lot.owner, lot.share, lot.active};
+    lot.owner = owner;
+    lot.share = share;
+    lot.active = share != 0.0;
+    return previous;
+}
+
+void OwnershipBook::restore_unchecked(
+    OwnershipLotId id,
+    const MutationResult& previous
+) noexcept {
+    auto& lot = lots_[static_cast<std::size_t>(id.value() - 1)];
+    lot.owner = previous.old_owner;
+    lot.share = previous.old_share;
+    lot.active = previous.old_active;
+}
+
+std::uint64_t NamedCounterBook::value(std::uint64_t stream_id) const noexcept {
+    const auto found = std::lower_bound(
+        counters_.begin(),
+        counters_.end(),
+        stream_id,
+        [](const auto& item, std::uint64_t id) { return item.first < id; }
+    );
+    return found != counters_.end() && found->first == stream_id
+        ? found->second
+        : 0;
+}
+
+bool NamedCounterBook::contains(std::uint64_t stream_id) const noexcept {
+    const auto found = std::lower_bound(
+        counters_.begin(),
+        counters_.end(),
+        stream_id,
+        [](const auto& item, std::uint64_t id) { return item.first < id; }
+    );
+    return found != counters_.end() && found->first == stream_id;
+}
+
+std::uint64_t NamedCounterBook::increment(std::uint64_t stream_id) {
+    const auto previous = value(stream_id);
+    set_unchecked(stream_id, previous + 1);
+    return previous;
+}
+
+const std::vector<std::pair<std::uint64_t, std::uint64_t>>&
+NamedCounterBook::records() const noexcept {
+    return counters_;
+}
+
+void NamedCounterBook::set_unchecked(
+    std::uint64_t stream_id,
+    std::uint64_t value
+) {
+    const auto found = std::lower_bound(
+        counters_.begin(),
+        counters_.end(),
+        stream_id,
+        [](const auto& item, std::uint64_t id) { return item.first < id; }
+    );
+    if (found != counters_.end() && found->first == stream_id) {
+        found->second = value;
+    } else {
+        counters_.insert(found, {stream_id, value});
+    }
+}
+
+void NamedCounterBook::erase_unchecked(std::uint64_t stream_id) noexcept {
+    const auto found = std::lower_bound(
+        counters_.begin(),
+        counters_.end(),
+        stream_id,
+        [](const auto& item, std::uint64_t id) { return item.first < id; }
+    );
+    if (found != counters_.end() && found->first == stream_id) {
+        counters_.erase(found);
+    }
+}
+
+}  // namespace macro_sim::core

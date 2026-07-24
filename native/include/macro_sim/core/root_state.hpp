@@ -1,0 +1,58 @@
+#ifndef MACRO_SIM_CORE_ROOT_STATE_HPP
+#define MACRO_SIM_CORE_ROOT_STATE_HPP
+
+#include "macro_sim/core/accounting.hpp"
+#include "macro_sim/core/slot_store.hpp"
+#include "macro_sim/core/state_types.hpp"
+
+namespace macro_sim::core {
+
+struct InstitutionRegistry final {
+    AccountId central_bank_account{};
+    AccountId dealer_account{};
+    AccountId rounding_residual_account{};
+    AccountId treasury_account{};
+};
+
+struct RootState final {
+    EconomyId economy{};
+    CurrencyId currency{};
+    Money genesis_money{};
+    double accounting_tolerance{1.0e-8};
+    bool transaction_active{false};
+
+    SlotStore<HouseholdId, HouseholdComponent> households;
+    SlotStore<FirmId, FirmComponent> firms;
+    SlotStore<BankId, BankComponent> banks;
+    PostingBook postings;
+    ReserveBook reserves;
+    LoanBook loans;
+    OwnershipBook ownership;
+    NamedCounterBook named_counters;
+    InstitutionRegistry institutions;
+};
+
+enum class GenesisVertical : std::uint8_t {
+    m4_v0_cash_loop = 0,
+    m4_v1_capital_fiscal = 1,
+};
+
+struct GenesisSpec final {
+    GenesisVertical vertical{GenesisVertical::m4_v0_cash_loop};
+    EconomyId economy{EconomyId(1)};
+    CurrencyId currency{CurrencyId(1)};
+    std::uint64_t households{1};
+    std::uint64_t consumption_firms{1};
+    std::uint64_t capital_firms{0};
+    std::uint64_t settlement_banks{1};
+    bool government{false};
+    Money aggregate_opening_money{Money(100.0)};
+    Capital aggregate_opening_capital{};
+    std::uint64_t seed{0};
+};
+
+[[nodiscard]] Result<RootState> build_genesis(const GenesisSpec& spec);
+
+}  // namespace macro_sim::core
+
+#endif

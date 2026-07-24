@@ -19,6 +19,13 @@ enum class ErrorCode : std::uint32_t {
     corrupt_input = 7,
     unsupported = 8,
     internal_error = 9,
+    not_found = 10,
+    already_exists = 11,
+    insufficient_funds = 12,
+    unbalanced_transaction = 13,
+    invariant_violation = 14,
+    invalid_transaction_state = 15,
+    stale_handle = 16,
 };
 
 [[nodiscard]] constexpr std::string_view error_code_name(ErrorCode code) noexcept {
@@ -43,6 +50,20 @@ enum class ErrorCode : std::uint32_t {
             return "unsupported";
         case ErrorCode::internal_error:
             return "internal_error";
+        case ErrorCode::not_found:
+            return "not_found";
+        case ErrorCode::already_exists:
+            return "already_exists";
+        case ErrorCode::insufficient_funds:
+            return "insufficient_funds";
+        case ErrorCode::unbalanced_transaction:
+            return "unbalanced_transaction";
+        case ErrorCode::invariant_violation:
+            return "invariant_violation";
+        case ErrorCode::invalid_transaction_state:
+            return "invalid_transaction_state";
+        case ErrorCode::stale_handle:
+            return "stale_handle";
     }
     return "unknown";
 }

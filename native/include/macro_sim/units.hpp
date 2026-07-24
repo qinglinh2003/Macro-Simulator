@@ -54,12 +54,16 @@ private:
 };
 
 struct CountTag;
+struct GoodsTag;
+struct CapitalTag;
 struct MoneyTag;
 struct PriceTag;
 struct RateTag;
 struct TickTag;
 
 using Count = Quantity<CountTag, std::uint64_t>;
+using Goods = Quantity<GoodsTag, double>;
+using Capital = Quantity<CapitalTag, double>;
 using Money = Quantity<MoneyTag, double>;
 using Price = Quantity<PriceTag, double>;
 using Rate = Quantity<RateTag, double>;

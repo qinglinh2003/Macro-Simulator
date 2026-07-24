@@ -45,21 +45,31 @@ private:
 
 struct AccountIdTag;
 struct BankIdTag;
+struct CurrencyIdTag;
 struct EconomyIdTag;
 struct EntityIdTag;
 struct EventIdTag;
 struct FirmIdTag;
 struct HouseholdIdTag;
+struct InstitutionIdTag;
+struct LoanIdTag;
+struct OwnershipLotIdTag;
 struct SessionIdTag;
+struct SettlementNodeIdTag;
 
 using AccountId = StrongId<AccountIdTag>;
 using BankId = StrongId<BankIdTag>;
+using CurrencyId = StrongId<CurrencyIdTag, std::uint32_t>;
 using EconomyId = StrongId<EconomyIdTag>;
 using EntityId = StrongId<EntityIdTag>;
 using EventId = StrongId<EventIdTag>;
 using FirmId = StrongId<FirmIdTag>;
 using HouseholdId = StrongId<HouseholdIdTag>;
+using InstitutionId = StrongId<InstitutionIdTag>;
+using LoanId = StrongId<LoanIdTag>;
+using OwnershipLotId = StrongId<OwnershipLotIdTag>;
 using SessionId = StrongId<SessionIdTag>;
+using SettlementNodeId = StrongId<SettlementNodeIdTag>;
 
 template <typename Id>
 struct StrongIdHash final {
