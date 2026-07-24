@@ -100,6 +100,10 @@ set_target_properties(
 macro_sim_project_options(macro_sim_c)
 
 if(MACRO_SIM_BUILD_PYTHON)
+    if(DEFINED ENV{VIRTUAL_ENV})
+        set(Python_FIND_VIRTUALENV ONLY)
+        set(Python_ROOT_DIR "$ENV{VIRTUAL_ENV}")
+    endif()
     find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
     execute_process(
         COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -115,6 +119,12 @@ if(MACRO_SIM_BUILD_PYTHON)
     nanobind_add_module(_native STABLE_ABI src/python_bindings.cpp)
     target_link_libraries(_native PRIVATE macro_sim_core)
     macro_sim_project_options(_native)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # GCC diagnoses shadowing inside nanobind's headers while compiling the
+        # binding translation unit. First-party libraries and tests retain the
+        # stricter -Wshadow/-Werror gate.
+        target_compile_options(_native PRIVATE -Wno-shadow)
+    endif()
     install(TARGETS _native LIBRARY DESTINATION macro_sim)
 endif()
 

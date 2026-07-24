@@ -38,10 +38,14 @@ def _version(command: str, arguments: tuple[str, ...] = ("--version",)) -> dict:
     version = tuple(int(part or 0) for part in match.groups()) if match else None
     return {
         "command": command,
-        "found": completed.returncode == 0,
+        # MSVC's `cl /Bv` prints a valid version and then exits nonzero because
+        # no source file was supplied. A resolved executable with a parseable
+        # version is a successful toolchain probe regardless of that exit code.
+        "found": version is not None,
         "path": path,
         "version": list(version) if version else None,
         "first_line": output.splitlines()[0] if output else "",
+        "return_code": completed.returncode,
     }
 
 
