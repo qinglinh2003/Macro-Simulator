@@ -1,0 +1,130 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 26,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "m1-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/native/${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MACRO_SIM_BUILD_BENCHMARKS": "ON",
+        "MACRO_SIM_BUILD_PYTHON": "ON",
+        "MACRO_SIM_BUILD_TESTS": "ON",
+        "MACRO_SIM_WARNINGS_AS_ERRORS": "ON",
+        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+      }
+    },
+    {
+      "name": "m1-debug",
+      "inherits": "m1-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "m1-release",
+      "inherits": "m1-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "m1-asan",
+      "inherits": "m1-debug",
+      "cacheVariables": {
+        "MACRO_SIM_SANITIZERS": "address,undefined"
+      }
+    },
+    {
+      "name": "m1-tsan",
+      "inherits": "m1-debug",
+      "cacheVariables": {
+        "MACRO_SIM_SANITIZERS": "thread"
+      }
+    },
+    {
+      "name": "m1-coverage",
+      "inherits": "m1-debug",
+      "cacheVariables": {
+        "MACRO_SIM_COVERAGE": "ON"
+      }
+    },
+    {
+      "name": "m1-benchmark",
+      "inherits": "m1-release",
+      "cacheVariables": {
+        "MACRO_SIM_BUILD_TESTS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "m1-debug",
+      "configurePreset": "m1-debug"
+    },
+    {
+      "name": "m1-release",
+      "configurePreset": "m1-release"
+    },
+    {
+      "name": "m1-asan",
+      "configurePreset": "m1-asan"
+    },
+    {
+      "name": "m1-tsan",
+      "configurePreset": "m1-tsan"
+    },
+    {
+      "name": "m1-coverage",
+      "configurePreset": "m1-coverage"
+    },
+    {
+      "name": "m1-benchmark",
+      "configurePreset": "m1-benchmark"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "m1-debug",
+      "configurePreset": "m1-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m1-release",
+      "configurePreset": "m1-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m1-asan",
+      "configurePreset": "m1-asan",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m1-tsan",
+      "configurePreset": "m1-tsan",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m1-coverage",
+      "configurePreset": "m1-coverage",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

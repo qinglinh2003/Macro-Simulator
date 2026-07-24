@@ -6,6 +6,8 @@ build/
 dist/
 wheels/
 *.egg-info
+CMakeUserPresets.json
+compile_commands.json
 
 # Virtual environments
 .venv
