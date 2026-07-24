@@ -15,9 +15,19 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--wheel", required=True, type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--wheel", type=Path)
+    source.add_argument("--wheel-dir", type=Path)
     args = parser.parse_args()
-    wheel = args.wheel.resolve()
+    if args.wheel_dir is not None:
+        wheels = sorted(args.wheel_dir.glob("macro_simulator-*.whl"))
+        if len(wheels) != 1:
+            raise SystemExit(
+                f"expected exactly one macro-simulator wheel, found {len(wheels)}"
+            )
+        wheel = wheels[0].resolve()
+    else:
+        wheel = args.wheel.resolve()
     with tempfile.TemporaryDirectory(prefix="macro-sim-wheel-smoke-") as raw:
         root = Path(raw)
         environment = root / "venv"

@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/macro_simTargets.cmake")
+
+check_required_components(macro_sim)

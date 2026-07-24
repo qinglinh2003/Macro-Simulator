@@ -18,6 +18,7 @@ MINIMUMS = {
     "cmake": (3, 26, 0),
     "ninja": (1, 11, 0),
     "ccache": (4, 8, 0),
+    "uv": (0, 7, 0),
 }
 
 
@@ -45,12 +46,15 @@ def _version(command: str, arguments: tuple[str, ...] = ("--version",)) -> dict:
 
 
 def inspect() -> dict:
+    compiler = "cl" if platform.system() == "Windows" else "cc"
+    compiler_arguments = ("/Bv",) if compiler == "cl" else ("--version",)
     tools = {
         "cmake": _version("cmake"),
         "ninja": _version("ninja", ("--version",)),
         "ccache": _version("ccache"),
-        "c_compiler": _version("clang"),
-        "cxx_compiler": _version("clang++"),
+        "uv": _version("uv"),
+        "git": _version("git"),
+        "c_compiler": _version(compiler, compiler_arguments),
     }
     failures: list[str] = []
     for name, minimum in MINIMUMS.items():
@@ -62,6 +66,10 @@ def inspect() -> dict:
             failures.append(f"{name} {version} is older than {minimum}")
     if sys.version_info[:2] != (3, 12):
         failures.append(f"Python 3.12 is required, found {platform.python_version()}")
+    if not tools["git"]["found"]:
+        failures.append("git is missing")
+    if not tools["c_compiler"]["found"]:
+        failures.append(f"{compiler} compiler is missing")
     return {
         "schema_version": "m1-bootstrap-v1",
         "platform": platform.system(),

@@ -1,0 +1,8 @@
+Checks: >
+  bugprone-*,
+  performance-*,
+  portability-*,
+  -bugprone-easily-swappable-parameters
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'native/(include|src)/.*'
+FormatStyle: file

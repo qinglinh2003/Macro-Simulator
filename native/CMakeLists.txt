@@ -1,5 +1,6 @@
 include(GNUInstallDirs)
 include(CTest)
+include(CMakePackageConfigHelpers)
 
 option(MACRO_SIM_BUILD_BENCHMARKS "Build native benchmark executables" ON)
 option(MACRO_SIM_BUILD_PYTHON "Build the nanobind Python extension" ON)
@@ -69,6 +70,7 @@ add_library(
         src/version.cpp
 )
 add_library(macro_sim::core ALIAS macro_sim_core)
+set_target_properties(macro_sim_core PROPERTIES EXPORT_NAME core)
 target_include_directories(
     macro_sim_core
     PUBLIC
@@ -79,6 +81,7 @@ macro_sim_project_options(macro_sim_core)
 
 add_library(macro_sim_c SHARED src/c_api.cpp)
 add_library(macro_sim::c ALIAS macro_sim_c)
+set_target_properties(macro_sim_c PROPERTIES EXPORT_NAME c)
 target_link_libraries(macro_sim_c PRIVATE macro_sim_core)
 target_include_directories(
     macro_sim_c
@@ -150,5 +153,21 @@ install(
     EXPORT macro_simTargets
     FILE macro_simTargets.cmake
     NAMESPACE macro_sim::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/macro_sim"
+)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macro_simConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/macro_simConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/macro_sim"
+)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/macro_simConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}"
+    COMPATIBILITY SameMajorVersion
+)
+install(
+    FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/macro_simConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/macro_simConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/macro_sim"
 )

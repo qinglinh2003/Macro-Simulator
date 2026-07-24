@@ -1,0 +1,130 @@
+name: Native foundation
+
+on:
+  push:
+    branches:
+      - refactor/cpp-m1-v33
+  pull_request:
+    paths:
+      - ".github/workflows/native.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "native/**"
+      - "pyproject.toml"
+      - "schemas/m0/**"
+      - "schemas/m1/**"
+      - "tests/native/**"
+      - "tools/m1/**"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: ${{ matrix.os }} / C++20 / wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - ubuntu-24.04
+          - windows-2022
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Enable MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Unix build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ccache ninja-build
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install ccache ninja
+      - name: Install Windows build tools
+        if: runner.os == 'Windows'
+        run: choco install ccache ninja --no-progress -y
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Verify bootstrap and generated contracts
+        run: uv run python tools/m1/check.py --skip-build
+      - name: Configure native release
+        run: uv run cmake --preset m1-release
+      - name: Build native release
+        run: uv run cmake --build --preset m1-release
+      - name: Test native release
+        run: uv run ctest --preset m1-release
+      - name: Verify installed C package
+        run: >-
+          uv run python tools/m1/installed_c_smoke.py
+          --build-dir build/native/m1-release
+          --prefix build/install/m1-ci
+      - name: Verify checkpoint performance budget
+        run: >-
+          uv run python tools/m1/checkpoint_prototype.py
+          --benchmark --iterations 1000
+      - name: Build wheel and source distribution
+        run: |
+          uv build --wheel
+          uv build --sdist
+      - name: Verify isolated wheel
+        run: uv run python tools/m1/wheel_smoke.py --wheel-dir dist
+      - name: Verify source artifact offline inputs
+        run: uv run python tools/m1/source_artifact_smoke.py --sdist-dir dist
+      - name: Upload native artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}
+          path: |
+            dist/*
+            schemas/m1/hashes.lock.json
+            schemas/m1/native_sbom.spdx.json
+          if-no-files-found: error
+
+  sanitizers:
+    name: ${{ matrix.os }} / ASan and UBSan
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ccache ninja-build
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install ccache ninja
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Configure sanitizer build
+        run: uv run cmake --preset m1-asan
+      - name: Build sanitizer targets
+        run: uv run cmake --build --preset m1-asan
+      - name: Run sanitizer tests
+        run: uv run ctest --preset m1-asan

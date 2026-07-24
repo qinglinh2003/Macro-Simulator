@@ -17,8 +17,7 @@
         "MACRO_SIM_BUILD_BENCHMARKS": "ON",
         "MACRO_SIM_BUILD_PYTHON": "ON",
         "MACRO_SIM_BUILD_TESTS": "ON",
-        "MACRO_SIM_WARNINGS_AS_ERRORS": "ON",
-        "Python_EXECUTABLE": "${sourceDir}/.venv/bin/python"
+        "MACRO_SIM_WARNINGS_AS_ERRORS": "ON"
       }
     },
     {

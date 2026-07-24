@@ -4,12 +4,8 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
-import platform
-import shutil
 import subprocess
-import sys
 import tempfile
 
 
@@ -33,10 +29,6 @@ def main() -> int:
         default=ROOT / "build/install/m1",
     )
     args = parser.parse_args()
-    compiler = shutil.which("cc") or shutil.which("clang")
-    if compiler is None:
-        print("installed C ABI smoke requires a C compiler", file=sys.stderr)
-        return 2
     run(
         [
             "cmake",
@@ -46,36 +38,32 @@ def main() -> int:
             str(args.prefix),
         ]
     )
-    library_dir = args.prefix / "lib"
     with tempfile.TemporaryDirectory(prefix="macro-sim-c-smoke-") as raw:
-        output = Path(raw) / (
-            "macro_sim_c_smoke.exe"
-            if platform.system() == "Windows"
-            else "macro_sim_c_smoke"
-        )
+        build_dir = Path(raw) / "build"
         run(
             [
-                compiler,
-                "-std=c11",
-                str(ROOT / "tests/native/installed_c_smoke.c"),
-                "-I",
-                str(args.prefix / "include"),
-                "-L",
-                str(library_dir),
-                "-lmacro_sim_c",
-                "-o",
-                str(output),
+                "cmake",
+                "-S",
+                str(ROOT / "tests/native/installed_consumer"),
+                "-B",
+                str(build_dir),
+                "-G",
+                "Ninja",
+                f"-DCMAKE_PREFIX_PATH={args.prefix.resolve()}",
+                "-DCMAKE_BUILD_TYPE=Release",
             ]
         )
-        env = os.environ.copy()
-        for variable in ("DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH", "PATH"):
-            current = env.get(variable, "")
-            env[variable] = (
-                str(library_dir)
-                if not current
-                else os.pathsep.join((str(library_dir), current))
-            )
-        run([str(output)], env=env)
+        run(["cmake", "--build", str(build_dir)])
+        run(
+            [
+                "ctest",
+                "--test-dir",
+                str(build_dir),
+                "--output-on-failure",
+                "-C",
+                "Release",
+            ]
+        )
     print("installed C ABI smoke: passed")
     return 0
 

@@ -55,12 +55,20 @@ build-dir = "build/wheel/{wheel_tag}"
 cmake.build-type = "Release"
 cmake.source-dir = "."
 sdist.include = [
-    "CMakeLists.txt",
-    "CMakePresets.json",
-    "native",
-    "schemas/m0",
-    "schemas/m1",
-    "tools/m1",
+    "/CMakeLists.txt",
+    "/CMakePresets.json",
+    "/native/**",
+    "/schemas/m0/**",
+    "/schemas/m1/**",
+    "/tools/m1/**",
+]
+sdist.exclude = [
+    "/.venv/**",
+    "/artifacts/**",
+    "/build/**",
+    "/dist/**",
+    "/outputs/**",
+    "/runs/**",
 ]
 wheel.packages = ["macro_sim"]
 wheel.py-api = "cp312"
