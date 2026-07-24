@@ -99,6 +99,27 @@ constexpr std::uint64_t kUnsupportedCapabilities =
     }
     scratch.balances_[source_index] -= amount;
     scratch.balances_[destination_index] += amount;
+    const auto source_node = scratch.account_nodes_[source_index];
+    const auto destination_node = scratch.account_nodes_[destination_index];
+    if (source_node != destination_node) {
+        const auto source_reserve =
+            static_cast<std::size_t>(source_node.value());
+        const auto destination_reserve =
+            static_cast<std::size_t>(destination_node.value());
+        if (source_reserve >= scratch.reserve_balances_.size()
+            || destination_reserve >= scratch.reserve_balances_.size()) {
+            return Status(
+                ErrorCode::internal_error,
+                "M4 reserve projection is stale"
+            );
+        }
+        scratch.reserve_balances_[source_reserve] -= amount;
+        scratch.reserve_balances_[destination_reserve] += amount;
+        scratch.reserve_minimum_[source_reserve] = std::min(
+            scratch.reserve_minimum_[source_reserve],
+            scratch.reserve_balances_[source_reserve]
+        );
+    }
     ++scratch.transfer_count_;
     return Status::success();
 }
@@ -144,12 +165,20 @@ void capture_phase(
 
 [[nodiscard]] Status validate_working_state(
     const core::RootState& state,
-    const M4TickScratch& scratch
+    const M4TickScratch& scratch,
+    bool endogenous_money
 ) noexcept {
     if (!all_finite(scratch.balances_)) {
         return Status(
             ErrorCode::invariant_violation,
             "M4 account balance is nonfinite"
+        );
+    }
+    if (!all_finite(scratch.reserve_balances_)
+        || !all_finite(scratch.reserve_minimum_)) {
+        return Status(
+            ErrorCode::invariant_violation,
+            "M4 reserve projection is not finite"
         );
     }
     for (const auto& record : state.postings.records()) {
@@ -173,7 +202,8 @@ void capture_phase(
         state.accounting_tolerance,
         1.0e-10 * std::max(1.0, std::abs(state.genesis_money.value()))
     );
-    if (std::abs(drift) > conservation_tolerance) {
+    if (!endogenous_money
+        && std::abs(drift) > conservation_tolerance) {
         return Status(
             ErrorCode::invariant_violation,
             "M4 money conservation failed"
@@ -252,6 +282,13 @@ void commit_working_state(
             scratch.balances_[static_cast<std::size_t>(record.id.value())]
         );
     }
+    for (auto& record : state.reserves.records()) {
+        record.balance = Money(
+            scratch.reserve_balances_[
+                static_cast<std::size_t>(record.node.value())
+            ]
+        );
+    }
     for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
         auto* household = state.households.get(scratch.household_ids_[index]);
         const auto& work = scratch.household_work_[index];
@@ -297,10 +334,27 @@ void commit_working_state(
         scratch.reserve(state);
     }
     std::fill(scratch.balances_.begin(), scratch.balances_.end(), 0.0);
+    std::fill(
+        scratch.account_nodes_.begin(),
+        scratch.account_nodes_.end(),
+        SettlementNodeId{}
+    );
     for (const auto& account : state.postings.records()) {
-        scratch.balances_[static_cast<std::size_t>(account.id.value())] =
+        const auto index = static_cast<std::size_t>(account.id.value());
+        scratch.balances_[index] =
             account.balance.value();
+        scratch.account_nodes_[index] = account.key.settlement_node;
     }
+    std::fill(
+        scratch.reserve_balances_.begin(),
+        scratch.reserve_balances_.end(),
+        0.0
+    );
+    for (const auto& reserve : state.reserves.records()) {
+        const auto index = static_cast<std::size_t>(reserve.node.value());
+        scratch.reserve_balances_[index] = reserve.balance.value();
+    }
+    scratch.reserve_minimum_ = scratch.reserve_balances_;
     scratch.transfer_count_ = 0;
     scratch.trade_count_ = 0;
     scratch.phase_trace_.clear();
@@ -423,7 +477,10 @@ void commit_working_state(
         if (!wage.ok()) {
             return wage.status();
         }
-        work.posted_wage = wage.get_if()->posted;
+        work.posted_wage = std::max(
+            runtime.rules.minimum_wage,
+            wage.get_if()->posted
+        );
         auto cost = algorithms::unit_cost(
             {
                 technology_for(firm->technology),
@@ -984,17 +1041,37 @@ void commit_working_state(
             return scratch.firm_ids_[left] < scratch.firm_ids_[right];
         }
     );
-    double units =
-        runtime.rules.government_consumption_share
-        * static_cast<double>(scratch.household_ids_.size())
-        * runtime.rules.linear_productivity;
+    double units = std::numeric_limits<double>::infinity();
+    double budget = std::numeric_limits<double>::infinity();
+    if (runtime.rules.government_deficit_target > 0.0) {
+        double target = runtime.rules.government_deficit_target;
+        if (runtime.rules.deficit_unemployment_reference > 0.0) {
+            target *= std::min(
+                runtime.rules.deficit_unemployment_cap,
+                runtime.last_metrics.unemployment_rate
+                    / runtime.rules.deficit_unemployment_reference
+            );
+        }
+        budget = std::max(
+            0.0,
+            runtime.last_metrics.tax_total
+                + target * runtime.previous_nominal_output
+        );
+    } else {
+        units =
+            runtime.rules.government_consumption_share
+            * static_cast<double>(scratch.household_ids_.size())
+            * runtime.rules.linear_productivity;
+    }
     const auto treasury = state.institutions.treasury_account;
     for (const auto index : scratch.firm_order_) {
         if (units <= algorithms::kEconomicEpsilon) {
             break;
         }
         auto& work = scratch.firm_work_[index];
-        const double quantity = std::min(units, work.closing_inventory);
+        const double quantity = std::min(
+            {units, work.closing_inventory, budget / work.posted_price}
+        );
         if (quantity <= algorithms::kEconomicEpsilon) {
             continue;
         }
@@ -1015,6 +1092,7 @@ void commit_working_state(
         work.revenue += value;
         government_spending += value;
         units -= quantity;
+        budget -= value;
     }
     return Status::success();
 }
@@ -1093,7 +1171,8 @@ void commit_working_state(
     const M4Runtime& runtime,
     M4TickScratch& scratch,
     double& tax_total,
-    double& benefit_spending
+    double& benefit_spending,
+    double& public_capital_addition
 ) {
     const bool fiscal = runtime.vertical == M4Vertical::capital_fiscal;
     const auto treasury = state.institutions.treasury_account;
@@ -1188,6 +1267,15 @@ void commit_working_state(
     if (!fiscal) {
         return Status::success();
     }
+    double mean_income = 0.0;
+    for (const auto& work : scratch.household_work_) {
+        mean_income += work.income_realized;
+    }
+    mean_income /= static_cast<double>(
+        std::max<std::size_t>(1, scratch.household_work_.size())
+    );
+    const double income_allowance =
+        runtime.rules.income_allowance * mean_income;
     for (std::size_t index = 0;
          index < scratch.household_ids_.size();
          ++index) {
@@ -1198,7 +1286,10 @@ void commit_working_state(
             static_cast<std::size_t>(household->primary_account.value());
         const double due =
             runtime.rules.income_tax_rate
-            * std::max(0.0, work.income_realized);
+            * std::max(
+                0.0,
+                work.income_realized - income_allowance
+            );
         const double paid = std::min(due, scratch.balances_[account]);
         auto status = transfer(
             state,
@@ -1220,6 +1311,37 @@ void commit_working_state(
     mean_wage /= static_cast<double>(
         std::max<std::size_t>(1, scratch.firm_work_.size())
     );
+    if (runtime.rules.job_guarantee
+        && runtime.rules.job_guarantee_wage_ratio > 0.0) {
+        const double guarantee_wage = std::max(
+            runtime.rules.minimum_wage,
+            runtime.rules.job_guarantee_wage_ratio * mean_wage
+        );
+        for (std::size_t index = 0;
+             index < scratch.household_ids_.size();
+             ++index) {
+            const auto* household =
+                state.households.get(scratch.household_ids_[index]);
+            auto& work = scratch.household_work_[index];
+            const double residual = std::max(0.0, 1.0 - work.labor_sold);
+            const double payment = guarantee_wage * residual;
+            const auto status = transfer(
+                state,
+                scratch,
+                treasury,
+                household->primary_account,
+                payment
+            );
+            if (!status.ok()) {
+                return status;
+            }
+            work.income_realized += payment;
+            benefit_spending += payment;
+            public_capital_addition +=
+                runtime.rules.job_guarantee_public_works_share
+                * residual;
+        }
+    }
     for (std::size_t index = 0;
          index < scratch.household_ids_.size();
          ++index) {
@@ -1228,7 +1350,13 @@ void commit_working_state(
         auto& work = scratch.household_work_[index];
         const double benefit =
             runtime.rules.unemployment_benefit_replacement
-            * mean_wage * std::max(0.0, 1.0 - work.labor_sold);
+            * mean_wage
+            * (
+                runtime.rules.job_guarantee
+                    && runtime.rules.job_guarantee_wage_ratio > 0.0
+                ? 0.0
+                : std::max(0.0, 1.0 - work.labor_sold)
+            );
         auto status = transfer(
             state,
             scratch,
@@ -1241,14 +1369,58 @@ void commit_working_state(
         }
         work.income_realized += benefit;
         benefit_spending += benefit;
+        if (runtime.rules.benefit_income_floor > 0.0) {
+            const double floor =
+                runtime.rules.benefit_income_floor * mean_wage;
+            const double top_up =
+                std::max(0.0, floor - work.income_realized);
+            status = transfer(
+                state,
+                scratch,
+                treasury,
+                household->primary_account,
+                top_up
+            );
+            if (!status.ok()) {
+                return status;
+            }
+            work.income_realized += top_up;
+            benefit_spending += top_up;
+        }
+    }
+    double mean_wealth = 0.0;
+    for (const auto id : scratch.household_ids_) {
+        const auto* household = state.households.get(id);
+        mean_wealth += std::max(
+            0.0,
+            scratch.balances_[
+                static_cast<std::size_t>(
+                    household->primary_account.value()
+                )
+            ]
+        );
+    }
+    mean_wealth /= static_cast<double>(
+        std::max<std::size_t>(1, scratch.household_ids_.size())
+    );
+    const double wealth_allowance =
+        runtime.rules.wealth_allowance * mean_wealth;
+    for (std::size_t index = 0;
+         index < scratch.household_ids_.size();
+         ++index) {
+        const auto* household =
+            state.households.get(scratch.household_ids_[index]);
         const auto account =
             static_cast<std::size_t>(household->primary_account.value());
         const double wealth_tax = std::min(
             runtime.rules.wealth_tax_rate
-                * std::max(0.0, scratch.balances_[account]),
+                * std::max(
+                    0.0,
+                    scratch.balances_[account] - wealth_allowance
+                ),
             scratch.balances_[account]
         );
-        status = transfer(
+        const auto status = transfer(
             state,
             scratch,
             household->primary_account,
@@ -1344,8 +1516,16 @@ void commit_capital(
     M4Runtime& runtime,
     M4TickScratch& scratch,
     Tick& tick,
-    const M4AdvanceOptions& options
+    const M4AdvanceOptions& options,
+    M4TickExtension* extension
 ) {
+    struct RuleRestore final {
+        M4Runtime& runtime;
+        M4Rules rules;
+        ~RuleRestore() {
+            runtime.rules = rules;
+        }
+    } restore{runtime, runtime.rules};
     auto status = check_fault(options, M4Phase::open_books);
     if (!status.ok()) {
         return status;
@@ -1353,6 +1533,19 @@ void commit_capital(
     status = prepare_working_state(state, runtime, scratch);
     if (!status.ok()) {
         return status;
+    }
+    PhiloxRng rng(runtime.rng_key, runtime.rng_counter);
+    if (extension != nullptr) {
+        status = extension->prepare_tick(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng
+        );
+        if (!status.ok()) {
+            return status;
+        }
     }
     capture_phase(state, scratch, options, M4Phase::open_books);
 
@@ -1369,7 +1562,6 @@ void commit_capital(
     const double production_factor = technology_index;
     capture_phase(state, scratch, options, M4Phase::open_real_economy);
 
-    PhiloxRng rng(runtime.rng_key, runtime.rng_counter);
     status = check_fault(options, M4Phase::plan_and_finance);
     if (!status.ok()) {
         return status;
@@ -1383,6 +1575,18 @@ void commit_capital(
     );
     if (!status.ok()) {
         return status;
+    }
+    if (extension != nullptr) {
+        status = extension->after_planning(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng
+        );
+        if (!status.ok()) {
+            return status;
+        }
     }
     capture_phase(state, scratch, options, M4Phase::plan_and_finance);
 
@@ -1459,17 +1663,52 @@ void commit_capital(
         return status;
     }
     double benefit_spending = 0.0;
+    if (extension != nullptr) {
+        status = extension->before_settlement(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng
+        );
+        if (!status.ok()) {
+            return status;
+        }
+    }
     status = run_settlement(
         state,
         runtime,
         scratch,
         tax_total,
-        benefit_spending
+        benefit_spending,
+        public_capital_addition
     );
     if (!status.ok()) {
         return status;
     }
     commit_capital(state, scratch);
+    if (extension != nullptr) {
+        status = extension->after_settlement(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng
+        );
+        if (!status.ok()) {
+            return status;
+        }
+        status = extension->close_institutions(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng
+        );
+        if (!status.ok()) {
+            return status;
+        }
+    }
     const double public_capital =
         runtime.public_capital + public_capital_addition;
     capture_phase(state, scratch, options, M4Phase::settle_domestic);
@@ -1478,9 +1717,24 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
-    status = validate_working_state(state, scratch);
+    status = validate_working_state(
+        state,
+        scratch,
+        extension != nullptr
+    );
     if (!status.ok()) {
         return status;
+    }
+    if (extension != nullptr) {
+        status = extension->validate(
+            state,
+            runtime,
+            scratch,
+            tick
+        );
+        if (!status.ok()) {
+            return status;
+        }
     }
     const auto metrics = measure(
         state,
@@ -1508,6 +1762,15 @@ void commit_capital(
         technology_index,
         public_capital
     );
+    if (extension != nullptr) {
+        extension->commit(
+            state,
+            runtime,
+            scratch,
+            metrics.tick,
+            metrics
+        );
+    }
     if (options.capture_phase_trace) {
         runtime.last_phase_trace.push_back(
             {
@@ -1563,6 +1826,9 @@ void M4TickScratch::reserve(const core::RootState& state) {
     household_order_.resize(household_count);
     firm_order_.resize(firm_count);
     balances_.resize(state.postings.size() + 1);
+    account_nodes_.resize(state.postings.size() + 1);
+    reserve_balances_.resize(state.reserves.size() + 1);
+    reserve_minimum_.resize(state.reserves.size() + 1);
     household_work_.resize(household_count);
     firm_work_.resize(firm_count);
     orders_.reserve(std::max(household_count, firm_count));
@@ -1586,6 +1852,9 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
         household_order_.capacity(),
         firm_order_.capacity(),
         balances_.capacity(),
+        account_nodes_.capacity(),
+        reserve_balances_.capacity(),
+        reserve_minimum_.capacity(),
         household_work_.capacity(),
         firm_work_.capacity(),
         orders_.capacity(),
@@ -1607,7 +1876,8 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
 
 Status validate_spec(const M4SimulationSpec& spec) noexcept {
     if (!spec.economy.valid() || !spec.currency.valid()
-        || spec.households == 0 || spec.consumption_firms == 0) {
+        || spec.households == 0 || spec.consumption_firms == 0
+        || spec.settlement_banks == 0) {
         return Status(
             ErrorCode::invalid_argument,
             "M4 genesis requires valid IDs, households, and consumption firms"
@@ -1615,7 +1885,8 @@ Status validate_spec(const M4SimulationSpec& spec) noexcept {
     }
     if (spec.households > 10'000'000
         || spec.consumption_firms > 10'000'000
-        || spec.capital_firms > 10'000'000) {
+        || spec.capital_firms > 10'000'000
+        || spec.settlement_banks > 1'000'000) {
         return Status(ErrorCode::out_of_range, "M4 entity limit is exceeded");
     }
     if ((spec.requested_capabilities & kUnsupportedCapabilities) != 0) {
@@ -1667,10 +1938,20 @@ Status validate_spec(const M4SimulationSpec& spec) noexcept {
         rules.consumption_tax_rate,
         rules.wealth_tax_rate,
         rules.government_consumption_share,
+        rules.government_deficit_target,
+        rules.deficit_unemployment_reference,
+        rules.deficit_unemployment_cap,
         rules.government_investment_share,
         rules.unemployment_benefit_replacement,
+        rules.income_allowance,
+        rules.wealth_allowance,
+        rules.benefit_income_floor,
+        rules.minimum_wage,
+        rules.job_guarantee_wage_ratio,
+        rules.job_guarantee_public_works_share,
         rules.initial_household_money,
         rules.initial_firm_money,
+        rules.initial_bank_capital,
         rules.initial_consumption_inventory,
         rules.initial_capital_inventory,
         rules.initial_consumption_capital,
@@ -1714,14 +1995,25 @@ Status validate_spec(const M4SimulationSpec& spec) noexcept {
         || rules.wealth_tax_rate < 0.0
         || rules.wealth_tax_rate > 1.0
         || rules.government_consumption_share < 0.0
+        || rules.government_deficit_target < 0.0
+        || rules.deficit_unemployment_reference < 0.0
+        || rules.deficit_unemployment_cap < 0.0
         || rules.government_investment_share < 0.0
         || rules.unemployment_benefit_replacement < 0.0
         || rules.unemployment_benefit_replacement > 1.0
         || rules.government_consumption_share > 1.0
+        || rules.income_allowance < 0.0
+        || rules.wealth_allowance < 0.0
+        || rules.benefit_income_floor < 0.0
+        || rules.minimum_wage < 0.0
+        || rules.job_guarantee_wage_ratio < 0.0
+        || rules.job_guarantee_public_works_share < 0.0
+        || rules.job_guarantee_public_works_share > 1.0
         || rules.government_investment_share > 1.0
         || rules.initial_price <= 0.0 || rules.initial_capital_price <= 0.0
         || rules.initial_wage <= 0.0 || rules.initial_household_money < 0.0
         || rules.initial_firm_money < 0.0
+        || rules.initial_bank_capital < 0.0
         || rules.initial_consumption_inventory < 0.0
         || rules.initial_capital_inventory < 0.0
         || rules.initial_consumption_capital < 0.0
@@ -1888,6 +2180,7 @@ Status validate_m4_state(
     spec.households = root.households.alive_count();
     spec.consumption_firms = consumption_firms;
     spec.capital_firms = capital_firms;
+    spec.settlement_banks = root.banks.alive_count();
     spec.seed = root.seed;
     spec.requested_capabilities = runtime.capability_mask;
     spec.stochastic = runtime.stochastic;
@@ -1910,7 +2203,9 @@ Result<M4Initialization> build_m4_genesis(
         static_cast<double>(spec.households)
             * spec.rules.initial_household_money
         + static_cast<double>(firm_count)
-            * spec.rules.initial_firm_money;
+            * spec.rules.initial_firm_money
+        + static_cast<double>(spec.settlement_banks)
+            * spec.rules.initial_bank_capital;
     const double opening_capital =
         spec.vertical == M4Vertical::capital_fiscal
         ? static_cast<double>(spec.consumption_firms)
@@ -1926,7 +2221,7 @@ Result<M4Initialization> build_m4_genesis(
     genesis.households = spec.households;
     genesis.consumption_firms = spec.consumption_firms;
     genesis.capital_firms = spec.capital_firms;
-    genesis.settlement_banks = 1;
+    genesis.settlement_banks = spec.settlement_banks;
     genesis.government =
         spec.vertical == M4Vertical::capital_fiscal;
     genesis.aggregate_opening_money = Money(opening_money);
@@ -1936,6 +2231,7 @@ Result<M4Initialization> build_m4_genesis(
     genesis.household_opening_money =
         Money(spec.rules.initial_household_money);
     genesis.firm_opening_money = Money(spec.rules.initial_firm_money);
+    genesis.bank_opening_money = Money(spec.rules.initial_bank_capital);
     genesis.opening_capital_to_consumption_firms = true;
     auto state = core::build_genesis(genesis);
     if (!state.ok()) {
@@ -2043,7 +2339,62 @@ Result<M4AdvanceResult> advance_ticks(
             runtime,
             scratch,
             tick,
-            options
+            options,
+            nullptr
+        );
+        if (!current.ok()) {
+            return current.status();
+        }
+        result = std::move(*current.get_if());
+        transfers += result.transfer_count;
+        trades += result.trade_count;
+    }
+    result.first_tick = first;
+    result.next_tick = tick;
+    result.advanced_ticks = count;
+    result.transfer_count = transfers;
+    result.trade_count = trades;
+    return result;
+}
+
+Result<M4AdvanceResult> advance_ticks_extended(
+    core::RootState& state,
+    M4Runtime& runtime,
+    M4TickScratch& scratch,
+    Tick& tick,
+    std::uint64_t count,
+    M4TickExtension& extension,
+    const M4AdvanceOptions& options
+) {
+    if (state.transaction_active) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "M4 cannot advance during an accounting transaction"
+        );
+    }
+    const Tick first = tick;
+    if (count == 0) {
+        return M4AdvanceResult{
+            first,
+            tick,
+            0,
+            runtime.last_metrics,
+            scratch.capacity_signature(),
+            0,
+            0,
+        };
+    }
+    M4AdvanceResult result;
+    std::uint64_t transfers = 0;
+    std::uint64_t trades = 0;
+    for (std::uint64_t index = 0; index < count; ++index) {
+        auto current = advance_one(
+            state,
+            runtime,
+            scratch,
+            tick,
+            options,
+            &extension
         );
         if (!current.ok()) {
             return current.status();

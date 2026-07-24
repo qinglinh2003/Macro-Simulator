@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "macro_sim/core/accounting.hpp"
+#include "macro_sim/core/financial.hpp"
 #include "macro_sim/core/slot_store.hpp"
 #include "macro_sim/core/state_types.hpp"
 
@@ -31,6 +32,10 @@ struct RootState final {
     PostingBook postings;
     ReserveBook reserves;
     LoanBook loans;
+    InterbankBook interbank;
+    CentralBankOperationBook central_bank_operations;
+    BankPnlJournal bank_pnl;
+    BankCapitalState bank_capital;
     OwnershipBook ownership;
     NamedCounterBook named_counters;
     InstitutionRegistry institutions;
@@ -57,6 +62,7 @@ struct GenesisSpec final {
     bool use_per_agent_endowments{false};
     Money household_opening_money{};
     Money firm_opening_money{};
+    Money bank_opening_money{};
     bool opening_capital_to_consumption_firms{false};
 };
 

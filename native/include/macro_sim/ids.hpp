@@ -45,6 +45,7 @@ private:
 
 struct AccountIdTag;
 struct BankIdTag;
+struct CentralBankOperationIdTag;
 struct CurrencyIdTag;
 struct EconomyIdTag;
 struct EntityIdTag;
@@ -52,6 +53,7 @@ struct EventIdTag;
 struct FirmIdTag;
 struct HouseholdIdTag;
 struct InstitutionIdTag;
+struct InterbankContractIdTag;
 struct LoanIdTag;
 struct OwnershipLotIdTag;
 struct SessionIdTag;
@@ -59,6 +61,7 @@ struct SettlementNodeIdTag;
 
 using AccountId = StrongId<AccountIdTag>;
 using BankId = StrongId<BankIdTag>;
+using CentralBankOperationId = StrongId<CentralBankOperationIdTag>;
 using CurrencyId = StrongId<CurrencyIdTag, std::uint32_t>;
 using EconomyId = StrongId<EconomyIdTag>;
 using EntityId = StrongId<EntityIdTag>;
@@ -66,6 +69,7 @@ using EventId = StrongId<EventIdTag>;
 using FirmId = StrongId<FirmIdTag>;
 using HouseholdId = StrongId<HouseholdIdTag>;
 using InstitutionId = StrongId<InstitutionIdTag>;
+using InterbankContractId = StrongId<InterbankContractIdTag>;
 using LoanId = StrongId<LoanIdTag>;
 using OwnershipLotId = StrongId<OwnershipLotIdTag>;
 using SessionId = StrongId<SessionIdTag>;

@@ -72,10 +72,21 @@ struct M4Rules final {
     double consumption_tax_rate{0.15};
     double wealth_tax_rate{5.479452054794521e-6};
     double government_consumption_share{0.20};
+    double government_deficit_target{0.0};
+    double deficit_unemployment_reference{0.0};
+    double deficit_unemployment_cap{1.0};
     double government_investment_share{0.04};
     double unemployment_benefit_replacement{0.40};
+    double income_allowance{0.0};
+    double wealth_allowance{0.0};
+    double benefit_income_floor{0.0};
+    double minimum_wage{0.0};
+    bool job_guarantee{false};
+    double job_guarantee_wage_ratio{0.0};
+    double job_guarantee_public_works_share{1.0};
     double initial_household_money{100.0};
     double initial_firm_money{200.0};
+    double initial_bank_capital{0.0};
     double initial_consumption_inventory{10.0};
     double initial_capital_inventory{5.0};
     double initial_consumption_capital{20.0};
@@ -96,6 +107,7 @@ struct M4SimulationSpec final {
     std::uint64_t households{1};
     std::uint64_t consumption_firms{1};
     std::uint64_t capital_firms{0};
+    std::uint64_t settlement_banks{1};
     std::uint64_t seed{0};
     std::uint64_t requested_capabilities{0};
     bool stochastic{false};
@@ -235,6 +247,9 @@ public:
     std::vector<std::size_t> household_order_;
     std::vector<std::size_t> firm_order_;
     std::vector<double> balances_;
+    std::vector<SettlementNodeId> account_nodes_;
+    std::vector<double> reserve_balances_;
+    std::vector<double> reserve_minimum_;
     std::vector<HouseholdWork> household_work_;
     std::vector<FirmWork> firm_work_;
     std::vector<algorithms::BuyOrder> orders_;
@@ -246,6 +261,63 @@ public:
     std::vector<M4PhaseSummary> phase_trace_;
     std::uint64_t transfer_count_{0};
     std::uint64_t trade_count_{0};
+};
+
+class M4TickExtension {
+public:
+    M4TickExtension() = default;
+    M4TickExtension(const M4TickExtension&) = delete;
+    M4TickExtension& operator=(const M4TickExtension&) = delete;
+    virtual ~M4TickExtension() = default;
+
+    [[nodiscard]] virtual Status prepare_tick(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng
+    ) = 0;
+    [[nodiscard]] virtual Status after_planning(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng
+    ) = 0;
+    [[nodiscard]] virtual Status before_settlement(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng
+    ) = 0;
+    [[nodiscard]] virtual Status after_settlement(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng
+    ) = 0;
+    [[nodiscard]] virtual Status close_institutions(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng
+    ) = 0;
+    [[nodiscard]] virtual Status validate(
+        const core::RootState& state,
+        const M4Runtime& runtime,
+        const M4TickScratch& scratch,
+        Tick tick
+    ) const = 0;
+    virtual void commit(
+        core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick closed_tick,
+        const M4Metrics& metrics
+    ) noexcept = 0;
 };
 
 struct M4Initialization final {
@@ -275,6 +347,15 @@ struct M4Initialization final {
     M4Runtime& runtime,
     M4TickScratch& scratch,
     Tick& tick,
+    const M4AdvanceOptions& options = {}
+);
+[[nodiscard]] Result<M4AdvanceResult> advance_ticks_extended(
+    core::RootState& state,
+    M4Runtime& runtime,
+    M4TickScratch& scratch,
+    Tick& tick,
+    std::uint64_t count,
+    M4TickExtension& extension,
     const M4AdvanceOptions& options = {}
 );
 

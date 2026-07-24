@@ -329,6 +329,10 @@ std::size_t ReserveBook::size() const noexcept {
     return positions_.size();
 }
 
+std::vector<ReserveRecord>& ReserveBook::records() noexcept {
+    return positions_;
+}
+
 const std::vector<ReserveRecord>& ReserveBook::records() const noexcept {
     return positions_;
 }
@@ -344,6 +348,10 @@ Status ReserveBook::validate_finite() const noexcept {
         }
     }
     return Status::success();
+}
+
+void ReserveBook::commit_projected_stock(Money stock) noexcept {
+    reserve_stock_ = stock;
 }
 
 ReserveBook::MutationResult ReserveBook::apply_delta_unchecked(
@@ -437,6 +445,12 @@ Status LoanBook::validate_finite() const noexcept {
         }
     }
     return Status::success();
+}
+
+void LoanBook::replace_records(
+    std::vector<LoanRecord>& projection
+) noexcept {
+    loans_.swap(projection);
 }
 
 LoanBook::CreateResult LoanBook::create_unchecked(

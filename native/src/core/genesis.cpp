@@ -27,7 +27,9 @@ namespace {
         || !std::isfinite(spec.household_opening_money.value())
         || spec.household_opening_money.value() < 0.0
         || !std::isfinite(spec.firm_opening_money.value())
-        || spec.firm_opening_money.value() < 0.0) {
+        || spec.firm_opening_money.value() < 0.0
+        || !std::isfinite(spec.bank_opening_money.value())
+        || spec.bank_opening_money.value() < 0.0) {
         return Status(
             ErrorCode::invalid_argument,
             "genesis stocks must be finite and nonnegative"
@@ -43,7 +45,9 @@ namespace {
             static_cast<double>(spec.households)
                 * spec.household_opening_money.value()
             + static_cast<double>(firm_count)
-                * spec.firm_opening_money.value();
+                * spec.firm_opening_money.value()
+            + static_cast<double>(spec.settlement_banks)
+                * spec.bank_opening_money.value();
         const double scale = std::max(
             1.0,
             std::max(
@@ -180,6 +184,8 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         if (!cash_result.ok()) {
             return cash_result.status();
         }
+        state.postings.get(*cash_result.get_if())->balance =
+            spec.bank_opening_money;
         auto* bank = state.banks.get(bank_receipt.id);
         bank->cash_account = *cash_result.get_if();
         bank->settlement_node = node;
@@ -251,10 +257,15 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         state.institutions.treasury_account = *treasury_result.get_if();
     }
 
+    const double bank_total =
+        static_cast<double>(spec.settlement_banks)
+        * spec.bank_opening_money.value();
+    const double non_bank_total =
+        spec.aggregate_opening_money.value() - bank_total;
     const double household_total = spec.use_per_agent_endowments
         ? static_cast<double>(spec.households)
             * spec.household_opening_money.value()
-        : spec.aggregate_opening_money.value();
+        : non_bank_total;
     const double household_base = spec.use_per_agent_endowments
         ? spec.household_opening_money.value()
         : household_total / static_cast<double>(spec.households);
@@ -342,7 +353,7 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         if (spec.use_per_agent_endowments) {
             opening_money =
                 index + 1 == firm_count
-                ? spec.aggregate_opening_money.value()
+                ? non_bank_total
                     - household_total - assigned_firm_money
                 : spec.firm_opening_money.value();
             assigned_firm_money += opening_money;

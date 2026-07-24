@@ -99,8 +99,10 @@ public:
     [[nodiscard]] double reserve_stock_roundoff_drift() const noexcept;
     [[nodiscard]] double total_roundoff_drift() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] std::vector<ReserveRecord>& records() noexcept;
     [[nodiscard]] const std::vector<ReserveRecord>& records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
+    void commit_projected_stock(Money stock) noexcept;
 
 private:
     friend class CheckpointCodec;
@@ -160,6 +162,7 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] const std::vector<LoanRecord>& records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
+    void replace_records(std::vector<LoanRecord>& projection) noexcept;
 
 private:
     friend class CheckpointCodec;

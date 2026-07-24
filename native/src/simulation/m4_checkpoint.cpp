@@ -170,10 +170,21 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.consumption_tax_rate);
     writer.f64(rules.wealth_tax_rate);
     writer.f64(rules.government_consumption_share);
+    writer.f64(rules.government_deficit_target);
+    writer.f64(rules.deficit_unemployment_reference);
+    writer.f64(rules.deficit_unemployment_cap);
     writer.f64(rules.government_investment_share);
     writer.f64(rules.unemployment_benefit_replacement);
+    writer.f64(rules.income_allowance);
+    writer.f64(rules.wealth_allowance);
+    writer.f64(rules.benefit_income_floor);
+    writer.f64(rules.minimum_wage);
+    writer.u8(rules.job_guarantee ? 1U : 0U);
+    writer.f64(rules.job_guarantee_wage_ratio);
+    writer.f64(rules.job_guarantee_public_works_share);
     writer.f64(rules.initial_household_money);
     writer.f64(rules.initial_firm_money);
+    writer.f64(rules.initial_bank_capital);
     writer.f64(rules.initial_consumption_inventory);
     writer.f64(rules.initial_capital_inventory);
     writer.f64(rules.initial_consumption_capital);
@@ -186,7 +197,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
 }
 
 [[nodiscard]] bool read_rules(Reader& reader, M4Rules& rules) noexcept {
-    return reader.f64(rules.linear_productivity)
+    std::uint8_t job_guarantee = 0;
+    const auto success = reader.f64(rules.linear_productivity)
         && reader.f64(rules.capital_productivity)
         && reader.f64(rules.total_factor_productivity)
         && reader.f64(rules.capital_share)
@@ -213,10 +225,21 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.consumption_tax_rate)
         && reader.f64(rules.wealth_tax_rate)
         && reader.f64(rules.government_consumption_share)
+        && reader.f64(rules.government_deficit_target)
+        && reader.f64(rules.deficit_unemployment_reference)
+        && reader.f64(rules.deficit_unemployment_cap)
         && reader.f64(rules.government_investment_share)
         && reader.f64(rules.unemployment_benefit_replacement)
+        && reader.f64(rules.income_allowance)
+        && reader.f64(rules.wealth_allowance)
+        && reader.f64(rules.benefit_income_floor)
+        && reader.f64(rules.minimum_wage)
+        && reader.u8(job_guarantee)
+        && reader.f64(rules.job_guarantee_wage_ratio)
+        && reader.f64(rules.job_guarantee_public_works_share)
         && reader.f64(rules.initial_household_money)
         && reader.f64(rules.initial_firm_money)
+        && reader.f64(rules.initial_bank_capital)
         && reader.f64(rules.initial_consumption_inventory)
         && reader.f64(rules.initial_capital_inventory)
         && reader.f64(rules.initial_consumption_capital)
@@ -226,6 +249,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.initial_markup)
         && reader.f64(rules.initial_expected_demand)
         && reader.u32(rules.market_sample_size);
+    rules.job_guarantee = job_guarantee != 0;
+    return success && job_guarantee <= 1U;
 }
 
 void write_metrics(Writer& writer, const M4Metrics& metrics) {
@@ -619,6 +644,7 @@ Result<M4Checkpoint> load_m4_checkpoint(
     spec.households = household_count;
     spec.consumption_firms = consumption_firms;
     spec.capital_firms = capital_firms;
+    spec.settlement_banks = root.banks.alive_count();
     spec.seed = root.seed;
     spec.requested_capabilities = runtime.capability_mask;
     spec.stochastic = runtime.stochastic;

@@ -138,6 +138,10 @@ struct FirmComponent final {
 struct BankComponent final {
     AccountId cash_account{};
     SettlementNodeId settlement_node{};
+    double leverage_appetite{10.0};
+    double loan_spread{0.0};
+    double deposit_spread{0.0};
+    bool alive{true};
 };
 
 }  // namespace macro_sim::core
