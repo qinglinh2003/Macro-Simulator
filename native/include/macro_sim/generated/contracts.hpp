@@ -15,6 +15,18 @@ inline constexpr std::string_view kM0ContractSha256 = "08cb44d8cbdf90ca70d791bb3
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };
 enum class ValidationCode : std::uint8_t { ok, unknown_contract, type_mismatch, nonfinite, below_minimum, above_maximum, invalid_choice };
+[[nodiscard]] constexpr std::string_view validation_code_name(ValidationCode code) noexcept {
+    switch (code) {
+        case ValidationCode::ok: return "ok";
+        case ValidationCode::unknown_contract: return "unknown_contract";
+        case ValidationCode::type_mismatch: return "type_mismatch";
+        case ValidationCode::nonfinite: return "nonfinite";
+        case ValidationCode::below_minimum: return "below_minimum";
+        case ValidationCode::above_maximum: return "above_maximum";
+        case ValidationCode::invalid_choice: return "invalid_choice";
+    }
+    return "unknown";
+}
 
 struct ContractSpec final {
     std::string_view id;
