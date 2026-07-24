@@ -56,6 +56,7 @@ def source_paths() -> tuple[Path, ...]:
     exact = (
         ROOT / ".clang-format",
         ROOT / ".clang-tidy",
+        ROOT / ".gitattributes",
         ROOT / ".github/workflows/native.yml",
         ROOT / "CMakeLists.txt",
         ROOT / "CMakePresets.json",
