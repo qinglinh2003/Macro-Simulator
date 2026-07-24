@@ -14,6 +14,7 @@ extern "C" {
 #define MACRO_SIM_CAPABILITY_M2_ACCOUNTING (UINT64_C(1) << 0)
 #define MACRO_SIM_CAPABILITY_M3_ALGORITHMS (UINT64_C(1) << 1)
 #define MACRO_SIM_CAPABILITY_M4_TICK (UINT64_C(1) << 2)
+#define MACRO_SIM_CAPABILITY_M5_MONETARY (UINT64_C(1) << 3)
 #define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
 #define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
@@ -187,6 +188,122 @@ typedef struct macro_sim_m4_advance_result {
     macro_sim_m4_metrics metrics;
 } macro_sim_m4_advance_result;
 
+typedef enum macro_sim_m5_monetary_regime {
+    MACRO_SIM_M5_EXOGENOUS = 0,
+    MACRO_SIM_M5_TAYLOR = 1,
+    MACRO_SIM_M5_MANUAL = 2
+} macro_sim_m5_monetary_regime;
+
+typedef struct macro_sim_m5_genesis_options {
+    uint32_t struct_size;
+    uint32_t monetary_regime;
+    uint64_t economy_id;
+    uint32_t currency_id;
+    uint32_t matching_protocol;
+    uint32_t stochastic;
+    uint32_t reserved;
+    uint64_t households;
+    uint64_t consumption_firms;
+    uint64_t capital_firms;
+    uint64_t banks;
+    uint64_t seed;
+    double opening_capital_per_bank;
+    double initial_policy_rate;
+    double manual_policy_rate;
+    uint32_t has_manual_policy_rate;
+    uint32_t interbank;
+    uint32_t household_credit;
+    uint32_t bank_runs;
+} macro_sim_m5_genesis_options;
+
+typedef struct macro_sim_m5_policy {
+    uint32_t struct_size;
+    uint32_t monetary_regime;
+    uint32_t has_manual_policy_rate;
+    uint32_t open_market_operations;
+    uint32_t reserve_target_indexes_deposits;
+    uint32_t lender_of_last_resort;
+    uint32_t bank_capital_constraint;
+    uint32_t unified_bank_rwa;
+    uint32_t migrate_relationships_on_failure;
+    uint32_t state_resolution_backstop;
+    uint32_t job_guarantee;
+    uint32_t reserved;
+    double government_consumption_share;
+    double government_deficit_target;
+    double deficit_unemployment_reference;
+    double deficit_unemployment_cap;
+    double government_investment_share;
+    double profit_tax_rate;
+    double income_tax_rate;
+    double income_allowance;
+    double consumption_tax_rate;
+    double wealth_tax_rate;
+    double wealth_allowance;
+    double unemployment_benefit_replacement;
+    double benefit_income_floor;
+    double minimum_wage;
+    double job_guarantee_wage_ratio;
+    double job_guarantee_public_works_share;
+    double inflation_target;
+    double taylor_inflation;
+    double taylor_unemployment;
+    double rate_inertia;
+    double manual_policy_rate;
+    double neutral_rate;
+    double natural_unemployment;
+    double maximum_policy_rate;
+    double inflation_sensor_lambda;
+    double reserve_target;
+    double reserve_gap_close;
+    double reserve_floor_fraction;
+    double firm_leverage_limit;
+    double firm_minimum_dscr;
+    double household_credit_limit;
+    double bank_leverage_cap;
+    double bank_exposure_limit;
+    double bank_target_capital_ratio;
+    double deposit_rate_floor;
+} macro_sim_m5_policy;
+
+typedef struct macro_sim_m5_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    macro_sim_m4_metrics economy;
+    double policy_rate;
+    double inflation_sensor;
+    double new_credit;
+    double principal_repaid;
+    double loan_interest_paid;
+    double household_interest_paid;
+    double deposit_interest_paid;
+    double total_loan_principal;
+    double total_bank_capital;
+    double total_reserves;
+    double reserve_stock;
+    double omo_flow;
+    double lolr_advances;
+    double interbank_volume;
+    double interbank_rate;
+    double run_flight_volume;
+    double resolution_cost;
+    double realized_credit_losses;
+    uint64_t alive_banks;
+    uint64_t bank_failures;
+} macro_sim_m5_metrics;
+
+typedef struct macro_sim_m5_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t scratch_capacity_signature;
+    uint64_t transfer_count;
+    uint64_t trade_count;
+    macro_sim_m5_metrics metrics;
+} macro_sim_m5_advance_result;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -268,6 +385,36 @@ MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_save(
     macro_sim_owned_buffer* output
 );
 MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_load(
+    macro_sim_session* session,
+    const uint8_t* checkpoint,
+    size_t checkpoint_size
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_genesis(
+    macro_sim_session* session,
+    const macro_sim_m5_genesis_options* options
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_update_policy(
+    macro_sim_session* session,
+    const macro_sim_m5_policy* policy
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_policy_defaults(
+    macro_sim_m5_policy* output
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_advance(
+    macro_sim_session* session,
+    uint64_t tick_count,
+    macro_sim_m5_advance_result* output
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_state_digest(
+    const macro_sim_session* session,
+    uint8_t* output,
+    size_t output_size
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_checkpoint_save(
+    const macro_sim_session* session,
+    macro_sim_owned_buffer* output
+);
+MACRO_SIM_C_API macro_sim_status macro_sim_m5_checkpoint_load(
     macro_sim_session* session,
     const uint8_t* checkpoint,
     size_t checkpoint_size

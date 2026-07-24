@@ -31,7 +31,7 @@ int main(void) {
     if (value != 0 || macro_sim_session_destroy(&session).code != MACRO_SIM_OK) {
         return 4;
     }
-    if (session != NULL || strcmp(macro_sim_engine_version(), "0.4.0-m4") != 0) {
+    if (session != NULL || strcmp(macro_sim_engine_version(), "0.5.0-m5") != 0) {
         return 5;
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M3_ALGORITHMS) == 0) {

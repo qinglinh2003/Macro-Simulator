@@ -163,6 +163,131 @@ nb::dict m4_result_to_python(
     return output;
 }
 
+nb::dict m5_metrics_to_python(
+    const macro_sim::simulation::M5Metrics& metrics
+) {
+    nb::dict output;
+    output["economy"] = m4_metrics_to_python(metrics.economy);
+    output["policy_rate"] = metrics.policy_rate;
+    output["inflation_sensor"] = metrics.inflation_sensor;
+    output["new_credit"] = metrics.new_credit;
+    output["principal_repaid"] = metrics.principal_repaid;
+    output["loan_interest_paid"] = metrics.loan_interest_paid;
+    output["household_interest_paid"] =
+        metrics.household_interest_paid;
+    output["deposit_interest_paid"] = metrics.deposit_interest_paid;
+    output["total_loan_principal"] = metrics.total_loan_principal;
+    output["total_bank_capital"] = metrics.total_bank_capital;
+    output["total_reserves"] = metrics.total_reserves;
+    output["reserve_stock"] = metrics.reserve_stock;
+    output["omo_flow"] = metrics.omo_flow;
+    output["lolr_advances"] = metrics.lolr_advances;
+    output["interbank_volume"] = metrics.interbank_volume;
+    output["interbank_rate"] = metrics.interbank_rate;
+    output["run_flight_volume"] = metrics.run_flight_volume;
+    output["resolution_cost"] = metrics.resolution_cost;
+    output["realized_credit_losses"] =
+        metrics.realized_credit_losses;
+    output["alive_banks"] = metrics.alive_banks;
+    output["bank_failures"] = metrics.bank_failures;
+    return output;
+}
+
+nb::dict m5_result_to_python(
+    const macro_sim::simulation::M5AdvanceResult& result
+) {
+    nb::dict output;
+    output["first_tick"] = result.first_tick.value();
+    output["next_tick"] = result.next_tick.value();
+    output["advanced_ticks"] = result.advanced_ticks;
+    output["scratch_capacity_signature"] =
+        result.scratch_capacity_signature;
+    output["transfer_count"] = result.transfer_count;
+    output["trade_count"] = result.trade_count;
+    output["metrics"] = m5_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m4_snapshot_to_python(
+    const macro_sim::EngineSession& session
+);
+
+nb::dict m5_snapshot_to_python(
+    const macro_sim::EngineSession& session
+) {
+    if (session.root() == nullptr || session.monetary_runtime() == nullptr) {
+        throw std::runtime_error(
+            "invalid_handle: session has no active M5 simulation"
+        );
+    }
+    auto output = m4_snapshot_to_python(session);
+    const auto& root = *session.root();
+    nb::list banks;
+    root.banks.for_each_alive(
+        [&banks, &root](
+            macro_sim::BankId id,
+            const macro_sim::core::BankComponent& bank
+        ) {
+            nb::dict item;
+            item["id"] = id.value();
+            item["cash_account"] = bank.cash_account.value();
+            item["reserve_node"] = bank.settlement_node.value();
+            item["leverage_appetite"] = bank.leverage_appetite;
+            item["loan_spread"] = bank.loan_spread;
+            item["deposit_spread"] = bank.deposit_spread;
+            item["alive"] = bank.alive;
+            if (const auto* capital = root.bank_capital.get(id);
+                capital != nullptr) {
+                item["opening_capital"] = capital->opening_capital;
+                item["closing_capital"] = capital->closing_capital;
+                item["deposit_interest_arrears"] =
+                    capital->deposit_interest_arrears;
+                item["resolved"] = capital->resolved;
+            }
+            banks.append(std::move(item));
+        }
+    );
+    nb::list interbank;
+    for (const auto& record : root.interbank.records()) {
+        nb::dict item;
+        item["id"] = record.id.value();
+        item["lender"] = record.lender.value();
+        item["borrower"] = record.borrower.value();
+        item["principal"] = record.principal.value();
+        item["rate"] = record.rate.value();
+        item["accrued_interest"] = record.accrued_interest.value();
+        item["originated_tick"] = record.originated_tick.value();
+        item["maturity_tick"] = record.maturity_tick.value();
+        item["active"] = record.active;
+        interbank.append(std::move(item));
+    }
+    nb::list central_bank_operations;
+    for (const auto& record : root.central_bank_operations.records()) {
+        nb::dict item;
+        item["id"] = record.id.value();
+        item["kind"] = static_cast<std::uint8_t>(record.kind);
+        item["bank"] = record.counterparty.value();
+        item["principal"] = record.principal.value();
+        item["rate"] = record.rate.value();
+        item["originated_tick"] = record.opened_tick.value();
+        item["maturity_tick"] = record.maturity_tick.value();
+        item["active"] = record.active;
+        central_bank_operations.append(std::move(item));
+    }
+    output["banks"] = std::move(banks);
+    output["interbank"] = std::move(interbank);
+    output["central_bank_operations"] =
+        std::move(central_bank_operations);
+    output["policy_rate"] =
+        session.monetary_runtime()->policy_rate;
+    output["inflation_sensor"] =
+        session.monetary_runtime()->inflation_sensor;
+    output["metrics"] = m5_metrics_to_python(
+        session.monetary_runtime()->last_metrics
+    );
+    return output;
+}
+
 nb::dict m4_snapshot_to_python(
     const macro_sim::EngineSession& session
 ) {
@@ -363,6 +488,10 @@ NB_MODULE(_native, module) {
             "capital_firms",
             &macro_sim::simulation::M4SimulationSpec::capital_firms
         )
+        .def_rw(
+            "settlement_banks",
+            &macro_sim::simulation::M4SimulationSpec::settlement_banks
+        )
         .def_rw("seed", &macro_sim::simulation::M4SimulationSpec::seed)
         .def_rw(
             "requested_capabilities",
@@ -375,6 +504,151 @@ NB_MODULE(_native, module) {
         .def_rw(
             "market_protocol",
             &macro_sim::simulation::M4SimulationSpec::market_protocol
+        );
+    nb::enum_<macro_sim::simulation::MonetaryRegime>(
+        module,
+        "MonetaryRegime"
+    )
+        .value(
+            "EXOGENOUS",
+            macro_sim::simulation::MonetaryRegime::exogenous
+        )
+        .value(
+            "TAYLOR",
+            macro_sim::simulation::MonetaryRegime::taylor
+        )
+        .value(
+            "MANUAL",
+            macro_sim::simulation::MonetaryRegime::manual
+        );
+    auto m5_policy =
+        nb::class_<macro_sim::simulation::M5PolicyState>(
+            module,
+            "M5Policy"
+        )
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_M5_POLICY(field) \
+    m5_policy.def_rw( \
+        #field, \
+        &macro_sim::simulation::M5PolicyState::field \
+    )
+    MACRO_SIM_BIND_M5_POLICY(government_consumption_share);
+    MACRO_SIM_BIND_M5_POLICY(government_deficit_target);
+    MACRO_SIM_BIND_M5_POLICY(deficit_unemployment_reference);
+    MACRO_SIM_BIND_M5_POLICY(deficit_unemployment_cap);
+    MACRO_SIM_BIND_M5_POLICY(government_investment_share);
+    MACRO_SIM_BIND_M5_POLICY(profit_tax_rate);
+    MACRO_SIM_BIND_M5_POLICY(income_tax_rate);
+    MACRO_SIM_BIND_M5_POLICY(income_allowance);
+    MACRO_SIM_BIND_M5_POLICY(consumption_tax_rate);
+    MACRO_SIM_BIND_M5_POLICY(wealth_tax_rate);
+    MACRO_SIM_BIND_M5_POLICY(wealth_allowance);
+    MACRO_SIM_BIND_M5_POLICY(unemployment_benefit_replacement);
+    MACRO_SIM_BIND_M5_POLICY(benefit_income_floor);
+    MACRO_SIM_BIND_M5_POLICY(minimum_wage);
+    MACRO_SIM_BIND_M5_POLICY(job_guarantee);
+    MACRO_SIM_BIND_M5_POLICY(job_guarantee_wage_ratio);
+    MACRO_SIM_BIND_M5_POLICY(job_guarantee_public_works_share);
+    MACRO_SIM_BIND_M5_POLICY(monetary_regime);
+    MACRO_SIM_BIND_M5_POLICY(inflation_target);
+    MACRO_SIM_BIND_M5_POLICY(taylor_inflation);
+    MACRO_SIM_BIND_M5_POLICY(taylor_unemployment);
+    MACRO_SIM_BIND_M5_POLICY(rate_inertia);
+    MACRO_SIM_BIND_M5_POLICY(neutral_rate);
+    MACRO_SIM_BIND_M5_POLICY(natural_unemployment);
+    MACRO_SIM_BIND_M5_POLICY(maximum_policy_rate);
+    MACRO_SIM_BIND_M5_POLICY(inflation_sensor_lambda);
+    MACRO_SIM_BIND_M5_POLICY(open_market_operations);
+    MACRO_SIM_BIND_M5_POLICY(reserve_target);
+    MACRO_SIM_BIND_M5_POLICY(reserve_gap_close);
+    MACRO_SIM_BIND_M5_POLICY(reserve_target_indexes_deposits);
+    MACRO_SIM_BIND_M5_POLICY(lender_of_last_resort);
+    MACRO_SIM_BIND_M5_POLICY(reserve_floor_fraction);
+    MACRO_SIM_BIND_M5_POLICY(firm_leverage_limit);
+    MACRO_SIM_BIND_M5_POLICY(firm_minimum_dscr);
+    MACRO_SIM_BIND_M5_POLICY(household_credit_limit);
+    MACRO_SIM_BIND_M5_POLICY(bank_capital_constraint);
+    MACRO_SIM_BIND_M5_POLICY(unified_bank_rwa);
+    MACRO_SIM_BIND_M5_POLICY(bank_leverage_cap);
+    MACRO_SIM_BIND_M5_POLICY(bank_exposure_limit);
+    MACRO_SIM_BIND_M5_POLICY(bank_target_capital_ratio);
+    MACRO_SIM_BIND_M5_POLICY(deposit_rate_floor);
+    MACRO_SIM_BIND_M5_POLICY(migrate_relationships_on_failure);
+    MACRO_SIM_BIND_M5_POLICY(state_resolution_backstop);
+#undef MACRO_SIM_BIND_M5_POLICY
+    m5_policy.def_prop_rw(
+        "manual_policy_rate",
+        [](const macro_sim::simulation::M5PolicyState& policy) {
+            if (!policy.manual_policy_rate.has_value()) {
+                return nb::object(nb::none());
+            }
+            return nb::object(nb::float_(*policy.manual_policy_rate));
+        },
+        [](macro_sim::simulation::M5PolicyState& policy,
+           const nb::object& value) {
+            if (value.is_none()) {
+                policy.manual_policy_rate.reset();
+            } else {
+                policy.manual_policy_rate = nb::cast<double>(value);
+            }
+        }
+    );
+    auto m5_rules = nb::class_<macro_sim::simulation::M5Rules>(
+        module,
+        "M5Rules"
+    ).def(nb::init<>());
+#define MACRO_SIM_BIND_M5_RULE(field) \
+    m5_rules.def_rw(#field, &macro_sim::simulation::M5Rules::field)
+    MACRO_SIM_BIND_M5_RULE(bank_count);
+    MACRO_SIM_BIND_M5_RULE(opening_capital_per_bank);
+    MACRO_SIM_BIND_M5_RULE(bank_leverage_mean);
+    MACRO_SIM_BIND_M5_RULE(bank_leverage_dispersion);
+    MACRO_SIM_BIND_M5_RULE(assign_banks_by_size);
+    MACRO_SIM_BIND_M5_RULE(realized_bank_pnl);
+    MACRO_SIM_BIND_M5_RULE(full_firm_pnl);
+    MACRO_SIM_BIND_M5_RULE(household_credit);
+    MACRO_SIM_BIND_M5_RULE(rate_competition);
+    MACRO_SIM_BIND_M5_RULE(relationship_lock_in);
+    MACRO_SIM_BIND_M5_RULE(loan_spread_dispersion);
+    MACRO_SIM_BIND_M5_RULE(bank_search_count);
+    MACRO_SIM_BIND_M5_RULE(interbank);
+    MACRO_SIM_BIND_M5_RULE(interbank_rate_base);
+    MACRO_SIM_BIND_M5_RULE(interbank_tightness);
+    MACRO_SIM_BIND_M5_RULE(deposit_spread_dispersion);
+    MACRO_SIM_BIND_M5_RULE(deposit_search_count);
+    MACRO_SIM_BIND_M5_RULE(deposit_rate);
+    MACRO_SIM_BIND_M5_RULE(deposit_interest_arrears);
+    MACRO_SIM_BIND_M5_RULE(interest_by_deposits);
+    MACRO_SIM_BIND_M5_RULE(firm_amortization);
+    MACRO_SIM_BIND_M5_RULE(household_amortization);
+    MACRO_SIM_BIND_M5_RULE(household_subsistence);
+    MACRO_SIM_BIND_M5_RULE(direct_monetary_transmission);
+    MACRO_SIM_BIND_M5_RULE(bank_runs);
+    MACRO_SIM_BIND_M5_RULE(run_sensitivity);
+    MACRO_SIM_BIND_M5_RULE(run_health_reference);
+    MACRO_SIM_BIND_M5_RULE(run_fear_persistence);
+    MACRO_SIM_BIND_M5_RULE(bank_payout_ratio);
+#undef MACRO_SIM_BIND_M5_RULE
+    nb::class_<macro_sim::simulation::M5SimulationSpec>(
+        module,
+        "M5SimulationSpec"
+    )
+        .def(nb::init<>())
+        .def_rw(
+            "real_economy",
+            &macro_sim::simulation::M5SimulationSpec::real_economy
+        )
+        .def_rw(
+            "policy",
+            &macro_sim::simulation::M5SimulationSpec::policy
+        )
+        .def_rw(
+            "rules",
+            &macro_sim::simulation::M5SimulationSpec::rules
+        )
+        .def_rw(
+            "initial_policy_rate",
+            &macro_sim::simulation::M5SimulationSpec::initial_policy_rate
         );
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")
         .value("HOUSEHOLD", macro_sim::core::OwnerKind::household)
@@ -627,6 +901,22 @@ NB_MODULE(_native, module) {
             nb::arg("spec")
         )
         .def(
+            "initialize_m5",
+            [](macro_sim::EngineSession& session,
+               const macro_sim::simulation::M5SimulationSpec& spec) {
+                require_status(session.initialize_m5(spec));
+            },
+            nb::arg("spec")
+        )
+        .def(
+            "update_m5_policy",
+            [](macro_sim::EngineSession& session,
+               const macro_sim::simulation::M5PolicyState& policy) {
+                require_status(session.update_m5_policy(policy));
+            },
+            nb::arg("policy")
+        )
+        .def(
             "advance_ticks",
             [](macro_sim::EngineSession& session,
                std::uint64_t count,
@@ -641,9 +931,25 @@ NB_MODULE(_native, module) {
             nb::arg("capture_phase_trace") = false
         )
         .def(
+            "advance_m5_ticks",
+            [](macro_sim::EngineSession& session,
+               std::uint64_t count) {
+                const auto result = session.advance_m5_ticks(count);
+                require_status(result.status());
+                return m5_result_to_python(*result.get_if());
+            },
+            nb::arg("count")
+        )
+        .def(
             "simulation_snapshot",
             [](const macro_sim::EngineSession& session) {
                 return m4_snapshot_to_python(session);
+            }
+        )
+        .def(
+            "m5_snapshot",
+            [](const macro_sim::EngineSession& session) {
+                return m5_snapshot_to_python(session);
             }
         )
         .def(
