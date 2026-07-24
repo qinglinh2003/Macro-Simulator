@@ -13,6 +13,7 @@
 #include "macro_sim/error.hpp"
 #include "macro_sim/ids.hpp"
 #include "macro_sim/simulation/m4.hpp"
+#include "macro_sim/simulation/m5.hpp"
 #include "macro_sim/units.hpp"
 
 namespace macro_sim {
@@ -47,6 +48,21 @@ public:
         const noexcept;
     [[nodiscard]] const simulation::M4TickScratch* tick_scratch()
         const noexcept;
+    [[nodiscard]] const simulation::M5Runtime* monetary_runtime()
+        const noexcept;
+    [[nodiscard]] Status initialize_m5(
+        const simulation::M5SimulationSpec& spec
+    );
+    [[nodiscard]] Status update_m5_policy(
+        const simulation::M5PolicyState& policy
+    );
+    [[nodiscard]] Result<simulation::M5AdvanceResult> advance_m5_ticks(
+        std::uint64_t count,
+        const simulation::M5AdvanceOptions& options
+    );
+    [[nodiscard]] Result<simulation::M5AdvanceResult> advance_m5_ticks(
+        std::uint64_t count
+    );
     [[nodiscard]] Status initialize(const core::GenesisSpec& spec);
     [[nodiscard]] Status initialize_simulation(
         const simulation::M4SimulationSpec& spec
@@ -79,6 +95,8 @@ private:
     std::unique_ptr<core::RootState> root_;
     std::unique_ptr<simulation::M4Runtime> simulation_runtime_;
     std::unique_ptr<simulation::M4TickScratch> tick_scratch_;
+    std::unique_ptr<simulation::M5Runtime> monetary_runtime_;
+    std::unique_ptr<simulation::M5TickScratch> monetary_scratch_;
 };
 
 }  // namespace macro_sim

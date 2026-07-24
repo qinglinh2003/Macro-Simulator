@@ -5,6 +5,8 @@
 
 #include "macro_sim/simulation/m4.hpp"
 #include "macro_sim/simulation/m4_checkpoint.hpp"
+#include "macro_sim/simulation/m5.hpp"
+#include "macro_sim/simulation/m5_checkpoint.hpp"
 
 namespace macro_sim {
 
@@ -52,6 +54,11 @@ const simulation::M4Runtime* EngineSession::simulation_runtime()
 const simulation::M4TickScratch* EngineSession::tick_scratch()
     const noexcept {
     return tick_scratch_.get();
+}
+
+const simulation::M5Runtime* EngineSession::monetary_runtime()
+    const noexcept {
+    return monetary_runtime_.get();
 }
 
 Status EngineSession::initialize(const core::GenesisSpec& spec) {
@@ -128,12 +135,124 @@ Status EngineSession::initialize_simulation(
     }
 }
 
+Status EngineSession::initialize_m5(
+    const simulation::M5SimulationSpec& spec
+) {
+    if (closed()) {
+        return Status(ErrorCode::invalid_handle, "session is closed");
+    }
+    if (initialized()) {
+        return Status(
+            ErrorCode::already_exists,
+            "session already has canonical state"
+        );
+    }
+    try {
+        auto initialization = simulation::build_m5_genesis(spec);
+        if (!initialization.ok()) {
+            return initialization.status();
+        }
+        auto* value = initialization.get_if();
+        auto root = std::make_unique<core::RootState>(
+            std::move(value->root)
+        );
+        auto real_economy = std::make_unique<simulation::M4Runtime>(
+            std::move(value->real_economy_runtime)
+        );
+        auto monetary = std::make_unique<simulation::M5Runtime>(
+            std::move(value->runtime)
+        );
+        auto real_scratch =
+            std::make_unique<simulation::M4TickScratch>();
+        auto monetary_scratch =
+            std::make_unique<simulation::M5TickScratch>();
+        real_scratch->reserve(*root);
+        monetary_scratch->reserve(*root);
+        root_ = std::move(root);
+        simulation_runtime_ = std::move(real_economy);
+        tick_scratch_ = std::move(real_scratch);
+        monetary_runtime_ = std::move(monetary);
+        monetary_scratch_ = std::move(monetary_scratch);
+        tick_ = Tick(0);
+        return Status::success();
+    } catch (const std::bad_alloc&) {
+        return Status(
+            ErrorCode::allocation_failure,
+            "M5 simulation genesis allocation failed"
+        );
+    } catch (...) {
+        return Status(
+            ErrorCode::internal_error,
+            "M5 simulation genesis failed"
+        );
+    }
+}
+
+Status EngineSession::update_m5_policy(
+    const simulation::M5PolicyState& policy
+) {
+    if (closed() || monetary_runtime_ == nullptr) {
+        return Status(
+            ErrorCode::invalid_handle,
+            "session has no active M5 simulation"
+        );
+    }
+    const auto validated = simulation::validate_m5_policy(policy);
+    if (!validated.ok()) {
+        return validated;
+    }
+    monetary_runtime_->policy = policy;
+    return Status::success();
+}
+
+Result<simulation::M5AdvanceResult> EngineSession::advance_m5_ticks(
+    std::uint64_t count,
+    const simulation::M5AdvanceOptions& options
+) {
+    if (closed() || !initialized() || simulation_runtime_ == nullptr
+        || tick_scratch_ == nullptr || monetary_runtime_ == nullptr
+        || monetary_scratch_ == nullptr) {
+        return Status(
+            ErrorCode::invalid_handle,
+            "session has no active M5 simulation"
+        );
+    }
+    try {
+        return simulation::advance_m5_ticks(
+            *root_,
+            *simulation_runtime_,
+            *tick_scratch_,
+            *monetary_runtime_,
+            *monetary_scratch_,
+            tick_,
+            count,
+            options
+        );
+    } catch (const std::bad_alloc&) {
+        return Status(
+            ErrorCode::allocation_failure,
+            "M5 tick execution allocation failed"
+        );
+    } catch (...) {
+        return Status(
+            ErrorCode::internal_error,
+            "M5 tick execution failed"
+        );
+    }
+}
+
+Result<simulation::M5AdvanceResult> EngineSession::advance_m5_ticks(
+    std::uint64_t count
+) {
+    return advance_m5_ticks(count, simulation::M5AdvanceOptions{});
+}
+
 Result<simulation::M4AdvanceResult> EngineSession::advance_ticks(
     std::uint64_t count,
     const simulation::M4AdvanceOptions& options
 ) {
     if (closed() || !initialized() || simulation_runtime_ == nullptr
-        || tick_scratch_ == nullptr) {
+        || tick_scratch_ == nullptr || monetary_runtime_ != nullptr) {
         return Status(
             ErrorCode::invalid_handle,
             "session has no active simulation"
@@ -213,6 +332,18 @@ Result<core::StateDigest> EngineSession::digest() const {
             "session has no active canonical state"
         );
     }
+    if (monetary_runtime_ != nullptr) {
+        auto encoded = simulation::save_m5_checkpoint(
+            *root_,
+            *simulation_runtime_,
+            *monetary_runtime_,
+            tick_
+        );
+        if (!encoded.ok()) {
+            return encoded.status();
+        }
+        return core::sha256_digest(*encoded.get_if());
+    }
     if (simulation_runtime_ != nullptr) {
         auto encoded = simulation::save_m4_checkpoint(
             *root_,
@@ -234,6 +365,14 @@ Result<std::vector<std::uint8_t>> EngineSession::checkpoint() const {
             "session has no active canonical state"
         );
     }
+    if (monetary_runtime_ != nullptr) {
+        return simulation::save_m5_checkpoint(
+            *root_,
+            *simulation_runtime_,
+            *monetary_runtime_,
+            tick_
+        );
+    }
     if (simulation_runtime_ != nullptr) {
         return simulation::save_m4_checkpoint(
             *root_,
@@ -249,6 +388,48 @@ Status EngineSession::restore_checkpoint(
 ) {
     if (closed()) {
         return Status(ErrorCode::invalid_handle, "session is closed");
+    }
+    if (simulation::is_m5_checkpoint(checkpoint)) {
+        auto loaded = simulation::load_m5_checkpoint(checkpoint);
+        if (!loaded.ok()) {
+            return loaded.status();
+        }
+        try {
+            auto* value = loaded.get_if();
+            auto replacement = std::make_unique<core::RootState>(
+                std::move(value->root)
+            );
+            auto real_economy =
+                std::make_unique<simulation::M4Runtime>(
+                    std::move(value->real_economy_runtime)
+                );
+            auto monetary = std::make_unique<simulation::M5Runtime>(
+                std::move(value->runtime)
+            );
+            auto real_scratch =
+                std::make_unique<simulation::M4TickScratch>();
+            auto monetary_scratch =
+                std::make_unique<simulation::M5TickScratch>();
+            real_scratch->reserve(*replacement);
+            monetary_scratch->reserve(*replacement);
+            root_ = std::move(replacement);
+            simulation_runtime_ = std::move(real_economy);
+            tick_scratch_ = std::move(real_scratch);
+            monetary_runtime_ = std::move(monetary);
+            monetary_scratch_ = std::move(monetary_scratch);
+            tick_ = value->tick;
+            return Status::success();
+        } catch (const std::bad_alloc&) {
+            return Status(
+                ErrorCode::allocation_failure,
+                "M5 checkpoint restore allocation failed"
+            );
+        } catch (...) {
+            return Status(
+                ErrorCode::internal_error,
+                "M5 checkpoint restore failed"
+            );
+        }
     }
     if (simulation::is_m4_checkpoint(checkpoint)) {
         auto loaded = simulation::load_m4_checkpoint(checkpoint);
@@ -268,6 +449,8 @@ Status EngineSession::restore_checkpoint(
             root_ = std::move(replacement);
             simulation_runtime_ = std::move(runtime);
             tick_scratch_ = std::move(scratch);
+            monetary_runtime_.reset();
+            monetary_scratch_.reset();
             tick_ = value->tick;
             return Status::success();
         } catch (const std::bad_alloc&) {
@@ -293,6 +476,8 @@ Status EngineSession::restore_checkpoint(
         root_ = std::move(replacement);
         simulation_runtime_.reset();
         tick_scratch_.reset();
+        monetary_runtime_.reset();
+        monetary_scratch_.reset();
         tick_ = Tick(0);
         return Status::success();
     } catch (const std::bad_alloc&) {
@@ -315,6 +500,8 @@ Status EngineSession::close() noexcept {
     root_.reset();
     simulation_runtime_.reset();
     tick_scratch_.reset();
+    monetary_runtime_.reset();
+    monetary_scratch_.reset();
     state_ = SessionState::closed;
     return Status::success();
 }
