@@ -1,0 +1,52 @@
+{
+  "differential": {
+    "exact_equation_cases": 33,
+    "random_equation_cases": 1000,
+    "status": "passed"
+  },
+  "full_python_regression": {
+    "duration_seconds": 3401.41,
+    "passed": 1586,
+    "skipped": 11,
+    "status": "passed",
+    "warnings": 4
+  },
+  "native_asan_ubsan": {
+    "passed": 10,
+    "status": "passed"
+  },
+  "native_release": {
+    "passed": 12,
+    "status": "passed"
+  },
+  "packaging": {
+    "installed_cmake_consumer": "passed",
+    "isolated_wheel": "passed",
+    "source_distribution": "passed"
+  },
+  "performance": {
+    "preferential_2048_median_ns": 970084,
+    "preferential_weight_builds_per_clearing": 1,
+    "price_sorted_2048_median_ns": 680000,
+    "price_sorts_per_clearing": 1,
+    "sampled_2048_median_ns": 913958,
+    "status": "passed"
+  },
+  "platform": {
+    "architecture": "arm64",
+    "build_type": "release",
+    "compiler": "AppleClang 21.0.0.21000101",
+    "operating_system": "macOS"
+  },
+  "properties": {
+    "market_random_seeds": 100,
+    "stochastic_panel_seeds": 20000,
+    "supported_worker_counts": [
+      1,
+      2,
+      4,
+      8
+    ]
+  },
+  "schema_version": "m3-acceptance-v1"
+}
