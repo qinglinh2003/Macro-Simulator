@@ -101,6 +101,7 @@ def main() -> int:
     check_frozen_evidence()
     check_contracts()
     check_english_delta()
+    run([sys.executable, "tools/m2/locks.py"])
     run([sys.executable, "-m", "pytest", "-q", "tests/native"])
     if not arguments.skip_build:
         run(["cmake", "--preset", arguments.preset])
