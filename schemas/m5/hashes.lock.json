@@ -1,1 +1,1 @@
-{"aggregate_sha256":"b04898d06225c702d0dc98dd65851e740d7e3b55a3e55216acc195f94b25130b","files":[{"byte_count":330,"path":"schemas/m5/performance_budget.json","sha256":"49b3bc334e9bc255335afc6dc693fb14d6df13bca25b69076c2148b30022e7da"}],"schema_version":"m5-contract-lock-v1"}
+{"aggregate_sha256":"4379a40e016fc9643de9e954d9ff814c817bf5dc9f09ecfb4734000534ff4441","files":[{"byte_count":436,"path":"schemas/m5/performance_budget.json","sha256":"64f3c85c71e6f8411dc7ce2740b5dc44ea7d5699bd56f0c8f9a7d949968c792a"}],"schema_version":"m5-contract-lock-v1"}

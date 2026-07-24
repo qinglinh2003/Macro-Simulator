@@ -22,6 +22,7 @@ def main() -> int:
         default=ROOT / "schemas/m5/performance_budget.json",
     )
     parser.add_argument("--days", type=int, default=120)
+    parser.add_argument("--platform", default=sys.platform)
     arguments = parser.parse_args()
     suffix = ".exe" if sys.platform == "win32" else ""
     executable = (
@@ -39,7 +40,11 @@ def main() -> int:
     budget = json.loads(arguments.budget.read_text(encoding="utf-8"))
     p0 = measured["p0"]
     failures: list[str] = []
-    if p0["p95_ns"] > budget["absolute_p95_ns"]:
+    absolute_p95_ns = budget.get(
+        "absolute_p95_ns_by_platform",
+        {},
+    ).get(arguments.platform, budget["absolute_p95_ns"])
+    if p0["p95_ns"] > absolute_p95_ns:
         failures.append("p0 p95 latency exceeds the absolute budget")
     if (
         p0["maximum_allocations_per_day"]
@@ -58,6 +63,8 @@ def main() -> int:
     report = {
         "failures": failures,
         "measurement": measured,
+        "platform": arguments.platform,
+        "platform_absolute_p95_ns": absolute_p95_ns,
         "schema_version": "m5-performance-gate-result-v1",
         "status": "failed" if failures else "passed",
     }

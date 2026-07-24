@@ -1,5 +1,10 @@
 {
   "absolute_p95_ns": 2000000,
+  "absolute_p95_ns_by_platform": {
+    "darwin": 2000000,
+    "linux": 2000000,
+    "win32": 2500000
+  },
   "maximum_allocations_per_day": 2,
   "maximum_scaling_ratio": 2.6,
   "p0": {

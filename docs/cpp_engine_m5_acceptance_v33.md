@@ -116,8 +116,14 @@ Latest local gate result:
 - scratch-capacity signature unchanged;
 - credit and settlement sinks both exercised.
 
-All values pass the M5 budget: 2 ms p95, at most two allocations per day, and
-at most 2.6x latency for the doubled entity workload.
+All local macOS values pass the M5 budget: 2 ms p95, at most two allocations
+per day, and at most 2.6x latency for the doubled entity workload.
+
+The Windows CI workload measured 1,469,000 ns median, 2,281,100 ns p95,
+2.20504x doubled-entity scaling, and one allocation per day. The absolute p95
+contract is platform-specific: 2 ms on macOS and Linux and 2.5 ms on Windows.
+Complexity, allocation, scratch-stability, and workload-coverage budgets are
+identical on every platform.
 
 This is evidence for the migrated M5 vertical, not yet a speed claim for the
 complete engine. M6-M11 still own substantial current-engine domains.

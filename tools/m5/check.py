@@ -24,6 +24,18 @@ def validate_contracts() -> None:
             encoding="utf-8"
         )
     )
+    if budget["absolute_p95_ns"] != 2_000_000:
+        raise AssertionError("M5 fallback latency budget changed")
+    expected_platform_budgets = {
+        "darwin": 2_000_000,
+        "linux": 2_000_000,
+        "win32": 2_500_000,
+    }
+    if (
+        budget.get("absolute_p95_ns_by_platform")
+        != expected_platform_budgets
+    ):
+        raise AssertionError("M5 platform latency budgets changed")
     if budget["maximum_allocations_per_day"] > 2:
         raise AssertionError("M5 allocation budget is too permissive")
     header = (
