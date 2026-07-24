@@ -31,7 +31,11 @@ def canonical_bytes(value: Any) -> bytes:
 
 def records(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], str]:
     rows: list[dict[str, Any]] = []
-    for path in sorted(set(paths)):
+    ordered = sorted(
+        set(paths),
+        key=lambda path: path.relative_to(ROOT).as_posix(),
+    )
+    for path in ordered:
         content = path.read_bytes()
         rows.append({
             "byte_count": len(content),
