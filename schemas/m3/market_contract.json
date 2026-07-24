@@ -1,0 +1,36 @@
+{
+  "epsilon": 1e-09,
+  "invariants": [
+    "finite_outputs",
+    "nonnegative_quantities",
+    "no_self_trade",
+    "buyer_budget_feasibility",
+    "buyer_demand_feasibility",
+    "seller_stock_feasibility",
+    "physical_conservation",
+    "trade_value_identity",
+    "stable_trade_order"
+  ],
+  "protocols": {
+    "preferential": {
+      "selection": "attractiveness^beta / price^price_elasticity",
+      "weight_builds_per_clearing": 1
+    },
+    "price_sorted": {
+      "sorts_per_clearing": 1,
+      "tie_break": "named Philox key then offer_id"
+    },
+    "sampled": {
+      "sample_size_min": 1,
+      "selection": "cheapest eligible offer in sample"
+    }
+  },
+  "rng": "philox4x32-10",
+  "schema_version": "m3-market-contract-v1",
+  "supported_worker_counts": [
+    1,
+    2,
+    4,
+    8
+  ]
+}

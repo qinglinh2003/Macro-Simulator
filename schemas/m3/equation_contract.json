@@ -1,0 +1,43 @@
+{
+  "absolute_tolerance": 1e-10,
+  "deferred": [
+    {
+      "id": "diversify_mpc",
+      "reason": "genesis population draw owned by M4 genesis"
+    }
+  ],
+  "equations": [
+    "demand_expectation",
+    "income_expectation",
+    "production",
+    "labor_demand",
+    "capital_service_cost",
+    "capital_service_unit_cost",
+    "unit_cost",
+    "production_plan",
+    "wage_plan",
+    "price_plan",
+    "investment_user_cost",
+    "investment_plan",
+    "firm_credit_request",
+    "firm_debt_service_headroom",
+    "credit_grant",
+    "debt_service",
+    "consumption_plan",
+    "household_contractual_debt_service",
+    "household_debt_service_reservation",
+    "equity_demand",
+    "household_credit_request",
+    "floor_safe_price_return",
+    "valuation_discount_rate",
+    "residual_income_fundamental",
+    "bond_price",
+    "mortality_integral",
+    "survival_probability",
+    "fertility_shape_rate",
+    "fertility_rate",
+    "expected_life_at_birth"
+  ],
+  "relative_tolerance": 1e-10,
+  "schema_version": "m3-equation-contract-v1"
+}

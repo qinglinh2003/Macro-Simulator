@@ -1,0 +1,19 @@
+{
+  "absolute_timing_is_diagnostic": true,
+  "complexity_ratios": {
+    "preferential_double_sellers_max": 2.8,
+    "price_sorted_double_sellers_max": 2.8,
+    "sampled_double_sellers_max": 2.4
+  },
+  "instrumentation": {
+    "preferential_weight_builds_max": 1,
+    "price_sorted_sorts_max": 1
+  },
+  "schema_version": "m3-performance-budget-v1",
+  "sizes": [
+    256,
+    512,
+    1024,
+    2048
+  ]
+}

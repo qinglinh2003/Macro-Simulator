@@ -1,0 +1,58 @@
+schema_version: m3-gate-manifest-v1
+base_milestone: m2-canonical-accounting-v33
+gates:
+  - id: m3.contracts
+    class: pr
+    command: [uv, run, python, tools/m3/check.py, --skip-build]
+    dependencies: []
+    timeout_seconds: 300
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m3/equation_contract.json
+      - schemas/m3/market_contract.json
+      - schemas/m3/performance_budget.json
+  - id: m3.native-debug
+    class: pr
+    command: [uv, run, python, tools/m3/check.py, --preset, m3-debug]
+    dependencies: [m3.contracts]
+    timeout_seconds: 900
+    platform_profiles: [any]
+    artifacts: []
+  - id: m3.native-release
+    class: nightly
+    command: [uv, run, python, tools/m3/check.py, --preset, m3-release]
+    dependencies: [m3.native-debug]
+    timeout_seconds: 900
+    platform_profiles: [any]
+    artifacts: []
+  - id: m3.sanitizers
+    class: nightly
+    command: [uv, run, python, tools/m3/check.py, --preset, m3-asan]
+    dependencies: [m3.native-debug]
+    timeout_seconds: 1200
+    platform_profiles: [unix]
+    artifacts: []
+  - id: m3.performance
+    class: milestone
+    command: [uv, run, python, tools/m3/performance_gate.py, --build-dir, build/native/m3-release]
+    dependencies: [m3.native-release]
+    timeout_seconds: 600
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m3/performance_budget.json
+  - id: m3.python-regression
+    class: milestone
+    command: [uv, run, pytest, -q, -n, "6"]
+    dependencies: [m3.sanitizers]
+    timeout_seconds: 7200
+    platform_profiles: [any]
+    artifacts: []
+  - id: m3.final-audit
+    class: milestone
+    command: [uv, run, python, tools/m3/final_audit.py, --require-clean]
+    dependencies: [m3.performance, m3.python-regression]
+    timeout_seconds: 600
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m3/hashes.lock.json
+      - schemas/m3/source.lock.json
