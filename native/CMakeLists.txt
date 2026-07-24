@@ -90,6 +90,7 @@ add_library(
         src/simulation/m4_checkpoint.cpp
         src/simulation/m5.cpp
         src/simulation/m5_checkpoint.cpp
+        src/simulation/m6.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -341,6 +342,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m6_extension_seam
         COMMAND macro_sim_m6_extension_seam_tests
+    )
+
+    add_executable(
+        macro_sim_m6_simulation_tests
+        tests/m6_simulation_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m6_simulation_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m6_simulation_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m6_simulation_tests)
+    add_test(
+        NAME macro_sim.m6_simulation
+        COMMAND macro_sim_m6_simulation_tests
     )
 
     if(TARGET _native)

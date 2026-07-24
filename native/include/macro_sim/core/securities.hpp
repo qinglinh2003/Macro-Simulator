@@ -157,7 +157,18 @@ public:
     );
     [[nodiscard]] Status settle_bond(BondId bond);
     [[nodiscard]] Status resolve_equity(EquityId equity);
+    [[nodiscard]] Status update_equity_valuation(
+        EquityId equity,
+        Price price,
+        Price last_price,
+        Price peak_price,
+        Price fundamental,
+        double trend,
+        double income_signal
+    );
     [[nodiscard]] Status consolidate();
+    [[nodiscard]] Status begin_batch() noexcept;
+    [[nodiscard]] Status finish_batch();
 
     [[nodiscard]] BondContract* get(BondId id) noexcept;
     [[nodiscard]] const BondContract* get(BondId id) const noexcept;
@@ -210,6 +221,7 @@ private:
         Money cost_basis
     );
     [[nodiscard]] Status validate_security(SecurityId security) const noexcept;
+    [[nodiscard]] Status mutation_complete();
     [[nodiscard]] Status rebuild_indexes();
     void bump_version() noexcept;
 
@@ -228,6 +240,8 @@ private:
     std::vector<BondId> maturity_bonds_;
     std::vector<HolderSecurityIndexEntry> bank_index_;
     std::vector<SecurityLotId> bank_lots_;
+    bool batch_active_{false};
+    bool batch_dirty_{false};
 };
 
 }  // namespace macro_sim::core

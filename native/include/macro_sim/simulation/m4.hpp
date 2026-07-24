@@ -242,6 +242,7 @@ public:
 
     std::vector<HouseholdId> household_ids_;
     std::vector<FirmId> firm_ids_;
+    std::vector<std::size_t> firm_dense_index_;
     std::vector<std::size_t> consumption_firm_indices_;
     std::vector<std::size_t> capital_firm_indices_;
     std::vector<std::size_t> household_order_;

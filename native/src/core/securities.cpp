@@ -247,12 +247,10 @@ Result<BondId> SecurityBook::issue_bond(
         bonds_.pop_back();
         return lot.status();
     }
-    bump_version();
-    const auto indexes = rebuild_indexes();
+    const auto indexes = mutation_complete();
     if (!indexes.ok()) {
         lots_.pop_back();
         bonds_.pop_back();
-        --version_;
         static_cast<void>(rebuild_indexes());
         return indexes;
     }
@@ -316,12 +314,10 @@ Result<EquityId> SecurityBook::create_equity(
             return lot.status();
         }
     }
-    bump_version();
-    const auto indexes = rebuild_indexes();
+    const auto indexes = mutation_complete();
     if (!indexes.ok()) {
         lots_.resize(first_lot);
         equities_.pop_back();
-        --version_;
         static_cast<void>(rebuild_indexes());
         return indexes;
     }
@@ -405,8 +401,7 @@ Status SecurityBook::transfer_units(
             destination_lot->cost_basis.value() + assigned_cost
         );
     }
-    bump_version();
-    return rebuild_indexes();
+    return mutation_complete();
 }
 
 Status SecurityBook::issue_equity_units(
@@ -432,8 +427,7 @@ Status SecurityBook::issue_equity_units(
         return created.status();
     }
     contract->outstanding_shares += units;
-    bump_version();
-    return rebuild_indexes();
+    return mutation_complete();
 }
 
 Status SecurityBook::retire_units(
@@ -481,8 +475,7 @@ Status SecurityBook::retire_units(
         contract->outstanding_shares =
             std::max(0.0, contract->outstanding_shares - units);
     }
-    bump_version();
-    return rebuild_indexes();
+    return mutation_complete();
 }
 
 Status SecurityBook::settle_bond(BondId bond) {
@@ -501,8 +494,7 @@ Status SecurityBook::settle_bond(BondId bond) {
     contract->outstanding_face = Money(0.0);
     contract->active = false;
     contract->settled = true;
-    bump_version();
-    return rebuild_indexes();
+    return mutation_complete();
 }
 
 Status SecurityBook::resolve_equity(EquityId equity) {
@@ -524,8 +516,37 @@ Status SecurityBook::resolve_equity(EquityId equity) {
     contract->fundamental = Price(0.0);
     contract->active = false;
     contract->resolved = true;
-    bump_version();
-    return rebuild_indexes();
+    return mutation_complete();
+}
+
+Status SecurityBook::update_equity_valuation(
+    EquityId equity,
+    Price price,
+    Price last_price,
+    Price peak_price,
+    Price fundamental,
+    double trend,
+    double income_signal
+) {
+    auto* contract = get(equity);
+    if (contract == nullptr || !contract->active || contract->resolved
+        || !finite_nonnegative(price.value())
+        || !finite_nonnegative(last_price.value())
+        || !finite_nonnegative(peak_price.value())
+        || !finite_nonnegative(fundamental.value())
+        || !std::isfinite(trend) || !std::isfinite(income_signal)) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "invalid equity valuation update"
+        );
+    }
+    contract->price = price;
+    contract->last_price = last_price;
+    contract->peak_price = peak_price;
+    contract->fundamental = fundamental;
+    contract->trend = trend;
+    contract->income_signal = income_signal;
+    return mutation_complete();
 }
 
 Status SecurityBook::consolidate() {
@@ -554,6 +575,33 @@ Status SecurityBook::consolidate() {
     if (!changed) {
         return Status::success();
     }
+    return mutation_complete();
+}
+
+Status SecurityBook::begin_batch() noexcept {
+    if (batch_active_) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "security mutation batch is already active"
+        );
+    }
+    batch_active_ = true;
+    batch_dirty_ = false;
+    return Status::success();
+}
+
+Status SecurityBook::finish_batch() {
+    if (!batch_active_) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "security mutation batch is not active"
+        );
+    }
+    batch_active_ = false;
+    if (!batch_dirty_) {
+        return Status::success();
+    }
+    batch_dirty_ = false;
     bump_version();
     return rebuild_indexes();
 }
@@ -665,6 +713,21 @@ double SecurityBook::units_held(
 ) const noexcept {
     double total = 0.0;
     double correction = 0.0;
+    if (batch_active_) {
+        for (const auto& lot : lots_) {
+            if (!lot.active || lot.security != security
+                || lot.holder != holder) {
+                continue;
+            }
+            const double next = total + lot.units;
+            correction +=
+                std::abs(total) >= std::abs(lot.units)
+                ? (total - next) + lot.units
+                : (lot.units - next) + total;
+            total = next;
+        }
+        return total + correction;
+    }
     for (const auto lot_id : lots_for_holder(holder)) {
         const auto* lot = get(lot_id);
         if (lot == nullptr || !lot->active || lot->security != security) {
@@ -844,6 +907,8 @@ void SecurityBook::replace_records(
     equities_ = std::move(equities);
     lots_ = std::move(lots);
     version_ = version;
+    batch_active_ = false;
+    batch_dirty_ = false;
     static_cast<void>(rebuild_indexes());
 }
 
@@ -938,6 +1003,15 @@ Status SecurityBook::rebuild_indexes() {
         maturity_bonds_
     );
     return Status::success();
+}
+
+Status SecurityBook::mutation_complete() {
+    if (batch_active_) {
+        batch_dirty_ = true;
+        return Status::success();
+    }
+    bump_version();
+    return rebuild_indexes();
 }
 
 void SecurityBook::bump_version() noexcept {

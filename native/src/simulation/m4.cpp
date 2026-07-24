@@ -18,6 +18,8 @@ namespace {
 
 constexpr double kTolerance = 1.0e-8;
 constexpr double kDaysPerYear = 365.0;
+constexpr std::size_t kAbsentFirmIndex =
+    std::numeric_limits<std::size_t>::max();
 constexpr std::uint64_t kV1Capabilities =
     capability_bit(M4Capability::physical_capital)
     | capability_bit(M4Capability::government);
@@ -133,6 +135,16 @@ constexpr std::uint64_t kUnsupportedCapabilities =
         return Status(ErrorCode::internal_error, "injected M4 phase fault");
     }
     return Status::success();
+}
+
+[[nodiscard]] std::size_t firm_projection_index(
+    const M4TickScratch& scratch,
+    std::uint64_t firm
+) noexcept {
+    const auto id = static_cast<std::size_t>(firm);
+    return id < scratch.firm_dense_index_.size()
+        ? scratch.firm_dense_index_[id]
+        : kAbsentFirmIndex;
 }
 
 void capture_phase(
@@ -330,6 +342,8 @@ void commit_working_state(
 ) {
     if (scratch.household_ids_.size() != state.households.alive_count()
         || scratch.firm_ids_.size() != state.firms.alive_count()
+        || scratch.firm_dense_index_.size()
+            != state.firms.allocator_state().next_id
         || scratch.balances_.size() != state.postings.size() + 1) {
         scratch.reserve(state);
     }
@@ -752,8 +766,17 @@ void commit_working_state(
             remaining_demand -= quantity;
             allocated += quantity;
             scratch.market_offer_remaining_[offer_index] -= quantity;
-            const auto firm_index =
-                static_cast<std::size_t>(offer.offer_id - 1);
+            const auto firm_index = firm_projection_index(
+                scratch,
+                offer.offer_id
+            );
+            if (firm_index == kAbsentFirmIndex
+                || firm_index >= scratch.firm_work_.size()) {
+                return Status(
+                    ErrorCode::internal_error,
+                    "M4 market offer projection is stale"
+                );
+            }
             auto& firm = scratch.firm_work_[firm_index];
             firm.sales += quantity;
             firm.revenue += value;
@@ -766,8 +789,10 @@ void commit_working_state(
             }
         }
         if (capital_market) {
-            const auto firm_index =
-                static_cast<std::size_t>(order.order_id - 1);
+            const auto firm_index = firm_projection_index(
+                scratch,
+                order.order_id
+            );
             if (firm_index >= scratch.firm_work_.size()
                 || scratch.firm_ids_[firm_index].value()
                     != order.order_id) {
@@ -793,9 +818,17 @@ void commit_working_state(
         }
     }
     for (std::size_t index = 0; index < scratch.offers_.size(); ++index) {
-        const auto firm_index = static_cast<std::size_t>(
-            scratch.offers_[index].offer_id - 1
+        const auto firm_index = firm_projection_index(
+            scratch,
+            scratch.offers_[index].offer_id
         );
+        if (firm_index == kAbsentFirmIndex
+            || firm_index >= scratch.firm_work_.size()) {
+            return Status(
+                ErrorCode::internal_error,
+                "M4 market offer projection is stale"
+            );
+        }
         scratch.firm_work_[firm_index].closing_inventory =
             scratch.market_offer_remaining_[index];
     }
@@ -927,8 +960,10 @@ void commit_working_state(
         if (!status.ok()) {
             return status;
         }
-        const auto firm_index =
-            static_cast<std::size_t>(trade.offer_id - 1);
+        const auto firm_index = firm_projection_index(
+            scratch,
+            trade.offer_id
+        );
         if (firm_index >= scratch.firm_work_.size()
             || scratch.firm_ids_[firm_index].value() != trade.offer_id) {
             return Status(
@@ -942,15 +977,27 @@ void commit_working_state(
         ++scratch.trade_count_;
     }
     for (const auto& stock : scratch.clearing_.stock_commands) {
-        const auto firm_index =
-            static_cast<std::size_t>(stock.offer_id - 1);
+        const auto firm_index = firm_projection_index(
+            scratch,
+            stock.offer_id
+        );
+        if (firm_index == kAbsentFirmIndex
+            || firm_index >= scratch.firm_work_.size()) {
+            return Status(
+                ErrorCode::internal_error,
+                "M4 market stock projection is stale"
+            );
+        }
         scratch.firm_work_[firm_index].closing_inventory =
             stock.closing.value();
     }
     for (const auto& allocation : scratch.clearing_.allocations) {
         if (capital_market) {
             const auto firm_id = allocation.order_id;
-            const auto firm_index = static_cast<std::size_t>(firm_id - 1);
+            const auto firm_index = firm_projection_index(
+                scratch,
+                firm_id
+            );
             if (firm_index >= scratch.firm_work_.size()
                 || scratch.firm_ids_[firm_index].value() != firm_id) {
                 return Status(
@@ -1807,6 +1854,12 @@ void M4TickScratch::reserve(const core::RootState& state) {
         }
     );
     firm_ids_.clear();
+    firm_dense_index_.assign(
+        static_cast<std::size_t>(
+            state.firms.allocator_state().next_id
+        ),
+        kAbsentFirmIndex
+    );
     consumption_firm_indices_.clear();
     capital_firm_indices_.clear();
     firm_ids_.reserve(firm_count);
@@ -1816,6 +1869,9 @@ void M4TickScratch::reserve(const core::RootState& state) {
         [this](FirmId id, const core::FirmComponent& firm) {
             const auto index = firm_ids_.size();
             firm_ids_.push_back(id);
+            firm_dense_index_[
+                static_cast<std::size_t>(id.value())
+            ] = index;
             if (firm.sector == core::FirmSector::consumption) {
                 consumption_firm_indices_.push_back(index);
             } else {
@@ -1847,6 +1903,7 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
     const std::array capacities{
         household_ids_.capacity(),
         firm_ids_.capacity(),
+        firm_dense_index_.capacity(),
         consumption_firm_indices_.capacity(),
         capital_firm_indices_.capacity(),
         household_order_.capacity(),

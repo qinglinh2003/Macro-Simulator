@@ -138,6 +138,9 @@ InvariantReport run_invariants(const RootState& state) noexcept {
         }
     );
     for (const auto& account : state.postings.records()) {
+        if (!account.open) {
+            continue;
+        }
         canonical_references =
             canonical_references && account.id.valid()
             && account.key.economy == state.economy

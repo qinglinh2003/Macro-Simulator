@@ -534,6 +534,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         }
         double share_sum = 0.0;
         double correction = 0.0;
+        bool active_after = false;
         for (const auto& existing : root_->ownership.records()) {
             if (!existing.active || existing.asset != lot->asset) {
                 continue;
@@ -549,6 +550,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
                     break;
                 }
             }
+            active_after = active_after || final_share > 0.0;
             const double next = share_sum + final_share;
             correction +=
                 std::abs(share_sum) >= std::abs(final_share)
@@ -556,7 +558,8 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
                 : (final_share - next) + share_sum;
             share_sum = next;
         }
-        if (std::abs((share_sum + correction) - 1.0)
+        if (active_after
+            && std::abs((share_sum + correction) - 1.0)
             > root_->accounting_tolerance) {
             return reject(
                 Status(
