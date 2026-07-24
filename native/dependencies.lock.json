@@ -1,0 +1,64 @@
+{
+  "schema_version": "m1-native-dependencies-v1",
+  "dependencies": [
+    {
+      "name": "cnpy",
+      "capability": "npy-npz",
+      "version": "4e8810b1a8637695171ed346ce68f6984e585ef4",
+      "immutable_ref": "4e8810b1a8637695171ed346ce68f6984e585ef4",
+      "source_url": "https://github.com/rogersce/cnpy/archive/4e8810b1a8637695171ed346ce68f6984e585ef4.tar.gz",
+      "source_sha256": "5120abc54a564efa92c642cc0199cc4fd3f345901157de9fbbdcedbb34d28d8a",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "integration": "planned-m2"
+    },
+    {
+      "name": "FlatBuffers",
+      "capability": "checkpoint-envelope",
+      "version": "25.2.10",
+      "immutable_ref": "v25.2.10",
+      "source_url": "https://github.com/google/flatbuffers/archive/refs/tags/v25.2.10.tar.gz",
+      "source_sha256": "b9c2df49707c57a48fc0923d52b8c73beb72d675f9d44b2211e4569be40a7421",
+      "license": "Apache-2.0",
+      "license_file": "LICENSE.txt",
+      "integration": "prototype-python-and-planned-m2-native",
+      "prototype_python_sdist": {
+        "url": "https://files.pythonhosted.org/packages/e4/30/eb5dce7994fc71a2f685d98ec33cc660c0a5887db5610137e60d8cbc4489/flatbuffers-25.2.10.tar.gz",
+        "sha256": "97e451377a41262f8d9bd4295cc836133415cc03d8cb966410a4af92eb00d26e"
+      }
+    },
+    {
+      "name": "nlohmann-json",
+      "capability": "canonical-json",
+      "version": "3.11.3",
+      "immutable_ref": "v3.11.3",
+      "source_url": "https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz",
+      "source_sha256": "d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d",
+      "license": "MIT",
+      "license_file": "LICENSE.MIT",
+      "integration": "planned-m2"
+    },
+    {
+      "name": "PicoSHA2",
+      "capability": "sha256",
+      "version": "161cb3fc4170fa7a3eca9e582cebd27cc4d1fe29",
+      "immutable_ref": "161cb3fc4170fa7a3eca9e582cebd27cc4d1fe29",
+      "source_url": "https://github.com/okdshin/PicoSHA2/archive/161cb3fc4170fa7a3eca9e582cebd27cc4d1fe29.tar.gz",
+      "source_sha256": "6cf473a00c98298d3ddee0aed853e3c799791f49dbc01c996ea46cb248e85802",
+      "license": "MIT",
+      "license_file": "LICENSE",
+      "integration": "planned-m2"
+    },
+    {
+      "name": "zlib",
+      "capability": "zip-deflate",
+      "version": "1.3.1",
+      "immutable_ref": "v1.3.1",
+      "source_url": "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz",
+      "source_sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+      "license": "Zlib",
+      "license_file": "LICENSE",
+      "integration": "planned-m2"
+    }
+  ]
+}

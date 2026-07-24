@@ -1,0 +1,15 @@
+namespace MacroSim.Checkpoint;
+
+table CheckpointEnvelope {
+  schema_version:uint;
+  canonical_encoding_version:uint;
+  engine_version:string;
+  payload_kind:string;
+  payload:[ubyte];
+  payload_sha256:[ubyte];
+  required_features:[string];
+  extensions_json:string;
+}
+
+root_type CheckpointEnvelope;
+file_identifier "MSCP";

@@ -44,6 +44,7 @@ OPTIONAL_LOCKED_ARTIFACTS = (
     ROOT / "schemas/m1/checkpoint_prototype.json",
     ROOT / "schemas/m1/canonical_encoding_vectors.json",
     ROOT / "native/dependencies.lock.json",
+    ROOT / "schemas/m1/native_sbom.spdx.json",
 )
 
 
