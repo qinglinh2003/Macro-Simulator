@@ -61,7 +61,13 @@ function(macro_sim_project_options target)
     endif()
 endfunction()
 
-add_library(macro_sim_core STATIC src/engine_session.cpp src/version.cpp)
+add_library(
+    macro_sim_core
+    STATIC
+        src/engine_session.cpp
+        src/rng.cpp
+        src/version.cpp
+)
 add_library(macro_sim::core ALIAS macro_sim_core)
 target_include_directories(
     macro_sim_core
@@ -119,6 +125,11 @@ if(MACRO_SIM_BUILD_TESTS)
     target_link_libraries(macro_sim_c_smoke PRIVATE macro_sim_c)
     macro_sim_project_options(macro_sim_c_smoke)
     add_test(NAME macro_sim.c_abi COMMAND macro_sim_c_smoke)
+
+    add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
+    target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
+    macro_sim_project_options(macro_sim_rng_tests)
+    add_test(NAME macro_sim.rng COMMAND macro_sim_rng_tests)
 endif()
 
 if(MACRO_SIM_BUILD_BENCHMARKS)

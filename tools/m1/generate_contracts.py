@@ -40,6 +40,7 @@ M0_FAMILIES = {
 
 OPTIONAL_LOCKED_ARTIFACTS = (
     ROOT / "schemas/m1/rng_vectors.json",
+    ROOT / "native/include/macro_sim/generated/rng_vectors.hpp",
     ROOT / "schemas/m1/checkpoint_prototype.json",
     ROOT / "schemas/m1/canonical_encoding_vectors.json",
     ROOT / "native/dependencies.lock.json",
