@@ -54,6 +54,14 @@ void test_v0_genesis_is_deterministic_and_balanced() {
     assert(first.ownership.validate_shares(1.0e-12).ok());
     assert(first.postings.validate_finite().ok());
     assert(first.postings.validate_nonnegative(1.0e-8).ok());
+    const auto household_account =
+        first.households.get(macro_sim::HouseholdId(1))->primary_account;
+    const auto* account = first.postings.get(household_account);
+    assert(account != nullptr);
+    const auto found = first.postings.find(account->key);
+    const auto node = first.postings.settlement_node(household_account);
+    assert(found.ok() && *found.get_if() == household_account);
+    assert(node.ok() && *node.get_if() == account->key.settlement_node);
 
     assert(first.postings.records() == second.postings.records());
     assert(first.reserves.records() == second.reserves.records());

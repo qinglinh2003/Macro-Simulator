@@ -15,6 +15,7 @@
 namespace macro_sim::core {
 
 class CheckpointCodec;
+class AccountingBenchmarkAccess;
 class SettlementTransaction;
 
 struct AccountRecord final {
@@ -36,6 +37,10 @@ public:
         bool allow_negative = false
     );
     [[nodiscard]] Status close_account(AccountId id);
+    [[nodiscard]] Result<AccountId> find(AccountKey key) const noexcept;
+    [[nodiscard]] Result<SettlementNodeId> settlement_node(
+        AccountId id
+    ) const noexcept;
     [[nodiscard]] bool contains(AccountId id) const noexcept;
     [[nodiscard]] AccountRecord* get(AccountId id) noexcept;
     [[nodiscard]] const AccountRecord* get(AccountId id) const noexcept;
@@ -48,6 +53,7 @@ public:
     [[nodiscard]] Status validate_nonnegative(double tolerance) const noexcept;
 
 private:
+    friend class AccountingBenchmarkAccess;
     friend class CheckpointCodec;
     friend class SettlementTransaction;
 

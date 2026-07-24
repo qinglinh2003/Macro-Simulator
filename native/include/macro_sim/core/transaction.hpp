@@ -77,10 +77,31 @@ struct SettlementBatch final {
     std::vector<CounterCommand> counter_increments;
 };
 
+class TransactionWorkspace final {
+public:
+    void reserve(const RootState& state);
+
+private:
+    friend class SettlementTransaction;
+
+    std::vector<double> posting_totals_;
+    std::vector<double> reserve_totals_;
+    std::vector<double> loan_totals_;
+    std::vector<std::pair<AccountId, double>> posting_deltas_;
+    std::vector<std::pair<SettlementNodeId, double>> reserve_deltas_;
+    std::vector<std::pair<LoanId, double>> loan_deltas_;
+    std::vector<std::uint8_t> digest_bytes_;
+};
+
 class SettlementTransaction final {
 public:
     explicit SettlementTransaction(
         RootState& state,
+        std::optional<std::uint64_t> fault_ordinal = std::nullopt
+    ) noexcept;
+    SettlementTransaction(
+        RootState& state,
+        TransactionWorkspace& workspace,
         std::optional<std::uint64_t> fault_ordinal = std::nullopt
     ) noexcept;
     SettlementTransaction(const SettlementTransaction&) = delete;
@@ -125,6 +146,7 @@ public:
         std::uint64_t amount = 1
     );
     [[nodiscard]] Status append(const SettlementBatch& batch);
+    void reserve_capacity();
     [[nodiscard]] Result<TransactionReceipt> commit();
     [[nodiscard]] TransactionState transaction_state() const noexcept;
     [[nodiscard]] std::uint64_t next_fault_ordinal() const noexcept;
@@ -203,8 +225,11 @@ private:
     [[nodiscard]] Result<TransactionReceipt> reject(Status status) noexcept;
     void rollback() noexcept;
     void release_root() noexcept;
+    void acquire_root(RootState& state) noexcept;
 
     RootState* root_{nullptr};
+    TransactionWorkspace owned_workspace_;
+    TransactionWorkspace* workspace_{&owned_workspace_};
     TransactionState state_{TransactionState::collecting};
     Status construction_status_{};
     std::optional<std::uint64_t> fault_ordinal_;

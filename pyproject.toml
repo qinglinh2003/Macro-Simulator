@@ -60,7 +60,9 @@ sdist.include = [
     "/native/**",
     "/schemas/m0/**",
     "/schemas/m1/**",
+    "/schemas/m2/**",
     "/tools/m1/**",
+    "/tools/m2/**",
 ]
 sdist.exclude = [
     "/.venv/**",

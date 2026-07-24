@@ -48,10 +48,8 @@ constexpr std::array<std::string_view, 4> kRequiredFeatures{
 
 [[nodiscard]] std::array<std::uint8_t, 32> sha256(
     std::span<const std::uint8_t> bytes
-) {
-    std::array<std::uint8_t, 32> digest{};
-    picosha2::hash256(bytes.begin(), bytes.end(), digest.begin(), digest.end());
-    return digest;
+) noexcept {
+    return sha256_digest(bytes).bytes;
 }
 
 [[nodiscard]] std::string hex(

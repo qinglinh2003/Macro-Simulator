@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -11,16 +13,31 @@ sys.path.insert(0, str(ROOT / "tools/m1"))
 from final_audit import (  # noqa: E402
     BASE_COMMIT,
     LOCK_PATH,
-    build_source_lock,
 )
 from scripts.cpp_migration.gates import load_gate_manifest, select_gates  # noqa: E402
 
 
 def test_m1_source_lock_matches_every_frozen_input() -> None:
     checked = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
-    assert checked == build_source_lock()
     assert checked["base_commit"] == BASE_COMMIT
     assert len(checked["files"]) >= 40
+    milestone = "m1-native-foundation-v33"
+    mapping: dict[str, str] = {}
+    for item in checked["files"]:
+        content = subprocess.run(
+            ["git", "show", f"{milestone}:{item['path']}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        digest = sha256(content).hexdigest()
+        assert digest == item["sha256"]
+        assert len(content) == item["byte_count"]
+        mapping[item["path"]] = digest
+    aggregate_input = "".join(
+        f"{path}\0{mapping[path]}\n" for path in sorted(mapping)
+    ).encode()
+    assert sha256(aggregate_input).hexdigest() == checked["aggregate_sha256"]
 
 
 def test_m1_gate_graph_has_all_acceptance_layers() -> None:

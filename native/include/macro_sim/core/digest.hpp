@@ -3,7 +3,9 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
+#include <vector>
 
 namespace macro_sim::core {
 
@@ -16,7 +18,14 @@ struct StateDigest final {
     constexpr auto operator<=>(const StateDigest&) const noexcept = default;
 };
 
+[[nodiscard]] StateDigest sha256_digest(
+    std::span<const std::uint8_t> bytes
+) noexcept;
 [[nodiscard]] StateDigest state_digest(const RootState& state);
+[[nodiscard]] StateDigest state_digest(
+    const RootState& state,
+    std::vector<std::uint8_t>& scratch
+);
 
 }  // namespace macro_sim::core
 

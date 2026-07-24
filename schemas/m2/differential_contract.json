@@ -1,0 +1,1 @@
+{"comparison":{"balances":{"absolute_tolerance":1e-13,"relative_tolerance":1e-13},"identities":"exact","invalid_error_family":"exact","rejected_digest":"exact"},"operations_per_seed":100,"schema_version":"m2-differential-contract-v1","seeds":100,"total_randomized_operations":10000}

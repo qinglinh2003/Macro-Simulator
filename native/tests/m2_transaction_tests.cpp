@@ -18,6 +18,7 @@ using macro_sim::Money;
 using macro_sim::Rate;
 using macro_sim::Tick;
 using macro_sim::core::GenesisSpec;
+using macro_sim::core::GenesisVertical;
 using macro_sim::core::LoanTerms;
 using macro_sim::core::OwnerId;
 using macro_sim::core::RootState;
@@ -66,6 +67,13 @@ void add_mixed_commands(SettlementTransaction& transaction, RootState& state) {
         ).ok()
     );
     assert(transaction.increment_counter(17, 3).ok());
+    assert(
+        transaction.mutate_ownership(
+            macro_sim::OwnershipLotId(1),
+            OwnerId::household(HouseholdId(2)),
+            1.0
+        ).ok()
+    );
 }
 
 void test_same_and_cross_bank_transfers_are_atomic() {
@@ -136,6 +144,90 @@ void test_origination_and_repayment_preserve_a5() {
     assert(balance(state, borrower) == 125.0);
     assert(state.loans.total_principal() == Money(25.0));
     assert(macro_sim::core::run_invariants(state).ok());
+}
+
+void test_reserve_treasury_and_ownership_commands() {
+    auto state = make_state();
+    const auto first_node =
+        state.banks.get(BankId(1))->settlement_node;
+    const auto second_node =
+        state.banks.get(BankId(2))->settlement_node;
+    const auto first_before =
+        state.reserves.balance(first_node).get_if()->value();
+    const auto second_before =
+        state.reserves.balance(second_node).get_if()->value();
+    SettlementTransaction reserves(state);
+    assert(
+        reserves.move_reserves(
+            first_node,
+            second_node,
+            Money(10.0)
+        ).ok()
+    );
+    assert(reserves.issue_reserves(first_node, Money(5.0)).ok());
+    assert(reserves.commit().ok());
+    assert(
+        state.reserves.balance(first_node).get_if()->value()
+        == first_before - 5.0
+    );
+    assert(
+        state.reserves.balance(second_node).get_if()->value()
+        == second_before + 10.0
+    );
+    assert(state.reserves.reserve_stock() == Money(405.0));
+
+    SettlementTransaction ownership(state);
+    assert(
+        ownership.mutate_ownership(
+            macro_sim::OwnershipLotId(1),
+            OwnerId::household(HouseholdId(2)),
+            1.0
+        ).ok()
+    );
+    assert(ownership.commit().ok());
+    assert(
+        state.ownership.get(macro_sim::OwnershipLotId(1))->owner
+        == OwnerId::household(HouseholdId(2))
+    );
+    assert(macro_sim::core::run_invariants(state).ok());
+
+    GenesisSpec fiscal_spec;
+    fiscal_spec.vertical = GenesisVertical::m4_v1_capital_fiscal;
+    fiscal_spec.households = 2;
+    fiscal_spec.consumption_firms = 1;
+    fiscal_spec.capital_firms = 1;
+    fiscal_spec.settlement_banks = 1;
+    fiscal_spec.government = true;
+    fiscal_spec.aggregate_opening_money = Money(200.0);
+    fiscal_spec.aggregate_opening_capital = macro_sim::Capital(10.0);
+    auto fiscal_result = macro_sim::core::build_genesis(fiscal_spec);
+    assert(fiscal_result.ok());
+    auto fiscal = std::move(fiscal_result).take();
+    const auto household = account_for(fiscal, HouseholdId(1));
+    SettlementTransaction institutions(fiscal);
+    assert(
+        institutions.transfer(
+            fiscal.institutions.treasury_account,
+            household,
+            Money(10.0)
+        ).ok()
+    );
+    assert(
+        institutions.transfer(
+            fiscal.institutions.central_bank_account,
+            household,
+            Money(5.0)
+        ).ok()
+    );
+    assert(institutions.commit().ok());
+    assert(balance(fiscal, household) == 115.0);
+    assert(
+        balance(fiscal, fiscal.institutions.treasury_account) == -10.0
+    );
+    assert(
+        balance(fiscal, fiscal.institutions.central_bank_account) == -5.0
+    );
+    assert(macro_sim::core::run_invariants(fiscal).ok());
 }
 
 void test_invalid_batch_restores_exact_digest() {
@@ -238,6 +330,7 @@ void test_world_transaction_restores_every_root_on_late_failure() {
 int main() {
     test_same_and_cross_bank_transfers_are_atomic();
     test_origination_and_repayment_preserve_a5();
+    test_reserve_treasury_and_ownership_commands();
     test_invalid_batch_restores_exact_digest();
     test_every_fault_ordinal_restores_exact_digest();
     test_nested_transaction_is_rejected_without_releasing_owner();

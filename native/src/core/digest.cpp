@@ -1,6 +1,8 @@
 #include "macro_sim/core/digest.hpp"
 
 #include <bit>
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -14,6 +16,11 @@ namespace {
 
 class DigestWriter final {
 public:
+    explicit DigestWriter(std::vector<std::uint8_t>& bytes) noexcept
+        : bytes_(bytes) {
+        bytes_.clear();
+    }
+
     void text(std::string_view value) {
         u64(static_cast<std::uint64_t>(value.size()));
         bytes_.insert(bytes_.end(), value.begin(), value.end());
@@ -48,7 +55,7 @@ public:
     }
 
 private:
-    std::vector<std::uint8_t> bytes_;
+    std::vector<std::uint8_t>& bytes_;
 };
 
 template <typename Id>
@@ -194,6 +201,62 @@ void append_root(DigestWriter& writer, const RootState& state) {
 
 }  // namespace
 
+StateDigest sha256_digest(
+    std::span<const std::uint8_t> bytes
+) noexcept {
+    std::array<picosha2::word_t, 8> words{};
+    std::copy(
+        picosha2::detail::initial_message_digest,
+        picosha2::detail::initial_message_digest + 8,
+        words.begin()
+    );
+    std::size_t offset = 0;
+    while (bytes.size() - offset >= 64) {
+        picosha2::detail::hash256_block(
+            words.begin(),
+            bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+            bytes.begin() + static_cast<std::ptrdiff_t>(offset + 64)
+        );
+        offset += 64;
+    }
+
+    std::array<std::uint8_t, 128> final_blocks{};
+    const auto remainder = bytes.size() - offset;
+    std::copy(
+        bytes.begin() + static_cast<std::ptrdiff_t>(offset),
+        bytes.end(),
+        final_blocks.begin()
+    );
+    final_blocks[remainder] = 0x80U;
+    const std::size_t block_count = remainder > 55 ? 2 : 1;
+    const auto bit_length = static_cast<std::uint64_t>(bytes.size()) * 8U;
+    const auto length_offset = block_count * 64 - 8;
+    for (std::size_t index = 0; index < 8; ++index) {
+        final_blocks[length_offset + index] = static_cast<std::uint8_t>(
+            bit_length >> static_cast<unsigned>((7 - index) * 8)
+        );
+    }
+    for (std::size_t block = 0; block < block_count; ++block) {
+        picosha2::detail::hash256_block(
+            words.begin(),
+            final_blocks.begin()
+                + static_cast<std::ptrdiff_t>(block * 64),
+            final_blocks.begin()
+                + static_cast<std::ptrdiff_t>((block + 1) * 64)
+        );
+    }
+
+    StateDigest output;
+    std::size_t output_index = 0;
+    for (const auto word : words) {
+        for (int shift = 24; shift >= 0; shift -= 8) {
+            output.bytes[output_index++] =
+                static_cast<std::uint8_t>(word >> shift);
+        }
+    }
+    return output;
+}
+
 std::string StateDigest::hex() const {
     constexpr char digits[] = "0123456789abcdef";
     std::string output;
@@ -206,11 +269,17 @@ std::string StateDigest::hex() const {
 }
 
 StateDigest state_digest(const RootState& state) {
-    DigestWriter writer;
+    std::vector<std::uint8_t> scratch;
+    return state_digest(state, scratch);
+}
+
+StateDigest state_digest(
+    const RootState& state,
+    std::vector<std::uint8_t>& scratch
+) {
+    DigestWriter writer(scratch);
     append_root(writer, state);
-    StateDigest digest;
-    picosha2::hash256(writer.bytes(), digest.bytes);
-    return digest;
+    return sha256_digest(writer.bytes());
 }
 
 }  // namespace macro_sim::core

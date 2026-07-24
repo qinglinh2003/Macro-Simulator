@@ -62,6 +62,14 @@ function(macro_sim_project_options target)
     endif()
 endfunction()
 
+function(macro_sim_enable_runtime_assertions target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(${target} PRIVATE -UNDEBUG)
+    endif()
+endfunction()
+
 add_library(
     macro_sim_core
     STATIC
@@ -166,6 +174,7 @@ if(MACRO_SIM_BUILD_TESTS)
     add_executable(macro_sim_m2_store_tests tests/m2_store_tests.cpp)
     target_link_libraries(macro_sim_m2_store_tests PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_m2_store_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m2_store_tests)
     add_test(NAME macro_sim.m2_store COMMAND macro_sim_m2_store_tests)
 
     add_executable(
@@ -177,6 +186,7 @@ if(MACRO_SIM_BUILD_TESTS)
         PRIVATE macro_sim_core
     )
     macro_sim_project_options(macro_sim_m2_accounting_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m2_accounting_tests)
     add_test(
         NAME macro_sim.m2_accounting
         COMMAND macro_sim_m2_accounting_tests
@@ -191,6 +201,7 @@ if(MACRO_SIM_BUILD_TESTS)
         PRIVATE macro_sim_core
     )
     macro_sim_project_options(macro_sim_m2_transaction_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m2_transaction_tests)
     add_test(
         NAME macro_sim.m2_transaction
         COMMAND macro_sim_m2_transaction_tests
@@ -211,6 +222,7 @@ if(MACRO_SIM_BUILD_TESTS)
             "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
     )
     macro_sim_project_options(macro_sim_m2_checkpoint_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m2_checkpoint_tests)
     target_compile_definitions(
         macro_sim_m2_checkpoint_tests
         PRIVATE MACRO_SIM_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
@@ -233,6 +245,10 @@ if(MACRO_SIM_BUILD_TESTS)
                 --operations-per-seed
                 "100"
         )
+        set_tests_properties(
+            macro_sim.m2_python_oracle
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -240,6 +256,14 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     add_executable(macro_sim_benchmarks benchmarks/foundation_benchmark.cpp)
     target_link_libraries(macro_sim_benchmarks PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_benchmarks)
+
+    add_executable(
+        macro_sim_m2_benchmarks
+        benchmarks/m2_accounting_benchmark.cpp
+    )
+    target_link_libraries(macro_sim_m2_benchmarks PRIVATE macro_sim_core)
+    macro_sim_project_options(macro_sim_m2_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m2_benchmarks)
 endif()
 
 install(

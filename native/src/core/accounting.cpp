@@ -135,6 +135,30 @@ Status PostingBook::close_account(AccountId id) {
     return Status::success();
 }
 
+Result<AccountId> PostingBook::find(AccountKey key) const noexcept {
+    const auto found = std::find_if(
+        accounts_.begin(),
+        accounts_.end(),
+        [&key](const AccountRecord& account) {
+            return account.open && account.key == key;
+        }
+    );
+    if (found == accounts_.end()) {
+        return Status(ErrorCode::not_found, "account key is absent");
+    }
+    return found->id;
+}
+
+Result<SettlementNodeId> PostingBook::settlement_node(
+    AccountId id
+) const noexcept {
+    const auto* account = get(id);
+    if (account == nullptr || !account->open) {
+        return Status(ErrorCode::not_found, "account is not open");
+    }
+    return account->key.settlement_node;
+}
+
 bool PostingBook::contains(AccountId id) const noexcept {
     const auto* account = get(id);
     return account != nullptr && account->open;
@@ -505,28 +529,35 @@ const std::vector<OwnershipLot>& OwnershipBook::records() const noexcept {
 }
 
 Status OwnershipBook::validate_shares(double tolerance) const {
-    std::vector<AssetKey> assets;
-    for (const auto& lot : lots_) {
-        if (lot.active) {
-            assets.push_back(lot.asset);
+    for (std::size_t index = 0; index < lots_.size(); ++index) {
+        const auto& candidate = lots_[index];
+        if (!candidate.active) {
+            continue;
         }
-    }
-    std::sort(assets.begin(), assets.end());
-    assets.erase(std::unique(assets.begin(), assets.end()), assets.end());
-    for (const auto& asset : assets) {
-        std::vector<double> shares;
+        bool first_for_asset = true;
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (lots_[previous].active
+                && lots_[previous].asset == candidate.asset) {
+                first_for_asset = false;
+                break;
+            }
+        }
+        if (!first_for_asset) {
+            continue;
+        }
+        NeumaierAccumulator shares;
         for (const auto& lot : lots_) {
-            if (lot.active && lot.asset == asset) {
+            if (lot.active && lot.asset == candidate.asset) {
                 if (!std::isfinite(lot.share) || lot.share <= 0.0) {
                     return Status(
                         ErrorCode::invariant_violation,
                         "invalid ownership share"
                     );
                 }
-                shares.push_back(lot.share);
+                shares.add(lot.share);
             }
         }
-        if (std::abs(neumaier_sum(shares) - 1.0) > tolerance) {
+        if (std::abs(shares.value() - 1.0) > tolerance) {
             return Status(
                 ErrorCode::invariant_violation,
                 "ownership shares do not sum to one"

@@ -61,6 +61,22 @@
       "cacheVariables": {
         "MACRO_SIM_BUILD_TESTS": "OFF"
       }
+    },
+    {
+      "name": "m2-debug",
+      "inherits": "m1-debug"
+    },
+    {
+      "name": "m2-release",
+      "inherits": "m1-release"
+    },
+    {
+      "name": "m2-asan",
+      "inherits": "m1-asan"
+    },
+    {
+      "name": "m2-benchmark",
+      "inherits": "m1-benchmark"
     }
   ],
   "buildPresets": [
@@ -87,6 +103,22 @@
     {
       "name": "m1-benchmark",
       "configurePreset": "m1-benchmark"
+    },
+    {
+      "name": "m2-debug",
+      "configurePreset": "m2-debug"
+    },
+    {
+      "name": "m2-release",
+      "configurePreset": "m2-release"
+    },
+    {
+      "name": "m2-asan",
+      "configurePreset": "m2-asan"
+    },
+    {
+      "name": "m2-benchmark",
+      "configurePreset": "m2-benchmark"
     }
   ],
   "testPresets": [
@@ -121,6 +153,32 @@
     {
       "name": "m1-coverage",
       "configurePreset": "m1-coverage",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m2-debug",
+      "configurePreset": "m2-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m2-release",
+      "configurePreset": "m2-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m2-asan",
+      "configurePreset": "m2-asan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
       "output": {
         "outputOnFailure": true
       }

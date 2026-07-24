@@ -191,11 +191,27 @@ void test_m1_canonical_json_vectors() {
     }
 }
 
+void test_sha256_known_vectors() {
+    const std::vector<std::uint8_t> empty;
+    const std::vector<std::uint8_t> abc{'a', 'b', 'c'};
+    assert(
+        macro_sim::core::sha256_digest(empty).hex()
+        == "e3b0c44298fc1c149afbf4c8996fb924"
+           "27ae41e4649b934ca495991b7852b855"
+    );
+    assert(
+        macro_sim::core::sha256_digest(abc).hex()
+        == "ba7816bf8f01cfea414140de5dae2223"
+           "b00361a396177a9cb410ff61f20015ad"
+    );
+}
+
 }  // namespace
 
 int main() {
     test_deterministic_round_trip_and_continuation();
     test_corruption_limits_and_active_transaction_are_rejected();
     test_m1_canonical_json_vectors();
+    test_sha256_known_vectors();
     return 0;
 }

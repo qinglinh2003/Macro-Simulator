@@ -1,0 +1,58 @@
+schema_version: m2-gate-manifest-v1
+base_milestone: m1-native-foundation-v33
+gates:
+  - id: m2.contracts
+    class: pr
+    command: [uv, run, python, tools/m2/check.py, --skip-build]
+    dependencies: []
+    timeout_seconds: 300
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m2/checkpoint_contract.json
+      - schemas/m2/differential_contract.json
+      - schemas/m2/performance_budget.json
+  - id: m2.native-debug
+    class: pr
+    command: [uv, run, python, tools/m2/check.py, --preset, m2-debug]
+    dependencies: [m2.contracts]
+    timeout_seconds: 900
+    platform_profiles: [any]
+    artifacts: []
+  - id: m2.native-release
+    class: nightly
+    command: [uv, run, python, tools/m2/check.py, --preset, m2-release]
+    dependencies: [m2.native-debug]
+    timeout_seconds: 900
+    platform_profiles: [any]
+    artifacts: []
+  - id: m2.sanitizers
+    class: nightly
+    command: [uv, run, python, tools/m2/check.py, --preset, m2-asan]
+    dependencies: [m2.native-debug]
+    timeout_seconds: 1200
+    platform_profiles: [unix]
+    artifacts: []
+  - id: m2.performance
+    class: milestone
+    command: [uv, run, python, tools/m2/performance_gate.py, --build-dir, build/native/m2-release, --repetitions, "1000"]
+    dependencies: [m2.native-release]
+    timeout_seconds: 600
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m2/performance_budget.json
+  - id: m2.python-regression
+    class: milestone
+    command: [uv, run, pytest, -q, -n, "6"]
+    dependencies: [m2.sanitizers]
+    timeout_seconds: 7200
+    platform_profiles: [any]
+    artifacts: []
+  - id: m2.final-audit
+    class: milestone
+    command: [uv, run, python, tools/m2/final_audit.py, --require-clean]
+    dependencies: [m2.performance, m2.python-regression]
+    timeout_seconds: 600
+    platform_profiles: [any]
+    artifacts:
+      - schemas/m2/hashes.lock.json
+      - schemas/m2/source.lock.json

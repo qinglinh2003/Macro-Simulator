@@ -12,12 +12,6 @@
 namespace macro_sim::core {
 namespace {
 
-template <typename Id>
-struct Delta final {
-    Id id{};
-    double amount{0.0};
-};
-
 [[nodiscard]] Status validate_nonnegative_amount(
     double amount,
     const char* message
@@ -33,13 +27,57 @@ struct Delta final {
         * std::max(1.0, absolute_sum);
 }
 
+[[nodiscard]] bool owner_exists(
+    const RootState& state,
+    OwnerId owner
+) noexcept {
+    switch (owner.kind) {
+        case OwnerKind::household:
+            return state.households.get(HouseholdId(owner.value)) != nullptr;
+        case OwnerKind::firm:
+            return state.firms.get(FirmId(owner.value)) != nullptr;
+        case OwnerKind::bank:
+            return state.banks.get(BankId(owner.value)) != nullptr;
+        case OwnerKind::treasury:
+        case OwnerKind::central_bank:
+        case OwnerKind::dealer:
+        case OwnerKind::rounding_residual:
+        case OwnerKind::institution:
+            return owner.valid();
+    }
+    return false;
+}
+
 }  // namespace
+
+void TransactionWorkspace::reserve(const RootState& state) {
+    posting_totals_.resize(state.postings.size());
+    reserve_totals_.resize(state.reserves.size());
+    loan_totals_.resize(state.loans.size());
+    posting_deltas_.reserve(state.postings.size());
+    reserve_deltas_.reserve(state.reserves.size());
+    loan_deltas_.reserve(state.loans.size());
+    static_cast<void>(state_digest(state, digest_bytes_));
+}
 
 SettlementTransaction::SettlementTransaction(
     RootState& state,
     std::optional<std::uint64_t> fault_ordinal
 ) noexcept
-    : root_(&state), fault_ordinal_(fault_ordinal) {
+    : fault_ordinal_(fault_ordinal) {
+    acquire_root(state);
+}
+
+SettlementTransaction::SettlementTransaction(
+    RootState& state,
+    TransactionWorkspace& workspace,
+    std::optional<std::uint64_t> fault_ordinal
+) noexcept
+    : workspace_(&workspace), fault_ordinal_(fault_ordinal) {
+    acquire_root(state);
+}
+
+void SettlementTransaction::acquire_root(RootState& state) noexcept {
     if (state.transaction_active) {
         construction_status_ = Status(
             ErrorCode::invalid_transaction_state,
@@ -50,6 +88,7 @@ SettlementTransaction::SettlementTransaction(
         return;
     }
     state.transaction_active = true;
+    root_ = &state;
 }
 
 SettlementTransaction::~SettlementTransaction() {
@@ -142,8 +181,19 @@ Status SettlementTransaction::originate_loan(
         amount.value(),
         "loan amount must be finite and nonnegative"
     );
-    if (!valid.ok()) {
-        return valid;
+    if (!valid.ok() || amount.value() == 0.0) {
+        return valid.ok()
+            ? Status(
+                ErrorCode::invalid_argument,
+                "loan amount must be positive"
+            )
+            : valid;
+    }
+    if (terms.maturity_tick < terms.originated_tick) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "loan maturity precedes origination"
+        );
     }
     if (!std::isfinite(terms.annual_rate.value())) {
         return Status(ErrorCode::invalid_argument, "loan rate must be finite");
@@ -279,6 +329,25 @@ Status SettlementTransaction::append(const SettlementBatch& batch) {
     return Status::success();
 }
 
+void SettlementTransaction::reserve_capacity() {
+    if (root_ == nullptr) {
+        return;
+    }
+    workspace_->reserve(*root_);
+    posting_undo_.reserve(root_->postings.size());
+    reserve_undo_.reserve(root_->reserves.size());
+    loan_undo_.reserve(root_->loans.size());
+    created_loans_.reserve(originations_.size());
+    ownership_undo_.reserve(ownership_mutations_.size());
+    counter_undo_.reserve(counter_increments_.size());
+    root_->loans.loans_.reserve(
+        root_->loans.loans_.size() + originations_.size()
+    );
+    root_->named_counters.counters_.reserve(
+        root_->named_counters.counters_.size() + counter_increments_.size()
+    );
+}
+
 bool SettlementTransaction::inject_fault() noexcept {
     const bool inject =
         fault_ordinal_.has_value()
@@ -307,10 +376,14 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         );
     }
 
-    const auto before = state_digest(*root_);
-    std::vector<double> posting_totals(root_->postings.size(), 0.0);
-    std::vector<double> reserve_totals(root_->reserves.size(), 0.0);
-    std::vector<double> loan_totals(root_->loans.size(), 0.0);
+    workspace_->reserve(*root_);
+    const auto before = state_digest(*root_, workspace_->digest_bytes_);
+    auto& posting_totals = workspace_->posting_totals_;
+    auto& reserve_totals = workspace_->reserve_totals_;
+    auto& loan_totals = workspace_->loan_totals_;
+    std::fill(posting_totals.begin(), posting_totals.end(), 0.0);
+    std::fill(reserve_totals.begin(), reserve_totals.end(), 0.0);
+    std::fill(loan_totals.begin(), loan_totals.end(), 0.0);
     double reserve_stock_delta = 0.0;
     double new_loan_total = 0.0;
     double absolute_economic_sum = 0.0;
@@ -387,12 +460,21 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
 
     for (const auto& intent : originations_) {
         const auto* account = root_->postings.get(intent.borrower_account);
-        if (root_->banks.get(intent.lender) == nullptr || account == nullptr
+        const auto* bank = root_->banks.get(intent.lender);
+        if (bank == nullptr || account == nullptr
             || !account->open || account->key.owner != intent.borrower) {
             return reject(
                 Status(
                     ErrorCode::contract_violation,
                     "loan parties do not match canonical state"
+                )
+            );
+        }
+        if (bank->settlement_node != account->key.settlement_node) {
+            return reject(
+                Status(
+                    ErrorCode::contract_violation,
+                    "loan deposit is not held at the lender bank"
                 )
             );
         }
@@ -406,7 +488,8 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     for (const auto& intent : repayments_) {
         const auto* loan = root_->loans.get(intent.loan);
         const auto* account = root_->postings.get(intent.payer_account);
-        if (loan == nullptr || account == nullptr || !account->open
+        if (loan == nullptr || !loan->active || account == nullptr
+            || !account->open
             || loan->borrower_account != intent.payer_account) {
             return reject(
                 Status(
@@ -421,6 +504,97 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         loan_totals[static_cast<std::size_t>(intent.loan.value() - 1)] -=
             intent.amount;
         absolute_economic_sum += 2.0 * intent.amount;
+    }
+
+    for (std::size_t index = 0; index < ownership_mutations_.size(); ++index) {
+        const auto& intent = ownership_mutations_[index];
+        const auto* lot = root_->ownership.get(intent.lot);
+        if (lot == nullptr || !lot->active
+            || !owner_exists(*root_, intent.owner)) {
+            return reject(
+                Status(
+                    ErrorCode::contract_violation,
+                    "ownership mutation references an absent party"
+                )
+            );
+        }
+        bool first_for_asset = true;
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            const auto* previous_lot = root_->ownership.get(
+                ownership_mutations_[previous].lot
+            );
+            if (previous_lot != nullptr
+                && previous_lot->asset == lot->asset) {
+                first_for_asset = false;
+                break;
+            }
+        }
+        if (!first_for_asset) {
+            continue;
+        }
+        double share_sum = 0.0;
+        double correction = 0.0;
+        for (const auto& existing : root_->ownership.records()) {
+            if (!existing.active || existing.asset != lot->asset) {
+                continue;
+            }
+            double final_share = existing.share;
+            for (
+                auto mutation = ownership_mutations_.rbegin();
+                mutation != ownership_mutations_.rend();
+                ++mutation
+            ) {
+                if (mutation->lot == existing.id) {
+                    final_share = mutation->share;
+                    break;
+                }
+            }
+            const double next = share_sum + final_share;
+            correction +=
+                std::abs(share_sum) >= std::abs(final_share)
+                ? (share_sum - next) + final_share
+                : (final_share - next) + share_sum;
+            share_sum = next;
+        }
+        if (std::abs((share_sum + correction) - 1.0)
+            > root_->accounting_tolerance) {
+            return reject(
+                Status(
+                    ErrorCode::contract_violation,
+                    "ownership shares would not sum to one"
+                )
+            );
+        }
+    }
+
+    for (std::size_t index = 0; index < counter_increments_.size(); ++index) {
+        const auto& intent = counter_increments_[index];
+        bool first_for_stream = true;
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (counter_increments_[previous].stream_id == intent.stream_id) {
+                first_for_stream = false;
+                break;
+            }
+        }
+        if (!first_for_stream) {
+            continue;
+        }
+        auto final_value = root_->named_counters.value(intent.stream_id);
+        for (const auto& candidate : counter_increments_) {
+            if (candidate.stream_id != intent.stream_id) {
+                continue;
+            }
+            if (candidate.amount
+                > std::numeric_limits<std::uint64_t>::max() - final_value) {
+                return reject(
+                    Status(
+                        ErrorCode::out_of_range,
+                        "named counter overflow"
+                    )
+                );
+            }
+            final_value += candidate.amount;
+        }
     }
 
     for (std::size_t index = 0; index < posting_totals.size(); ++index) {
@@ -507,19 +681,26 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
             )
         );
     }
+    if (!std::isfinite(
+            root_->reserves.reserve_stock().value() + reserve_stock_delta
+        )) {
+        return reject(
+            Status(ErrorCode::out_of_range, "reserve stock overflow")
+        );
+    }
 
-    std::vector<Delta<AccountId>> posting_deltas;
-    std::vector<Delta<SettlementNodeId>> reserve_deltas;
-    std::vector<Delta<LoanId>> loan_deltas;
-    posting_deltas.reserve(posting_totals.size());
-    reserve_deltas.reserve(reserve_totals.size());
-    loan_deltas.reserve(loan_totals.size());
+    auto& posting_deltas = workspace_->posting_deltas_;
+    auto& reserve_deltas = workspace_->reserve_deltas_;
+    auto& loan_deltas = workspace_->loan_deltas_;
+    posting_deltas.clear();
+    reserve_deltas.clear();
+    loan_deltas.clear();
     for (std::size_t index = 0; index < posting_totals.size(); ++index) {
         if (posting_totals[index] != 0.0) {
             posting_deltas.push_back(
                 {
                     AccountId(static_cast<std::uint64_t>(index) + 1),
-                    posting_totals[index],
+                    posting_totals[index]
                 }
             );
         }
@@ -531,7 +712,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
                     SettlementNodeId(
                         static_cast<std::uint64_t>(index) + 1
                     ),
-                    reserve_totals[index],
+                    reserve_totals[index]
                 }
             );
         }
@@ -541,24 +722,13 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
             loan_deltas.push_back(
                 {
                     LoanId(static_cast<std::uint64_t>(index) + 1),
-                    loan_totals[index],
+                    loan_totals[index]
                 }
             );
         }
     }
 
-    posting_undo_.reserve(posting_deltas.size());
-    reserve_undo_.reserve(reserve_deltas.size());
-    loan_undo_.reserve(loan_deltas.size());
-    created_loans_.reserve(originations_.size());
-    ownership_undo_.reserve(ownership_mutations_.size());
-    counter_undo_.reserve(counter_increments_.size());
-    root_->loans.loans_.reserve(
-        root_->loans.loans_.size() + originations_.size()
-    );
-    root_->named_counters.counters_.reserve(
-        root_->named_counters.counters_.size() + counter_increments_.size()
-    );
+    reserve_capacity();
     if (inject_fault()) {
         return reject(
             Status(ErrorCode::internal_error, "injected transaction fault")
@@ -569,10 +739,10 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     for (const auto& delta : posting_deltas) {
         posting_undo_.push_back(
             {
-                delta.id,
+                delta.first,
                 root_->postings.apply_delta_unchecked(
-                    delta.id,
-                    delta.amount
+                    delta.first,
+                    delta.second
                 ),
             }
         );
@@ -586,10 +756,10 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     for (const auto& delta : reserve_deltas) {
         reserve_undo_.push_back(
             {
-                delta.id,
+                delta.first,
                 root_->reserves.apply_delta_unchecked(
-                    delta.id,
-                    delta.amount
+                    delta.first,
+                    delta.second
                 ),
             }
         );
@@ -613,10 +783,10 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     for (const auto& delta : loan_deltas) {
         loan_undo_.push_back(
             {
-                delta.id,
+                delta.first,
                 root_->loans.apply_principal_delta_unchecked(
-                    delta.id,
-                    delta.amount
+                    delta.first,
+                    delta.second
                 ),
             }
         );
@@ -644,11 +814,6 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         }
     }
     for (const auto& intent : ownership_mutations_) {
-        if (!root_->ownership.contains(intent.lot)) {
-            return reject(
-                Status(ErrorCode::not_found, "ownership lot is absent")
-            );
-        }
         ownership_undo_.push_back(
             {
                 intent.lot,
@@ -668,12 +833,6 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     }
     for (const auto& intent : counter_increments_) {
         const auto previous = root_->named_counters.value(intent.stream_id);
-        if (intent.amount
-            > std::numeric_limits<std::uint64_t>::max() - previous) {
-            return reject(
-                Status(ErrorCode::out_of_range, "named counter overflow")
-            );
-        }
         counter_undo_.push_back(
             {
                 intent.stream_id,
@@ -710,7 +869,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
 
     TransactionReceipt receipt{
         before,
-        state_digest(*root_),
+        state_digest(*root_, workspace_->digest_bytes_),
         mutations,
         created_loans_,
     };
