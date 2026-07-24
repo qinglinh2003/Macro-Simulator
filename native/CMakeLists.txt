@@ -81,11 +81,14 @@ add_library(
         src/core/accounting.cpp
         src/core/checkpoint.cpp
         src/core/digest.cpp
+        src/core/financial.cpp
         src/core/genesis.cpp
         src/core/invariants.cpp
         src/core/transaction.cpp
         src/simulation/m4.cpp
         src/simulation/m4_checkpoint.cpp
+        src/simulation/m5.cpp
+        src/simulation/m5_checkpoint.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -177,6 +180,11 @@ if(MACRO_SIM_BUILD_TESTS)
     target_link_libraries(macro_sim_m4_c_smoke PRIVATE macro_sim_c)
     macro_sim_project_options(macro_sim_m4_c_smoke)
     add_test(NAME macro_sim.m4_c_abi COMMAND macro_sim_m4_c_smoke)
+
+    add_executable(macro_sim_m5_c_smoke tests/m5_c_smoke.c)
+    target_link_libraries(macro_sim_m5_c_smoke PRIVATE macro_sim_c)
+    macro_sim_project_options(macro_sim_m5_c_smoke)
+    add_test(NAME macro_sim.m5_c_abi COMMAND macro_sim_m5_c_smoke)
 
     add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
@@ -289,6 +297,21 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m4_tick_tests
     )
 
+    add_executable(
+        macro_sim_m5_monetary_tests
+        tests/m5_monetary_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m5_monetary_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m5_monetary_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m5_monetary_tests)
+    add_test(
+        NAME macro_sim.m5_monetary
+        COMMAND macro_sim_m5_monetary_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
@@ -358,6 +381,30 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m4_stochastic_panel
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m5_fresh_process_checkpoint
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m5/fresh_process_checkpoint.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m5_fresh_process_checkpoint
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m5_semantic_panel
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m5/semantic_panel.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m5_semantic_panel
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -395,6 +442,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     )
     macro_sim_project_options(macro_sim_m4_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m4_benchmarks)
+
+    add_executable(
+        macro_sim_m5_benchmarks
+        benchmarks/m5_monetary_benchmark.cpp
+    )
+    target_link_libraries(
+        macro_sim_m5_benchmarks
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m5_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m5_benchmarks)
 endif()
 
 install(

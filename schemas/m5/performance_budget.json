@@ -1,0 +1,15 @@
+{
+  "absolute_p95_ns": 2000000,
+  "maximum_allocations_per_day": 2,
+  "maximum_scaling_ratio": 2.6,
+  "p0": {
+    "banks": 16,
+    "firms": 300,
+    "households": 2000,
+    "measured_days": 120,
+    "seed": 505,
+    "warmup_days": 6
+  },
+  "require_stable_scratch_capacity": true,
+  "schema_version": "m5-performance-budget-v1"
+}
