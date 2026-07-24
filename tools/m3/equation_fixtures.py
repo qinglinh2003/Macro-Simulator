@@ -4,23 +4,73 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 from typing import Any
 
 from macro_sim.behavior import planning
-from macro_sim.demographics.rates import Phase0VitalRates, expected_life_at_birth
-from macro_sim.systems.securities import bond_price
-from macro_sim.systems.valuation import (
-    floor_safe_price_return,
-    residual_income_fundamental,
-)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "schemas/m3/fixtures/equations.json"
+
+
+def load_vital_rates_module():
+    """Load the pure oracle without importing optional visualization modules."""
+
+    path = ROOT / "macro_sim/demographics/rates.py"
+    specification = importlib.util.spec_from_file_location(
+        "macro_sim_m3_vital_rates_oracle",
+        path,
+    )
+    if specification is None or specification.loader is None:
+        raise RuntimeError("cannot load vital-rate oracle")
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+VITAL_RATES = load_vital_rates_module()
+Phase0VitalRates = VITAL_RATES.Phase0VitalRates
+expected_life_at_birth = VITAL_RATES.expected_life_at_birth
+
+
+def floor_safe_price_return(old_price: float, new_price: float) -> float:
+    if old_price <= planning.EPS:
+        return 0.0
+    return (new_price - old_price) / old_price
+
+
+def residual_income_fundamental(
+    *,
+    book_value: float,
+    residual_income: float,
+    shares_outstanding: float,
+    discount_rate: float,
+) -> float:
+    if shares_outstanding <= planning.EPS:
+        return 0.0
+    premium = max(0.0, residual_income) / max(planning.EPS, discount_rate)
+    return max(0.0, (book_value + premium) / shares_outstanding)
+
+
+def bond_price(face: float, periods: int, rate: float, coupon: float) -> float:
+    if periods <= 0 or rate <= -1.0 + planning.EPS:
+        return face
+    discount = 1.0 / (1.0 + rate)
+    principal = face * discount ** periods
+    if coupon <= 0.0:
+        coupons = 0.0
+    elif abs(rate) < 1e-12:
+        coupons = coupon * face * periods
+    else:
+        coupons = coupon * face * (1.0 - discount ** periods) / rate
+    return coupons + principal
 
 
 class Draw:
