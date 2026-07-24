@@ -82,7 +82,9 @@ def source_paths() -> tuple[Path, ...]:
     missing = [path for path in sorted(paths) if not path.is_file()]
     if missing:
         raise AuditError(f"M1 source inputs are absent: {missing}")
-    return tuple(sorted(paths))
+    return tuple(
+        sorted(paths, key=lambda path: path.relative_to(ROOT).as_posix())
+    )
 
 
 def build_source_lock() -> dict[str, Any]:
