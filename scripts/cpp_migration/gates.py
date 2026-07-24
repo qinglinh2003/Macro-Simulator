@@ -89,6 +89,16 @@ def _expect_positive_int(value: Any, *, field: str, allow_zero: bool = False) ->
     return value
 
 
+def _subprocess_output_text(value: str | bytes | None) -> str:
+    """Normalize subprocess output, including TimeoutExpired byte payloads."""
+
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
 def load_gate_manifest(path: Path) -> GateManifest:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -343,8 +353,8 @@ def run_gates(
                 "returncode": None,
                 "duration_ns": time.perf_counter_ns() - started,
                 "failure_class": "timeout",
-                "stdout": exc.stdout or "",
-                "stderr": exc.stderr or "",
+                "stdout": _subprocess_output_text(exc.stdout),
+                "stderr": _subprocess_output_text(exc.stderr),
             }
         results.append(result)
         (artifact_root / f"{gate.id}.json").write_bytes(canonical_json_bytes(result))

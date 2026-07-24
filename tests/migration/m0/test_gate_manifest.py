@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import subprocess
 
 import pytest
 import yaml
 
-from scripts.cpp_migration.common import SchemaError
+from scripts.cpp_migration.common import GitMetadata, SchemaError
 from scripts.cpp_migration.gates import (
     load_gate_manifest,
+    run_gates,
     select_gates,
 )
 
@@ -121,3 +124,40 @@ def test_class_selection_includes_lower_classes_and_dependencies(tmp_path: Path)
             only=("milestone",),
         )
     ] == ["base", "nightly.check", "milestone.check"]
+
+
+def test_timeout_bytes_are_recorded_as_canonical_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    path = _write(tmp_path, [_gate("timeout.check")])
+    manifest = load_gate_manifest(path)
+
+    def raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd=args[0],
+            timeout=10,
+            output=b"partial \xff output",
+            stderr=b"deadline exceeded",
+        )
+
+    monkeypatch.setattr("scripts.cpp_migration.gates.is_ancestor", lambda commit: True)
+    monkeypatch.setattr(
+        "scripts.cpp_migration.gates.git_metadata",
+        lambda: GitMetadata(commit=ORACLE, dirty=False),
+    )
+    monkeypatch.setattr(
+        "scripts.cpp_migration.gates.environment_metadata",
+        lambda: {},
+    )
+    monkeypatch.setattr("scripts.cpp_migration.gates.subprocess.run", raise_timeout)
+    artifact_root = tmp_path / "artifacts"
+    summary = run_gates(manifest, manifest.gates, artifact_root=artifact_root)
+
+    assert summary["status"] == "failed"
+    result = json.loads(
+        (artifact_root / "timeout.check.json").read_text(encoding="utf-8")
+    )
+    assert result["failure_class"] == "timeout"
+    assert result["stdout"] == "partial \ufffd output"
+    assert result["stderr"] == "deadline exceeded"
