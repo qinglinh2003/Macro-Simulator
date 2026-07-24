@@ -84,6 +84,7 @@ add_library(
         src/core/financial.cpp
         src/core/genesis.cpp
         src/core/invariants.cpp
+        src/core/securities.cpp
         src/core/transaction.cpp
         src/simulation/m4.cpp
         src/simulation/m4_checkpoint.cpp
@@ -310,6 +311,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m5_monetary
         COMMAND macro_sim_m5_monetary_tests
+    )
+
+    add_executable(
+        macro_sim_m6_security_book_tests
+        tests/m6_security_book_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m6_security_book_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m6_security_book_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m6_security_book_tests)
+    add_test(
+        NAME macro_sim.m6_security_book
+        COMMAND macro_sim_m6_security_book_tests
     )
 
     if(TARGET _native)
