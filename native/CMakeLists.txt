@@ -61,7 +61,7 @@ function(macro_sim_project_options target)
     endif()
 endfunction()
 
-add_library(macro_sim_core STATIC src/version.cpp)
+add_library(macro_sim_core STATIC src/engine_session.cpp src/version.cpp)
 add_library(macro_sim::core ALIAS macro_sim_core)
 target_include_directories(
     macro_sim_core
