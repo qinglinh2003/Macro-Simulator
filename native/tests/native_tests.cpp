@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <type_traits>
 
 #include "macro_sim/arena.hpp"
@@ -9,6 +10,7 @@
 #include "macro_sim/c_api.h"
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/error.hpp"
+#include "macro_sim/generated/invalid_cases.hpp"
 #include "macro_sim/ids.hpp"
 #include "macro_sim/units.hpp"
 #include "macro_sim/version.hpp"
@@ -139,6 +141,40 @@ int main() {
             "C double destroy was accepted"
         ) != 0) {
         return EXIT_FAILURE;
+    }
+
+    for (const auto& item : macro_sim::generated::kInvalidContractCases) {
+        macro_sim::generated::ScalarValue value{};
+        switch (item.input_kind) {
+            case macro_sim::generated::InvalidInputKind::null_value:
+                value.kind = macro_sim::generated::InputKind::null_value;
+                break;
+            case macro_sim::generated::InvalidInputKind::boolean:
+                value.kind = macro_sim::generated::InputKind::boolean;
+                value.number = item.number;
+                break;
+            case macro_sim::generated::InvalidInputKind::integer:
+                value.kind = macro_sim::generated::InputKind::integer;
+                value.number = item.number;
+                break;
+            case macro_sim::generated::InvalidInputKind::number:
+                value.kind = macro_sim::generated::InputKind::number;
+                value.number = item.number;
+                break;
+            case macro_sim::generated::InvalidInputKind::string:
+                value.kind = macro_sim::generated::InputKind::string;
+                value.text = item.text;
+                break;
+            case macro_sim::generated::InvalidInputKind::nonfinite:
+                value.kind = macro_sim::generated::InputKind::number;
+                value.number = std::numeric_limits<double>::quiet_NaN();
+                break;
+        }
+        const auto code =
+            macro_sim::generated::validate_scalar(item.contract_id, value);
+        if (require(code == item.expected, item.id.data()) != 0) {
+            return EXIT_FAILURE;
+        }
     }
     return EXIT_SUCCESS;
 }
