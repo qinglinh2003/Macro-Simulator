@@ -138,6 +138,27 @@ void test_bank_index() {
     assert(book.validate_indexes().ok());
 }
 
+void test_transfer_roundoff_clamp_preserves_units() {
+    SecurityBook book;
+    const auto source = OwnerId::household(HouseholdId(1));
+    const auto destination = OwnerId::household(HouseholdId(2));
+    const auto bond =
+        book.issue_bond(bond_contract(1, 1, 0, 2, 1.0), source, Money(1.0));
+    assert(bond.ok());
+    const auto security = SecurityId::bond(*bond.get_if());
+
+    assert(book.begin_batch().ok());
+    assert(book.transfer_units(security, source, destination, 1.0 + 5.0e-10,
+                               Money(1.0 + 5.0e-10))
+               .ok());
+    assert(book.finish_batch().ok());
+
+    assert(book.units_held(security, source) == 0.0);
+    assert(std::abs(book.units_held(security, destination) - 1.0) < 1.0e-15);
+    assert(std::abs(book.total_units(security) - 1.0) < 1.0e-15);
+    assert(book.validate(1.0e-9).ok());
+}
+
 void test_fuzzed_mutations() {
     SecurityBook book;
     std::vector<EquityId> equities;
@@ -234,6 +255,7 @@ int main() {
     static_cast<void>(EconomyId(1));
     test_contracts_and_indexes();
     test_bank_index();
+    test_transfer_roundoff_clamp_preserves_units();
     test_fuzzed_mutations();
     test_rejections();
     return 0;

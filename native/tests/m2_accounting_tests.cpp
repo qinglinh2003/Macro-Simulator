@@ -13,6 +13,7 @@ using macro_sim::Money;
 using macro_sim::core::FirmSector;
 using macro_sim::core::GenesisSpec;
 using macro_sim::core::GenesisVertical;
+using macro_sim::core::PostingBook;
 using macro_sim::core::RootState;
 
 [[nodiscard]] RootState take_state(macro_sim::Result<RootState> result) {
@@ -56,7 +57,7 @@ void test_v0_genesis_is_deterministic_and_balanced() {
     assert(first.postings.validate_nonnegative(1.0e-8).ok());
     const auto household_account =
         first.households.get(macro_sim::HouseholdId(1))->primary_account;
-    const auto* account = first.postings.get(household_account);
+    const auto *account = first.postings.get(household_account);
     assert(account != nullptr);
     const auto found = first.postings.find(account->key);
     const auto node = first.postings.settlement_node(household_account);
@@ -91,17 +92,14 @@ void test_v1_genesis_has_capital_and_treasury() {
     double physical_capital = 0.0;
     state.firms.for_each_alive(
         [&consumption, &capital, &physical_capital](
-            macro_sim::FirmId,
-            const macro_sim::core::FirmComponent& firm
-        ) {
+            macro_sim::FirmId, const macro_sim::core::FirmComponent &firm) {
             if (firm.sector == FirmSector::consumption) {
                 ++consumption;
             } else {
                 ++capital;
             }
             physical_capital += firm.physical_capital.value();
-        }
-    );
+        });
     assert(consumption == 3);
     assert(capital == 2);
     assert(std::abs(physical_capital - 9.0) < 1.0e-12);
@@ -117,6 +115,44 @@ void test_invalid_vertical_capabilities_publish_no_state() {
     assert(result.status().code() == macro_sim::ErrorCode::unsupported);
 }
 
+void test_posting_account_index_growth_and_reuse() {
+    PostingBook postings;
+    constexpr std::uint64_t kAccountCount = 4096;
+    for (std::uint64_t value = 1; value <= kAccountCount; ++value) {
+        const macro_sim::core::AccountKey key{
+            macro_sim::core::AccountKind::deposit,
+            EconomyId(1),
+            macro_sim::core::OwnerId::household(macro_sim::HouseholdId(value)),
+            macro_sim::CurrencyId(1),
+            macro_sim::SettlementNodeId(1 + (value % 4)),
+        };
+        const auto created = postings.create_account(key, Money(0.0));
+        assert(created.ok());
+        assert(created.get_if()->value() == value);
+    }
+    for (std::uint64_t value = 1; value <= kAccountCount; ++value) {
+        const macro_sim::core::AccountKey key{
+            macro_sim::core::AccountKind::deposit,
+            EconomyId(1),
+            macro_sim::core::OwnerId::household(macro_sim::HouseholdId(value)),
+            macro_sim::CurrencyId(1),
+            macro_sim::SettlementNodeId(1 + (value % 4)),
+        };
+        const auto found = postings.find(key);
+        assert(found.ok());
+        assert(found.get_if()->value() == value);
+    }
+
+    const auto first_key = postings.get(macro_sim::AccountId(1))->key;
+    assert(!postings.create_account(first_key, Money(0.0)).ok());
+    assert(postings.close_account(macro_sim::AccountId(1)).ok());
+    assert(!postings.find(first_key).ok());
+    const auto replacement = postings.create_account(first_key, Money(0.0));
+    assert(replacement.ok());
+    assert(replacement.get_if()->value() == kAccountCount + 1);
+    assert(postings.find(first_key).get_if()->value() == kAccountCount + 1);
+}
+
 void test_ownership_owner_rekey_merges_assets() {
     macro_sim::core::OwnershipBook ownership;
     const macro_sim::core::AssetKey asset{
@@ -124,21 +160,12 @@ void test_ownership_owner_rekey_merges_assets() {
         EconomyId(1),
         7,
     };
-    const auto source =
-        macro_sim::core::OwnerId::household(
-            macro_sim::HouseholdId(1)
-        );
+    const auto source = macro_sim::core::OwnerId::household(macro_sim::HouseholdId(1));
     const auto destination =
-        macro_sim::core::OwnerId::household(
-            macro_sim::HouseholdId(2)
-        );
+        macro_sim::core::OwnerId::household(macro_sim::HouseholdId(2));
     assert(ownership.create_lot(asset, source, 0.4).ok());
-    assert(
-        ownership.create_lot(asset, destination, 0.6).ok()
-    );
-    assert(
-        ownership.rekey_owner(source, destination).ok()
-    );
+    assert(ownership.create_lot(asset, destination, 0.6).ok());
+    assert(ownership.rekey_owner(source, destination).ok());
     assert(ownership.validate_shares(1.0e-12).ok());
     std::size_t active = 0;
     for (const auto &lot : ownership.records()) {
@@ -152,12 +179,13 @@ void test_ownership_owner_rekey_merges_assets() {
     assert(active == 1);
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     test_v0_genesis_is_deterministic_and_balanced();
     test_v1_genesis_has_capital_and_treasury();
     test_invalid_vertical_capabilities_publish_no_state();
+    test_posting_account_index_growth_and_reuse();
     test_ownership_owner_rekey_merges_assets();
     return 0;
 }

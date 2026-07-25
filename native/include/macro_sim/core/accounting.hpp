@@ -61,8 +61,14 @@ class PostingBook final {
     [[nodiscard]] MutationResult apply_delta_unchecked(AccountId id,
                                                        double delta) noexcept;
     void restore_unchecked(AccountId id, const MutationResult &previous) noexcept;
+    [[nodiscard]] static std::size_t account_hash(AccountKey key) noexcept;
+    [[nodiscard]] std::size_t find_account_row(AccountKey key) const noexcept;
+    void ensure_account_slot_capacity(std::size_t required_rows);
+    void rebuild_account_slots();
+    void insert_account_row(std::size_t row) noexcept;
 
     std::vector<AccountRecord> accounts_;
+    std::vector<std::size_t> account_slots_;
 };
 
 struct ReserveRecord final {
@@ -191,8 +197,7 @@ class OwnershipBook final {
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] const std::vector<OwnershipLot> &records() const noexcept;
     [[nodiscard]] std::size_t retire_asset(AssetKey asset) noexcept;
-    [[nodiscard]] Status rekey_owner(OwnerId source,
-                                     OwnerId destination) noexcept;
+    [[nodiscard]] Status rekey_owner(OwnerId source, OwnerId destination) noexcept;
     [[nodiscard]] Status validate_shares(double tolerance) const;
 
   private:

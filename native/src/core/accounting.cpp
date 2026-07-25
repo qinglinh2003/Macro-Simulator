@@ -7,6 +7,8 @@
 namespace macro_sim::core {
 namespace {
 
+constexpr std::size_t kMissingAccountRow = std::numeric_limits<std::size_t>::max();
+
 struct RoundedAdd final {
     double value{0.0};
     double error{0.0};
@@ -86,19 +88,17 @@ Result<AccountId> PostingBook::create_account(AccountKey key, Money opening_bala
         return Status(ErrorCode::invalid_argument,
                       "opening balance must be finite and permitted");
     }
-    const auto duplicate = std::find_if(accounts_.begin(), accounts_.end(),
-                                        [&key](const AccountRecord &account) {
-                                            return account.open && account.key == key;
-                                        });
-    if (duplicate != accounts_.end()) {
+    if (find_account_row(key) != kMissingAccountRow) {
         return Status(ErrorCode::already_exists, "account key already exists");
     }
     if (accounts_.size() >= std::numeric_limits<std::uint64_t>::max() - 1) {
         return Status(ErrorCode::out_of_range, "account ID space exhausted");
     }
     const auto id = AccountId(static_cast<std::uint64_t>(accounts_.size()) + 1);
+    ensure_account_slot_capacity(accounts_.size() + 1);
     accounts_.push_back(
         AccountRecord{id, key, opening_balance, 0.0, allow_negative, true});
+    insert_account_row(accounts_.size() - 1);
     return id;
 }
 
@@ -112,18 +112,16 @@ Status PostingBook::close_account(AccountId id) {
                       "nonzero account cannot be closed");
     }
     account->open = false;
+    rebuild_account_slots();
     return Status::success();
 }
 
 Result<AccountId> PostingBook::find(AccountKey key) const noexcept {
-    const auto found = std::find_if(accounts_.begin(), accounts_.end(),
-                                    [&key](const AccountRecord &account) {
-                                        return account.open && account.key == key;
-                                    });
-    if (found == accounts_.end()) {
+    const auto row = find_account_row(key);
+    if (row == kMissingAccountRow) {
         return Status(ErrorCode::not_found, "account key is absent");
     }
-    return found->id;
+    return accounts_[row].id;
 }
 
 Result<SettlementNodeId> PostingBook::settlement_node(AccountId id) const noexcept {
@@ -179,6 +177,71 @@ std::vector<AccountRecord> &PostingBook::records() noexcept { return accounts_; 
 
 const std::vector<AccountRecord> &PostingBook::records() const noexcept {
     return accounts_;
+}
+
+std::size_t PostingBook::account_hash(AccountKey key) noexcept {
+    auto mix = [](std::uint64_t value) {
+        value += 0x9e3779b97f4a7c15ULL;
+        value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
+        value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
+        return value ^ (value >> 31U);
+    };
+    std::uint64_t hash = mix(static_cast<std::uint64_t>(key.kind));
+    const auto combine = [&hash, &mix](std::uint64_t value) {
+        hash ^= mix(value + hash + 0x9e3779b97f4a7c15ULL);
+    };
+    combine(key.economy.value());
+    combine(static_cast<std::uint64_t>(key.owner.kind));
+    combine(key.owner.value);
+    combine(key.currency.value());
+    combine(key.settlement_node.value());
+    return static_cast<std::size_t>(hash);
+}
+
+std::size_t PostingBook::find_account_row(AccountKey key) const noexcept {
+    if (account_slots_.empty()) {
+        return kMissingAccountRow;
+    }
+    const auto mask = account_slots_.size() - 1;
+    auto slot = account_hash(key) & mask;
+    while (account_slots_[slot] != 0) {
+        const auto row = account_slots_[slot] - 1;
+        const auto &account = accounts_[row];
+        if (account.open && account.key == key) {
+            return row;
+        }
+        slot = (slot + 1) & mask;
+    }
+    return kMissingAccountRow;
+}
+
+void PostingBook::ensure_account_slot_capacity(std::size_t required_rows) {
+    std::size_t capacity = account_slots_.empty() ? 8 : account_slots_.size();
+    while (required_rows > capacity / 2) {
+        capacity *= 2;
+    }
+    if (capacity != account_slots_.size()) {
+        account_slots_.assign(capacity, 0);
+        for (std::size_t row = 0; row < accounts_.size(); ++row) {
+            if (accounts_[row].open) {
+                insert_account_row(row);
+            }
+        }
+    }
+}
+
+void PostingBook::rebuild_account_slots() {
+    account_slots_.clear();
+    ensure_account_slot_capacity(accounts_.size());
+}
+
+void PostingBook::insert_account_row(std::size_t row) noexcept {
+    const auto mask = account_slots_.size() - 1;
+    auto slot = account_hash(accounts_[row].key) & mask;
+    while (account_slots_[slot] != 0) {
+        slot = (slot + 1) & mask;
+    }
+    account_slots_[slot] = row + 1;
 }
 
 Status PostingBook::validate_finite() const noexcept {
@@ -472,27 +535,20 @@ std::size_t OwnershipBook::retire_asset(AssetKey asset) noexcept {
     return retired;
 }
 
-Status OwnershipBook::rekey_owner(OwnerId source,
-                                  OwnerId destination) noexcept {
-    if (!source.valid() || !destination.valid() ||
-        source == destination) {
-        return Status(
-            ErrorCode::invalid_argument,
-            "ownership rekey subjects are invalid"
-        );
+Status OwnershipBook::rekey_owner(OwnerId source, OwnerId destination) noexcept {
+    if (!source.valid() || !destination.valid() || source == destination) {
+        return Status(ErrorCode::invalid_argument,
+                      "ownership rekey subjects are invalid");
     }
     for (auto &lot : lots_) {
         if (!lot.active || lot.owner != source) {
             continue;
         }
         const auto existing = std::find_if(
-            lots_.begin(), lots_.end(),
-            [&](const OwnershipLot &candidate) {
-                return candidate.active &&
-                       candidate.owner == destination &&
+            lots_.begin(), lots_.end(), [&](const OwnershipLot &candidate) {
+                return candidate.active && candidate.owner == destination &&
                        candidate.asset == lot.asset;
-            }
-        );
+            });
         if (existing == lots_.end()) {
             lot.owner = destination;
             continue;

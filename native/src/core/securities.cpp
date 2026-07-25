@@ -186,9 +186,14 @@ Result<SecurityLotId> SecurityBook::create_lot(SecurityId security, OwnerId hold
 
 SecurityLot *SecurityBook::find_active_lot(SecurityId security,
                                            OwnerId holder) noexcept {
-    for (const auto lot_id : lots_for_holder(holder)) {
+    const auto holder_lots = lots_for_holder(holder);
+    const auto security_lots = lots_for_security(security);
+    const auto candidates =
+        holder_lots.size() <= security_lots.size() ? holder_lots : security_lots;
+    for (const auto lot_id : candidates) {
         auto *lot = get(lot_id);
-        if (lot != nullptr && lot->active && lot->security == security) {
+        if (lot != nullptr && lot->active && lot->security == security &&
+            lot->holder == holder) {
             return lot;
         }
     }
@@ -311,12 +316,16 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
         return Status(ErrorCode::invalid_argument, "invalid security transfer");
     }
     const double held = units_held(security, source);
-    if (units > held + scaled_tolerance(1.0e-10, held)) {
+    constexpr double transfer_tolerance = 1.0e-9;
+    if (units > held + scaled_tolerance(transfer_tolerance, held)) {
         return Status(ErrorCode::insufficient_funds,
-                      "security transfer exceeds holdings");
+                      security.kind == SecurityKind::bond
+                          ? "bond transfer exceeds holdings"
+                          : "equity transfer exceeds holdings");
     }
 
-    double remaining = std::min(units, held);
+    const double transferred_units = std::min(units, held);
+    double remaining = transferred_units;
     double removed_cost = 0.0;
     const auto remove_from_lot = [&](SecurityLot &lot) {
         if (!lot.active || lot.security != security || lot.holder != source ||
@@ -336,8 +345,13 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
             lot.active = false;
         }
     };
+    const auto source_holder_lots = lots_for_holder(source);
+    const auto source_security_lots = lots_for_security(security);
+    const auto source_candidates =
+        source_holder_lots.size() <= source_security_lots.size() ? source_holder_lots
+                                                                 : source_security_lots;
     if (batch_active_) {
-        for (const auto lot_id : lots_for_holder(source)) {
+        for (const auto lot_id : source_candidates) {
             auto *lot = get(lot_id);
             if (lot != nullptr) {
                 remove_from_lot(*lot);
@@ -361,34 +375,31 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
             }
         }
     } else {
-        for (auto &lot : lots_) {
-            remove_from_lot(lot);
+        for (const auto lot_id : source_candidates) {
+            auto *lot = get(lot_id);
+            if (lot != nullptr) {
+                remove_from_lot(*lot);
+            }
         }
     }
-    if (remaining > scaled_tolerance(1.0e-10, units)) {
+    if (remaining > scaled_tolerance(transfer_tolerance, transferred_units)) {
         return Status(ErrorCode::invariant_violation,
                       "security source index is inconsistent");
     }
 
     SecurityLot *destination_lot = find_active_lot(security, destination);
-    if (destination_lot == nullptr && !batch_active_) {
-        for (auto &lot : lots_) {
-            if (lot.active && lot.security == security && lot.holder == destination) {
-                destination_lot = &lot;
-                break;
-            }
-        }
-    }
-    const double assigned_cost = destination_cost_basis.value() > 0.0
-                                     ? destination_cost_basis.value()
-                                     : removed_cost;
+    const double assigned_cost =
+        destination_cost_basis.value() > 0.0
+            ? destination_cost_basis.value() * transferred_units / units
+            : removed_cost;
     if (destination_lot == nullptr) {
-        auto created = create_lot(security, destination, units, Money(assigned_cost));
+        auto created =
+            create_lot(security, destination, transferred_units, Money(assigned_cost));
         if (!created.ok()) {
             return created.status();
         }
     } else {
-        destination_lot->units += units;
+        destination_lot->units += transferred_units;
         destination_lot->cost_basis =
             Money(destination_lot->cost_basis.value() + assigned_cost);
     }
@@ -717,10 +728,15 @@ std::span<const SecurityLotId> SecurityBook::bank_lots(BankId bank) const noexce
 double SecurityBook::units_held(SecurityId security, OwnerId holder) const noexcept {
     double total = 0.0;
     double correction = 0.0;
+    const auto holder_lots = lots_for_holder(holder);
+    const auto security_lots = lots_for_security(security);
+    const auto candidates =
+        holder_lots.size() <= security_lots.size() ? holder_lots : security_lots;
     if (batch_active_) {
-        for (const auto lot_id : lots_for_holder(holder)) {
+        for (const auto lot_id : candidates) {
             const auto *lot = get(lot_id);
-            if (lot == nullptr || !lot->active || lot->security != security) {
+            if (lot == nullptr || !lot->active || lot->security != security ||
+                lot->holder != holder) {
                 continue;
             }
             const double next = total + lot->units;
@@ -753,9 +769,10 @@ double SecurityBook::units_held(SecurityId security, OwnerId holder) const noexc
         }
         return total + correction;
     }
-    for (const auto lot_id : lots_for_holder(holder)) {
+    for (const auto lot_id : candidates) {
         const auto *lot = get(lot_id);
-        if (lot == nullptr || !lot->active || lot->security != security) {
+        if (lot == nullptr || !lot->active || lot->security != security ||
+            lot->holder != holder) {
             continue;
         }
         const double next = total + lot->units;

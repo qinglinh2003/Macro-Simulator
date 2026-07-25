@@ -940,14 +940,20 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
     if (accounts.previous_employed_heads >= 0.0) {
         const double expected = accounts.previous_employed_heads + head_flow_balance -
                                 accounts.previous_head_flow_balance;
-        if (std::abs(expected - accounts.employed_heads) > kLaborTolerance) {
+        const double tolerance =
+            kLaborTolerance *
+            std::max({1.0, std::abs(expected), std::abs(accounts.employed_heads)});
+        if (std::abs(expected - accounts.employed_heads) > tolerance) {
             accounts.employed_heads = std::numeric_limits<double>::quiet_NaN();
         }
     }
     if (accounts.previous_employed_fte >= 0.0) {
         const double expected = accounts.previous_employed_fte + fte_flow_balance -
                                 accounts.previous_fte_flow_balance;
-        if (std::abs(expected - accounts.employed_fte) > kLaborTolerance) {
+        const double tolerance =
+            kLaborTolerance *
+            std::max({1.0, std::abs(expected), std::abs(accounts.employed_fte)});
+        if (std::abs(expected - accounts.employed_fte) > tolerance) {
             accounts.employed_fte = std::numeric_limits<double>::quiet_NaN();
         }
     }

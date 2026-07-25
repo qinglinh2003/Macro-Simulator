@@ -15,6 +15,7 @@
 #include <sys/resource.h>
 #endif
 
+#include "macro_sim/core/digest.hpp"
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/simulation/m9.hpp"
 
@@ -220,6 +221,7 @@ template <typename Advance>
         if (!advance()) {
             return false;
         }
+        std::cerr << "Scale probe warmup day complete: " << day + 1U << '\n';
     }
     std::vector<std::uint64_t> samples;
     samples.reserve(static_cast<std::size_t>(options.measured_days));
@@ -239,6 +241,8 @@ template <typename Advance>
         measurement.total_measured_ns += elapsed;
         measurement.maximum_allocations_per_day =
             std::max(measurement.maximum_allocations_per_day, allocations);
+        std::cerr << "Scale probe measured day complete: " << day + 1U << ' ' << elapsed
+                  << " ns\n";
     }
     std::sort(samples.begin(), samples.end());
     const auto p95_index = ((samples.size() - 1U) * 95U + 99U) / 100U;
@@ -275,24 +279,27 @@ template <typename Advance>
     measurement.households = session.root()->households.alive_count();
     measurement.firms = session.root()->firms.alive_count();
     measurement.banks = session.root()->banks.alive_count();
+    std::cerr << "M8 scale probe genesis complete: " << measurement.genesis_ns
+              << " ns\n";
 
+    Status advance_status;
     const auto advanced = measure_days(
         options,
-        [&session]() {
+        [&session, &advance_status]() {
             const auto result = session.advance_m8_ticks(1U);
+            if (!result.ok()) {
+                advance_status = result.status();
+            }
             return result.ok();
         },
         measurement);
     if (!advanced) {
-        std::cerr << "M8 scale probe advance failed\n";
+        std::cerr << "M8 scale probe advance failed: "
+                  << static_cast<std::uint32_t>(advance_status.code()) << ' '
+                  << advance_status.message() << '\n';
         std::abort();
     }
-    const auto digest = session.digest();
-    if (!digest.ok()) {
-        std::cerr << "M8 scale probe digest failed\n";
-        std::abort();
-    }
-    measurement.digest = digest.get_if()->hex();
+    measurement.digest = core::state_digest(*session.root()).hex();
     return measurement;
 }
 
@@ -329,16 +336,24 @@ template <typename Advance>
     measurement.households = root->households.alive_count();
     measurement.firms = root->firms.alive_count();
     measurement.banks = root->banks.alive_count();
+    std::cerr << "M9 scale probe genesis complete: " << measurement.genesis_ns
+              << " ns\n";
 
+    Status advance_status;
     const auto advanced = measure_days(
         options,
-        [&world]() {
+        [&world, &advance_status]() {
             const auto result = world.advance(1U);
+            if (!result.ok()) {
+                advance_status = result.status();
+            }
             return result.ok();
         },
         measurement);
     if (!advanced) {
-        std::cerr << "M9 scale probe advance failed\n";
+        std::cerr << "M9 scale probe advance failed: "
+                  << static_cast<std::uint32_t>(advance_status.code()) << ' '
+                  << advance_status.message() << '\n';
         std::abort();
     }
     measurement.digest = std::to_string(world.digest());

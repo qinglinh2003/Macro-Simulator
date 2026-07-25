@@ -1342,6 +1342,7 @@ Result<RootState> CheckpointCodec::decode_state(
             }
         );
     }
+    state.postings.rebuild_account_slots();
 
     const auto reserve_count = reader.count();
     if (!reserve_count.ok()) {

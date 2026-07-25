@@ -1,6 +1,6 @@
 # C++ Engine Scale Baseline V33
 
-Status: initial scale survey complete; optimization work has not started
+Status: one-million-person M8 baseline established; optimization in progress
 
 Date: 2026-07-25
 
@@ -61,6 +61,36 @@ The normal probe keeps beneficial ownership enabled. A diagnostic switch can
 disable beneficial ownership and estates together. That switch exists only to
 isolate a hotspot; it is not a proposal to remove either mechanism from the
 product.
+
+### 3.1 Performance acceptance population
+
+All performance acceptance runs from this point forward use exactly 1,000,000
+persons. Smaller scenarios may still be used for correctness, semantic, and unit
+tests, but they are not performance evidence and cannot be used to claim an
+optimization win.
+
+The earlier smaller-population measurements below are retained only as historical
+hotspot evidence from the initial survey.
+
+### 3.2 First complete one-million-person M8 baseline
+
+The first complete run followed the removal of quadratic account creation,
+beneficial-asset insertion, securities genesis, and producer-opening transaction
+paths. It kept beneficial ownership enabled and completed three validated days.
+
+| Persons | Mode | Genesis | Day samples | Median day | Peak RSS | Max allocations/day |
+| ---: | :---: | ---: | :--- | ---: | ---: | ---: |
+| 1,000,000 | M8 | 8.10 s | 21.26 s, 30.99 s, 31.68 s | 30.99 s | 6.12 GiB | 26,860,085 |
+
+The run produced root-state digest
+`9c0bba0226b7c6784e82bfd330b3aae744fa60f59aaa5c287fd66970c3ebd0ce`.
+The probe uses the root-state digest because the current full M8 digest first
+materializes a checkpoint and the legacy checkpoint limit is 512 MiB. Full state
+validation still runs inside every measured day.
+
+This baseline proves that the enabled model can now create and advance one
+million persons on the target machine. It does not meet the interactive target.
+The remaining gap is approximately 31 times at the median.
 
 ## 4. Baseline with the current model enabled
 
@@ -251,19 +281,10 @@ Each optimization must preserve:
 - C, C++, and Python binding contracts
 - sanitizer cleanliness
 
-The scale gates after each primary fix are:
-
-| Population | Initial target |
-| ---: | ---: |
-| 20,000 | no regression from the best equivalent baseline |
-| 50,000 | under 100 ms per normal M9 day |
-| 100,000 | under 200 ms per normal M9 day |
-| 250,000 | under 300 ms per normal M9 day |
-| 500,000 | under 500 ms per normal M9 day |
-| 1,000,000 | under 1 second per normal M9 day |
-
-The one-million run should not be attempted until the 100,000-person latency,
-memory, and allocation gates show a safe scaling slope.
+The sole performance gate is one million persons. Each accepted optimization
+must improve or preserve genesis time, daily latency, peak RSS, and allocation
+count on that population while all required correctness gates remain green. The
+target is no more than one second per normal M9 day.
 
 ## 11. Reproduction
 
@@ -275,24 +296,24 @@ uv run cmake --preset m9-release
 uv run cmake --build --preset m9-release --parallel 8
 ```
 
-Run a normal M9 probe:
+Run the current one-million-person M8 acceptance probe:
 
 ```bash
 build/native/m9-release/native/macro_sim_m9_scale_probe \
-  --mode m9 \
-  --persons 50000 \
-  --warmup-days 1 \
-  --days 8 \
+  --mode m8 \
+  --persons 1000000 \
+  --warmup-days 0 \
+  --days 3 \
   --beneficial-ownership enabled
 ```
 
-Run the diagnostic isolation:
+Run the one-million-person M9 acceptance probe once M9 memory staging is safe:
 
 ```bash
 build/native/m9-release/native/macro_sim_m9_scale_probe \
   --mode m9 \
-  --persons 50000 \
-  --warmup-days 1 \
-  --days 8 \
-  --beneficial-ownership disabled
+  --persons 1000000 \
+  --warmup-days 0 \
+  --days 3 \
+  --beneficial-ownership enabled
 ```

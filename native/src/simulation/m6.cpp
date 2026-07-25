@@ -1794,11 +1794,13 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     }
     double allocated = 0.0;
     for (std::size_t index = 0; index < demands.size(); ++index) {
-        const double amount =
+        const double remaining_issue = std::max(0.0, issue - allocated);
+        const double planned =
             index + 1 == demands.size()
-                ? issue - allocated
+                ? remaining_issue
                 : std::min(demands[index].amount,
                            issue * demands[index].amount / total_demand);
+        const double amount = std::min(remaining_issue, planned);
         if (amount <= kEconomicEpsilon) {
             continue;
         }
@@ -2571,6 +2573,10 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
             }
         }
     }
+    auto securities_batch = runtime.securities.begin_batch();
+    if (!securities_batch.ok()) {
+        return securities_batch;
+    }
     for (std::size_t index = 0; index < equity_firms.size(); ++index) {
         const auto firm_id = equity_firms[index];
         const auto *firm = value.root.firms.get(firm_id);
@@ -2652,6 +2658,10 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     }
     if (!bank_equity_status.ok()) {
         return bank_equity_status;
+    }
+    securities_batch = runtime.securities.finish_batch();
+    if (!securities_batch.ok()) {
+        return securities_batch;
     }
     runtime.last_metrics.economy = value.runtime.last_metrics;
     runtime.last_metrics.bond_outstanding_face = 0.0;

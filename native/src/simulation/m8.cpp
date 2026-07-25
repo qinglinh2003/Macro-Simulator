@@ -121,11 +121,18 @@ lifecycle_for_energy_firm(const core::RootState &state, const M6Runtime &runtime
     return lifecycle;
 }
 
+struct GenesisFirmOpening final {
+    FirmId firm{};
+    AccountId account{};
+    double amount{0.0};
+};
+
 [[nodiscard]] Status
 create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
                    const EnergyRules &rules, double expected_demand, double capital,
                    double inventory, bool state_owned, SettlementNodeId settlement_node,
-                   EnergyProducerComponent &producer) {
+                   EnergyProducerComponent &producer,
+                   std::vector<GenesisFirmOpening> &openings) {
     core::FirmComponent component;
     component.sector = core::FirmSector::energy;
     component.goods_inventory = Goods(inventory);
@@ -174,17 +181,7 @@ create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
     }
     state.firms.get(firm_id)->primary_account = *account.get_if();
     if (rules.initial_producer_cash > kEconomicEpsilon) {
-        core::SettlementTransaction transaction(state);
-        auto status =
-            transaction.transfer(state.institutions.treasury_account, *account.get_if(),
-                                 Money(rules.initial_producer_cash));
-        if (!status.ok()) {
-            return status;
-        }
-        const auto committed = transaction.commit();
-        if (!committed.ok()) {
-            return committed.status();
-        }
+        openings.push_back({firm_id, *account.get_if(), rules.initial_producer_cash});
     }
     if (financial_runtime.firms.size() <= firm_id.value()) {
         financial_runtime.firms.resize(static_cast<std::size_t>(firm_id.value() + 1U));
@@ -205,7 +202,8 @@ create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
                                          M6Runtime &financial_runtime,
                                          const HousingRules &rules, double wage,
                                          SettlementNodeId settlement_node,
-                                         BuilderComponent &builder) {
+                                         BuilderComponent &builder,
+                                         std::vector<GenesisFirmOpening> &openings) {
     core::FirmComponent component;
     component.sector = core::FirmSector::construction;
     component.goods_inventory = Goods(0.0);
@@ -249,17 +247,8 @@ create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
     }
     state.firms.get(firm_id)->primary_account = *account.get_if();
     if (rules.initial_builder_cash_buffer > kEconomicEpsilon) {
-        core::SettlementTransaction transaction(state);
-        auto status =
-            transaction.transfer(state.institutions.treasury_account, *account.get_if(),
-                                 Money(rules.initial_builder_cash_buffer));
-        if (!status.ok()) {
-            return status;
-        }
-        const auto committed = transaction.commit();
-        if (!committed.ok()) {
-            return committed.status();
-        }
+        openings.push_back(
+            {firm_id, *account.get_if(), rules.initial_builder_cash_buffer});
     }
     if (financial_runtime.firms.size() <= firm_id.value()) {
         financial_runtime.firms.resize(static_cast<std::size_t>(firm_id.value() + 1U));
@@ -3041,6 +3030,9 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
     runtime.housing_policy = spec.housing_policy;
     runtime.housing_rules = spec.housing_rules;
     runtime.housing_input = spec.housing_input;
+    std::vector<GenesisFirmOpening> firm_openings;
+    firm_openings.reserve(static_cast<std::size_t>(spec.energy_rules.producer_count +
+                                                   spec.housing_rules.builder_count));
     ensure_runtime_indexes(base.root, runtime);
     if (spec.energy_rules.enabled) {
         const auto settlement_node = genesis_settlement_node(base.root);
@@ -3076,7 +3068,7 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                 base.root, base.financial_runtime, spec.energy_rules, per_producer,
                 capital, inventory,
                 spec.energy_rules.state_owned_first_producer && index == 0,
-                settlement_node, producer);
+                settlement_node, producer, firm_openings);
             if (!status.ok()) {
                 return status;
             }
@@ -3135,7 +3127,8 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                 BuilderComponent builder;
                 const auto status = create_builder_firm(
                     base.root, base.financial_runtime, spec.housing_rules,
-                    real_spec.rules.initial_wage, settlement_node, builder);
+                    real_spec.rules.initial_wage, settlement_node, builder,
+                    firm_openings);
                 if (!status.ok()) {
                     return status;
                 }
@@ -3241,6 +3234,27 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
             target_count == 0 ? 0.0
                               : static_cast<double>(target_count - occupied_count) /
                                     static_cast<double>(target_count);
+    }
+    if (!firm_openings.empty()) {
+        core::SettlementTransaction transaction(base.root);
+        for (const auto &opening : firm_openings) {
+            const auto status =
+                transaction.transfer(base.root.institutions.treasury_account,
+                                     opening.account, Money(opening.amount));
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        const auto committed = transaction.commit();
+        if (!committed.ok()) {
+            return committed.status();
+        }
+        for (const auto &opening : firm_openings) {
+            base.financial_runtime
+                .firms[static_cast<std::size_t>(opening.firm.value())] =
+                lifecycle_for_energy_firm(base.root, base.financial_runtime,
+                                          opening.firm);
+        }
     }
     runtime.last_metrics.energy.transaction_price = runtime.energy_price;
     runtime.last_metrics.energy.fuel_poverty_mortality_multiplier = 1.0;

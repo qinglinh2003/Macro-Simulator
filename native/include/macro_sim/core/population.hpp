@@ -56,8 +56,7 @@ class PersonStore final {
     [[nodiscard]] std::span<const PersonId> alive_ids() const noexcept;
     [[nodiscard]] std::span<const PersonId> archive_ids() const noexcept;
     [[nodiscard]] const std::vector<PersonRecord> &records() const noexcept;
-    [[nodiscard]] Status
-    replace_records(std::vector<PersonRecord> records);
+    [[nodiscard]] Status replace_records(std::vector<PersonRecord> records);
     [[nodiscard]] Status validate() const noexcept;
 
   private:
@@ -125,34 +124,39 @@ class BeneficialOwnershipBook final {
     [[nodiscard]] Status retire(BeneficialLotId lot);
     [[nodiscard]] Status retire_asset(BeneficialAssetKey asset);
     [[nodiscard]] Status retire_household(HouseholdId household);
-    [[nodiscard]] Status rekey_household(HouseholdId source,
-                                         HouseholdId destination);
+    [[nodiscard]] Status rekey_household(HouseholdId source, HouseholdId destination);
     [[nodiscard]] BeneficialLot *get(BeneficialLotId id) noexcept;
     [[nodiscard]] const BeneficialLot *get(BeneficialLotId id) const noexcept;
-    [[nodiscard]] bool
-    contains_asset(BeneficialAssetKey asset) const noexcept;
+    [[nodiscard]] bool contains_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] std::span<const BeneficialLotId>
     lots_for_person(PersonId person) const noexcept;
     [[nodiscard]] std::span<const BeneficialLotId>
     lots_for_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
-    [[nodiscard]] Status
-    replace_records(std::vector<BeneficialLot> records);
+    [[nodiscard]] Status replace_records(std::vector<BeneficialLot> records);
     [[nodiscard]] Status validate(const PersonStore &persons, double tolerance) const;
 
   private:
+    static constexpr std::size_t kMissingAssetRow =
+        std::numeric_limits<std::size_t>::max();
+
     struct AssetIndexRow final {
         BeneficialAssetKey asset{};
         std::vector<BeneficialLotId> lots;
     };
 
     void ensure_person(PersonId person);
+    [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
+    [[nodiscard]] std::size_t find_asset_row(BeneficialAssetKey asset) const noexcept;
+    [[nodiscard]] std::size_t ensure_asset_row(BeneficialAssetKey asset);
+    void rebuild_asset_slots(std::size_t minimum_rows);
 
     std::vector<BeneficialLot> lots_;
     std::vector<std::vector<BeneficialLotId>> lots_by_person_{
         std::vector<BeneficialLotId>{}};
     std::vector<AssetIndexRow> lots_by_asset_;
+    std::vector<std::size_t> asset_slots_;
 };
 
 } // namespace macro_sim::core

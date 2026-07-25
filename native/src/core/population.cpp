@@ -94,12 +94,9 @@ const std::vector<PersonRecord> &PersonStore::records() const noexcept {
     return records_;
 }
 
-Status PersonStore::replace_records(
-    std::vector<PersonRecord> records
-) {
+Status PersonStore::replace_records(std::vector<PersonRecord> records) {
     if (records.empty()) {
-        return Status(ErrorCode::corrupt_input,
-                      "person checkpoint records are empty");
+        return Status(ErrorCode::corrupt_input, "person checkpoint records are empty");
     }
     records_ = std::move(records);
     alive_ids_.clear();
@@ -188,13 +185,8 @@ Status HouseholdMembershipBook::add(PersonId person, HouseholdId household) {
         return Status(ErrorCode::contract_violation, "person already has a household");
     }
     household_by_person_[static_cast<std::size_t>(person.value())] = household;
-    auto &members =
-        members_by_household_[
-            static_cast<std::size_t>(household.value())];
-    members.insert(
-        std::lower_bound(members.begin(), members.end(), person),
-        person
-    );
+    auto &members = members_by_household_[static_cast<std::size_t>(household.value())];
+    members.insert(std::lower_bound(members.begin(), members.end(), person), person);
     return Status::success();
 }
 
@@ -266,10 +258,8 @@ Status HouseholdMembershipBook::validate(const PersonStore &persons,
                           "membership references an absent household");
         }
         if (!std::is_sorted(members.begin(), members.end())) {
-            return Status(
-                ErrorCode::invariant_violation,
-                "household member order is not canonical"
-            );
+            return Status(ErrorCode::invariant_violation,
+                          "household member order is not canonical");
         }
         for (const auto person : members) {
             if (!persons.alive(person) || person.value() >= seen.size() ||
@@ -293,9 +283,7 @@ Status HouseholdMembershipBook::validate(const PersonStore &persons,
     return Status::success();
 }
 
-Status HouseholdMembershipBook::rebuild(
-    const PersonStore &persons
-) {
+Status HouseholdMembershipBook::rebuild(const PersonStore &persons) {
     household_by_person_.assign(1, HouseholdId{});
     members_by_household_.assign(1, std::vector<PersonId>{});
     for (const auto person : persons.alive_ids()) {
@@ -315,6 +303,74 @@ void BeneficialOwnershipBook::ensure_person(PersonId person) {
     }
 }
 
+std::size_t BeneficialOwnershipBook::asset_hash(BeneficialAssetKey asset) noexcept {
+    const auto mix = [](std::uint64_t value) {
+        value += 0x9e3779b97f4a7c15ULL;
+        value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
+        value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
+        return value ^ (value >> 31U);
+    };
+    std::uint64_t hash =
+        mix(static_cast<std::uint64_t>(static_cast<std::uint8_t>(asset.kind)));
+    hash ^= mix(asset.household.value() + 0x517cc1b727220a95ULL);
+    hash ^= mix(asset.value + 0x6eed0e9da4d94a4fULL);
+    return static_cast<std::size_t>(hash);
+}
+
+std::size_t
+BeneficialOwnershipBook::find_asset_row(BeneficialAssetKey asset) const noexcept {
+    if (asset_slots_.empty()) {
+        return kMissingAssetRow;
+    }
+    const auto mask = asset_slots_.size() - 1U;
+    auto slot = asset_hash(asset) & mask;
+    while (asset_slots_[slot] != 0U) {
+        const auto row = asset_slots_[slot] - 1U;
+        if (lots_by_asset_[row].asset == asset) {
+            return row;
+        }
+        slot = (slot + 1U) & mask;
+    }
+    return kMissingAssetRow;
+}
+
+void BeneficialOwnershipBook::rebuild_asset_slots(std::size_t minimum_rows) {
+    const auto required_rows = std::max(minimum_rows, lots_by_asset_.size());
+    std::size_t capacity = 8U;
+    while (capacity < required_rows * 2U) {
+        capacity *= 2U;
+    }
+    asset_slots_.assign(capacity, 0U);
+    const auto mask = capacity - 1U;
+    for (std::size_t row = 0; row < lots_by_asset_.size(); ++row) {
+        auto slot = asset_hash(lots_by_asset_[row].asset) & mask;
+        while (asset_slots_[slot] != 0U) {
+            slot = (slot + 1U) & mask;
+        }
+        asset_slots_[slot] = row + 1U;
+    }
+}
+
+std::size_t BeneficialOwnershipBook::ensure_asset_row(BeneficialAssetKey asset) {
+    const auto existing = find_asset_row(asset);
+    if (existing != kMissingAssetRow) {
+        return existing;
+    }
+    if (asset_slots_.empty() ||
+        (lots_by_asset_.size() + 1U) * 10U >= asset_slots_.size() * 7U) {
+        rebuild_asset_slots(lots_by_asset_.size() + 1U);
+    }
+    const auto row = lots_by_asset_.size();
+    lots_by_asset_.push_back({asset, {}});
+    const auto mask = asset_slots_.size() - 1U;
+    auto slot = asset_hash(asset) & mask;
+    while (asset_slots_[slot] != 0U) {
+        slot = (slot + 1U) & mask;
+    }
+    asset_slots_[slot] = row + 1U;
+    return row;
+}
+
 Result<BeneficialLotId> BeneficialOwnershipBook::create_lot(BeneficialAssetKey asset,
                                                             PersonId owner,
                                                             double share) {
@@ -327,20 +383,7 @@ Result<BeneficialLotId> BeneficialOwnershipBook::create_lot(BeneficialAssetKey a
     lots_.push_back({id, asset, owner, share, true});
     ensure_person(owner);
     lots_by_person_[static_cast<std::size_t>(owner.value())].push_back(id);
-    auto asset_row = std::lower_bound(
-        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
-        [](const AssetIndexRow &row,
-           BeneficialAssetKey key) {
-            return row.asset < key;
-        }
-    );
-    if (asset_row == lots_by_asset_.end() ||
-        asset_row->asset != asset) {
-        asset_row = lots_by_asset_.insert(
-            asset_row, AssetIndexRow{asset, {}}
-        );
-    }
-    asset_row->lots.push_back(id);
+    lots_by_asset_[ensure_asset_row(asset)].lots.push_back(id);
     return id;
 }
 
@@ -392,21 +435,12 @@ Status BeneficialOwnershipBook::retire(BeneficialLotId lot) {
     return Status::success();
 }
 
-Status BeneficialOwnershipBook::retire_asset(
-    BeneficialAssetKey asset
-) {
-    const auto found = std::lower_bound(
-        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
-        [](const AssetIndexRow &row,
-           BeneficialAssetKey key) {
-            return row.asset < key;
-        }
-    );
-    if (found == lots_by_asset_.end() ||
-        found->asset != asset) {
+Status BeneficialOwnershipBook::retire_asset(BeneficialAssetKey asset) {
+    const auto row = find_asset_row(asset);
+    if (row == kMissingAssetRow) {
         return Status::success();
     }
-    const auto lots = found->lots;
+    const auto lots = lots_by_asset_[row].lots;
     for (const auto lot : lots) {
         const auto *record = get(lot);
         if (record == nullptr || !record->active) {
@@ -417,23 +451,18 @@ Status BeneficialOwnershipBook::retire_asset(
             return status;
         }
     }
-    lots_by_asset_.erase(found);
+    lots_by_asset_[row].lots.clear();
     return Status::success();
 }
 
-Status BeneficialOwnershipBook::retire_household(
-    HouseholdId household
-) {
+Status BeneficialOwnershipBook::retire_household(HouseholdId household) {
     if (!household.valid()) {
-        return Status(
-            ErrorCode::invalid_argument,
-            "beneficial household retirement is invalid"
-        );
+        return Status(ErrorCode::invalid_argument,
+                      "beneficial household retirement is invalid");
     }
     std::vector<BeneficialAssetKey> assets;
     for (const auto &row : lots_by_asset_) {
-        if (row.asset.household == household &&
-            !row.lots.empty()) {
+        if (row.asset.household == household && !row.lots.empty()) {
             assets.push_back(row.asset);
         }
     }
@@ -446,20 +475,15 @@ Status BeneficialOwnershipBook::retire_household(
     return Status::success();
 }
 
-Status BeneficialOwnershipBook::rekey_household(
-    HouseholdId source, HouseholdId destination
-) {
-    if (!source.valid() || !destination.valid() ||
-        source == destination) {
-        return Status(
-            ErrorCode::invalid_argument,
-            "beneficial household rekey is invalid"
-        );
+Status BeneficialOwnershipBook::rekey_household(HouseholdId source,
+                                                HouseholdId destination) {
+    if (!source.valid() || !destination.valid() || source == destination) {
+        return Status(ErrorCode::invalid_argument,
+                      "beneficial household rekey is invalid");
     }
     std::vector<BeneficialAssetKey> source_assets;
     for (const auto &row : lots_by_asset_) {
-        if (row.asset.household == source &&
-            !row.lots.empty()) {
+        if (row.asset.household == source && !row.lots.empty()) {
             source_assets.push_back(row.asset);
         }
     }
@@ -467,90 +491,48 @@ Status BeneficialOwnershipBook::rekey_household(
         auto destination_asset = source_asset;
         destination_asset.household = destination;
         if (contains_asset(destination_asset)) {
-            return Status(
-                ErrorCode::already_exists,
-                "beneficial destination asset already exists"
-            );
+            return Status(ErrorCode::already_exists,
+                          "beneficial destination asset already exists");
         }
-        auto source_row = std::lower_bound(
-            lots_by_asset_.begin(), lots_by_asset_.end(),
-            source_asset,
-            [](const AssetIndexRow &row,
-               BeneficialAssetKey key) {
-                return row.asset < key;
-            }
-        );
-        if (source_row == lots_by_asset_.end() ||
-            source_row->asset != source_asset) {
-            return Status(
-                ErrorCode::invariant_violation,
-                "beneficial source asset is absent"
-            );
+        const auto source_row = find_asset_row(source_asset);
+        if (source_row == kMissingAssetRow) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial source asset is absent");
         }
-        auto lots = std::move(source_row->lots);
-        lots_by_asset_.erase(source_row);
+        auto lots = std::move(lots_by_asset_[source_row].lots);
+        lots_by_asset_[source_row].lots.clear();
         for (const auto lot : lots) {
             auto *record = get(lot);
             if (record != nullptr && record->active) {
                 record->asset = destination_asset;
             }
         }
-        const auto destination_row = std::lower_bound(
-            lots_by_asset_.begin(), lots_by_asset_.end(),
-            destination_asset,
-            [](const AssetIndexRow &row,
-               BeneficialAssetKey key) {
-                return row.asset < key;
-            }
-        );
-        lots_by_asset_.insert(
-            destination_row,
-            AssetIndexRow{
-                destination_asset, std::move(lots)
-            }
-        );
+        auto &destination_lots =
+            lots_by_asset_[ensure_asset_row(destination_asset)].lots;
+        destination_lots.clear();
+        destination_lots = std::move(lots);
     }
     return Status::success();
 }
 
-bool BeneficialOwnershipBook::contains_asset(
-    BeneficialAssetKey asset
-) const noexcept {
-    const auto found = std::lower_bound(
-        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
-        [](const AssetIndexRow &row,
-           BeneficialAssetKey key) {
-            return row.asset < key;
-        }
-    );
-    if (found == lots_by_asset_.end() ||
-        found->asset != asset) {
+bool BeneficialOwnershipBook::contains_asset(BeneficialAssetKey asset) const noexcept {
+    const auto row = find_asset_row(asset);
+    if (row == kMissingAssetRow) {
         return false;
     }
-    return std::any_of(
-        found->lots.begin(), found->lots.end(),
-        [this](BeneficialLotId lot) {
-            const auto *record = get(lot);
-            return record != nullptr && record->active;
-        }
-    );
+    return std::any_of(lots_by_asset_[row].lots.begin(), lots_by_asset_[row].lots.end(),
+                       [this](BeneficialLotId lot) {
+                           const auto *record = get(lot);
+                           return record != nullptr && record->active;
+                       });
 }
 
 std::span<const BeneficialLotId>
-BeneficialOwnershipBook::lots_for_asset(
-    BeneficialAssetKey asset
-) const noexcept {
-    const auto found = std::lower_bound(
-        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
-        [](const AssetIndexRow &row,
-           BeneficialAssetKey key) {
-            return row.asset < key;
-        }
-    );
-    return found == lots_by_asset_.end() ||
-                   found->asset != asset
+BeneficialOwnershipBook::lots_for_asset(BeneficialAssetKey asset) const noexcept {
+    const auto row = find_asset_row(asset);
+    return row == kMissingAssetRow
                ? std::span<const BeneficialLotId>{}
-               : std::span<const BeneficialLotId>(found->lots);
+               : std::span<const BeneficialLotId>(lots_by_asset_[row].lots);
 }
 
 BeneficialLot *BeneficialOwnershipBook::get(BeneficialLotId id) noexcept {
@@ -582,12 +564,13 @@ const std::vector<BeneficialLot> &BeneficialOwnershipBook::records() const noexc
 
 std::size_t BeneficialOwnershipBook::size() const noexcept { return lots_.size(); }
 
-Status BeneficialOwnershipBook::replace_records(
-    std::vector<BeneficialLot> records
-) {
+Status BeneficialOwnershipBook::replace_records(std::vector<BeneficialLot> records) {
     lots_ = std::move(records);
     lots_by_person_.assign(1, std::vector<BeneficialLotId>{});
     lots_by_asset_.clear();
+    asset_slots_.clear();
+    lots_by_asset_.reserve(lots_.size());
+    rebuild_asset_slots(lots_.size());
     for (std::size_t index = 0; index < lots_.size(); ++index) {
         auto &lot = lots_[index];
         if (lot.id != BeneficialLotId(index + 1U)) {
@@ -598,24 +581,8 @@ Status BeneficialOwnershipBook::replace_records(
             continue;
         }
         ensure_person(lot.owner);
-        lots_by_person_[
-            static_cast<std::size_t>(lot.owner.value())]
-            .push_back(lot.id);
-        auto asset_row = std::lower_bound(
-            lots_by_asset_.begin(), lots_by_asset_.end(),
-            lot.asset,
-            [](const AssetIndexRow &row,
-               BeneficialAssetKey key) {
-                return row.asset < key;
-            }
-        );
-        if (asset_row == lots_by_asset_.end() ||
-            asset_row->asset != lot.asset) {
-            asset_row = lots_by_asset_.insert(
-                asset_row, AssetIndexRow{lot.asset, {}}
-            );
-        }
-        asset_row->lots.push_back(lot.id);
+        lots_by_person_[static_cast<std::size_t>(lot.owner.value())].push_back(lot.id);
+        lots_by_asset_[ensure_asset_row(lot.asset)].lots.push_back(lot.id);
     }
     return Status::success();
 }
