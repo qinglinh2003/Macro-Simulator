@@ -14,6 +14,7 @@
 #include "macro_sim/ids.hpp"
 #include "macro_sim/simulation/m4.hpp"
 #include "macro_sim/simulation/m5.hpp"
+#include "macro_sim/simulation/m6.hpp"
 #include "macro_sim/units.hpp"
 
 namespace macro_sim {
@@ -28,13 +29,13 @@ struct EngineSessionOptions final {
 };
 
 class EngineSession final {
-public:
+  public:
     explicit EngineSession(EngineSessionOptions options = {}) noexcept;
     explicit EngineSession(std::uint64_t session_id) noexcept;
-    EngineSession(const EngineSession&) = delete;
-    EngineSession& operator=(const EngineSession&) = delete;
-    EngineSession(EngineSession&&) = delete;
-    EngineSession& operator=(EngineSession&&) = delete;
+    EngineSession(const EngineSession &) = delete;
+    EngineSession &operator=(const EngineSession &) = delete;
+    EngineSession(EngineSession &&) = delete;
+    EngineSession &operator=(EngineSession &&) = delete;
     ~EngineSession();
 
     [[nodiscard]] SessionId id() const noexcept;
@@ -42,53 +43,42 @@ public:
     [[nodiscard]] SessionState state() const noexcept;
     [[nodiscard]] bool closed() const noexcept;
     [[nodiscard]] bool initialized() const noexcept;
-    [[nodiscard]] core::RootState* root() noexcept;
-    [[nodiscard]] const core::RootState* root() const noexcept;
-    [[nodiscard]] const simulation::M4Runtime* simulation_runtime()
-        const noexcept;
-    [[nodiscard]] const simulation::M4TickScratch* tick_scratch()
-        const noexcept;
-    [[nodiscard]] const simulation::M5Runtime* monetary_runtime()
-        const noexcept;
-    [[nodiscard]] Status initialize_m5(
-        const simulation::M5SimulationSpec& spec
-    );
-    [[nodiscard]] Status update_m5_policy(
-        const simulation::M5PolicyState& policy
-    );
-    [[nodiscard]] Result<simulation::M5AdvanceResult> advance_m5_ticks(
-        std::uint64_t count,
-        const simulation::M5AdvanceOptions& options
-    );
-    [[nodiscard]] Result<simulation::M5AdvanceResult> advance_m5_ticks(
-        std::uint64_t count
-    );
-    [[nodiscard]] Status initialize(const core::GenesisSpec& spec);
-    [[nodiscard]] Status initialize_simulation(
-        const simulation::M4SimulationSpec& spec
-    );
-    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_ticks(
-        std::uint64_t count,
-        const simulation::M4AdvanceOptions& options
-    );
-    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_ticks(
-        std::uint64_t count
-    );
-    [[nodiscard]] Result<simulation::M4AdvanceResult> advance_tick(
-        const simulation::M4AdvanceOptions& options
-    );
+    [[nodiscard]] core::RootState *root() noexcept;
+    [[nodiscard]] const core::RootState *root() const noexcept;
+    [[nodiscard]] const simulation::M4Runtime *simulation_runtime() const noexcept;
+    [[nodiscard]] const simulation::M4TickScratch *tick_scratch() const noexcept;
+    [[nodiscard]] const simulation::M5Runtime *monetary_runtime() const noexcept;
+    [[nodiscard]] const simulation::M6Runtime *securities_runtime() const noexcept;
+    [[nodiscard]] Status initialize_m6(const simulation::M6SimulationSpec &spec);
+    [[nodiscard]] Status update_m6_policy(const simulation::M6PolicyState &policy);
+    [[nodiscard]] Result<simulation::M6AdvanceResult>
+    advance_m6_ticks(std::uint64_t count, const simulation::M6AdvanceOptions &options);
+    [[nodiscard]] Result<simulation::M6AdvanceResult>
+    advance_m6_ticks(std::uint64_t count);
+    [[nodiscard]] Status initialize_m5(const simulation::M5SimulationSpec &spec);
+    [[nodiscard]] Status update_m5_policy(const simulation::M5PolicyState &policy);
+    [[nodiscard]] Result<simulation::M5AdvanceResult>
+    advance_m5_ticks(std::uint64_t count, const simulation::M5AdvanceOptions &options);
+    [[nodiscard]] Result<simulation::M5AdvanceResult>
+    advance_m5_ticks(std::uint64_t count);
+    [[nodiscard]] Status initialize(const core::GenesisSpec &spec);
+    [[nodiscard]] Status
+    initialize_simulation(const simulation::M4SimulationSpec &spec);
+    [[nodiscard]] Result<simulation::M4AdvanceResult>
+    advance_ticks(std::uint64_t count, const simulation::M4AdvanceOptions &options);
+    [[nodiscard]] Result<simulation::M4AdvanceResult>
+    advance_ticks(std::uint64_t count);
+    [[nodiscard]] Result<simulation::M4AdvanceResult>
+    advance_tick(const simulation::M4AdvanceOptions &options);
     [[nodiscard]] Result<simulation::M4AdvanceResult> advance_tick();
-    [[nodiscard]] Result<core::TransactionReceipt> apply(
-        const core::SettlementBatch& batch
-    );
+    [[nodiscard]] Result<core::TransactionReceipt>
+    apply(const core::SettlementBatch &batch);
     [[nodiscard]] Result<core::StateDigest> digest() const;
     [[nodiscard]] Result<std::vector<std::uint8_t>> checkpoint() const;
-    [[nodiscard]] Status restore_checkpoint(
-        std::span<const std::uint8_t> checkpoint
-    );
+    [[nodiscard]] Status restore_checkpoint(std::span<const std::uint8_t> checkpoint);
     [[nodiscard]] Status close() noexcept;
 
-private:
+  private:
     SessionId id_;
     Tick tick_{};
     SessionState state_{SessionState::ready};
@@ -97,8 +87,10 @@ private:
     std::unique_ptr<simulation::M4TickScratch> tick_scratch_;
     std::unique_ptr<simulation::M5Runtime> monetary_runtime_;
     std::unique_ptr<simulation::M5TickScratch> monetary_scratch_;
+    std::unique_ptr<simulation::M6Runtime> securities_runtime_;
+    std::unique_ptr<simulation::M6TickScratch> securities_scratch_;
 };
 
-}  // namespace macro_sim
+} // namespace macro_sim
 
 #endif

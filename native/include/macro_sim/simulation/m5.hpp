@@ -66,7 +66,7 @@ struct M5PolicyState final {
     bool migrate_relationships_on_failure{true};
     bool state_resolution_backstop{false};
 
-    bool operator==(const M5PolicyState&) const = default;
+    bool operator==(const M5PolicyState &) const = default;
 };
 
 struct M5Rules final {
@@ -100,7 +100,7 @@ struct M5Rules final {
     double run_fear_persistence{0.90};
     double bank_payout_ratio{0.50};
 
-    bool operator==(const M5Rules&) const = default;
+    bool operator==(const M5Rules &) const = default;
 };
 
 struct M5SimulationSpec final {
@@ -133,7 +133,7 @@ struct M5Metrics final {
     std::uint64_t alive_banks{0};
     std::uint64_t bank_failures{0};
 
-    bool operator==(const M5Metrics&) const = default;
+    bool operator==(const M5Metrics &) const = default;
 };
 
 struct M5AdvanceOptions final {
@@ -164,12 +164,14 @@ struct M5Runtime final {
     double bank_fear{0.0};
     M5Metrics last_metrics{};
 
-    bool operator==(const M5Runtime&) const = default;
+    bool operator==(const M5Runtime &) const = default;
 };
 
 class M5TickScratch final {
-public:
-    void reserve(const core::RootState& state);
+  public:
+    void reserve(const core::RootState &state);
+    void synchronize_topology(const core::RootState &state,
+                              const M4TickScratch &real_economy_scratch);
     [[nodiscard]] std::uint64_t capacity_signature() const noexcept;
 
     std::vector<core::LoanRecord> loans_;
@@ -193,83 +195,45 @@ public:
 };
 
 class M5TickExtension {
-public:
+  public:
     M5TickExtension() = default;
-    M5TickExtension(const M5TickExtension&) = delete;
-    M5TickExtension& operator=(const M5TickExtension&) = delete;
+    M5TickExtension(const M5TickExtension &) = delete;
+    M5TickExtension &operator=(const M5TickExtension &) = delete;
     virtual ~M5TickExtension() = default;
 
-    [[nodiscard]] virtual Status prepare_tick(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status after_planning(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status before_settlement(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status after_settlement(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status before_bank_resolution(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status close_institutions(
-        const core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status validate(
-        const core::RootState& state,
-        const M4Runtime& real_economy_runtime,
-        const M4TickScratch& real_economy_scratch,
-        const M5Runtime& runtime,
-        const M5TickScratch& scratch,
-        Tick tick
-    ) const = 0;
-    virtual void commit(
-        core::RootState& state,
-        M4Runtime& real_economy_runtime,
-        M4TickScratch& real_economy_scratch,
-        M5Runtime& runtime,
-        M5TickScratch& scratch,
-        Tick closed_tick,
-        const M5Metrics& metrics
-    ) noexcept = 0;
+    [[nodiscard]] virtual Status
+    prepare_tick(const core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                 M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    after_planning(const core::RootState &state, M4Runtime &real_economy_runtime,
+                   M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                   M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    before_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
+                      M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                      M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    after_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
+                     M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                     M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    before_bank_resolution(const core::RootState &state,
+                           M4Runtime &real_economy_runtime,
+                           M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                           M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    close_institutions(const core::RootState &state, M4Runtime &real_economy_runtime,
+                       M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                       M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    validate(const core::RootState &state, const M4Runtime &real_economy_runtime,
+             const M4TickScratch &real_economy_scratch, const M5Runtime &runtime,
+             const M5TickScratch &scratch, Tick tick) const = 0;
+    virtual void commit(core::RootState &state, M4Runtime &real_economy_runtime,
+                        M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                        M5TickScratch &scratch, Tick closed_tick,
+                        const M5Metrics &metrics) noexcept = 0;
 };
 
 struct M5Initialization final {
@@ -278,43 +242,24 @@ struct M5Initialization final {
     M5Runtime runtime;
 };
 
-[[nodiscard]] Status validate_m5_policy(
-    const M5PolicyState& policy
-) noexcept;
-[[nodiscard]] Status validate_m5_spec(
-    const M5SimulationSpec& spec
-) noexcept;
-[[nodiscard]] Status validate_m5_state(
-    const core::RootState& state,
-    const M4Runtime& real_economy_runtime,
-    const M5Runtime& runtime,
-    Tick tick
-) noexcept;
-[[nodiscard]] Result<M5Initialization> build_m5_genesis(
-    const M5SimulationSpec& spec
-);
-[[nodiscard]] Result<M5AdvanceResult> advance_m5_ticks(
-    core::RootState& state,
-    M4Runtime& real_economy_runtime,
-    M4TickScratch& real_economy_scratch,
-    M5Runtime& runtime,
-    M5TickScratch& scratch,
-    Tick& tick,
-    std::uint64_t count,
-    const M5AdvanceOptions& options = {}
-);
-[[nodiscard]] Result<M5AdvanceResult> advance_m5_ticks_extended(
-    core::RootState& state,
-    M4Runtime& real_economy_runtime,
-    M4TickScratch& real_economy_scratch,
-    M5Runtime& runtime,
-    M5TickScratch& scratch,
-    Tick& tick,
-    std::uint64_t count,
-    M5TickExtension& extension,
-    const M5AdvanceOptions& options = {}
-);
+[[nodiscard]] Status validate_m5_policy(const M5PolicyState &policy) noexcept;
+[[nodiscard]] Status validate_m5_spec(const M5SimulationSpec &spec) noexcept;
+[[nodiscard]] Status validate_m5_state(const core::RootState &state,
+                                       const M4Runtime &real_economy_runtime,
+                                       const M5Runtime &runtime, Tick tick) noexcept;
+[[nodiscard]] Result<M5Initialization> build_m5_genesis(const M5SimulationSpec &spec);
+[[nodiscard]] Result<M5AdvanceResult>
+advance_m5_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                 M5TickScratch &scratch, Tick &tick, std::uint64_t count,
+                 const M5AdvanceOptions &options = {});
+[[nodiscard]] Result<M5AdvanceResult>
+advance_m5_ticks_extended(core::RootState &state, M4Runtime &real_economy_runtime,
+                          M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+                          M5TickScratch &scratch, Tick &tick, std::uint64_t count,
+                          M5TickExtension &extension,
+                          const M5AdvanceOptions &options = {});
 
-}  // namespace macro_sim::simulation
+} // namespace macro_sim::simulation
 
 #endif

@@ -1,4 +1,4 @@
-name: Native M5 monetary closed economy
+name: Native M6 securities and lifecycle
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - refactor/cpp-m3-v33
       - refactor/cpp-m4-v33
       - refactor/cpp-m5-v33
+      - refactor/cpp-m6-v33
       - refactor/cpp-engine-v33
   pull_request:
     paths:
@@ -21,12 +22,14 @@ on:
       - "schemas/m3/**"
       - "schemas/m4/**"
       - "schemas/m5/**"
+      - "schemas/m6/**"
       - "tests/native/**"
       - "tools/m1/**"
       - "tools/m2/**"
       - "tools/m3/**"
       - "tools/m4/**"
       - "tools/m5/**"
+      - "tools/m6/**"
       - "uv.lock"
   workflow_dispatch:
 
@@ -74,32 +77,37 @@ jobs:
         run: choco install ccache ninja --no-progress -y
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
-      - name: Verify M5 contracts and current playable target
-        run: uv run python tools/m5/check.py --skip-build
+      - name: Verify M6 contracts and current playable target
+        run: uv run python tools/m6/check.py --skip-build
       - name: Configure native release
-        run: uv run cmake --preset m5-release
+        run: uv run cmake --preset m6-release
       - name: Build native release
-        run: uv run cmake --build --preset m5-release
+        run: uv run cmake --build --preset m6-release
       - name: Test native release
-        run: uv run ctest --preset m5-release
+        run: uv run ctest --preset m6-release
       - name: Verify installed C package
         run: >-
           uv run python tools/m1/installed_c_smoke.py
-          --build-dir build/native/m5-release
-          --prefix build/install/m5-ci
+          --build-dir build/native/m6-release
+          --prefix build/install/m6-ci
       - name: Verify M5 monetary performance budget
         run: >-
           uv run python tools/m5/performance_gate.py
           --budget schemas/m5/performance_budget.json
-          --build-dir build/native/m5-release
+          --build-dir build/native/m6-release
+      - name: Verify M6 securities performance budget
+        run: >-
+          uv run python tools/m6/performance_gate.py
+          --budget schemas/m6/performance_budget.json
+          --build-dir build/native/m6-release
       - name: Build wheel and source distribution
         run: |
           uv build --wheel
           uv build --sdist
       - name: Verify isolated wheel
-        run: uv run python tools/m5/wheel_smoke.py --wheel-dir dist
+        run: uv run python tools/m6/wheel_smoke.py --wheel-dir dist
       - name: Verify source artifact offline inputs
-        run: uv run python tools/m5/source_artifact_smoke.py --sdist-dir dist
+        run: uv run python tools/m6/source_artifact_smoke.py --sdist-dir dist
       - name: Upload native artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -115,6 +123,7 @@ jobs:
             schemas/m4/reference_performance.json
             schemas/m4/stochastic_envelopes.json
             schemas/m5/performance_budget.json
+            schemas/m6/performance_budget.json
           if-no-files-found: error
 
   sanitizers:
@@ -147,8 +156,8 @@ jobs:
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
       - name: Configure sanitizer build
-        run: uv run cmake --preset m5-asan
+        run: uv run cmake --preset m6-asan
       - name: Build sanitizer targets
-        run: uv run cmake --build --preset m5-asan
+        run: uv run cmake --build --preset m6-asan
       - name: Run sanitizer tests
-        run: uv run ctest --preset m5-asan
+        run: uv run ctest --preset m6-asan

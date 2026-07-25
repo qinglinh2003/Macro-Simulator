@@ -1,8 +1,8 @@
 #ifndef MACRO_SIM_C_API_H
 #define MACRO_SIM_C_API_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "macro_sim/export.h"
 
@@ -15,6 +15,7 @@ extern "C" {
 #define MACRO_SIM_CAPABILITY_M3_ALGORITHMS (UINT64_C(1) << 1)
 #define MACRO_SIM_CAPABILITY_M4_TICK (UINT64_C(1) << 2)
 #define MACRO_SIM_CAPABILITY_M5_MONETARY (UINT64_C(1) << 3)
+#define MACRO_SIM_CAPABILITY_M6_SECURITIES (UINT64_C(1) << 4)
 #define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
 #define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
@@ -33,7 +34,7 @@ typedef enum macro_sim_error_code {
 
 typedef struct macro_sim_status {
     macro_sim_error_code code;
-    const char* message;
+    const char *message;
 } macro_sim_status;
 
 typedef struct macro_sim_create_options {
@@ -57,7 +58,7 @@ typedef struct macro_sim_scalar {
     macro_sim_scalar_kind kind;
     int64_t integer_value;
     double number_value;
-    const char* string_value;
+    const char *string_value;
     size_t string_size;
 } macro_sim_scalar;
 
@@ -126,7 +127,7 @@ typedef struct macro_sim_m2_receipt {
 } macro_sim_m2_receipt;
 
 typedef struct macro_sim_owned_buffer {
-    uint8_t* data;
+    uint8_t *data;
     size_t size;
 } macro_sim_owned_buffer;
 
@@ -304,6 +305,147 @@ typedef struct macro_sim_m5_advance_result {
     macro_sim_m5_metrics metrics;
 } macro_sim_m5_advance_result;
 
+typedef struct macro_sim_m6_genesis_options {
+    uint32_t struct_size;
+    uint32_t matching_protocol;
+    uint64_t economy_id;
+    uint32_t currency_id;
+    uint32_t stochastic;
+    uint32_t bonds;
+    uint32_t firm_equity;
+    uint32_t margin_credit;
+    uint32_t firm_dynamics;
+    uint32_t bank_dynamics;
+    uint32_t reserved;
+    uint64_t households;
+    uint64_t consumption_firms;
+    uint64_t capital_firms;
+    uint64_t banks;
+    uint64_t seed;
+    uint32_t watchlist_size;
+    uint32_t reserved_2;
+    double opening_capital_per_bank;
+    double initial_policy_rate;
+} macro_sim_m6_genesis_options;
+
+typedef struct macro_sim_m6_policy {
+    uint32_t struct_size;
+    uint32_t household_bankruptcy;
+    uint32_t bank_resolution_fund;
+    uint32_t reserved;
+    uint64_t bond_maturity_days;
+    double bond_finance_fraction;
+    double bond_coupon_rate;
+    double household_bond_target;
+    double bank_bond_appetite;
+    double bank_bond_duration_limit;
+    double margin_ltv;
+    double margin_max;
+    double bank_minimum_capital;
+} macro_sim_m6_policy;
+
+typedef struct macro_sim_m6_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    macro_sim_m5_metrics economy;
+    double bond_outstanding_face;
+    double bond_market_value;
+    double bond_issuance;
+    double bond_redemption;
+    double bond_coupon_paid;
+    double firm_equity_market_cap;
+    double bank_equity_market_cap;
+    double equity_turnover;
+    double primary_equity_raised;
+    double margin_principal;
+    double margin_originated;
+    double margin_repaid;
+    double margin_writeoffs;
+    double total_firm_book_equity;
+    double clearing_residual;
+    double sector_retool_capital;
+    uint64_t active_security_lots;
+    uint64_t household_bankruptcies;
+    uint64_t firm_births;
+    uint64_t firm_exits;
+    uint64_t firm_defaults;
+    uint64_t sector_switches;
+    uint64_t bank_births;
+    uint64_t bank_equity_resolutions;
+} macro_sim_m6_metrics;
+
+typedef struct macro_sim_m6_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t scratch_capacity_signature;
+    uint64_t transfer_count;
+    uint64_t trade_count;
+    macro_sim_m6_metrics metrics;
+} macro_sim_m6_advance_result;
+
+typedef struct macro_sim_m6_bond {
+    uint32_t struct_size;
+    uint32_t issuer_kind;
+    uint64_t id;
+    uint64_t issuer_id;
+    uint64_t issuer_account;
+    uint32_t currency_id;
+    uint32_t active;
+    uint64_t issued_tick;
+    uint64_t maturity_tick;
+    double coupon_rate;
+    double original_face;
+    double outstanding_face;
+    uint32_t settled;
+    uint32_t reserved;
+} macro_sim_m6_bond;
+
+typedef struct macro_sim_m6_equity {
+    uint32_t struct_size;
+    uint32_t issuer_kind;
+    uint64_t id;
+    uint32_t owner_kind;
+    uint32_t currency_id;
+    uint64_t issuer_id;
+    uint64_t issuer_account;
+    double outstanding_shares;
+    double price;
+    double last_price;
+    double peak_price;
+    double fundamental;
+    double trend;
+    double income_signal;
+    uint32_t active;
+    uint32_t resolved;
+} macro_sim_m6_equity;
+
+typedef struct macro_sim_m6_firm_statement {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t firm_id;
+    uint32_t stratum;
+    uint32_t defaulted;
+    double cash;
+    double debt;
+    double interest_arrears;
+    double capital_units;
+    double capital_unit_price;
+    double capital_value;
+    double output_inventory_units;
+    double output_inventory_unit_price;
+    double output_inventory_value;
+    double inventory_value;
+    double gross_assets;
+    double book_equity;
+    double eligible_collateral_value;
+    double borrowing_base_proxy;
+    double borrowing_base_headroom;
+    double earnings;
+} macro_sim_m6_firm_statement;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -316,112 +458,92 @@ typedef enum macro_sim_validation_code {
 
 MACRO_SIM_C_API uint32_t macro_sim_abi_version(void);
 MACRO_SIM_C_API uint64_t macro_sim_capabilities(void);
-MACRO_SIM_C_API const char* macro_sim_engine_version(void);
-MACRO_SIM_C_API const char* macro_sim_error_code_name(macro_sim_error_code code);
+MACRO_SIM_C_API const char *macro_sim_engine_version(void);
+MACRO_SIM_C_API const char *macro_sim_error_code_name(macro_sim_error_code code);
 MACRO_SIM_C_API macro_sim_status macro_sim_session_create(
-    const macro_sim_create_options* options,
-    macro_sim_session** output
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_session_destroy(
-    macro_sim_session** session
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_session_id(
-    const macro_sim_session* session,
-    uint64_t* output
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_session_tick(
-    const macro_sim_session* session,
-    uint64_t* output
-);
+    const macro_sim_create_options *options, macro_sim_session **output);
+MACRO_SIM_C_API macro_sim_status macro_sim_session_destroy(macro_sim_session **session);
+MACRO_SIM_C_API macro_sim_status macro_sim_session_id(const macro_sim_session *session,
+                                                      uint64_t *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_session_tick(const macro_sim_session *session, uint64_t *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_validate_scalar(
-    const char* contract_id,
-    size_t contract_id_size,
-    const macro_sim_scalar* value,
-    macro_sim_validation_code* output
-);
-MACRO_SIM_C_API const char* macro_sim_validation_code_name(
-    macro_sim_validation_code code
-);
+    const char *contract_id, size_t contract_id_size, const macro_sim_scalar *value,
+    macro_sim_validation_code *output);
+MACRO_SIM_C_API const char *
+macro_sim_validation_code_name(macro_sim_validation_code code);
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_genesis(
-    macro_sim_session* session,
-    const macro_sim_m2_genesis_options* options
-);
+    macro_sim_session *session, const macro_sim_m2_genesis_options *options);
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_apply_batch(
-    macro_sim_session* session,
-    const macro_sim_m2_command* commands,
-    size_t command_count,
-    macro_sim_m2_receipt* output
-);
+    macro_sim_session *session, const macro_sim_m2_command *commands,
+    size_t command_count, macro_sim_m2_receipt *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_state_digest(
-    const macro_sim_session* session,
-    uint8_t* output,
-    size_t output_size
-);
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_checkpoint_save(
-    const macro_sim_session* session,
-    macro_sim_owned_buffer* output
-);
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m2_checkpoint_load(
-    macro_sim_session* session,
-    const uint8_t* checkpoint,
-    size_t checkpoint_size
-);
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
 MACRO_SIM_C_API macro_sim_status macro_sim_m4_genesis(
-    macro_sim_session* session,
-    const macro_sim_m4_genesis_options* options
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_m4_advance(
-    macro_sim_session* session,
-    uint64_t tick_count,
-    macro_sim_m4_advance_result* output
-);
+    macro_sim_session *session, const macro_sim_m4_genesis_options *options);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m4_advance(macro_sim_session *session, uint64_t tick_count,
+                     macro_sim_m4_advance_result *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m4_state_digest(
-    const macro_sim_session* session,
-    uint8_t* output,
-    size_t output_size
-);
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
 MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_save(
-    const macro_sim_session* session,
-    macro_sim_owned_buffer* output
-);
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m4_checkpoint_load(
-    macro_sim_session* session,
-    const uint8_t* checkpoint,
-    size_t checkpoint_size
-);
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
 MACRO_SIM_C_API macro_sim_status macro_sim_m5_genesis(
-    macro_sim_session* session,
-    const macro_sim_m5_genesis_options* options
-);
+    macro_sim_session *session, const macro_sim_m5_genesis_options *options);
 MACRO_SIM_C_API macro_sim_status macro_sim_m5_update_policy(
-    macro_sim_session* session,
-    const macro_sim_m5_policy* policy
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_m5_policy_defaults(
-    macro_sim_m5_policy* output
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_m5_advance(
-    macro_sim_session* session,
-    uint64_t tick_count,
-    macro_sim_m5_advance_result* output
-);
+    macro_sim_session *session, const macro_sim_m5_policy *policy);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m5_policy_defaults(macro_sim_m5_policy *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m5_advance(macro_sim_session *session, uint64_t tick_count,
+                     macro_sim_m5_advance_result *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m5_state_digest(
-    const macro_sim_session* session,
-    uint8_t* output,
-    size_t output_size
-);
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
 MACRO_SIM_C_API macro_sim_status macro_sim_m5_checkpoint_save(
-    const macro_sim_session* session,
-    macro_sim_owned_buffer* output
-);
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m5_checkpoint_load(
-    macro_sim_session* session,
-    const uint8_t* checkpoint,
-    size_t checkpoint_size
-);
-MACRO_SIM_C_API macro_sim_status macro_sim_owned_buffer_release(
-    macro_sim_owned_buffer* buffer
-);
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_genesis(
+    macro_sim_session *session, const macro_sim_m6_genesis_options *options);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_update_policy(
+    macro_sim_session *session, const macro_sim_m6_policy *policy);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m6_policy_defaults(macro_sim_m6_policy *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m6_advance(macro_sim_session *session, uint64_t tick_count,
+                     macro_sim_m6_advance_result *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_state_digest(
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_checkpoint_save(
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_checkpoint_load(
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m6_bond_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_bonds(const macro_sim_session *session,
+                                                    size_t offset,
+                                                    macro_sim_m6_bond *output,
+                                                    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m6_equity_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_equities(const macro_sim_session *session,
+                                                       size_t offset,
+                                                       macro_sim_m6_equity *output,
+                                                       size_t capacity,
+                                                       size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m6_firm_statement_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m6_firm_statements(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m6_firm_statement *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_owned_buffer_release(macro_sim_owned_buffer *buffer);
 
 #ifdef __cplusplus
 }

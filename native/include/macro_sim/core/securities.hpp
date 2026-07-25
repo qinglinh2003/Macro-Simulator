@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include "macro_sim/core/state_types.hpp"
@@ -35,11 +36,9 @@ struct SecurityId final {
         return {SecurityKind::equity, id.value()};
     }
 
-    [[nodiscard]] constexpr bool valid() const noexcept {
-        return value != 0;
-    }
+    [[nodiscard]] constexpr bool valid() const noexcept { return value != 0; }
 
-    constexpr auto operator<=>(const SecurityId&) const noexcept = default;
+    constexpr auto operator<=>(const SecurityId &) const noexcept = default;
 };
 
 struct BondContract final {
@@ -55,7 +54,7 @@ struct BondContract final {
     bool active{true};
     bool settled{false};
 
-    bool operator==(const BondContract&) const = default;
+    bool operator==(const BondContract &) const = default;
 };
 
 struct EquityContract final {
@@ -74,7 +73,7 @@ struct EquityContract final {
     bool active{true};
     bool resolved{false};
 
-    bool operator==(const EquityContract&) const = default;
+    bool operator==(const EquityContract &) const = default;
 };
 
 struct SecurityLot final {
@@ -85,7 +84,7 @@ struct SecurityLot final {
     Money cost_basis{};
     bool active{true};
 
-    bool operator==(const SecurityLot&) const = default;
+    bool operator==(const SecurityLot &) const = default;
 };
 
 struct InitialSecurityHolding final {
@@ -99,7 +98,7 @@ struct HolderSecurityIndexEntry final {
     std::uint32_t offset{0};
     std::uint32_t count{0};
 
-    bool operator==(const HolderSecurityIndexEntry&) const = default;
+    bool operator==(const HolderSecurityIndexEntry &) const = default;
 };
 
 struct ContractLotIndexEntry final {
@@ -107,7 +106,7 @@ struct ContractLotIndexEntry final {
     std::uint32_t offset{0};
     std::uint32_t count{0};
 
-    bool operator==(const ContractLotIndexEntry&) const = default;
+    bool operator==(const ContractLotIndexEntry &) const = default;
 };
 
 struct IssuerSecurityIndexEntry final {
@@ -115,7 +114,7 @@ struct IssuerSecurityIndexEntry final {
     std::uint32_t offset{0};
     std::uint32_t count{0};
 
-    bool operator==(const IssuerSecurityIndexEntry&) const = default;
+    bool operator==(const IssuerSecurityIndexEntry &) const = default;
 };
 
 struct MaturityIndexEntry final {
@@ -123,105 +122,82 @@ struct MaturityIndexEntry final {
     std::uint32_t offset{0};
     std::uint32_t count{0};
 
-    bool operator==(const MaturityIndexEntry&) const = default;
+    bool operator==(const MaturityIndexEntry &) const = default;
 };
 
 class SecurityBook final {
-public:
-    [[nodiscard]] Result<BondId> issue_bond(
-        BondContract contract,
-        OwnerId holder,
-        Money cost_basis
-    );
-    [[nodiscard]] Result<EquityId> create_equity(
-        EquityContract contract,
-        std::span<const InitialSecurityHolding> holdings
-    );
-    [[nodiscard]] Status transfer_units(
-        SecurityId security,
-        OwnerId source,
-        OwnerId destination,
-        double units,
-        Money destination_cost_basis
-    );
-    [[nodiscard]] Status issue_equity_units(
-        EquityId equity,
-        OwnerId destination,
-        double units,
-        Money cost_basis
-    );
-    [[nodiscard]] Status retire_units(
-        SecurityId security,
-        OwnerId holder,
-        double units
-    );
+  public:
+    [[nodiscard]] Result<BondId> issue_bond(BondContract contract, OwnerId holder,
+                                            Money cost_basis);
+    [[nodiscard]] Result<EquityId>
+    create_equity(EquityContract contract,
+                  std::span<const InitialSecurityHolding> holdings);
+    [[nodiscard]] Status transfer_units(SecurityId security, OwnerId source,
+                                        OwnerId destination, double units,
+                                        Money destination_cost_basis);
+    [[nodiscard]] Status issue_equity_units(EquityId equity, OwnerId destination,
+                                            double units, Money cost_basis);
+    [[nodiscard]] Status issue_bond_units(BondId bond, OwnerId destination,
+                                          double units, Money cost_basis);
+    [[nodiscard]] Status retire_units(SecurityId security, OwnerId holder,
+                                      double units);
     [[nodiscard]] Status settle_bond(BondId bond);
     [[nodiscard]] Status resolve_equity(EquityId equity);
-    [[nodiscard]] Status update_equity_valuation(
-        EquityId equity,
-        Price price,
-        Price last_price,
-        Price peak_price,
-        Price fundamental,
-        double trend,
-        double income_signal
-    );
+    [[nodiscard]] Status update_equity_valuation(EquityId equity, Price price,
+                                                 Price last_price, Price peak_price,
+                                                 Price fundamental, double trend,
+                                                 double income_signal);
     [[nodiscard]] Status consolidate();
     [[nodiscard]] Status begin_batch() noexcept;
     [[nodiscard]] Status finish_batch();
 
-    [[nodiscard]] BondContract* get(BondId id) noexcept;
-    [[nodiscard]] const BondContract* get(BondId id) const noexcept;
-    [[nodiscard]] EquityContract* get(EquityId id) noexcept;
-    [[nodiscard]] const EquityContract* get(EquityId id) const noexcept;
-    [[nodiscard]] SecurityLot* get(SecurityLotId id) noexcept;
-    [[nodiscard]] const SecurityLot* get(SecurityLotId id) const noexcept;
+    [[nodiscard]] BondContract *get(BondId id) noexcept;
+    [[nodiscard]] const BondContract *get(BondId id) const noexcept;
+    [[nodiscard]] EquityContract *get(EquityId id) noexcept;
+    [[nodiscard]] const EquityContract *get(EquityId id) const noexcept;
+    [[nodiscard]] SecurityLot *get(SecurityLotId id) noexcept;
+    [[nodiscard]] const SecurityLot *get(SecurityLotId id) const noexcept;
 
-    [[nodiscard]] const std::vector<BondContract>& bonds() const noexcept;
-    [[nodiscard]] const std::vector<EquityContract>& equities() const noexcept;
-    [[nodiscard]] const std::vector<SecurityLot>& lots() const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId> lots_for_holder(
-        OwnerId holder
-    ) const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId> lots_for_security(
-        SecurityId security
-    ) const noexcept;
-    [[nodiscard]] std::span<const SecurityId> securities_for_issuer(
-        OwnerId issuer
-    ) const noexcept;
-    [[nodiscard]] std::span<const BondId> bonds_maturing_at(
-        Tick maturity
-    ) const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId> bank_lots(
-        BankId bank
-    ) const noexcept;
+    [[nodiscard]] const std::vector<BondContract> &bonds() const noexcept;
+    [[nodiscard]] const std::vector<EquityContract> &equities() const noexcept;
+    [[nodiscard]] const std::vector<SecurityLot> &lots() const noexcept;
+    [[nodiscard]] std::span<const SecurityLotId>
+    lots_for_holder(OwnerId holder) const noexcept;
+    [[nodiscard]] std::span<const SecurityLotId>
+    lots_for_security(SecurityId security) const noexcept;
+    [[nodiscard]] std::span<const SecurityId>
+    securities_for_issuer(OwnerId issuer) const noexcept;
+    [[nodiscard]] std::span<const BondId>
+    bonds_maturing_at(Tick maturity) const noexcept;
+    [[nodiscard]] std::span<const SecurityLotId> bank_lots(BankId bank) const noexcept;
 
-    [[nodiscard]] double units_held(
-        SecurityId security,
-        OwnerId holder
-    ) const noexcept;
+    [[nodiscard]] double units_held(SecurityId security, OwnerId holder) const noexcept;
     [[nodiscard]] double total_units(SecurityId security) const noexcept;
     [[nodiscard]] Money total_bond_face() const noexcept;
     [[nodiscard]] std::uint64_t version() const noexcept;
+    [[nodiscard]] Status validate_records(double tolerance) const;
     [[nodiscard]] Status validate(double tolerance) const;
     [[nodiscard]] Status validate_indexes() const;
 
-    void replace_records(
-        std::vector<BondContract> bonds,
-        std::vector<EquityContract> equities,
-        std::vector<SecurityLot> lots,
-        std::uint64_t version
-    );
+    void replace_records(std::vector<BondContract> bonds,
+                         std::vector<EquityContract> equities,
+                         std::vector<SecurityLot> lots, std::uint64_t version);
 
-private:
-    [[nodiscard]] Result<SecurityLotId> create_lot(
-        SecurityId security,
-        OwnerId holder,
-        double units,
-        Money cost_basis
-    );
+  private:
+    struct BatchLotIndexEntry final {
+        SecurityId security{};
+        OwnerId holder{};
+        SecurityLotId lot{};
+    };
+
+    [[nodiscard]] Result<SecurityLotId> create_lot(SecurityId security, OwnerId holder,
+                                                   double units, Money cost_basis);
+    [[nodiscard]] SecurityLot *find_active_lot(SecurityId security,
+                                               OwnerId holder) noexcept;
+    [[nodiscard]] const SecurityLot *find_active_lot(SecurityId security,
+                                                     OwnerId holder) const noexcept;
     [[nodiscard]] Status validate_security(SecurityId security) const noexcept;
-    [[nodiscard]] Status mutation_complete();
+    [[nodiscard]] Status mutation_complete(bool indexes_dirty = true);
     [[nodiscard]] Status rebuild_indexes();
     void bump_version() noexcept;
 
@@ -240,10 +216,17 @@ private:
     std::vector<BondId> maturity_bonds_;
     std::vector<HolderSecurityIndexEntry> bank_index_;
     std::vector<SecurityLotId> bank_lots_;
+    std::vector<std::pair<OwnerId, SecurityLotId>> holder_rows_scratch_;
+    std::vector<std::pair<OwnerId, SecurityLotId>> bank_rows_scratch_;
+    std::vector<std::pair<SecurityId, SecurityLotId>> contract_rows_scratch_;
+    std::vector<std::pair<OwnerId, SecurityId>> issuer_rows_scratch_;
+    std::vector<std::pair<Tick, BondId>> maturity_rows_scratch_;
     bool batch_active_{false};
     bool batch_dirty_{false};
+    bool batch_indexes_dirty_{false};
+    std::vector<BatchLotIndexEntry> batch_lot_index_;
 };
 
-}  // namespace macro_sim::core
+} // namespace macro_sim::core
 
 #endif

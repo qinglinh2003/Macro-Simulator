@@ -38,9 +38,7 @@ M6 starts only from the accepted M5 SHA and preserves all M0-M5 contracts:
 - release, sanitizer, semantic, regression, and performance gates;
 - English source, documentation, generated contracts, and commit subjects.
 
-The M6 production target remains the latest complete playable engine. A
-historical `v124` configuration is neither an implementation target nor an
-acceptance oracle.
+The M6 production target remains the latest complete playable engine.
 
 ## 3. Current semantic sources
 
@@ -565,4 +563,3 @@ M6 is accepted only if:
 - all five CI jobs are green on one SHA;
 - the branch is clean and contains no Chinese source, documentation, generated
   contract, or commit subject.
-

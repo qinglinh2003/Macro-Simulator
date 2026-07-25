@@ -91,6 +91,7 @@ add_library(
         src/simulation/m5.cpp
         src/simulation/m5_checkpoint.cpp
         src/simulation/m6.cpp
+        src/simulation/m6_checkpoint.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -187,6 +188,11 @@ if(MACRO_SIM_BUILD_TESTS)
     target_link_libraries(macro_sim_m5_c_smoke PRIVATE macro_sim_c)
     macro_sim_project_options(macro_sim_m5_c_smoke)
     add_test(NAME macro_sim.m5_c_abi COMMAND macro_sim_m5_c_smoke)
+
+    add_executable(macro_sim_m6_c_smoke tests/m6_c_smoke.c)
+    target_link_libraries(macro_sim_m6_c_smoke PRIVATE macro_sim_c)
+    macro_sim_project_options(macro_sim_m6_c_smoke)
+    add_test(NAME macro_sim.m6_c_abi COMMAND macro_sim_m6_c_smoke)
 
     add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
@@ -452,6 +458,30 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m5_semantic_panel
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m6_fresh_process_checkpoint
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m6/fresh_process_checkpoint.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m6_fresh_process_checkpoint
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m6_semantic_panel
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m6/semantic_panel.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m6_semantic_panel
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -500,6 +530,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     )
     macro_sim_project_options(macro_sim_m5_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m5_benchmarks)
+
+    add_executable(
+        macro_sim_m6_benchmarks
+        benchmarks/m6_securities_benchmark.cpp
+    )
+    target_link_libraries(
+        macro_sim_m6_benchmarks
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m6_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m6_benchmarks)
 endif()
 
 install(

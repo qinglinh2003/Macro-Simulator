@@ -4,25 +4,16 @@
 #include "macro_sim/c_api.h"
 
 int main(void) {
-    macro_sim_session* session = NULL;
-    macro_sim_create_options options = {
-        sizeof(macro_sim_create_options),
-        MACRO_SIM_ABI_VERSION,
-        42
-    };
+    macro_sim_session *session = NULL;
+    macro_sim_create_options options = {sizeof(macro_sim_create_options),
+                                        MACRO_SIM_ABI_VERSION, 42};
     uint64_t value = 0;
     macro_sim_validation_code validation = MACRO_SIM_VALIDATION_OK;
-    macro_sim_scalar invalid_scalar = {
-        MACRO_SIM_SCALAR_STRING,
-        0,
-        0.0,
-        "invalid",
-        7
-    };
+    macro_sim_scalar invalid_scalar = {MACRO_SIM_SCALAR_STRING, 0, 0.0, "invalid", 7};
     if (macro_sim_abi_version() != MACRO_SIM_ABI_VERSION) {
         return 1;
     }
-    if (strcmp(macro_sim_engine_version(), "0.5.0-m5") != 0) {
+    if (strcmp(macro_sim_engine_version(), "0.6.0-m6") != 0) {
         return 2;
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M2_ACCOUNTING) == 0) {
@@ -43,12 +34,8 @@ int main(void) {
     if (macro_sim_session_destroy(&session).code != MACRO_SIM_OK || session != NULL) {
         return 6;
     }
-    if (macro_sim_validate_scalar(
-            "config.a",
-            8,
-            &invalid_scalar,
-            &validation
-        ).code != MACRO_SIM_OK) {
+    if (macro_sim_validate_scalar("config.a", 8, &invalid_scalar, &validation).code !=
+        MACRO_SIM_OK) {
         return 7;
     }
     if (validation != MACRO_SIM_VALIDATION_TYPE_MISMATCH) {

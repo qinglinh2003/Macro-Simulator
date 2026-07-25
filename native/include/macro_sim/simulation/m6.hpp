@@ -29,7 +29,7 @@ struct M6PolicyState final {
     bool bank_resolution_fund{true};
     double bank_minimum_capital{25.0};
 
-    bool operator==(const M6PolicyState&) const = default;
+    bool operator==(const M6PolicyState &) const = default;
 };
 
 struct M6Rules final {
@@ -53,7 +53,6 @@ struct M6Rules final {
     bool margin_credit{true};
     double valuation_discount_floor{1.0e-6};
     double valuation_risk_premium{1.0e-4};
-    bool priced_firm_statements{true};
     double capital_haircut{0.20};
     double inventory_haircut{0.50};
     bool firm_dynamics{true};
@@ -79,7 +78,7 @@ struct M6Rules final {
     double bank_entry_beta{0.02};
     std::uint32_t bank_entry_max{1};
 
-    bool operator==(const M6Rules&) const = default;
+    bool operator==(const M6Rules &) const = default;
 };
 
 struct FirmStatement final {
@@ -103,7 +102,7 @@ struct FirmStatement final {
     double borrowing_base_headroom{0.0};
     double earnings{0.0};
 
-    bool operator==(const FirmStatement&) const = default;
+    bool operator==(const FirmStatement &) const = default;
 };
 
 struct FirmLifecycleRecord final {
@@ -118,7 +117,7 @@ struct FirmLifecycleRecord final {
     bool active{false};
     bool defaulted{false};
 
-    bool operator==(const FirmLifecycleRecord&) const = default;
+    bool operator==(const FirmLifecycleRecord &) const = default;
 };
 
 struct M6WatchlistRow final {
@@ -126,7 +125,7 @@ struct M6WatchlistRow final {
     std::uint32_t offset{0};
     std::uint32_t count{0};
 
-    bool operator==(const M6WatchlistRow&) const = default;
+    bool operator==(const M6WatchlistRow &) const = default;
 };
 
 struct M6Metrics final {
@@ -156,7 +155,7 @@ struct M6Metrics final {
     std::uint64_t bank_births{0};
     std::uint64_t bank_equity_resolutions{0};
 
-    bool operator==(const M6Metrics&) const = default;
+    bool operator==(const M6Metrics &) const = default;
 };
 
 struct M6SimulationSpec final {
@@ -218,7 +217,6 @@ struct M6BankEntryCommand final {
     SettlementNodeId settlement_node{};
     HouseholdId founder{};
     AccountId founder_account{};
-    SettlementNodeId founder_node{};
     double capital{0.0};
     core::BankComponent component{};
     core::BankPnlRecord pnl{};
@@ -232,12 +230,15 @@ struct M6EquityOrder final {
     std::uint64_t ordinal{0};
 };
 
+struct M6BondDemand final {
+    core::OwnerId holder{};
+    AccountId account{};
+    double amount{0.0};
+};
+
 class M6TickScratch final {
-public:
-    void reserve(
-        const core::RootState& state,
-        const M6Runtime& runtime
-    );
+  public:
+    void reserve(const core::RootState &state, const M6Runtime &runtime);
     [[nodiscard]] std::uint64_t capacity_signature() const noexcept;
 
     core::SecurityBook securities_;
@@ -245,6 +246,10 @@ public:
     std::vector<M6EquityOrder> orders_;
     std::vector<M6EquityOrder> buyers_;
     std::vector<M6EquityOrder> sellers_;
+    std::vector<EquityId> bank_equities_;
+    std::vector<M6BondDemand> bond_demands_;
+    std::vector<double> watch_current_;
+    std::vector<double> watch_attractiveness_;
     std::vector<LoanId> margin_loans_;
     std::vector<double> debt_by_account_;
     std::vector<double> margin_by_account_;
@@ -262,51 +267,28 @@ struct M6Initialization final {
     M6Runtime runtime;
 };
 
-[[nodiscard]] double bond_price(
-    double face,
-    std::uint64_t remaining_days,
-    double required_return,
-    double coupon_rate
-) noexcept;
-[[nodiscard]] double equity_discount_rate(
-    const M5Runtime& monetary_runtime,
-    const M6Rules& rules
-) noexcept;
-[[nodiscard]] double residual_income_fundamental(
-    double book_value,
-    double residual_income,
-    double shares,
-    double discount_rate
-) noexcept;
-[[nodiscard]] Status validate_m6_policy(
-    const M6PolicyState& policy
-) noexcept;
-[[nodiscard]] Status validate_m6_spec(
-    const M6SimulationSpec& spec
-) noexcept;
-[[nodiscard]] Status validate_m6_state(
-    const core::RootState& state,
-    const M4Runtime& real_economy_runtime,
-    const M5Runtime& monetary_runtime,
-    const M6Runtime& runtime,
-    Tick tick
-) noexcept;
-[[nodiscard]] Result<M6Initialization> build_m6_genesis(
-    const M6SimulationSpec& spec
-);
-[[nodiscard]] Result<M6AdvanceResult> advance_m6_ticks(
-    core::RootState& state,
-    M4Runtime& real_economy_runtime,
-    M4TickScratch& real_economy_scratch,
-    M5Runtime& monetary_runtime,
-    M5TickScratch& monetary_scratch,
-    M6Runtime& runtime,
-    M6TickScratch& scratch,
-    Tick& tick,
-    std::uint64_t count,
-    const M6AdvanceOptions& options = {}
-);
+[[nodiscard]] double bond_price(double face, std::uint64_t remaining_days,
+                                double required_return, double coupon_rate) noexcept;
+[[nodiscard]] double equity_discount_rate(const M5Runtime &monetary_runtime,
+                                          const M6Rules &rules) noexcept;
+[[nodiscard]] double residual_income_fundamental(double book_value,
+                                                 double residual_income, double shares,
+                                                 double discount_rate) noexcept;
+[[nodiscard]] Status validate_m6_policy(const M6PolicyState &policy) noexcept;
+[[nodiscard]] Status validate_m6_rules(const M6Rules &rules) noexcept;
+[[nodiscard]] Status validate_m6_spec(const M6SimulationSpec &spec) noexcept;
+[[nodiscard]] Status validate_m6_state(const core::RootState &state,
+                                       const M4Runtime &real_economy_runtime,
+                                       const M5Runtime &monetary_runtime,
+                                       const M6Runtime &runtime, Tick tick) noexcept;
+[[nodiscard]] Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec);
+[[nodiscard]] Result<M6AdvanceResult>
+advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &runtime,
+                 M6TickScratch &scratch, Tick &tick, std::uint64_t count,
+                 const M6AdvanceOptions &options = {});
 
-}  // namespace macro_sim::simulation
+} // namespace macro_sim::simulation
 
 #endif
