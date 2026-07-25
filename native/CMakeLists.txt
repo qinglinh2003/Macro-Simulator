@@ -86,6 +86,7 @@ add_library(
         src/core/invariants.cpp
         src/core/population.cpp
         src/core/securities.cpp
+        src/core/social_labor.cpp
         src/core/transaction.cpp
         src/simulation/m4.cpp
         src/simulation/m4_checkpoint.cpp
@@ -397,6 +398,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m7_simulation
         COMMAND macro_sim_m7_simulation_tests
+    )
+
+    add_executable(
+        macro_sim_m7_social_labor_store_tests
+        tests/m7_social_labor_store_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m7_social_labor_store_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m7_social_labor_store_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m7_social_labor_store_tests
+    )
+    add_test(
+        NAME macro_sim.m7_social_labor_store
+        COMMAND macro_sim_m7_social_labor_store_tests
     )
 
     if(TARGET _native)

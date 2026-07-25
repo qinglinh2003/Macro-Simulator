@@ -8,6 +8,7 @@
 
 #include "macro_sim/algorithms/vital_rates.hpp"
 #include "macro_sim/core/population.hpp"
+#include "macro_sim/core/social_labor.hpp"
 #include "macro_sim/simulation/m6.hpp"
 
 namespace macro_sim::simulation {
@@ -26,6 +27,17 @@ struct M7Rules final {
     bool estates{true};
     bool fertility{true};
     bool mortality{true};
+    bool persistent_labor{true};
+    bool fractional_hours{true};
+    bool second_jobs{false};
+    bool suspensions{true};
+    double annual_churn{0.28};
+    double firing_adjustment{0.03};
+    double layoff_band{0.05};
+    double target_smoothing{0.02};
+    std::uint32_t suspension_timeout_days{45};
+    bool frictional_search{false};
+    double search_intensity{0.15};
 
     bool operator==(const M7Rules &) const = default;
 };
@@ -70,6 +82,19 @@ struct M7Metrics final {
     std::uint64_t beneficial_lots_transferred{0};
     double inheritance_tax_share{0.0};
     double beneficial_projection_error{0.0};
+    double employed_fte{0.0};
+    double employed_heads{0.0};
+    double unemployment{0.0};
+    double unemployment_rate{0.0};
+    double suspended{0.0};
+    double job_guarantee{0.0};
+    double out_of_labor_force{0.0};
+    double labor_supply{0.0};
+    double vacancies{0.0};
+    double underemployed_heads{0.0};
+    double underemployment_hours{0.0};
+    double hires{0.0};
+    double separations{0.0};
 
     bool operator==(const M7Metrics &) const = default;
 };
@@ -82,6 +107,9 @@ struct M7Runtime final {
     core::PersonStore persons{};
     core::HouseholdMembershipBook membership{};
     core::BeneficialOwnershipBook beneficial_ownership{};
+    core::EmploymentBook employment{};
+    core::LaborAccounts labor_accounts{};
+    std::vector<double> firm_target_ema;
     std::vector<EstateRecord> estates;
     std::uint64_t next_event_id{1};
     std::uint64_t population_rng_counter{0};
@@ -113,9 +141,15 @@ class M7TickScratch final {
     core::PersonStore persons_;
     core::HouseholdMembershipBook membership_;
     core::BeneficialOwnershipBook beneficial_ownership_;
+    core::EmploymentBook employment_;
+    core::LaborAccounts labor_accounts_{};
+    std::vector<double> firm_target_ema_;
     std::vector<EstateRecord> estates_;
     std::vector<PersonId> opening_alive_;
     std::vector<BeneficialLotId> deceased_lots_;
+    std::vector<PersonId> labor_candidates_;
+    std::vector<std::size_t> household_work_index_;
+    std::vector<JobId> roster_buffer_;
     std::uint64_t next_event_id_{1};
     std::uint64_t population_rng_counter_{0};
     M7Metrics working_metrics_{};

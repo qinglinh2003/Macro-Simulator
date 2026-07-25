@@ -210,6 +210,12 @@ class M5TickExtension {
                    M4TickScratch &real_economy_scratch, M5Runtime &runtime,
                    M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
+    run_labor(const core::RootState &state,
+              M4Runtime &real_economy_runtime,
+              M4TickScratch &real_economy_scratch, M5Runtime &runtime,
+              M5TickScratch &scratch, Tick tick, PhiloxRng &rng,
+              bool &handled) = 0;
+    [[nodiscard]] virtual Status
     before_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
                       M4TickScratch &real_economy_scratch, M5Runtime &runtime,
                       M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;

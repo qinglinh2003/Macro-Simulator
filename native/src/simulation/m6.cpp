@@ -2073,6 +2073,19 @@ class M6Extension final : public M5TickExtension {
         return Status::success();
     }
 
+    Status run_labor(const core::RootState &state, M4Runtime &real_runtime,
+                     M4TickScratch &real, M5Runtime &monetary_runtime,
+                     M5TickScratch &monetary, Tick tick, PhiloxRng &rng,
+                     bool &handled) override {
+        handled = false;
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->run_labor(state, real_runtime, real, monetary_runtime,
+                                     monetary, runtime_, scratch_, tick, rng,
+                                     handled);
+    }
+
     Status before_settlement(const core::RootState &, M4Runtime &, M4TickScratch &,
                              M5Runtime &, M5TickScratch &, Tick, PhiloxRng &) override {
         return Status::success();

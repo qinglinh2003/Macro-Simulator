@@ -1530,6 +1530,17 @@ class M5Extension final : public M4TickExtension {
                                           tick, rng);
     }
 
+    Status run_labor(const core::RootState &state, M4Runtime &real_runtime,
+                     M4TickScratch &real, Tick tick, PhiloxRng &rng,
+                     bool &handled) override {
+        handled = false;
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->run_labor(state, real_runtime, real, runtime_, scratch_,
+                                     tick, rng, handled);
+    }
+
     Status before_settlement(const core::RootState &state, M4Runtime &real_runtime,
                              M4TickScratch &real, Tick tick, PhiloxRng &rng) override {
         auto status = Status::success();

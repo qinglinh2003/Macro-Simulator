@@ -273,6 +273,14 @@ class M6TickExtension {
                  M5TickScratch &monetary_scratch, M6Runtime &runtime,
                  M6TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
+    run_labor(const core::RootState &state,
+              M4Runtime &real_economy_runtime,
+              M4TickScratch &real_economy_scratch,
+              M5Runtime &monetary_runtime,
+              M5TickScratch &monetary_scratch, M6Runtime &runtime,
+              M6TickScratch &scratch, Tick tick, PhiloxRng &rng,
+              bool &handled) = 0;
+    [[nodiscard]] virtual Status
     close_day(const core::RootState &state, M4Runtime &real_economy_runtime,
               M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
               M5TickScratch &monetary_scratch, M6Runtime &runtime,

@@ -63,6 +63,7 @@ using macro_sim::simulation::capability_bit;
     spec.population.start_calendar_day = 20'000;
     spec.rules.fertility = false;
     spec.rules.mortality = false;
+    spec.rules.annual_churn = 0.0;
     return spec;
 }
 
@@ -266,6 +267,69 @@ void test_forced_birth_and_split_determinism() {
     );
     assert(batch.runtime.estates == split.runtime.estates);
     assert(batch.runtime.last_metrics == split.runtime.last_metrics);
+    assert(
+        batch.runtime.employment.records() ==
+        split.runtime.employment.records()
+    );
+    assert(
+        batch.runtime.labor_accounts ==
+        split.runtime.labor_accounts
+    );
+}
+
+void test_persistent_labor_and_death_separation() {
+    auto harness = build();
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.employed_heads > 0.0);
+    assert(result.get_if()->metrics.employed_fte > 0.0);
+    assert(result.get_if()->metrics.hires > 0.0);
+    assert(
+        harness.runtime.employment.validate(
+            harness.runtime.persons, harness.root,
+            harness.root.accounting_tolerance
+        )
+            .ok()
+    );
+    assert(
+        macro_sim::core::validate_labor_accounts(
+            harness.runtime.labor_accounts,
+            harness.root.accounting_tolerance
+        )
+            .ok()
+    );
+    PersonId worker{};
+    for (const auto person : harness.runtime.persons.alive_ids()) {
+        if (harness.runtime.employment
+                .primary_job(person)
+                .valid()) {
+            worker = person;
+            break;
+        }
+    }
+    assert(worker.valid());
+    const auto death_flow =
+        harness.runtime.labor_accounts.death_separations_total;
+    M7AdvanceOptions death;
+    death.force_death = worker;
+    result = advance(harness, 1, death);
+    assert(result.ok());
+    assert(!harness.runtime.persons.alive(worker));
+    assert(
+        !harness.runtime.employment.primary_job(worker).valid()
+    );
+    assert(
+        harness.runtime.labor_accounts.death_separations_total ==
+        death_flow + 1.0
+    );
+    assert(
+        macro_sim::simulation::validate_m7_state(
+            harness.root, harness.real_runtime,
+            harness.monetary_runtime, harness.financial_runtime,
+            harness.runtime, harness.tick
+        )
+            .ok()
+    );
 }
 
 void test_validation_rejects_invalid_population() {
@@ -288,6 +352,7 @@ int main() {
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();
+    test_persistent_labor_and_death_separation();
     test_validation_rejects_invalid_population();
     return 0;
 }

@@ -106,6 +106,20 @@ public:
         return visit(1);
     }
 
+    Status run_labor(
+        const RootState&,
+        M4Runtime&,
+        M4TickScratch&,
+        M5Runtime&,
+        M5TickScratch&,
+        Tick,
+        PhiloxRng&,
+        bool& handled
+    ) override {
+        handled = false;
+        return Status::success();
+    }
+
     Status before_settlement(
         const RootState&,
         M4Runtime&,

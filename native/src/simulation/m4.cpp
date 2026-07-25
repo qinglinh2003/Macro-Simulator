@@ -1641,9 +1641,25 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
-    status = run_labor(state, runtime, scratch, rng);
-    if (!status.ok()) {
-        return status;
+    bool labor_handled = false;
+    if (extension != nullptr) {
+        status = extension->run_labor(
+            state,
+            runtime,
+            scratch,
+            tick,
+            rng,
+            labor_handled
+        );
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    if (!labor_handled) {
+        status = run_labor(state, runtime, scratch, rng);
+        if (!status.ok()) {
+            return status;
+        }
     }
     capture_phase(state, scratch, options, M4Phase::labor);
 
@@ -2085,6 +2101,22 @@ Status validate_spec(const M4SimulationSpec& spec) noexcept {
         return Status(ErrorCode::invalid_argument, "M4 rules are invalid");
     }
     return Status::success();
+}
+
+Status stage_m4_transfer(
+    const core::RootState& state,
+    M4TickScratch& scratch,
+    AccountId source,
+    AccountId destination,
+    double amount
+) noexcept {
+    if (!std::isfinite(amount) || amount < 0.0) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "M4 staged transfer amount is invalid"
+        );
+    }
+    return transfer(state, scratch, source, destination, amount);
 }
 
 Status validate_m4_state(

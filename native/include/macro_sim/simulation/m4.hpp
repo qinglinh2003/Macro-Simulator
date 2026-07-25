@@ -285,6 +285,14 @@ public:
         Tick tick,
         PhiloxRng& rng
     ) = 0;
+    [[nodiscard]] virtual Status run_labor(
+        const core::RootState& state,
+        M4Runtime& runtime,
+        M4TickScratch& scratch,
+        Tick tick,
+        PhiloxRng& rng,
+        bool& handled
+    ) = 0;
     [[nodiscard]] virtual Status before_settlement(
         const core::RootState& state,
         M4Runtime& runtime,
@@ -327,6 +335,13 @@ struct M4Initialization final {
 };
 
 [[nodiscard]] Status validate_spec(const M4SimulationSpec& spec) noexcept;
+[[nodiscard]] Status stage_m4_transfer(
+    const core::RootState& state,
+    M4TickScratch& scratch,
+    AccountId source,
+    AccountId destination,
+    double amount
+) noexcept;
 [[nodiscard]] Status validate_m4_state(
     const core::RootState& root,
     const M4Runtime& runtime,
