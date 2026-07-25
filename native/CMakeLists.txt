@@ -99,6 +99,8 @@ add_library(
         src/simulation/m7_checkpoint.cpp
         src/simulation/m8.cpp
         src/simulation/m8_checkpoint.cpp
+        src/simulation/m9.cpp
+        src/simulation/m9_checkpoint.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -559,6 +561,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m8_checkpoint
         COMMAND macro_sim_m8_checkpoint_tests
+    )
+
+    add_executable(
+        macro_sim_m9_world_tests
+        tests/m9_world_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m9_world_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m9_world_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m9_world_tests)
+    add_test(
+        NAME macro_sim.m9_world
+        COMMAND macro_sim_m9_world_tests
     )
 
     if(TARGET _native)
