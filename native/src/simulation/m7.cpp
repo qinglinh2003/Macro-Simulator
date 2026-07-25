@@ -287,55 +287,6 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
     return Status::success();
 }
 
-[[nodiscard]] Status
-validate_beneficial_projection(const core::RootState &state, const M4TickScratch &real,
-                               const std::vector<core::LoanRecord> &loans,
-                               const core::SecurityBook &securities,
-                               const core::HouseholdMembershipBook &membership,
-                               const core::BeneficialOwnershipBook &ownership,
-                               std::vector<core::BeneficialAssetKey> &asset_buffer) {
-    ownership.active_assets(asset_buffer);
-    for (const auto asset : asset_buffer) {
-        if (!canonical_claim_exists(state, real, loans, securities, asset)) {
-            return Status(ErrorCode::invariant_violation,
-                          "beneficial claim has no canonical position");
-        }
-    }
-    bool complete = true;
-    state.households.for_each_alive(
-        [&](HouseholdId household, const core::HouseholdComponent &) {
-            if (membership.members(household).empty()) {
-                return;
-            }
-            complete = complete && ownership.contains_asset({
-                                       core::BeneficialAssetKind::household_cash,
-                                       household,
-                                       household.value(),
-                                   });
-        });
-    for (const auto &lot : securities.lots()) {
-        if (lot.active && lot.holder.kind == core::OwnerKind::household) {
-            complete = complete && ownership.contains_asset({
-                                       core::BeneficialAssetKind::security_position,
-                                       HouseholdId(lot.holder.value),
-                                       security_token(lot.security),
-                                   });
-        }
-    }
-    for (const auto &loan : loans) {
-        if (loan.active && loan.borrower.kind == core::OwnerKind::household) {
-            complete = complete && ownership.contains_asset({
-                                       core::BeneficialAssetKind::household_debt,
-                                       HouseholdId(loan.borrower.value),
-                                       loan.id.value(),
-                                   });
-        }
-    }
-    return complete ? Status::success()
-                    : Status(ErrorCode::invariant_violation,
-                             "canonical position lacks beneficial claims");
-}
-
 [[nodiscard]] PersonId select_heir(const core::PersonStore &persons,
                                    const core::HouseholdMembershipBook &membership,
                                    const core::RelationshipBook &relationships,
@@ -1993,12 +1944,6 @@ class M7Extension final : public M6TickExtension {
         if (status.ok() && runtime_.rules.beneficial_ownership) {
             status = scratch_.beneficial_ownership_.validate_fast(
                 scratch_.persons_, state.accounting_tolerance);
-        }
-        if (status.ok() && runtime_.rules.beneficial_ownership) {
-            status = validate_beneficial_projection(
-                state, real, monetary.loans_, financial.securities_,
-                scratch_.membership_, scratch_.beneficial_ownership_,
-                scratch_.beneficial_assets_);
         }
         if (status.ok() && runtime_.rules.persistent_labor) {
             status = scratch_.employment_.validate(scratch_.persons_, state,

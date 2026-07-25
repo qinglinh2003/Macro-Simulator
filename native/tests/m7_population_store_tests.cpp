@@ -105,6 +105,10 @@ void test_beneficial_ownership_split_and_transfer() {
     assert(ownership.validate(persons, 1.0e-12).ok());
     assert(ownership.transfer(*second.get_if(), PersonId(3), 0.4).ok());
     assert(ownership.get(*second.get_if())->owner == PersonId(3));
+    const auto destination_lots = ownership.lots_for_person(PersonId(3));
+    assert(destination_lots.size() == 2);
+    assert(destination_lots[0] == BeneficialLotId(3));
+    assert(destination_lots[1] == *second.get_if());
     assert(ownership.validate(persons, 1.0e-12).ok());
 }
 
@@ -162,6 +166,41 @@ void test_beneficial_rekey_retains_retired_history() {
     };
     assert(!ownership.contains_asset(asset));
     assert(ownership.contains_asset(destination));
+    assert(ownership.lots_for_asset(asset).size() == 1);
+    assert(ownership.lots_for_asset(destination).size() == 2);
+    assert(ownership.validate(persons, 1.0e-12).ok());
+}
+
+void test_canonical_cash_lookup_preserves_full_asset_identity() {
+    PersonStore persons;
+    assert(persons.create(person(-9'000, PersonSex::female)).ok());
+
+    const BeneficialAssetKey canonical{
+        BeneficialAssetKind::household_cash,
+        HouseholdId(1),
+        1,
+    };
+    const BeneficialAssetKey alternate{
+        BeneficialAssetKind::household_cash,
+        HouseholdId(1),
+        77,
+    };
+    BeneficialOwnershipBook ownership;
+    const auto canonical_lot =
+        ownership.create_lot(canonical, PersonId(1), 1.0);
+    const auto alternate_lot =
+        ownership.create_lot(alternate, PersonId(1), 1.0);
+    assert(canonical_lot.ok());
+    assert(alternate_lot.ok());
+    assert(ownership.contains_asset(canonical));
+    assert(ownership.contains_asset(alternate));
+    assert(ownership.lots_for_asset(canonical).size() == 1);
+    assert(ownership.lots_for_asset(alternate).size() == 1);
+    assert(ownership.retire(*canonical_lot.get_if()).ok());
+    assert(!ownership.contains_asset(canonical));
+    assert(ownership.contains_asset(alternate));
+    assert(ownership.retire_asset(alternate).ok());
+    assert(ownership.lots_for_asset(alternate).empty());
     assert(ownership.validate(persons, 1.0e-12).ok());
 }
 
@@ -200,6 +239,7 @@ int main() {
     test_beneficial_ownership_split_and_transfer();
     test_beneficial_index_copy_isolation();
     test_beneficial_rekey_retains_retired_history();
+    test_canonical_cash_lookup_preserves_full_asset_identity();
     test_rejections();
     return 0;
 }

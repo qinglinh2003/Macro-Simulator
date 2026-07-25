@@ -130,13 +130,13 @@ class BeneficialOwnershipBook final {
     [[nodiscard]] const BeneficialLot *get(BeneficialLotId id) const noexcept;
     [[nodiscard]] bool contains_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] std::span<const BeneficialLotId>
-    lots_for_person(PersonId person) const noexcept;
+    lots_for_person(PersonId person) const;
     [[nodiscard]] std::span<const BeneficialLotId>
-    lots_for_asset(BeneficialAssetKey asset) const noexcept;
+    lots_for_asset(BeneficialAssetKey asset) const;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
     void active_assets(std::vector<BeneficialAssetKey> &output) const;
-    [[nodiscard]] double maximum_projection_error() const noexcept;
+    [[nodiscard]] double maximum_projection_error() const;
     [[nodiscard]] Status replace_records(std::vector<BeneficialLot> records);
     [[nodiscard]] Status validate_fast(const PersonStore &persons,
                                        double tolerance) const;
@@ -148,22 +148,36 @@ class BeneficialOwnershipBook final {
 
     struct AssetIndexRow final {
         BeneficialAssetKey asset{};
-        std::vector<BeneficialLotId> lots;
         std::uint32_t active_lots{0};
     };
 
     struct Indexes final {
-        std::vector<std::vector<BeneficialLotId>> lots_by_person{
-            std::vector<BeneficialLotId>{}};
         std::vector<AssetIndexRow> lots_by_asset;
         std::vector<std::size_t> asset_slots;
+        std::vector<std::uint32_t> canonical_cash_rows;
+        std::vector<std::uint32_t> asset_row_by_lot;
+        std::vector<std::uint8_t> asset_lot_indexed;
+        std::vector<std::uint32_t> person_heads{0U};
+        std::vector<std::uint32_t> person_tails{0U};
+        std::vector<std::uint32_t> person_next;
+        std::vector<std::uint32_t> person_previous;
+        mutable std::vector<std::size_t> person_offsets;
+        mutable std::vector<BeneficialLotId> lots_by_person;
+        mutable std::vector<std::size_t> asset_offsets;
+        mutable std::vector<BeneficialLotId> lots_by_asset_flat;
+        mutable bool person_index_dirty{true};
+        mutable bool asset_lot_index_dirty{true};
         mutable std::vector<BeneficialLotId> validation_dirty_lots;
         mutable std::vector<std::size_t> validation_dirty_asset_rows;
         mutable bool full_validation_required{true};
     };
 
     void ensure_unique_indexes();
-    void ensure_person(PersonId person);
+    void ensure_person_links(PersonId person);
+    void append_person_lot(BeneficialLotId lot, PersonId person);
+    [[nodiscard]] Status unlink_person_lot(BeneficialLotId lot, PersonId person);
+    void rebuild_person_index() const;
+    void rebuild_asset_lot_index() const;
     [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
     [[nodiscard]] std::size_t find_asset_row(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] std::size_t ensure_asset_row(BeneficialAssetKey asset);

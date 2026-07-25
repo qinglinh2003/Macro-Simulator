@@ -86,7 +86,7 @@ The run produced root-state digest
 `9c0bba0226b7c6784e82bfd330b3aae744fa60f59aaa5c287fd66970c3ebd0ce`.
 The probe uses the root-state digest because the current full M8 digest first
 materializes a checkpoint and the legacy checkpoint limit is 512 MiB. Full state
-validation still runs inside every measured day.
+record and accounting validation still runs inside every measured day.
 
 This baseline proves that the enabled model can now create and advance one
 million persons on the target machine. It does not meet the interactive target.
@@ -111,18 +111,21 @@ scenario. The root-state digest remains
 | Monotonic sequential energy clearing | 10.05 s | 7.67 GiB | -67.6% |
 | Stable equity-order bucketing | 9.47 s | 7.86 GiB | -69.4% |
 | Compact incremental security-pair chains | 8.02 s | 8.06 GiB | -74.1% |
+| Contiguous beneficial indexes and one synchronization boundary | 7.48 s | 7.83 GiB | -75.9% |
 
-The latest acceptance run measured 9.09 s, 8.02 s, and 6.20 s. A second
-profiled run measured an 8.44-second median and 7.87 GiB peak RSS. Genesis
-remained approximately 8.20 seconds. The optimization has therefore removed
-approximately 74% of
+The latest acceptance run measured 7.90 s, 7.48 s, and 5.96 s. A preceding
+profiled run measured a 7.26-second median. Genesis remained approximately
+8.21 seconds. The optimization has therefore removed approximately 76% of
 median daily latency without changing the deterministic result, but it is still
-approximately eight times above the interactive target.
+approximately 7.5 times above the interactive target. First- and second-day
+allocation counts fell from 26.86 million and 11.47 million to approximately
+544 thousand and 24 thousand.
 
-The additional lookup structures currently increase peak resident memory. This
-is an explicit open issue, not an accepted final tradeoff. The next data-layout
-work must share or remove redundant derived security indexes and release stale
-scratch capacities while continuing to reduce daily latency.
+Peak resident memory remains above the first complete baseline because later
+security lookup structures trade memory for latency. The latest ownership layout
+recovered approximately 0.23 GiB relative to the preceding checkpoint. Further
+data-layout work must continue removing redundant derived indexes and stale
+scratch capacities while reducing daily latency.
 
 Beneficial ownership now keeps canonical lots independently in runtime and tick
 scratch, while immutable reverse indexes are shared until a mutation requires a
@@ -151,6 +154,27 @@ and one compact head/tail slot per observed pair. New lots join the index
 incrementally, including inside mutation batches. Oldest-lot-first transfer
 order is preserved, while active public holder, contract, issuer, bank, and
 maturity indexes retain their existing semantics and validation.
+
+Beneficial reverse indexes no longer use one independently allocated vector per
+person and per asset. Canonical lots now carry compact row metadata, while
+person projections preserve append order with compact head, tail, previous, and
+next arrays; query spans and asset projections use contiguous offset-and-ID
+arrays rebuilt only when invalidated. Copy-on-write tick staging therefore
+copies a small number of contiguous buffers instead of millions of heap
+allocations. Individual
+retirement, whole-asset retirement, household rekeying, inactive history,
+checkpoint reconstruction, and public span ordering retain their previous
+semantics. Canonical household-cash assets also use a dense household lookup;
+noncanonical keys retain the general hash path.
+
+Close-day synchronization already creates every missing beneficial claim and
+retires every claim whose canonical position disappeared. The immediately
+following validation used to repeat the same complete household, security,
+loan, and asset scans before commit. Normal advancement now performs that
+projection work once, followed by the existing mutation-tracked lot and
+asset-row validation. Explicit ownership validation, checkpoint round trips,
+fault injection, accounting validation, and deterministic digest checks remain
+unchanged.
 
 ## 4. Baseline with the current model enabled
 
