@@ -3203,11 +3203,11 @@ build_m7_genesis(const M7SimulationSpec &spec) {
         static_cast<double>(spec.population.initial_persons) /
         spec.population.target_household_size
     ));
-    const auto genesis = build_m6_genesis(financial_spec);
+    auto genesis = build_m6_genesis(financial_spec);
     if (!genesis.ok()) {
         return genesis.status();
     }
-    auto financial = std::move(*genesis.get_if());
+    auto financial = std::move(genesis).take();
 
     M7Runtime runtime;
     runtime.policy = spec.policy;
