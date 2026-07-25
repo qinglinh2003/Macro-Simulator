@@ -45,14 +45,15 @@ and playable capability set.
 
 M8 first adds a public `M7TickExtension` and
 `advance_m7_ticks_extended(...)`. The extension receives typed M4-M7 runtime
-and scratch references at five boundaries:
+and scratch references at six boundaries:
 
 1. `prepare_tick`, after M7 has copied opening population and labor state;
-2. `after_labor`, after persistent labor has staged effective labor but before
+2. `before_labor`, after real-economy planning and before persistent matching;
+3. `after_labor`, after persistent labor has staged effective labor but before
    production and goods clearing;
-3. `close_day`, after base financial closure and M7 lifecycle staging;
-4. `validate`, after M4-M7 validation and before any canonical mutation;
-5. `commit`, after M7 canonical commit.
+4. `close_day`, after base financial closure and M7 lifecycle staging;
+5. `validate`, after M4-M7 validation and before any canonical mutation;
+6. `commit`, after M7 canonical commit.
 
 The M7 extension remains optional and preserves the current public M7 behavior
 when absent. Nested commit callbacks are no-fail and execute only prevalidated

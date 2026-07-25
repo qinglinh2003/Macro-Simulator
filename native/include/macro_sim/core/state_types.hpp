@@ -72,6 +72,8 @@ struct AccountKey final {
 enum class FirmSector : std::uint8_t {
     consumption = 0,
     capital = 1,
+    energy = 2,
+    construction = 3,
 };
 
 enum class FirmTechnology : std::uint8_t {

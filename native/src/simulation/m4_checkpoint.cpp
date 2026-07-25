@@ -632,7 +632,7 @@ Result<M4Checkpoint> load_m4_checkpoint(
         ) {
             if (firm.sector == core::FirmSector::consumption) {
                 ++consumption_firms;
-            } else {
+            } else if (firm.sector == core::FirmSector::capital) {
                 ++capital_firms;
             }
         }

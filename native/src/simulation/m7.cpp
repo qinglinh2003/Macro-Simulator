@@ -1098,6 +1098,14 @@ class M7Extension final : public M6TickExtension {
                      M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
                      M6TickScratch &financial_scratch, Tick tick, PhiloxRng &rng,
                      bool &handled) override {
+        if (extension_ != nullptr) {
+            const auto status = extension_->before_labor(
+                state, real_runtime, real, monetary, monetary_scratch,
+                financial_runtime, financial_scratch, runtime_, scratch_, tick, rng);
+            if (!status.ok()) {
+                return status;
+            }
+        }
         handled = runtime_.rules.persistent_labor;
         if (!handled) {
             if (extension_ != nullptr) {

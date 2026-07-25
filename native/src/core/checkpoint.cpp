@@ -1246,7 +1246,7 @@ Result<RootState> CheckpointCodec::decode_state(
         [](BinaryReader& input) -> Result<FirmComponent> {
             const auto sector = read_enum<FirmSector>(
                 input,
-                static_cast<std::uint8_t>(FirmSector::capital)
+                static_cast<std::uint8_t>(FirmSector::construction)
             );
             const auto account = read_id<AccountId>(input);
             const auto goods = input.f64();

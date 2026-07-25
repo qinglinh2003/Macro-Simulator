@@ -237,6 +237,12 @@ class M7TickExtension {
                  M6TickScratch &financial_scratch, M7Runtime &runtime,
                  M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
+    before_labor(const core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+                 M6TickScratch &financial_scratch, M7Runtime &runtime,
+                 M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
     after_labor(const core::RootState &state, M4Runtime &real_economy_runtime,
                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
                 M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,

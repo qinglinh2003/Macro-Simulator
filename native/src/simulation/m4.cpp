@@ -54,6 +54,12 @@ constexpr std::uint64_t kUnsupportedCapabilities =
         : algorithms::ProductionTechnology::cobb_douglas;
 }
 
+[[nodiscard]] constexpr bool
+is_base_firm_sector(core::FirmSector sector) noexcept {
+    return sector == core::FirmSector::consumption ||
+           sector == core::FirmSector::capital;
+}
+
 [[nodiscard]] double sum_balances(
     const M4TickScratch& scratch
 ) noexcept {
@@ -159,6 +165,10 @@ void capture_phase(
     double goods = 0.0;
     double capital = 0.0;
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
+        const auto* firm = state.firms.get(scratch.firm_ids_[index]);
+        if (firm == nullptr || !is_base_firm_sector(firm->sector)) {
+            continue;
+        }
         goods += scratch.firm_work_[index].closing_inventory;
         capital += scratch.firm_work_[index].closing_capital;
     }
@@ -172,7 +182,6 @@ void capture_phase(
             scratch.trade_count_,
         }
     );
-    static_cast<void>(state);
 }
 
 [[nodiscard]] Status validate_working_state(
@@ -251,6 +260,7 @@ void capture_phase(
             firm.labor_demand_notional,
             firm.labor_demand_effective,
             firm.hired,
+            firm.production_input_factor,
             firm.produced,
             firm.sales,
             firm.revenue,
@@ -272,7 +282,9 @@ void capture_phase(
         if (!all_finite(values) || firm.closing_inventory < -kTolerance
             || firm.closing_capital < -kTolerance
             || firm.posted_price <= 0.0 || firm.posted_wage <= 0.0
-            || firm.hired < -kTolerance) {
+            || firm.hired < -kTolerance
+            || firm.production_input_factor < -kTolerance
+            || firm.production_input_factor > 1.0 + kTolerance) {
             return Status(
                 ErrorCode::invariant_violation,
                 "M4 firm state is invalid"
@@ -446,6 +458,9 @@ void commit_working_state(
 ) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto* firm = state.firms.get(scratch.firm_ids_[index]);
+        if (!is_base_firm_sector(firm->sector)) {
+            continue;
+        }
         auto& work = scratch.firm_work_[index];
         auto production_plan = algorithms::production_plan(
             {
@@ -606,6 +621,9 @@ void commit_working_state(
     double worker_remaining = 1.0;
     for (const auto firm_index : scratch.firm_order_) {
         const auto* firm = state.firms.get(scratch.firm_ids_[firm_index]);
+        if (!is_base_firm_sector(firm->sector)) {
+            continue;
+        }
         auto& firm_work = scratch.firm_work_[firm_index];
         double need = firm_work.labor_demand_effective;
         while (need > algorithms::kEconomicEpsilon
@@ -660,6 +678,9 @@ void commit_working_state(
 ) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto* firm = state.firms.get(scratch.firm_ids_[index]);
+        if (!is_base_firm_sector(firm->sector)) {
+            continue;
+        }
         auto& work = scratch.firm_work_[index];
         auto produced = algorithms::production(
             {
@@ -675,7 +696,8 @@ void commit_working_state(
         if (!produced.ok()) {
             return produced.status();
         }
-        work.produced = *produced.get_if();
+        work.produced =
+            *produced.get_if() * work.production_input_factor;
         work.closing_inventory =
             firm->goods_inventory.value() + work.produced;
     }
@@ -1246,6 +1268,9 @@ void commit_working_state(
     double dividend_total = 0.0;
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto* firm = state.firms.get(scratch.firm_ids_[index]);
+        if (!is_base_firm_sector(firm->sector)) {
+            continue;
+        }
         auto& work = scratch.firm_work_[index];
         work.profit = work.revenue - work.wage_bill;
         if (fiscal && work.profit > algorithms::kEconomicEpsilon) {
@@ -1538,10 +1563,12 @@ void commit_capital(
          index < scratch.firm_work_.size();
          ++index) {
         const auto& firm = scratch.firm_work_[index];
-        metrics.real_output += firm.produced;
-        metrics.nominal_output += firm.revenue;
         const auto* persistent =
             state.firms.get(scratch.firm_ids_[index]);
+        if (is_base_firm_sector(persistent->sector)) {
+            metrics.real_output += firm.produced;
+            metrics.nominal_output += firm.revenue;
+        }
         if (persistent->sector == core::FirmSector::consumption) {
             sold_quantity += firm.sales;
             price_value += firm.sales * firm.posted_price;
@@ -1564,12 +1591,15 @@ void commit_capital(
         : 0.0;
     if (sold_quantity > algorithms::kEconomicEpsilon) {
         metrics.price_index = price_value / sold_quantity;
-    } else if (!scratch.firm_work_.empty()) {
-        for (const auto& firm : scratch.firm_work_) {
-            metrics.price_index += firm.posted_price;
+    } else if (!scratch.consumption_firm_indices_.empty()) {
+        for (const auto index : scratch.consumption_firm_indices_) {
+            metrics.price_index +=
+                scratch.firm_work_[index].posted_price;
         }
         metrics.price_index /=
-            static_cast<double>(scratch.firm_work_.size());
+            static_cast<double>(
+                scratch.consumption_firm_indices_.size()
+            );
     }
     metrics.total_money = sum_balances(scratch);
     metrics.conservation_drift =
@@ -1913,9 +1943,13 @@ void M4TickScratch::reserve(const core::RootState& state) {
     );
     consumption_firm_indices_.clear();
     capital_firm_indices_.clear();
+    energy_firm_indices_.clear();
+    construction_firm_indices_.clear();
     firm_ids_.reserve(firm_count);
     consumption_firm_indices_.reserve(firm_count);
     capital_firm_indices_.reserve(firm_count);
+    energy_firm_indices_.reserve(firm_count);
+    construction_firm_indices_.reserve(firm_count);
     state.firms.for_each_alive(
         [this](FirmId id, const core::FirmComponent& firm) {
             const auto index = firm_ids_.size();
@@ -1925,8 +1959,12 @@ void M4TickScratch::reserve(const core::RootState& state) {
             ] = index;
             if (firm.sector == core::FirmSector::consumption) {
                 consumption_firm_indices_.push_back(index);
-            } else {
+            } else if (firm.sector == core::FirmSector::capital) {
                 capital_firm_indices_.push_back(index);
+            } else if (firm.sector == core::FirmSector::energy) {
+                energy_firm_indices_.push_back(index);
+            } else {
+                construction_firm_indices_.push_back(index);
             }
         }
     );
@@ -1966,6 +2004,8 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
         firm_dense_index_.capacity(),
         consumption_firm_indices_.capacity(),
         capital_firm_indices_.capacity(),
+        energy_firm_indices_.capacity(),
+        construction_firm_indices_.capacity(),
         household_order_.capacity(),
         firm_order_.capacity(),
         balances_.capacity(),
@@ -2218,8 +2258,11 @@ Status validate_m4_state(
         ) {
             if (firm.sector == core::FirmSector::consumption) {
                 ++consumption_firms;
-            } else {
+            } else if (firm.sector == core::FirmSector::capital) {
                 ++capital_firms;
+            } else if (firm.sector != core::FirmSector::energy &&
+                       firm.sector != core::FirmSector::construction) {
+                components_valid = false;
             }
             const std::array values{
                 firm.total_factor_productivity,

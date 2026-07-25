@@ -222,6 +222,7 @@ public:
         double labor_demand_notional{0.0};
         double labor_demand_effective{0.0};
         double hired{0.0};
+        double production_input_factor{1.0};
         double produced{0.0};
         double sales{0.0};
         double revenue{0.0};
@@ -247,6 +248,8 @@ public:
     std::vector<std::size_t> firm_dense_index_;
     std::vector<std::size_t> consumption_firm_indices_;
     std::vector<std::size_t> capital_firm_indices_;
+    std::vector<std::size_t> energy_firm_indices_;
+    std::vector<std::size_t> construction_firm_indices_;
     std::vector<std::size_t> household_order_;
     std::vector<std::size_t> firm_order_;
     std::vector<double> balances_;

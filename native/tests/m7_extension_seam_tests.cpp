@@ -105,18 +105,25 @@ class ProbeExtension final : public M7TickExtension {
         return visit(0);
     }
 
+    Status before_labor(const RootState &, M4Runtime &, M4TickScratch &,
+                        M5Runtime &, M5TickScratch &, M6Runtime &,
+                        M6TickScratch &, M7Runtime &, M7TickScratch &, Tick,
+                        PhiloxRng &) override {
+        return visit(1);
+    }
+
     Status after_labor(const RootState &, M4Runtime &, M4TickScratch &,
                        M5Runtime &, M5TickScratch &, M6Runtime &,
                        M6TickScratch &, M7Runtime &, M7TickScratch &, Tick,
                        PhiloxRng &) override {
-        return visit(1);
+        return visit(2);
     }
 
     Status close_day(const RootState &, M4Runtime &, M4TickScratch &,
                      M5Runtime &, M5TickScratch &, M6Runtime &,
                      M6TickScratch &, M7Runtime &, M7TickScratch &, Tick,
                      PhiloxRng &) override {
-        return visit(2);
+        return visit(3);
     }
 
     Status validate(const RootState &, const M4Runtime &,
@@ -124,13 +131,13 @@ class ProbeExtension final : public M7TickExtension {
                     const M5TickScratch &, const M6Runtime &,
                     const M6TickScratch &, const M7Runtime &,
                     const M7TickScratch &, Tick) const override {
-        return const_cast<ProbeExtension *>(this)->visit(3);
+        return const_cast<ProbeExtension *>(this)->visit(4);
     }
 
     void commit(RootState &, M4Runtime &, M4TickScratch &, M5Runtime &,
                 M5TickScratch &, M6Runtime &, M6TickScratch &, M7Runtime &,
                 M7TickScratch &, Tick, const M7Metrics &) noexcept override {
-        phases.push_back(4);
+        phases.push_back(5);
     }
 
     std::vector<std::size_t> phases;
@@ -175,11 +182,11 @@ void test_phase_order() {
     assert(result.ok());
     assert(harness.tick == Tick(1));
     assert(extension.phases ==
-           std::vector<std::size_t>({0, 1, 2, 3, 4}));
+           std::vector<std::size_t>({0, 1, 2, 3, 4, 5}));
 }
 
 void test_failure_is_atomic_at_every_fallible_boundary() {
-    for (std::size_t phase = 0; phase < 4; ++phase) {
+    for (std::size_t phase = 0; phase < 5; ++phase) {
         auto harness = build();
         const auto before = checkpoint(harness);
         ProbeExtension extension(phase);
@@ -205,7 +212,7 @@ void test_noop_extension_preserves_m7() {
     assert(direct_result.ok());
     assert(extended_result.ok());
     assert(checkpoint(direct) == checkpoint(extended));
-    assert(extension.phases.size() == 20 * 5);
+    assert(extension.phases.size() == 20 * 6);
 }
 
 } // namespace

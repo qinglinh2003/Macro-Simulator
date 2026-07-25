@@ -96,6 +96,7 @@ add_library(
         src/simulation/m6_checkpoint.cpp
         src/simulation/m7.cpp
         src/simulation/m7_checkpoint.cpp
+        src/simulation/m8.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -455,6 +456,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m7_checkpoint
         COMMAND macro_sim_m7_checkpoint_tests
+    )
+
+    add_executable(
+        macro_sim_m8_energy_tests
+        tests/m8_energy_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m8_energy_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m8_energy_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m8_energy_tests)
+    add_test(
+        NAME macro_sim.m8_energy
+        COMMAND macro_sim_m8_energy_tests
     )
 
     if(TARGET _native)
