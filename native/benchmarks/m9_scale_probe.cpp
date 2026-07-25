@@ -33,6 +33,15 @@ enum class ProbeMode : std::uint8_t {
     m9 = 1,
 };
 
+enum class WorkloadProfile : std::uint8_t {
+    static_only = 0,
+    population = 1,
+    financial = 2,
+    energy = 3,
+    housing = 4,
+    full = 5,
+};
+
 struct Options final {
     ProbeMode mode{ProbeMode::m8};
     std::uint64_t persons{10'000U};
@@ -43,6 +52,7 @@ struct Options final {
     bool beneficial_ownership{true};
     bool open_economy{false};
     bool active_shock{false};
+    WorkloadProfile workload{WorkloadProfile::static_only};
 };
 
 struct Measurement final {
@@ -72,6 +82,7 @@ struct Measurement final {
     bool beneficial_ownership{true};
     bool open_economy{false};
     bool active_shock{false};
+    std::string workload;
     std::vector<std::uint64_t> day_allocations;
     std::vector<std::uint64_t> day_ns;
 };
@@ -103,6 +114,25 @@ struct Measurement final {
     }
     value = parsed;
     return true;
+}
+
+[[nodiscard]] constexpr std::string_view workload_name(
+    WorkloadProfile workload) noexcept {
+    switch (workload) {
+    case WorkloadProfile::static_only:
+        return "static";
+    case WorkloadProfile::population:
+        return "population";
+    case WorkloadProfile::financial:
+        return "financial";
+    case WorkloadProfile::energy:
+        return "energy";
+    case WorkloadProfile::housing:
+        return "housing";
+    case WorkloadProfile::full:
+        return "full";
+    }
+    return "unknown";
 }
 
 [[nodiscard]] bool parse_options(int argc, char **argv, Options &options) {
@@ -164,6 +194,22 @@ struct Measurement final {
             } else {
                 return false;
             }
+        } else if (flag == "--workload") {
+            if (value == "static") {
+                options.workload = WorkloadProfile::static_only;
+            } else if (value == "population") {
+                options.workload = WorkloadProfile::population;
+            } else if (value == "financial") {
+                options.workload = WorkloadProfile::financial;
+            } else if (value == "energy") {
+                options.workload = WorkloadProfile::energy;
+            } else if (value == "housing") {
+                options.workload = WorkloadProfile::housing;
+            } else if (value == "full") {
+                options.workload = WorkloadProfile::full;
+            } else {
+                return false;
+            }
         } else {
             return false;
         }
@@ -185,6 +231,7 @@ struct Measurement final {
 
 [[nodiscard]] M8SimulationSpec make_spec(std::uint64_t persons,
                                          bool beneficial_ownership,
+                                         WorkloadProfile workload,
                                          std::uint64_t economy_index = 0U) {
     M8SimulationSpec spec;
     auto &population = spec.domestic_economy;
@@ -221,37 +268,47 @@ struct Measurement final {
 
     financial.rules.watchlist_size = 12U;
     financial.rules.portfolio_review_interval_days = 30U;
-    financial.rules.firm_dynamics = false;
-    financial.rules.bank_dynamics = false;
+    const bool population_dynamics =
+        workload == WorkloadProfile::population || workload == WorkloadProfile::full;
+    const bool financial_dynamics =
+        workload == WorkloadProfile::financial || workload == WorkloadProfile::full;
+    const bool energy_dynamics =
+        workload == WorkloadProfile::energy || workload == WorkloadProfile::full;
+    const bool housing_dynamics =
+        workload == WorkloadProfile::housing || workload == WorkloadProfile::full;
+
+    financial.rules.firm_dynamics = financial_dynamics;
+    financial.rules.bank_dynamics = financial_dynamics;
 
     population.population.initial_persons = persons;
     population.population.target_household_size = 2.5;
-    population.rules.fertility = false;
-    population.rules.mortality = false;
-    population.rules.relationships = false;
-    population.rules.marriage = false;
-    population.rules.divorce = false;
-    population.rules.household_lifecycle = false;
-    population.rules.annual_churn = 0.0;
+    population.rules.fertility = population_dynamics;
+    population.rules.mortality = population_dynamics;
+    population.rules.relationships = population_dynamics;
+    population.rules.marriage = population_dynamics;
+    population.rules.divorce = population_dynamics;
+    population.rules.household_lifecycle = population_dynamics;
+    population.rules.annual_churn =
+        population_dynamics ? M7Rules{}.annual_churn : 0.0;
     population.rules.beneficial_ownership = beneficial_ownership;
     population.rules.estates = beneficial_ownership;
 
     spec.energy_rules.producer_count = std::max<std::uint64_t>(2U, persons / 500U);
-    spec.energy_rules.deprivation = false;
+    spec.energy_rules.deprivation = energy_dynamics;
     spec.energy_rules.hoarding_beta = 0.0;
 
     spec.housing_rules.enabled = true;
-    spec.housing_rules.resale_market = false;
-    spec.housing_rules.rentals = false;
-    spec.housing_rules.mortgages = false;
-    spec.housing_rules.construction = false;
-    spec.housing_rules.market_interval_days = 7U;
+    spec.housing_rules.resale_market = housing_dynamics;
+    spec.housing_rules.rentals = housing_dynamics;
+    spec.housing_rules.mortgages = housing_dynamics;
+    spec.housing_rules.construction = housing_dynamics;
+    spec.housing_rules.market_interval_days = housing_dynamics ? 30U : 7U;
     spec.housing_rules.initial_homeownership_share = 0.75;
     spec.housing_rules.builder_count = 2U;
     spec.housing_rules.initial_builder_cash_buffer = 1'000.0;
     spec.housing_rules.builder_productivity = 0.01;
     spec.housing_rules.builder_demand_seed = 0.01;
-    spec.housing_policy.mortgage_underwriting = false;
+    spec.housing_policy.mortgage_underwriting = housing_dynamics;
     spec.housing_policy.annual_housing_permits = persons;
     return spec;
 }
@@ -315,6 +372,7 @@ template <typename Advance>
     measurement.warmup_days = options.warmup_days;
     measurement.measured_days = options.measured_days;
     measurement.beneficial_ownership = options.beneficial_ownership;
+    measurement.workload = workload_name(options.workload);
     measurement.day_allocations.reserve(
         static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
@@ -322,8 +380,8 @@ template <typename Advance>
     EngineSession session(33909U);
     begin_allocation_measurement();
     const auto start = Clock::now();
-    const auto initialized =
-        session.initialize_m8(make_spec(options.persons, options.beneficial_ownership));
+    const auto initialized = session.initialize_m8(make_spec(
+        options.persons, options.beneficial_ownership, options.workload));
     const auto stop = Clock::now();
     measurement.genesis_allocations = end_allocation_measurement();
     if (!initialized.ok()) {
@@ -384,6 +442,7 @@ template <typename Advance>
     measurement.beneficial_ownership = options.beneficial_ownership;
     measurement.open_economy = options.open_economy;
     measurement.active_shock = options.active_shock;
+    measurement.workload = workload_name(options.workload);
     measurement.day_allocations.reserve(
         static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
@@ -394,8 +453,8 @@ template <typename Advance>
     for (std::uint64_t index = 0U; index < options.economies; ++index) {
         const auto population =
             population_per_economy + (index < population_remainder ? 1U : 0U);
-        spec.economies.push_back(
-            make_spec(population, options.beneficial_ownership, index));
+        spec.economies.push_back(make_spec(
+            population, options.beneficial_ownership, options.workload, index));
     }
     spec.external_policies.resize(static_cast<std::size_t>(options.economies));
     if (options.open_economy) {
@@ -465,6 +524,21 @@ template <typename Advance>
                   << advance_status.message() << '\n';
         std::abort();
     }
+    const auto validation = world.validate();
+    if (!validation.ok()) {
+        std::cerr << "M9 scale probe final validation failed: "
+                  << validation.message() << '\n';
+        std::abort();
+    }
+    measurement.households = 0U;
+    measurement.firms = 0U;
+    measurement.banks = 0U;
+    for (std::uint64_t index = 0U; index < options.economies; ++index) {
+        const auto *root = world.economy_root(EconomyId(index));
+        measurement.households += root->households.alive_count();
+        measurement.firms += root->firms.alive_count();
+        measurement.banks += root->banks.alive_count();
+    }
     measurement.digest = std::to_string(world.digest());
     return measurement;
 }
@@ -497,6 +571,7 @@ void print(const Measurement &value) {
               << "\"digest\":\"" << value.digest << "\","
               << "\"economies\":" << value.economies << ','
               << "\"firms\":" << value.firms << ','
+              << "\"workload\":\"" << value.workload << "\","
               << "\"genesis_allocations\":" << value.genesis_allocations << ','
               << "\"genesis_ns\":" << value.genesis_ns << ','
               << "\"genesis_peak_rss_bytes\":" << value.genesis_peak_rss_bytes << ','
@@ -513,8 +588,8 @@ void print(const Measurement &value) {
               << "\"persons\":" << value.persons << ','
               << "\"portfolio_review_interval_days\":"
               << value.portfolio_review_interval_days << ','
-              << "\"scenario\":\"static-population-multicountry-v5\","
-              << "\"schema_version\":\"m9-scale-probe-v6\","
+              << "\"scenario\":\"one-million-playable-v6\","
+              << "\"schema_version\":\"m9-scale-probe-v7\","
               << "\"security_lots\":" << value.security_lots << ','
               << "\"shock_active\":"
               << (value.active_shock ? "true" : "false") << ','
@@ -544,7 +619,9 @@ int main(int argc, char **argv) {
     if (!parse_options(argc, argv, options)) {
         std::cerr << "usage: macro_sim_m9_scale_probe --mode m8|m9 --persons N "
                      "--economies N --workers N --world-mode closed|open "
-                     "--shocks none|active --warmup-days N --days N "
+                     "--shocks none|active "
+                     "--workload static|population|financial|energy|housing|full "
+                     "--warmup-days N --days N "
                      "--beneficial-ownership enabled|disabled\n";
         return 2;
     }

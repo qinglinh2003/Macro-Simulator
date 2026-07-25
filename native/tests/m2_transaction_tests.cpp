@@ -12,6 +12,7 @@ namespace {
 
 using macro_sim::AccountId;
 using macro_sim::BankId;
+using macro_sim::FirmId;
 using macro_sim::HouseholdId;
 using macro_sim::LoanId;
 using macro_sim::Money;
@@ -143,6 +144,40 @@ void test_origination_and_repayment_preserve_a5() {
     assert(repayment.commit().ok());
     assert(balance(state, borrower) == 125.0);
     assert(state.loans.total_principal() == Money(25.0));
+    assert(macro_sim::core::run_invariants(state).ok());
+}
+
+void test_inactive_loan_retains_retired_borrower_history() {
+    auto state = make_state();
+    const auto firm = FirmId(1);
+    const auto *component = state.firms.get(firm);
+    assert(component != nullptr);
+    const auto account = component->primary_account;
+
+    SettlementTransaction origination(state);
+    assert(
+        origination.originate_loan(
+            BankId(1),
+            OwnerId::firm(firm),
+            account,
+            Money(10.0),
+            LoanTerms{Rate(0.04), Tick(0), Tick(365)}
+        ).ok()
+    );
+    assert(origination.commit().ok());
+
+    SettlementTransaction repayment(state);
+    assert(repayment.repay_loan(LoanId(1), account, Money(10.0)).ok());
+    assert(repayment.commit().ok());
+    assert(!state.loans.get(LoanId(1))->active);
+
+    static_cast<void>(state.ownership.retire_asset({
+        macro_sim::core::AssetKind::firm_equity,
+        state.economy,
+        firm.value(),
+    }));
+    assert(state.postings.close_account(account).ok());
+    assert(state.firms.remove(firm).ok());
     assert(macro_sim::core::run_invariants(state).ok());
 }
 
@@ -380,6 +415,7 @@ void test_world_transaction_restores_every_root_on_late_failure() {
 int main() {
     test_same_and_cross_bank_transfers_are_atomic();
     test_origination_and_repayment_preserve_a5();
+    test_inactive_loan_retains_retired_borrower_history();
     test_reserve_treasury_and_ownership_commands();
     test_invalid_batch_restores_exact_digest();
     test_locally_validated_transfer_matches_full_commit();

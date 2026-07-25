@@ -2552,6 +2552,7 @@ class M8Extension final : public M7TickExtension {
         double acute = 0.0;
         double chronic = 0.0;
         double maximum_spell = 0.0;
+        const double current_price = real_runtime_price(real);
         for (std::size_t dense = 0; dense < real.household_ids_.size(); ++dense) {
             const auto household_id = real.household_ids_[dense];
             const auto id_index = static_cast<std::size_t>(household_id.value());
@@ -2572,15 +2573,15 @@ class M8Extension final : public M7TickExtension {
             if (!scratch_.deprivation_.active) {
                 scratch_.deprivation_.per_unit_sum += consumption / need_units;
                 scratch_.deprivation_.household_days += 1.0;
-                if (real_runtime_price(real) > kEconomicEpsilon) {
-                    scratch_.deprivation_.price_sum += real_runtime_price(real);
+                if (current_price > kEconomicEpsilon) {
+                    scratch_.deprivation_.price_sum += current_price;
                     scratch_.deprivation_.price_days += 1.0;
                 }
                 continue;
             }
             const double price_ratio =
                 scratch_.deprivation_.price_anchor > kEconomicEpsilon
-                    ? real_runtime_price(real) / scratch_.deprivation_.price_anchor
+                    ? current_price / scratch_.deprivation_.price_anchor
                     : 1.0;
             const double basket =
                 scratch_.deprivation_.basket_cost_anchor * need_units * price_ratio;

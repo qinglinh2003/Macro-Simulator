@@ -243,6 +243,9 @@ InvariantReport run_invariants(const RootState& state) noexcept {
     }
 
     for (const auto& loan : state.loans.records()) {
+        if (!loan.active) {
+            continue;
+        }
         const auto* account = state.postings.get(loan.borrower_account);
         if (!loan.lender.valid() || state.banks.get(loan.lender) == nullptr
             || !owner_exists(state, loan.borrower) || account == nullptr

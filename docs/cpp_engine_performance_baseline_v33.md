@@ -1,6 +1,6 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person open multicountry M9 60-day target met
+Status: one-million-person full-play open multicountry M9 60-day target met
 
 Date: 2026-07-26
 
@@ -22,12 +22,13 @@ native engine after M9. It answers four questions:
    plausible without changing the economic model?
 
 The answer to the performance target is now yes for static-population M8 and for
-closed, open, multicountry, and shock-active M9 acceptance scenarios. All 60
-measured days complete in less than one second over the first two portfolio
-cycles. The all-days result includes the documented household-portfolio
-beneficial-ownership simplification below; before that change, the median met
-the target but the tail did not. Dynamic population, active housing, and firm or
-bank entry remain outside this claim.
+closed, open, multicountry, shock-active, and full-play dynamic M9 acceptance
+scenarios. All 60 measured days complete in less than one second over the first
+two portfolio and housing cycles. The static all-days result includes the
+documented household-portfolio beneficial-ownership simplification below; before
+that change, the median met the target but the tail did not. The full-play claim
+also enables population and household lifecycle, firm and bank dynamics, energy
+deprivation, and the active housing market.
 
 ## 2. Test environment
 
@@ -41,6 +42,8 @@ bank entry remain outside this claim.
 The probe reports process peak RSS through `getrusage`. Genesis and simulated days
 are timed with `std::chrono::steady_clock`. Heap allocation counts use the same
 global allocation counter pattern as the existing milestone performance gates.
+M9 probes run a complete world validation after the final measured day; that
+validation is outside the daily timing window.
 
 ## 3. Probe scenario
 
@@ -58,8 +61,8 @@ opening wage and price profiles, and each country has a distinct seed. The
 shock reduces household demand by 10 percent for 30 days and ramps out over the
 last 10 days.
 
-The scenario is deliberately stable so that entity-scale cost is not confused
-with population growth:
+The `static` workload is deliberately stable so that entity-scale cost is not
+confused with population growth:
 
 - 2.5 persons per household
 - consumption and capital firms scale with population
@@ -72,6 +75,19 @@ with population growth:
   across households
 - housing stock enabled, with the active housing market disabled
 - firm and bank entry dynamics disabled
+
+The `full` workload retains the same opening scale and additionally enables:
+
+- fertility, mortality, relationships, marriage, divorce, and household lifecycle
+- the default annual labor and household churn rate
+- firm entry, firm exit, bank entry, and bank resolution dynamics
+- household energy deprivation and fuel-poverty state
+- housing resale, rentals, mortgages, underwriting, and construction
+- one housing session every 30 days
+
+The diagnostic `population`, `financial`, `energy`, and `housing` workloads enable
+one of those groups at a time. They exist to isolate a full-scale hotspot; they
+are not smaller performance substitutes.
 
 The normal probe keeps beneficial ownership enabled. A diagnostic switch can
 disable beneficial ownership and estates together. That switch exists only to
@@ -216,9 +232,9 @@ for day 60, matching the per-security-claim runs.
 
 The retained full 8-worker acceptance suite passes all 49 tests, including C and
 Python bindings, checkpoint round trips, semantic panels, extension seams, and
-fault-injection coverage. Further work should reduce the approximately 5.05 GiB
-day-60 peak RSS and remove the remaining full tick-staging copies before
-treating M9 multi-economy or highly dynamic population workloads as complete.
+fault-injection coverage. This static checkpoint did not yet cover full-play
+dynamics; Section 8.3 records the later dynamic acceptance. Further work should
+reduce peak RSS and remove the remaining full tick-staging copies.
 
 ## 4. Baseline with the current model enabled
 
@@ -460,9 +476,13 @@ generally performance-positive.
 
 ### 8.2 Numerical stability corrections
 
-Large multicountry batches exposed two false rejections rather than economic
+Large multicountry batches exposed three false rejections rather than economic
 imbalances:
 
+- A local trade batch with thousands of posting commands accumulated more than
+  eight machine epsilons of cancellation error. Economic transaction balance
+  now uses the greater of the root accounting tolerance and a scale-aware
+  32-epsilon bound.
 - Thousands of balanced reserve postings left a roughly
   `5e-15` aggregation residual. The reserve check now uses the greater of the
   root accounting tolerance and a scale-aware floating-point error bound.
@@ -474,6 +494,56 @@ These changes do not add money, remove money, or relax the final root
 invariants. They align intermediate command validation with the precision
 already used by the economic model.
 
+### 8.3 Full-play dynamic acceptance
+
+The first exact one-million-person full-play sample took 2.55 seconds to create
+and recorded 0.949, 1.111, and 1.112 seconds for its first three days. A 15-day
+profile had a 1.055-second median and a 1.477-second maximum. Static acceptance
+therefore did not predict full-play latency.
+
+Exact one-million-person isolation identified the dominant subsystem:
+
+| Dynamic group | Median day | Maximum day | Peak RSS |
+| :--- | ---: | ---: | ---: |
+| Population and household lifecycle | 0.152 s | 0.159 s | 2.21 GiB |
+| Firm and bank lifecycle | 0.277 s | 0.282 s | 1.99 GiB |
+| Energy deprivation | 0.125 s | 0.127 s | 1.92 GiB |
+| Active housing | 0.118 s | 0.124 s | 1.95 GiB |
+
+Before optimization, energy deprivation alone had a 0.913-second median and a
+0.977-second maximum. During its two-year burn-in, the household loop requested
+the same aggregate firm price twice for every household. Each request scanned
+all firms, producing household-count times firm-count work. Computing that
+daily price once outside the household loop preserves every equation and reduces
+the energy-only median by approximately 86 percent.
+
+The 60-day run also reached firm exit and bank entry states that short runs did
+not cover. Two lifecycle consistency fixes were required:
+
+- Firm liquidation can leave a sub-tolerance floating residual after
+  proportional shareholder distribution. The residual is now transferred to
+  the canonical rounding account before the firm account is closed. Account
+  close and firm removal failures are no longer ignored.
+- Repaid, inactive loans remain historical records. Live-reference validation
+  now applies to active loans, matching the existing active-only ownership-lot
+  rule, so a retired borrower need not remain an economic agent forever.
+
+Neither fix changes an active contract or economic flow. No new gameplay
+simplification was introduced for the full-play latency result.
+
+The final eight-country runs use exactly 1,000,000 opening persons, eight workers,
+open trade, capital, and migration, all full-play dynamics above, and two
+complete 30-day portfolio and housing cycles:
+
+| Scenario | Genesis | Median day | P95 day | Maximum day | Peak RSS | Digest |
+| :--- | ---: | ---: | ---: | ---: | ---: | :--- |
+| Full play, no shock | 2.52 s | 0.232 s | 0.684 s | 0.742 s | 4.85 GiB | `2061388354141165434` |
+| Full play, 30-day demand shock | 2.57 s | 0.225 s | 0.670 s | 0.721 s | 4.84 GiB | `10376059397024061528` |
+
+All 120 measured full-play days complete below one second. The one-time genesis
+cost is already below three seconds and is not the interactive bottleneck, so
+this checkpoint did not trade model detail for faster creation.
+
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
@@ -484,12 +554,12 @@ settlement, and deterministic country-level parallelism.
 
 The next measured order is:
 
-1. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
+1. Remove repeated account-index rebuilds and root-wide transaction digests from
+   batched firm exit and entry commit paths.
+2. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
    storage or mutation journals.
-2. Rebuild public security indexes no more than once per mutation phase.
-3. Profile dynamic population, firm entry and exit, active housing, and
-   multi-economy workloads at one million persons.
-4. Reduce the approximately 4.2-4.8 GiB day-60 peak RSS and bound history
+3. Rebuild public security indexes no more than once per mutation phase.
+4. Reduce the approximately 4.8-4.9 GiB full-play day-60 peak RSS and bound history
    retention for long game sessions.
 5. Extend deterministic parallelism inside a single large country only after
    phase read/write sets and memory-bandwidth limits are measured.
@@ -512,9 +582,8 @@ Each optimization must preserve:
 The sole performance gate is one million persons. Each accepted optimization
 must improve or preserve genesis time, daily latency, peak RSS, and allocation
 count on that population while all required correctness gates remain green. The
-target is no more than one second per M9 day. Closed, open multicountry, and
-bounded shock-active static-population scenarios now meet it; new dynamic
-workloads must pass independently before entering the claim.
+target is no more than one second per M9 day. Closed, open multicountry,
+bounded shock-active, and full-play dynamic scenarios now meet it.
 
 ## 11. Reproduction
 
@@ -548,7 +617,7 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
   --beneficial-ownership enabled
 ```
 
-Run the one-million-person eight-country open acceptance probe:
+Run the one-million-person eight-country open static acceptance probe:
 
 ```bash
 build/native/m9-release/native/macro_sim_m9_scale_probe \
@@ -558,6 +627,7 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
   --workers 8 \
   --world-mode open \
   --shocks none \
+  --workload static \
   --warmup-days 0 \
   --days 60 \
   --beneficial-ownership enabled
@@ -573,7 +643,27 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
   --workers 8 \
   --world-mode open \
   --shocks active \
+  --workload static \
   --warmup-days 0 \
   --days 60 \
   --beneficial-ownership enabled
 ```
+
+Run the full-play dynamic acceptance:
+
+```bash
+build/native/m9-release/native/macro_sim_m9_scale_probe \
+  --mode m9 \
+  --persons 1000000 \
+  --economies 8 \
+  --workers 8 \
+  --world-mode open \
+  --shocks none \
+  --workload full \
+  --warmup-days 0 \
+  --days 60 \
+  --beneficial-ownership enabled
+```
+
+Use `--shocks active` in the same command for the bounded demand-shock
+acceptance.

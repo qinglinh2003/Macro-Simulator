@@ -1995,13 +1995,38 @@ void append_founder_watchlist(M6Runtime &runtime, HouseholdId founder,
 void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
                       M6Runtime &runtime, M6TickScratch &scratch) noexcept {
     for (const auto &exit : scratch.firm_exits_) {
+        const auto *account = state.postings.get(exit.account);
+        if (account == nullptr || !account->open ||
+            std::abs(account->balance.value()) > state.accounting_tolerance) {
+            std::terminate();
+        }
+        if (account->balance.value() != 0.0) {
+            core::SettlementTransaction transaction(state);
+            const double residual = account->balance.value();
+            const auto transfer_status =
+                residual > 0.0
+                    ? transaction.transfer(
+                          exit.account,
+                          state.institutions.rounding_residual_account,
+                          Money(residual))
+                    : transaction.transfer(
+                          state.institutions.rounding_residual_account,
+                          exit.account,
+                          Money(-residual));
+            if (!transfer_status.ok() ||
+                !transaction.commit_locally_validated().ok()) {
+                std::terminate();
+            }
+        }
         static_cast<void>(state.ownership.retire_asset(core::AssetKey{
             core::AssetKind::firm_equity,
             state.economy,
             exit.firm.value(),
         }));
-        static_cast<void>(state.postings.close_account(exit.account));
-        static_cast<void>(state.firms.remove(exit.firm));
+        if (!state.postings.close_account(exit.account).ok() ||
+            !state.firms.remove(exit.firm).ok()) {
+            std::terminate();
+        }
     }
     for (const auto &entry : scratch.firm_entries_) {
         auto created = state.firms.create(entry.component);
@@ -2022,11 +2047,13 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         }
         state.firms.get(entry.firm)->primary_account = entry.account;
         core::SettlementTransaction transaction(state);
-        if (!transaction
-                 .transfer(entry.founder_account, entry.account,
-                           Money(entry.startup_cash))
-                 .ok() ||
-            !transaction.commit().ok()) {
+        const auto transfer = transaction.transfer(
+            entry.founder_account, entry.account, Money(entry.startup_cash));
+        if (!transfer.ok()) {
+            std::terminate();
+        }
+        const auto committed = transaction.commit();
+        if (!committed.ok()) {
             std::terminate();
         }
         append_founder_watchlist(runtime, entry.founder, entry.equity);

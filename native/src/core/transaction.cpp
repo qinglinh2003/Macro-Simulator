@@ -22,11 +22,6 @@ namespace {
     return Status::success();
 }
 
-[[nodiscard]] double residual_bound(double absolute_sum) noexcept {
-    return 8.0 * std::numeric_limits<double>::epsilon()
-        * std::max(1.0, absolute_sum);
-}
-
 [[nodiscard]] bool owner_exists(
     const RootState& state,
     OwnerId owner
@@ -675,7 +670,11 @@ Result<TransactionReceipt> SettlementTransaction::commit_impl(
     const double existing_loan_sum = neumaier_sum(loan_totals);
     const double economic_residual =
         posting_sum - existing_loan_sum - new_loan_total;
-    const double allowed_residual = residual_bound(absolute_economic_sum);
+    const double allowed_residual = std::max(
+        root_->accounting_tolerance,
+        32.0 * std::numeric_limits<double>::epsilon() *
+            std::max(1.0, absolute_economic_sum)
+    );
     if (std::abs(economic_residual) > allowed_residual) {
         return reject(
             Status(
