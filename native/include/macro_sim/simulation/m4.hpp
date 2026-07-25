@@ -161,9 +161,22 @@ struct M4PhaseSummary final {
     bool operator==(const M4PhaseSummary&) const = default;
 };
 
+struct M4ExternalGoodsOffer final {
+    std::uint64_t offer_id{0};
+    AccountId seller{};
+    double stock{0.0};
+    double price{0.0};
+
+    bool operator==(const M4ExternalGoodsOffer&) const = default;
+};
+
 struct M4AdvanceOptions final {
     bool capture_phase_trace{false};
     std::optional<M4Phase> fault_before_phase{};
+    std::array<double, 4> productivity_multipliers{1.0, 1.0, 1.0, 1.0};
+    std::array<double, 4> labor_availability_multipliers{1.0, 1.0, 1.0, 1.0};
+    double household_demand_multiplier{1.0};
+    std::optional<M4ExternalGoodsOffer> external_goods_offer{};
 };
 
 struct M4AdvanceResult final {
@@ -174,6 +187,8 @@ struct M4AdvanceResult final {
     std::uint64_t scratch_capacity_signature{0};
     std::uint64_t transfer_count{0};
     std::uint64_t trade_count{0};
+    double external_goods_units{0.0};
+    double external_goods_value{0.0};
 };
 
 struct M4Runtime final {
@@ -267,6 +282,8 @@ public:
     std::vector<M4PhaseSummary> phase_trace_;
     std::uint64_t transfer_count_{0};
     std::uint64_t trade_count_{0};
+    double external_goods_units_{0.0};
+    double external_goods_value_{0.0};
 };
 
 class M4TickExtension {

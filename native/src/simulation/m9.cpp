@@ -1,5 +1,7 @@
 #include "macro_sim/simulation/m9.hpp"
 
+#include "macro_sim/core/transaction.hpp"
+
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -20,8 +22,7 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
-[[nodiscard]] bool valid_economy(EconomyId economy,
-                                 std::size_t count) noexcept {
+[[nodiscard]] bool valid_economy(EconomyId economy, std::size_t count) noexcept {
     return economy.valid() && economy.value() < count;
 }
 
@@ -40,23 +41,46 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
            static_cast<std::uint8_t>(ShockShape::triangular);
 }
 
+[[nodiscard]] bool valid_sector(ShockSector sector) noexcept {
+    return static_cast<std::uint8_t>(sector) <=
+           static_cast<std::uint8_t>(ShockSector::public_sector);
+}
+
+[[nodiscard]] bool valid_event_type(ShockEventType type) noexcept {
+    return static_cast<std::uint8_t>(type) <=
+           static_cast<std::uint8_t>(ShockEventType::realized);
+}
+
 [[nodiscard]] double clamp_nonnegative(double value) noexcept {
     return std::max(0.0, value);
 }
 
-[[nodiscard]] double shock_progress(const ShockSpec &shock,
-                                    Tick tick) noexcept {
+[[nodiscard]] double shock_progress(const ShockSpec &shock, Tick tick) noexcept {
     if (tick.value() < shock.start.value() ||
         tick.value() >= shock.start.value() + shock.duration) {
         return 0.0;
     }
     const auto elapsed = tick.value() - shock.start.value();
+    if (shock.ramp_in_ticks > 0U || shock.ramp_out_ticks > 0U) {
+        double intensity = 1.0;
+        if (shock.ramp_in_ticks > 0U) {
+            intensity =
+                std::min(intensity, static_cast<double>(elapsed + 1U) /
+                                        static_cast<double>(shock.ramp_in_ticks));
+        }
+        if (shock.ramp_out_ticks > 0U) {
+            const auto remaining = shock.start.value() + shock.duration - tick.value();
+            intensity =
+                std::min(intensity, static_cast<double>(remaining) /
+                                        static_cast<double>(shock.ramp_out_ticks));
+        }
+        return std::clamp(intensity, 0.0, 1.0);
+    }
     if (shock.shape == ShockShape::step || shock.duration <= 1U) {
         return 1.0;
     }
     if (shock.shape == ShockShape::linear) {
-        return static_cast<double>(elapsed + 1U) /
-               static_cast<double>(shock.duration);
+        return static_cast<double>(elapsed + 1U) / static_cast<double>(shock.duration);
     }
     const double position =
         static_cast<double>(elapsed) /
@@ -66,19 +90,20 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
 [[nodiscard]] double shock_factor(std::span<const ShockSpec> shocks, ShockKind kind,
                                   std::size_t economy, Tick tick,
+                                  std::optional<ShockSector> sector = std::nullopt,
                                   std::uint64_t *active = nullptr) noexcept {
     double result = 1.0;
     for (const auto &shock : shocks) {
         if (shock.kind != kind ||
-            (shock.economy.has_value() &&
-             shock.economy->value() != economy)) {
+            (shock.economy.has_value() && shock.economy->value() != economy) ||
+            (shock.sector.has_value() && shock.sector != sector)) {
             continue;
         }
         const double progress = shock_progress(shock, tick);
         if (progress <= 0.0) {
             continue;
         }
-        result *= std::max(0.0, 1.0 + shock.magnitude * progress);
+        result *= std::max(0.0, 1.0 - shock.magnitude * progress);
         if (active != nullptr) {
             ++*active;
         }
@@ -92,8 +117,7 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 }
 
 [[nodiscard]] double country_output(const M8Metrics &metrics) noexcept {
-    return clamp_nonnegative(
-        metrics.economy.economy.economy.economy.real_output);
+    return clamp_nonnegative(metrics.economy.economy.economy.economy.real_output);
 }
 
 [[nodiscard]] double country_wage(const M8Metrics &metrics) noexcept {
@@ -102,8 +126,7 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 }
 
 [[nodiscard]] double policy_rate(const M8Metrics &metrics) noexcept {
-    const double rate =
-        metrics.economy.economy.economy.policy_rate;
+    const double rate = metrics.economy.economy.economy.policy_rate;
     return finite(rate) ? rate : 0.0;
 }
 
@@ -130,8 +153,7 @@ double RateVector::rate(EconomyId economy) const noexcept {
     return std::exp(log_rates[static_cast<std::size_t>(economy.value())]);
 }
 
-double RateVector::bilateral(EconomyId destination,
-                             EconomyId source) const noexcept {
+double RateVector::bilateral(EconomyId destination, EconomyId source) const noexcept {
     if (!valid_economy(destination, log_rates.size()) ||
         !valid_economy(source, log_rates.size())) {
         return std::numeric_limits<double>::quiet_NaN();
@@ -142,26 +164,24 @@ double RateVector::bilateral(EconomyId destination,
 
 double RateVector::to_numeraire(double amount, EconomyId economy) const noexcept {
     const double local_rate = rate(economy);
-    return finite(local_rate) && local_rate > kEpsilon ? amount / local_rate
-                                                       : 0.0;
+    return finite(local_rate) && local_rate > kEpsilon ? amount / local_rate : 0.0;
 }
 
 void RateVector::normalize() noexcept {
     if (log_rates.empty()) {
         return;
     }
-    const double mean =
-        std::accumulate(log_rates.begin(), log_rates.end(), 0.0) /
-        static_cast<double>(log_rates.size());
+    const double mean = std::accumulate(log_rates.begin(), log_rates.end(), 0.0) /
+                        static_cast<double>(log_rates.size());
     for (auto &value : log_rates) {
         value -= mean;
     }
 }
 
 M9World::EconomyState::EconomyState(const EconomyState &other)
-    : root(other.root), real_economy(other.real_economy),
-      monetary(other.monetary), financial(other.financial),
-      population(other.population), domestic(other.domestic), tick(other.tick) {
+    : root(other.root), real_economy(other.real_economy), monetary(other.monetary),
+      financial(other.financial), population(other.population),
+      domestic(other.domestic), tick(other.tick) {
     real_economy_scratch.reserve(root);
     monetary_scratch.reserve(root);
     financial_scratch.reserve(root, financial);
@@ -169,8 +189,7 @@ M9World::EconomyState::EconomyState(const EconomyState &other)
     domestic_scratch.reserve(root, domestic);
 }
 
-M9World::EconomyState &
-M9World::EconomyState::operator=(const EconomyState &other) {
+M9World::EconomyState &M9World::EconomyState::operator=(const EconomyState &other) {
     if (this == &other) {
         return *this;
     }
@@ -180,8 +199,7 @@ M9World::EconomyState::operator=(const EconomyState &other) {
 }
 
 Status validate_external_policy(const ExternalPolicyState &policy,
-                                std::size_t economy_count,
-                                EconomyId owner) noexcept {
+                                std::size_t economy_count, EconomyId owner) noexcept {
     if (!finite(policy.tariff) || policy.tariff <= -1.0 ||
         !finite(policy.export_subsidy) || policy.export_subsidy >= 1.0 ||
         !finite(policy.capital_control) || policy.capital_control < 0.0 ||
@@ -190,21 +208,15 @@ Status validate_external_policy(const ExternalPolicyState &policy,
         policy.external_interest_settlement_fraction < 0.0 ||
         policy.external_interest_settlement_fraction > 1.0 ||
         !finite(policy.remittance_tax) || policy.remittance_tax < 0.0 ||
-        policy.remittance_tax > 1.0 ||
-        !finite(policy.outward_remittance_tax) ||
-        policy.outward_remittance_tax < 0.0 ||
-        policy.outward_remittance_tax > 1.0 ||
-        !finite(policy.guest_worker_return) ||
-        policy.guest_worker_return < 0.0 ||
-        policy.guest_worker_return > 1.0 ||
-        !finite(policy.peg_reserve_scale) ||
+        policy.remittance_tax > 1.0 || !finite(policy.outward_remittance_tax) ||
+        policy.outward_remittance_tax < 0.0 || policy.outward_remittance_tax > 1.0 ||
+        !finite(policy.guest_worker_return) || policy.guest_worker_return < 0.0 ||
+        policy.guest_worker_return > 1.0 || !finite(policy.peg_reserve_scale) ||
         policy.peg_reserve_scale <= 0.0) {
-        return Status(ErrorCode::invalid_argument,
-                      "invalid external policy scalar");
+        return Status(ErrorCode::invalid_argument, "invalid external policy scalar");
     }
     const auto valid_optional_share = [](const std::optional<double> &value) {
-        return !value.has_value() ||
-               (finite(*value) && *value >= 0.0 && *value <= 1.0);
+        return !value.has_value() || (finite(*value) && *value >= 0.0 && *value <= 1.0);
     };
     if (!valid_optional_share(policy.import_quota) ||
         !valid_optional_share(policy.immigration_cap) ||
@@ -244,26 +256,21 @@ Status validate_external_policy(const ExternalPolicyState &policy,
 Status validate_world_rules(const WorldRules &rules) noexcept {
     if (!finite(rules.fx_adjustment) || rules.fx_adjustment < 0.0 ||
         !finite(rules.fx_friction) || rules.fx_friction < 0.0 ||
-        !finite(rules.fx_spread) || rules.fx_spread < 0.0 ||
-        rules.fx_spread >= 0.1 || !finite(rules.fx_trade_cap) ||
-        rules.fx_trade_cap < 0.0 || rules.fx_trade_cap > 1.0 ||
-        !finite(rules.capital_mobility) || rules.capital_mobility < 0.0 ||
-        rules.capital_mobility > 1.0 ||
-        !finite(rules.capital_adjustment) ||
-        rules.capital_adjustment < 0.0 ||
-        rules.capital_adjustment > 1.0 ||
-        !finite(rules.periods_per_year) || rules.periods_per_year <= 0.0 ||
-        !finite(rules.migration_rate) || rules.migration_rate < 0.0 ||
-        rules.migration_rate > 1.0 ||
-        !finite(rules.migration_max_share) ||
-        rules.migration_max_share < 0.0 ||
-        rules.migration_max_share > 1.0 ||
-        !finite(rules.remittance_share) || rules.remittance_share < 0.0 ||
-        rules.remittance_share > 1.0 || !finite(rules.wage_smoothing) ||
-        rules.wage_smoothing < 0.0 || rules.wage_smoothing > 1.0 ||
-        !finite(rules.initial_peg_reserves) ||
+        !finite(rules.fx_spread) || rules.fx_spread < 0.0 || rules.fx_spread >= 0.1 ||
+        !finite(rules.fx_trade_cap) || rules.fx_trade_cap < 0.0 ||
+        rules.fx_trade_cap > 1.0 || !finite(rules.capital_mobility) ||
+        rules.capital_mobility < 0.0 || rules.capital_mobility > 1.0 ||
+        !finite(rules.capital_adjustment) || rules.capital_adjustment < 0.0 ||
+        rules.capital_adjustment > 1.0 || !finite(rules.periods_per_year) ||
+        rules.periods_per_year <= 0.0 || !finite(rules.migration_rate) ||
+        rules.migration_rate < 0.0 || rules.migration_rate > 1.0 ||
+        !finite(rules.migration_max_share) || rules.migration_max_share < 0.0 ||
+        rules.migration_max_share > 1.0 || !finite(rules.remittance_share) ||
+        rules.remittance_share < 0.0 || rules.remittance_share > 1.0 ||
+        !finite(rules.wage_smoothing) || rules.wage_smoothing < 0.0 ||
+        rules.wage_smoothing > 1.0 || !finite(rules.initial_peg_reserves) ||
         rules.initial_peg_reserves < 0.0 ||
-        rules.dense_edge_threshold == 0U) {
+        rules.dense_edge_threshold != kM9DenseEdgeThreshold) {
         return Status(ErrorCode::invalid_argument, "invalid World rules");
     }
     if ((rules.capital || rules.migration) && !rules.trade) {
@@ -273,22 +280,185 @@ Status validate_world_rules(const WorldRules &rules) noexcept {
     return Status::success();
 }
 
-Status validate_shock_spec(const ShockSpec &shock,
-                           std::size_t economy_count) noexcept {
-    if (shock.id == 0U || !valid_kind(shock.kind) ||
-        !valid_shape(shock.shape) || shock.duration == 0U ||
-        !finite(shock.magnitude) || shock.magnitude < -1.0 ||
-        (shock.economy.has_value() &&
-         !valid_economy(*shock.economy, economy_count))) {
+Status validate_shock_spec(const ShockSpec &shock, std::size_t economy_count) noexcept {
+    if (shock.id == 0U || !valid_kind(shock.kind) || !valid_shape(shock.shape) ||
+        shock.duration == 0U || !finite(shock.magnitude) || shock.magnitude < -3.0 ||
+        shock.magnitude > 0.99 ||
+        (shock.economy.has_value() && !valid_economy(*shock.economy, economy_count)) ||
+        (shock.sector.has_value() && !valid_sector(*shock.sector))) {
         return Status(ErrorCode::invalid_argument, "invalid shock specification");
+    }
+    const bool sector_allowed = shock.kind == ShockKind::productivity ||
+                                shock.kind == ShockKind::labor_availability ||
+                                shock.kind == ShockKind::energy_capacity ||
+                                shock.kind == ShockKind::capital_destruction;
+    if (shock.sector.has_value() && !sector_allowed) {
+        return Status(ErrorCode::invalid_argument,
+                      "shock kind does not accept a sector target");
+    }
+    if (shock.kind == ShockKind::energy_capacity && shock.sector.has_value() &&
+        *shock.sector != ShockSector::energy) {
+        return Status(ErrorCode::invalid_argument,
+                      "energy capacity only accepts the energy sector");
+    }
+    if (shock.start.value() >
+            std::numeric_limits<std::uint64_t>::max() - shock.duration ||
+        shock.ramp_in_ticks > shock.duration ||
+        shock.ramp_out_ticks > shock.duration - shock.ramp_in_ticks) {
+        return Status(ErrorCode::invalid_argument,
+                      "shock timing exceeds the supported range");
+    }
+    if (shock.kind == ShockKind::capital_destruction &&
+        (shock.magnitude < 0.0 || shock.duration != 1U ||
+         shock.shape != ShockShape::step || shock.ramp_in_ticks != 0U ||
+         shock.ramp_out_ticks != 0U)) {
+        return Status(ErrorCode::invalid_argument,
+                      "capital destruction must be a one-tick adverse step");
+    }
+    if (shock.announcement.has_value() &&
+        shock.announcement->value() > shock.start.value()) {
+        return Status(ErrorCode::invalid_argument,
+                      "shock announcement cannot follow its start");
     }
     return Status::success();
 }
 
-Result<M9World> M9World::create(const M9WorldSpec &spec) {
-    if (spec.economies.empty()) {
+Result<std::vector<ShockSpec>>
+make_crisis_scenario(CrisisScenario scenario, const CrisisScenarioOptions &options,
+                     std::size_t economy_count) {
+    if (economy_count == 0U || options.first_shock_id == 0U ||
+        !finite(options.capital_loss) || options.capital_loss < 0.0 ||
+        options.capital_loss > 0.99 ||
+        static_cast<std::uint8_t>(scenario) >
+            static_cast<std::uint8_t>(CrisisScenario::natural_disaster)) {
+        return Status(ErrorCode::invalid_argument, "invalid crisis scenario options");
+    }
+    auto targets = options.economies;
+    std::sort(targets.begin(), targets.end());
+    if (std::adjacent_find(targets.begin(), targets.end()) != targets.end() ||
+        std::any_of(targets.begin(), targets.end(), [economy_count](EconomyId economy) {
+            return !valid_economy(economy, economy_count);
+        })) {
         return Status(ErrorCode::invalid_argument,
-                      "M9 World requires at least one economy");
+                      "invalid crisis scenario economy targets");
+    }
+    const auto announcement =
+        Tick(options.start.value() > options.announcement_lead_ticks
+                 ? options.start.value() - options.announcement_lead_ticks
+                 : 0U);
+    std::vector<ShockSpec> shocks;
+    std::uint64_t next_id = options.first_shock_id;
+    auto append = [&](ShockKind kind, double magnitude, std::uint64_t duration,
+                      std::uint64_t ramp_out,
+                      std::optional<ShockSector> sector =
+                          std::nullopt) mutable -> Status {
+        auto append_one = [&](std::optional<EconomyId> economy) mutable -> Status {
+            if (next_id == std::numeric_limits<std::uint64_t>::max()) {
+                return Status(ErrorCode::out_of_range,
+                              "crisis scenario shock IDs overflow");
+            }
+            ShockSpec shock;
+            shock.id = next_id++;
+            shock.kind = kind;
+            shock.economy = economy;
+            shock.start = options.start;
+            shock.announcement = announcement;
+            shock.duration = duration;
+            shock.magnitude = magnitude;
+            shock.ramp_out_ticks = ramp_out;
+            shock.sector = sector;
+            auto status = validate_shock_spec(shock, economy_count);
+            if (!status.ok()) {
+                return status;
+            }
+            shocks.push_back(std::move(shock));
+            return Status::success();
+        };
+        if (targets.empty()) {
+            return append_one(std::nullopt);
+        }
+        for (const auto economy : targets) {
+            auto status = append_one(economy);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        return Status::success();
+    };
+
+    const auto configured_duration = [duration =
+                                          options.duration](std::uint64_t fallback) {
+        return duration == 0U ? fallback : duration;
+    };
+    Status status = Status::success();
+    switch (scenario) {
+    case CrisisScenario::oil_embargo: {
+        const auto duration = configured_duration(180U);
+        status =
+            append(ShockKind::energy_capacity, 0.45, duration, 0U, ShockSector::energy);
+        if (status.ok()) {
+            status = append(ShockKind::import_capacity, 0.20, duration, 0U);
+        }
+        break;
+    }
+    case CrisisScenario::global_financial_crisis: {
+        const auto duration = configured_duration(365U);
+        const auto ramp_out = std::min<std::uint64_t>(90U, duration / 3U);
+        status = append(ShockKind::credit_supply, 0.70, duration, ramp_out);
+        if (status.ok()) {
+            status = append(ShockKind::household_demand, 0.18, duration, ramp_out);
+        }
+        if (status.ok()) {
+            status = append(ShockKind::productivity, 0.05, duration, ramp_out);
+        }
+        break;
+    }
+    case CrisisScenario::pandemic: {
+        const auto duration = configured_duration(540U);
+        const auto ramp_out = std::min<std::uint64_t>(180U, duration / 3U);
+        for (const auto [kind, magnitude] :
+             {std::pair{ShockKind::labor_availability, 0.25},
+              std::pair{ShockKind::productivity, 0.12},
+              std::pair{ShockKind::household_demand, 0.16},
+              std::pair{ShockKind::credit_supply, 0.12}}) {
+            status = append(kind, magnitude, duration, ramp_out);
+            if (!status.ok()) {
+                break;
+            }
+        }
+        if (status.ok() && options.include_trade) {
+            status = append(ShockKind::import_capacity, 0.30, duration, ramp_out);
+        }
+        if (status.ok() && options.include_trade) {
+            status = append(ShockKind::export_capacity, 0.25, duration, ramp_out);
+        }
+        break;
+    }
+    case CrisisScenario::natural_disaster: {
+        const auto recovery = configured_duration(180U);
+        status = append(ShockKind::capital_destruction, options.capital_loss, 1U, 0U);
+        if (status.ok()) {
+            status = append(ShockKind::productivity, 0.15, recovery,
+                            std::min<std::uint64_t>(90U, recovery / 2U));
+        }
+        const auto labor_duration = std::min<std::uint64_t>(30U, recovery);
+        if (status.ok()) {
+            status = append(ShockKind::labor_availability, 0.10, labor_duration,
+                            std::min<std::uint64_t>(10U, labor_duration / 3U));
+        }
+        break;
+    }
+    }
+    if (!status.ok()) {
+        return status;
+    }
+    return shocks;
+}
+
+Result<M9World> M9World::create(const M9WorldSpec &spec) {
+    if (spec.economies.empty() || spec.economies.size() > kM9MaximumEconomies) {
+        return Status(ErrorCode::invalid_argument,
+                      "M9 World economy count is outside the supported range");
     }
     auto rules_status = validate_world_rules(spec.rules);
     if (!rules_status.ok()) {
@@ -304,17 +474,15 @@ Result<M9World> M9World::create(const M9WorldSpec &spec) {
     world.rules_ = spec.rules;
     world.rates_.log_rates.assign(spec.economies.size(), 0.0);
     world.dealer_inventory_.assign(spec.economies.size(), 0.0);
-    world.external_principal_.assign(
-        spec.economies.size(),
-        std::vector<double>(spec.economies.size(), 0.0));
+    world.external_principal_.assign(spec.economies.size(),
+                                     std::vector<double>(spec.economies.size(), 0.0));
     world.interest_arrears_ = world.external_principal_;
     world.smoothed_real_wages_.assign(spec.economies.size(), 1.0);
     world.external_policies_ = spec.external_policies;
     if (world.external_policies_.empty()) {
         world.external_policies_.resize(spec.economies.size());
     }
-    auto policy_status =
-        world.validate_policy_vector(world.external_policies_);
+    auto policy_status = world.validate_policy_vector(world.external_policies_);
     if (!policy_status.ok()) {
         return policy_status;
     }
@@ -322,8 +490,8 @@ Result<M9World> M9World::create(const M9WorldSpec &spec) {
     world.economies_.reserve(spec.economies.size());
     for (std::size_t index = 0; index < spec.economies.size(); ++index) {
         auto domestic_spec = spec.economies[index];
-        auto &m4 = domestic_spec.domestic_economy.financial_economy
-                       .monetary_economy.real_economy;
+        auto &m4 = domestic_spec.domestic_economy.financial_economy.monetary_economy
+                       .real_economy;
         m4.economy = EconomyId(static_cast<std::uint64_t>(index));
         m4.currency = CurrencyId(static_cast<std::uint32_t>(index));
         auto built = build_m8_genesis(domestic_spec);
@@ -333,8 +501,7 @@ Result<M9World> M9World::create(const M9WorldSpec &spec) {
         auto initialization = std::move(built).take();
         EconomyState state;
         state.root = std::move(initialization.root);
-        state.real_economy =
-            std::move(initialization.real_economy_runtime);
+        state.real_economy = std::move(initialization.real_economy_runtime);
         state.monetary = std::move(initialization.monetary_runtime);
         state.financial = std::move(initialization.financial_runtime);
         state.population = std::move(initialization.population_runtime);
@@ -348,19 +515,17 @@ Result<M9World> M9World::create(const M9WorldSpec &spec) {
         world.economies_.push_back(std::move(state));
     }
 
-    for (std::size_t index = 0; index < world.external_policies_.size();
-         ++index) {
+    for (std::size_t index = 0; index < world.external_policies_.size(); ++index) {
         const auto &policy = world.external_policies_[index];
         if (policy.fx_regime == FxRegime::peg) {
-            world.pegs_.push_back(
-                PegRuntime{
-                    EconomyId(static_cast<std::uint64_t>(index)),
-                    *policy.peg_anchor,
-                    world.rules_.initial_peg_reserves,
-                    0.0,
-                    0.0,
-                    true,
-                });
+            world.pegs_.push_back(PegRuntime{
+                EconomyId(static_cast<std::uint64_t>(index)),
+                *policy.peg_anchor,
+                world.rules_.initial_peg_reserves,
+                0.0,
+                0.0,
+                true,
+            });
         }
     }
     world.shocks_ = spec.shocks;
@@ -407,9 +572,9 @@ Status M9World::validate_policy_vector(
     }
     std::size_t peg_count = 0;
     for (std::size_t index = 0; index < policies.size(); ++index) {
-        auto status = validate_external_policy(
-            policies[index], policies.size(),
-            EconomyId(static_cast<std::uint64_t>(index)));
+        auto status =
+            validate_external_policy(policies[index], policies.size(),
+                                     EconomyId(static_cast<std::uint64_t>(index)));
         if (!status.ok()) {
             return status;
         }
@@ -418,20 +583,18 @@ Status M9World::validate_policy_vector(
             const auto anchor =
                 static_cast<std::size_t>(policies[index].peg_anchor->value());
             if (policies[anchor].fx_regime != FxRegime::floating) {
-                return Status(ErrorCode::contract_violation,
-                              "peg anchor must float");
+                return Status(ErrorCode::contract_violation, "peg anchor must float");
             }
         }
     }
     if (peg_count > 1U) {
-        return Status(ErrorCode::unsupported,
-                      "M9 P0 permits at most one pegger");
+        return Status(ErrorCode::unsupported, "M9 P0 permits at most one pegger");
     }
     return Status::success();
 }
 
-Status M9World::update_external_policies(
-    std::span<const ExternalPolicyState> policies) {
+Status
+M9World::update_external_policies(std::span<const ExternalPolicyState> policies) {
     auto status = validate_policy_vector(policies);
     if (!status.ok()) {
         return status;
@@ -446,21 +609,18 @@ Status M9World::update_external_policies(
             std::find_if(pegs_.begin(), pegs_.end(), [index](const PegRuntime &peg) {
                 return peg.pegger.value() == index;
             });
-        if (existing != pegs_.end() &&
-            existing->anchor == *next[index].peg_anchor) {
+        if (existing != pegs_.end() && existing->anchor == *next[index].peg_anchor) {
             next_pegs.push_back(*existing);
         } else {
-            next_pegs.push_back(
-                PegRuntime{
-                    EconomyId(static_cast<std::uint64_t>(index)),
-                    *next[index].peg_anchor,
-                    rules_.initial_peg_reserves,
-                    0.0,
-                    rates_.log_rates[index] -
-                        rates_.log_rates[static_cast<std::size_t>(
-                            next[index].peg_anchor->value())],
-                    true,
-                });
+            next_pegs.push_back(PegRuntime{
+                EconomyId(static_cast<std::uint64_t>(index)),
+                *next[index].peg_anchor,
+                rules_.initial_peg_reserves,
+                0.0,
+                rates_.log_rates[index] - rates_.log_rates[static_cast<std::size_t>(
+                                              next[index].peg_anchor->value())],
+                true,
+            });
         }
     }
     external_policies_ = std::move(next);
@@ -473,11 +633,18 @@ Status M9World::schedule_shock(const ShockSpec &shock) {
     if (!status.ok()) {
         return status;
     }
-    const auto position =
-        std::lower_bound(shocks_.begin(), shocks_.end(), shock.id,
-                         [](const ShockSpec &candidate, std::uint64_t id) {
-                             return candidate.id < id;
-                         });
+    if (shock.start.value() < tick_.value()) {
+        return Status(ErrorCode::invalid_argument,
+                      "cannot schedule a shock in the past");
+    }
+    const Tick announcement = shock.announcement.value_or(shock.start);
+    if (announcement.value() < tick_.value()) {
+        return Status(ErrorCode::invalid_argument,
+                      "cannot backdate a shock announcement");
+    }
+    const auto position = std::lower_bound(
+        shocks_.begin(), shocks_.end(), shock.id,
+        [](const ShockSpec &candidate, std::uint64_t id) { return candidate.id < id; });
     if (position != shocks_.end() && position->id == shock.id) {
         return Status(ErrorCode::already_exists, "duplicate shock ID");
     }
@@ -486,23 +653,19 @@ Status M9World::schedule_shock(const ShockSpec &shock) {
 }
 
 bool M9World::sanctioned(std::size_t first, std::size_t second) const noexcept {
-    if (first >= external_policies_.size() ||
-        second >= external_policies_.size()) {
+    if (first >= external_policies_.size() || second >= external_policies_.size()) {
         return true;
     }
     const auto first_target = EconomyId(static_cast<std::uint64_t>(second));
     const auto second_target = EconomyId(static_cast<std::uint64_t>(first));
-    return contains_id(external_policies_[first].sanctions_imposed_on,
-                       first_target) ||
-           contains_id(external_policies_[second].sanctions_imposed_on,
-                       second_target);
+    return contains_id(external_policies_[first].sanctions_imposed_on, first_target) ||
+           contains_id(external_policies_[second].sanctions_imposed_on, second_target);
 }
 
 Result<M9AdvanceResult> M9World::advance(std::uint64_t count,
-                                        const M9AdvanceOptions &options) {
+                                         const M9AdvanceOptions &options) {
     if (!valid_fault(options.fault_point) || options.worker_count == 0U ||
-        (!options.domestic.empty() &&
-         options.domestic.size() != economies_.size())) {
+        (!options.domestic.empty() && options.domestic.size() != economies_.size())) {
         return Status(ErrorCode::invalid_argument, "invalid M9 advance options");
     }
     const Tick first = tick_;
@@ -513,11 +676,7 @@ Result<M9AdvanceResult> M9World::advance(std::uint64_t count,
         }
     }
     return M9AdvanceResult{
-        first,
-        tick_,
-        count,
-        last_metrics_,
-        digest(),
+        first, tick_, count, last_metrics_, digest(),
     };
 }
 
@@ -528,10 +687,62 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     staged.last_metrics_.domestic.resize(count);
     staged.last_metrics_.external.resize(count);
     staged.trade_reservations_.clear();
+    const std::uint64_t opening_event_counter = staged.event_counter_;
+
+    std::vector<std::uint64_t> next_active;
+    for (const auto &shock : staged.shocks_) {
+        const Tick announcement = shock.announcement.value_or(shock.start);
+        if (announcement == staged.tick_ &&
+            !std::binary_search(staged.announced_shock_ids_.begin(),
+                                staged.announced_shock_ids_.end(), shock.id)) {
+            staged.shock_events_.push_back({staged.event_counter_++,
+                                            ShockEventType::announced, staged.tick_,
+                                            shock.id, 0.0});
+            staged.announced_shock_ids_.push_back(shock.id);
+        }
+        if (shock.kind != ShockKind::capital_destruction &&
+            shock_progress(shock, staged.tick_) > 0.0) {
+            next_active.push_back(shock.id);
+        }
+    }
+    std::sort(staged.announced_shock_ids_.begin(), staged.announced_shock_ids_.end());
+    for (const auto shock_id : staged.active_shock_ids_) {
+        if (!std::binary_search(next_active.begin(), next_active.end(), shock_id)) {
+            staged.shock_events_.push_back({staged.event_counter_++,
+                                            ShockEventType::ended, staged.tick_,
+                                            shock_id, 0.0});
+        }
+    }
+    for (const auto shock_id : next_active) {
+        if (!std::binary_search(staged.active_shock_ids_.begin(),
+                                staged.active_shock_ids_.end(), shock_id)) {
+            const auto found = std::lower_bound(
+                staged.shocks_.begin(), staged.shocks_.end(), shock_id,
+                [](const ShockSpec &shock, std::uint64_t id) { return shock.id < id; });
+            const double intensity = found == staged.shocks_.end()
+                                         ? 0.0
+                                         : shock_progress(*found, staged.tick_);
+            staged.shock_events_.push_back({staged.event_counter_++,
+                                            ShockEventType::started, staged.tick_,
+                                            shock_id, intensity});
+        }
+    }
+    staged.active_shock_ids_ = std::move(next_active);
+    for (const auto &shock : staged.shocks_) {
+        if (shock.kind == ShockKind::capital_destruction &&
+            shock.start == staged.tick_ &&
+            !std::binary_search(staged.realized_shock_ids_.begin(),
+                                staged.realized_shock_ids_.end(), shock.id)) {
+            staged.shock_events_.push_back({staged.event_counter_++,
+                                            ShockEventType::realized, staged.tick_,
+                                            shock.id, 1.0});
+            staged.realized_shock_ids_.push_back(shock.id);
+        }
+    }
+    std::sort(staged.realized_shock_ids_.begin(), staged.realized_shock_ids_.end());
 
     if (options.fault_point == M9FaultPoint::after_policy_barrier) {
-        return Status(ErrorCode::internal_error,
-                      "injected M9 policy barrier fault");
+        return Status(ErrorCode::internal_error, "injected M9 policy barrier fault");
     }
 
     std::vector<double> opening_rates(count, 1.0);
@@ -546,26 +757,62 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     std::vector<std::uint64_t> active_shocks(count, 0U);
     for (std::size_t index = 0; index < count; ++index) {
         for (const auto &shock : staged.shocks_) {
-            if ((!shock.economy.has_value() ||
-                 shock.economy->value() == index) &&
+            if ((!shock.economy.has_value() || shock.economy->value() == index) &&
                 shock_progress(shock, staged.tick_) > 0.0) {
                 ++active_shocks[index];
             }
         }
-        import_factor[index] =
-            shock_factor(staged.shocks_, ShockKind::import_capacity, index,
-                         staged.tick_);
-        export_factor[index] =
-            shock_factor(staged.shocks_, ShockKind::export_capacity, index,
-                         staged.tick_);
+        import_factor[index] = shock_factor(staged.shocks_, ShockKind::import_capacity,
+                                            index, staged.tick_, std::nullopt);
+        export_factor[index] = shock_factor(staged.shocks_, ShockKind::export_capacity,
+                                            index, staged.tick_, std::nullopt);
+    }
+
+    for (std::size_t index = 0; index < count; ++index) {
+        auto &economy = staged.economies_[index];
+        economy.root.firms.for_each_alive([&](FirmId, core::FirmComponent &firm) {
+            const ShockSector sector =
+                firm.sector == core::FirmSector::construction
+                    ? ShockSector::housing
+                    : static_cast<ShockSector>(static_cast<std::uint8_t>(firm.sector));
+            double survival = 1.0;
+            for (const auto &shock : staged.shocks_) {
+                if (shock.kind != ShockKind::capital_destruction ||
+                    shock.start != staged.tick_ ||
+                    (shock.economy.has_value() && shock.economy->value() != index) ||
+                    (shock.sector.has_value() && *shock.sector != sector)) {
+                    continue;
+                }
+                survival *= 1.0 - shock.magnitude;
+            }
+            const double opening = firm.physical_capital.value();
+            const double closing = std::max(0.0, opening * survival);
+            firm.physical_capital = Capital(closing);
+            staged.last_metrics_.external[index].capital_destroyed += opening - closing;
+        });
+        double public_survival = 1.0;
+        for (const auto &shock : staged.shocks_) {
+            if (shock.kind != ShockKind::capital_destruction ||
+                shock.start != staged.tick_ ||
+                (shock.economy.has_value() && shock.economy->value() != index) ||
+                (shock.sector.has_value() &&
+                 *shock.sector != ShockSector::public_sector)) {
+                continue;
+            }
+            public_survival *= 1.0 - shock.magnitude;
+        }
+        const double opening_public = economy.real_economy.public_capital;
+        economy.real_economy.public_capital =
+            std::max(0.0, opening_public * public_survival);
+        staged.last_metrics_.external[index].capital_destroyed +=
+            opening_public - economy.real_economy.public_capital;
     }
 
     if (staged.rules_.trade && count > 1U) {
         std::vector<double> export_remaining(count, 0.0);
         for (std::size_t source = 0; source < count; ++source) {
             staged.economies_[source].root.firms.for_each_alive(
-                [&export_remaining, source](FirmId,
-                                            const core::FirmComponent &firm) {
+                [&export_remaining, source](FirmId, const core::FirmComponent &firm) {
                     if (firm.sector == core::FirmSector::consumption) {
                         export_remaining[source] +=
                             clamp_nonnegative(firm.goods_inventory.value());
@@ -600,12 +847,10 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             }
             double capacity =
                 staged.rules_.fx_trade_cap *
-                std::max(1.0,
-                         country_output(
-                             staged.economies_[importer].domestic.last_metrics));
+                std::max(1.0, country_output(
+                                  staged.economies_[importer].domestic.last_metrics));
             capacity *= import_factor[importer];
-            const auto quota =
-                staged.external_policies_[importer].import_quota;
+            const auto quota = staged.external_policies_[importer].import_quota;
             if (quota.has_value()) {
                 capacity *= *quota;
             }
@@ -624,8 +869,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 });
             std::sort(candidates.begin(), candidates.end(),
                       [](const auto &left, const auto &right) {
-                          if (left.second->posted_price !=
-                              right.second->posted_price) {
+                          if (left.second->posted_price != right.second->posted_price) {
                               return left.second->posted_price <
                                      right.second->posted_price;
                           }
@@ -640,8 +884,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 const double delivered = shipped / iceberg;
                 const double source_value =
                     shipped * firm->posted_price.value() *
-                    (1.0 - staged.external_policies_[best_source]
-                               .export_subsidy);
+                    (1.0 - staged.external_policies_[best_source].export_subsidy);
                 const double importer_basic =
                     source_value *
                     staged.rates_.bilateral(
@@ -649,20 +892,17 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                         EconomyId(static_cast<std::uint64_t>(best_source))) /
                     (1.0 - staged.rules_.fx_spread);
                 const double importer_value =
-                    importer_basic *
-                    (1.0 + staged.external_policies_[importer].tariff);
-                firm->goods_inventory =
-                    Goods(firm->goods_inventory.value() - shipped);
-                staged.trade_reservations_.push_back(
-                    TradeReservation{
-                        EconomyId(static_cast<std::uint64_t>(importer)),
-                        EconomyId(static_cast<std::uint64_t>(best_source)),
-                        firm_id,
-                        shipped,
-                        delivered,
-                        firm->posted_price.value(),
-                        importer_value,
-                    });
+                    importer_basic * (1.0 + staged.external_policies_[importer].tariff);
+                firm->goods_inventory = Goods(firm->goods_inventory.value() - shipped);
+                staged.trade_reservations_.push_back(TradeReservation{
+                    EconomyId(static_cast<std::uint64_t>(importer)),
+                    EconomyId(static_cast<std::uint64_t>(best_source)),
+                    firm_id,
+                    shipped,
+                    delivered,
+                    firm->posted_price.value(),
+                    importer_value,
+                });
                 shipped_need -= shipped;
                 export_remaining[best_source] -= shipped;
             }
@@ -670,36 +910,73 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     }
 
     if (options.fault_point == M9FaultPoint::after_trade_reservation) {
-        return Status(ErrorCode::internal_error,
-                      "injected M9 trade reservation fault");
+        return Status(ErrorCode::internal_error, "injected M9 trade reservation fault");
     }
 
+    std::vector<double> reserved_import_units(count, 0.0);
+    std::vector<double> reserved_import_value(count, 0.0);
+    for (const auto &reservation : staged.trade_reservations_) {
+        const auto importer = static_cast<std::size_t>(reservation.importer.value());
+        reserved_import_units[importer] += reservation.delivered_units;
+        reserved_import_value[importer] += reservation.importer_value;
+    }
+    std::vector<double> realized_import_units(count, 0.0);
+    std::vector<double> realized_import_value(count, 0.0);
     for (std::size_t index = 0; index < count; ++index) {
         auto domestic_options =
-            options.domestic.empty() ? M8AdvanceOptions{}
-                                     : options.domestic[index];
+            options.domestic.empty() ? M8AdvanceOptions{} : options.domestic[index];
         const double energy_capacity =
             shock_factor(staged.shocks_, ShockKind::energy_capacity, index,
-                         staged.tick_);
-        const double labor_availability =
+                         staged.tick_, ShockSector::energy);
+        const double labor_energy =
             shock_factor(staged.shocks_, ShockKind::labor_availability, index,
-                         staged.tick_);
+                         staged.tick_, ShockSector::energy);
+        const double productivity_energy =
+            shock_factor(staged.shocks_, ShockKind::productivity, index, staged.tick_,
+                         ShockSector::energy);
         const double household_demand =
             shock_factor(staged.shocks_, ShockKind::household_demand, index,
-                         staged.tick_);
+                         staged.tick_, std::nullopt);
+        const double credit_supply =
+            shock_factor(staged.shocks_, ShockKind::credit_supply, index, staged.tick_,
+                         std::nullopt);
         auto energy_input = staged.economies_[index].domestic.energy_input;
         energy_input.capacity_multiplier *= energy_capacity;
-        energy_input.labor_availability_multiplier *= labor_availability;
-        energy_input.household_demand_multiplier *= household_demand;
+        energy_input.labor_availability_multiplier *= labor_energy;
+        energy_input.supply_multiplier *= productivity_energy;
         domestic_options.energy_input = energy_input;
 
-        const double productivity =
-            shock_factor(staged.shocks_, ShockKind::productivity, index,
-                         staged.tick_);
-        staged.economies_[index].real_economy.technology_index *= productivity;
+        auto housing_input = staged.economies_[index].domestic.housing_input;
+        housing_input.construction_productivity_multiplier *=
+            shock_factor(staged.shocks_, ShockKind::productivity, index, staged.tick_,
+                         ShockSector::housing) *
+            shock_factor(staged.shocks_, ShockKind::labor_availability, index,
+                         staged.tick_, ShockSector::housing);
+        domestic_options.housing_input = housing_input;
+
+        auto &m4_options = domestic_options.base.base.base.base;
+        m4_options.household_demand_multiplier *= household_demand;
+        if (reserved_import_units[index] > kEpsilon) {
+            m4_options.external_goods_offer = M4ExternalGoodsOffer{
+                std::numeric_limits<std::uint64_t>::max() -
+                    static_cast<std::uint64_t>(index),
+                staged.economies_[index].root.institutions.dealer_account,
+                reserved_import_units[index],
+                reserved_import_value[index] / reserved_import_units[index],
+            };
+        }
+        for (const auto sector : {ShockSector::consumption, ShockSector::capital}) {
+            const auto slot =
+                static_cast<std::size_t>(static_cast<std::uint8_t>(sector));
+            m4_options.productivity_multipliers[slot] *= shock_factor(
+                staged.shocks_, ShockKind::productivity, index, staged.tick_, sector);
+            m4_options.labor_availability_multipliers[slot] *=
+                shock_factor(staged.shocks_, ShockKind::labor_availability, index,
+                             staged.tick_, sector);
+        }
+        domestic_options.base.base.base.credit_supply_multiplier *= credit_supply;
         auto result = advance_m8_ticks(
-            staged.economies_[index].root,
-            staged.economies_[index].real_economy,
+            staged.economies_[index].root, staged.economies_[index].real_economy,
             staged.economies_[index].real_economy_scratch,
             staged.economies_[index].monetary,
             staged.economies_[index].monetary_scratch,
@@ -708,24 +985,55 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             staged.economies_[index].population,
             staged.economies_[index].population_scratch,
             staged.economies_[index].domestic,
-            staged.economies_[index].domestic_scratch,
-            staged.economies_[index].tick, 1U, domestic_options);
+            staged.economies_[index].domestic_scratch, staged.economies_[index].tick,
+            1U, domestic_options);
         if (!result.ok()) {
             return result.status();
         }
-        if (productivity > kEpsilon) {
-            staged.economies_[index].real_economy.technology_index /=
-                productivity;
-        }
         staged.last_metrics_.domestic[index] = result.get_if()->metrics;
-        staged.last_metrics_.external[index].active_shocks =
-            active_shocks[index];
+        realized_import_units[index] =
+            staged.economies_[index].real_economy_scratch.external_goods_units_;
+        realized_import_value[index] =
+            staged.economies_[index].real_economy_scratch.external_goods_value_;
+        staged.last_metrics_.external[index].active_shocks = active_shocks[index];
     }
 
     if (options.fault_point == M9FaultPoint::after_domestic_advance) {
-        return Status(ErrorCode::internal_error,
-                      "injected M9 domestic advance fault");
+        return Status(ErrorCode::internal_error, "injected M9 domestic advance fault");
     }
+
+    std::vector<double> import_fill(count, 0.0);
+    for (std::size_t importer = 0; importer < count; ++importer) {
+        if (reserved_import_units[importer] <= kEpsilon) {
+            continue;
+        }
+        if (realized_import_units[importer] >
+            reserved_import_units[importer] + kTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "realized imports exceed reserved supply");
+        }
+        import_fill[importer] = std::clamp(realized_import_units[importer] /
+                                               reserved_import_units[importer],
+                                           0.0, 1.0);
+        const double expected_value =
+            reserved_import_value[importer] * import_fill[importer];
+        const double value_tolerance = kTolerance * std::max(1.0, expected_value);
+        if (std::abs(realized_import_value[importer] - expected_value) >
+            value_tolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "realized import value does not match market fill");
+        }
+    }
+
+    std::vector<std::vector<core::TransferCommand>> settlement_commands(count);
+    auto append_transfer = [&settlement_commands](std::size_t economy, AccountId source,
+                                                  AccountId destination,
+                                                  double amount) {
+        if (amount > kEpsilon) {
+            settlement_commands[economy].push_back(
+                core::TransferCommand{source, destination, Money(amount)});
+        }
+    };
 
     double declared_spread = 0.0;
     for (const auto &reservation : staged.trade_reservations_) {
@@ -733,72 +1041,116 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             static_cast<std::size_t>(reservation.importer.value());
         const std::size_t exporter =
             static_cast<std::size_t>(reservation.exporter.value());
-        const double tariff_rate =
-            staged.external_policies_[importer].tariff;
-        const double importer_basic =
-            reservation.importer_value / (1.0 + tariff_rate);
-        const double tariff =
-            reservation.importer_value - importer_basic;
+        const double fill = import_fill[importer];
+        const double shipped_units = reservation.shipped_units * fill;
+        const double delivered_units = reservation.delivered_units * fill;
+        const double returned_units = reservation.shipped_units - shipped_units;
+        auto *firm = staged.economies_[exporter].root.firms.get(reservation.firm);
+        if (firm == nullptr) {
+            return Status(ErrorCode::invariant_violation,
+                          "reserved export firm no longer exists");
+        }
+        firm->goods_inventory = Goods(firm->goods_inventory.value() + returned_units);
+        firm->sales_previous += shipped_units;
+        if (shipped_units <= kEpsilon) {
+            continue;
+        }
+
+        const double tariff_rate = staged.external_policies_[importer].tariff;
+        const double importer_value = reservation.importer_value * fill;
+        const double importer_basic = importer_value / (1.0 + tariff_rate);
+        const double tariff = importer_value - importer_basic;
         const double exporter_basic =
-            reservation.shipped_units * reservation.source_price *
-            (1.0 -
-             staged.external_policies_[exporter].export_subsidy);
-        const double subsidy =
-            reservation.shipped_units * reservation.source_price *
-            staged.external_policies_[exporter].export_subsidy;
+            shipped_units * reservation.source_price *
+            (1.0 - staged.external_policies_[exporter].export_subsidy);
+        const double subsidy = shipped_units * reservation.source_price *
+                               staged.external_policies_[exporter].export_subsidy;
+
+        const auto importer_dealer =
+            staged.economies_[importer].root.institutions.dealer_account;
+        const auto importer_treasury =
+            staged.economies_[importer].root.institutions.treasury_account;
+        if (tariff > kEpsilon) {
+            append_transfer(importer, importer_dealer, importer_treasury, tariff);
+        } else if (tariff < -kEpsilon) {
+            append_transfer(importer, importer_treasury, importer_dealer, -tariff);
+        }
+
+        const auto exporter_dealer =
+            staged.economies_[exporter].root.institutions.dealer_account;
+        const auto exporter_treasury =
+            staged.economies_[exporter].root.institutions.treasury_account;
+        append_transfer(exporter, exporter_dealer, firm->primary_account,
+                        exporter_basic);
+        if (subsidy > kEpsilon) {
+            append_transfer(exporter, exporter_treasury, firm->primary_account,
+                            subsidy);
+        } else if (subsidy < -kEpsilon) {
+            append_transfer(exporter, firm->primary_account, exporter_treasury,
+                            -subsidy);
+        }
+
         staged.dealer_inventory_[importer] += importer_basic;
         staged.dealer_inventory_[exporter] -= exporter_basic;
         declared_spread +=
-            staged.rates_.to_numeraire(importer_basic,
-                                       reservation.importer) -
-            staged.rates_.to_numeraire(exporter_basic,
-                                       reservation.exporter);
+            staged.rates_.to_numeraire(importer_basic, reservation.importer) -
+            staged.rates_.to_numeraire(exporter_basic, reservation.exporter);
 
         auto &import_metrics = staged.last_metrics_.external[importer];
         auto &export_metrics = staged.last_metrics_.external[exporter];
-        import_metrics.imports_value += reservation.importer_value;
-        import_metrics.imports_volume += reservation.delivered_units;
+        import_metrics.imports_value += importer_value;
+        import_metrics.imports_volume += delivered_units;
         import_metrics.tariff_revenue += tariff;
         export_metrics.exports_value += exporter_basic + subsidy;
-        export_metrics.exports_volume += reservation.shipped_units;
-        export_metrics.iceberg_loss +=
-            reservation.shipped_units - reservation.delivered_units;
+        export_metrics.exports_volume += shipped_units;
+        export_metrics.iceberg_loss += shipped_units - delivered_units;
         export_metrics.export_subsidy_cost += subsidy;
         ++staged.last_metrics_.trade_routes;
     }
+    for (std::size_t economy = 0; economy < count; ++economy) {
+        if (settlement_commands[economy].empty()) {
+            continue;
+        }
+        core::SettlementTransaction transaction(staged.economies_[economy].root);
+        for (const auto &command : settlement_commands[economy]) {
+            auto status = transaction.transfer(command.source, command.destination,
+                                               command.amount);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        auto receipt = transaction.commit();
+        if (!receipt.ok()) {
+            return receipt.status();
+        }
+    }
+    staged.trade_reservations_.clear();
 
     if (staged.rules_.capital && count > 1U) {
         const auto opening_principal = staged.external_principal_;
         for (std::size_t debtor = 0; debtor < count; ++debtor) {
             for (std::size_t creditor = 0; creditor < count; ++creditor) {
-                if (debtor == creditor ||
-                    staged.sanctioned(debtor, creditor)) {
+                if (debtor == creditor || staged.sanctioned(debtor, creditor)) {
                     continue;
                 }
-                const double annual_rate =
-                    std::max(0.0,
-                             policy_rate(staged.economies_[debtor]
-                                             .domestic.last_metrics));
-                const double due =
-                    opening_principal[debtor][creditor] * annual_rate /
-                    staged.rules_.periods_per_year +
-                    staged.interest_arrears_[debtor][creditor];
-                const double fraction =
-                    staged.external_policies_[debtor]
-                        .external_interest_settlement_fraction;
+                const double annual_rate = std::max(
+                    0.0, policy_rate(staged.economies_[debtor].domestic.last_metrics));
+                const double due = opening_principal[debtor][creditor] * annual_rate /
+                                       staged.rules_.periods_per_year +
+                                   staged.interest_arrears_[debtor][creditor];
+                const double fraction = staged.external_policies_[debtor]
+                                            .external_interest_settlement_fraction;
                 const double cash = due * fraction;
                 staged.interest_arrears_[debtor][creditor] = due - cash;
                 staged.dealer_inventory_[debtor] += cash;
                 const double creditor_cash =
-                    cash /
-                    staged.rates_.bilateral(
-                        EconomyId(static_cast<std::uint64_t>(debtor)),
-                        EconomyId(static_cast<std::uint64_t>(creditor)));
+                    cash / staged.rates_.bilateral(
+                               EconomyId(static_cast<std::uint64_t>(debtor)),
+                               EconomyId(static_cast<std::uint64_t>(creditor)));
                 staged.dealer_inventory_[creditor] -= creditor_cash;
-                staged.last_metrics_.external[debtor]
-                    .factor_income_accrued -= due;
-                staged.last_metrics_.external[creditor]
-                    .factor_income_accrued += creditor_cash;
+                staged.last_metrics_.external[debtor].factor_income_accrued -= due;
+                staged.last_metrics_.external[creditor].factor_income_accrued +=
+                    creditor_cash;
                 staged.last_metrics_.external[debtor].factor_income_cash -= cash;
                 staged.last_metrics_.external[creditor].factor_income_cash +=
                     creditor_cash;
@@ -811,13 +1163,11 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             const double investor_rate =
                 policy_rate(staged.economies_[investor].domestic.last_metrics);
             for (std::size_t debtor = 0; debtor < count; ++debtor) {
-                if (debtor == investor ||
-                    staged.sanctioned(debtor, investor)) {
+                if (debtor == investor || staged.sanctioned(debtor, investor)) {
                     continue;
                 }
                 const double gap =
-                    policy_rate(
-                        staged.economies_[debtor].domestic.last_metrics) -
+                    policy_rate(staged.economies_[debtor].domestic.last_metrics) -
                     investor_rate;
                 if (gap > best_gap) {
                     best_gap = gap;
@@ -828,26 +1178,21 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 continue;
             }
             const double openness =
-                (1.0 -
-                 staged.external_policies_[investor].capital_control) *
-                (1.0 -
-                 staged.external_policies_[best_debtor].capital_control);
+                (1.0 - staged.external_policies_[investor].capital_control) *
+                (1.0 - staged.external_policies_[best_debtor].capital_control);
             const double flow =
-                staged.rules_.capital_mobility *
-                staged.rules_.capital_adjustment * openness * best_gap *
-                std::max(1.0,
-                         country_output(staged.economies_[investor]
-                                            .domestic.last_metrics));
+                staged.rules_.capital_mobility * staged.rules_.capital_adjustment *
+                openness * best_gap *
+                std::max(1.0, country_output(
+                                  staged.economies_[investor].domestic.last_metrics));
             staged.external_principal_[best_debtor][investor] += flow;
             staged.dealer_inventory_[investor] += flow;
             const double debtor_cash =
-                flow *
-                staged.rates_.bilateral(
-                    EconomyId(static_cast<std::uint64_t>(best_debtor)),
-                    EconomyId(static_cast<std::uint64_t>(investor)));
+                flow * staged.rates_.bilateral(
+                           EconomyId(static_cast<std::uint64_t>(best_debtor)),
+                           EconomyId(static_cast<std::uint64_t>(investor)));
             staged.dealer_inventory_[best_debtor] -= debtor_cash;
-            staged.last_metrics_.external[best_debtor].capital_flow +=
-                debtor_cash;
+            staged.last_metrics_.external[best_debtor].capital_flow += debtor_cash;
             staged.last_metrics_.external[investor].capital_flow -= flow;
         }
     }
@@ -873,13 +1218,11 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             std::size_t host = count;
             double best_gap = 0.0;
             for (std::size_t candidate = 0; candidate < count; ++candidate) {
-                if (candidate == origin ||
-                    staged.sanctioned(origin, candidate)) {
+                if (candidate == origin || staged.sanctioned(origin, candidate)) {
                     continue;
                 }
-                const double gap =
-                    staged.smoothed_real_wages_[candidate] -
-                    staged.smoothed_real_wages_[origin];
+                const double gap = staged.smoothed_real_wages_[candidate] -
+                                   staged.smoothed_real_wages_[origin];
                 if (gap > best_gap) {
                     best_gap = gap;
                     host = candidate;
@@ -892,10 +1235,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 host = origin == 0U ? 1U : 0U;
             }
             const double population = static_cast<double>(
-                staged.economies_[origin].domestic.last_metrics.economy
-                    .population);
-            double flow = staged.rules_.migration_rate *
-                          std::max(0.0, best_gap) *
+                staged.economies_[origin].domestic.last_metrics.economy.population);
+            double flow = staged.rules_.migration_rate * std::max(0.0, best_gap) *
                           std::max(1.0, population);
             const auto emigration_cap =
                 staged.external_policies_[origin].emigration_cap;
@@ -906,23 +1247,18 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 staged.external_policies_[host].immigration_cap;
             if (immigration_cap.has_value()) {
                 const double host_population = static_cast<double>(
-                    staged.economies_[host].domestic.last_metrics.economy
-                        .population);
+                    staged.economies_[host].domestic.last_metrics.economy.population);
                 flow = std::min(flow, *immigration_cap * host_population);
             }
             const double max_stock =
                 staged.rules_.migration_max_share * std::max(1.0, population);
-            flow = std::min(flow,
-                            std::max(0.0,
-                                     max_stock -
-                                         opening_origin_stock[origin]));
+            flow =
+                std::min(flow, std::max(0.0, max_stock - opening_origin_stock[origin]));
             const double return_flow =
                 std::min(opening_origin_stock[origin],
-                         staged.external_policies_[origin]
-                                 .guest_worker_return *
+                         staged.external_policies_[origin].guest_worker_return *
                              opening_origin_stock[origin]);
-            const double stock =
-                opening_origin_stock[origin] + flow - return_flow;
+            const double stock = opening_origin_stock[origin] + flow - return_flow;
             const double host_wage =
                 country_wage(staged.economies_[host].domestic.last_metrics);
             const double remittance_gross =
@@ -932,35 +1268,30 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 staged.external_policies_[host].outward_remittance_tax;
             const double after_host_tax = remittance_gross - outward_tax;
             const double inbound_tax =
-                after_host_tax *
-                staged.external_policies_[origin].remittance_tax;
+                after_host_tax * staged.external_policies_[origin].remittance_tax;
             const double remittance_net = after_host_tax - inbound_tax;
             staged.dealer_inventory_[host] += after_host_tax;
             const double origin_payout =
                 remittance_net *
-                staged.rates_.bilateral(
-                    EconomyId(static_cast<std::uint64_t>(origin)),
-                    EconomyId(static_cast<std::uint64_t>(host))) *
+                staged.rates_.bilateral(EconomyId(static_cast<std::uint64_t>(origin)),
+                                        EconomyId(static_cast<std::uint64_t>(host))) *
                 (1.0 - staged.rules_.fx_spread);
             staged.dealer_inventory_[origin] -= origin_payout;
             declared_spread +=
-                staged.rates_.to_numeraire(after_host_tax,
-                                           EconomyId(static_cast<std::uint64_t>(
-                                               host))) -
-                staged.rates_.to_numeraire(origin_payout,
-                                           EconomyId(static_cast<std::uint64_t>(
-                                               origin)));
-            next_routes.push_back(
-                MigrationRoute{
-                    EconomyId(static_cast<std::uint64_t>(origin)),
-                    EconomyId(static_cast<std::uint64_t>(host)),
-                    stock,
-                    best_gap,
-                    flow,
-                    return_flow,
-                    remittance_gross,
-                    remittance_net,
-                });
+                staged.rates_.to_numeraire(
+                    after_host_tax, EconomyId(static_cast<std::uint64_t>(host))) -
+                staged.rates_.to_numeraire(
+                    origin_payout, EconomyId(static_cast<std::uint64_t>(origin)));
+            next_routes.push_back(MigrationRoute{
+                EconomyId(static_cast<std::uint64_t>(origin)),
+                EconomyId(static_cast<std::uint64_t>(host)),
+                stock,
+                best_gap,
+                flow,
+                return_flow,
+                remittance_gross,
+                remittance_net,
+            });
             auto &origin_metrics = staged.last_metrics_.external[origin];
             auto &host_metrics = staged.last_metrics_.external[host];
             origin_metrics.migrant_stock_abroad += stock;
@@ -977,35 +1308,29 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     std::vector<double> grope_signal(count, 0.0);
     double inventory_scale = 1.0;
     for (std::size_t index = 0; index < count; ++index) {
-        inventory_scale += std::abs(staged.dealer_inventory_[index]) /
-                           opening_rates[index];
+        inventory_scale +=
+            std::abs(staged.dealer_inventory_[index]) / opening_rates[index];
     }
     for (std::size_t index = 0; index < count; ++index) {
         grope_signal[index] =
-            staged.dealer_inventory_[index] / opening_rates[index] /
-            inventory_scale;
+            staged.dealer_inventory_[index] / opening_rates[index] / inventory_scale;
         staged.rates_.log_rates[index] +=
             staged.rules_.fx_adjustment * grope_signal[index];
     }
     staged.rates_.normalize();
 
     for (auto &peg : staged.pegs_) {
-        const std::size_t pegger =
-            static_cast<std::size_t>(peg.pegger.value());
-        const std::size_t anchor =
-            static_cast<std::size_t>(peg.anchor.value());
+        const std::size_t pegger = static_cast<std::size_t>(peg.pegger.value());
+        const std::size_t anchor = static_cast<std::size_t>(peg.anchor.value());
         const double floated_spread =
-            staged.rates_.log_rates[pegger] -
-            staged.rates_.log_rates[anchor];
+            staged.rates_.log_rates[pegger] - staged.rates_.log_rates[anchor];
         const double pressure = floated_spread - peg.target_log_spread;
         const double reserve_need =
-            std::abs(pressure) *
-            staged.external_policies_[pegger].peg_reserve_scale;
+            std::abs(pressure) * staged.external_policies_[pegger].peg_reserve_scale;
         const double defense = std::min(peg.reserves, reserve_need);
         if (reserve_need > kEpsilon) {
             const double defended_share = defense / reserve_need;
-            staged.rates_.log_rates[pegger] -=
-                pressure * defended_share;
+            staged.rates_.log_rates[pegger] -= pressure * defended_share;
             peg.pressure += pressure * (1.0 - defended_share);
             peg.reserves -= defense;
         }
@@ -1022,8 +1347,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     }
     double valuation = 0.0;
     for (std::size_t index = 0; index < count; ++index) {
-        const double closing_rate = staged.rates_.rate(
-            EconomyId(static_cast<std::uint64_t>(index)));
+        const double closing_rate =
+            staged.rates_.rate(EconomyId(static_cast<std::uint64_t>(index)));
         valuation += staged.dealer_inventory_[index] *
                      (1.0 / closing_rate - 1.0 / opening_rates[index]);
     }
@@ -1031,20 +1356,20 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
 
     for (std::size_t index = 0; index < count; ++index) {
         auto &metrics = staged.last_metrics_.external[index];
-        metrics.exchange_rate = staged.rates_.rate(
-            EconomyId(static_cast<std::uint64_t>(index)));
-        metrics.current_account =
-            metrics.exports_value - metrics.imports_value +
-            metrics.factor_income_accrued + metrics.remittances_received -
-            metrics.remittances_sent;
+        metrics.exchange_rate =
+            staged.rates_.rate(EconomyId(static_cast<std::uint64_t>(index)));
+        metrics.current_account = metrics.exports_value - metrics.imports_value +
+                                  metrics.factor_income_accrued +
+                                  metrics.remittances_received -
+                                  metrics.remittances_sent;
         double assets = 0.0;
         double liabilities = 0.0;
         double arrears = 0.0;
         for (std::size_t other = 0; other < count; ++other) {
-            assets += staged.external_principal_[other][index] /
-                      staged.rates_.bilateral(
-                          EconomyId(static_cast<std::uint64_t>(index)),
-                          EconomyId(static_cast<std::uint64_t>(other)));
+            assets +=
+                staged.external_principal_[other][index] /
+                staged.rates_.bilateral(EconomyId(static_cast<std::uint64_t>(index)),
+                                        EconomyId(static_cast<std::uint64_t>(other)));
             liabilities += staged.external_principal_[index][other];
             arrears += staged.interest_arrears_[index][other];
         }
@@ -1052,8 +1377,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         metrics.factor_income_arrears = arrears;
     }
     for (const auto &peg : staged.pegs_) {
-        staged.last_metrics_
-            .external[static_cast<std::size_t>(peg.pegger.value())]
+        staged.last_metrics_.external[static_cast<std::size_t>(peg.pegger.value())]
             .peg_reserves = peg.reserves;
     }
     staged.last_metrics_.dealer_flow = flow;
@@ -1062,10 +1386,9 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     staged.last_metrics_.world_nfa = 0.0;
     for (const auto &metrics : staged.last_metrics_.external) {
         staged.last_metrics_.world_nfa += metrics.net_foreign_assets;
-        staged.last_metrics_.shock_events += metrics.active_shocks;
     }
+    staged.last_metrics_.shock_events = staged.event_counter_ - opening_event_counter;
 
-    ++staged.event_counter_;
     staged.tick_ = Tick(staged.tick_.value() + 1U);
 
     auto validation = staged.validate();
@@ -1073,8 +1396,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         return validation;
     }
     if (options.fault_point == M9FaultPoint::before_world_commit) {
-        return Status(ErrorCode::internal_error,
-                      "injected M9 pre-commit fault");
+        return Status(ErrorCode::internal_error, "injected M9 pre-commit fault");
     }
     *this = std::move(staged);
     return Status::success();
@@ -1098,17 +1420,52 @@ Status M9World::validate() const noexcept {
     if (!policy_status.ok()) {
         return policy_status;
     }
+    for (std::size_t index = 0; index < shocks_.size(); ++index) {
+        const auto status = validate_shock_spec(shocks_[index], economies_.size());
+        if (!status.ok() ||
+            (index > 0U && shocks_[index - 1U].id >= shocks_[index].id)) {
+            return Status(ErrorCode::invariant_violation, "invalid M9 shock tape");
+        }
+    }
+    const auto known_shock = [&](std::uint64_t id) {
+        const auto found =
+            std::lower_bound(shocks_.begin(), shocks_.end(), id,
+                             [](const ShockSpec &shock, std::uint64_t candidate) {
+                                 return shock.id < candidate;
+                             });
+        return found != shocks_.end() && found->id == id;
+    };
+    const auto valid_lifecycle_ids = [&](const std::vector<std::uint64_t> &ids) {
+        if (!std::is_sorted(ids.begin(), ids.end()) ||
+            std::adjacent_find(ids.begin(), ids.end()) != ids.end()) {
+            return false;
+        }
+        return std::all_of(ids.begin(), ids.end(), known_shock);
+    };
+    if (!valid_lifecycle_ids(announced_shock_ids_) ||
+        !valid_lifecycle_ids(active_shock_ids_) ||
+        !valid_lifecycle_ids(realized_shock_ids_) ||
+        event_counter_ != shock_events_.size()) {
+        return Status(ErrorCode::invariant_violation,
+                      "invalid M9 shock lifecycle state");
+    }
+    for (std::size_t index = 0; index < shock_events_.size(); ++index) {
+        const auto &event = shock_events_[index];
+        if (event.sequence != index || !valid_event_type(event.type) ||
+            !finite(event.intensity) || event.intensity < 0.0 ||
+            !known_shock(event.shock_id)) {
+            return Status(ErrorCode::invariant_violation,
+                          "invalid M9 shock event stream");
+        }
+    }
     double mean_log_rate = 0.0;
     for (std::size_t index = 0; index < economies_.size(); ++index) {
-        if (!finite(rates_.log_rates[index]) ||
-            !finite(dealer_inventory_[index]) ||
-            !finite(smoothed_real_wages_[index]) ||
-            smoothed_real_wages_[index] < 0.0 ||
+        if (!finite(rates_.log_rates[index]) || !finite(dealer_inventory_[index]) ||
+            !finite(smoothed_real_wages_[index]) || smoothed_real_wages_[index] < 0.0 ||
             external_principal_[index].size() != economies_.size() ||
             interest_arrears_[index].size() != economies_.size() ||
             economies_[index].tick != tick_) {
-            return Status(ErrorCode::invariant_violation,
-                          "invalid M9 country state");
+            return Status(ErrorCode::invariant_violation, "invalid M9 country state");
         }
         mean_log_rate += rates_.log_rates[index];
         for (std::size_t other = 0; other < economies_.size(); ++other) {
@@ -1123,11 +1480,11 @@ Status M9World::validate() const noexcept {
                               "invalid external contract matrix");
             }
         }
-        auto domestic_status = validate_m8_state(
-            economies_[index].root, economies_[index].real_economy,
-            economies_[index].monetary, economies_[index].financial,
-            economies_[index].population, economies_[index].domestic,
-            economies_[index].tick);
+        auto domestic_status =
+            validate_m8_state(economies_[index].root, economies_[index].real_economy,
+                              economies_[index].monetary, economies_[index].financial,
+                              economies_[index].population, economies_[index].domestic,
+                              economies_[index].tick);
         if (!domestic_status.ok()) {
             return domestic_status;
         }
@@ -1139,12 +1496,10 @@ Status M9World::validate() const noexcept {
     }
     for (const auto &peg : pegs_) {
         if (!valid_economy(peg.pegger, economies_.size()) ||
-            !valid_economy(peg.anchor, economies_.size()) ||
-            peg.pegger == peg.anchor || !finite(peg.reserves) ||
-            peg.reserves < -kTolerance || !finite(peg.pressure) ||
-            !finite(peg.target_log_spread)) {
-            return Status(ErrorCode::invariant_violation,
-                          "invalid peg runtime");
+            !valid_economy(peg.anchor, economies_.size()) || peg.pegger == peg.anchor ||
+            !finite(peg.reserves) || peg.reserves < -kTolerance ||
+            !finite(peg.pressure) || !finite(peg.target_log_spread)) {
+            return Status(ErrorCode::invariant_violation, "invalid peg runtime");
         }
     }
     for (const auto &route : migration_routes_) {
@@ -1153,13 +1508,10 @@ Status M9World::validate() const noexcept {
             route.origin == route.host || !finite(route.stock) ||
             route.stock < -kTolerance || !finite(route.flow) ||
             route.flow < -kTolerance || !finite(route.return_flow) ||
-            route.return_flow < -kTolerance ||
-            !finite(route.remittance_gross) ||
-            route.remittance_gross < -kTolerance ||
-            !finite(route.remittance_net) ||
+            route.return_flow < -kTolerance || !finite(route.remittance_gross) ||
+            route.remittance_gross < -kTolerance || !finite(route.remittance_net) ||
             route.remittance_net < -kTolerance) {
-            return Status(ErrorCode::invariant_violation,
-                          "invalid migration route");
+            return Status(ErrorCode::invariant_violation, "invalid migration route");
         }
     }
     return Status::success();
@@ -1176,10 +1528,8 @@ std::uint64_t M9World::digest() const noexcept {
         hash_mix(hash, external_policies_[index].tariff);
         hash_mix(hash, external_policies_[index].capital_control);
         hash_mix(hash, economies_[index].root.seed);
-        hash_mix(hash,
-                 economies_[index].domestic.energy_event_counter);
-        hash_mix(hash,
-                 economies_[index].domestic.housing_event_counter);
+        hash_mix(hash, economies_[index].domestic.energy_event_counter);
+        hash_mix(hash, economies_[index].domestic.housing_event_counter);
         for (std::size_t other = 0; other < economies_.size(); ++other) {
             hash_mix(hash, external_principal_[index][other]);
             hash_mix(hash, interest_arrears_[index][other]);

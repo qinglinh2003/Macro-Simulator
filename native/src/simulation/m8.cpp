@@ -1686,9 +1686,10 @@ class M8Extension final : public M7TickExtension {
                 return Status(ErrorCode::insufficient_funds,
                               "M8 mortgage LTV is binding");
             }
-            const auto quote = quote_m5_credit(state, real, monetary, monetary_scratch,
-                                               household->primary_account,
-                                               Money(required), Money(ltv_room));
+            const auto quote = quote_m5_credit(
+                state, real, monetary, monetary_scratch, household->primary_account,
+                Money(required), Money(ltv_room),
+                options_.base.base.base.credit_supply_multiplier);
             if (!quote.ok() ||
                 quote.get_if()->principal.value() + kTolerance < required) {
                 return Status(ErrorCode::insufficient_funds,

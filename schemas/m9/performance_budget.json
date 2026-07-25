@@ -1,0 +1,25 @@
+{
+  "absolute_n256_p95_ns": 30000000,
+  "absolute_n256_p95_ns_by_platform": {
+    "darwin": 30000000,
+    "linux": 30000000,
+    "win32": 90000000
+  },
+  "dense_edge_threshold": 256,
+  "maximum_allocations_per_economy_day": 400,
+  "maximum_normalized_64_to_256_scaling": 2.0,
+  "minimum_active_routes_per_day": 1,
+  "p0": {
+    "days": 7,
+    "economies": [
+      2,
+      4,
+      8,
+      16,
+      64,
+      256
+    ],
+    "persons_per_economy": 8
+  },
+  "schema_version": "m9-performance-budget-v1"
+}

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 
 project(
     macro_sim
-    VERSION 0.8.0
+    VERSION 0.9.0
     DESCRIPTION "Native foundation for the macro simulator"
     LANGUAGES C CXX
 )

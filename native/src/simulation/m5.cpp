@@ -308,9 +308,11 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
 [[nodiscard]] double grant_credit(const core::RootState &state, M4TickScratch &real,
                                   M5Runtime &runtime, M5TickScratch &scratch,
                                   AccountId account, double requested,
-                                  double borrower_limit, Tick tick) {
-    const auto quote = quote_m5_credit(state, real, runtime, scratch, account,
-                                       Money(requested), Money(borrower_limit));
+                                  double borrower_limit, Tick tick,
+                                  double credit_supply_multiplier) {
+    const auto quote =
+        quote_m5_credit(state, real, runtime, scratch, account, Money(requested),
+                        Money(borrower_limit), credit_supply_multiplier);
     if (!quote.ok()) {
         return 0.0;
     }
@@ -572,7 +574,8 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
 
 [[nodiscard]] Status run_credit(const core::RootState &state, M4Runtime &real_runtime,
                                 M4TickScratch &real, M5Runtime &runtime,
-                                M5TickScratch &scratch, Tick tick) {
+                                M5TickScratch &scratch, Tick tick,
+                                double credit_supply_multiplier) {
     const double capital_price = real_runtime.rules.initial_capital_price;
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(real.firm_ids_[index]);
@@ -602,7 +605,8 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
             }
         }
         static_cast<void>(grant_credit(state, real, runtime, scratch,
-                                       firm->primary_account, request, room, tick));
+                                       firm->primary_account, request, room, tick,
+                                       credit_supply_multiplier));
         work.labor_demand_effective =
             std::max(0.0, std::min(work.labor_demand_notional,
                                    real.balances_[account] / work.posted_wage));
@@ -624,7 +628,7 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
                 std::max(0.0, runtime.policy.household_credit_limit * income - debt);
             static_cast<void>(grant_credit(state, real, runtime, scratch,
                                            household->primary_account, requested, room,
-                                           tick));
+                                           tick, credit_supply_multiplier));
         }
     }
     refresh_aggregates(state, real, scratch);
@@ -1481,7 +1485,8 @@ class M5Extension final : public M4TickExtension {
 
     Status after_planning(const core::RootState &state, M4Runtime &real_runtime,
                           M4TickScratch &real, Tick tick, PhiloxRng &rng) override {
-        auto status = run_credit(state, real_runtime, real, runtime_, scratch_, tick);
+        auto status = run_credit(state, real_runtime, real, runtime_, scratch_, tick,
+                                 options_.credit_supply_multiplier);
         if (!status.ok() || extension_ == nullptr) {
             return status;
         }
@@ -1732,8 +1737,10 @@ Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
                                       const M4TickScratch &real_economy,
                                       const M5Runtime &runtime, M5TickScratch &scratch,
                                       AccountId borrower_account, Money requested,
-                                      Money borrower_limit) {
+                                      Money borrower_limit,
+                                      double credit_supply_multiplier) {
     if (!finite(requested.value()) || !finite(borrower_limit.value()) ||
+        !finite(credit_supply_multiplier) || credit_supply_multiplier < 0.0 ||
         requested.value() <= algorithms::kEconomicEpsilon ||
         borrower_limit.value() <= algorithms::kEconomicEpsilon) {
         return Status(ErrorCode::invalid_argument, "invalid M5 credit request");
@@ -1769,7 +1776,10 @@ Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
         const double capital = std::max(0.0, scratch.bank_capital_live_[lender_slot]);
         room = std::min(room, runtime.policy.bank_exposure_limit * capital - existing);
     }
-    const double approved = std::min(requested_principal, std::max(0.0, room));
+    room *= credit_supply_multiplier;
+    const double supply_limited_request =
+        requested_principal * std::min(1.0, credit_supply_multiplier);
+    const double approved = std::min(supply_limited_request, std::max(0.0, room));
     if (approved <= algorithms::kEconomicEpsilon) {
         return Status(ErrorCode::insufficient_funds, "M5 credit capacity is exhausted");
     }
@@ -2170,6 +2180,11 @@ advance_m5_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
                       M5TickScratch &scratch, Tick &tick, std::uint64_t count,
                       M5TickExtension *tick_extension,
                       const M5AdvanceOptions &options) {
+    if (!finite(options.credit_supply_multiplier) ||
+        options.credit_supply_multiplier < 0.0) {
+        return Status(ErrorCode::invalid_argument,
+                      "M5 credit-supply multiplier is invalid");
+    }
     if (count == 0) {
         return M5AdvanceResult{
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,

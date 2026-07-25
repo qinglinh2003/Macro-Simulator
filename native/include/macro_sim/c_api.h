@@ -18,6 +18,7 @@ extern "C" {
 #define MACRO_SIM_CAPABILITY_M6_SECURITIES (UINT64_C(1) << 4)
 #define MACRO_SIM_CAPABILITY_M7_POPULATION (UINT64_C(1) << 5)
 #define MACRO_SIM_CAPABILITY_M8_ENERGY_HOUSING (UINT64_C(1) << 6)
+#define MACRO_SIM_CAPABILITY_M9_WORLD (UINT64_C(1) << 7)
 #define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
 #define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
@@ -46,6 +47,7 @@ typedef struct macro_sim_create_options {
 } macro_sim_create_options;
 
 typedef struct macro_sim_session macro_sim_session;
+typedef struct macro_sim_m9_world macro_sim_m9_world;
 
 typedef enum macro_sim_scalar_kind {
     MACRO_SIM_SCALAR_NULL = 0,
@@ -981,6 +983,174 @@ typedef struct macro_sim_m8_energy_producer {
     double demand_expected;
 } macro_sim_m8_energy_producer;
 
+typedef enum macro_sim_m9_fx_regime {
+    MACRO_SIM_M9_FX_FLOAT = 0,
+    MACRO_SIM_M9_FX_PEG = 1
+} macro_sim_m9_fx_regime;
+
+typedef enum macro_sim_m9_shock_kind {
+    MACRO_SIM_M9_SHOCK_PRODUCTIVITY = 0,
+    MACRO_SIM_M9_SHOCK_LABOR_AVAILABILITY = 1,
+    MACRO_SIM_M9_SHOCK_ENERGY_CAPACITY = 2,
+    MACRO_SIM_M9_SHOCK_HOUSEHOLD_DEMAND = 3,
+    MACRO_SIM_M9_SHOCK_IMPORT_CAPACITY = 4,
+    MACRO_SIM_M9_SHOCK_EXPORT_CAPACITY = 5,
+    MACRO_SIM_M9_SHOCK_CREDIT_SUPPLY = 6,
+    MACRO_SIM_M9_SHOCK_CAPITAL_DESTRUCTION = 7
+} macro_sim_m9_shock_kind;
+
+typedef enum macro_sim_m9_shock_shape {
+    MACRO_SIM_M9_SHOCK_STEP = 0,
+    MACRO_SIM_M9_SHOCK_LINEAR = 1,
+    MACRO_SIM_M9_SHOCK_TRIANGULAR = 2
+} macro_sim_m9_shock_shape;
+
+typedef enum macro_sim_m9_shock_sector {
+    MACRO_SIM_M9_SHOCK_SECTOR_CONSUMPTION = 0,
+    MACRO_SIM_M9_SHOCK_SECTOR_CAPITAL = 1,
+    MACRO_SIM_M9_SHOCK_SECTOR_ENERGY = 2,
+    MACRO_SIM_M9_SHOCK_SECTOR_HOUSING = 3,
+    MACRO_SIM_M9_SHOCK_SECTOR_PUBLIC = 4
+} macro_sim_m9_shock_sector;
+
+typedef enum macro_sim_m9_shock_event_type {
+    MACRO_SIM_M9_SHOCK_ANNOUNCED = 0,
+    MACRO_SIM_M9_SHOCK_STARTED = 1,
+    MACRO_SIM_M9_SHOCK_ENDED = 2,
+    MACRO_SIM_M9_SHOCK_REALIZED = 3
+} macro_sim_m9_shock_event_type;
+
+typedef struct macro_sim_m9_shock {
+    uint32_t struct_size;
+    uint32_t kind;
+    uint32_t shape;
+    uint32_t has_economy;
+    uint32_t has_announcement;
+    uint32_t has_sector;
+    uint32_t sector;
+    uint32_t reserved;
+    uint64_t id;
+    uint64_t economy_id;
+    uint64_t start_tick;
+    uint64_t announcement_tick;
+    uint64_t duration;
+    double magnitude;
+    uint64_t ramp_in_ticks;
+    uint64_t ramp_out_ticks;
+} macro_sim_m9_shock;
+
+typedef struct macro_sim_m9_shock_event {
+    uint32_t struct_size;
+    uint32_t type;
+    uint64_t sequence;
+    uint64_t tick;
+    uint64_t shock_id;
+    double intensity;
+} macro_sim_m9_shock_event;
+
+typedef struct macro_sim_m9_world_rules {
+    uint32_t struct_size;
+    uint32_t trade;
+    uint32_t capital;
+    uint32_t migration;
+    uint32_t fx_loss_mutualization;
+    uint32_t reserved;
+    uint64_t dense_edge_threshold;
+    double fx_adjustment;
+    double fx_friction;
+    double fx_spread;
+    double fx_trade_cap;
+    double capital_mobility;
+    double capital_adjustment;
+    double periods_per_year;
+    double migration_rate;
+    double migration_max_share;
+    double remittance_share;
+    double wage_smoothing;
+    double initial_peg_reserves;
+} macro_sim_m9_world_rules;
+
+typedef struct macro_sim_m9_external_policy {
+    uint32_t struct_size;
+    uint32_t has_import_quota;
+    uint32_t has_immigration_cap;
+    uint32_t has_emigration_cap;
+    uint32_t fx_regime;
+    uint32_t has_peg_anchor;
+    uint32_t reserved;
+    uint32_t reserved_2;
+    uint64_t peg_anchor;
+    const uint64_t *sanctions;
+    size_t sanction_count;
+    double tariff;
+    double import_quota;
+    double export_subsidy;
+    double capital_control;
+    double external_interest_settlement_fraction;
+    double immigration_cap;
+    double emigration_cap;
+    double remittance_tax;
+    double outward_remittance_tax;
+    double guest_worker_return;
+    double peg_reserve_scale;
+} macro_sim_m9_external_policy;
+
+typedef struct macro_sim_m9_genesis_options {
+    uint32_t struct_size;
+    uint32_t reserved;
+    const macro_sim_m8_genesis_options *economies;
+    size_t economy_count;
+    const macro_sim_m9_external_policy *external_policies;
+    size_t external_policy_count;
+    const macro_sim_m9_shock *shocks;
+    size_t shock_count;
+    macro_sim_m9_world_rules rules;
+} macro_sim_m9_genesis_options;
+
+typedef struct macro_sim_m9_country_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t economy_id;
+    uint64_t active_shocks;
+    double exchange_rate;
+    double imports_value;
+    double imports_volume;
+    double exports_value;
+    double exports_volume;
+    double iceberg_loss;
+    double tariff_revenue;
+    double export_subsidy_cost;
+    double current_account;
+    double capital_flow;
+    double net_foreign_assets;
+    double factor_income_accrued;
+    double factor_income_cash;
+    double factor_income_arrears;
+    double peg_reserves;
+    double migrant_stock_abroad;
+    double migrant_stock_hosted;
+    double remittances_received;
+    double remittances_sent;
+    double remittance_tax_revenue;
+    double capital_destroyed;
+} macro_sim_m9_country_metrics;
+
+typedef struct macro_sim_m9_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t digest;
+    uint64_t trade_routes;
+    uint64_t migration_routes;
+    uint64_t shock_events;
+    double dealer_flow;
+    double dealer_spread_revenue;
+    double dealer_valuation;
+    double world_nfa;
+} macro_sim_m9_advance_result;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -1180,6 +1350,38 @@ macro_sim_m8_energy_producer_count(const macro_sim_session *session, size_t *out
 MACRO_SIM_C_API macro_sim_status macro_sim_m8_energy_producers(
     const macro_sim_session *session, size_t offset,
     macro_sim_m8_energy_producer *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_world_rules_defaults(macro_sim_m9_world_rules *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_external_policy_defaults(macro_sim_m9_external_policy *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_create(
+    const macro_sim_m9_genesis_options *options, macro_sim_m9_world **output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_destroy(macro_sim_m9_world **world);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_world_tick(const macro_sim_m9_world *world, uint64_t *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_world_advance(macro_sim_m9_world *world, uint64_t tick_count,
+                           macro_sim_m9_advance_result *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_update_external_policies(
+    macro_sim_m9_world *world, const macro_sim_m9_external_policy *policies,
+    size_t policy_count);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_schedule_shock(
+    macro_sim_m9_world *world, const macro_sim_m9_shock *shock);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_world_shock_event_count(const macro_sim_m9_world *world, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_shock_events(
+    const macro_sim_m9_world *world, size_t offset, macro_sim_m9_shock_event *output,
+    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m9_world_rates(const macro_sim_m9_world *world, size_t offset, double *output,
+                         size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_country_metrics(
+    const macro_sim_m9_world *world, size_t offset,
+    macro_sim_m9_country_metrics *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_checkpoint_save(
+    const macro_sim_m9_world *world, macro_sim_owned_buffer *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m9_world_checkpoint_load(
+    macro_sim_m9_world *world, const uint8_t *checkpoint, size_t checkpoint_size);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_owned_buffer_release(macro_sim_owned_buffer *buffer);
 

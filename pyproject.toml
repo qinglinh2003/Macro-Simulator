@@ -1,6 +1,6 @@
 [project]
 name = "macro-simulator"
-version = "0.8.0"
+version = "0.9.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -67,6 +67,7 @@ sdist.include = [
     "/schemas/m6/**",
     "/schemas/m7/**",
     "/schemas/m8/**",
+    "/schemas/m9/**",
     "/tools/m1/**",
     "/tools/m2/**",
     "/tools/m3/**",
@@ -75,6 +76,7 @@ sdist.include = [
     "/tools/m6/**",
     "/tools/m7/**",
     "/tools/m8/**",
+    "/tools/m9/**",
 ]
 sdist.exclude = [
     "/.venv/**",

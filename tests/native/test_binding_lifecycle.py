@@ -7,7 +7,7 @@ import macro_sim._native as native
 
 def test_native_version_and_empty_session_lifecycle() -> None:
     assert native.ABI_VERSION == 1
-    assert native.engine_version() == "0.8.0-m8"
+    assert native.engine_version() == "0.9.0-m9"
 
     session = native.EngineSession(123)
     assert session.session_id == 123

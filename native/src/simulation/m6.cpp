@@ -619,7 +619,7 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
                                       M5Runtime &monetary_runtime,
                                       M5TickScratch &monetary, M6TickScratch &scratch,
                                       HouseholdId household_id, double requested,
-                                      Tick tick) {
+                                      Tick tick, double credit_supply_multiplier) {
     if (requested <= kEconomicEpsilon) {
         return 0.0;
     }
@@ -653,6 +653,7 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         std::min(headroom,
                  std::max(0.0, monetary_runtime.policy.household_credit_limit * income -
                                    current_debt));
+    headroom *= credit_supply_multiplier;
     const double granted = std::max(0.0, headroom);
     if (granted <= kEconomicEpsilon) {
         return 0.0;
@@ -684,7 +685,8 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
 void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &real,
                                  M5Runtime &monetary_runtime, M5TickScratch &monetary,
                                  const M6Runtime &runtime, M6TickScratch &scratch,
-                                 Tick tick, std::uint64_t &ordinal) {
+                                 Tick tick, std::uint64_t &ordinal,
+                                 double credit_supply_multiplier) {
     state.households.for_each_alive([&](HouseholdId household_id,
                                         const core::HouseholdComponent &household) {
         const auto watch = household_watchlist(runtime, household_id);
@@ -752,7 +754,8 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
             const double desired_margin =
                 std::max(0.0, std::min(buy_cash, deposits + secured_room) - deposits);
             budget += originate_margin(state, real, monetary_runtime, monetary, scratch,
-                                       household_id, desired_margin, tick);
+                                       household_id, desired_margin, tick,
+                                       credit_supply_multiplier);
         }
         const double scale =
             buy_cash > kEconomicEpsilon ? std::min(1.0, budget / buy_cash) : 1.0;
@@ -2082,8 +2085,7 @@ class M6Extension final : public M5TickExtension {
             return Status::success();
         }
         return extension_->run_labor(state, real_runtime, real, monetary_runtime,
-                                     monetary, runtime_, scratch_, tick, rng,
-                                     handled);
+                                     monetary, runtime_, scratch_, tick, rng, handled);
     }
 
     Status before_settlement(const core::RootState &, M4Runtime &, M4TickScratch &,
@@ -2110,7 +2112,8 @@ class M6Extension final : public M5TickExtension {
         std::uint64_t ordinal = 0;
         if (runtime_.rules.firm_equity) {
             generate_firm_equity_orders(state, real, monetary_runtime, monetary,
-                                        runtime_, scratch_, tick, ordinal);
+                                        runtime_, scratch_, tick, ordinal,
+                                        options_.base.credit_supply_multiplier);
         }
         if (runtime_.rules.bank_equity && runtime_.rules.bank_equity_trading) {
             generate_bank_equity_orders(state, real, runtime_, scratch_, ordinal);

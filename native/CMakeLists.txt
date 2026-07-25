@@ -213,6 +213,11 @@ if(MACRO_SIM_BUILD_TESTS)
     macro_sim_project_options(macro_sim_m8_c_smoke)
     add_test(NAME macro_sim.m8_c_abi COMMAND macro_sim_m8_c_smoke)
 
+    add_executable(macro_sim_m9_c_smoke tests/m9_c_smoke.c)
+    target_link_libraries(macro_sim_m9_c_smoke PRIVATE macro_sim_c)
+    macro_sim_project_options(macro_sim_m9_c_smoke)
+    add_test(NAME macro_sim.m9_c_abi COMMAND macro_sim_m9_c_smoke)
+
     add_executable(macro_sim_rng_tests tests/rng_tests.cpp)
     target_link_libraries(macro_sim_rng_tests PRIVATE macro_sim_core)
     macro_sim_project_options(macro_sim_rng_tests)
@@ -743,6 +748,42 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m8_semantic_panel
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m9_binding_smoke
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m9/binding_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m9_binding_smoke
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m9_fresh_process_checkpoint
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m9/fresh_process_checkpoint.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m9_fresh_process_checkpoint
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m9_semantic_panel
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m9/semantic_panel.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m9_semantic_panel
+            PROPERTIES LABELS "python-binding"
+        )
     endif()
 endif()
 
@@ -824,6 +865,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     )
     macro_sim_project_options(macro_sim_m8_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m8_benchmarks)
+
+    add_executable(
+        macro_sim_m9_benchmarks
+        benchmarks/m9_world_benchmark.cpp
+    )
+    target_link_libraries(
+        macro_sim_m9_benchmarks
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m9_benchmarks)
+    macro_sim_enable_runtime_assertions(macro_sim_m9_benchmarks)
 endif()
 
 install(

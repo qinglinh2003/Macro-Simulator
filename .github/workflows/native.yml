@@ -1,4 +1,4 @@
-name: Native M8 energy and housing
+name: Native M9 World
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
       - refactor/cpp-m6-v33
       - refactor/cpp-m7-v33
       - refactor/cpp-m8-v33
+      - refactor/cpp-m9-v33
       - refactor/cpp-engine-v33
   pull_request:
     paths:
@@ -27,6 +28,7 @@ on:
       - "schemas/m6/**"
       - "schemas/m7/**"
       - "schemas/m8/**"
+      - "schemas/m9/**"
       - "tests/native/**"
       - "tools/m1/**"
       - "tools/m2/**"
@@ -36,6 +38,7 @@ on:
       - "tools/m6/**"
       - "tools/m7/**"
       - "tools/m8/**"
+      - "tools/m9/**"
       - "uv.lock"
   workflow_dispatch:
 
@@ -83,47 +86,52 @@ jobs:
         run: choco install ccache ninja --no-progress -y
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
-      - name: Verify M8 contracts and current playable target
-        run: uv run python tools/m8/check.py --skip-build
+      - name: Verify M9 contracts and current playable target
+        run: uv run python tools/m9/check.py --skip-build
       - name: Configure native release
-        run: uv run cmake --preset m8-release
+        run: uv run cmake --preset m9-release
       - name: Build native release
-        run: uv run cmake --build --preset m8-release --parallel 8
+        run: uv run cmake --build --preset m9-release --parallel 8
       - name: Test native release
-        run: uv run ctest --preset m8-release -j 8
+        run: uv run ctest --preset m9-release -j 8
       - name: Verify installed C package
         run: >-
           uv run python tools/m1/installed_c_smoke.py
-          --build-dir build/native/m8-release
-          --prefix build/install/m8-ci
+          --build-dir build/native/m9-release
+          --prefix build/install/m9-ci
       - name: Verify M5 monetary performance budget
         run: >-
           uv run python tools/m5/performance_gate.py
           --budget schemas/m5/performance_budget.json
-          --build-dir build/native/m8-release
+          --build-dir build/native/m9-release
       - name: Verify M6 securities performance budget
         run: >-
           uv run python tools/m6/performance_gate.py
           --budget schemas/m6/performance_budget.json
-          --build-dir build/native/m8-release
+          --build-dir build/native/m9-release
       - name: Verify M7 population and labor performance budget
         run: >-
           uv run python tools/m7/performance_gate.py
           --budget schemas/m7/performance_budget.json
-          --build-dir build/native/m8-release
+          --build-dir build/native/m9-release
       - name: Verify M8 energy and housing performance budget
         run: >-
           uv run python tools/m8/performance_gate.py
           --budget schemas/m8/performance_budget.json
-          --build-dir build/native/m8-release
+          --build-dir build/native/m9-release
+      - name: Verify M9 World performance budget
+        run: >-
+          uv run python tools/m9/performance_gate.py
+          --budget schemas/m9/performance_budget.json
+          --build-dir build/native/m9-release
       - name: Build wheel and source distribution
         run: |
           uv build --wheel
           uv build --sdist
       - name: Verify isolated wheel
-        run: uv run python tools/m8/wheel_smoke.py --wheel-dir dist
+        run: uv run python tools/m9/wheel_smoke.py --wheel-dir dist
       - name: Verify source artifact offline inputs
-        run: uv run python tools/m8/source_artifact_smoke.py --sdist-dir dist
+        run: uv run python tools/m9/source_artifact_smoke.py --sdist-dir dist
       - name: Upload native artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -142,6 +150,7 @@ jobs:
             schemas/m6/performance_budget.json
             schemas/m7/performance_budget.json
             schemas/m8/performance_budget.json
+            schemas/m9/performance_budget.json
           if-no-files-found: error
 
   sanitizers:
@@ -174,8 +183,8 @@ jobs:
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
       - name: Configure sanitizer build
-        run: uv run cmake --preset m8-asan
+        run: uv run cmake --preset m9-asan
       - name: Build sanitizer targets
-        run: uv run cmake --build --preset m8-asan --parallel 8
+        run: uv run cmake --build --preset m9-asan --parallel 8
       - name: Run sanitizer tests
-        run: uv run ctest --preset m8-asan -j 8
+        run: uv run ctest --preset m9-asan -j 8

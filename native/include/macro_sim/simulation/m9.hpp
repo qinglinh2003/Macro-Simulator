@@ -14,6 +14,9 @@
 
 namespace macro_sim::simulation {
 
+inline constexpr std::size_t kM9MaximumEconomies = 256U;
+inline constexpr std::size_t kM9DenseEdgeThreshold = 256U;
+
 enum class FxRegime : std::uint8_t {
     floating = 0,
     peg = 1,
@@ -34,6 +37,28 @@ enum class ShockShape : std::uint8_t {
     step = 0,
     linear = 1,
     triangular = 2,
+};
+
+enum class ShockSector : std::uint8_t {
+    consumption = 0,
+    capital = 1,
+    energy = 2,
+    housing = 3,
+    public_sector = 4,
+};
+
+enum class ShockEventType : std::uint8_t {
+    announced = 0,
+    started = 1,
+    ended = 2,
+    realized = 3,
+};
+
+enum class CrisisScenario : std::uint8_t {
+    oil_embargo = 0,
+    global_financial_crisis = 1,
+    pandemic = 2,
+    natural_disaster = 3,
 };
 
 enum class M9FaultPoint : std::uint8_t {
@@ -80,7 +105,7 @@ struct WorldRules final {
     double remittance_share{0.2};
     double wage_smoothing{0.02};
     double initial_peg_reserves{5000.0};
-    std::size_t dense_edge_threshold{64};
+    std::size_t dense_edge_threshold{kM9DenseEdgeThreshold};
 
     bool operator==(const WorldRules &) const = default;
 };
@@ -90,12 +115,35 @@ struct ShockSpec final {
     ShockKind kind{ShockKind::productivity};
     std::optional<EconomyId> economy{};
     Tick start{};
+    std::optional<Tick> announcement{};
     std::uint64_t duration{1};
     double magnitude{0.0};
     ShockShape shape{ShockShape::step};
-    std::optional<std::uint8_t> sector{};
+    std::uint64_t ramp_in_ticks{0};
+    std::uint64_t ramp_out_ticks{0};
+    std::optional<ShockSector> sector{};
 
     bool operator==(const ShockSpec &) const = default;
+};
+
+struct ShockEvent final {
+    std::uint64_t sequence{0};
+    ShockEventType type{ShockEventType::announced};
+    Tick tick{};
+    std::uint64_t shock_id{0};
+    double intensity{0.0};
+
+    bool operator==(const ShockEvent &) const = default;
+};
+
+struct CrisisScenarioOptions final {
+    Tick start{};
+    std::uint64_t duration{0};
+    std::uint64_t announcement_lead_ticks{0};
+    std::uint64_t first_shock_id{1};
+    std::vector<EconomyId> economies;
+    bool include_trade{true};
+    double capital_loss{0.2};
 };
 
 struct M9WorldSpec final {
@@ -163,6 +211,7 @@ struct CountryExternalMetrics final {
     double remittances_received{0.0};
     double remittances_sent{0.0};
     double remittance_tax_revenue{0.0};
+    double capital_destroyed{0.0};
     std::uint64_t active_shocks{0};
 
     bool operator==(const CountryExternalMetrics &) const = default;
@@ -214,30 +263,31 @@ class M9World final {
     [[nodiscard]] const std::vector<double> &dealer_inventory() const noexcept {
         return dealer_inventory_;
     }
-    [[nodiscard]] const std::vector<ExternalPolicyState> &external_policies() const
-        noexcept {
+    [[nodiscard]] const std::vector<ExternalPolicyState> &
+    external_policies() const noexcept {
         return external_policies_;
     }
-    [[nodiscard]] const std::vector<PegRuntime> &pegs() const noexcept {
-        return pegs_;
-    }
-    [[nodiscard]] const std::vector<MigrationRoute> &migration_routes() const
-        noexcept {
+    [[nodiscard]] const std::vector<PegRuntime> &pegs() const noexcept { return pegs_; }
+    [[nodiscard]] const std::vector<MigrationRoute> &migration_routes() const noexcept {
         return migration_routes_;
+    }
+    [[nodiscard]] const std::vector<ShockEvent> &shock_events() const noexcept {
+        return shock_events_;
     }
     [[nodiscard]] const M9WorldMetrics &last_metrics() const noexcept {
         return last_metrics_;
     }
-    [[nodiscard]] const core::RootState *economy_root(EconomyId economy) const
-        noexcept;
+    [[nodiscard]] const core::RootState *economy_root(EconomyId economy) const noexcept;
     [[nodiscard]] const M8Runtime *economy_runtime(EconomyId economy) const noexcept;
 
     [[nodiscard]] Status
     update_external_policies(std::span<const ExternalPolicyState> policies);
     [[nodiscard]] Status schedule_shock(const ShockSpec &shock);
-    [[nodiscard]] Result<M9AdvanceResult>
-    advance(std::uint64_t count, const M9AdvanceOptions &options = {});
+    [[nodiscard]] Result<M9AdvanceResult> advance(std::uint64_t count,
+                                                  const M9AdvanceOptions &options = {});
     [[nodiscard]] Result<std::vector<std::uint8_t>> checkpoint() const;
+    [[nodiscard]] Result<std::vector<std::uint8_t>>
+    economy_checkpoint(EconomyId economy) const;
     [[nodiscard]] static Result<M9World>
     restore(std::span<const std::uint8_t> checkpoint);
     [[nodiscard]] Status validate() const noexcept;
@@ -281,8 +331,7 @@ class M9World final {
     [[nodiscard]] Status advance_one(const M9AdvanceOptions &options);
     [[nodiscard]] Status validate_policy_vector(
         std::span<const ExternalPolicyState> policies) const noexcept;
-    [[nodiscard]] bool sanctioned(std::size_t first, std::size_t second) const
-        noexcept;
+    [[nodiscard]] bool sanctioned(std::size_t first, std::size_t second) const noexcept;
 
     Tick tick_{};
     WorldRules rules_{};
@@ -295,6 +344,10 @@ class M9World final {
     std::vector<PegRuntime> pegs_;
     std::vector<MigrationRoute> migration_routes_;
     std::vector<ShockSpec> shocks_;
+    std::vector<std::uint64_t> announced_shock_ids_;
+    std::vector<std::uint64_t> active_shock_ids_;
+    std::vector<std::uint64_t> realized_shock_ids_;
+    std::vector<ShockEvent> shock_events_;
     std::vector<TradeReservation> trade_reservations_;
     std::vector<double> smoothed_real_wages_;
     double dealer_valuation_{0.0};
@@ -302,12 +355,15 @@ class M9World final {
     M9WorldMetrics last_metrics_{};
 };
 
-[[nodiscard]] Status validate_external_policy(
-    const ExternalPolicyState &policy, std::size_t economy_count,
-    EconomyId owner) noexcept;
+[[nodiscard]] Status validate_external_policy(const ExternalPolicyState &policy,
+                                              std::size_t economy_count,
+                                              EconomyId owner) noexcept;
 [[nodiscard]] Status validate_world_rules(const WorldRules &rules) noexcept;
 [[nodiscard]] Status validate_shock_spec(const ShockSpec &shock,
                                          std::size_t economy_count) noexcept;
+[[nodiscard]] Result<std::vector<ShockSpec>>
+make_crisis_scenario(CrisisScenario scenario, const CrisisScenarioOptions &options,
+                     std::size_t economy_count);
 
 } // namespace macro_sim::simulation
 

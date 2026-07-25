@@ -6,13 +6,16 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
+#include <nanobind/stl/vector.h>
 
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/generated/contracts.hpp"
 #include "macro_sim/rng.hpp"
+#include "macro_sim/simulation/m9.hpp"
 #include "macro_sim/version.hpp"
 #include "python_m3_bindings.hpp"
 
@@ -450,6 +453,110 @@ nb::dict m8_result_to_python(const macro_sim::simulation::M8AdvanceResult &resul
     output["transfer_count"] = result.transfer_count;
     output["trade_count"] = result.trade_count;
     output["metrics"] = m8_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m9_country_metrics_to_python(
+    const macro_sim::simulation::CountryExternalMetrics &metrics, std::size_t economy) {
+    nb::dict output;
+    output["economy_id"] = economy;
+#define MACRO_SIM_M9_COUNTRY_METRIC(field) output[#field] = metrics.field
+    MACRO_SIM_M9_COUNTRY_METRIC(exchange_rate);
+    MACRO_SIM_M9_COUNTRY_METRIC(imports_value);
+    MACRO_SIM_M9_COUNTRY_METRIC(imports_volume);
+    MACRO_SIM_M9_COUNTRY_METRIC(exports_value);
+    MACRO_SIM_M9_COUNTRY_METRIC(exports_volume);
+    MACRO_SIM_M9_COUNTRY_METRIC(iceberg_loss);
+    MACRO_SIM_M9_COUNTRY_METRIC(tariff_revenue);
+    MACRO_SIM_M9_COUNTRY_METRIC(export_subsidy_cost);
+    MACRO_SIM_M9_COUNTRY_METRIC(current_account);
+    MACRO_SIM_M9_COUNTRY_METRIC(capital_flow);
+    MACRO_SIM_M9_COUNTRY_METRIC(net_foreign_assets);
+    MACRO_SIM_M9_COUNTRY_METRIC(factor_income_accrued);
+    MACRO_SIM_M9_COUNTRY_METRIC(factor_income_cash);
+    MACRO_SIM_M9_COUNTRY_METRIC(factor_income_arrears);
+    MACRO_SIM_M9_COUNTRY_METRIC(peg_reserves);
+    MACRO_SIM_M9_COUNTRY_METRIC(migrant_stock_abroad);
+    MACRO_SIM_M9_COUNTRY_METRIC(migrant_stock_hosted);
+    MACRO_SIM_M9_COUNTRY_METRIC(remittances_received);
+    MACRO_SIM_M9_COUNTRY_METRIC(remittances_sent);
+    MACRO_SIM_M9_COUNTRY_METRIC(remittance_tax_revenue);
+    MACRO_SIM_M9_COUNTRY_METRIC(capital_destroyed);
+    MACRO_SIM_M9_COUNTRY_METRIC(active_shocks);
+#undef MACRO_SIM_M9_COUNTRY_METRIC
+    return output;
+}
+
+nb::dict m9_metrics_to_python(const macro_sim::simulation::M9WorldMetrics &metrics) {
+    nb::list domestic;
+    for (const auto &value : metrics.domestic) {
+        domestic.append(m8_metrics_to_python(value));
+    }
+    nb::list external;
+    for (std::size_t index = 0; index < metrics.external.size(); ++index) {
+        external.append(m9_country_metrics_to_python(metrics.external[index], index));
+    }
+    nb::dict output;
+    output["domestic"] = std::move(domestic);
+    output["external"] = std::move(external);
+    output["dealer_flow"] = metrics.dealer_flow;
+    output["dealer_spread_revenue"] = metrics.dealer_spread_revenue;
+    output["dealer_valuation"] = metrics.dealer_valuation;
+    output["world_nfa"] = metrics.world_nfa;
+    output["trade_routes"] = metrics.trade_routes;
+    output["migration_routes"] = metrics.migration_routes;
+    output["shock_events"] = metrics.shock_events;
+    return output;
+}
+
+nb::dict m9_result_to_python(const macro_sim::simulation::M9AdvanceResult &result) {
+    nb::dict output;
+    output["first_tick"] = result.first_tick.value();
+    output["next_tick"] = result.next_tick.value();
+    output["advanced_ticks"] = result.advanced_ticks;
+    output["digest"] = result.digest;
+    output["metrics"] = m9_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m9_snapshot_to_python(const macro_sim::simulation::M9World &world) {
+    nb::list rates;
+    for (std::size_t index = 0; index < world.economy_count(); ++index) {
+        rates.append(world.rates().rate(
+            macro_sim::EconomyId(static_cast<std::uint64_t>(index))));
+    }
+    nb::list pegs;
+    for (const auto &peg : world.pegs()) {
+        nb::dict item;
+        item["pegger"] = peg.pegger.value();
+        item["anchor"] = peg.anchor.value();
+        item["reserves"] = peg.reserves;
+        item["pressure"] = peg.pressure;
+        item["target_log_spread"] = peg.target_log_spread;
+        item["intact"] = peg.intact;
+        pegs.append(std::move(item));
+    }
+    nb::list migration;
+    for (const auto &route : world.migration_routes()) {
+        nb::dict item;
+        item["origin"] = route.origin.value();
+        item["host"] = route.host.value();
+        item["stock"] = route.stock;
+        item["smoothed_real_wage_gap"] = route.smoothed_real_wage_gap;
+        item["flow"] = route.flow;
+        item["return_flow"] = route.return_flow;
+        item["remittance_gross"] = route.remittance_gross;
+        item["remittance_net"] = route.remittance_net;
+        migration.append(std::move(item));
+    }
+    nb::dict output;
+    output["tick"] = world.tick().value();
+    output["economy_count"] = world.economy_count();
+    output["digest"] = world.digest();
+    output["rates"] = std::move(rates);
+    output["pegs"] = std::move(pegs);
+    output["migration"] = std::move(migration);
+    output["metrics"] = m9_metrics_to_python(world.last_metrics());
     return output;
 }
 
@@ -917,6 +1024,62 @@ NB_MODULE(_native, module) {
         .value("SAMPLED", macro_sim::algorithms::MatchingProtocol::sampled)
         .value("PREFERENTIAL", macro_sim::algorithms::MatchingProtocol::preferential)
         .value("PRICE_SORTED", macro_sim::algorithms::MatchingProtocol::price_sorted);
+    auto m4_rules =
+        nb::class_<macro_sim::simulation::M4Rules>(module, "M4Rules").def(nb::init<>());
+#define MACRO_SIM_BIND_M4_RULE(field)                                                  \
+    m4_rules.def_rw(#field, &macro_sim::simulation::M4Rules::field)
+    MACRO_SIM_BIND_M4_RULE(linear_productivity);
+    MACRO_SIM_BIND_M4_RULE(capital_productivity);
+    MACRO_SIM_BIND_M4_RULE(total_factor_productivity);
+    MACRO_SIM_BIND_M4_RULE(capital_share);
+    MACRO_SIM_BIND_M4_RULE(capital_output_ratio);
+    MACRO_SIM_BIND_M4_RULE(demand_adjustment);
+    MACRO_SIM_BIND_M4_RULE(income_adjustment);
+    MACRO_SIM_BIND_M4_RULE(inventory_ratio);
+    MACRO_SIM_BIND_M4_RULE(inventory_gap_close);
+    MACRO_SIM_BIND_M4_RULE(markup_adjustment);
+    MACRO_SIM_BIND_M4_RULE(markup_minimum);
+    MACRO_SIM_BIND_M4_RULE(markup_maximum);
+    MACRO_SIM_BIND_M4_RULE(wage_shortage_adjustment);
+    MACRO_SIM_BIND_M4_RULE(wage_downward_drift);
+    MACRO_SIM_BIND_M4_RULE(wage_calvo_probability);
+    MACRO_SIM_BIND_M4_RULE(price_calvo_probability);
+    MACRO_SIM_BIND_M4_RULE(income_propensity);
+    MACRO_SIM_BIND_M4_RULE(wealth_propensity);
+    MACRO_SIM_BIND_M4_RULE(dividend_payout);
+    MACRO_SIM_BIND_M4_RULE(investment_adjustment);
+    MACRO_SIM_BIND_M4_RULE(capital_depreciation);
+    MACRO_SIM_BIND_M4_RULE(annual_tfp_growth);
+    MACRO_SIM_BIND_M4_RULE(profit_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(income_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(consumption_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(wealth_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(government_consumption_share);
+    MACRO_SIM_BIND_M4_RULE(government_deficit_target);
+    MACRO_SIM_BIND_M4_RULE(deficit_unemployment_reference);
+    MACRO_SIM_BIND_M4_RULE(deficit_unemployment_cap);
+    MACRO_SIM_BIND_M4_RULE(government_investment_share);
+    MACRO_SIM_BIND_M4_RULE(unemployment_benefit_replacement);
+    MACRO_SIM_BIND_M4_RULE(income_allowance);
+    MACRO_SIM_BIND_M4_RULE(wealth_allowance);
+    MACRO_SIM_BIND_M4_RULE(benefit_income_floor);
+    MACRO_SIM_BIND_M4_RULE(minimum_wage);
+    MACRO_SIM_BIND_M4_RULE(job_guarantee);
+    MACRO_SIM_BIND_M4_RULE(job_guarantee_wage_ratio);
+    MACRO_SIM_BIND_M4_RULE(job_guarantee_public_works_share);
+    MACRO_SIM_BIND_M4_RULE(initial_household_money);
+    MACRO_SIM_BIND_M4_RULE(initial_firm_money);
+    MACRO_SIM_BIND_M4_RULE(initial_bank_capital);
+    MACRO_SIM_BIND_M4_RULE(initial_consumption_inventory);
+    MACRO_SIM_BIND_M4_RULE(initial_capital_inventory);
+    MACRO_SIM_BIND_M4_RULE(initial_consumption_capital);
+    MACRO_SIM_BIND_M4_RULE(initial_price);
+    MACRO_SIM_BIND_M4_RULE(initial_capital_price);
+    MACRO_SIM_BIND_M4_RULE(initial_wage);
+    MACRO_SIM_BIND_M4_RULE(initial_markup);
+    MACRO_SIM_BIND_M4_RULE(initial_expected_demand);
+    MACRO_SIM_BIND_M4_RULE(market_sample_size);
+#undef MACRO_SIM_BIND_M4_RULE
     nb::class_<macro_sim::simulation::M4SimulationSpec>(module, "M4SimulationSpec")
         .def(nb::init<>())
         .def_rw("vertical", &macro_sim::simulation::M4SimulationSpec::vertical)
@@ -948,7 +1111,8 @@ NB_MODULE(_native, module) {
                 &macro_sim::simulation::M4SimulationSpec::requested_capabilities)
         .def_rw("stochastic", &macro_sim::simulation::M4SimulationSpec::stochastic)
         .def_rw("market_protocol",
-                &macro_sim::simulation::M4SimulationSpec::market_protocol);
+                &macro_sim::simulation::M4SimulationSpec::market_protocol)
+        .def_rw("rules", &macro_sim::simulation::M4SimulationSpec::rules);
     nb::enum_<macro_sim::simulation::MonetaryRegime>(module, "MonetaryRegime")
         .value("EXOGENOUS", macro_sim::simulation::MonetaryRegime::exogenous)
         .value("TAYLOR", macro_sim::simulation::MonetaryRegime::taylor)
@@ -1387,6 +1551,323 @@ NB_MODULE(_native, module) {
                 &macro_sim::simulation::M8SimulationSpec::housing_rules)
         .def_rw("housing_input",
                 &macro_sim::simulation::M8SimulationSpec::housing_input);
+    nb::enum_<macro_sim::simulation::FxRegime>(module, "FxRegime")
+        .value("FLOAT", macro_sim::simulation::FxRegime::floating)
+        .value("PEG", macro_sim::simulation::FxRegime::peg);
+    nb::enum_<macro_sim::simulation::ShockKind>(module, "ShockKind")
+        .value("PRODUCTIVITY", macro_sim::simulation::ShockKind::productivity)
+        .value("LABOR_AVAILABILITY",
+               macro_sim::simulation::ShockKind::labor_availability)
+        .value("ENERGY_CAPACITY", macro_sim::simulation::ShockKind::energy_capacity)
+        .value("HOUSEHOLD_DEMAND", macro_sim::simulation::ShockKind::household_demand)
+        .value("IMPORT_CAPACITY", macro_sim::simulation::ShockKind::import_capacity)
+        .value("EXPORT_CAPACITY", macro_sim::simulation::ShockKind::export_capacity)
+        .value("CREDIT_SUPPLY", macro_sim::simulation::ShockKind::credit_supply)
+        .value("CAPITAL_DESTRUCTION",
+               macro_sim::simulation::ShockKind::capital_destruction);
+    nb::enum_<macro_sim::simulation::ShockShape>(module, "ShockShape")
+        .value("STEP", macro_sim::simulation::ShockShape::step)
+        .value("LINEAR", macro_sim::simulation::ShockShape::linear)
+        .value("TRIANGULAR", macro_sim::simulation::ShockShape::triangular);
+    nb::enum_<macro_sim::simulation::ShockSector>(module, "ShockSector")
+        .value("CONSUMPTION", macro_sim::simulation::ShockSector::consumption)
+        .value("CAPITAL", macro_sim::simulation::ShockSector::capital)
+        .value("ENERGY", macro_sim::simulation::ShockSector::energy)
+        .value("HOUSING", macro_sim::simulation::ShockSector::housing)
+        .value("PUBLIC", macro_sim::simulation::ShockSector::public_sector);
+    nb::enum_<macro_sim::simulation::ShockEventType>(module, "ShockEventType")
+        .value("ANNOUNCED", macro_sim::simulation::ShockEventType::announced)
+        .value("STARTED", macro_sim::simulation::ShockEventType::started)
+        .value("ENDED", macro_sim::simulation::ShockEventType::ended)
+        .value("REALIZED", macro_sim::simulation::ShockEventType::realized);
+    nb::enum_<macro_sim::simulation::CrisisScenario>(module, "CrisisScenario")
+        .value("OIL_EMBARGO", macro_sim::simulation::CrisisScenario::oil_embargo)
+        .value("GLOBAL_FINANCIAL_CRISIS",
+               macro_sim::simulation::CrisisScenario::global_financial_crisis)
+        .value("PANDEMIC", macro_sim::simulation::CrisisScenario::pandemic)
+        .value("NATURAL_DISASTER",
+               macro_sim::simulation::CrisisScenario::natural_disaster);
+    auto world_rules =
+        nb::class_<macro_sim::simulation::WorldRules>(module, "WorldRules")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_WORLD_RULE(field)                                               \
+    world_rules.def_rw(#field, &macro_sim::simulation::WorldRules::field)
+    MACRO_SIM_BIND_WORLD_RULE(trade);
+    MACRO_SIM_BIND_WORLD_RULE(capital);
+    MACRO_SIM_BIND_WORLD_RULE(migration);
+    MACRO_SIM_BIND_WORLD_RULE(fx_adjustment);
+    MACRO_SIM_BIND_WORLD_RULE(fx_friction);
+    MACRO_SIM_BIND_WORLD_RULE(fx_spread);
+    MACRO_SIM_BIND_WORLD_RULE(fx_loss_mutualization);
+    MACRO_SIM_BIND_WORLD_RULE(fx_trade_cap);
+    MACRO_SIM_BIND_WORLD_RULE(capital_mobility);
+    MACRO_SIM_BIND_WORLD_RULE(capital_adjustment);
+    MACRO_SIM_BIND_WORLD_RULE(periods_per_year);
+    MACRO_SIM_BIND_WORLD_RULE(migration_rate);
+    MACRO_SIM_BIND_WORLD_RULE(migration_max_share);
+    MACRO_SIM_BIND_WORLD_RULE(remittance_share);
+    MACRO_SIM_BIND_WORLD_RULE(wage_smoothing);
+    MACRO_SIM_BIND_WORLD_RULE(initial_peg_reserves);
+    MACRO_SIM_BIND_WORLD_RULE(dense_edge_threshold);
+#undef MACRO_SIM_BIND_WORLD_RULE
+    auto external_policy =
+        nb::class_<macro_sim::simulation::ExternalPolicyState>(module, "ExternalPolicy")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_EXTERNAL_POLICY(field)                                          \
+    external_policy.def_rw(#field, &macro_sim::simulation::ExternalPolicyState::field)
+    MACRO_SIM_BIND_EXTERNAL_POLICY(tariff);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(import_quota);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(export_subsidy);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(capital_control);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(external_interest_settlement_fraction);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(immigration_cap);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(emigration_cap);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(remittance_tax);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(outward_remittance_tax);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(guest_worker_return);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(fx_regime);
+    MACRO_SIM_BIND_EXTERNAL_POLICY(peg_reserve_scale);
+#undef MACRO_SIM_BIND_EXTERNAL_POLICY
+    external_policy
+        .def_prop_rw(
+            "sanctions_imposed_on",
+            [](const macro_sim::simulation::ExternalPolicyState &value) {
+                std::vector<std::uint64_t> output;
+                output.reserve(value.sanctions_imposed_on.size());
+                for (const auto target : value.sanctions_imposed_on) {
+                    output.push_back(target.value());
+                }
+                return output;
+            },
+            [](macro_sim::simulation::ExternalPolicyState &value,
+               const std::vector<std::uint64_t> &targets) {
+                value.sanctions_imposed_on.clear();
+                value.sanctions_imposed_on.reserve(targets.size());
+                for (const auto target : targets) {
+                    value.sanctions_imposed_on.emplace_back(target);
+                }
+            })
+        .def_prop_rw(
+            "peg_anchor",
+            [](const macro_sim::simulation::ExternalPolicyState &value) -> nb::object {
+                if (!value.peg_anchor.has_value()) {
+                    return nb::none();
+                }
+                return nb::int_(value.peg_anchor->value());
+            },
+            [](macro_sim::simulation::ExternalPolicyState &value, nb::object anchor) {
+                value.peg_anchor =
+                    anchor.is_none()
+                        ? std::nullopt
+                        : std::optional<macro_sim::EconomyId>(
+                              macro_sim::EconomyId(nb::cast<std::uint64_t>(anchor)));
+            });
+    auto shock_spec =
+        nb::class_<macro_sim::simulation::ShockSpec>(module, "ShockSpec")
+            .def(nb::init<>())
+            .def_rw("id", &macro_sim::simulation::ShockSpec::id)
+            .def_rw("kind", &macro_sim::simulation::ShockSpec::kind)
+            .def_prop_rw(
+                "economy_id",
+                [](const macro_sim::simulation::ShockSpec &value) -> nb::object {
+                    if (!value.economy.has_value()) {
+                        return nb::none();
+                    }
+                    return nb::int_(value.economy->value());
+                },
+                [](macro_sim::simulation::ShockSpec &value, nb::object economy) {
+                    value.economy =
+                        economy.is_none()
+                            ? std::nullopt
+                            : std::optional<macro_sim::EconomyId>(macro_sim::EconomyId(
+                                  nb::cast<std::uint64_t>(economy)));
+                })
+            .def_prop_rw(
+                "start_tick",
+                [](const macro_sim::simulation::ShockSpec &value) {
+                    return value.start.value();
+                },
+                [](macro_sim::simulation::ShockSpec &value, std::uint64_t tick) {
+                    value.start = macro_sim::Tick(tick);
+                })
+            .def_prop_rw(
+                "announcement_tick",
+                [](const macro_sim::simulation::ShockSpec &value) -> nb::object {
+                    if (!value.announcement.has_value()) {
+                        return nb::none();
+                    }
+                    return nb::int_(value.announcement->value());
+                },
+                [](macro_sim::simulation::ShockSpec &value, nb::object tick) {
+                    value.announcement =
+                        tick.is_none() ? std::nullopt
+                                       : std::optional<macro_sim::Tick>(macro_sim::Tick(
+                                             nb::cast<std::uint64_t>(tick)));
+                })
+            .def_rw("duration", &macro_sim::simulation::ShockSpec::duration)
+            .def_rw("magnitude", &macro_sim::simulation::ShockSpec::magnitude)
+            .def_rw("shape", &macro_sim::simulation::ShockSpec::shape)
+            .def_rw("ramp_in_ticks", &macro_sim::simulation::ShockSpec::ramp_in_ticks)
+            .def_rw("ramp_out_ticks", &macro_sim::simulation::ShockSpec::ramp_out_ticks)
+            .def_prop_rw(
+                "sector",
+                [](const macro_sim::simulation::ShockSpec &value) -> nb::object {
+                    if (!value.sector.has_value()) {
+                        return nb::none();
+                    }
+                    return nb::cast(*value.sector);
+                },
+                [](macro_sim::simulation::ShockSpec &value, nb::object sector) {
+                    value.sector =
+                        sector.is_none()
+                            ? std::nullopt
+                            : std::optional<macro_sim::simulation::ShockSector>(
+                                  nb::cast<macro_sim::simulation::ShockSector>(sector));
+                });
+    static_cast<void>(shock_spec);
+    nb::class_<macro_sim::simulation::CrisisScenarioOptions>(module,
+                                                             "CrisisScenarioOptions")
+        .def(nb::init<>())
+        .def_prop_rw(
+            "start_tick",
+            [](const macro_sim::simulation::CrisisScenarioOptions &value) {
+                return value.start.value();
+            },
+            [](macro_sim::simulation::CrisisScenarioOptions &value,
+               std::uint64_t tick) { value.start = macro_sim::Tick(tick); })
+        .def_rw("duration", &macro_sim::simulation::CrisisScenarioOptions::duration)
+        .def_rw("announcement_lead_ticks",
+                &macro_sim::simulation::CrisisScenarioOptions::announcement_lead_ticks)
+        .def_rw("first_shock_id",
+                &macro_sim::simulation::CrisisScenarioOptions::first_shock_id)
+        .def_prop_rw(
+            "economies",
+            [](const macro_sim::simulation::CrisisScenarioOptions &value) {
+                std::vector<std::uint64_t> output;
+                output.reserve(value.economies.size());
+                for (const auto economy : value.economies) {
+                    output.push_back(economy.value());
+                }
+                return output;
+            },
+            [](macro_sim::simulation::CrisisScenarioOptions &value,
+               const std::vector<std::uint64_t> &economies) {
+                value.economies.clear();
+                value.economies.reserve(economies.size());
+                for (const auto economy : economies) {
+                    value.economies.emplace_back(economy);
+                }
+            })
+        .def_rw("include_trade",
+                &macro_sim::simulation::CrisisScenarioOptions::include_trade)
+        .def_rw("capital_loss",
+                &macro_sim::simulation::CrisisScenarioOptions::capital_loss);
+    module.def("make_crisis_scenario",
+               [](macro_sim::simulation::CrisisScenario scenario,
+                  const macro_sim::simulation::CrisisScenarioOptions &options,
+                  std::size_t economy_count) {
+                   auto result = macro_sim::simulation::make_crisis_scenario(
+                       scenario, options, economy_count);
+                   require_status(result.status());
+                   return std::move(*result.get_if());
+               });
+    nb::class_<macro_sim::simulation::M9WorldSpec>(module, "M9WorldSpec")
+        .def(nb::init<>())
+        .def_rw("economies", &macro_sim::simulation::M9WorldSpec::economies)
+        .def_rw("external_policies",
+                &macro_sim::simulation::M9WorldSpec::external_policies)
+        .def_rw("rules", &macro_sim::simulation::M9WorldSpec::rules)
+        .def_rw("shocks", &macro_sim::simulation::M9WorldSpec::shocks);
+    nb::class_<macro_sim::simulation::M9World>(module, "WorldSession")
+        .def_static(
+            "create",
+            [](const macro_sim::simulation::M9WorldSpec &spec) {
+                auto result = macro_sim::simulation::M9World::create(spec);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("spec"))
+        .def_prop_ro("tick",
+                     [](const macro_sim::simulation::M9World &world) {
+                         return world.tick().value();
+                     })
+        .def_prop_ro("economy_count", &macro_sim::simulation::M9World::economy_count)
+        .def(
+            "update_external_policies",
+            [](macro_sim::simulation::M9World &world,
+               const std::vector<macro_sim::simulation::ExternalPolicyState>
+                   &policies) {
+                require_status(world.update_external_policies(policies));
+            },
+            nb::arg("policies"))
+        .def(
+            "schedule_shock",
+            [](macro_sim::simulation::M9World &world,
+               const macro_sim::simulation::ShockSpec &shock) {
+                require_status(world.schedule_shock(shock));
+            },
+            nb::arg("shock"))
+        .def(
+            "advance",
+            [](macro_sim::simulation::M9World &world, std::uint64_t count,
+               std::uint32_t worker_count) {
+                macro_sim::simulation::M9AdvanceOptions options;
+                options.worker_count = worker_count;
+                auto result = [&world, count, &options]() {
+                    nb::gil_scoped_release release;
+                    return world.advance(count, options);
+                }();
+                require_status(result.status());
+                return m9_result_to_python(*result.get_if());
+            },
+            nb::arg("count"), nb::arg("worker_count") = 1U)
+        .def("snapshot",
+             [](const macro_sim::simulation::M9World &world) {
+                 return m9_snapshot_to_python(world);
+             })
+        .def("shock_events",
+             [](const macro_sim::simulation::M9World &world) {
+                 nb::list output;
+                 for (const auto &event : world.shock_events()) {
+                     nb::dict row;
+                     row["sequence"] = event.sequence;
+                     row["type"] = event.type;
+                     row["tick"] = event.tick.value();
+                     row["shock_id"] = event.shock_id;
+                     row["intensity"] = event.intensity;
+                     output.append(std::move(row));
+                 }
+                 return output;
+             })
+        .def("digest", &macro_sim::simulation::M9World::digest)
+        .def("checkpoint",
+             [](const macro_sim::simulation::M9World &world) {
+                 const auto result = world.checkpoint();
+                 require_status(result.status());
+                 const auto &bytes = *result.get_if();
+                 return nb::bytes(bytes.data(), bytes.size());
+             })
+        .def(
+            "economy_checkpoint",
+            [](const macro_sim::simulation::M9World &world, std::uint64_t economy) {
+                const auto result =
+                    world.economy_checkpoint(macro_sim::EconomyId(economy));
+                require_status(result.status());
+                const auto &bytes = *result.get_if();
+                return nb::bytes(bytes.data(), bytes.size());
+            },
+            nb::arg("economy_id"))
+        .def(
+            "restore_checkpoint",
+            [](macro_sim::simulation::M9World &world, const nb::bytes &encoded) {
+                auto result = macro_sim::simulation::M9World::restore(
+                    std::span<const std::uint8_t>(
+                        static_cast<const std::uint8_t *>(encoded.data()),
+                        encoded.size()));
+                require_status(result.status());
+                world = std::move(*result.get_if());
+            },
+            nb::arg("checkpoint"));
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")
         .value("HOUSEHOLD", macro_sim::core::OwnerKind::household)
         .value("FIRM", macro_sim::core::OwnerKind::firm)

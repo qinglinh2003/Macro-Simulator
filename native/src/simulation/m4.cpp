@@ -143,6 +143,46 @@ is_base_firm_sector(core::FirmSector sector) noexcept {
     return Status::success();
 }
 
+[[nodiscard]] Status validate_advance_options(
+    const core::RootState& state,
+    const M4AdvanceOptions& options
+) noexcept {
+    if (!all_finite(options.productivity_multipliers)
+        || !all_finite(options.labor_availability_multipliers)
+        || !std::isfinite(options.household_demand_multiplier)
+        || options.household_demand_multiplier < 0.0
+        || std::any_of(
+            options.productivity_multipliers.begin(),
+            options.productivity_multipliers.end(),
+            [](double value) { return value < 0.0; }
+        )
+        || std::any_of(
+            options.labor_availability_multipliers.begin(),
+            options.labor_availability_multipliers.end(),
+            [](double value) { return value < 0.0; }
+        )) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "M4 exogenous multipliers must be finite and nonnegative"
+        );
+    }
+    if (!options.external_goods_offer.has_value()) {
+        return Status::success();
+    }
+    const auto& offer = *options.external_goods_offer;
+    const auto* seller = state.postings.get(offer.seller);
+    if (offer.offer_id == 0U || seller == nullptr || !seller->open
+        || !std::isfinite(offer.stock) || offer.stock < 0.0
+        || !std::isfinite(offer.price) || offer.price <= 0.0
+        || state.firms.get(FirmId(offer.offer_id)) != nullptr) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "invalid M4 external goods offer"
+        );
+    }
+    return Status::success();
+}
+
 [[nodiscard]] std::size_t firm_projection_index(
     const M4TickScratch& scratch,
     std::uint64_t firm
@@ -388,6 +428,8 @@ void commit_working_state(
     scratch.reserve_minimum_ = scratch.reserve_balances_;
     scratch.transfer_count_ = 0;
     scratch.trade_count_ = 0;
+    scratch.external_goods_units_ = 0.0;
+    scratch.external_goods_value_ = 0.0;
     scratch.phase_trace_.clear();
     for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
         const auto* household =
@@ -454,13 +496,24 @@ void commit_working_state(
     const M4Runtime& runtime,
     M4TickScratch& scratch,
     PhiloxRng& rng,
-    double production_factor
+    double production_factor,
+    const M4AdvanceOptions& options
 ) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto* firm = state.firms.get(scratch.firm_ids_[index]);
         if (!is_base_firm_sector(firm->sector)) {
             continue;
         }
+        const auto sector =
+            static_cast<std::size_t>(
+                static_cast<std::uint8_t>(firm->sector)
+            );
+        const double productivity =
+            firm->productivity
+            * options.productivity_multipliers[sector];
+        const double total_factor_productivity =
+            firm->total_factor_productivity
+            * options.productivity_multipliers[sector];
         auto& work = scratch.firm_work_[index];
         auto production_plan = algorithms::production_plan(
             {
@@ -519,8 +572,8 @@ void commit_working_state(
             {
                 technology_for(firm->technology),
                 work.posted_wage,
-                firm->productivity,
-                firm->total_factor_productivity,
+                productivity,
+                total_factor_productivity,
                 firm->physical_capital.value(),
                 firm->capital_share,
                 work.production_target,
@@ -674,20 +727,28 @@ void commit_working_state(
 [[nodiscard]] Status run_production(
     const core::RootState& state,
     M4TickScratch& scratch,
-    double production_factor
+    double production_factor,
+    const M4AdvanceOptions& options
 ) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto* firm = state.firms.get(scratch.firm_ids_[index]);
         if (!is_base_firm_sector(firm->sector)) {
             continue;
         }
+        const auto sector =
+            static_cast<std::size_t>(
+                static_cast<std::uint8_t>(firm->sector)
+            );
         auto& work = scratch.firm_work_[index];
         auto produced = algorithms::production(
             {
                 technology_for(firm->technology),
-                work.hired,
-                firm->productivity,
-                firm->total_factor_productivity,
+                work.hired
+                    * options.labor_availability_multipliers[sector],
+                firm->productivity
+                    * options.productivity_multipliers[sector],
+                firm->total_factor_productivity
+                    * options.productivity_multipliers[sector],
                 firm->physical_capital.value(),
                 firm->capital_share,
                 production_factor,
@@ -708,7 +769,8 @@ void commit_working_state(
     const core::RootState& state,
     M4TickScratch& scratch,
     PhiloxRng& rng,
-    bool capital_market
+    bool capital_market,
+    const M4AdvanceOptions& options
 ) {
     scratch.market_buyer_order_.resize(scratch.orders_.size());
     std::iota(
@@ -793,20 +855,28 @@ void commit_working_state(
             remaining_demand -= quantity;
             allocated += quantity;
             scratch.market_offer_remaining_[offer_index] -= quantity;
-            const auto firm_index = firm_projection_index(
-                scratch,
-                offer.offer_id
-            );
-            if (firm_index == kAbsentFirmIndex
-                || firm_index >= scratch.firm_work_.size()) {
-                return Status(
-                    ErrorCode::internal_error,
-                    "M4 market offer projection is stale"
+            if (!capital_market
+                && options.external_goods_offer.has_value()
+                && offer.offer_id
+                    == options.external_goods_offer->offer_id) {
+                scratch.external_goods_units_ += quantity;
+                scratch.external_goods_value_ += value;
+            } else {
+                const auto firm_index = firm_projection_index(
+                    scratch,
+                    offer.offer_id
                 );
+                if (firm_index == kAbsentFirmIndex
+                    || firm_index >= scratch.firm_work_.size()) {
+                    return Status(
+                        ErrorCode::internal_error,
+                        "M4 market offer projection is stale"
+                    );
+                }
+                auto& firm = scratch.firm_work_[firm_index];
+                firm.sales += quantity;
+                firm.revenue += value;
             }
-            auto& firm = scratch.firm_work_[firm_index];
-            firm.sales += quantity;
-            firm.revenue += value;
             ++scratch.trade_count_;
             if (scratch.market_offer_remaining_[offer_index]
                 <= algorithms::kEconomicEpsilon) {
@@ -852,6 +922,12 @@ void commit_working_state(
         }
     }
     for (std::size_t index = 0; index < scratch.offers_.size(); ++index) {
+        if (!capital_market
+            && options.external_goods_offer.has_value()
+            && scratch.offers_[index].offer_id
+                == options.external_goods_offer->offer_id) {
+            continue;
+        }
         const auto firm_index = firm_projection_index(
             scratch,
             scratch.offers_[index].offer_id
@@ -874,7 +950,8 @@ void commit_working_state(
     const M4Runtime& runtime,
     M4TickScratch& scratch,
     PhiloxRng& rng,
-    bool capital_market
+    bool capital_market,
+    const M4AdvanceOptions& options
 ) {
     scratch.orders_.clear();
     scratch.offers_.clear();
@@ -958,6 +1035,18 @@ void commit_working_state(
                 }
             );
         }
+        if (options.external_goods_offer.has_value()) {
+            const auto& offer = *options.external_goods_offer;
+            scratch.offers_.push_back(
+                {
+                    offer.offer_id,
+                    offer.seller,
+                    Goods(offer.stock),
+                    Price(offer.price),
+                    1.0,
+                }
+            );
+        }
     }
     if (runtime.market_protocol == algorithms::MatchingProtocol::sampled
         && runtime.rules.market_sample_size == 1) {
@@ -965,7 +1054,8 @@ void commit_working_state(
             state,
             scratch,
             rng,
-            capital_market
+            capital_market,
+            options
         );
     }
     algorithms::MarketConfig config;
@@ -994,23 +1084,38 @@ void commit_working_state(
         if (!status.ok()) {
             return status;
         }
-        const auto firm_index = firm_projection_index(
-            scratch,
-            trade.offer_id
-        );
-        if (firm_index >= scratch.firm_work_.size()
-            || scratch.firm_ids_[firm_index].value() != trade.offer_id) {
-            return Status(
-                ErrorCode::internal_error,
-                "M4 market offer projection is stale"
+        if (!capital_market
+            && options.external_goods_offer.has_value()
+            && trade.offer_id
+                == options.external_goods_offer->offer_id) {
+            scratch.external_goods_units_ += trade.quantity.value();
+            scratch.external_goods_value_ += trade.value.value();
+        } else {
+            const auto firm_index = firm_projection_index(
+                scratch,
+                trade.offer_id
             );
+            if (firm_index >= scratch.firm_work_.size()
+                || scratch.firm_ids_[firm_index].value()
+                    != trade.offer_id) {
+                return Status(
+                    ErrorCode::internal_error,
+                    "M4 market offer projection is stale"
+                );
+            }
+            auto& firm = scratch.firm_work_[firm_index];
+            firm.sales += trade.quantity.value();
+            firm.revenue += trade.value.value();
         }
-        auto& firm = scratch.firm_work_[firm_index];
-        firm.sales += trade.quantity.value();
-        firm.revenue += trade.value.value();
         ++scratch.trade_count_;
     }
     for (const auto& stock : scratch.clearing_.stock_commands) {
+        if (!capital_market
+            && options.external_goods_offer.has_value()
+            && stock.offer_id
+                == options.external_goods_offer->offer_id) {
+            continue;
+        }
         const auto firm_index = firm_projection_index(
             scratch,
             stock.offer_id
@@ -1637,6 +1742,10 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
+    for (auto& household : scratch.household_work_) {
+        household.consumption_budget *=
+            options.household_demand_multiplier;
+    }
     PhiloxRng rng(runtime.rng_key, runtime.rng_counter);
     if (extension != nullptr) {
         status = extension->prepare_tick(
@@ -1674,7 +1783,8 @@ void commit_capital(
         runtime,
         scratch,
         rng,
-        production_factor
+        production_factor,
+        options
     );
     if (!status.ok()) {
         return status;
@@ -1723,7 +1833,12 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
-    status = run_production(state, scratch, production_factor);
+    status = run_production(
+        state,
+        scratch,
+        production_factor,
+        options
+    );
     if (!status.ok()) {
         return status;
     }
@@ -1733,7 +1848,14 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
-    status = apply_market(state, runtime, scratch, rng, false);
+    status = apply_market(
+        state,
+        runtime,
+        scratch,
+        rng,
+        false,
+        options
+    );
     if (!status.ok()) {
         return status;
     }
@@ -1760,7 +1882,14 @@ void commit_capital(
         if (!status.ok()) {
             return status;
         }
-        status = apply_market(state, runtime, scratch, rng, true);
+        status = apply_market(
+            state,
+            runtime,
+            scratch,
+            rng,
+            true,
+            options
+        );
         if (!status.ok()) {
             return status;
         }
@@ -1910,6 +2039,8 @@ void commit_capital(
         scratch.capacity_signature(),
         scratch.transfer_count_,
         scratch.trade_count_,
+        scratch.external_goods_units_,
+        scratch.external_goods_value_,
     };
 }
 
@@ -2493,6 +2624,10 @@ Result<M4AdvanceResult> advance_ticks(
             "M4 cannot advance during an accounting transaction"
         );
     }
+    auto options_status = validate_advance_options(state, options);
+    if (!options_status.ok()) {
+        return options_status;
+    }
     const Tick first = tick;
     if (count == 0) {
         return M4AdvanceResult{
@@ -2508,6 +2643,8 @@ Result<M4AdvanceResult> advance_ticks(
     M4AdvanceResult result;
     std::uint64_t transfers = 0;
     std::uint64_t trades = 0;
+    double external_units = 0.0;
+    double external_value = 0.0;
     for (std::uint64_t index = 0; index < count; ++index) {
         auto current = advance_one(
             state,
@@ -2523,12 +2660,16 @@ Result<M4AdvanceResult> advance_ticks(
         result = std::move(*current.get_if());
         transfers += result.transfer_count;
         trades += result.trade_count;
+        external_units += result.external_goods_units;
+        external_value += result.external_goods_value;
     }
     result.first_tick = first;
     result.next_tick = tick;
     result.advanced_ticks = count;
     result.transfer_count = transfers;
     result.trade_count = trades;
+    result.external_goods_units = external_units;
+    result.external_goods_value = external_value;
     return result;
 }
 
@@ -2547,6 +2688,10 @@ Result<M4AdvanceResult> advance_ticks_extended(
             "M4 cannot advance during an accounting transaction"
         );
     }
+    auto options_status = validate_advance_options(state, options);
+    if (!options_status.ok()) {
+        return options_status;
+    }
     const Tick first = tick;
     if (count == 0) {
         return M4AdvanceResult{
@@ -2562,6 +2707,8 @@ Result<M4AdvanceResult> advance_ticks_extended(
     M4AdvanceResult result;
     std::uint64_t transfers = 0;
     std::uint64_t trades = 0;
+    double external_units = 0.0;
+    double external_value = 0.0;
     for (std::uint64_t index = 0; index < count; ++index) {
         auto current = advance_one(
             state,
@@ -2577,12 +2724,16 @@ Result<M4AdvanceResult> advance_ticks_extended(
         result = std::move(*current.get_if());
         transfers += result.transfer_count;
         trades += result.trade_count;
+        external_units += result.external_goods_units;
+        external_value += result.external_goods_value;
     }
     result.first_tick = first;
     result.next_tick = tick;
     result.advanced_ticks = count;
     result.transfer_count = transfers;
     result.trade_count = trades;
+    result.external_goods_units = external_units;
+    result.external_goods_value = external_value;
     return result;
 }
 

@@ -84,14 +84,17 @@ Deliver:
 - one complete M8 economy state per country;
 - dense vectors for rates, dealer inventory, country aggregates, policy, and
   migration stocks;
-- dense matrices only for capital principal, arrears, and current settlement
-  while the measured country count is below the selected threshold;
-- a deterministic sparse edge representation above that threshold;
+- dense matrices for capital principal, arrears, and current settlement across
+  the qualified `N <= 256` World range;
 - one world tick, event counter, shock engine, and stable digest;
 - reusable phase scratch with capacities excluded from semantic digests.
 
 All cross-country references use stable economy IDs. World vectors are stored
-in ascending economy-ID order. Sparse edges sort by `(origin, destination)`.
+in ascending economy-ID order. The M9 benchmark found no crossover that
+justifies a second edge representation inside the supported range, so `256` is
+both the measured dense threshold and the initial maximum country count. A
+later extension beyond 256 must add deterministic sparse edges sorted by
+`(origin, destination)` and requalify checkpoints and complexity.
 
 ## 5. Phase graph and atomicity
 
@@ -170,11 +173,13 @@ households. Every tick proves:
 
 ## 10. Shock contract
 
-Shock IDs are unique and stable. Specs contain kind, target, start, duration,
-shape, magnitude, optional sector, and composition metadata. Materialization is
-pure for `(spec, world tick, economy ID, sector ID)`. Overlaps compose in
-canonical shock-ID order. Checkpoints store specs plus lifecycle state, never
-callable objects or host-language state.
+Shock IDs are unique and stable. Numeric specs contain kind, target, start,
+duration, shape, magnitude, optional sector, and deterministic ramp timing.
+Materialization is pure for `(spec, world tick, economy ID, sector ID)`.
+Overlaps compose in canonical shock-ID order. Checkpoints store specs plus
+lifecycle state, never callable objects or host-language state. Player-facing
+visibility, source, and narrative metadata belong to the M10 release envelope
+and do not enter the M9 economic state.
 
 ## 11. Performance design
 
@@ -183,9 +188,9 @@ persons or firms to compute world routing inputs; M8 publishes maintained
 country aggregates. Candidate trade and migration edges are pruned by
 sanctions, capacity, and positive-flow tests.
 
-Benchmarks cover `N=1/2/4/8/16/64/256`, quiet and active coupling, dense and
-sparse edge layouts, checkpoint continuation, and thread counts. The measured
-dense/sparse threshold becomes a checked contract. Threading is permitted only
+Benchmarks cover `N=1/2/4/8/16/64/256`, active coupling, checkpoint
+continuation, and thread counts. The measured all-dense decision through the
+initial 256-country maximum becomes a checked contract. Threading is permitted only
 between independent domestic prepares; reduction and commit order remain
 stable.
 
@@ -212,7 +217,8 @@ M9 is accepted only when:
 - fault injection proves reservation release and whole-world rollback;
 - checkpoint split-run and fresh-process continuation are exact;
 - thread counts produce identical digests and events;
-- `N=2/4/8/16/64/256` benchmarks publish the dense/sparse decision;
+- `N=2/4/8/16/64/256` benchmarks qualify the dense representation and its
+  supported-range limit;
 - release and sanitizer CTest pass;
 - isolated C, Python wheel, and source artifacts consume M9;
 - the full Python regression passes with eight workers;

@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <string_view>
+#include <vector>
 
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/error.hpp"
 #include "macro_sim/generated/contracts.hpp"
+#include "macro_sim/simulation/m9.hpp"
 #include "macro_sim/version.hpp"
 
 struct macro_sim_session {
@@ -15,6 +18,13 @@ struct macro_sim_session {
         : engine(macro_sim::EngineSessionOptions{macro_sim::SessionId(session_id)}) {}
 
     macro_sim::EngineSession engine;
+};
+
+struct macro_sim_m9_world {
+    explicit macro_sim_m9_world(macro_sim::simulation::M9World value)
+        : engine(std::move(value)) {}
+
+    macro_sim::simulation::M9World engine;
 };
 
 namespace {
@@ -535,6 +545,153 @@ housing_input_from_c(const macro_sim_m8_housing_input &value) noexcept {
     };
 }
 
+bool valid_m8_genesis_options(const macro_sim_m8_genesis_options &options) noexcept {
+    return options.struct_size == sizeof(options) && options.reserved == 0 &&
+           valid_m7_genesis_options(options.domestic_economy) &&
+           options.energy_policy.struct_size == sizeof(options.energy_policy) &&
+           options.energy_rules.struct_size == sizeof(options.energy_rules) &&
+           options.energy_input.struct_size == sizeof(options.energy_input) &&
+           options.housing_policy.struct_size == sizeof(options.housing_policy) &&
+           options.housing_rules.struct_size == sizeof(options.housing_rules) &&
+           options.housing_input.struct_size == sizeof(options.housing_input) &&
+           valid_flag(options.energy_policy.price_cap_compensation) &&
+           valid_flag(options.energy_policy.state_owned_price_at_cost) &&
+           options.energy_policy.rationing <=
+               MACRO_SIM_M8_ENERGY_RATION_INDUSTRY_FIRST &&
+           valid_flag(options.energy_rules.enabled) &&
+           valid_flag(options.energy_rules.household_energy) &&
+           valid_flag(options.energy_rules.deprivation) &&
+           valid_flag(options.energy_rules.state_owned_first_producer) &&
+           options.energy_rules.reserved == 0 && options.energy_input.reserved == 0 &&
+           valid_flag(options.housing_policy.mortgage_underwriting) &&
+           options.housing_policy.reserved == 0 &&
+           valid_flag(options.housing_rules.enabled) &&
+           valid_flag(options.housing_rules.resale_market) &&
+           valid_flag(options.housing_rules.mortgages) &&
+           valid_flag(options.housing_rules.rentals) &&
+           valid_flag(options.housing_rules.construction) &&
+           valid_flag(options.housing_rules.builder_land_fee_credit) &&
+           options.housing_rules.reserved == 0 && options.housing_input.reserved == 0;
+}
+
+macro_sim::simulation::M8SimulationSpec
+make_m8_spec(const macro_sim_m8_genesis_options &options) {
+    macro_sim::simulation::M8SimulationSpec spec;
+    spec.domestic_economy = make_m7_spec(options.domestic_economy);
+    spec.energy_policy = energy_policy_from_c(options.energy_policy);
+    spec.energy_rules = energy_rules_from_c(options.energy_rules);
+    spec.energy_input = energy_input_from_c(options.energy_input);
+    spec.housing_policy = housing_policy_from_c(options.housing_policy);
+    spec.housing_rules = housing_rules_from_c(options.housing_rules);
+    spec.housing_input = housing_input_from_c(options.housing_input);
+    return spec;
+}
+
+macro_sim::simulation::WorldRules
+world_rules_from_c(const macro_sim_m9_world_rules &value) noexcept {
+    macro_sim::simulation::WorldRules output;
+    output.trade = value.trade != 0U;
+    output.capital = value.capital != 0U;
+    output.migration = value.migration != 0U;
+    output.fx_loss_mutualization = value.fx_loss_mutualization != 0U;
+    output.dense_edge_threshold = static_cast<std::size_t>(value.dense_edge_threshold);
+    output.fx_adjustment = value.fx_adjustment;
+    output.fx_friction = value.fx_friction;
+    output.fx_spread = value.fx_spread;
+    output.fx_trade_cap = value.fx_trade_cap;
+    output.capital_mobility = value.capital_mobility;
+    output.capital_adjustment = value.capital_adjustment;
+    output.periods_per_year = value.periods_per_year;
+    output.migration_rate = value.migration_rate;
+    output.migration_max_share = value.migration_max_share;
+    output.remittance_share = value.remittance_share;
+    output.wage_smoothing = value.wage_smoothing;
+    output.initial_peg_reserves = value.initial_peg_reserves;
+    return output;
+}
+
+bool valid_m9_world_rules(const macro_sim_m9_world_rules &value) noexcept {
+    return value.struct_size == sizeof(value) && valid_flag(value.trade) &&
+           valid_flag(value.capital) && valid_flag(value.migration) &&
+           valid_flag(value.fx_loss_mutualization) && value.reserved == 0U &&
+           value.dense_edge_threshold != 0U;
+}
+
+bool valid_m9_external_policy(const macro_sim_m9_external_policy &value) noexcept {
+    return value.struct_size == sizeof(value) && valid_flag(value.has_import_quota) &&
+           valid_flag(value.has_immigration_cap) &&
+           valid_flag(value.has_emigration_cap) &&
+           value.fx_regime <= MACRO_SIM_M9_FX_PEG && valid_flag(value.has_peg_anchor) &&
+           value.reserved == 0U && value.reserved_2 == 0U &&
+           (value.sanction_count == 0U || value.sanctions != nullptr);
+}
+
+macro_sim::simulation::ExternalPolicyState
+external_policy_from_c(const macro_sim_m9_external_policy &value) {
+    macro_sim::simulation::ExternalPolicyState output;
+    output.tariff = value.tariff;
+    if (value.has_import_quota != 0U) {
+        output.import_quota = value.import_quota;
+    }
+    output.export_subsidy = value.export_subsidy;
+    output.capital_control = value.capital_control;
+    output.external_interest_settlement_fraction =
+        value.external_interest_settlement_fraction;
+    output.sanctions_imposed_on.reserve(value.sanction_count);
+    for (std::size_t index = 0; index < value.sanction_count; ++index) {
+        output.sanctions_imposed_on.emplace_back(value.sanctions[index]);
+    }
+    if (value.has_immigration_cap != 0U) {
+        output.immigration_cap = value.immigration_cap;
+    }
+    if (value.has_emigration_cap != 0U) {
+        output.emigration_cap = value.emigration_cap;
+    }
+    output.remittance_tax = value.remittance_tax;
+    output.outward_remittance_tax = value.outward_remittance_tax;
+    output.guest_worker_return = value.guest_worker_return;
+    output.fx_regime = static_cast<macro_sim::simulation::FxRegime>(value.fx_regime);
+    if (value.has_peg_anchor != 0U) {
+        output.peg_anchor = macro_sim::EconomyId(value.peg_anchor);
+    }
+    output.peg_reserve_scale = value.peg_reserve_scale;
+    return output;
+}
+
+bool valid_m9_shock(const macro_sim_m9_shock &value) noexcept {
+    return value.struct_size == sizeof(value) &&
+           value.kind <= MACRO_SIM_M9_SHOCK_CAPITAL_DESTRUCTION &&
+           value.shape <= MACRO_SIM_M9_SHOCK_TRIANGULAR &&
+           valid_flag(value.has_economy) && valid_flag(value.has_announcement) &&
+           valid_flag(value.has_sector) &&
+           (value.has_sector == 0U ||
+            value.sector <= MACRO_SIM_M9_SHOCK_SECTOR_PUBLIC) &&
+           value.reserved == 0U;
+}
+
+macro_sim::simulation::ShockSpec
+shock_from_c(const macro_sim_m9_shock &value) noexcept {
+    macro_sim::simulation::ShockSpec output;
+    output.id = value.id;
+    output.kind = static_cast<macro_sim::simulation::ShockKind>(value.kind);
+    if (value.has_economy != 0U) {
+        output.economy = macro_sim::EconomyId(value.economy_id);
+    }
+    output.start = macro_sim::Tick(value.start_tick);
+    if (value.has_announcement != 0U) {
+        output.announcement = macro_sim::Tick(value.announcement_tick);
+    }
+    output.duration = value.duration;
+    output.magnitude = value.magnitude;
+    output.ramp_in_ticks = value.ramp_in_ticks;
+    output.ramp_out_ticks = value.ramp_out_ticks;
+    output.shape = static_cast<macro_sim::simulation::ShockShape>(value.shape);
+    if (value.has_sector != 0U) {
+        output.sector = static_cast<macro_sim::simulation::ShockSector>(value.sector);
+    }
+    return output;
+}
+
 void fill_m8_metrics(macro_sim_m8_metrics &output,
                      const macro_sim::simulation::M8Metrics &value) noexcept {
     output.reserved = 0;
@@ -613,7 +770,7 @@ uint64_t macro_sim_capabilities(void) {
     return MACRO_SIM_CAPABILITY_M2_ACCOUNTING | MACRO_SIM_CAPABILITY_M3_ALGORITHMS |
            MACRO_SIM_CAPABILITY_M4_TICK | MACRO_SIM_CAPABILITY_M5_MONETARY |
            MACRO_SIM_CAPABILITY_M6_SECURITIES | MACRO_SIM_CAPABILITY_M7_POPULATION |
-           MACRO_SIM_CAPABILITY_M8_ENERGY_HOUSING;
+           MACRO_SIM_CAPABILITY_M8_ENERGY_HOUSING | MACRO_SIM_CAPABILITY_M9_WORLD;
 }
 
 const char *macro_sim_engine_version(void) { return macro_sim::kEngineVersion.data(); }
@@ -2035,43 +2192,11 @@ macro_sim_status macro_sim_m8_defaults(macro_sim_m8_genesis_options *output) {
 macro_sim_status macro_sim_m8_genesis(macro_sim_session *session,
                                       const macro_sim_m8_genesis_options *options) {
     if (session == nullptr || options == nullptr ||
-        options->struct_size != sizeof(*options) || options->reserved != 0 ||
-        !valid_m7_genesis_options(options->domestic_economy) ||
-        options->energy_policy.struct_size != sizeof(options->energy_policy) ||
-        options->energy_rules.struct_size != sizeof(options->energy_rules) ||
-        options->energy_input.struct_size != sizeof(options->energy_input) ||
-        options->housing_policy.struct_size != sizeof(options->housing_policy) ||
-        options->housing_rules.struct_size != sizeof(options->housing_rules) ||
-        options->housing_input.struct_size != sizeof(options->housing_input) ||
-        !valid_flag(options->energy_policy.price_cap_compensation) ||
-        !valid_flag(options->energy_policy.state_owned_price_at_cost) ||
-        options->energy_policy.rationing > MACRO_SIM_M8_ENERGY_RATION_INDUSTRY_FIRST ||
-        !valid_flag(options->energy_rules.enabled) ||
-        !valid_flag(options->energy_rules.household_energy) ||
-        !valid_flag(options->energy_rules.deprivation) ||
-        !valid_flag(options->energy_rules.state_owned_first_producer) ||
-        options->energy_rules.reserved != 0 || options->energy_input.reserved != 0 ||
-        !valid_flag(options->housing_policy.mortgage_underwriting) ||
-        options->housing_policy.reserved != 0 ||
-        !valid_flag(options->housing_rules.enabled) ||
-        !valid_flag(options->housing_rules.resale_market) ||
-        !valid_flag(options->housing_rules.mortgages) ||
-        !valid_flag(options->housing_rules.rentals) ||
-        !valid_flag(options->housing_rules.construction) ||
-        !valid_flag(options->housing_rules.builder_land_fee_credit) ||
-        options->housing_rules.reserved != 0 || options->housing_input.reserved != 0) {
+        !valid_m8_genesis_options(*options)) {
         return status(MACRO_SIM_INVALID_ARGUMENT,
                       "session and valid M8 genesis options are required");
     }
-    macro_sim::simulation::M8SimulationSpec spec;
-    spec.domestic_economy = make_m7_spec(options->domestic_economy);
-    spec.energy_policy = energy_policy_from_c(options->energy_policy);
-    spec.energy_rules = energy_rules_from_c(options->energy_rules);
-    spec.energy_input = energy_input_from_c(options->energy_input);
-    spec.housing_policy = housing_policy_from_c(options->housing_policy);
-    spec.housing_rules = housing_rules_from_c(options->housing_rules);
-    spec.housing_input = housing_input_from_c(options->housing_input);
-    return status(session->engine.initialize_m8(spec));
+    return status(session->engine.initialize_m8(make_m8_spec(*options)));
 }
 
 macro_sim_status
@@ -2444,6 +2569,352 @@ macro_sim_status macro_sim_m8_energy_producers(const macro_sim_session *session,
         target.demand_expected = source.demand_expected;
     }
     *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_rules_defaults(macro_sim_m9_world_rules *output) {
+    if (output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT, "M9 World rules output is required");
+    }
+    const macro_sim::simulation::WorldRules value;
+    std::memset(output, 0, sizeof(*output));
+    output->struct_size = sizeof(*output);
+    output->trade = value.trade ? 1U : 0U;
+    output->capital = value.capital ? 1U : 0U;
+    output->migration = value.migration ? 1U : 0U;
+    output->fx_loss_mutualization = value.fx_loss_mutualization ? 1U : 0U;
+    output->dense_edge_threshold = value.dense_edge_threshold;
+    output->fx_adjustment = value.fx_adjustment;
+    output->fx_friction = value.fx_friction;
+    output->fx_spread = value.fx_spread;
+    output->fx_trade_cap = value.fx_trade_cap;
+    output->capital_mobility = value.capital_mobility;
+    output->capital_adjustment = value.capital_adjustment;
+    output->periods_per_year = value.periods_per_year;
+    output->migration_rate = value.migration_rate;
+    output->migration_max_share = value.migration_max_share;
+    output->remittance_share = value.remittance_share;
+    output->wage_smoothing = value.wage_smoothing;
+    output->initial_peg_reserves = value.initial_peg_reserves;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status
+macro_sim_m9_external_policy_defaults(macro_sim_m9_external_policy *output) {
+    if (output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 external policy output is required");
+    }
+    const macro_sim::simulation::ExternalPolicyState value;
+    std::memset(output, 0, sizeof(*output));
+    output->struct_size = sizeof(*output);
+    output->fx_regime = MACRO_SIM_M9_FX_FLOAT;
+    output->tariff = value.tariff;
+    output->export_subsidy = value.export_subsidy;
+    output->capital_control = value.capital_control;
+    output->external_interest_settlement_fraction =
+        value.external_interest_settlement_fraction;
+    output->remittance_tax = value.remittance_tax;
+    output->outward_remittance_tax = value.outward_remittance_tax;
+    output->guest_worker_return = value.guest_worker_return;
+    output->peg_reserve_scale = value.peg_reserve_scale;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_create(const macro_sim_m9_genesis_options *options,
+                                           macro_sim_m9_world **output) {
+    if (options == nullptr || output == nullptr ||
+        options->struct_size != sizeof(*options) || options->reserved != 0U ||
+        options->economy_count == 0U || options->economies == nullptr ||
+        !valid_m9_world_rules(options->rules) ||
+        (options->external_policy_count != 0U &&
+         (options->external_policy_count != options->economy_count ||
+          options->external_policies == nullptr)) ||
+        (options->shock_count != 0U && options->shocks == nullptr)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "valid M9 genesis options and output are required");
+    }
+    *output = nullptr;
+    try {
+        macro_sim::simulation::M9WorldSpec spec;
+        spec.rules = world_rules_from_c(options->rules);
+        spec.economies.reserve(options->economy_count);
+        for (std::size_t index = 0; index < options->economy_count; ++index) {
+            if (!valid_m8_genesis_options(options->economies[index])) {
+                return status(MACRO_SIM_INVALID_ARGUMENT,
+                              "invalid M8 economy in M9 genesis");
+            }
+            spec.economies.push_back(make_m8_spec(options->economies[index]));
+        }
+        if (options->external_policy_count != 0U) {
+            spec.external_policies.reserve(options->external_policy_count);
+            for (std::size_t index = 0; index < options->external_policy_count;
+                 ++index) {
+                if (!valid_m9_external_policy(options->external_policies[index])) {
+                    return status(MACRO_SIM_INVALID_ARGUMENT,
+                                  "invalid external policy in M9 genesis");
+                }
+                spec.external_policies.push_back(
+                    external_policy_from_c(options->external_policies[index]));
+            }
+        }
+        spec.shocks.reserve(options->shock_count);
+        for (std::size_t index = 0; index < options->shock_count; ++index) {
+            if (!valid_m9_shock(options->shocks[index])) {
+                return status(MACRO_SIM_INVALID_ARGUMENT,
+                              "invalid shock in M9 genesis");
+            }
+            spec.shocks.push_back(shock_from_c(options->shocks[index]));
+        }
+        auto created = macro_sim::simulation::M9World::create(spec);
+        if (!created.ok()) {
+            return status(created.status());
+        }
+        auto *handle =
+            new (std::nothrow) macro_sim_m9_world(std::move(*created.get_if()));
+        if (handle == nullptr) {
+            return status(MACRO_SIM_ALLOCATION_FAILURE, "M9 World allocation failed");
+        }
+        *output = handle;
+        return status(MACRO_SIM_OK, "");
+    } catch (const std::bad_alloc &) {
+        return status(MACRO_SIM_ALLOCATION_FAILURE, "M9 World allocation failed");
+    } catch (...) {
+        return status(MACRO_SIM_INTERNAL_ERROR, "M9 World conversion failed");
+    }
+}
+
+macro_sim_status macro_sim_m9_world_destroy(macro_sim_m9_world **world) {
+    if (world == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World handle pointer is required");
+    }
+    delete *world;
+    *world = nullptr;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_tick(const macro_sim_m9_world *world,
+                                         uint64_t *output) {
+    if (world == nullptr || output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and tick output are required");
+    }
+    *output = world->engine.tick().value();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_advance(macro_sim_m9_world *world,
+                                            uint64_t tick_count,
+                                            macro_sim_m9_advance_result *output) {
+    if (world == nullptr || output == nullptr ||
+        output->struct_size != sizeof(*output)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and initialized result are required");
+    }
+    const auto result = world->engine.advance(tick_count);
+    if (!result.ok()) {
+        return status(result.status());
+    }
+    const auto &value = *result.get_if();
+    output->reserved = 0U;
+    output->first_tick = value.first_tick.value();
+    output->next_tick = value.next_tick.value();
+    output->advanced_ticks = value.advanced_ticks;
+    output->digest = value.digest;
+    output->trade_routes = value.metrics.trade_routes;
+    output->migration_routes = value.metrics.migration_routes;
+    output->shock_events = value.metrics.shock_events;
+    output->dealer_flow = value.metrics.dealer_flow;
+    output->dealer_spread_revenue = value.metrics.dealer_spread_revenue;
+    output->dealer_valuation = value.metrics.dealer_valuation;
+    output->world_nfa = value.metrics.world_nfa;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_update_external_policies(
+    macro_sim_m9_world *world, const macro_sim_m9_external_policy *policies,
+    size_t policy_count) {
+    if (world == nullptr || policies == nullptr ||
+        policy_count != world->engine.economy_count()) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "complete M9 external policy vector is required");
+    }
+    try {
+        std::vector<macro_sim::simulation::ExternalPolicyState> values;
+        values.reserve(policy_count);
+        for (std::size_t index = 0; index < policy_count; ++index) {
+            if (!valid_m9_external_policy(policies[index])) {
+                return status(MACRO_SIM_INVALID_ARGUMENT, "invalid M9 external policy");
+            }
+            values.push_back(external_policy_from_c(policies[index]));
+        }
+        return status(world->engine.update_external_policies(values));
+    } catch (const std::bad_alloc &) {
+        return status(MACRO_SIM_ALLOCATION_FAILURE, "M9 policy allocation failed");
+    } catch (...) {
+        return status(MACRO_SIM_INTERNAL_ERROR, "M9 policy conversion failed");
+    }
+}
+
+macro_sim_status macro_sim_m9_world_schedule_shock(macro_sim_m9_world *world,
+                                                   const macro_sim_m9_shock *shock) {
+    if (world == nullptr || shock == nullptr || !valid_m9_shock(*shock)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "valid M9 World and shock are required");
+    }
+    return status(world->engine.schedule_shock(shock_from_c(*shock)));
+}
+
+macro_sim_status macro_sim_m9_world_shock_event_count(const macro_sim_m9_world *world,
+                                                      size_t *output) {
+    if (world == nullptr || output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and event-count output are required");
+    }
+    *output = world->engine.shock_events().size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_shock_events(const macro_sim_m9_world *world,
+                                                 size_t offset,
+                                                 macro_sim_m9_shock_event *output,
+                                                 size_t capacity, size_t *written) {
+    if (world == nullptr || written == nullptr ||
+        (capacity != 0U && output == nullptr)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and event output are required");
+    }
+    *written = 0U;
+    const auto &events = world->engine.shock_events();
+    if (offset >= events.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, events.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = events[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.type = static_cast<std::uint32_t>(source.type);
+        target.sequence = source.sequence;
+        target.tick = source.tick.value();
+        target.shock_id = source.shock_id;
+        target.intensity = source.intensity;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_rates(const macro_sim_m9_world *world,
+                                          size_t offset, double *output,
+                                          size_t capacity, size_t *written) {
+    if (world == nullptr || written == nullptr ||
+        (capacity != 0U && output == nullptr)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and rate output are required");
+    }
+    *written = 0U;
+    const auto count = world->engine.economy_count();
+    if (offset >= count) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto rows = std::min(capacity, count - offset);
+    for (std::size_t index = 0; index < rows; ++index) {
+        output[index] = world->engine.rates().rate(
+            macro_sim::EconomyId(static_cast<std::uint64_t>(offset + index)));
+    }
+    *written = rows;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status
+macro_sim_m9_world_country_metrics(const macro_sim_m9_world *world, size_t offset,
+                                   macro_sim_m9_country_metrics *output,
+                                   size_t capacity, size_t *written) {
+    if (world == nullptr || written == nullptr ||
+        (capacity != 0U && output == nullptr)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and metrics output are required");
+    }
+    *written = 0U;
+    const auto &metrics = world->engine.last_metrics().external;
+    if (offset >= metrics.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, metrics.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = metrics[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.economy_id = offset + index;
+        target.active_shocks = source.active_shocks;
+#define MACRO_SIM_FILL_M9_COUNTRY(field) target.field = source.field
+        MACRO_SIM_FILL_M9_COUNTRY(exchange_rate);
+        MACRO_SIM_FILL_M9_COUNTRY(imports_value);
+        MACRO_SIM_FILL_M9_COUNTRY(imports_volume);
+        MACRO_SIM_FILL_M9_COUNTRY(exports_value);
+        MACRO_SIM_FILL_M9_COUNTRY(exports_volume);
+        MACRO_SIM_FILL_M9_COUNTRY(iceberg_loss);
+        MACRO_SIM_FILL_M9_COUNTRY(tariff_revenue);
+        MACRO_SIM_FILL_M9_COUNTRY(export_subsidy_cost);
+        MACRO_SIM_FILL_M9_COUNTRY(current_account);
+        MACRO_SIM_FILL_M9_COUNTRY(capital_flow);
+        MACRO_SIM_FILL_M9_COUNTRY(net_foreign_assets);
+        MACRO_SIM_FILL_M9_COUNTRY(factor_income_accrued);
+        MACRO_SIM_FILL_M9_COUNTRY(factor_income_cash);
+        MACRO_SIM_FILL_M9_COUNTRY(factor_income_arrears);
+        MACRO_SIM_FILL_M9_COUNTRY(peg_reserves);
+        MACRO_SIM_FILL_M9_COUNTRY(migrant_stock_abroad);
+        MACRO_SIM_FILL_M9_COUNTRY(migrant_stock_hosted);
+        MACRO_SIM_FILL_M9_COUNTRY(remittances_received);
+        MACRO_SIM_FILL_M9_COUNTRY(remittances_sent);
+        MACRO_SIM_FILL_M9_COUNTRY(remittance_tax_revenue);
+        MACRO_SIM_FILL_M9_COUNTRY(capital_destroyed);
+#undef MACRO_SIM_FILL_M9_COUNTRY
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_checkpoint_save(const macro_sim_m9_world *world,
+                                                    macro_sim_owned_buffer *output) {
+    if (world == nullptr || output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and checkpoint output are required");
+    }
+    output->data = nullptr;
+    output->size = 0U;
+    const auto checkpoint = world->engine.checkpoint();
+    if (!checkpoint.ok()) {
+        return status(checkpoint.status());
+    }
+    const auto size = checkpoint.get_if()->size();
+    auto *bytes = new (std::nothrow) std::uint8_t[size];
+    if (bytes == nullptr && size != 0U) {
+        return status(MACRO_SIM_ALLOCATION_FAILURE,
+                      "M9 checkpoint output allocation failed");
+    }
+    std::memcpy(bytes, checkpoint.get_if()->data(), size);
+    output->data = bytes;
+    output->size = size;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m9_world_checkpoint_load(macro_sim_m9_world *world,
+                                                    const uint8_t *checkpoint,
+                                                    size_t checkpoint_size) {
+    if (world == nullptr || (checkpoint_size != 0U && checkpoint == nullptr)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "M9 World and checkpoint are required");
+    }
+    const auto restored = macro_sim::simulation::M9World::restore(
+        std::span<const std::uint8_t>(checkpoint, checkpoint_size));
+    if (!restored.ok()) {
+        return status(restored.status());
+    }
+    world->engine = std::move(*restored.get_if());
     return status(MACRO_SIM_OK, "");
 }
 

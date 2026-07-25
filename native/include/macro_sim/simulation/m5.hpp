@@ -140,6 +140,7 @@ struct M5AdvanceOptions final {
     M4AdvanceOptions base{};
     std::optional<AccountId> force_default_account{};
     std::optional<BankId> force_run_bank{};
+    double credit_supply_multiplier{1.0};
 };
 
 struct M5AdvanceResult final {
@@ -210,7 +211,8 @@ struct M5CreditQuote final {
 [[nodiscard]] Result<M5CreditQuote>
 quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,
-                AccountId borrower_account, Money requested, Money borrower_limit);
+                AccountId borrower_account, Money requested, Money borrower_limit,
+                double credit_supply_multiplier = 1.0);
 [[nodiscard]] Result<LoanId> stage_m5_credit(const core::RootState &state,
                                              M4TickScratch &real_economy,
                                              const M5Runtime &runtime,

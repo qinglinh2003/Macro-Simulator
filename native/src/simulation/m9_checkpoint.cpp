@@ -40,22 +40,19 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     }
 }
 
-[[nodiscard]] bool read_u32(std::span<const std::uint8_t> bytes,
-                            std::size_t &position,
+[[nodiscard]] bool read_u32(std::span<const std::uint8_t> bytes, std::size_t &position,
                             std::uint32_t &value) noexcept {
     if (position > bytes.size() || bytes.size() - position < 4U) {
         return false;
     }
     value = 0U;
     for (int index = 0; index < 4; ++index) {
-        value = static_cast<std::uint32_t>(
-            (value << 8U) | bytes[position++]);
+        value = static_cast<std::uint32_t>((value << 8U) | bytes[position++]);
     }
     return true;
 }
 
-[[nodiscard]] bool read_u64(std::span<const std::uint8_t> bytes,
-                            std::size_t &position,
+[[nodiscard]] bool read_u64(std::span<const std::uint8_t> bytes, std::size_t &position,
                             std::uint64_t &value) noexcept {
     if (position > bytes.size() || bytes.size() - position < 8U) {
         return false;
@@ -123,8 +120,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 [[nodiscard]] std::optional<double> decode_optional(const Json &value) {
-    return value.is_null() ? std::nullopt
-                           : std::optional<double>(value.get<double>());
+    return value.is_null() ? std::nullopt : std::optional<double>(value.get<double>());
 }
 
 [[nodiscard]] Json encode_policy(const ExternalPolicyState &value) {
@@ -145,9 +141,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.outward_remittance_tax,
         value.guest_worker_return,
         static_cast<std::uint8_t>(value.fx_regime),
-        value.peg_anchor.has_value()
-            ? Json(value.peg_anchor->value())
-            : Json(nullptr),
+        value.peg_anchor.has_value() ? Json(value.peg_anchor->value()) : Json(nullptr),
         value.peg_reserve_scale,
     });
 }
@@ -184,15 +178,20 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         static_cast<std::uint8_t>(value.kind),
         value.economy.has_value() ? Json(value.economy->value()) : Json(nullptr),
         value.start.value(),
+        value.announcement.has_value() ? Json(value.announcement->value())
+                                       : Json(nullptr),
         value.duration,
         value.magnitude,
         static_cast<std::uint8_t>(value.shape),
-        value.sector.has_value() ? Json(*value.sector) : Json(nullptr),
+        value.ramp_in_ticks,
+        value.ramp_out_ticks,
+        value.sector.has_value() ? Json(static_cast<std::uint8_t>(*value.sector))
+                                 : Json(nullptr),
     });
 }
 
 [[nodiscard]] ShockSpec decode_shock(const Json &input) {
-    if (!input.is_array() || input.size() != 8U) {
+    if (!input.is_array() || input.size() != 11U) {
         throw std::runtime_error("invalid shock");
     }
     ShockSpec value;
@@ -202,44 +201,38 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.economy = EconomyId(input[2].get<std::uint64_t>());
     }
     value.start = Tick(input[3].get<std::uint64_t>());
-    value.duration = input[4].get<std::uint64_t>();
-    value.magnitude = input[5].get<double>();
-    value.shape = static_cast<ShockShape>(input[6].get<std::uint8_t>());
-    if (!input[7].is_null()) {
-        value.sector = input[7].get<std::uint8_t>();
+    if (!input[4].is_null()) {
+        value.announcement = Tick(input[4].get<std::uint64_t>());
+    }
+    value.duration = input[5].get<std::uint64_t>();
+    value.magnitude = input[6].get<double>();
+    value.shape = static_cast<ShockShape>(input[7].get<std::uint8_t>());
+    value.ramp_in_ticks = input[8].get<std::uint64_t>();
+    value.ramp_out_ticks = input[9].get<std::uint64_t>();
+    if (!input[10].is_null()) {
+        value.sector = static_cast<ShockSector>(input[10].get<std::uint8_t>());
     }
     return value;
 }
 
 [[nodiscard]] Json encode_country_metrics(const CountryExternalMetrics &value) {
     return Json::array({
-        value.exchange_rate,
-        value.imports_value,
-        value.imports_volume,
-        value.exports_value,
-        value.exports_volume,
-        value.iceberg_loss,
-        value.tariff_revenue,
-        value.export_subsidy_cost,
-        value.current_account,
-        value.capital_flow,
-        value.net_foreign_assets,
-        value.factor_income_accrued,
-        value.factor_income_cash,
-        value.factor_income_arrears,
-        value.peg_reserves,
-        value.migrant_stock_abroad,
-        value.migrant_stock_hosted,
-        value.remittances_received,
-        value.remittances_sent,
-        value.remittance_tax_revenue,
-        value.active_shocks,
+        value.exchange_rate,        value.imports_value,
+        value.imports_volume,       value.exports_value,
+        value.exports_volume,       value.iceberg_loss,
+        value.tariff_revenue,       value.export_subsidy_cost,
+        value.current_account,      value.capital_flow,
+        value.net_foreign_assets,   value.factor_income_accrued,
+        value.factor_income_cash,   value.factor_income_arrears,
+        value.peg_reserves,         value.migrant_stock_abroad,
+        value.migrant_stock_hosted, value.remittances_received,
+        value.remittances_sent,     value.remittance_tax_revenue,
+        value.capital_destroyed,    value.active_shocks,
     });
 }
 
-[[nodiscard]] CountryExternalMetrics
-decode_country_metrics(const Json &input) {
-    if (!input.is_array() || input.size() != 21U) {
+[[nodiscard]] CountryExternalMetrics decode_country_metrics(const Json &input) {
+    if (!input.is_array() || input.size() != 22U) {
         throw std::runtime_error("invalid country metrics");
     }
     CountryExternalMetrics value;
@@ -263,7 +256,8 @@ decode_country_metrics(const Json &input) {
     value.remittances_received = input[17].get<double>();
     value.remittances_sent = input[18].get<double>();
     value.remittance_tax_revenue = input[19].get<double>();
-    value.active_shocks = input[20].get<std::uint64_t>();
+    value.capital_destroyed = input[20].get<double>();
+    value.active_shocks = input[21].get<std::uint64_t>();
     return value;
 }
 
@@ -272,8 +266,7 @@ decode_country_metrics(const Json &input) {
 Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
     const auto state_status = validate();
     if (!state_status.ok()) {
-        return Status(ErrorCode::invariant_violation,
-                      "cannot save invalid M9 World");
+        return Status(ErrorCode::invariant_violation, "cannot save invalid M9 World");
     }
     Json metadata;
     metadata["tick"] = tick_.value();
@@ -285,6 +278,19 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
     metadata["smoothed_wages"] = smoothed_real_wages_;
     metadata["dealer_valuation"] = dealer_valuation_;
     metadata["event_counter"] = event_counter_;
+    metadata["announced_shocks"] = announced_shock_ids_;
+    metadata["active_shocks"] = active_shock_ids_;
+    metadata["realized_shocks"] = realized_shock_ids_;
+    metadata["shock_events"] = Json::array();
+    for (const auto &event : shock_events_) {
+        metadata["shock_events"].push_back(Json::array({
+            event.sequence,
+            static_cast<std::uint8_t>(event.type),
+            event.tick.value(),
+            event.shock_id,
+            event.intensity,
+        }));
+    }
     metadata["policies"] = Json::array();
     for (const auto &policy : external_policies_) {
         metadata["policies"].push_back(encode_policy(policy));
@@ -319,8 +325,7 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
     }
     metadata["external_metrics"] = Json::array();
     for (const auto &metrics : last_metrics_.external) {
-        metadata["external_metrics"].push_back(
-            encode_country_metrics(metrics));
+        metadata["external_metrics"].push_back(encode_country_metrics(metrics));
     }
     metadata["world_metrics"] = Json::array({
         last_metrics_.dealer_flow,
@@ -339,9 +344,8 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
         kMagic.size() + 4U + 8U + encoded.size() + 8U + kDigestBytes;
     for (const auto &economy : economies_) {
         auto value = save_m8_checkpoint(
-            economy.root, economy.real_economy, economy.monetary,
-            economy.financial, economy.population, economy.domestic,
-            economy.tick);
+            economy.root, economy.real_economy, economy.monetary, economy.financial,
+            economy.population, economy.domestic, economy.tick);
         if (!value.ok()) {
             return value.status();
         }
@@ -364,33 +368,37 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
         bytes.insert(bytes.end(), value.begin(), value.end());
     }
     const auto digest_value = core::sha256_digest(bytes);
-    bytes.insert(bytes.end(), digest_value.bytes.begin(),
-                 digest_value.bytes.end());
+    bytes.insert(bytes.end(), digest_value.bytes.begin(), digest_value.bytes.end());
     return bytes;
 }
 
-Result<M9World>
-M9World::restore(std::span<const std::uint8_t> checkpoint) {
+Result<std::vector<std::uint8_t>> M9World::economy_checkpoint(EconomyId economy) const {
+    if (!economy.valid() || economy.value() >= economies_.size()) {
+        return Status(ErrorCode::out_of_range,
+                      "M9 economy checkpoint index is out of range");
+    }
+    const auto &state = economies_[static_cast<std::size_t>(economy.value())];
+    return save_m8_checkpoint(state.root, state.real_economy, state.monetary,
+                              state.financial, state.population, state.domestic,
+                              state.tick);
+}
+
+Result<M9World> M9World::restore(std::span<const std::uint8_t> checkpoint) {
     if (checkpoint.size() > kMaximumCheckpointBytes ||
-        checkpoint.size() <
-            kMagic.size() + 4U + 8U + 8U + kDigestBytes ||
+        checkpoint.size() < kMagic.size() + 4U + 8U + 8U + kDigestBytes ||
         !std::equal(kMagic.begin(), kMagic.end(), checkpoint.begin())) {
         return corrupt();
     }
-    const auto payload =
-        checkpoint.first(checkpoint.size() - kDigestBytes);
+    const auto payload = checkpoint.first(checkpoint.size() - kDigestBytes);
     const auto digest_value = core::sha256_digest(payload);
-    if (!std::equal(
-            digest_value.bytes.begin(), digest_value.bytes.end(),
-            checkpoint.end() -
-                static_cast<std::ptrdiff_t>(kDigestBytes))) {
+    if (!std::equal(digest_value.bytes.begin(), digest_value.bytes.end(),
+                    checkpoint.end() - static_cast<std::ptrdiff_t>(kDigestBytes))) {
         return corrupt();
     }
     std::size_t position = kMagic.size();
     std::uint32_t version = 0U;
     std::uint64_t json_size = 0U;
-    if (!read_u32(payload, position, version) ||
-        version != kSchemaVersion ||
+    if (!read_u32(payload, position, version) || version != kSchemaVersion ||
         !read_u64(payload, position, json_size) ||
         json_size > payload.size() - position) {
         return corrupt();
@@ -402,33 +410,43 @@ M9World::restore(std::span<const std::uint8_t> checkpoint) {
         position += static_cast<std::size_t>(json_size);
         const auto metadata = Json::parse(encoded);
         std::uint64_t economy_count = 0U;
-        if (!read_u64(payload, position, economy_count) ||
-            economy_count == 0U ||
+        if (!read_u64(payload, position, economy_count) || economy_count == 0U ||
             economy_count >
-                static_cast<std::uint64_t>(
-                    std::numeric_limits<std::size_t>::max())) {
+                static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
             return corrupt();
         }
 
         M9World world;
         world.tick_ = Tick(metadata.at("tick").get<std::uint64_t>());
         world.rules_ = decode_rules(metadata.at("rules"));
-        world.rates_.log_rates =
-            metadata.at("rates").get<std::vector<double>>();
-        world.dealer_inventory_ =
-            metadata.at("dealer").get<std::vector<double>>();
+        world.rates_.log_rates = metadata.at("rates").get<std::vector<double>>();
+        world.dealer_inventory_ = metadata.at("dealer").get<std::vector<double>>();
         world.external_principal_ =
-            metadata.at("principal")
-                .get<std::vector<std::vector<double>>>();
+            metadata.at("principal").get<std::vector<std::vector<double>>>();
         world.interest_arrears_ =
-            metadata.at("arrears")
-                .get<std::vector<std::vector<double>>>();
+            metadata.at("arrears").get<std::vector<std::vector<double>>>();
         world.smoothed_real_wages_ =
             metadata.at("smoothed_wages").get<std::vector<double>>();
-        world.dealer_valuation_ =
-            metadata.at("dealer_valuation").get<double>();
-        world.event_counter_ =
-            metadata.at("event_counter").get<std::uint64_t>();
+        world.dealer_valuation_ = metadata.at("dealer_valuation").get<double>();
+        world.event_counter_ = metadata.at("event_counter").get<std::uint64_t>();
+        world.announced_shock_ids_ =
+            metadata.at("announced_shocks").get<std::vector<std::uint64_t>>();
+        world.active_shock_ids_ =
+            metadata.at("active_shocks").get<std::vector<std::uint64_t>>();
+        world.realized_shock_ids_ =
+            metadata.at("realized_shocks").get<std::vector<std::uint64_t>>();
+        for (const auto &item : metadata.at("shock_events")) {
+            if (!item.is_array() || item.size() != 5U) {
+                return corrupt();
+            }
+            world.shock_events_.push_back(ShockEvent{
+                item[0].get<std::uint64_t>(),
+                static_cast<ShockEventType>(item[1].get<std::uint8_t>()),
+                Tick(item[2].get<std::uint64_t>()),
+                item[3].get<std::uint64_t>(),
+                item[4].get<double>(),
+            });
+        }
         for (const auto &item : metadata.at("policies")) {
             world.external_policies_.push_back(decode_policy(item));
         }
@@ -464,32 +482,22 @@ M9World::restore(std::span<const std::uint8_t> checkpoint) {
             world.shocks_.push_back(decode_shock(item));
         }
         for (const auto &item : metadata.at("external_metrics")) {
-            world.last_metrics_.external.push_back(
-                decode_country_metrics(item));
+            world.last_metrics_.external.push_back(decode_country_metrics(item));
         }
         const auto &world_metrics = metadata.at("world_metrics");
         if (!world_metrics.is_array() || world_metrics.size() != 7U) {
             return corrupt();
         }
-        world.last_metrics_.dealer_flow =
-            world_metrics[0].get<double>();
-        world.last_metrics_.dealer_spread_revenue =
-            world_metrics[1].get<double>();
-        world.last_metrics_.dealer_valuation =
-            world_metrics[2].get<double>();
-        world.last_metrics_.world_nfa =
-            world_metrics[3].get<double>();
-        world.last_metrics_.trade_routes =
-            world_metrics[4].get<std::uint64_t>();
-        world.last_metrics_.migration_routes =
-            world_metrics[5].get<std::uint64_t>();
-        world.last_metrics_.shock_events =
-            world_metrics[6].get<std::uint64_t>();
+        world.last_metrics_.dealer_flow = world_metrics[0].get<double>();
+        world.last_metrics_.dealer_spread_revenue = world_metrics[1].get<double>();
+        world.last_metrics_.dealer_valuation = world_metrics[2].get<double>();
+        world.last_metrics_.world_nfa = world_metrics[3].get<double>();
+        world.last_metrics_.trade_routes = world_metrics[4].get<std::uint64_t>();
+        world.last_metrics_.migration_routes = world_metrics[5].get<std::uint64_t>();
+        world.last_metrics_.shock_events = world_metrics[6].get<std::uint64_t>();
 
-        world.economies_.reserve(
-            static_cast<std::size_t>(economy_count));
-        world.last_metrics_.domestic.reserve(
-            static_cast<std::size_t>(economy_count));
+        world.economies_.reserve(static_cast<std::size_t>(economy_count));
+        world.last_metrics_.domestic.reserve(static_cast<std::size_t>(economy_count));
         for (std::uint64_t index = 0U; index < economy_count; ++index) {
             std::uint64_t size = 0U;
             if (!read_u64(payload, position, size) ||
@@ -508,8 +516,7 @@ M9World::restore(std::span<const std::uint8_t> checkpoint) {
             }
             EconomyState state;
             state.root = std::move(value.root);
-            state.real_economy =
-                std::move(value.real_economy_runtime);
+            state.real_economy = std::move(value.real_economy_runtime);
             state.monetary = std::move(value.monetary_runtime);
             state.financial = std::move(value.financial_runtime);
             state.population = std::move(value.population_runtime);
@@ -520,13 +527,11 @@ M9World::restore(std::span<const std::uint8_t> checkpoint) {
             state.financial_scratch.reserve(state.root, state.financial);
             state.population_scratch.reserve(state.population);
             state.domestic_scratch.reserve(state.root, state.domestic);
-            world.last_metrics_.domestic.push_back(
-                state.domestic.last_metrics);
+            world.last_metrics_.domestic.push_back(state.domestic.last_metrics);
             world.economies_.push_back(std::move(state));
         }
         if (position != payload.size() ||
-            world.last_metrics_.external.size() !=
-                world.economies_.size()) {
+            world.last_metrics_.external.size() != world.economies_.size()) {
             return corrupt();
         }
         const auto status = world.validate();
