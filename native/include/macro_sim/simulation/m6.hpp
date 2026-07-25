@@ -315,6 +315,11 @@ struct M6Initialization final {
 [[nodiscard]] Status validate_m6_policy(const M6PolicyState &policy) noexcept;
 [[nodiscard]] Status validate_m6_rules(const M6Rules &rules) noexcept;
 [[nodiscard]] Status validate_m6_spec(const M6SimulationSpec &spec) noexcept;
+[[nodiscard]] Status
+validate_m6_state_fast(const core::RootState &state,
+                       const M4Runtime &real_economy_runtime,
+                       const M5Runtime &monetary_runtime,
+                       const M6Runtime &runtime, Tick tick) noexcept;
 [[nodiscard]] Status validate_m6_state(const core::RootState &state,
                                        const M4Runtime &real_economy_runtime,
                                        const M5Runtime &monetary_runtime,

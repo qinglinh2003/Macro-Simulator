@@ -2197,16 +2197,19 @@ class M8Extension final : public M7TickExtension {
     [[nodiscard]] Status clear_buyer_sequence(const core::RootState &state,
                                               M4TickScratch &real,
                                               std::span<const std::size_t> buyers) {
+        std::size_t seller_cursor = 0;
         for (const auto buyer_index : buyers) {
             auto &order = scratch_.orders_[buyer_index];
             double remaining = std::max(0.0, order.demand - order.allocated);
-            for (const auto seller_index : scratch_.seller_order_) {
+            while (seller_cursor < scratch_.seller_order_.size()) {
+                const auto seller_index = scratch_.seller_order_[seller_cursor];
                 auto &offer = scratch_.offers_[seller_index];
                 if (remaining <= kEconomicEpsilon || order.budget <= kEconomicEpsilon) {
                     break;
                 }
                 if (offer.stock <= kEconomicEpsilon ||
                     offer.price <= kEconomicEpsilon) {
+                    ++seller_cursor;
                     continue;
                 }
                 const double available =
@@ -2221,13 +2224,19 @@ class M8Extension final : public M7TickExtension {
                     available / offer.price,
                 });
                 if (quantity <= kEconomicEpsilon) {
-                    continue;
+                    // Offers are ordered by nondecreasing price. A buyer that
+                    // cannot take the current live offer cannot take a later
+                    // one, while another buyer may still take this offer.
+                    break;
                 }
                 const auto status = transfer_trade(state, real, order, offer, quantity);
                 if (!status.ok()) {
                     return status;
                 }
                 remaining -= quantity;
+                if (offer.stock <= kEconomicEpsilon) {
+                    ++seller_cursor;
+                }
             }
         }
         return Status::success();

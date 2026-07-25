@@ -2361,11 +2361,14 @@ Status validate_m7_spec(const M7SimulationSpec &spec) noexcept {
     return validate_m6_spec(financial);
 }
 
-Status validate_m7_state(const core::RootState &state,
-                         const M4Runtime &real_economy_runtime,
-                         const M5Runtime &monetary_runtime,
-                         const M6Runtime &financial_runtime, const M7Runtime &runtime,
-                         Tick tick) noexcept {
+namespace {
+
+Status validate_m7_state_impl(const core::RootState &state,
+                              const M4Runtime &real_economy_runtime,
+                              const M5Runtime &monetary_runtime,
+                              const M6Runtime &financial_runtime,
+                              const M7Runtime &runtime, Tick tick,
+                              bool full_index_validation) noexcept {
     auto status = validate_m7_policy(runtime.policy);
     if (!status.ok()) {
         return status;
@@ -2374,8 +2377,11 @@ Status validate_m7_state(const core::RootState &state,
     if (!status.ok()) {
         return status;
     }
-    status = validate_m6_state(state, real_economy_runtime, monetary_runtime,
-                               financial_runtime, tick);
+    status = full_index_validation
+                 ? validate_m6_state(state, real_economy_runtime, monetary_runtime,
+                                     financial_runtime, tick)
+                 : validate_m6_state_fast(state, real_economy_runtime,
+                                          monetary_runtime, financial_runtime, tick);
     if (!status.ok()) {
         return status;
     }
@@ -2388,8 +2394,11 @@ Status validate_m7_state(const core::RootState &state,
         return status;
     }
     if (runtime.rules.beneficial_ownership) {
-        status = runtime.beneficial_ownership.validate(runtime.persons,
-                                                       state.accounting_tolerance);
+        status = full_index_validation
+                     ? runtime.beneficial_ownership.validate(
+                           runtime.persons, state.accounting_tolerance)
+                     : runtime.beneficial_ownership.validate_fast(
+                           runtime.persons, state.accounting_tolerance);
         if (!status.ok()) {
             return status;
         }
@@ -2426,6 +2435,17 @@ Status validate_m7_state(const core::RootState &state,
                       "M7 calendar and tick are inconsistent");
     }
     return Status::success();
+}
+
+} // namespace
+
+Status validate_m7_state(const core::RootState &state,
+                         const M4Runtime &real_economy_runtime,
+                         const M5Runtime &monetary_runtime,
+                         const M6Runtime &financial_runtime, const M7Runtime &runtime,
+                         Tick tick) noexcept {
+    return validate_m7_state_impl(state, real_economy_runtime, monetary_runtime,
+                                  financial_runtime, runtime, tick, true);
 }
 
 Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
@@ -2654,8 +2674,9 @@ advance_m7_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
                       M7TickScratch &scratch, Tick &tick, std::uint64_t count,
                       M7TickExtension *nested_extension,
                       const M7AdvanceOptions &options) {
-    const auto status = validate_m7_state(state, real_economy_runtime, monetary_runtime,
-                                          financial_runtime, runtime, tick);
+    const auto status =
+        validate_m7_state_impl(state, real_economy_runtime, monetary_runtime,
+                               financial_runtime, runtime, tick, false);
     if (!status.ok()) {
         return Status(ErrorCode::invariant_violation,
                       "M7 cannot advance an invalid state");

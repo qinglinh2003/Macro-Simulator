@@ -107,11 +107,14 @@ scenario. The root-state digest remains
 | Shared beneficial derived indexes | 15.40 s | 7.06 GiB | -50.3% |
 | Asset-row aggregation and no projection sort | 13.68 s | 7.54 GiB | -55.9% |
 | Mutation-tracked incremental beneficial validation | 12.40 s | 7.78 GiB | -60.0% |
+| Fast advance-entry validation | 10.27 s | 7.80 GiB | -66.9% |
+| Monotonic sequential energy clearing | 10.05 s | 7.67 GiB | -67.6% |
 
-The latest measured days were 10.37 s, 12.40 s, and 13.13 s. Genesis remained
-8.26 s. The optimization has therefore removed 60% of median daily latency
-without changing the deterministic result, but it is still approximately 12.4
-times above the interactive target.
+The latest acceptance run measured 10.05 s, 10.27 s, and 9.25 s. A second
+profiled run measured a 9.76-second median. Genesis remained approximately
+8.25 seconds. The optimization has therefore removed approximately 68% of
+median daily latency without changing the deterministic result, but it is still
+approximately ten times above the interactive target.
 
 The additional lookup structures currently increase peak resident memory. This
 is an explicit open issue, not an accepted final tradeoff. The next data-layout
@@ -123,6 +126,14 @@ scratch, while immutable reverse indexes are shared until a mutation requires a
 copy. Daily validation checks every touched lot and asset row. Checkpoint loads,
 explicit state validation, and the acceptance suite still execute the complete
 cross-index validation.
+
+Normal single-day advancement now uses the existing fast M6 record validation at
+its entry boundary. Explicit state validation and checkpoint boundaries retain
+the full security-index check, and the per-day working-state validation remains
+in place. Sequential energy rationing now carries a monotonic cursor over
+price-ordered offers. Permanently exhausted offers are visited once rather than
+once per buyer; buyer priority, offer priority, prices, fiscal flows, and the
+resulting digest are unchanged.
 
 ## 4. Baseline with the current model enabled
 
