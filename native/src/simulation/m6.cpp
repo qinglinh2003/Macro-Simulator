@@ -2042,12 +2042,13 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
 class M6Extension final : public M5TickExtension {
   public:
     M6Extension(M6Runtime &runtime, M6TickScratch &scratch,
-                const M6AdvanceOptions &options) noexcept
-        : runtime_(runtime), scratch_(scratch), options_(options) {}
+                const M6AdvanceOptions &options, M6TickExtension *extension) noexcept
+        : runtime_(runtime), scratch_(scratch), options_(options),
+          extension_(extension) {}
 
-    Status prepare_tick(const core::RootState &state, M4Runtime &, M4TickScratch &real,
-                        M5Runtime &, M5TickScratch &monetary, Tick tick,
-                        PhiloxRng &) override {
+    Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
+                        M4TickScratch &real, M5Runtime &monetary_runtime,
+                        M5TickScratch &monetary, Tick tick, PhiloxRng &rng) override {
         scratch_.securities_ = runtime_.securities;
         scratch_.firms_ = runtime_.firms;
         scratch_.margin_loans_ = runtime_.margin_loans;
@@ -2059,7 +2060,12 @@ class M6Extension final : public M5TickExtension {
         lifecycle_counter_ = runtime_.lifecycle_rng_counter;
         security_counter_ = runtime_.security_rng_counter;
         open_bank_security_books(state, scratch_.securities_, monetary);
-        return run_bond_open(state, real, monetary, scratch_, tick);
+        auto status = run_bond_open(state, real, monetary, scratch_, tick);
+        if (!status.ok() || extension_ == nullptr) {
+            return status;
+        }
+        return extension_->prepare_tick(state, real_runtime, real, monetary_runtime,
+                                        monetary, runtime_, scratch_, tick, rng);
     }
 
     Status after_planning(const core::RootState &, M4Runtime &, M4TickScratch &,
@@ -2107,10 +2113,10 @@ class M6Extension final : public M5TickExtension {
         return run_firm_exits(state, real, monetary, runtime_, scratch_, options_);
     }
 
-    Status close_institutions(const core::RootState &state, M4Runtime &,
+    Status close_institutions(const core::RootState &state, M4Runtime &real_runtime,
                               M4TickScratch &real, M5Runtime &monetary_runtime,
                               M5TickScratch &monetary, Tick tick,
-                              PhiloxRng &) override {
+                              PhiloxRng &rng) override {
         auto status = resolve_dead_bank_equity(state, monetary, scratch_);
         if (!status.ok()) {
             return status;
@@ -2133,17 +2139,27 @@ class M6Extension final : public M5TickExtension {
         }
         close_bank_security_books(state, real, scratch_.securities_, monetary);
         measure_m6(state, monetary, runtime_, scratch_, tick);
-        return Status::success();
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->close_day(state, real_runtime, real, monetary_runtime,
+                                     monetary, runtime_, scratch_, tick, rng);
     }
 
-    Status validate(const core::RootState &state, const M4Runtime &,
-                    const M4TickScratch &real, const M5Runtime &,
-                    const M5TickScratch &monetary, Tick) const override {
-        return validate_projection(state, real, monetary, runtime_, scratch_);
+    Status validate(const core::RootState &state, const M4Runtime &real_runtime,
+                    const M4TickScratch &real, const M5Runtime &monetary_runtime,
+                    const M5TickScratch &monetary, Tick tick) const override {
+        const auto status =
+            validate_projection(state, real, monetary, runtime_, scratch_);
+        if (!status.ok() || extension_ == nullptr) {
+            return status;
+        }
+        return extension_->validate(state, real_runtime, real, monetary_runtime,
+                                    monetary, runtime_, scratch_, tick);
     }
 
-    void commit(core::RootState &state, M4Runtime &, M4TickScratch &,
-                M5Runtime &monetary_runtime, M5TickScratch &, Tick,
+    void commit(core::RootState &state, M4Runtime &real_runtime, M4TickScratch &real,
+                M5Runtime &monetary_runtime, M5TickScratch &monetary, Tick tick,
                 const M5Metrics &metrics) noexcept override {
         const auto previous_security_version = runtime_.securities.version();
         const auto next_security_version = scratch_.securities_.version();
@@ -2158,12 +2174,17 @@ class M6Extension final : public M5TickExtension {
         scratch_.working_metrics_.economy = metrics;
         runtime_.last_metrics = scratch_.working_metrics_;
         commit_lifecycle(state, monetary_runtime, runtime_, scratch_);
+        if (extension_ != nullptr) {
+            extension_->commit(state, real_runtime, real, monetary_runtime, monetary,
+                               runtime_, scratch_, tick, runtime_.last_metrics);
+        }
     }
 
   private:
     M6Runtime &runtime_;
     M6TickScratch &scratch_;
     const M6AdvanceOptions &options_;
+    M6TickExtension *extension_{nullptr};
     std::uint64_t lifecycle_counter_{0};
     std::uint64_t security_counter_{0};
 };
@@ -2681,11 +2702,12 @@ std::uint64_t M6TickScratch::capacity_signature() const noexcept {
 }
 
 Result<M6AdvanceResult>
-advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
-                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
-                 M5TickScratch &monetary_scratch, M6Runtime &runtime,
-                 M6TickScratch &scratch, Tick &tick, std::uint64_t count,
-                 const M6AdvanceOptions &options) {
+advance_m6_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
+                      M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                      M5TickScratch &monetary_scratch, M6Runtime &runtime,
+                      M6TickScratch &scratch, Tick &tick, std::uint64_t count,
+                      M6TickExtension *tick_extension,
+                      const M6AdvanceOptions &options) {
     if (count == 0) {
         return M6AdvanceResult{
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,
@@ -2697,7 +2719,7 @@ advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
         return Status(ErrorCode::invariant_violation,
                       "M6 cannot advance an invalid state");
     }
-    M6Extension extension(runtime, scratch, options);
+    M6Extension extension(runtime, scratch, options, tick_extension);
     auto result = advance_m5_ticks_extended(
         state, real_economy_runtime, real_economy_scratch, monetary_runtime,
         monetary_scratch, tick, count, extension, options.base);
@@ -2714,6 +2736,29 @@ advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
         base.transfer_count,
         base.trade_count,
     };
+}
+
+Result<M6AdvanceResult>
+advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &runtime,
+                 M6TickScratch &scratch, Tick &tick, std::uint64_t count,
+                 const M6AdvanceOptions &options) {
+    return advance_m6_ticks_impl(state, real_economy_runtime, real_economy_scratch,
+                                 monetary_runtime, monetary_scratch, runtime, scratch,
+                                 tick, count, nullptr, options);
+}
+
+Result<M6AdvanceResult>
+advance_m6_ticks_extended(core::RootState &state, M4Runtime &real_economy_runtime,
+                          M4TickScratch &real_economy_scratch,
+                          M5Runtime &monetary_runtime, M5TickScratch &monetary_scratch,
+                          M6Runtime &runtime, M6TickScratch &scratch, Tick &tick,
+                          std::uint64_t count, M6TickExtension &extension,
+                          const M6AdvanceOptions &options) {
+    return advance_m6_ticks_impl(state, real_economy_runtime, real_economy_scratch,
+                                 monetary_runtime, monetary_scratch, runtime, scratch,
+                                 tick, count, &extension, options);
 }
 
 } // namespace macro_sim::simulation

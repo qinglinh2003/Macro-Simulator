@@ -260,6 +260,36 @@ class M6TickScratch final {
     M6Metrics working_metrics_{};
 };
 
+class M6TickExtension {
+  public:
+    M6TickExtension() = default;
+    M6TickExtension(const M6TickExtension &) = delete;
+    M6TickExtension &operator=(const M6TickExtension &) = delete;
+    virtual ~M6TickExtension() = default;
+
+    [[nodiscard]] virtual Status
+    prepare_tick(const core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &runtime,
+                 M6TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    close_day(const core::RootState &state, M4Runtime &real_economy_runtime,
+              M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+              M5TickScratch &monetary_scratch, M6Runtime &runtime,
+              M6TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    validate(const core::RootState &state, const M4Runtime &real_economy_runtime,
+             const M4TickScratch &real_economy_scratch,
+             const M5Runtime &monetary_runtime, const M5TickScratch &monetary_scratch,
+             const M6Runtime &runtime, const M6TickScratch &scratch,
+             Tick tick) const = 0;
+    virtual void commit(core::RootState &state, M4Runtime &real_economy_runtime,
+                        M4TickScratch &real_economy_scratch,
+                        M5Runtime &monetary_runtime, M5TickScratch &monetary_scratch,
+                        M6Runtime &runtime, M6TickScratch &scratch, Tick tick,
+                        const M6Metrics &metrics) noexcept = 0;
+};
+
 struct M6Initialization final {
     core::RootState root;
     M4Runtime real_economy_runtime;
@@ -288,6 +318,13 @@ advance_m6_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
                  M5TickScratch &monetary_scratch, M6Runtime &runtime,
                  M6TickScratch &scratch, Tick &tick, std::uint64_t count,
                  const M6AdvanceOptions &options = {});
+[[nodiscard]] Result<M6AdvanceResult>
+advance_m6_ticks_extended(core::RootState &state, M4Runtime &real_economy_runtime,
+                          M4TickScratch &real_economy_scratch,
+                          M5Runtime &monetary_runtime, M5TickScratch &monetary_scratch,
+                          M6Runtime &runtime, M6TickScratch &scratch, Tick &tick,
+                          std::uint64_t count, M6TickExtension &extension,
+                          const M6AdvanceOptions &options = {});
 
 } // namespace macro_sim::simulation
 
