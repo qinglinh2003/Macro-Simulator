@@ -388,6 +388,8 @@ void print(const Measurement &value) {
     std::cout << '{'
               << "\"active_beneficial_lots\":" << value.active_beneficial_lots << ','
               << "\"banks\":" << value.banks << ','
+              << "\"beneficial_security_claim_granularity\":"
+                 "\"household_portfolio\","
               << "\"beneficial_lots\":" << value.beneficial_lots << ','
               << "\"beneficial_ownership\":"
               << (value.beneficial_ownership ? "true" : "false") << ','
@@ -423,8 +425,8 @@ void print(const Measurement &value) {
               << "\"persons\":" << value.persons << ','
               << "\"portfolio_review_interval_days\":"
               << value.portfolio_review_interval_days << ','
-              << "\"scenario\":\"static-population-staggered-portfolio-v2\","
-              << "\"schema_version\":\"m9-scale-probe-v3\","
+              << "\"scenario\":\"static-population-aggregate-portfolio-v3\","
+              << "\"schema_version\":\"m9-scale-probe-v4\","
               << "\"security_lots\":" << value.security_lots << ','
               << "\"total_measured_ns\":" << value.total_measured_ns << ','
               << "\"warmup_days\":" << value.warmup_days << "}\n";

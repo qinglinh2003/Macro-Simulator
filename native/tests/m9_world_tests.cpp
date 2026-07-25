@@ -132,6 +132,32 @@ void test_single_country_is_an_inert_m8_container() {
     assert(world.validate().ok());
 }
 
+void test_closed_single_country_fast_path_matches_staged_world() {
+    auto fast = build_world(1);
+    auto staged = build_world(1);
+    ShockSpec future;
+    future.id = 77U;
+    future.kind = ShockKind::household_demand;
+    future.economy = EconomyId(0U);
+    future.start = Tick(100U);
+    future.announcement = Tick(100U);
+    future.duration = 1U;
+    future.magnitude = 0.25;
+    assert(staged.schedule_shock(future).ok());
+
+    const auto fast_result = fast.advance(5U);
+    const auto staged_result = staged.advance(5U);
+    assert(fast_result.ok());
+    assert(staged_result.ok());
+    assert(fast_result.get_if()->metrics == staged_result.get_if()->metrics);
+    assert(fast.digest() == staged.digest());
+    const auto fast_economy = fast.economy_checkpoint(EconomyId(0U));
+    const auto staged_economy = staged.economy_checkpoint(EconomyId(0U));
+    assert(fast_economy.ok());
+    assert(staged_economy.ok());
+    assert(*fast_economy.get_if() == *staged_economy.get_if());
+}
+
 void test_trade_fx_and_tariff_clear_deterministically() {
     WorldRules rules;
     rules.trade = true;
@@ -545,6 +571,7 @@ void test_worker_count_does_not_change_semantics() {
 
 int main() {
     test_single_country_is_an_inert_m8_container();
+    test_closed_single_country_fast_path_matches_staged_world();
     test_trade_fx_and_tariff_clear_deterministically();
     test_unilateral_sanction_has_symmetric_effect();
     test_faults_leave_the_complete_old_world();

@@ -1,8 +1,8 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person M8 median target met; tail optimization continues
+Status: one-million-person closed single-country M9 60-day target met
 
-Date: 2026-07-25
+Date: 2026-07-26
 
 Base commit: `a0c7a324d3cc79361bef7562e05bd42f5d461c16`
 
@@ -21,11 +21,13 @@ native engine after M9. It answers four questions:
 4. Is one million simulated persons at no more than one second per simulated day
    plausible without changing the economic model?
 
-The median answer to the last question is now yes for the committed
-static-population M8 acceptance scenario. Across days 31 through 60, 25 of 30 days
-complete in less than one second. P95 is 1.054 seconds and the maximum is 1.190
-seconds, so the tail target is close but not yet complete. This is not a claim
-that dynamic, open-economy, or M9 workloads meet the same budget.
+The answer to the performance target is now yes for the static-population M8 and
+closed single-country M9 acceptance scenarios. All 60 measured days complete in
+less than one second over the first two portfolio cycles. The all-days result
+does include the documented household-portfolio beneficial-ownership
+simplification below; before that change, the median met the target but the tail
+did not. This is not a claim that dynamic, open-economy, shock-active, or
+multicountry workloads meet the same budget.
 
 ## 2. Test environment
 
@@ -120,6 +122,11 @@ portfolio review moved to a realistic staggered 30-day cadence.
 | Presence epochs and fingerprinted asset slots | 6.82 s | 7.23 GiB | -78.0% |
 | Staggered review, change journal, and linear indexes, first cycle | 0.674 s | 6.88 GiB | -97.8% |
 | Staggered review, second 30-day cycle | 0.760 s | 6.71 GiB | -97.5% |
+| Aggregate household portfolio claims, first cycle | 0.565 s | 4.82 GiB | -98.2% |
+| Aggregate household portfolio claims, second cycle | 0.701 s | 5.05 GiB | -97.7% |
+| M9 staged-world baseline, first cycle | 0.959 s | 6.61 GiB | -96.9% |
+| M9 closed-single-country direct path, first cycle | 0.568 s | 5.36 GiB | -98.2% |
+| M9 closed-single-country direct path, second cycle | 0.707 s | 5.59 GiB | -97.7% |
 
 The final first-cycle run used schema `m9-scale-probe-v3` and scenario
 `static-population-staggered-portfolio-v2`. Genesis took 8.22 seconds. Across
@@ -140,8 +147,8 @@ noise. Its digest is
 `5b95c26e27d6015df5274f76888f876074e99007d8e84f17cafcb27bffc791d5`.
 Genesis remains a one-time cost and is not part of daily latency acceptance.
 
-The result comes from model-preserving algorithm and data-layout changes plus
-one documented scheduling rule:
+The pre-aggregation result comes from model-preserving algorithm and data-layout
+changes plus one documented scheduling rule:
 
 - Household portfolio decisions occur every 30 days rather than every day.
   Households are deterministically staggered, so one thirtieth reviews on each
@@ -164,11 +171,41 @@ one documented scheduling rule:
 - Bond allocation is capped by the clearing holder's actual remaining units,
   preventing floating-point over-allocation at large scale.
 
+The final tail-latency checkpoint deliberately simplifies one game rule. A
+household now has one beneficial claim set for its complete securities
+portfolio, rather than a separate person-level claim set for every stock and
+bond position. Estate valuation still uses the live market value of every
+security in the portfolio, and the portfolio claim still transfers to heirs.
+The model no longer preserves a distinct internal ownership history for each
+security acquired by the same household. This changes the household-level legal
+abstraction, but not security balances, market clearing, prices, household net
+worth, or estate valuation. When a last-member estate merges into a household
+that already has a portfolio, the inherited securities adopt the destination
+household's existing internal portfolio-share schedule. A destination without a
+portfolio keeps the inherited schedule.
+
+The aggregate-portfolio probe uses schema `m9-scale-probe-v4` and scenario
+`static-population-aggregate-portfolio-v3`. Genesis takes approximately 8.21
+seconds. Across days 1 through 30, median daily latency is 0.565 seconds, p95 is
+0.806 seconds, and the maximum is 0.870 seconds. Across days 31 through 60,
+median daily latency is 0.701 seconds, p95 is 0.803 seconds, and the maximum is
+0.843 seconds. All 60 measured days are below one second.
+
+At the end of the first cycle, 5,748,680 active security lots map to 2,000,000
+active beneficial lots rather than 15,392,650. Peak RSS falls from 6.88 GiB to
+4.82 GiB. At the end of the second cycle, 6,093,687 security lots still map to
+2,000,000 beneficial lots. Peak RSS falls from 6.71 GiB to 5.05 GiB. Root-state
+digests remain
+`5f23e4becd18f3e3d29595a0c12127682b0340c2cfcf0ef736e017e8cc7ad73f`
+for day 30 and
+`5b95c26e27d6015df5274f76888f876074e99007d8e84f17cafcb27bffc791d5`
+for day 60, matching the per-security-claim runs.
+
 The retained full 8-worker acceptance suite passes all 49 tests, including C and
 Python bindings, checkpoint round trips, semantic panels, extension seams, and
-fault-injection coverage. Further work should reduce the approximately 6.9 GiB
-peak RSS and remove the remaining full tick-staging copies before treating M9
-multi-economy or highly dynamic population workloads as complete.
+fault-injection coverage. Further work should reduce the approximately 5.05 GiB
+day-60 peak RSS and remove the remaining full tick-staging copies before
+treating M9 multi-economy or highly dynamic population workloads as complete.
 
 ## 4. Baseline with the current model enabled
 
@@ -309,44 +346,63 @@ domestic engines, validates the complete world, and then moves the staged world
 back. Domestic advancement already has its own scratch and validation protocol.
 The current layering duplicates memory, allocation, and some validation work.
 
-## 8. One-million-person projection
+## 8. One-million-person results
 
-Direct M8 execution now demonstrates the median target rather than projecting it:
+Direct M8 execution now demonstrates the complete 60-day target rather than
+projecting it:
 
-- 8.22 seconds for one-time genesis
-- 0.760-second median across days 31 through 60
-- 1.054-second p95 and 1.190-second maximum
-- 25 of 30 second-cycle days below one second
-- approximately 6.7 GiB peak RSS
+- approximately 8.21 seconds for one-time genesis
+- 0.565-second median, 0.806-second p95, and 0.870-second maximum on days 1-30
+- 0.701-second median, 0.803-second p95, and 0.843-second maximum on days 31-60
+- all 60 measured days below one second
+- 4.82 GiB peak RSS at day 30 and 5.05 GiB at day 60
 
-The first-cycle p95 remains above one second while millions of direct positions
-and person-level claims are materialized. Product startup can hide or explicitly
-report this market-initialization phase, but the engine should continue reducing
-it rather than treating it as free work.
+The measured M9 baseline confirms the cost. In the same one-country closed-world
+scenario, days 1 through 30 have a 0.959-second median, 1.454-second p95, and
+1.460-second maximum, with 6.61 GiB peak RSS. The world wrapper is therefore the
+remaining reason that the latest container misses the tail target.
 
-M9 is still outside the claim. Its world-level transactional staging deep-copies
-the domestic economy and can multiply the M8 memory footprint. One million
-persons in one M9 economy therefore remains blocked on removing the world copy,
-not on the domestic economic mechanisms measured here.
+For one country with trade disabled, no shocks, and no fault injection, M9 can
+use the already-transactional M8 prepare/validate/commit path directly. No
+cross-country state can change in this configuration, so copying and validating
+the complete M9 world adds no rollback protection. Multicountry, shock, and
+fault-injection advances retain the original staged-world transaction.
+
+After the direct path, the closed single-country M9 result is:
+
+- approximately 8.30 seconds for one-time genesis
+- 0.568-second median, 0.838-second p95, and 0.870-second maximum on days 1-30
+- 0.707-second median, 0.803-second p95, and 0.853-second maximum on days 31-60
+- all 60 measured days below one second
+- 5.36 GiB peak RSS at day 30 and 5.59 GiB at day 60
+
+The day-30 M9 digest remains `6935004978910860284` before and after the direct
+path. The day-60 digest is `15096525921303579400`. A dedicated equivalence test
+also compares the direct path with the staged path using an inactive future
+shock and requires identical domestic checkpoints, world metrics, and digests.
+
+Multicountry and shock-active M9 remain outside the one-second claim because
+they still require atomic world-level mutation. That is now a narrower problem
+than the original single-country wrapper overhead.
 
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
 incremental synchronization and validation, stable order bucketing, linear
-security-index construction, and staggered portfolio scheduling.
+security-index construction, staggered portfolio scheduling, and aggregate
+household portfolio claims. Closed single-country M9 also bypasses redundant
+world staging while preserving its domestic transaction boundary.
 
 The next measured order is:
 
-1. Remove the M9 daily world deep copy with a reusable atomic prepare/commit or
-   undo-journal protocol.
+1. Remove the remaining multicountry M9 daily world deep copy with a reusable
+   atomic prepare/commit or undo-journal protocol.
 2. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
    storage or mutation journals.
-3. Reduce the approximately 15.4 million materialized beneficial lots through a
-   compact household-equal-claim representation with explicit exception records.
-4. Rebuild public security indexes no more than once per mutation phase.
-5. Profile dynamic population, firm entry and exit, active housing, and
+3. Rebuild public security indexes no more than once per mutation phase.
+4. Profile dynamic population, firm entry and exit, active housing, and
    multi-economy workloads at one million persons.
-6. Add deterministic parallel phases only after their read/write sets and memory
+5. Add deterministic parallel phases only after their read/write sets and memory
    budgets are measured.
 
 Complexity and memory-layout fixes continue to precede multithreading. Parallel

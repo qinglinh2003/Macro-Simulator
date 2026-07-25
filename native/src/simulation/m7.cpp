@@ -121,18 +121,46 @@ beneficial_projection_error(const core::BeneficialOwnershipBook &ownership) {
     return ownership.maximum_projection_error();
 }
 
-[[nodiscard]] constexpr std::uint64_t
-security_token(core::SecurityId security) noexcept {
-    return (security.value << 1U) |
-           (security.kind == core::SecurityKind::equity ? 1U : 0U);
-}
-
 [[nodiscard]] constexpr core::SecurityId
 security_from_token(std::uint64_t token) noexcept {
     return {
         (token & 1U) == 0U ? core::SecurityKind::bond : core::SecurityKind::equity,
         token >> 1U,
     };
+}
+
+[[nodiscard]] bool household_has_security_portfolio(
+    const core::SecurityBook &securities, HouseholdId household) noexcept {
+    for (const auto lot_id :
+         securities.lots_for_holder(core::OwnerId::household(household))) {
+        const auto *lot = securities.get(lot_id);
+        if (lot != nullptr && lot->active && lot->units > kLaborTolerance) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] double household_security_portfolio_value(
+    const core::SecurityBook &securities, HouseholdId household) noexcept {
+    double value = 0.0;
+    for (const auto lot_id :
+         securities.lots_for_holder(core::OwnerId::household(household))) {
+        const auto *lot = securities.get(lot_id);
+        if (lot == nullptr || !lot->active) {
+            continue;
+        }
+        if (lot->security.kind == core::SecurityKind::equity) {
+            const auto *contract =
+                securities.get(EquityId(lot->security.value));
+            if (contract != nullptr && contract->active) {
+                value += lot->units * contract->price.value();
+            }
+        } else {
+            value += lot->units;
+        }
+    }
+    return value;
 }
 
 [[nodiscard]] Status create_equal_claims(
@@ -220,6 +248,9 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
                loan->borrower == core::OwnerId::household(asset.household);
     }
     case core::BeneficialAssetKind::security_position:
+        if (asset.value == 0U) {
+            return household_has_security_portfolio(securities, asset.household);
+        }
         return securities.units_held(security_from_token(asset.value),
                                      core::OwnerId::household(asset.household)) >
                kLaborTolerance;
@@ -258,16 +289,14 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         asset_buffer.push_back({
             core::BeneficialAssetKind::security_position,
             HouseholdId(change.holder.value),
-            security_token(change.security),
+            0U,
         });
     }
     std::sort(asset_buffer.begin(), asset_buffer.end());
     asset_buffer.erase(std::unique(asset_buffer.begin(), asset_buffer.end()),
                        asset_buffer.end());
     for (const auto asset : asset_buffer) {
-        const auto security = security_from_token(asset.value);
-        const auto holder = core::OwnerId::household(asset.household);
-        if (securities.units_held(security, holder) > kLaborTolerance) {
+        if (household_has_security_portfolio(securities, asset.household)) {
             status = create_equal_claims(
                 asset, membership, persons, ownership);
         } else if (ownership.contains_asset(asset)) {
@@ -352,6 +381,10 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
                                                : 0.0;
     }
     case core::BeneficialAssetKind::security_position: {
+        if (asset.value == 0U) {
+            return household_security_portfolio_value(securities,
+                                                      asset.household);
+        }
         const auto security = security_from_token(asset.value);
         const double units =
             securities.units_held(security, core::OwnerId::household(asset.household));
@@ -521,6 +554,25 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
                                    destination_account, residual_cash);
         if (!status.ok()) {
             return status;
+        }
+    }
+    if (destination_household.valid()) {
+        const core::BeneficialAssetKey source_portfolio{
+            core::BeneficialAssetKind::security_position,
+            source_household,
+            0U,
+        };
+        const core::BeneficialAssetKey destination_portfolio{
+            core::BeneficialAssetKind::security_position,
+            destination_household,
+            0U,
+        };
+        if (ownership.contains_asset(source_portfolio) &&
+            ownership.contains_asset(destination_portfolio)) {
+            status = ownership.retire_asset(source_portfolio);
+            if (!status.ok()) {
+                return status;
+            }
         }
     }
     return destination_household.valid()
@@ -2580,15 +2632,24 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
                 }
             }
         }
+        std::vector<HouseholdId> security_households;
+        security_households.reserve(financial.root.households.alive_count());
         for (const auto &lot : financial.runtime.securities.lots()) {
             if (!lot.active || lot.holder.kind != core::OwnerKind::household) {
                 continue;
             }
+            security_households.push_back(HouseholdId(lot.holder.value));
+        }
+        std::sort(security_households.begin(), security_households.end());
+        security_households.erase(
+            std::unique(security_households.begin(), security_households.end()),
+            security_households.end());
+        for (const auto household : security_households) {
             const auto claim_status = create_equal_claims(
                 {
                     core::BeneficialAssetKind::security_position,
-                    HouseholdId(lot.holder.value),
-                    security_token(lot.security),
+                    household,
+                    0U,
                 },
                 runtime.membership, runtime.persons, runtime.beneficial_ownership);
             if (!claim_status.ok()) {

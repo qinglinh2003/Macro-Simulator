@@ -130,13 +130,15 @@ void test_genesis_derives_households_from_population() {
     assert(harness.runtime.beneficial_ownership.size() >= 100);
     bool has_security_claim = false;
     bool has_debt_claim = false;
+    std::vector<macro_sim::HouseholdId> security_claim_households;
     for (const auto &lot :
          harness.runtime.beneficial_ownership.records()) {
-        has_security_claim =
-            has_security_claim ||
-            lot.asset.kind ==
-                macro_sim::core::BeneficialAssetKind::
-                    security_position;
+        if (lot.asset.kind ==
+            macro_sim::core::BeneficialAssetKind::security_position) {
+            has_security_claim = true;
+            assert(lot.asset.value == 0U);
+            security_claim_households.push_back(lot.asset.household);
+        }
         has_debt_claim =
             has_debt_claim ||
             lot.asset.kind ==
@@ -144,6 +146,17 @@ void test_genesis_derives_households_from_population() {
                     household_debt;
     }
     assert(has_security_claim);
+    std::sort(security_claim_households.begin(),
+              security_claim_households.end());
+    for (auto first = security_claim_households.begin();
+         first != security_claim_households.end();) {
+        const auto last =
+            std::upper_bound(first, security_claim_households.end(), *first);
+        const auto members =
+            harness.runtime.membership.members(*first).size();
+        assert(static_cast<std::size_t>(last - first) == members);
+        first = last;
+    }
     const bool has_household_loan =
         std::any_of(
             harness.root.loans.records().begin(),

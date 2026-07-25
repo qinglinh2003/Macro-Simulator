@@ -681,6 +681,29 @@ Result<M9AdvanceResult> M9World::advance(std::uint64_t count,
 }
 
 Status M9World::advance_one(const M9AdvanceOptions &options) {
+    if (economies_.size() == 1U && !rules_.trade && shocks_.empty() &&
+        options.fault_point == M9FaultPoint::none) {
+        auto domestic_options =
+            options.domestic.empty() ? M8AdvanceOptions{} : options.domestic.front();
+        auto &economy = economies_.front();
+        auto result = advance_m8_ticks(
+            economy.root, economy.real_economy, economy.real_economy_scratch,
+            economy.monetary, economy.monetary_scratch, economy.financial,
+            economy.financial_scratch, economy.population,
+            economy.population_scratch, economy.domestic,
+            economy.domestic_scratch, economy.tick, 1U, domestic_options);
+        if (!result.ok()) {
+            return result.status();
+        }
+        last_metrics_ = {};
+        last_metrics_.domestic.push_back(result.get_if()->metrics);
+        last_metrics_.external.resize(1U);
+        last_metrics_.external.front().exchange_rate =
+            rates_.rate(EconomyId(0U));
+        tick_ = economy.tick;
+        return Status::success();
+    }
+
     M9World staged = *this;
     const std::size_t count = staged.economies_.size();
     staged.last_metrics_ = {};
