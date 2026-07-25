@@ -112,18 +112,20 @@ scenario. The root-state digest remains
 | Stable equity-order bucketing | 9.47 s | 7.86 GiB | -69.4% |
 | Compact incremental security-pair chains | 8.02 s | 8.06 GiB | -74.1% |
 | Contiguous beneficial indexes and one synchronization boundary | 7.48 s | 7.83 GiB | -75.9% |
+| Presence epochs and fingerprinted asset slots | 6.82 s | 7.23 GiB | -78.0% |
 
-The latest acceptance run measured 7.90 s, 7.48 s, and 5.96 s. A preceding
-profiled run measured a 7.26-second median. Genesis remained approximately
-8.21 seconds. The optimization has therefore removed approximately 76% of
+The latest profiled acceptance run measured 6.82 s, 7.01 s, and 6.19 s. A
+preceding run measured a 7.02-second median. Genesis remained approximately
+8.21 seconds. The optimization has therefore removed approximately 78% of
 median daily latency without changing the deterministic result, but it is still
-approximately 7.5 times above the interactive target. First- and second-day
+approximately 6.8 times above the interactive target. First- and second-day
 allocation counts fell from 26.86 million and 11.47 million to approximately
 544 thousand and 24 thousand.
 
 Peak resident memory remains above the first complete baseline because later
 security lookup structures trade memory for latency. The latest ownership layout
-recovered approximately 0.23 GiB relative to the preceding checkpoint. Further
+recovered approximately 0.83 GiB relative to the compact security-pair
+checkpoint. Further
 data-layout work must continue removing redundant derived indexes and stale
 scratch capacities while reducing daily latency.
 
@@ -166,6 +168,15 @@ retirement, whole-asset retirement, household rekeying, inactive history,
 checkpoint reconstruction, and public span ordering retain their previous
 semantics. Canonical household-cash assets also use a dense household lookup;
 noncanonical keys retain the general hash path.
+
+Security-position synchronization now marks each beneficial asset row with the
+current refresh epoch while it already scans active canonical security lots.
+After the scan, unseen security-position rows retire in deterministic row order.
+This removes the prior second pass of random `SecurityBook::units_held` lookups.
+Cash, debt, and generic claims retain their prior canonical validation paths.
+Asset hash slots now pack a 32-bit fingerprint beside the 32-bit row index in
+the same eight-byte footprint. Failed probes normally reject inside the slot and
+only matching fingerprints dereference the larger asset-row table.
 
 Close-day synchronization already creates every missing beneficial claim and
 retires every claim whose canonical position disappeared. The immediately

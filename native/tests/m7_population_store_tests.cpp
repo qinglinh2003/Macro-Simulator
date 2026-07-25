@@ -204,6 +204,53 @@ void test_canonical_cash_lookup_preserves_full_asset_identity() {
     assert(ownership.validate(persons, 1.0e-12).ok());
 }
 
+void test_asset_presence_refresh_retires_only_unseen_kind() {
+    PersonStore persons;
+    assert(persons.create(person(-9'000, PersonSex::female)).ok());
+
+    const BeneficialAssetKey first_security{
+        BeneficialAssetKind::security_position,
+        HouseholdId(1),
+        2,
+    };
+    const BeneficialAssetKey second_security{
+        BeneficialAssetKind::security_position,
+        HouseholdId(1),
+        4,
+    };
+    const BeneficialAssetKey generic{
+        BeneficialAssetKind::generic_position,
+        HouseholdId(1),
+        9,
+    };
+    BeneficialOwnershipBook ownership;
+    assert(ownership.create_lot(first_security, PersonId(1), 1.0).ok());
+    assert(ownership.create_lot(second_security, PersonId(1), 1.0).ok());
+    assert(ownership.create_lot(generic, PersonId(1), 1.0).ok());
+    const auto untouched = ownership;
+
+    assert(ownership
+               .begin_asset_presence_refresh(
+                   BeneficialAssetKind::security_position)
+               .ok());
+    assert(!ownership
+                .begin_asset_presence_refresh(
+                    BeneficialAssetKind::security_position)
+                .ok());
+    assert(ownership.touch_asset_presence(first_security));
+    assert(!ownership.touch_asset_presence(generic));
+    assert(ownership.finish_asset_presence_refresh().ok());
+    assert(ownership.contains_asset(first_security));
+    assert(!ownership.contains_asset(second_security));
+    assert(ownership.contains_asset(generic));
+    assert(ownership.lots_for_asset(second_security).empty());
+    assert(ownership.validate(persons, 1.0e-12).ok());
+    assert(untouched.contains_asset(first_security));
+    assert(untouched.contains_asset(second_security));
+    assert(untouched.contains_asset(generic));
+    assert(untouched.validate(persons, 1.0e-12).ok());
+}
+
 void test_rejections() {
     PersonStore persons;
     PersonRecord invalid;
@@ -240,6 +287,7 @@ int main() {
     test_beneficial_index_copy_isolation();
     test_beneficial_rekey_retains_retired_history();
     test_canonical_cash_lookup_preserves_full_asset_identity();
+    test_asset_presence_refresh_retires_only_unseen_kind();
     test_rejections();
     return 0;
 }

@@ -136,6 +136,11 @@ class BeneficialOwnershipBook final {
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
     void active_assets(std::vector<BeneficialAssetKey> &output) const;
+    void active_assets_except(BeneficialAssetKind excluded,
+                              std::vector<BeneficialAssetKey> &output) const;
+    [[nodiscard]] Status begin_asset_presence_refresh(BeneficialAssetKind kind);
+    [[nodiscard]] bool touch_asset_presence(BeneficialAssetKey asset) noexcept;
+    [[nodiscard]] Status finish_asset_presence_refresh();
     [[nodiscard]] double maximum_projection_error() const;
     [[nodiscard]] Status replace_records(std::vector<BeneficialLot> records);
     [[nodiscard]] Status validate_fast(const PersonStore &persons,
@@ -151,12 +156,18 @@ class BeneficialOwnershipBook final {
         std::uint32_t active_lots{0};
     };
 
+    struct AssetSlot final {
+        std::uint32_t fingerprint{0U};
+        std::uint32_t row{0U};
+    };
+
     struct Indexes final {
         std::vector<AssetIndexRow> lots_by_asset;
-        std::vector<std::size_t> asset_slots;
+        std::vector<AssetSlot> asset_slots;
         std::vector<std::uint32_t> canonical_cash_rows;
         std::vector<std::uint32_t> asset_row_by_lot;
         std::vector<std::uint8_t> asset_lot_indexed;
+        std::vector<std::uint32_t> asset_presence_epochs;
         std::vector<std::uint32_t> person_heads{0U};
         std::vector<std::uint32_t> person_tails{0U};
         std::vector<std::uint32_t> person_next;
@@ -167,6 +178,10 @@ class BeneficialOwnershipBook final {
         mutable std::vector<BeneficialLotId> lots_by_asset_flat;
         mutable bool person_index_dirty{true};
         mutable bool asset_lot_index_dirty{true};
+        std::uint32_t asset_presence_epoch{0U};
+        BeneficialAssetKind refreshed_asset_kind{
+            BeneficialAssetKind::generic_position};
+        bool asset_presence_refresh_active{false};
         mutable std::vector<BeneficialLotId> validation_dirty_lots;
         mutable std::vector<std::size_t> validation_dirty_asset_rows;
         mutable bool full_validation_required{true};
@@ -179,6 +194,8 @@ class BeneficialOwnershipBook final {
     void rebuild_person_index() const;
     void rebuild_asset_lot_index() const;
     [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
+    [[nodiscard]] static std::uint32_t
+    asset_fingerprint(std::size_t hash) noexcept;
     [[nodiscard]] std::size_t find_asset_row(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] std::size_t ensure_asset_row(BeneficialAssetKey asset);
     void rebuild_asset_slots(std::size_t minimum_rows);

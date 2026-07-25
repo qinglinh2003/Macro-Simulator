@@ -137,8 +137,12 @@ security_from_token(std::uint64_t token) noexcept {
 
 [[nodiscard]] Status create_equal_claims(
     core::BeneficialAssetKey asset, const core::HouseholdMembershipBook &membership,
-    const core::PersonStore &persons, core::BeneficialOwnershipBook &ownership) {
-    if (ownership.contains_asset(asset)) {
+    const core::PersonStore &persons, core::BeneficialOwnershipBook &ownership,
+    bool refresh_presence = false) {
+    const bool present =
+        refresh_presence ? ownership.touch_asset_presence(asset)
+                         : ownership.contains_asset(asset);
+    if (present) {
         return Status::success();
     }
     std::size_t alive_members = 0;
@@ -165,10 +169,14 @@ security_from_token(std::uint64_t token) noexcept {
             }
             projected += share;
         }
-        return projected >= 1.0 - kLaborTolerance
+        if (projected < 1.0 - kLaborTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "empty household has no beneficial owner");
+        }
+        return !refresh_presence || ownership.touch_asset_presence(asset)
                    ? Status::success()
                    : Status(ErrorCode::invariant_violation,
-                            "empty household has no beneficial owner");
+                            "beneficial asset refresh is inconsistent");
     }
     const double share = 1.0 / static_cast<double>(alive_members);
     for (const auto person : membership.members(asset.household)) {
@@ -180,7 +188,10 @@ security_from_token(std::uint64_t token) noexcept {
             return lot.status();
         }
     }
-    return Status::success();
+    return !refresh_presence || ownership.touch_asset_presence(asset)
+               ? Status::success()
+               : Status(ErrorCode::invariant_violation,
+                        "beneficial asset refresh is inconsistent");
 }
 
 [[nodiscard]] const core::LoanRecord *
@@ -241,6 +252,11 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
     if (!status.ok()) {
         return status;
     }
+    status = ownership.begin_asset_presence_refresh(
+        core::BeneficialAssetKind::security_position);
+    if (!status.ok()) {
+        return status;
+    }
     for (const auto &lot : securities.lots()) {
         if (!lot.active || lot.holder.kind != core::OwnerKind::household) {
             continue;
@@ -252,10 +268,14 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
                 household,
                 security_token(lot.security),
             },
-            membership, persons, ownership);
+            membership, persons, ownership, true);
         if (!status.ok()) {
             return status;
         }
+    }
+    status = ownership.finish_asset_presence_refresh();
+    if (!status.ok()) {
+        return status;
     }
     for (const auto &loan : loans) {
         if (!loan.active || loan.borrower.kind != core::OwnerKind::household) {
@@ -274,7 +294,8 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         }
     }
 
-    ownership.active_assets(asset_buffer);
+    ownership.active_assets_except(
+        core::BeneficialAssetKind::security_position, asset_buffer);
     for (const auto asset : asset_buffer) {
         if (canonical_claim_exists(state, real, loans, securities, asset)) {
             continue;

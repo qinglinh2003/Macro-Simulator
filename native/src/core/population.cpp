@@ -438,6 +438,16 @@ std::size_t BeneficialOwnershipBook::asset_hash(BeneficialAssetKey asset) noexce
     return static_cast<std::size_t>(hash);
 }
 
+std::uint32_t
+BeneficialOwnershipBook::asset_fingerprint(std::size_t hash) noexcept {
+    auto fingerprint = static_cast<std::uint32_t>(
+        static_cast<std::uint64_t>(hash) >> 32U);
+    if (fingerprint == 0U) {
+        fingerprint = 1U;
+    }
+    return fingerprint;
+}
+
 std::size_t
 BeneficialOwnershipBook::find_asset_row(BeneficialAssetKey asset) const noexcept {
     if (asset.kind == BeneficialAssetKind::household_cash &&
@@ -453,10 +463,14 @@ BeneficialOwnershipBook::find_asset_row(BeneficialAssetKey asset) const noexcept
         return kMissingAssetRow;
     }
     const auto mask = indexes_->asset_slots.size() - 1U;
-    auto slot = asset_hash(asset) & mask;
-    while (indexes_->asset_slots[slot] != 0U) {
-        const auto row = indexes_->asset_slots[slot] - 1U;
-        if (indexes_->lots_by_asset[row].asset == asset) {
+    const auto hash = asset_hash(asset);
+    const auto fingerprint = asset_fingerprint(hash);
+    auto slot = hash & mask;
+    while (indexes_->asset_slots[slot].row != 0U) {
+        const auto &candidate = indexes_->asset_slots[slot];
+        const auto row = static_cast<std::size_t>(candidate.row - 1U);
+        if (candidate.fingerprint == fingerprint &&
+            indexes_->lots_by_asset[row].asset == asset) {
             return row;
         }
         slot = (slot + 1U) & mask;
@@ -471,14 +485,18 @@ void BeneficialOwnershipBook::rebuild_asset_slots(std::size_t minimum_rows) {
     while (capacity < required_rows * 2U) {
         capacity *= 2U;
     }
-    indexes_->asset_slots.assign(capacity, 0U);
+    indexes_->asset_slots.assign(capacity, AssetSlot{});
     const auto mask = capacity - 1U;
     for (std::size_t row = 0; row < indexes_->lots_by_asset.size(); ++row) {
-        auto slot = asset_hash(indexes_->lots_by_asset[row].asset) & mask;
-        while (indexes_->asset_slots[slot] != 0U) {
+        const auto hash = asset_hash(indexes_->lots_by_asset[row].asset);
+        auto slot = hash & mask;
+        while (indexes_->asset_slots[slot].row != 0U) {
             slot = (slot + 1U) & mask;
         }
-        indexes_->asset_slots[slot] = row + 1U;
+        indexes_->asset_slots[slot] = {
+            asset_fingerprint(hash),
+            static_cast<std::uint32_t>(row + 1U),
+        };
     }
 }
 
@@ -493,13 +511,21 @@ std::size_t BeneficialOwnershipBook::ensure_asset_row(BeneficialAssetKey asset) 
         rebuild_asset_slots(indexes_->lots_by_asset.size() + 1U);
     }
     const auto row = indexes_->lots_by_asset.size();
+    if (row >= std::numeric_limits<std::uint32_t>::max()) {
+        return kMissingAssetRow;
+    }
     indexes_->lots_by_asset.push_back({asset, 0U});
+    indexes_->asset_presence_epochs.push_back(0U);
     const auto mask = indexes_->asset_slots.size() - 1U;
-    auto slot = asset_hash(asset) & mask;
-    while (indexes_->asset_slots[slot] != 0U) {
+    const auto hash = asset_hash(asset);
+    auto slot = hash & mask;
+    while (indexes_->asset_slots[slot].row != 0U) {
         slot = (slot + 1U) & mask;
     }
-    indexes_->asset_slots[slot] = row + 1U;
+    indexes_->asset_slots[slot] = {
+        asset_fingerprint(hash),
+        static_cast<std::uint32_t>(row + 1U),
+    };
     if (asset.kind == BeneficialAssetKind::household_cash &&
         asset.value == asset.household.value() &&
         row < std::numeric_limits<std::uint32_t>::max() &&
@@ -792,6 +818,75 @@ void BeneficialOwnershipBook::active_assets(
     }
 }
 
+void BeneficialOwnershipBook::active_assets_except(
+    BeneficialAssetKind excluded,
+    std::vector<BeneficialAssetKey> &output) const {
+    output.clear();
+    for (const auto &row : indexes_->lots_by_asset) {
+        if (row.active_lots != 0U && row.asset.kind != excluded) {
+            output.push_back(row.asset);
+        }
+    }
+}
+
+Status BeneficialOwnershipBook::begin_asset_presence_refresh(
+    BeneficialAssetKind kind) {
+    if (indexes_->asset_presence_refresh_active) {
+        return Status(ErrorCode::invalid_transaction_state,
+                      "beneficial asset refresh is already active");
+    }
+    ensure_unique_indexes();
+    if (indexes_->asset_presence_epoch ==
+        std::numeric_limits<std::uint32_t>::max()) {
+        std::fill(indexes_->asset_presence_epochs.begin(),
+                  indexes_->asset_presence_epochs.end(), 0U);
+        indexes_->asset_presence_epoch = 1U;
+    } else {
+        ++indexes_->asset_presence_epoch;
+    }
+    indexes_->refreshed_asset_kind = kind;
+    indexes_->asset_presence_refresh_active = true;
+    return Status::success();
+}
+
+bool BeneficialOwnershipBook::touch_asset_presence(
+    BeneficialAssetKey asset) noexcept {
+    if (!indexes_->asset_presence_refresh_active ||
+        asset.kind != indexes_->refreshed_asset_kind) {
+        return false;
+    }
+    const auto row = find_asset_row(asset);
+    if (row == kMissingAssetRow ||
+        indexes_->lots_by_asset[row].active_lots == 0U) {
+        return false;
+    }
+    indexes_->asset_presence_epochs[row] = indexes_->asset_presence_epoch;
+    return true;
+}
+
+Status BeneficialOwnershipBook::finish_asset_presence_refresh() {
+    if (!indexes_->asset_presence_refresh_active) {
+        return Status(ErrorCode::invalid_transaction_state,
+                      "beneficial asset refresh is not active");
+    }
+    const auto kind = indexes_->refreshed_asset_kind;
+    const auto epoch = indexes_->asset_presence_epoch;
+    for (std::size_t row = 0U; row < indexes_->lots_by_asset.size(); ++row) {
+        const auto &index = indexes_->lots_by_asset[row];
+        if (index.asset.kind != kind || index.active_lots == 0U ||
+            indexes_->asset_presence_epochs[row] == epoch) {
+            continue;
+        }
+        const auto status = retire_asset(index.asset);
+        if (!status.ok()) {
+            indexes_->asset_presence_refresh_active = false;
+            return status;
+        }
+    }
+    indexes_->asset_presence_refresh_active = false;
+    return Status::success();
+}
+
 double BeneficialOwnershipBook::maximum_projection_error() const {
     double maximum_error = 0.0;
     for (const auto &row : indexes_->lots_by_asset) {
@@ -856,6 +951,12 @@ Status BeneficialOwnershipBook::validate_fast(const PersonStore &persons,
     if (!finite(tolerance) || tolerance < 0.0) {
         return Status(ErrorCode::invalid_argument,
                       "beneficial ownership tolerance is invalid");
+    }
+    if (indexes_->asset_presence_refresh_active ||
+        indexes_->asset_presence_epochs.size() !=
+            indexes_->lots_by_asset.size()) {
+        return Status(ErrorCode::invariant_violation,
+                      "beneficial asset refresh is inconsistent");
     }
     auto &dirty_lots = indexes_->validation_dirty_lots;
     auto &dirty_rows = indexes_->validation_dirty_asset_rows;
@@ -952,7 +1053,10 @@ Status BeneficialOwnershipBook::validate(const PersonStore &persons,
         indexes_->asset_lot_indexed.size() != lots_.size() ||
         indexes_->person_next.size() != lots_.size() ||
         indexes_->person_previous.size() != lots_.size() ||
-        indexes_->person_heads.size() != indexes_->person_tails.size()) {
+        indexes_->person_heads.size() != indexes_->person_tails.size() ||
+        indexes_->asset_presence_refresh_active ||
+        indexes_->asset_presence_epochs.size() !=
+            indexes_->lots_by_asset.size()) {
         return Status(ErrorCode::invariant_violation,
                       "beneficial asset lot index is inconsistent");
     }
