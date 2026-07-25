@@ -18,6 +18,8 @@ struct VitalRates final {
     double sex_ratio_at_birth{1.05};
     std::uint32_t maximum_age{100};
     double interval{1.0};
+
+    bool operator==(const VitalRates &) const = default;
 };
 
 [[nodiscard]] Result<double> female_birth_share(

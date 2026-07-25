@@ -93,6 +93,7 @@ add_library(
         src/simulation/m5_checkpoint.cpp
         src/simulation/m6.cpp
         src/simulation/m6_checkpoint.cpp
+        src/simulation/m7.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -381,6 +382,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m7_population_store
         COMMAND macro_sim_m7_population_store_tests
+    )
+
+    add_executable(
+        macro_sim_m7_simulation_tests
+        tests/m7_simulation_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m7_simulation_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m7_simulation_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m7_simulation_tests)
+    add_test(
+        NAME macro_sim.m7_simulation
+        COMMAND macro_sim_m7_simulation_tests
     )
 
     if(TARGET _native)
