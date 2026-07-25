@@ -102,6 +102,14 @@ void test_single_country_is_an_inert_m8_container() {
     domestic_scratch.reserve(state.root, state.runtime);
 
     auto world = build_world(1);
+    assert(world.economy_root(EconomyId(0)) != nullptr);
+    assert(world.economy_financial_runtime(EconomyId(0)) != nullptr);
+    assert(world.economy_population_runtime(EconomyId(0)) != nullptr);
+    assert(world.economy_runtime(EconomyId(0)) != nullptr);
+    assert(world.economy_root(EconomyId(1)) == nullptr);
+    assert(world.economy_financial_runtime(EconomyId(1)) == nullptr);
+    assert(world.economy_population_runtime(EconomyId(1)) == nullptr);
+    assert(world.economy_runtime(EconomyId(1)) == nullptr);
     const auto result = world.advance(3);
     if (!result.ok()) {
         std::cerr << "M9 single-country advance failed: " << result.status().message()

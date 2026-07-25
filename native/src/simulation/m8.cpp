@@ -573,23 +573,47 @@ class M8Extension final : public M7TickExtension {
                 const M8AdvanceOptions &options) noexcept
         : runtime_(runtime), scratch_(scratch), options_(options) {}
 
+    ~M8Extension() override {
+        if (memory_efficient_staging_ && !committed_) {
+            runtime_.energy_producers = std::move(scratch_.energy_producers_);
+            runtime_.energy_inputs = std::move(scratch_.energy_inputs_);
+            runtime_.household_energy = std::move(scratch_.household_energy_);
+            runtime_.housing_listings = std::move(scratch_.housing_listings_);
+            runtime_.mortgages = std::move(scratch_.mortgages_);
+            runtime_.tenancies = std::move(scratch_.tenancies_);
+            runtime_.builders = std::move(scratch_.builders_);
+        }
+    }
+
     Status prepare_tick(const core::RootState &state, M4Runtime &, M4TickScratch &real,
                         M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
                         M7Runtime &, M7TickScratch &population, Tick,
                         PhiloxRng &) override {
-        scratch_.energy_producers_ = runtime_.energy_producers;
-        scratch_.energy_inputs_ = runtime_.energy_inputs;
-        scratch_.household_energy_ = runtime_.household_energy;
+        memory_efficient_staging_ =
+            options_.base.base.base.base.memory_efficient_staging;
+        if (memory_efficient_staging_) {
+            scratch_.energy_producers_ = std::move(runtime_.energy_producers);
+            scratch_.energy_inputs_ = std::move(runtime_.energy_inputs);
+            scratch_.household_energy_ = std::move(runtime_.household_energy);
+            scratch_.housing_listings_ = std::move(runtime_.housing_listings);
+            scratch_.mortgages_ = std::move(runtime_.mortgages);
+            scratch_.tenancies_ = std::move(runtime_.tenancies);
+            scratch_.builders_ = std::move(runtime_.builders);
+        } else {
+            scratch_.energy_producers_ = runtime_.energy_producers;
+            scratch_.energy_inputs_ = runtime_.energy_inputs;
+            scratch_.household_energy_ = runtime_.household_energy;
+            scratch_.housing_listings_ = runtime_.housing_listings;
+            scratch_.mortgages_ = runtime_.mortgages;
+            scratch_.tenancies_ = runtime_.tenancies;
+            scratch_.builders_ = runtime_.builders;
+        }
         scratch_.deprivation_ = runtime_.deprivation;
         scratch_.strategic_reserve_stock_ = runtime_.strategic_reserve_stock;
         scratch_.strategic_reserve_cost_ = runtime_.strategic_reserve_cost;
         scratch_.energy_price_ = runtime_.energy_price;
         scratch_.slow_energy_price_ = runtime_.slow_energy_price;
         scratch_.energy_event_counter_ = runtime_.energy_event_counter;
-        scratch_.housing_listings_ = runtime_.housing_listings;
-        scratch_.mortgages_ = runtime_.mortgages;
-        scratch_.tenancies_ = runtime_.tenancies;
-        scratch_.builders_ = runtime_.builders;
         scratch_.staged_properties_.reset();
         scratch_.housing_affordability_ = runtime_.housing_affordability;
         scratch_.housing_input_ =
@@ -1025,9 +1049,15 @@ class M8Extension final : public M7TickExtension {
                 M7TickScratch &population_scratch, Tick,
                 const M7Metrics &metrics) noexcept override {
         runtime_.energy_input = input_;
-        std::swap(runtime_.energy_producers, scratch_.energy_producers_);
-        std::swap(runtime_.energy_inputs, scratch_.energy_inputs_);
-        std::swap(runtime_.household_energy, scratch_.household_energy_);
+        if (memory_efficient_staging_) {
+            runtime_.energy_producers = std::move(scratch_.energy_producers_);
+            runtime_.energy_inputs = std::move(scratch_.energy_inputs_);
+            runtime_.household_energy = std::move(scratch_.household_energy_);
+        } else {
+            std::swap(runtime_.energy_producers, scratch_.energy_producers_);
+            std::swap(runtime_.energy_inputs, scratch_.energy_inputs_);
+            std::swap(runtime_.household_energy, scratch_.household_energy_);
+        }
         for (const auto &event : population_scratch.pending_leaving_home_) {
             const auto index = static_cast<std::size_t>(event.destination.value());
             if (index >= runtime_.household_energy.size() ||
@@ -1049,10 +1079,17 @@ class M8Extension final : public M7TickExtension {
             std::swap(runtime_.properties, *scratch_.staged_properties_);
             scratch_.staged_properties_.reset();
         }
-        std::swap(runtime_.housing_listings, scratch_.housing_listings_);
-        std::swap(runtime_.mortgages, scratch_.mortgages_);
-        std::swap(runtime_.tenancies, scratch_.tenancies_);
-        std::swap(runtime_.builders, scratch_.builders_);
+        if (memory_efficient_staging_) {
+            runtime_.housing_listings = std::move(scratch_.housing_listings_);
+            runtime_.mortgages = std::move(scratch_.mortgages_);
+            runtime_.tenancies = std::move(scratch_.tenancies_);
+            runtime_.builders = std::move(scratch_.builders_);
+        } else {
+            std::swap(runtime_.housing_listings, scratch_.housing_listings_);
+            std::swap(runtime_.mortgages, scratch_.mortgages_);
+            std::swap(runtime_.tenancies, scratch_.tenancies_);
+            std::swap(runtime_.builders, scratch_.builders_);
+        }
         runtime_.housing_affordability = scratch_.housing_affordability_;
         runtime_.house_price = scratch_.house_price_;
         runtime_.rent_level = scratch_.rent_level_;
@@ -1061,6 +1098,7 @@ class M8Extension final : public M7TickExtension {
         runtime_.housing_event_counter = scratch_.housing_event_counter_;
         scratch_.working_metrics_.economy = metrics;
         runtime_.last_metrics = scratch_.working_metrics_;
+        committed_ = true;
     }
 
   private:
@@ -2660,6 +2698,8 @@ class M8Extension final : public M7TickExtension {
     M8Runtime &runtime_;
     M8TickScratch &scratch_;
     const M8AdvanceOptions &options_;
+    bool memory_efficient_staging_{false};
+    bool committed_{false};
     EnergyExogenousInput input_{};
 };
 

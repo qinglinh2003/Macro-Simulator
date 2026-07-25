@@ -276,7 +276,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     }
     return {
         static_cast<core::OwnerKind>(row[0].get<std::uint8_t>()),
-        row[1].get<std::uint64_t>(),
+        row[1].get<std::uint32_t>(),
     };
 }
 

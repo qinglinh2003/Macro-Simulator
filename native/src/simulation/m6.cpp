@@ -2114,13 +2114,30 @@ class M6Extension final : public M5TickExtension {
         : runtime_(runtime), scratch_(scratch), options_(options),
           extension_(extension) {}
 
+    ~M6Extension() override {
+        if (memory_efficient_staging_ && !committed_) {
+            runtime_.securities = std::move(scratch_.securities_);
+            runtime_.firms = std::move(scratch_.firms_);
+            runtime_.margin_loans = std::move(scratch_.margin_loans_);
+        }
+    }
+
     Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
                         M4TickScratch &real, M5Runtime &monetary_runtime,
                         M5TickScratch &monetary, Tick tick, PhiloxRng &rng) override {
-        scratch_.securities_ = runtime_.securities;
+        memory_efficient_staging_ =
+            options_.base.base.memory_efficient_staging;
+        opening_security_version_ = runtime_.securities.version();
+        if (memory_efficient_staging_) {
+            scratch_.securities_ = std::move(runtime_.securities);
+            scratch_.firms_ = std::move(runtime_.firms);
+            scratch_.margin_loans_ = std::move(runtime_.margin_loans);
+        } else {
+            scratch_.securities_ = runtime_.securities;
+            scratch_.firms_ = runtime_.firms;
+            scratch_.margin_loans_ = runtime_.margin_loans;
+        }
         scratch_.securities_.clear_household_position_changes();
-        scratch_.firms_ = runtime_.firms;
-        scratch_.margin_loans_ = runtime_.margin_loans;
         scratch_.orders_.clear();
         scratch_.firm_exits_.clear();
         scratch_.firm_entries_.clear();
@@ -2248,14 +2265,19 @@ class M6Extension final : public M5TickExtension {
     void commit(core::RootState &state, M4Runtime &real_runtime, M4TickScratch &real,
                 M5Runtime &monetary_runtime, M5TickScratch &monetary, Tick tick,
                 const M5Metrics &metrics) noexcept override {
-        const auto previous_security_version = runtime_.securities.version();
         const auto next_security_version = scratch_.securities_.version();
-        if (next_security_version >= previous_security_version) {
-            security_counter_ += next_security_version - previous_security_version;
+        if (next_security_version >= opening_security_version_) {
+            security_counter_ += next_security_version - opening_security_version_;
         }
-        std::swap(runtime_.securities, scratch_.securities_);
-        std::swap(runtime_.firms, scratch_.firms_);
-        std::swap(runtime_.margin_loans, scratch_.margin_loans_);
+        if (memory_efficient_staging_) {
+            runtime_.securities = std::move(scratch_.securities_);
+            runtime_.firms = std::move(scratch_.firms_);
+            runtime_.margin_loans = std::move(scratch_.margin_loans_);
+        } else {
+            std::swap(runtime_.securities, scratch_.securities_);
+            std::swap(runtime_.firms, scratch_.firms_);
+            std::swap(runtime_.margin_loans, scratch_.margin_loans_);
+        }
         runtime_.lifecycle_rng_counter = lifecycle_counter_;
         runtime_.security_rng_counter = security_counter_;
         scratch_.working_metrics_.economy = metrics;
@@ -2265,6 +2287,7 @@ class M6Extension final : public M5TickExtension {
             extension_->commit(state, real_runtime, real, monetary_runtime, monetary,
                                runtime_, scratch_, tick, runtime_.last_metrics);
         }
+        committed_ = true;
     }
 
   private:
@@ -2274,6 +2297,9 @@ class M6Extension final : public M5TickExtension {
     M6TickExtension *extension_{nullptr};
     std::uint64_t lifecycle_counter_{0};
     std::uint64_t security_counter_{0};
+    std::uint64_t opening_security_version_{0};
+    bool memory_efficient_staging_{false};
+    bool committed_{false};
 };
 
 [[nodiscard]] core::EquityContract

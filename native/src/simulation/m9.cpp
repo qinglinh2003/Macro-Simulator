@@ -560,6 +560,20 @@ const core::RootState *M9World::economy_root(EconomyId economy) const noexcept {
                : nullptr;
 }
 
+const M6Runtime *
+M9World::economy_financial_runtime(EconomyId economy) const noexcept {
+    return valid_economy(economy, economies_.size())
+               ? &economies_[static_cast<std::size_t>(economy.value())].financial
+               : nullptr;
+}
+
+const M7Runtime *
+M9World::economy_population_runtime(EconomyId economy) const noexcept {
+    return valid_economy(economy, economies_.size())
+               ? &economies_[static_cast<std::size_t>(economy.value())].population
+               : nullptr;
+}
+
 const M8Runtime *M9World::economy_runtime(EconomyId economy) const noexcept {
     return valid_economy(economy, economies_.size())
                ? &economies_[static_cast<std::size_t>(economy.value())].domestic
@@ -687,6 +701,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         options.fault_point == M9FaultPoint::none) {
         auto domestic_options =
             options.domestic.empty() ? M8AdvanceOptions{} : options.domestic.front();
+        domestic_options.base.base.base.base.memory_efficient_staging = true;
         auto &economy = economies_.front();
         auto result = advance_m8_ticks(
             economy.root, economy.real_economy, economy.real_economy_scratch,
@@ -997,6 +1012,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         domestic_options.housing_input = housing_input;
 
         auto &m4_options = domestic_options.base.base.base.base;
+        m4_options.memory_efficient_staging = true;
         m4_options.household_demand_multiplier *= household_demand;
         if (reserved_import_units[index] > kEpsilon) {
             m4_options.external_goods_offer = M4ExternalGoodsOffer{
@@ -1629,15 +1645,15 @@ std::uint64_t M9World::digest() const noexcept {
         }
     }
     for (const auto &peg : pegs_) {
-        hash_mix(hash, peg.pegger.value());
-        hash_mix(hash, peg.anchor.value());
+        hash_mix(hash, static_cast<std::uint64_t>(peg.pegger.value()));
+        hash_mix(hash, static_cast<std::uint64_t>(peg.anchor.value()));
         hash_mix(hash, peg.reserves);
         hash_mix(hash, peg.pressure);
         hash_mix(hash, static_cast<std::uint64_t>(peg.intact ? 1U : 0U));
     }
     for (const auto &route : migration_routes_) {
-        hash_mix(hash, route.origin.value());
-        hash_mix(hash, route.host.value());
+        hash_mix(hash, static_cast<std::uint64_t>(route.origin.value()));
+        hash_mix(hash, static_cast<std::uint64_t>(route.host.value()));
         hash_mix(hash, route.stock);
         hash_mix(hash, route.remittance_net);
     }

@@ -14,17 +14,19 @@ namespace {
 } // namespace
 
 Result<PersonId> PersonStore::create(PersonRecord person) {
-    if (next_id_ == std::numeric_limits<std::uint64_t>::max()) {
+    if (next_id_ > static_cast<std::uint64_t>(PersonId::max_valid_value())) {
         return Status(ErrorCode::out_of_range, "person ID space exhausted");
     }
     if (person.id.valid() || !finite(person.efficiency) || person.efficiency <= 0.0 ||
         person.death_day >= 0 || !person.alive) {
         return Status(ErrorCode::invalid_argument, "person genesis record is invalid");
     }
-    const auto id = PersonId(next_id_++);
+    const auto id =
+        PersonId(static_cast<PersonId::rep_type>(next_id_++));
     person.id = id;
     records_.push_back(std::move(person));
-    alive_dense_by_id_.push_back(alive_ids_.size());
+    alive_dense_by_id_.push_back(
+        static_cast<std::uint32_t>(alive_ids_.size()));
     alive_ids_.push_back(id);
     return id;
 }
@@ -39,7 +41,7 @@ Status PersonStore::mark_dead(PersonId id, std::int32_t day) {
                       "person death was already recorded");
     }
     const auto index = static_cast<std::size_t>(id.value());
-    const auto dense = alive_dense_by_id_[index];
+    const auto dense = static_cast<std::size_t>(alive_dense_by_id_[index]);
     if (dense == kNoDense || dense >= alive_ids_.size()) {
         return Status(ErrorCode::invariant_violation,
                       "person alive index is inconsistent");
@@ -47,7 +49,8 @@ Status PersonStore::mark_dead(PersonId id, std::int32_t day) {
     const auto moved = alive_ids_.back();
     alive_ids_[dense] = moved;
     alive_ids_.pop_back();
-    alive_dense_by_id_[static_cast<std::size_t>(moved.value())] = dense;
+    alive_dense_by_id_[static_cast<std::size_t>(moved.value())] =
+        static_cast<std::uint32_t>(dense);
     alive_dense_by_id_[index] = kNoDense;
     person->alive = false;
     person->death_day = day;
@@ -109,7 +112,8 @@ Status PersonStore::replace_records(std::vector<PersonRecord> records) {
                           "person checkpoint identity is invalid");
         }
         if (records_[index].alive) {
-            alive_dense_by_id_[index] = alive_ids_.size();
+            alive_dense_by_id_[index] =
+                static_cast<std::uint32_t>(alive_ids_.size());
             alive_ids_.push_back(id);
         } else {
             archive_ids_.push_back(id);

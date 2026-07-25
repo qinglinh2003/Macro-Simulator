@@ -22,22 +22,22 @@ enum class PersonSex : std::uint8_t {
 
 struct PersonRecord final {
     PersonId id{};
-    PersonSex sex{PersonSex::female};
-    std::int32_t birth_day{0};
-    std::int32_t death_day{-1};
     PersonId mother{};
     PersonId father{};
     PersonId partner{};
     PersonId guardian{};
     HouseholdId household{};
+    std::int32_t birth_day{0};
+    std::int32_t death_day{-1};
     std::int32_t marriage_start_day{-1};
     std::int32_t last_divorce_day{-1};
     std::int32_t last_widowed_day{-1};
-    std::uint32_t marriage_count{0};
     double efficiency{1.0};
-    bool participating{false};
-    bool searching{true};
-    bool alive{true};
+    std::uint32_t marriage_count{0};
+    PersonSex sex : 1 = PersonSex::female;
+    bool participating : 1 = false;
+    bool searching : 1 = true;
+    bool alive : 1 = true;
 
     bool operator==(const PersonRecord &) const = default;
 };
@@ -61,12 +61,13 @@ class PersonStore final {
     [[nodiscard]] Status validate() const noexcept;
 
   private:
-    static constexpr std::size_t kNoDense = std::numeric_limits<std::size_t>::max();
+    static constexpr std::uint32_t kNoDense =
+        std::numeric_limits<std::uint32_t>::max();
 
     std::vector<PersonRecord> records_{PersonRecord{}};
     std::vector<PersonId> alive_ids_;
     std::vector<PersonId> archive_ids_;
-    std::vector<std::size_t> alive_dense_by_id_{kNoDense};
+    std::vector<std::uint32_t> alive_dense_by_id_{kNoDense};
     std::uint64_t next_id_{1};
 };
 
@@ -101,17 +102,24 @@ enum class BeneficialAssetKind : std::uint8_t {
 struct BeneficialAssetKey final {
     BeneficialAssetKind kind{BeneficialAssetKind::generic_position};
     HouseholdId household{};
-    std::uint64_t value{0};
+    std::uint32_t value{0};
 
     constexpr auto operator<=>(const BeneficialAssetKey &) const noexcept = default;
 };
 
 struct BeneficialLot final {
-    BeneficialLotId id{};
     BeneficialAssetKey asset{};
     PersonId owner{};
     double share{0.0};
+    BeneficialLotId id{};
     bool active{true};
+
+    BeneficialLot() = default;
+    BeneficialLot(BeneficialLotId lot_id, BeneficialAssetKey asset_key,
+                  PersonId person, double beneficial_share,
+                  bool is_active = true) noexcept
+        : asset(asset_key), owner(person), share(beneficial_share), id(lot_id),
+          active(is_active) {}
 
     bool operator==(const BeneficialLot &) const = default;
 };

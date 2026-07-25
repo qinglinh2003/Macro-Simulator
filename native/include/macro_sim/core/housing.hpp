@@ -99,13 +99,16 @@ class PropertyRegistry final {
   private:
     [[nodiscard]] Status rebuild_indexes();
     [[nodiscard]] Status append_title_event(TitleEvent event);
+    void insert_owner_index(OwnerId owner, DwellingId dwelling);
     void remove_owner_index(OwnerId owner, DwellingId dwelling) noexcept;
 
     std::vector<DwellingRecord> records_;
     std::vector<TitleEvent> title_events_;
-    std::map<OwnerId, std::vector<DwellingId>> owner_index_;
-    std::map<HouseholdId, DwellingId> occupant_index_;
-    std::map<LoanId, DwellingId> collateral_index_;
+    std::vector<DwellingId> household_owner_primary_{DwellingId{}};
+    std::map<HouseholdId, std::vector<DwellingId>> household_owner_overflow_;
+    std::map<OwnerId, std::vector<DwellingId>> non_household_owner_index_;
+    std::vector<DwellingId> occupant_index_{DwellingId{}};
+    std::vector<DwellingId> collateral_index_{DwellingId{}};
     std::size_t active_count_{0};
     std::size_t destroyed_count_{0};
     std::size_t occupied_count_{0};

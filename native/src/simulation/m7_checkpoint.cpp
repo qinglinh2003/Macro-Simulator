@@ -631,7 +631,7 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
                     row[1].get<std::uint8_t>()
                 ),
                 HouseholdId(row[2].get<std::uint64_t>()),
-                row[3].get<std::uint64_t>(),
+                row[3].get<std::uint32_t>(),
             },
             PersonId(row[4].get<std::uint64_t>()),
             row[5].get<double>(),

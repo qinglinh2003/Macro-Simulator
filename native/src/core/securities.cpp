@@ -110,7 +110,7 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
     std::vector<std::uint32_t> &offsets) {
     constexpr std::size_t kind_count =
         static_cast<std::size_t>(OwnerKind::institution) + 1U;
-    std::uint64_t maximum_value = 0U;
+    std::uint32_t maximum_value = 0U;
     std::size_t active_count = 0U;
     for (const auto &lot : lots) {
         if (lot.active) {
@@ -120,9 +120,6 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
             maximum_value = std::max(maximum_value, lot.holder.value);
             ++active_count;
         }
-    }
-    if (maximum_value >= std::numeric_limits<std::size_t>::max() / kind_count) {
-        return false;
     }
     const auto stride = static_cast<std::size_t>(maximum_value) + 1U;
     const auto slot_count = stride * kind_count;
@@ -153,7 +150,10 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
                 continue;
             }
             entries.push_back({
-                OwnerId{static_cast<OwnerKind>(kind), value},
+                OwnerId{
+                    static_cast<OwnerKind>(kind),
+                    static_cast<std::uint32_t>(value),
+                },
                 offset,
                 count,
             });
@@ -178,7 +178,7 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
     std::vector<std::uint32_t> &offsets) {
     constexpr std::size_t kind_count =
         static_cast<std::size_t>(SecurityKind::equity) + 1U;
-    std::uint64_t maximum_value = 0U;
+    std::uint32_t maximum_value = 0U;
     std::size_t active_count = 0U;
     for (const auto &lot : lots) {
         if (lot.active) {
@@ -188,9 +188,6 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
             maximum_value = std::max(maximum_value, lot.security.value);
             ++active_count;
         }
-    }
-    if (maximum_value >= std::numeric_limits<std::size_t>::max() / kind_count) {
-        return false;
     }
     const auto stride = static_cast<std::size_t>(maximum_value) + 1U;
     const auto slot_count = stride * kind_count;
@@ -221,7 +218,10 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
                 continue;
             }
             entries.push_back({
-                SecurityId{static_cast<SecurityKind>(kind), value},
+                SecurityId{
+                    static_cast<SecurityKind>(kind),
+                    static_cast<std::uint32_t>(value),
+                },
                 offset,
                 count,
             });

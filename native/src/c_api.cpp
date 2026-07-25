@@ -947,13 +947,15 @@ macro_sim_status macro_sim_m2_apply_batch(macro_sim_session *session,
                 return status(MACRO_SIM_INVALID_ARGUMENT,
                               "command structure is invalid");
             }
-            if (command.owner_kind > MACRO_SIM_M2_OWNER_INSTITUTION) {
+            if (command.owner_kind > MACRO_SIM_M2_OWNER_INSTITUTION ||
+                command.tertiary_id >
+                    std::numeric_limits<std::uint32_t>::max()) {
                 return status(MACRO_SIM_INVALID_ARGUMENT,
-                              "command owner kind is invalid");
+                              "command owner is invalid");
             }
             const macro_sim::core::OwnerId owner{
                 static_cast<macro_sim::core::OwnerKind>(command.owner_kind),
-                command.tertiary_id,
+                static_cast<std::uint32_t>(command.tertiary_id),
             };
             switch (command.kind) {
             case MACRO_SIM_M2_TRANSFER:

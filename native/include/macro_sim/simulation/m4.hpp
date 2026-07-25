@@ -177,6 +177,7 @@ struct M4AdvanceOptions final {
     std::array<double, 4> labor_availability_multipliers{1.0, 1.0, 1.0, 1.0};
     double household_demand_multiplier{1.0};
     std::optional<M4ExternalGoodsOffer> external_goods_offer{};
+    bool memory_efficient_staging{false};
 };
 
 struct M4AdvanceResult final {

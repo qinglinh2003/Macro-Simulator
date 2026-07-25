@@ -218,7 +218,12 @@ template <typename Id>
     if (!value.ok()) {
         return value.status();
     }
-    return Id(*value.get_if());
+    if (*value.get_if() >
+        static_cast<std::uint64_t>(
+            std::numeric_limits<typename Id::rep_type>::max())) {
+        return corrupt("state payload ID exceeds the compact ID range");
+    }
+    return Id(static_cast<typename Id::rep_type>(*value.get_if()));
 }
 
 [[nodiscard]] Result<OwnerId> read_owner(BinaryReader& reader) noexcept {
@@ -233,7 +238,13 @@ template <typename Id>
     if (*kind.get_if() > static_cast<std::uint8_t>(OwnerKind::institution)) {
         return corrupt("state payload contains an unknown owner kind");
     }
-    OwnerId owner{static_cast<OwnerKind>(*kind.get_if()), *value.get_if()};
+    if (*value.get_if() > std::numeric_limits<std::uint32_t>::max()) {
+        return corrupt("state payload owner exceeds the compact ID range");
+    }
+    OwnerId owner{
+        static_cast<OwnerKind>(*kind.get_if()),
+        static_cast<std::uint32_t>(*value.get_if()),
+    };
     if (!owner.valid()) {
         return corrupt("state payload contains an invalid owner");
     }
@@ -1443,13 +1454,16 @@ Result<RootState> CheckpointCodec::decode_state(
         if (id.get_if()->value() != index + 1) {
             return corrupt("ownership lot IDs are not sequential");
         }
+        if (*asset_value.get_if() > std::numeric_limits<std::uint32_t>::max()) {
+            return corrupt("ownership asset exceeds the compact ID range");
+        }
         state.ownership.lots_.push_back(
             OwnershipLot{
                 *id.get_if(),
                 AssetKey{
                     *kind.get_if(),
                     *asset_economy.get_if(),
-                    *asset_value.get_if(),
+                    static_cast<std::uint32_t>(*asset_value.get_if()),
                 },
                 *owner.get_if(),
                 *share.get_if(),

@@ -69,7 +69,7 @@ class RelationshipBook final {
 
     [[nodiscard]] EventId active_union(PersonId person) const noexcept;
     [[nodiscard]] std::span<const PersonId>
-    children(PersonId parent) const noexcept;
+    children(PersonId parent) const;
     [[nodiscard]] const std::vector<UnionRecord> &unions() const noexcept;
     [[nodiscard]] Status
     replace_unions(const PersonStore &persons,
@@ -77,14 +77,21 @@ class RelationshipBook final {
     [[nodiscard]] Status validate(const PersonStore &persons) const;
 
   private:
+    struct ChildLink final {
+        PersonId child{};
+        std::uint32_t previous{0U};
+    };
+
     void ensure_person(PersonId person);
+    [[nodiscard]] Status append_child(PersonId parent, PersonId child);
     [[nodiscard]] UnionRecord *get(EventId event) noexcept;
     [[nodiscard]] const UnionRecord *get(EventId event) const noexcept;
 
     std::vector<UnionRecord> unions_;
     std::vector<EventId> active_union_by_person_{EventId{}};
-    std::vector<std::vector<PersonId>> children_by_parent_{
-        std::vector<PersonId>{}};
+    std::vector<std::uint32_t> child_head_by_parent_{0U};
+    std::vector<ChildLink> child_links_;
+    mutable std::vector<PersonId> child_query_;
 };
 
 [[nodiscard]] Result<std::vector<MarriageMatch>>
@@ -153,8 +160,8 @@ class EmploymentBook final {
                                   double tolerance) const;
 
   private:
-    static constexpr std::size_t kNoRoster =
-        std::numeric_limits<std::size_t>::max();
+    static constexpr std::uint32_t kNoRoster =
+        std::numeric_limits<std::uint32_t>::max();
 
     void ensure_person(PersonId person);
     void ensure_firm(FirmId firm);
@@ -164,7 +171,7 @@ class EmploymentBook final {
     std::vector<JobId> secondary_by_person_{JobId{}};
     std::vector<std::vector<JobId>> roster_by_firm_{
         std::vector<JobId>{}};
-    std::vector<std::size_t> roster_position_by_job_{kNoRoster};
+    std::vector<std::uint32_t> roster_position_by_job_{kNoRoster};
     std::uint64_t next_id_{1};
     std::size_t active_count_{0};
     std::size_t suspended_count_{0};

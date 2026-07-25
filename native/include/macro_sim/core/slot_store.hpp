@@ -56,7 +56,7 @@ public:
     };
 
     [[nodiscard]] Result<CreateReceipt> create(Value value) {
-        if (next_id_ == std::numeric_limits<std::uint64_t>::max()) {
+        if (next_id_ > static_cast<std::uint64_t>(Id::max_valid_value())) {
             return Status(ErrorCode::out_of_range, "stable ID space exhausted");
         }
         if (next_sequence_ == std::numeric_limits<std::uint64_t>::max()) {
@@ -66,7 +66,7 @@ public:
             );
         }
 
-        const auto id = Id(next_id_);
+        const auto id = Id(static_cast<typename Id::rep_type>(next_id_));
         ++next_id_;
         const auto sequence = next_sequence_;
         ++next_sequence_;

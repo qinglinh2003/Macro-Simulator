@@ -7,10 +7,11 @@
 #include <functional>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 namespace macro_sim {
 
-template <typename Tag, typename Rep = std::uint64_t> class StrongId final {
+template <typename Tag, typename Rep = std::uint32_t> class StrongId final {
     static_assert(std::is_integral_v<Rep>);
     static_assert(std::is_unsigned_v<Rep>);
 
@@ -20,8 +21,22 @@ template <typename Tag, typename Rep = std::uint64_t> class StrongId final {
     constexpr StrongId() noexcept = default;
     explicit constexpr StrongId(Rep value) noexcept : value_(value) {}
 
+    template <typename Source>
+        requires(std::is_integral_v<Source> &&
+                 !std::is_same_v<std::remove_cv_t<Source>, Rep>)
+    explicit constexpr StrongId(Source value) noexcept
+        : value_(std::in_range<Rep>(value) &&
+                         static_cast<Rep>(value) !=
+                             std::numeric_limits<Rep>::max()
+                     ? static_cast<Rep>(value)
+                     : std::numeric_limits<Rep>::max()) {}
+
     [[nodiscard]] static constexpr StrongId invalid() noexcept {
         return StrongId(std::numeric_limits<Rep>::max());
+    }
+
+    [[nodiscard]] static constexpr Rep max_valid_value() noexcept {
+        return static_cast<Rep>(std::numeric_limits<Rep>::max() - Rep{1});
     }
 
     [[nodiscard]] constexpr bool valid() const noexcept {
@@ -83,7 +98,7 @@ using LoanId = StrongId<LoanIdTag>;
 using PersonId = StrongId<PersonIdTag>;
 using OwnershipLotId = StrongId<OwnershipLotIdTag>;
 using SecurityLotId = StrongId<SecurityLotIdTag>;
-using SessionId = StrongId<SessionIdTag>;
+using SessionId = StrongId<SessionIdTag, std::uint64_t>;
 using SettlementNodeId = StrongId<SettlementNodeIdTag>;
 using TenancyId = StrongId<TenancyIdTag>;
 using TitleEventId = StrongId<TitleEventIdTag>;

@@ -1,12 +1,17 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person full-play open multicountry M9 60-day target met
+Status: one-million-person latency target met; memory footprint reduced and
+validated over 60 full-play days
 
 Date: 2026-07-26
 
 Base commit: `a0c7a324d3cc79361bef7562e05bd42f5d461c16`
 
 Branch: `perf/cpp-scale-v33`
+
+Memory refinement base: `c93c4af75c0ba2a1ec59760906221f21d1309723`
+
+Memory refinement branch: `perf/cpp-memory-v33`
 
 ## 1. Purpose
 
@@ -42,6 +47,10 @@ deprivation, and the active housing market.
 The probe reports process peak RSS through `getrusage`. Genesis and simulated days
 are timed with `std::chrono::steady_clock`. Heap allocation counts use the same
 global allocation counter pattern as the existing milestone performance gates.
+On macOS, schema `m9-scale-probe-v7` also reports allocator live heap bytes from
+the default malloc zone. The allocator statistic is useful for trends but can
+exceed physical RSS because it includes allocator-managed regions and rounded
+size classes; peak RSS remains the acceptance measure.
 M9 probes run a complete world validation after the final measured day; that
 validation is outside the daily timing window.
 
@@ -544,23 +553,76 @@ All 120 measured full-play days complete below one second. The one-time genesis
 cost is already below three seconds and is not the interactive bottleneck, so
 this checkpoint did not trade model detail for faster creation.
 
+### 8.4 Memory-layout refinement
+
+The first full-play result retained 4.84-4.85 GiB at day 60. The memory pass
+reduced both persistent records and transient tick staging:
+
+- Internal entity IDs, owner payloads, and asset payloads use 32-bit
+  representations. Session IDs remain 64-bit. External C and Python inputs remain
+  wide and reject values that cannot be represented instead of wrapping.
+- The highest valid internal ID is `4,294,967,294` in each ID category. This is
+  above the intended one-million-person game scale but is now an explicit engine
+  limit.
+- `PersonRecord` is 64 bytes instead of 96 bytes, `BeneficialLot` is 32 bytes
+  instead of 56 bytes, `JobRecord` is 48 bytes instead of 64 bytes, and
+  `AccountRecord` is 56 bytes instead of 80 bytes. These reductions use field
+  layout and narrower IDs; economic scalar precision remains `double`.
+- Alive-person and employment-roster dense positions use 32-bit indexes under
+  the same entity-count limit.
+- Household property ownership, occupancy, and collateral use dense indexes for
+  their common one-to-one cases. Maps remain only for non-household ownership and
+  multi-property overflow.
+- Parent-child relationships use a compact edge table instead of one
+  `std::vector` object per person. A returned `children()` span is a transient
+  query view and remains valid only until the next `children()` query or mutation
+  on the same relationship book. Call sites consume it immediately.
+- Normal M9 advancement moves the large M6-M8 runtime collections through the
+  tick scratch space instead of retaining a second complete copy. Low-level
+  direct M6-M8 advancement keeps copy staging by default.
+
+The last item deliberately distinguishes normal play from diagnostic rollback.
+M9 callers that require the complete pre-tick world after any unexpected
+domestic error must set `require_world_rollback=true`; fault-injection paths
+already use copied staging. Normal validated gameplay uses move staging to avoid
+doubling the resident world. This does not change successful-tick economics.
+
+A three-day full-play sample after the memory pass retained approximately
+1.0 GiB peak RSS. That short result is not presented as a long-session bound:
+the 60-day portfolio cycles grew public security history to approximately
+6.03 million lots. The formal long-run results are:
+
+| Scenario | Genesis | Median day | P95 day | Maximum day | Peak RSS | Security lots | Digest |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| Full play, no shock | 2.15 s | 0.186 s | 0.660 s | 0.819 s | 2.58 GiB | 6,027,071 | `2061388354141165434` |
+| Full play, 30-day demand shock | 2.11 s | 0.180 s | 0.645 s | 0.744 s | 2.67 GiB | 6,028,715 | `10376059397024061528` |
+
+Relative to the preceding accepted run, day-60 peak RSS fell by approximately
+47 percent without changing either deterministic digest. Median day latency
+also improved by approximately 20 percent. Allocation counts and beneficial and
+security lot counts are now emitted for M9 rather than silently reporting zero.
+The remaining long-session memory growth is persistent security-position
+history, not duplicate tick staging.
+
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
 incremental synchronization and validation, stable order bucketing, linear
 security-index construction, staggered portfolio scheduling, aggregate
 household portfolio claims, copy-free normal M9 staging, locally audited trade
-settlement, and deterministic country-level parallelism.
+settlement, deterministic country-level parallelism, compact internal IDs,
+dense housing indexes, compact lineage storage, and move-based M6-M8 tick
+staging.
 
 The next measured order is:
 
 1. Remove repeated account-index rebuilds and root-wide transaction digests from
    batched firm exit and entry commit paths.
-2. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
-   storage or mutation journals.
+2. Bound or compact inactive public-security position history across long game
+   sessions while retaining the audit information required by gameplay.
 3. Rebuild public security indexes no more than once per mutation phase.
-4. Reduce the approximately 4.8-4.9 GiB full-play day-60 peak RSS and bound history
-   retention for long game sessions.
+4. Replace copied rollback staging with chunked copy-on-write storage or mutation
+   journals where strong rollback is required.
 5. Extend deterministic parallelism inside a single large country only after
    phase read/write sets and memory-bandwidth limits are measured.
 

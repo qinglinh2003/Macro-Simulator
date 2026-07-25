@@ -428,7 +428,7 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
             BondId(row[0].get<std::uint64_t>()),
             {
                 static_cast<core::OwnerKind>(row[1].get<std::uint8_t>()),
-                row[2].get<std::uint64_t>(),
+                row[2].get<std::uint32_t>(),
             },
             AccountId(row[3].get<std::uint64_t>()),
             CurrencyId(row[4].get<std::uint32_t>()),
@@ -451,7 +451,7 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
             static_cast<core::EquityIssuerKind>(row[1].get<std::uint8_t>()),
             {
                 static_cast<core::OwnerKind>(row[2].get<std::uint8_t>()),
-                row[3].get<std::uint64_t>(),
+                row[3].get<std::uint32_t>(),
             },
             AccountId(row[4].get<std::uint64_t>()),
             CurrencyId(row[5].get<std::uint32_t>()),
@@ -475,11 +475,11 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
             SecurityLotId(row[0].get<std::uint64_t>()),
             {
                 static_cast<core::SecurityKind>(row[1].get<std::uint8_t>()),
-                row[2].get<std::uint64_t>(),
+                row[2].get<std::uint32_t>(),
             },
             {
                 static_cast<core::OwnerKind>(row[3].get<std::uint8_t>()),
-                row[4].get<std::uint64_t>(),
+                row[4].get<std::uint32_t>(),
             },
             row[5].get<double>(),
             Money(row[6].get<double>()),

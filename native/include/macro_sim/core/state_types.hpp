@@ -2,6 +2,8 @@
 #define MACRO_SIM_CORE_STATE_TYPES_HPP
 
 #include <cstdint>
+#include <type_traits>
+#include <utility>
 
 #include "macro_sim/ids.hpp"
 #include "macro_sim/units.hpp"
@@ -21,7 +23,7 @@ enum class OwnerKind : std::uint8_t {
 
 struct OwnerId final {
     OwnerKind kind{OwnerKind::institution};
-    std::uint64_t value{0};
+    std::uint32_t value{0};
 
     [[nodiscard]] static constexpr OwnerId household(HouseholdId id) noexcept {
         return {OwnerKind::household, id.value()};
@@ -35,11 +37,18 @@ struct OwnerId final {
         return {OwnerKind::bank, id.value()};
     }
 
+    template <typename Source = std::uint32_t>
+        requires std::is_integral_v<Source>
     [[nodiscard]] static constexpr OwnerId institutional(
         OwnerKind kind,
-        std::uint64_t value = 1
+        Source value = Source{1}
     ) noexcept {
-        return {kind, value};
+        return {
+            kind,
+            std::in_range<std::uint32_t>(value)
+                ? static_cast<std::uint32_t>(value)
+                : std::uint32_t{0},
+        };
     }
 
     [[nodiscard]] constexpr bool valid() const noexcept {
@@ -90,7 +99,7 @@ enum class AssetKind : std::uint8_t {
 struct AssetKey final {
     AssetKind kind{AssetKind::generic_contract};
     EconomyId economy{};
-    std::uint64_t value{0};
+    std::uint32_t value{0};
 
     constexpr auto operator<=>(const AssetKey&) const noexcept = default;
 };

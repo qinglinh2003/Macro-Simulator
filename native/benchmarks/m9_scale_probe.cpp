@@ -15,6 +15,10 @@
 #include <sys/resource.h>
 #endif
 
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#endif
+
 #include "macro_sim/core/digest.hpp"
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/simulation/m9.hpp"
@@ -69,12 +73,14 @@ struct Measurement final {
     std::uint64_t genesis_ns{0};
     std::uint64_t genesis_allocations{0};
     std::uint64_t genesis_peak_rss_bytes{0};
+    std::uint64_t genesis_live_heap_bytes{0};
     std::uint64_t median_day_ns{0};
     std::uint64_t p95_day_ns{0};
     std::uint64_t maximum_day_ns{0};
     std::uint64_t total_measured_ns{0};
     std::uint64_t maximum_allocations_per_day{0};
     std::uint64_t peak_rss_bytes{0};
+    std::uint64_t final_live_heap_bytes{0};
     std::uint64_t security_lots{0};
     std::uint64_t beneficial_lots{0};
     std::uint64_t active_beneficial_lots{0};
@@ -84,6 +90,7 @@ struct Measurement final {
     bool active_shock{false};
     std::string workload;
     std::vector<std::uint64_t> day_allocations;
+    std::vector<std::uint64_t> day_live_heap_bytes;
     std::vector<std::uint64_t> day_ns;
 };
 
@@ -98,6 +105,16 @@ struct Measurement final {
 #else
     return static_cast<std::uint64_t>(usage.ru_maxrss) * 1024U;
 #endif
+#else
+    return 0U;
+#endif
+}
+
+[[nodiscard]] std::uint64_t live_heap_bytes() noexcept {
+#if defined(__APPLE__)
+    malloc_statistics_t statistics{};
+    malloc_zone_statistics(malloc_default_zone(), &statistics);
+    return static_cast<std::uint64_t>(statistics.size_in_use);
 #else
     return 0U;
 #endif
@@ -347,6 +364,7 @@ template <typename Advance>
             std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count());
         samples.push_back(elapsed);
         measurement.day_allocations.push_back(allocations);
+        measurement.day_live_heap_bytes.push_back(live_heap_bytes());
         measurement.day_ns.push_back(elapsed);
         measurement.total_measured_ns += elapsed;
         measurement.maximum_allocations_per_day =
@@ -360,6 +378,7 @@ template <typename Advance>
     measurement.p95_day_ns = samples[p95_index];
     measurement.maximum_day_ns = samples.back();
     measurement.peak_rss_bytes = peak_rss_bytes();
+    measurement.final_live_heap_bytes = live_heap_bytes();
     return true;
 }
 
@@ -374,6 +393,8 @@ template <typename Advance>
     measurement.beneficial_ownership = options.beneficial_ownership;
     measurement.workload = workload_name(options.workload);
     measurement.day_allocations.reserve(
+        static_cast<std::size_t>(options.measured_days));
+    measurement.day_live_heap_bytes.reserve(
         static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
 
@@ -391,6 +412,7 @@ template <typename Advance>
     measurement.genesis_ns = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count());
     measurement.genesis_peak_rss_bytes = peak_rss_bytes();
+    measurement.genesis_live_heap_bytes = live_heap_bytes();
     measurement.households = session.root()->households.alive_count();
     measurement.firms = session.root()->firms.alive_count();
     measurement.banks = session.root()->banks.alive_count();
@@ -445,6 +467,8 @@ template <typename Advance>
     measurement.workload = workload_name(options.workload);
     measurement.day_allocations.reserve(
         static_cast<std::size_t>(options.measured_days));
+    measurement.day_live_heap_bytes.reserve(
+        static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
 
     M9WorldSpec spec;
@@ -492,6 +516,7 @@ template <typename Advance>
     measurement.genesis_ns = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count());
     measurement.genesis_peak_rss_bytes = peak_rss_bytes();
+    measurement.genesis_live_heap_bytes = live_heap_bytes();
     for (std::uint64_t index = 0U; index < options.economies; ++index) {
         const auto *root = world.economy_root(EconomyId(index));
         if (root == nullptr) {
@@ -534,10 +559,20 @@ template <typename Advance>
     measurement.firms = 0U;
     measurement.banks = 0U;
     for (std::uint64_t index = 0U; index < options.economies; ++index) {
-        const auto *root = world.economy_root(EconomyId(index));
+        const auto economy = EconomyId(index);
+        const auto *root = world.economy_root(economy);
+        const auto *financial = world.economy_financial_runtime(economy);
+        const auto *population = world.economy_population_runtime(economy);
         measurement.households += root->households.alive_count();
         measurement.firms += root->firms.alive_count();
         measurement.banks += root->banks.alive_count();
+        measurement.security_lots += financial->securities.lots().size();
+        measurement.beneficial_lots += population->beneficial_ownership.size();
+        measurement.active_beneficial_lots +=
+            static_cast<std::uint64_t>(std::count_if(
+                population->beneficial_ownership.records().begin(),
+                population->beneficial_ownership.records().end(),
+                [](const core::BeneficialLot &lot) { return lot.active; }));
     }
     measurement.digest = std::to_string(world.digest());
     return measurement;
@@ -560,6 +595,14 @@ void print(const Measurement &value) {
         std::cout << value.day_allocations[index];
     }
     std::cout << "],"
+              << "\"day_live_heap_bytes\":[";
+    for (std::size_t index = 0; index < value.day_live_heap_bytes.size(); ++index) {
+        if (index != 0U) {
+            std::cout << ',';
+        }
+        std::cout << value.day_live_heap_bytes[index];
+    }
+    std::cout << "],"
               << "\"day_ns\":[";
     for (std::size_t index = 0; index < value.day_ns.size(); ++index) {
         if (index != 0U) {
@@ -573,9 +616,12 @@ void print(const Measurement &value) {
               << "\"firms\":" << value.firms << ','
               << "\"workload\":\"" << value.workload << "\","
               << "\"genesis_allocations\":" << value.genesis_allocations << ','
+              << "\"genesis_live_heap_bytes\":" << value.genesis_live_heap_bytes
+              << ','
               << "\"genesis_ns\":" << value.genesis_ns << ','
               << "\"genesis_peak_rss_bytes\":" << value.genesis_peak_rss_bytes << ','
               << "\"households\":" << value.households << ','
+              << "\"final_live_heap_bytes\":" << value.final_live_heap_bytes << ','
               << "\"maximum_allocations_per_day\":" << value.maximum_allocations_per_day
               << ',' << "\"maximum_day_ns\":" << value.maximum_day_ns << ','
               << "\"measured_days\":" << value.measured_days << ','

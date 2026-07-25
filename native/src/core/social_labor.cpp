@@ -38,8 +38,21 @@ void RelationshipBook::ensure_person(PersonId person) {
     const auto size = static_cast<std::size_t>(person.value()) + 1U;
     if (active_union_by_person_.size() < size) {
         active_union_by_person_.resize(size);
-        children_by_parent_.resize(size);
+        child_head_by_parent_.resize(size, 0U);
     }
+}
+
+Status RelationshipBook::append_child(PersonId parent, PersonId child) {
+    if (child_links_.size() >=
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max() - 1U)) {
+        return Status(ErrorCode::out_of_range, "child lineage space exhausted");
+    }
+    ensure_person(parent);
+    const auto parent_index = static_cast<std::size_t>(parent.value());
+    child_links_.push_back({child, child_head_by_parent_[parent_index]});
+    child_head_by_parent_[parent_index] =
+        static_cast<std::uint32_t>(child_links_.size());
+    return Status::success();
 }
 
 UnionRecord *RelationshipBook::get(EventId event) noexcept {
@@ -198,15 +211,16 @@ Status RelationshipBook::register_birth(const PersonStore &persons,
                           "child references an absent parent");
         }
         ensure_person(parent);
-        auto &children =
-            children_by_parent_[
-                static_cast<std::size_t>(parent.value())];
+        const auto children = this->children(parent);
         if (std::find(children.begin(), children.end(), child) !=
             children.end()) {
             return Status(ErrorCode::already_exists,
                           "child lineage is already registered");
         }
-        children.push_back(child);
+        const auto status = append_child(parent, child);
+        if (!status.ok()) {
+            return status;
+        }
     }
     ensure_person(child);
     return Status::success();
@@ -223,13 +237,21 @@ RelationshipBook::active_union(PersonId person) const noexcept {
 }
 
 std::span<const PersonId>
-RelationshipBook::children(PersonId parent) const noexcept {
+RelationshipBook::children(PersonId parent) const {
+    child_query_.clear();
     if (!parent.valid() || parent.value() == 0 ||
-        parent.value() >= children_by_parent_.size()) {
+        parent.value() >= child_head_by_parent_.size()) {
         return {};
     }
-    return children_by_parent_[
-        static_cast<std::size_t>(parent.value())];
+    auto link =
+        child_head_by_parent_[static_cast<std::size_t>(parent.value())];
+    while (link != 0U) {
+        const auto &record =
+            child_links_[static_cast<std::size_t>(link - 1U)];
+        child_query_.push_back(record.child);
+        link = record.previous;
+    }
+    return child_query_;
 }
 
 const std::vector<UnionRecord> &
@@ -245,9 +267,9 @@ Status RelationshipBook::replace_unions(
     active_union_by_person_.assign(
         persons.next_id(), EventId{}
     );
-    children_by_parent_.assign(
-        persons.next_id(), std::vector<PersonId>{}
-    );
+    child_head_by_parent_.assign(persons.next_id(), 0U);
+    child_links_.clear();
+    child_query_.clear();
     for (const auto &record : unions_) {
         if (!record.active) {
             continue;
@@ -280,10 +302,10 @@ Status RelationshipBook::replace_unions(
                     "relationship checkpoint parent is absent"
                 );
             }
-            ensure_person(parent);
-            children_by_parent_[
-                static_cast<std::size_t>(parent.value())]
-                .push_back(child);
+            const auto status = append_child(parent, child);
+            if (!status.ok()) {
+                return status;
+            }
         }
     }
     return validate(persons);
@@ -366,10 +388,9 @@ Status RelationshipBook::validate(
         }
     }
     for (std::size_t parent_index = 1;
-         parent_index < children_by_parent_.size(); ++parent_index) {
+         parent_index < child_head_by_parent_.size(); ++parent_index) {
         std::vector<PersonId> seen;
-        for (const auto child :
-             children_by_parent_[parent_index]) {
+        for (const auto child : children(PersonId(parent_index))) {
             const auto *record = persons.get(child);
             const auto parent = PersonId(parent_index);
             if (record == nullptr ||
@@ -696,7 +717,7 @@ Result<JobId> EmploymentBook::hire(PersonId person, FirmId firm,
     if (!person.valid() || person.value() == 0 || !firm.valid() ||
         firm.value() == 0 || !finite(wage) || wage <= 0.0 ||
         !finite(hours) || hours <= 0.0 || hours > 1.0 ||
-        next_id_ == std::numeric_limits<std::uint64_t>::max()) {
+        next_id_ > static_cast<std::uint64_t>(JobId::max_valid_value())) {
         return Status(ErrorCode::invalid_argument,
                       "employment contract is invalid");
     }
@@ -726,7 +747,7 @@ Result<JobId> EmploymentBook::hire(PersonId person, FirmId firm,
                           "person job hours exceed capacity");
         }
     }
-    const auto id = JobId(next_id_++);
+    const auto id = JobId(static_cast<JobId::rep_type>(next_id_++));
     jobs_.push_back({
         id,
         person,
@@ -744,7 +765,8 @@ Result<JobId> EmploymentBook::hire(PersonId person, FirmId firm,
     slot = id;
     auto &firm_roster =
         roster_by_firm_[static_cast<std::size_t>(firm.value())];
-    roster_position_by_job_.push_back(firm_roster.size());
+    roster_position_by_job_.push_back(
+        static_cast<std::uint32_t>(firm_roster.size()));
     firm_roster.push_back(id);
     ++active_count_;
     return id;
@@ -758,7 +780,8 @@ Status EmploymentBook::separate(JobId job, std::int32_t day,
                       "active employment contract is absent");
     }
     const auto index = static_cast<std::size_t>(job.value());
-    const auto position = roster_position_by_job_[index];
+    const auto position =
+        static_cast<std::size_t>(roster_position_by_job_[index]);
     auto &firm_roster =
         roster_by_firm_[static_cast<std::size_t>(record->firm.value())];
     if (position == kNoRoster || position >= firm_roster.size() ||
@@ -771,7 +794,8 @@ Status EmploymentBook::separate(JobId job, std::int32_t day,
     firm_roster.pop_back();
     if (moved != job) {
         roster_position_by_job_[
-            static_cast<std::size_t>(moved.value())] = position;
+            static_cast<std::size_t>(moved.value())] =
+            static_cast<std::uint32_t>(position);
     }
     roster_position_by_job_[index] = kNoRoster;
     auto &slot =
@@ -990,7 +1014,8 @@ Status EmploymentBook::replace_records(
         auto &firm_roster =
             roster_by_firm_[
                 static_cast<std::size_t>(job.firm.value())];
-        roster_position_by_job_[index] = firm_roster.size();
+        roster_position_by_job_[index] =
+            static_cast<std::uint32_t>(firm_roster.size());
         firm_roster.push_back(job.id);
         ++active_count_;
         suspended_count_ += job.suspended ? 1U : 0U;

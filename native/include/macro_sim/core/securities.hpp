@@ -26,7 +26,7 @@ enum class EquityIssuerKind : std::uint8_t {
 
 struct SecurityId final {
     SecurityKind kind{SecurityKind::bond};
-    std::uint64_t value{0};
+    std::uint32_t value{0};
 
     [[nodiscard]] static constexpr SecurityId bond(BondId id) noexcept {
         return {SecurityKind::bond, id.value()};

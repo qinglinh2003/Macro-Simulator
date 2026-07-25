@@ -91,10 +91,12 @@ Result<AccountId> PostingBook::create_account(AccountKey key, Money opening_bala
     if (find_account_row(key) != kMissingAccountRow) {
         return Status(ErrorCode::already_exists, "account key already exists");
     }
-    if (accounts_.size() >= std::numeric_limits<std::uint64_t>::max() - 1) {
+    if (accounts_.size() >=
+        static_cast<std::size_t>(AccountId::max_valid_value())) {
         return Status(ErrorCode::out_of_range, "account ID space exhausted");
     }
-    const auto id = AccountId(static_cast<std::uint64_t>(accounts_.size()) + 1);
+    const auto id =
+        AccountId(static_cast<AccountId::rep_type>(accounts_.size() + 1U));
     ensure_account_slot_capacity(accounts_.size() + 1);
     accounts_.push_back(
         AccountRecord{id, key, opening_balance, 0.0, allow_negative, true});
@@ -291,11 +293,12 @@ Result<SettlementNodeId> ReserveBook::create_position(BankId bank,
         return Status(ErrorCode::invalid_argument,
                       "reserve position requires a valid bank and finite balance");
     }
-    if (positions_.size() >= std::numeric_limits<std::uint64_t>::max() - 1) {
+    if (positions_.size() >=
+        static_cast<std::size_t>(SettlementNodeId::max_valid_value())) {
         return Status(ErrorCode::out_of_range, "settlement node ID space exhausted");
     }
-    const auto node =
-        SettlementNodeId(static_cast<std::uint64_t>(positions_.size()) + 1);
+    const auto node = SettlementNodeId(
+        static_cast<SettlementNodeId::rep_type>(positions_.size() + 1U));
     positions_.push_back(ReserveRecord{node, bank, opening_balance, 0.0});
     static_cast<void>(apply_stock_delta_unchecked(opening_balance.value()));
     return node;
@@ -450,7 +453,8 @@ void LoanBook::replace_records(std::vector<LoanRecord> &projection) noexcept {
 LoanBook::CreateResult LoanBook::create_unchecked(BankId lender, OwnerId borrower,
                                                   AccountId borrower_account,
                                                   Money principal, LoanTerms terms) {
-    const auto id = LoanId(static_cast<std::uint64_t>(loans_.size()) + 1);
+    const auto id =
+        LoanId(static_cast<LoanId::rep_type>(loans_.size() + 1U));
     loans_.push_back(LoanRecord{
         id,
         lender,
@@ -498,7 +502,12 @@ Result<OwnershipLotId> OwnershipBook::create_lot(AssetKey asset, OwnerId owner,
         !std::isfinite(share) || share <= 0.0 || share > 1.0) {
         return Status(ErrorCode::invalid_argument, "invalid ownership lot");
     }
-    const auto id = OwnershipLotId(static_cast<std::uint64_t>(lots_.size()) + 1);
+    if (lots_.size() >=
+        static_cast<std::size_t>(OwnershipLotId::max_valid_value())) {
+        return Status(ErrorCode::out_of_range, "ownership lot ID space exhausted");
+    }
+    const auto id = OwnershipLotId(
+        static_cast<OwnershipLotId::rep_type>(lots_.size() + 1U));
     lots_.push_back(OwnershipLot{id, asset, owner, share, true});
     return id;
 }

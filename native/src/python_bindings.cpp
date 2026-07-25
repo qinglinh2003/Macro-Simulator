@@ -1972,7 +1972,8 @@ NB_MODULE(_native, module) {
                std::uint64_t originated_tick, std::uint64_t maturity_tick) {
                 batch.originations.push_back({
                     macro_sim::BankId(lender),
-                    {borrower_kind, borrower},
+                    macro_sim::core::OwnerId::institutional(
+                        borrower_kind, borrower),
                     macro_sim::AccountId(borrower_account),
                     macro_sim::Money(amount),
                     {
@@ -2003,7 +2004,7 @@ NB_MODULE(_native, module) {
                double share) {
                 batch.ownership_mutations.push_back({
                     macro_sim::OwnershipLotId(lot),
-                    {owner_kind, owner},
+                    macro_sim::core::OwnerId::institutional(owner_kind, owner),
                     share,
                 });
             },

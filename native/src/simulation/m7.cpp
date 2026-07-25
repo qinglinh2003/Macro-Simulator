@@ -125,7 +125,7 @@ beneficial_projection_error(const core::BeneficialOwnershipBook &ownership) {
 security_from_token(std::uint64_t token) noexcept {
     return {
         (token & 1U) == 0U ? core::SecurityKind::bond : core::SecurityKind::equity,
-        token >> 1U,
+        static_cast<std::uint32_t>(token >> 1U),
     };
 }
 
@@ -992,6 +992,20 @@ class M7Extension final : public M6TickExtension {
         : runtime_(runtime), scratch_(scratch), options_(options),
           extension_(extension) {}
 
+    ~M7Extension() override {
+        if (memory_efficient_staging_ && !committed_) {
+            runtime_.persons = std::move(scratch_.persons_);
+            runtime_.membership = std::move(scratch_.membership_);
+            runtime_.beneficial_ownership =
+                std::move(scratch_.beneficial_ownership_);
+            runtime_.employment = std::move(scratch_.employment_);
+            runtime_.relationships = std::move(scratch_.relationships_);
+            runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
+            runtime_.estates = std::move(scratch_.estates_);
+            runtime_.leaving_home = std::move(scratch_.leaving_home_);
+        }
+    }
+
     Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
                         M4TickScratch &real, M5Runtime &monetary_runtime,
                         M5TickScratch &monetary, M6Runtime &financial_runtime,
@@ -1011,18 +1025,32 @@ class M7Extension final : public M6TickExtension {
             return Status(ErrorCode::contract_violation,
                           "forced leaving-home target is not alive");
         }
-        scratch_.persons_ = runtime_.persons;
-        scratch_.membership_ = runtime_.membership;
-        scratch_.beneficial_ownership_ = runtime_.beneficial_ownership;
-        scratch_.employment_ = runtime_.employment;
-        scratch_.relationships_ = runtime_.relationships;
+        memory_efficient_staging_ =
+            options_.base.base.base.memory_efficient_staging;
+        if (memory_efficient_staging_) {
+            scratch_.persons_ = std::move(runtime_.persons);
+            scratch_.membership_ = std::move(runtime_.membership);
+            scratch_.beneficial_ownership_ =
+                std::move(runtime_.beneficial_ownership);
+            scratch_.employment_ = std::move(runtime_.employment);
+            scratch_.relationships_ = std::move(runtime_.relationships);
+            scratch_.firm_target_ema_ = std::move(runtime_.firm_target_ema);
+            scratch_.estates_ = std::move(runtime_.estates);
+            scratch_.leaving_home_ = std::move(runtime_.leaving_home);
+        } else {
+            scratch_.persons_ = runtime_.persons;
+            scratch_.membership_ = runtime_.membership;
+            scratch_.beneficial_ownership_ = runtime_.beneficial_ownership;
+            scratch_.employment_ = runtime_.employment;
+            scratch_.relationships_ = runtime_.relationships;
+            scratch_.firm_target_ema_ = runtime_.firm_target_ema;
+            scratch_.estates_ = runtime_.estates;
+            scratch_.leaving_home_ = runtime_.leaving_home;
+        }
         scratch_.labor_accounts_ = runtime_.labor_accounts;
-        scratch_.firm_target_ema_ = runtime_.firm_target_ema;
-        scratch_.estates_ = runtime_.estates;
-        scratch_.leaving_home_ = runtime_.leaving_home;
         scratch_.pending_leaving_home_.clear();
-        scratch_.opening_alive_.assign(runtime_.persons.alive_ids().begin(),
-                                       runtime_.persons.alive_ids().end());
+        scratch_.opening_alive_.assign(scratch_.persons_.alive_ids().begin(),
+                                       scratch_.persons_.alive_ids().end());
         std::sort(scratch_.opening_alive_.begin(), scratch_.opening_alive_.end());
         scratch_.retired_households_.clear();
         scratch_.external_leave_home_multiplier_ = 1.0;
@@ -2058,15 +2086,27 @@ class M7Extension final : public M6TickExtension {
                 M5Runtime &monetary_runtime, M5TickScratch &monetary,
                 M6Runtime &financial_runtime, M6TickScratch &financial, Tick tick,
                 const M6Metrics &metrics) noexcept override {
-        std::swap(runtime_.persons, scratch_.persons_);
-        std::swap(runtime_.membership, scratch_.membership_);
-        std::swap(runtime_.beneficial_ownership, scratch_.beneficial_ownership_);
-        std::swap(runtime_.employment, scratch_.employment_);
-        std::swap(runtime_.relationships, scratch_.relationships_);
+        if (memory_efficient_staging_) {
+            runtime_.persons = std::move(scratch_.persons_);
+            runtime_.membership = std::move(scratch_.membership_);
+            runtime_.beneficial_ownership =
+                std::move(scratch_.beneficial_ownership_);
+            runtime_.employment = std::move(scratch_.employment_);
+            runtime_.relationships = std::move(scratch_.relationships_);
+            runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
+            runtime_.estates = std::move(scratch_.estates_);
+            runtime_.leaving_home = std::move(scratch_.leaving_home_);
+        } else {
+            std::swap(runtime_.persons, scratch_.persons_);
+            std::swap(runtime_.membership, scratch_.membership_);
+            std::swap(runtime_.beneficial_ownership, scratch_.beneficial_ownership_);
+            std::swap(runtime_.employment, scratch_.employment_);
+            std::swap(runtime_.relationships, scratch_.relationships_);
+            std::swap(runtime_.firm_target_ema, scratch_.firm_target_ema_);
+            std::swap(runtime_.estates, scratch_.estates_);
+            std::swap(runtime_.leaving_home, scratch_.leaving_home_);
+        }
         runtime_.labor_accounts = scratch_.labor_accounts_;
-        std::swap(runtime_.firm_target_ema, scratch_.firm_target_ema_);
-        std::swap(runtime_.estates, scratch_.estates_);
-        std::swap(runtime_.leaving_home, scratch_.leaving_home_);
         runtime_.next_event_id = scratch_.next_event_id_;
         runtime_.population_rng_counter = scratch_.population_rng_counter_;
         for (const auto household : scratch_.retired_households_) {
@@ -2234,6 +2274,7 @@ class M7Extension final : public M6TickExtension {
                                financial_runtime, financial, runtime_, scratch_, tick,
                                runtime_.last_metrics);
         }
+        committed_ = true;
     }
 
   private:
@@ -2241,6 +2282,8 @@ class M7Extension final : public M6TickExtension {
     M7TickScratch &scratch_;
     const M7AdvanceOptions &options_;
     M7TickExtension *extension_{nullptr};
+    bool memory_efficient_staging_{false};
+    bool committed_{false};
 };
 
 } // namespace
