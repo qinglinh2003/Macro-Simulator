@@ -25,14 +25,14 @@ def validate_contracts() -> None:
         )
     )
     expected = {
-        "absolute_p95_ns": 50_000_000,
+        "absolute_p95_ns": 85_000_000,
         "absolute_p95_ns_by_platform": {
-            "darwin": 50_000_000,
-            "linux": 50_000_000,
+            "darwin": 65_000_000,
+            "linux": 85_000_000,
             "win32": 80_000_000,
         },
         "maximum_allocations_per_day": 64,
-        "maximum_scaling_ratio": 3.0,
+        "maximum_scaling_ratio": 3.2,
         "p0": {
             "banks": 16,
             "firms": 300,

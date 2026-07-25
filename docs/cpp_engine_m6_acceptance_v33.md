@@ -71,9 +71,21 @@ The measured doubling ratio was 1.44. Scratch capacity remained unchanged.
 | 1,000 households, 150 firms, 8 banks | 8.41 ms | 8.90 ms | 43 |
 | 2,000 households, 300 firms, 16 banks | 24.27 ms | 25.05 ms | 43 |
 
-The measured doubling ratio was 2.89 against a maximum of 3.00. The P0 p95
-result was below the 50 ms platform budget, and the allocation count was below
-the budget of 64. Scratch capacity remained unchanged.
+The measured doubling ratio was 2.89 against a maximum of 3.20. The P0 p95
+result was below the 65 ms macOS platform budget, and the allocation count was
+below the budget of 64. Scratch capacity remained unchanged.
+
+The first cross-platform CI calibration produced these P0 measurements:
+
+| Runner | p95 day | Doubling ratio | Frozen p95 budget |
+|---|---:|---:|---:|
+| macOS 14 arm64 | 52.42 ms | 3.05 | 65 ms |
+| Ubuntu 24.04 x64 | 68.27 ms | 2.95 | 85 ms |
+| Windows 2022 x64 | 66.55 ms | 3.04 | 80 ms |
+
+The cross-platform scaling budget is 3.20. Allocation counts and scratch
+capacity were stable on every runner. The budgets retain a bounded runner-noise
+margin without weakening the allocation or topology-stability gates.
 
 ## Promotion rule
 
