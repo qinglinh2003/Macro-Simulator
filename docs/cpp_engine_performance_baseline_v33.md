@@ -1,6 +1,6 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person closed single-country M9 60-day target met
+Status: one-million-person open multicountry M9 60-day target met
 
 Date: 2026-07-26
 
@@ -21,13 +21,13 @@ native engine after M9. It answers four questions:
 4. Is one million simulated persons at no more than one second per simulated day
    plausible without changing the economic model?
 
-The answer to the performance target is now yes for the static-population M8 and
-closed single-country M9 acceptance scenarios. All 60 measured days complete in
-less than one second over the first two portfolio cycles. The all-days result
-does include the documented household-portfolio beneficial-ownership
-simplification below; before that change, the median met the target but the tail
-did not. This is not a claim that dynamic, open-economy, shock-active, or
-multicountry workloads meet the same budget.
+The answer to the performance target is now yes for static-population M8 and for
+closed, open, multicountry, and shock-active M9 acceptance scenarios. All 60
+measured days complete in less than one second over the first two portfolio
+cycles. The all-days result includes the documented household-portfolio
+beneficial-ownership simplification below; before that change, the median met
+the target but the tail did not. Dynamic population, active housing, and firm or
+bank entry remain outside this claim.
 
 ## 2. Test environment
 
@@ -35,7 +35,7 @@ multicountry workloads meet the same budget.
 - Operating system: macOS 26.5.2
 - Compiler: Apple Clang 21.0.0, arm64
 - Build: `m9-release`, optimized, project warning gates enabled
-- Build parallelism: 8 workers
+- Build and M9 runtime parallelism: up to 8 workers
 - Measurement process: one configuration per process
 
 The probe reports process peak RSS through `getrusage`. Genesis and simulated days
@@ -44,10 +44,19 @@ global allocation counter pattern as the existing milestone performance gates.
 
 ## 3. Probe scenario
 
-`macro_sim_m9_scale_probe` creates the same domestic specification in both modes:
+`macro_sim_m9_scale_probe` creates the same aggregate domestic specification in
+both modes:
 
 - `m8`: direct `EngineSession` execution
-- `m9`: one economy inside `M9World`
+- `m9`: one or more economies inside `M9World`
+
+For multicountry runs, `--persons` is the exact total population rather than a
+per-country count. Quotient and remainder distribution keeps the reported total
+exact. The probe can enable trade, capital flows, migration, and one bounded
+household-demand shock. Neighboring countries alternate between two modest
+opening wage and price profiles, and each country has a distinct seed. The
+shock reduces household demand by 10 percent for 30 days and ramps out over the
+last 10 days.
 
 The scenario is deliberately stable so that entity-scale cost is not confused
 with population growth:
@@ -55,7 +64,7 @@ with population growth:
 - 2.5 persons per household
 - consumption and capital firms scale with population
 - energy producers scale with population
-- eight banks
+- eight banks per economy
 - static population and household topology
 - persistent labor and financial markets enabled
 - twelve equity watchlist entries per household
@@ -127,6 +136,10 @@ portfolio review moved to a realistic staggered 30-day cadence.
 | M9 staged-world baseline, first cycle | 0.959 s | 6.61 GiB | -96.9% |
 | M9 closed-single-country direct path, first cycle | 0.568 s | 5.36 GiB | -98.2% |
 | M9 closed-single-country direct path, second cycle | 0.707 s | 5.59 GiB | -97.7% |
+| M9 two-country open, serial, 60 days | 0.654 s | 4.68 GiB | -97.9% |
+| M9 two-country open, 8-worker limit, 60 days | 0.394 s | 4.81 GiB | -98.7% |
+| M9 eight-country open, 8 workers, 60 days | 0.199 s | 4.38 GiB | -99.4% |
+| M9 eight-country open with shock, 8 workers, 60 days | 0.190 s | 4.20 GiB | -99.4% |
 
 The final first-cycle run used schema `m9-scale-probe-v3` and scenario
 `static-population-staggered-portfolio-v2`. Genesis took 8.22 seconds. Across
@@ -365,8 +378,9 @@ remaining reason that the latest container misses the tail target.
 For one country with trade disabled, no shocks, and no fault injection, M9 can
 use the already-transactional M8 prepare/validate/commit path directly. No
 cross-country state can change in this configuration, so copying and validating
-the complete M9 world adds no rollback protection. Multicountry, shock, and
-fault-injection advances retain the original staged-world transaction.
+the complete M9 world adds no rollback protection. At this earlier checkpoint,
+multicountry, shock, and fault-injection advances retained the original
+staged-world transaction; Section 8.1 records the later multicountry result.
 
 After the direct path, the closed single-country M9 result is:
 
@@ -381,32 +395,108 @@ path. The day-60 digest is `15096525921303579400`. A dedicated equivalence test
 also compares the direct path with the staged path using an inactive future
 shock and requires identical domestic checkpoints, world metrics, and digests.
 
-Multicountry and shock-active M9 remain outside the one-second claim because
-they still require atomic world-level mutation. That is now a narrower problem
-than the original single-country wrapper overhead.
+### 8.1 Open multicountry result
+
+The original exact one-million-person two-country open baseline took 3.318
+seconds at the median over its first three days, peaked at 3.382 seconds, and
+used 3.29 GiB. It deep-copied the complete world and then repeated full root
+audits and state hashing during post-domestic trade settlement.
+
+Normal multicountry advancement now moves the current world into its staging
+object instead of deep-copying it. This changes the default failure contract:
+if an unexpected internal error occurs, the partially advanced staged world is
+restored rather than the complete pre-day world. Callers that need strong
+rollback can set `require_world_rollback`; explicit M9 fault injection and
+per-country override paths retain deep-copy rollback automatically.
+
+Each successful M8 domestic advance already validates its staged projection.
+The M9 close therefore validates exchange rates, external contracts, shock
+lifecycle state, pegs, and migration routes without rescanning every domestic
+record. Explicit `M9World::validate` calls remain complete.
+
+Trade settlement uses an explicit locally validated transaction commit. It
+still checks command references, account status, overdrafts, reserve movement,
+and posting and reserve conservation, and it retains mutation undo. It omits
+the root-wide ownership audit and before/after SHA digests because the domestic
+root was just audited and M9 controls the subsequent firm and posting
+mutations. The default `SettlementTransaction::commit` contract remains a full
+audit with both digests.
+
+Transaction workspace reservation no longer computes a state digest merely to
+grow scratch storage, and undo vectors reserve for actual mutations rather than
+for every account, reserve position, and loan in the root.
+
+With those serial changes, the exact one-million-person, two-country open run
+over 60 days records:
+
+- 4.72 seconds for one-time genesis
+- 0.654-second median, 0.805-second p95, and 0.863-second maximum
+- all 60 measured days below one second
+- 4.68 GiB peak RSS
+- deterministic digest `8685033631341402429`
+
+The independent domestic economies then advance in parallel after deterministic
+trade reservation. Workers only mutate their assigned economy and result slot;
+all world clearing and commit order remains deterministic. A one-worker and an
+eight-worker run are required to produce identical checkpoints and digests.
+The two-country run can use only two workers and improves to:
+
+- 0.394-second median, 0.502-second p95, and 0.594-second maximum
+- 4.81 GiB peak RSS
+- the same digest `8685033631341402429`
+
+The full eight-worker result uses eight countries and exactly 1,000,000 total
+persons:
+
+| Scenario | Genesis | Median day | P95 day | Maximum day | Peak RSS | Digest |
+| :--- | ---: | ---: | ---: | ---: | ---: | :--- |
+| Open, no shock | 1.70 s | 0.199 s | 0.238 s | 0.249 s | 4.38 GiB | `8891068046243627764` |
+| Open, 30-day demand shock | 1.66 s | 0.190 s | 0.233 s | 0.249 s | 4.20 GiB | `9292730278626412201` |
+
+Both eight-country scenarios complete all 60 days below one second. The shock
+case is slightly faster because lower demand reduces realized market work; it
+is evidence that the shock path remains inside the budget, not that shocks are
+generally performance-positive.
+
+### 8.2 Numerical stability corrections
+
+Large multicountry batches exposed two false rejections rather than economic
+imbalances:
+
+- Thousands of balanced reserve postings left a roughly
+  `5e-15` aggregation residual. The reserve check now uses the greater of the
+  root accounting tolerance and a scale-aware floating-point error bound.
+- Fiscal settlement produced `-8.67e-19` after subtractive cancellation. M4 now
+  treats negative values whose magnitude is below the existing economic epsilon
+  as zero; materially negative and all non-finite transfers remain invalid.
+
+These changes do not add money, remove money, or relax the final root
+invariants. They align intermediate command validation with the precision
+already used by the economic model.
 
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
 incremental synchronization and validation, stable order bucketing, linear
-security-index construction, staggered portfolio scheduling, and aggregate
-household portfolio claims. Closed single-country M9 also bypasses redundant
-world staging while preserving its domestic transaction boundary.
+security-index construction, staggered portfolio scheduling, aggregate
+household portfolio claims, copy-free normal M9 staging, locally audited trade
+settlement, and deterministic country-level parallelism.
 
 The next measured order is:
 
-1. Remove the remaining multicountry M9 daily world deep copy with a reusable
-   atomic prepare/commit or undo-journal protocol.
-2. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
+1. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
    storage or mutation journals.
-3. Rebuild public security indexes no more than once per mutation phase.
-4. Profile dynamic population, firm entry and exit, active housing, and
+2. Rebuild public security indexes no more than once per mutation phase.
+3. Profile dynamic population, firm entry and exit, active housing, and
    multi-economy workloads at one million persons.
-5. Add deterministic parallel phases only after their read/write sets and memory
-   budgets are measured.
+4. Reduce the approximately 4.2-4.8 GiB day-60 peak RSS and bound history
+   retention for long game sessions.
+5. Extend deterministic parallelism inside a single large country only after
+   phase read/write sets and memory-bandwidth limits are measured.
 
-Complexity and memory-layout fixes continue to precede multithreading. Parallel
-execution would otherwise multiply the remaining staging footprint.
+Country-level parallelism is now active because economies have disjoint domestic
+state. Parallelism inside one economy still follows complexity and memory-layout
+work so it does not multiply avoidable staging or synchronization.
 
 ## 10. Next acceptance gates
 
@@ -422,7 +512,9 @@ Each optimization must preserve:
 The sole performance gate is one million persons. Each accepted optimization
 must improve or preserve genesis time, daily latency, peak RSS, and allocation
 count on that population while all required correctness gates remain green. The
-target is no more than one second per normal M9 day.
+target is no more than one second per M9 day. Closed, open multicountry, and
+bounded shock-active static-population scenarios now meet it; new dynamic
+workloads must pass independently before entering the claim.
 
 ## 11. Reproduction
 
@@ -456,13 +548,32 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
   --beneficial-ownership enabled
 ```
 
-Run the one-million-person M9 acceptance probe once M9 memory staging is safe:
+Run the one-million-person eight-country open acceptance probe:
 
 ```bash
 build/native/m9-release/native/macro_sim_m9_scale_probe \
   --mode m9 \
   --persons 1000000 \
+  --economies 8 \
+  --workers 8 \
+  --world-mode open \
+  --shocks none \
   --warmup-days 0 \
-  --days 3 \
+  --days 60 \
+  --beneficial-ownership enabled
+```
+
+Run the same acceptance with the bounded demand shock:
+
+```bash
+build/native/m9-release/native/macro_sim_m9_scale_probe \
+  --mode m9 \
+  --persons 1000000 \
+  --economies 8 \
+  --workers 8 \
+  --world-mode open \
+  --shocks active \
+  --warmup-days 0 \
+  --days 60 \
   --beneficial-ownership enabled
 ```

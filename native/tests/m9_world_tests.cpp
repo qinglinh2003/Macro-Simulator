@@ -555,6 +555,7 @@ void test_worker_count_does_not_change_semantics() {
     auto parallel = build_world(4, rules);
     M9AdvanceOptions serial_options;
     serial_options.worker_count = 1U;
+    serial_options.require_world_rollback = true;
     M9AdvanceOptions parallel_options;
     parallel_options.worker_count = 8U;
     assert(serial.advance(6, serial_options).ok());

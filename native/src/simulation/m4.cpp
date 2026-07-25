@@ -73,7 +73,8 @@ is_base_firm_sector(core::FirmSector sector) noexcept {
     AccountId destination,
     double amount
 ) noexcept {
-    if (!std::isfinite(amount) || amount < 0.0) {
+    if (!std::isfinite(amount) ||
+        amount < -algorithms::kEconomicEpsilon) {
         return Status(
             ErrorCode::invalid_argument,
             "M4 transfer amount must be finite and nonnegative"

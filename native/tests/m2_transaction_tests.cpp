@@ -244,6 +244,56 @@ void test_invalid_batch_restores_exact_digest() {
     assert(!state.transaction_active);
 }
 
+void test_locally_validated_transfer_matches_full_commit() {
+    auto full = make_state();
+    auto local = full;
+    const auto source = account_for(full, HouseholdId(1));
+    const auto destination = account_for(full, HouseholdId(2));
+
+    SettlementTransaction full_transaction(full);
+    assert(full_transaction.transfer(source, destination, Money(37.0)).ok());
+    assert(full_transaction.commit().ok());
+
+    SettlementTransaction local_transaction(local);
+    assert(local_transaction.transfer(source, destination, Money(37.0)).ok());
+    assert(local_transaction.commit_locally_validated().ok());
+    assert(macro_sim::core::state_digest(local) ==
+           macro_sim::core::state_digest(full));
+    assert(macro_sim::core::run_invariants(local).ok());
+
+    const auto before_rejection = macro_sim::core::state_digest(local);
+    SettlementTransaction rejected(local);
+    assert(rejected.transfer(source, destination, Money(1'000.0)).ok());
+    const auto status = rejected.commit_locally_validated();
+    assert(!status.ok());
+    assert(status.code() == macro_sim::ErrorCode::insufficient_funds);
+    assert(macro_sim::core::state_digest(local) == before_rejection);
+    assert(!local.transaction_active);
+}
+
+void test_locally_validated_commit_rejects_contract_mutations() {
+    auto state = make_state();
+    const auto before = macro_sim::core::state_digest(state);
+    const auto borrower = account_for(state, HouseholdId(1));
+    SettlementTransaction transaction(state);
+    assert(
+        transaction.originate_loan(
+            BankId(1),
+            OwnerId::household(HouseholdId(1)),
+            borrower,
+            Money(25.0),
+            LoanTerms{Rate(0.05), Tick(0), Tick(365)}
+        ).ok()
+    );
+    const auto status = transaction.commit_locally_validated();
+    assert(!status.ok());
+    assert(
+        status.code() == macro_sim::ErrorCode::invalid_transaction_state
+    );
+    assert(macro_sim::core::state_digest(state) == before);
+    assert(!state.transaction_active);
+}
+
 void test_every_fault_ordinal_restores_exact_digest() {
     auto reference = make_state();
     SettlementTransaction accepted(reference);
@@ -332,6 +382,8 @@ int main() {
     test_origination_and_repayment_preserve_a5();
     test_reserve_treasury_and_ownership_commands();
     test_invalid_batch_restores_exact_digest();
+    test_locally_validated_transfer_matches_full_commit();
+    test_locally_validated_commit_rejects_contract_mutations();
     test_every_fault_ordinal_restores_exact_digest();
     test_nested_transaction_is_rejected_without_releasing_owner();
     test_world_transaction_restores_every_root_on_late_failure();

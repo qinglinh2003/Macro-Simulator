@@ -235,6 +235,7 @@ struct M9AdvanceOptions final {
     std::vector<M8AdvanceOptions> domestic;
     M9FaultPoint fault_point{M9FaultPoint::none};
     std::uint32_t worker_count{1};
+    bool require_world_rollback{false};
 };
 
 struct M9AdvanceResult final {
@@ -329,6 +330,7 @@ class M9World final {
     M9World() = default;
 
     [[nodiscard]] Status advance_one(const M9AdvanceOptions &options);
+    [[nodiscard]] Status validate_impl(bool validate_domestic) const noexcept;
     [[nodiscard]] Status validate_policy_vector(
         std::span<const ExternalPolicyState> policies) const noexcept;
     [[nodiscard]] bool sanctioned(std::size_t first, std::size_t second) const noexcept;

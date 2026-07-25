@@ -1,6 +1,7 @@
 include(GNUInstallDirs)
 include(CTest)
 include(CMakePackageConfigHelpers)
+find_package(Threads REQUIRED)
 
 option(MACRO_SIM_BUILD_BENCHMARKS "Build native benchmark executables" ON)
 option(MACRO_SIM_BUILD_PYTHON "Build the nanobind Python extension" ON)
@@ -121,6 +122,7 @@ target_include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/picosha2"
 )
+target_link_libraries(macro_sim_core PUBLIC Threads::Threads)
 macro_sim_project_options(macro_sim_core)
 
 add_library(macro_sim_c SHARED src/c_api.cpp)

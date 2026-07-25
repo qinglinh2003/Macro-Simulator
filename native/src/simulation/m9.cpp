@@ -3,6 +3,7 @@
 #include "macro_sim/core/transaction.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -10,6 +11,7 @@
 #include <limits>
 #include <numeric>
 #include <span>
+#include <thread>
 #include <utility>
 
 namespace macro_sim::simulation {
@@ -704,7 +706,23 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         return Status::success();
     }
 
-    M9World staged = *this;
+    const bool move_staging =
+        !options.require_world_rollback &&
+        options.fault_point == M9FaultPoint::none && options.domestic.empty();
+    M9World staged = [this, move_staging]() {
+        return move_staging ? M9World(std::move(*this)) : M9World(*this);
+    }();
+    struct MovedWorldGuard final {
+        M9World *target;
+        M9World *staged;
+        bool armed;
+
+        ~MovedWorldGuard() {
+            if (armed) {
+                *target = std::move(*staged);
+            }
+        }
+    } guard{this, &staged, move_staging};
     const std::size_t count = staged.economies_.size();
     staged.last_metrics_ = {};
     staged.last_metrics_.domestic.resize(count);
@@ -945,7 +963,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     }
     std::vector<double> realized_import_units(count, 0.0);
     std::vector<double> realized_import_value(count, 0.0);
-    for (std::size_t index = 0; index < count; ++index) {
+    std::vector<Status> domestic_status(count);
+    const auto advance_domestic = [&](std::size_t index) {
         auto domestic_options =
             options.domestic.empty() ? M8AdvanceOptions{} : options.domestic[index];
         const double energy_capacity =
@@ -1011,7 +1030,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             staged.economies_[index].domestic_scratch, staged.economies_[index].tick,
             1U, domestic_options);
         if (!result.ok()) {
-            return result.status();
+            domestic_status[index] = result.status();
+            return;
         }
         staged.last_metrics_.domestic[index] = result.get_if()->metrics;
         realized_import_units[index] =
@@ -1019,6 +1039,39 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         realized_import_value[index] =
             staged.economies_[index].real_economy_scratch.external_goods_value_;
         staged.last_metrics_.external[index].active_shocks = active_shocks[index];
+    };
+    const auto domestic_worker_count = std::min<std::size_t>(
+        static_cast<std::size_t>(options.worker_count),
+        count
+    );
+    if (domestic_worker_count == 1U) {
+        for (std::size_t index = 0; index < count; ++index) {
+            advance_domestic(index);
+        }
+    } else {
+        std::atomic<std::size_t> next_domestic{0U};
+        std::vector<std::thread> workers;
+        workers.reserve(domestic_worker_count);
+        for (std::size_t worker = 0; worker < domestic_worker_count; ++worker) {
+            workers.emplace_back([&]() {
+                while (true) {
+                    const auto index =
+                        next_domestic.fetch_add(1U, std::memory_order_relaxed);
+                    if (index >= count) {
+                        return;
+                    }
+                    advance_domestic(index);
+                }
+            });
+        }
+        for (auto &worker : workers) {
+            worker.join();
+        }
+    }
+    for (const auto &status : domestic_status) {
+        if (!status.ok()) {
+            return status;
+        }
     }
 
     if (options.fault_point == M9FaultPoint::after_domestic_advance) {
@@ -1073,8 +1126,18 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             return Status(ErrorCode::invariant_violation,
                           "reserved export firm no longer exists");
         }
-        firm->goods_inventory = Goods(firm->goods_inventory.value() + returned_units);
-        firm->sales_previous += shipped_units;
+        const double closing_inventory =
+            firm->goods_inventory.value() + returned_units;
+        const double closing_sales = firm->sales_previous + shipped_units;
+        if (!finite(closing_inventory) || closing_inventory < -kTolerance ||
+            !finite(closing_sales)) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "trade settlement would invalidate the export firm"
+            );
+        }
+        firm->goods_inventory = Goods(std::max(0.0, closing_inventory));
+        firm->sales_previous = closing_sales;
         if (shipped_units <= kEpsilon) {
             continue;
         }
@@ -1142,9 +1205,9 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                 return status;
             }
         }
-        auto receipt = transaction.commit();
-        if (!receipt.ok()) {
-            return receipt.status();
+        const auto committed = transaction.commit_locally_validated();
+        if (!committed.ok()) {
+            return committed;
         }
     }
     staged.trade_reservations_.clear();
@@ -1414,7 +1477,7 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
 
     staged.tick_ = Tick(staged.tick_.value() + 1U);
 
-    auto validation = staged.validate();
+    auto validation = staged.validate_impl(false);
     if (!validation.ok()) {
         return validation;
     }
@@ -1422,10 +1485,15 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         return Status(ErrorCode::internal_error, "injected M9 pre-commit fault");
     }
     *this = std::move(staged);
+    guard.armed = false;
     return Status::success();
 }
 
 Status M9World::validate() const noexcept {
+    return validate_impl(true);
+}
+
+Status M9World::validate_impl(bool validate_domestic) const noexcept {
     if (economies_.empty() || external_policies_.size() != economies_.size() ||
         rates_.size() != economies_.size() ||
         dealer_inventory_.size() != economies_.size() ||
@@ -1503,13 +1571,15 @@ Status M9World::validate() const noexcept {
                               "invalid external contract matrix");
             }
         }
-        auto domestic_status =
-            validate_m8_state(economies_[index].root, economies_[index].real_economy,
-                              economies_[index].monetary, economies_[index].financial,
-                              economies_[index].population, economies_[index].domestic,
-                              economies_[index].tick);
-        if (!domestic_status.ok()) {
-            return domestic_status;
+        if (validate_domestic) {
+            auto domestic_status = validate_m8_state(
+                economies_[index].root, economies_[index].real_economy,
+                economies_[index].monetary, economies_[index].financial,
+                economies_[index].population, economies_[index].domestic,
+                economies_[index].tick);
+            if (!domestic_status.ok()) {
+                return domestic_status;
+            }
         }
     }
     mean_log_rate /= static_cast<double>(economies_.size());

@@ -148,6 +148,11 @@ public:
     [[nodiscard]] Status append(const SettlementBatch& batch);
     void reserve_capacity();
     [[nodiscard]] Result<TransactionReceipt> commit();
+    // Commits transfer and reserve commands after local account, balance, and
+    // conservation checks. This deliberately omits the root-wide invariant
+    // audit and state digests; loan, ownership, and counter commands are
+    // rejected in this mode.
+    [[nodiscard]] Status commit_locally_validated();
     [[nodiscard]] TransactionState transaction_state() const noexcept;
     [[nodiscard]] std::uint64_t next_fault_ordinal() const noexcept;
 
@@ -223,6 +228,7 @@ private:
     [[nodiscard]] Status require_collecting() const noexcept;
     [[nodiscard]] bool inject_fault() noexcept;
     [[nodiscard]] Result<TransactionReceipt> reject(Status status) noexcept;
+    [[nodiscard]] Result<TransactionReceipt> commit_impl(bool audit_root);
     void rollback() noexcept;
     void release_root() noexcept;
     void acquire_root(RootState& state) noexcept;

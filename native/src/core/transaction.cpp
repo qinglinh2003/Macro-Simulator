@@ -54,10 +54,6 @@ void TransactionWorkspace::reserve(const RootState& state) {
     posting_totals_.resize(state.postings.size());
     reserve_totals_.resize(state.reserves.size());
     loan_totals_.resize(state.loans.size());
-    posting_deltas_.reserve(state.postings.size());
-    reserve_deltas_.reserve(state.reserves.size());
-    loan_deltas_.reserve(state.loans.size());
-    static_cast<void>(state_digest(state, digest_bytes_));
 }
 
 SettlementTransaction::SettlementTransaction(
@@ -333,10 +329,9 @@ void SettlementTransaction::reserve_capacity() {
     if (root_ == nullptr) {
         return;
     }
-    workspace_->reserve(*root_);
-    posting_undo_.reserve(root_->postings.size());
-    reserve_undo_.reserve(root_->reserves.size());
-    loan_undo_.reserve(root_->loans.size());
+    posting_undo_.reserve(workspace_->posting_deltas_.size());
+    reserve_undo_.reserve(workspace_->reserve_deltas_.size());
+    loan_undo_.reserve(workspace_->loan_deltas_.size());
     created_loans_.reserve(originations_.size());
     ownership_undo_.reserve(ownership_mutations_.size());
     counter_undo_.reserve(counter_increments_.size());
@@ -366,6 +361,29 @@ Result<TransactionReceipt> SettlementTransaction::reject(
 }
 
 Result<TransactionReceipt> SettlementTransaction::commit() {
+    return commit_impl(true);
+}
+
+Status SettlementTransaction::commit_locally_validated() {
+    const auto collecting = require_collecting();
+    if (!collecting.ok()) {
+        return collecting;
+    }
+    if (!originations_.empty() || !repayments_.empty() ||
+        !ownership_mutations_.empty() || !counter_increments_.empty()) {
+        auto rejected = reject(Status(
+            ErrorCode::invalid_transaction_state,
+            "local validation only supports posting and reserve commands"
+        ));
+        return rejected.status();
+    }
+    auto result = commit_impl(false);
+    return result.ok() ? Status::success() : result.status();
+}
+
+Result<TransactionReceipt> SettlementTransaction::commit_impl(
+    bool audit_root
+) {
     const auto collecting = require_collecting();
     if (!collecting.ok()) {
         return collecting;
@@ -377,7 +395,9 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     }
 
     workspace_->reserve(*root_);
-    const auto before = state_digest(*root_, workspace_->digest_bytes_);
+    const auto before = audit_root
+        ? state_digest(*root_, workspace_->digest_bytes_)
+        : StateDigest{};
     auto& posting_totals = workspace_->posting_totals_;
     auto& reserve_totals = workspace_->reserve_totals_;
     auto& loan_totals = workspace_->loan_totals_;
@@ -387,6 +407,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     double reserve_stock_delta = 0.0;
     double new_loan_total = 0.0;
     double absolute_economic_sum = 0.0;
+    double absolute_reserve_sum = 0.0;
 
     for (const auto& intent : transfers_) {
         const auto* source = root_->postings.get(intent.source);
@@ -425,6 +446,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
             reserve_totals[
                 static_cast<std::size_t>(destination_node.value() - 1)
             ] += intent.amount;
+            absolute_reserve_sum += 2.0 * intent.amount;
         }
     }
 
@@ -444,6 +466,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         reserve_totals[
             static_cast<std::size_t>(intent.destination.value() - 1)
         ] += intent.amount;
+        absolute_reserve_sum += 2.0 * intent.amount;
     }
 
     for (const auto& intent : reserve_issues_) {
@@ -456,6 +479,7 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
             static_cast<std::size_t>(intent.destination.value() - 1)
         ] += intent.amount;
         reserve_stock_delta += intent.amount;
+        absolute_reserve_sum += intent.amount;
     }
 
     for (const auto& intent : originations_) {
@@ -675,8 +699,16 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
         ] -= economic_residual;
     }
 
+    const double reserve_residual_bound = std::max(
+        root_->accounting_tolerance,
+        32.0 * std::numeric_limits<double>::epsilon() *
+            std::max(
+                1.0,
+                absolute_reserve_sum + std::abs(reserve_stock_delta)
+            )
+    );
     if (std::abs(neumaier_sum(reserve_totals) - reserve_stock_delta)
-        > residual_bound(std::abs(reserve_stock_delta))) {
+        > reserve_residual_bound) {
         return reject(
             Status(
                 ErrorCode::unbalanced_transaction,
@@ -698,6 +730,14 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
     posting_deltas.clear();
     reserve_deltas.clear();
     loan_deltas.clear();
+    posting_deltas.reserve(
+        transfers_.size() * 2U + originations_.size() + repayments_.size() + 1U
+    );
+    reserve_deltas.reserve(
+        transfers_.size() * 2U + reserve_transfers_.size() * 2U +
+        reserve_issues_.size()
+    );
+    loan_deltas.reserve(repayments_.size());
     for (std::size_t index = 0; index < posting_totals.size(); ++index) {
         if (posting_totals[index] != 0.0) {
             posting_deltas.push_back(
@@ -860,9 +900,11 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
             Status(ErrorCode::internal_error, "injected transaction fault")
         );
     }
-    const auto invariants = run_invariants(*root_);
-    if (!invariants.ok()) {
-        return reject(invariants.status);
+    if (audit_root) {
+        const auto invariants = run_invariants(*root_);
+        if (!invariants.ok()) {
+            return reject(invariants.status);
+        }
     }
     if (inject_fault()) {
         return reject(
@@ -872,7 +914,9 @@ Result<TransactionReceipt> SettlementTransaction::commit() {
 
     TransactionReceipt receipt{
         before,
-        state_digest(*root_, workspace_->digest_bytes_),
+        audit_root
+            ? state_digest(*root_, workspace_->digest_bytes_)
+            : StateDigest{},
         mutations,
         created_loans_,
     };
