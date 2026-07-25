@@ -876,6 +876,17 @@ if(MACRO_SIM_BUILD_BENCHMARKS)
     )
     macro_sim_project_options(macro_sim_m9_benchmarks)
     macro_sim_enable_runtime_assertions(macro_sim_m9_benchmarks)
+
+    add_executable(
+        macro_sim_m9_scale_probe
+        benchmarks/m9_scale_probe.cpp
+    )
+    target_link_libraries(
+        macro_sim_m9_scale_probe
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m9_scale_probe)
+    macro_sim_enable_runtime_assertions(macro_sim_m9_scale_probe)
 endif()
 
 install(
