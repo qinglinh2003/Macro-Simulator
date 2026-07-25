@@ -223,6 +223,46 @@ class M7TickScratch final {
     M7Metrics working_metrics_{};
 };
 
+class M7TickExtension {
+  public:
+    M7TickExtension() = default;
+    M7TickExtension(const M7TickExtension &) = delete;
+    M7TickExtension &operator=(const M7TickExtension &) = delete;
+    virtual ~M7TickExtension() = default;
+
+    [[nodiscard]] virtual Status
+    prepare_tick(const core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+                 M6TickScratch &financial_scratch, M7Runtime &runtime,
+                 M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    after_labor(const core::RootState &state, M4Runtime &real_economy_runtime,
+                M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+                M6TickScratch &financial_scratch, M7Runtime &runtime,
+                M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    close_day(const core::RootState &state, M4Runtime &real_economy_runtime,
+              M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+              M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+              M6TickScratch &financial_scratch, M7Runtime &runtime,
+              M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status
+    validate(const core::RootState &state, const M4Runtime &real_economy_runtime,
+             const M4TickScratch &real_economy_scratch,
+             const M5Runtime &monetary_runtime, const M5TickScratch &monetary_scratch,
+             const M6Runtime &financial_runtime, const M6TickScratch &financial_scratch,
+             const M7Runtime &runtime, const M7TickScratch &scratch,
+             Tick tick) const = 0;
+    virtual void commit(core::RootState &state, M4Runtime &real_economy_runtime,
+                        M4TickScratch &real_economy_scratch,
+                        M5Runtime &monetary_runtime, M5TickScratch &monetary_scratch,
+                        M6Runtime &financial_runtime, M6TickScratch &financial_scratch,
+                        M7Runtime &runtime, M7TickScratch &scratch, Tick tick,
+                        const M7Metrics &metrics) noexcept = 0;
+};
+
 struct M7Initialization final {
     core::RootState root;
     M4Runtime real_economy_runtime;
@@ -231,31 +271,31 @@ struct M7Initialization final {
     M7Runtime runtime;
 };
 
-[[nodiscard]] Status
-validate_m7_policy(const M7PolicyState &policy) noexcept;
+[[nodiscard]] Status validate_m7_policy(const M7PolicyState &policy) noexcept;
 [[nodiscard]] Status validate_m7_rules(const M7Rules &rules) noexcept;
 [[nodiscard]] Status
 validate_m7_population_spec(const M7PopulationSpec &population) noexcept;
 [[nodiscard]] Status validate_m7_spec(const M7SimulationSpec &spec) noexcept;
-[[nodiscard]] Status
-validate_m7_state(const core::RootState &state,
-                  const M4Runtime &real_economy_runtime,
-                  const M5Runtime &monetary_runtime,
-                  const M6Runtime &financial_runtime,
-                  const M7Runtime &runtime, Tick tick) noexcept;
-[[nodiscard]] Result<M7Initialization>
-build_m7_genesis(const M7SimulationSpec &spec);
+[[nodiscard]] Status validate_m7_state(const core::RootState &state,
+                                       const M4Runtime &real_economy_runtime,
+                                       const M5Runtime &monetary_runtime,
+                                       const M6Runtime &financial_runtime,
+                                       const M7Runtime &runtime, Tick tick) noexcept;
+[[nodiscard]] Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec);
 [[nodiscard]] Result<M7AdvanceResult>
-advance_m7_ticks(core::RootState &state,
-                 M4Runtime &real_economy_runtime,
-                 M4TickScratch &real_economy_scratch,
-                 M5Runtime &monetary_runtime,
-                 M5TickScratch &monetary_scratch,
-                 M6Runtime &financial_runtime,
-                 M6TickScratch &financial_scratch,
-                 M7Runtime &runtime, M7TickScratch &scratch, Tick &tick,
-                 std::uint64_t count,
+advance_m7_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
+                 M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+                 M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+                 M6TickScratch &financial_scratch, M7Runtime &runtime,
+                 M7TickScratch &scratch, Tick &tick, std::uint64_t count,
                  const M7AdvanceOptions &options = {});
+[[nodiscard]] Result<M7AdvanceResult> advance_m7_ticks_extended(
+    core::RootState &state, M4Runtime &real_economy_runtime,
+    M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
+    M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
+    M6TickScratch &financial_scratch, M7Runtime &runtime, M7TickScratch &scratch,
+    Tick &tick, std::uint64_t count, M7TickExtension &extension,
+    const M7AdvanceOptions &options = {});
 
 } // namespace macro_sim::simulation
 

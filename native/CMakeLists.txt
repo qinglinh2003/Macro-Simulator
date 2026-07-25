@@ -407,6 +407,23 @@ if(MACRO_SIM_BUILD_TESTS)
     )
 
     add_executable(
+        macro_sim_m7_extension_seam_tests
+        tests/m7_extension_seam_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m7_extension_seam_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m7_extension_seam_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m7_extension_seam_tests
+    )
+    add_test(
+        NAME macro_sim.m7_extension_seam
+        COMMAND macro_sim_m7_extension_seam_tests
+    )
+
+    add_executable(
         macro_sim_m7_social_labor_store_tests
         tests/m7_social_labor_store_tests.cpp
     )
