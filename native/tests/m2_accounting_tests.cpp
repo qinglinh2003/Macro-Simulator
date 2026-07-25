@@ -117,11 +117,47 @@ void test_invalid_vertical_capabilities_publish_no_state() {
     assert(result.status().code() == macro_sim::ErrorCode::unsupported);
 }
 
+void test_ownership_owner_rekey_merges_assets() {
+    macro_sim::core::OwnershipBook ownership;
+    const macro_sim::core::AssetKey asset{
+        macro_sim::core::AssetKind::firm_equity,
+        EconomyId(1),
+        7,
+    };
+    const auto source =
+        macro_sim::core::OwnerId::household(
+            macro_sim::HouseholdId(1)
+        );
+    const auto destination =
+        macro_sim::core::OwnerId::household(
+            macro_sim::HouseholdId(2)
+        );
+    assert(ownership.create_lot(asset, source, 0.4).ok());
+    assert(
+        ownership.create_lot(asset, destination, 0.6).ok()
+    );
+    assert(
+        ownership.rekey_owner(source, destination).ok()
+    );
+    assert(ownership.validate_shares(1.0e-12).ok());
+    std::size_t active = 0;
+    for (const auto &lot : ownership.records()) {
+        if (!lot.active) {
+            continue;
+        }
+        ++active;
+        assert(lot.owner == destination);
+        assert(std::abs(lot.share - 1.0) < 1.0e-12);
+    }
+    assert(active == 1);
+}
+
 }  // namespace
 
 int main() {
     test_v0_genesis_is_deterministic_and_balanced();
     test_v1_genesis_has_capital_and_treasury();
     test_invalid_vertical_capabilities_publish_no_state();
+    test_ownership_owner_rekey_merges_assets();
     return 0;
 }

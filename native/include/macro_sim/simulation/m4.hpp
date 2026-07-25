@@ -213,6 +213,7 @@ public:
         double consumption_budget{0.0};
         double spent{0.0};
         double labor_sold{0.0};
+        double labor_capacity{1.0};
     };
 
     struct FirmWork final {
@@ -241,6 +242,7 @@ public:
     };
 
     std::vector<HouseholdId> household_ids_;
+    std::vector<std::size_t> household_dense_index_;
     std::vector<FirmId> firm_ids_;
     std::vector<std::size_t> firm_dense_index_;
     std::vector<std::size_t> consumption_firm_indices_;

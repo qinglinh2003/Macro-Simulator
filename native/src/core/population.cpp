@@ -188,8 +188,13 @@ Status HouseholdMembershipBook::add(PersonId person, HouseholdId household) {
         return Status(ErrorCode::contract_violation, "person already has a household");
     }
     household_by_person_[static_cast<std::size_t>(person.value())] = household;
-    members_by_household_[static_cast<std::size_t>(household.value())].push_back(
-        person);
+    auto &members =
+        members_by_household_[
+            static_cast<std::size_t>(household.value())];
+    members.insert(
+        std::lower_bound(members.begin(), members.end(), person),
+        person
+    );
     return Status::success();
 }
 
@@ -260,6 +265,12 @@ Status HouseholdMembershipBook::validate(const PersonStore &persons,
             return Status(ErrorCode::invariant_violation,
                           "membership references an absent household");
         }
+        if (!std::is_sorted(members.begin(), members.end())) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "household member order is not canonical"
+            );
+        }
         for (const auto person : members) {
             if (!persons.alive(person) || person.value() >= seen.size() ||
                 seen[static_cast<std::size_t>(person.value())] != 0U ||
@@ -316,6 +327,7 @@ Result<BeneficialLotId> BeneficialOwnershipBook::create_lot(BeneficialAssetKey a
     lots_.push_back({id, asset, owner, share, true});
     ensure_person(owner);
     lots_by_person_[static_cast<std::size_t>(owner.value())].push_back(id);
+    lots_by_asset_[asset].push_back(id);
     return id;
 }
 
@@ -367,6 +379,116 @@ Status BeneficialOwnershipBook::retire(BeneficialLotId lot) {
     return Status::success();
 }
 
+Status BeneficialOwnershipBook::retire_asset(
+    BeneficialAssetKey asset
+) {
+    const auto found = lots_by_asset_.find(asset);
+    if (found == lots_by_asset_.end()) {
+        return Status::success();
+    }
+    const auto lots = found->second;
+    for (const auto lot : lots) {
+        const auto *record = get(lot);
+        if (record == nullptr || !record->active) {
+            continue;
+        }
+        const auto status = retire(lot);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    lots_by_asset_.erase(asset);
+    return Status::success();
+}
+
+Status BeneficialOwnershipBook::retire_household(
+    HouseholdId household
+) {
+    if (!household.valid()) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "beneficial household retirement is invalid"
+        );
+    }
+    std::vector<BeneficialAssetKey> assets;
+    for (const auto &[asset, lots] : lots_by_asset_) {
+        if (asset.household == household && !lots.empty()) {
+            assets.push_back(asset);
+        }
+    }
+    for (const auto asset : assets) {
+        const auto status = retire_asset(asset);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    return Status::success();
+}
+
+Status BeneficialOwnershipBook::rekey_household(
+    HouseholdId source, HouseholdId destination
+) {
+    if (!source.valid() || !destination.valid() ||
+        source == destination) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "beneficial household rekey is invalid"
+        );
+    }
+    std::vector<BeneficialAssetKey> source_assets;
+    for (const auto &[asset, lots] : lots_by_asset_) {
+        if (asset.household == source && !lots.empty()) {
+            source_assets.push_back(asset);
+        }
+    }
+    for (const auto source_asset : source_assets) {
+        auto destination_asset = source_asset;
+        destination_asset.household = destination;
+        if (contains_asset(destination_asset)) {
+            return Status(
+                ErrorCode::already_exists,
+                "beneficial destination asset already exists"
+            );
+        }
+        auto node = lots_by_asset_.extract(source_asset);
+        node.key() = destination_asset;
+        for (const auto lot : node.mapped()) {
+            auto *record = get(lot);
+            if (record != nullptr && record->active) {
+                record->asset = destination_asset;
+            }
+        }
+        lots_by_asset_.insert(std::move(node));
+    }
+    return Status::success();
+}
+
+bool BeneficialOwnershipBook::contains_asset(
+    BeneficialAssetKey asset
+) const noexcept {
+    const auto found = lots_by_asset_.find(asset);
+    if (found == lots_by_asset_.end()) {
+        return false;
+    }
+    return std::any_of(
+        found->second.begin(), found->second.end(),
+        [this](BeneficialLotId lot) {
+            const auto *record = get(lot);
+            return record != nullptr && record->active;
+        }
+    );
+}
+
+std::span<const BeneficialLotId>
+BeneficialOwnershipBook::lots_for_asset(
+    BeneficialAssetKey asset
+) const noexcept {
+    const auto found = lots_by_asset_.find(asset);
+    return found == lots_by_asset_.end()
+               ? std::span<const BeneficialLotId>{}
+               : std::span<const BeneficialLotId>(found->second);
+}
+
 BeneficialLot *BeneficialOwnershipBook::get(BeneficialLotId id) noexcept {
     if (!id.valid() || id.value() == 0 || id.value() > lots_.size()) {
         return nullptr;
@@ -401,6 +523,7 @@ Status BeneficialOwnershipBook::replace_records(
 ) {
     lots_ = std::move(records);
     lots_by_person_.assign(1, std::vector<BeneficialLotId>{});
+    lots_by_asset_.clear();
     for (std::size_t index = 0; index < lots_.size(); ++index) {
         auto &lot = lots_[index];
         if (lot.id != BeneficialLotId(index + 1U)) {
@@ -414,6 +537,7 @@ Status BeneficialOwnershipBook::replace_records(
         lots_by_person_[
             static_cast<std::size_t>(lot.owner.value())]
             .push_back(lot.id);
+        lots_by_asset_[lot.asset].push_back(lot.id);
     }
     return Status::success();
 }

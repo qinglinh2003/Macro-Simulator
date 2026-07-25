@@ -472,6 +472,38 @@ std::size_t OwnershipBook::retire_asset(AssetKey asset) noexcept {
     return retired;
 }
 
+Status OwnershipBook::rekey_owner(OwnerId source,
+                                  OwnerId destination) noexcept {
+    if (!source.valid() || !destination.valid() ||
+        source == destination) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "ownership rekey subjects are invalid"
+        );
+    }
+    for (auto &lot : lots_) {
+        if (!lot.active || lot.owner != source) {
+            continue;
+        }
+        const auto existing = std::find_if(
+            lots_.begin(), lots_.end(),
+            [&](const OwnershipLot &candidate) {
+                return candidate.active &&
+                       candidate.owner == destination &&
+                       candidate.asset == lot.asset;
+            }
+        );
+        if (existing == lots_.end()) {
+            lot.owner = destination;
+            continue;
+        }
+        existing->share += lot.share;
+        lot.share = 0.0;
+        lot.active = false;
+    }
+    return Status::success();
+}
+
 Status OwnershipBook::validate_shares(double tolerance) const {
     for (std::size_t index = 0; index < lots_.size(); ++index) {
         const auto &candidate = lots_[index];

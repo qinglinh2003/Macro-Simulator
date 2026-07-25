@@ -146,9 +146,11 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(mean_household_size);
     MACRO_SIM_FILL_M7(working_age_share);
     MACRO_SIM_FILL_M7(dependency_ratio);
+    MACRO_SIM_FILL_M7(participation_rate);
     MACRO_SIM_FILL_M7(estates_settled);
     MACRO_SIM_FILL_M7(beneficial_lots_transferred);
     MACRO_SIM_FILL_M7(inheritance_tax_share);
+    MACRO_SIM_FILL_M7(inheritance_tax_paid);
     MACRO_SIM_FILL_M7(beneficial_projection_error);
     MACRO_SIM_FILL_M7(employed_fte);
     MACRO_SIM_FILL_M7(employed_heads);
@@ -161,11 +163,21 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(vacancies);
     MACRO_SIM_FILL_M7(underemployed_heads);
     MACRO_SIM_FILL_M7(underemployment_hours);
+    MACRO_SIM_FILL_M7(suspended_memo);
+    MACRO_SIM_FILL_M7(second_job_heads);
+    MACRO_SIM_FILL_M7(second_job_hours);
+    MACRO_SIM_FILL_M7(nonsearching);
+    MACRO_SIM_FILL_M7(job_to_job_moves);
+    MACRO_SIM_FILL_M7(mean_hourly_wage);
+    MACRO_SIM_FILL_M7(family_transfer_total);
+    MACRO_SIM_FILL_M7(family_transfer_recipients);
+    MACRO_SIM_FILL_M7(family_exposed_households);
     MACRO_SIM_FILL_M7(hires);
     MACRO_SIM_FILL_M7(separations);
     MACRO_SIM_FILL_M7(marriages);
     MACRO_SIM_FILL_M7(divorces);
     MACRO_SIM_FILL_M7(widowhoods);
+    MACRO_SIM_FILL_M7(leaving_home_events);
 #undef MACRO_SIM_FILL_M7
 }
 
@@ -1186,10 +1198,15 @@ macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     MACRO_SIM_M7_RULE_FLAG(second_jobs);
     MACRO_SIM_M7_RULE_FLAG(suspensions);
     MACRO_SIM_M7_RULE_FLAG(frictional_search);
+    MACRO_SIM_M7_RULE_FLAG(relationship_wages);
+    MACRO_SIM_M7_RULE_FLAG(job_ladder);
+    MACRO_SIM_M7_RULE_FLAG(participation_margin);
+    MACRO_SIM_M7_RULE_FLAG(family_transfers);
     MACRO_SIM_M7_RULE_FLAG(relationships);
     MACRO_SIM_M7_RULE_FLAG(marriage);
     MACRO_SIM_M7_RULE_FLAG(divorce);
     MACRO_SIM_M7_RULE_FLAG(household_lifecycle);
+    MACRO_SIM_M7_RULE_FLAG(leaving_home);
 #undef MACRO_SIM_M7_RULE_FLAG
     output->forbid_same_household =
         value.marriage_rules.forbid_same_household ? 1U : 0U;
@@ -1204,6 +1221,10 @@ macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
         value.marriage_rules.maximum_age;
     output->marriage_maximum_age_gap =
         value.marriage_rules.maximum_age_gap;
+    output->leave_home_min_age =
+        value.leave_home_min_age;
+    output->leave_home_peak_end_age =
+        value.leave_home_peak_end_age;
     output->makeham_a = value.vital_rates.makeham_a;
     output->gompertz_b = value.vital_rates.gompertz_b;
     output->gompertz_theta = value.vital_rates.gompertz_theta;
@@ -1221,6 +1242,18 @@ macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->layoff_band = value.layoff_band;
     output->target_smoothing = value.target_smoothing;
     output->search_intensity = value.search_intensity;
+    output->ladder_search_intensity =
+        value.ladder_search_intensity;
+    output->ladder_premium = value.ladder_premium;
+    output->reservation_markup = value.reservation_markup;
+    output->welfare_quit_hazard =
+        value.welfare_quit_hazard;
+    output->family_transfer_buffer =
+        value.family_transfer_buffer;
+    output->annual_leave_rate_peak =
+        value.annual_leave_rate_peak;
+    output->annual_leave_rate_late =
+        value.annual_leave_rate_late;
     output->annual_marriage_rate = value.annual_marriage_rate;
     output->annual_divorce_rate = value.annual_divorce_rate;
     output->marriage_preferred_age_gap =
@@ -1246,10 +1279,15 @@ macro_sim_status macro_sim_m7_update_rules(
         !valid_flag(rules->second_jobs) ||
         !valid_flag(rules->suspensions) ||
         !valid_flag(rules->frictional_search) ||
+        !valid_flag(rules->relationship_wages) ||
+        !valid_flag(rules->job_ladder) ||
+        !valid_flag(rules->participation_margin) ||
+        !valid_flag(rules->family_transfers) ||
         !valid_flag(rules->relationships) ||
         !valid_flag(rules->marriage) ||
         !valid_flag(rules->divorce) ||
         !valid_flag(rules->household_lifecycle) ||
+        !valid_flag(rules->leaving_home) ||
         !valid_flag(rules->forbid_same_household) ||
         !valid_flag(rules->forbid_close_kin)) {
         return status(
@@ -1271,10 +1309,15 @@ macro_sim_status macro_sim_m7_update_rules(
     MACRO_SIM_COPY_M7_FLAG(second_jobs);
     MACRO_SIM_COPY_M7_FLAG(suspensions);
     MACRO_SIM_COPY_M7_FLAG(frictional_search);
+    MACRO_SIM_COPY_M7_FLAG(relationship_wages);
+    MACRO_SIM_COPY_M7_FLAG(job_ladder);
+    MACRO_SIM_COPY_M7_FLAG(participation_margin);
+    MACRO_SIM_COPY_M7_FLAG(family_transfers);
     MACRO_SIM_COPY_M7_FLAG(relationships);
     MACRO_SIM_COPY_M7_FLAG(marriage);
     MACRO_SIM_COPY_M7_FLAG(divorce);
     MACRO_SIM_COPY_M7_FLAG(household_lifecycle);
+    MACRO_SIM_COPY_M7_FLAG(leaving_home);
 #undef MACRO_SIM_COPY_M7_FLAG
     value.marriage_rules.forbid_same_household =
         rules->forbid_same_household != 0;
@@ -1289,6 +1332,10 @@ macro_sim_status macro_sim_m7_update_rules(
         rules->marriage_maximum_age;
     value.marriage_rules.maximum_age_gap =
         rules->marriage_maximum_age_gap;
+    value.leave_home_min_age =
+        rules->leave_home_min_age;
+    value.leave_home_peak_end_age =
+        rules->leave_home_peak_end_age;
     value.vital_rates.makeham_a = rules->makeham_a;
     value.vital_rates.gompertz_b = rules->gompertz_b;
     value.vital_rates.gompertz_theta = rules->gompertz_theta;
@@ -1306,6 +1353,18 @@ macro_sim_status macro_sim_m7_update_rules(
     value.layoff_band = rules->layoff_band;
     value.target_smoothing = rules->target_smoothing;
     value.search_intensity = rules->search_intensity;
+    value.ladder_search_intensity =
+        rules->ladder_search_intensity;
+    value.ladder_premium = rules->ladder_premium;
+    value.reservation_markup = rules->reservation_markup;
+    value.welfare_quit_hazard =
+        rules->welfare_quit_hazard;
+    value.family_transfer_buffer =
+        rules->family_transfer_buffer;
+    value.annual_leave_rate_peak =
+        rules->annual_leave_rate_peak;
+    value.annual_leave_rate_late =
+        rules->annual_leave_rate_late;
     value.annual_marriage_rate = rules->annual_marriage_rate;
     value.annual_divorce_rate = rules->annual_divorce_rate;
     value.marriage_rules.preferred_age_gap =
@@ -1429,6 +1488,7 @@ macro_sim_status macro_sim_m7_persons(
         target.marriage_count = source.marriage_count;
         target.efficiency = source.efficiency;
         target.participating = source.participating ? 1U : 0U;
+        target.searching = source.searching ? 1U : 0U;
         target.alive = source.alive ? 1U : 0U;
     }
     *written = count;
@@ -1632,12 +1692,20 @@ macro_sim_status macro_sim_m7_estates(
         target.settled = source.settled ? 1U : 0U;
         target.event_id = source.event.value();
         target.deceased_id = source.deceased.value();
+        target.heir_id = source.heir.value();
         target.household_id = source.household.value();
+        target.destination_household_id =
+            source.destination_household.value();
         target.opened_day = source.opened_day;
         target.settled_day = source.settled_day;
         target.transferred_lots = source.transferred_lots;
         target.gross_share = source.gross_share;
         target.tax_share = source.tax_share;
+        target.gross_value = source.gross_value;
+        target.liabilities = source.liabilities;
+        target.tax_paid = source.tax_paid;
+        target.public_residual =
+            source.public_residual ? 1U : 0U;
     }
     *written = count;
     return status(MACRO_SIM_OK, "");

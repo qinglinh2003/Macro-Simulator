@@ -29,7 +29,7 @@ struct M7Rules final {
     bool mortality{true};
     bool persistent_labor{true};
     bool fractional_hours{true};
-    bool second_jobs{false};
+    bool second_jobs{true};
     bool suspensions{true};
     double annual_churn{0.28};
     double firing_adjustment{0.03};
@@ -38,10 +38,24 @@ struct M7Rules final {
     std::uint32_t suspension_timeout_days{45};
     bool frictional_search{false};
     double search_intensity{0.15};
+    bool relationship_wages{true};
+    bool job_ladder{true};
+    double ladder_search_intensity{0.03};
+    double ladder_premium{0.05};
+    bool participation_margin{true};
+    double reservation_markup{1.0};
+    double welfare_quit_hazard{0.02};
+    bool family_transfers{false};
+    double family_transfer_buffer{1.5};
     bool relationships{true};
     bool marriage{true};
     bool divorce{true};
     bool household_lifecycle{true};
+    bool leaving_home{true};
+    std::uint32_t leave_home_min_age{22};
+    std::uint32_t leave_home_peak_end_age{30};
+    double annual_leave_rate_peak{0.25};
+    double annual_leave_rate_late{0.05};
     std::uint32_t marriage_interval_days{30};
     double annual_marriage_rate{0.08};
     double annual_divorce_rate{0.02};
@@ -66,15 +80,31 @@ struct M7SimulationSpec final {
 struct EstateRecord final {
     EventId event{};
     PersonId deceased{};
+    PersonId heir{};
     HouseholdId household{};
+    HouseholdId destination_household{};
     std::int32_t opened_day{0};
     std::int32_t settled_day{0};
     std::uint64_t transferred_lots{0};
     double gross_share{0.0};
     double tax_share{0.0};
+    double gross_value{0.0};
+    double liabilities{0.0};
+    double tax_paid{0.0};
+    bool public_residual{false};
     bool settled{false};
 
     bool operator==(const EstateRecord &) const = default;
+};
+
+struct LeavingHomeRecord final {
+    EventId event{};
+    PersonId person{};
+    HouseholdId origin{};
+    HouseholdId destination{};
+    std::int32_t day{0};
+
+    bool operator==(const LeavingHomeRecord &) const = default;
 };
 
 struct M7Metrics final {
@@ -86,9 +116,11 @@ struct M7Metrics final {
     double mean_household_size{0.0};
     double working_age_share{0.0};
     double dependency_ratio{0.0};
+    double participation_rate{0.0};
     std::uint64_t estates_settled{0};
     std::uint64_t beneficial_lots_transferred{0};
     double inheritance_tax_share{0.0};
+    double inheritance_tax_paid{0.0};
     double beneficial_projection_error{0.0};
     double employed_fte{0.0};
     double employed_heads{0.0};
@@ -101,11 +133,21 @@ struct M7Metrics final {
     double vacancies{0.0};
     double underemployed_heads{0.0};
     double underemployment_hours{0.0};
+    double suspended_memo{0.0};
+    double second_job_heads{0.0};
+    double second_job_hours{0.0};
+    double nonsearching{0.0};
+    double job_to_job_moves{0.0};
+    double mean_hourly_wage{0.0};
+    double family_transfer_total{0.0};
+    double family_transfer_recipients{0.0};
+    double family_exposed_households{0.0};
     double hires{0.0};
     double separations{0.0};
     std::uint64_t marriages{0};
     std::uint64_t divorces{0};
     std::uint64_t widowhoods{0};
+    std::uint64_t leaving_home_events{0};
 
     bool operator==(const M7Metrics &) const = default;
 };
@@ -123,6 +165,7 @@ struct M7Runtime final {
     core::LaborAccounts labor_accounts{};
     std::vector<double> firm_target_ema;
     std::vector<EstateRecord> estates;
+    std::vector<LeavingHomeRecord> leaving_home;
     std::uint64_t next_event_id{1};
     std::uint64_t population_rng_counter{0};
     M7Metrics last_metrics{};
@@ -132,6 +175,7 @@ struct M7AdvanceOptions final {
     M6AdvanceOptions base{};
     std::optional<PersonId> force_death{};
     std::optional<PersonId> force_birth{};
+    std::optional<PersonId> force_leave_home{};
     bool fault_before_population_commit{false};
 };
 
@@ -158,9 +202,19 @@ class M7TickScratch final {
     core::LaborAccounts labor_accounts_{};
     std::vector<double> firm_target_ema_;
     std::vector<EstateRecord> estates_;
+    std::vector<LeavingHomeRecord> leaving_home_;
+    std::vector<LeavingHomeRecord> pending_leaving_home_;
     std::vector<PersonId> opening_alive_;
     std::vector<BeneficialLotId> deceased_lots_;
+    std::vector<core::BeneficialAssetKey> beneficial_assets_;
+    std::vector<core::SecurityId> estate_securities_;
     std::vector<PersonId> labor_candidates_;
+    std::vector<PersonId> second_job_candidates_;
+    std::vector<PersonId> ladder_candidates_;
+    std::vector<PersonId> divorce_candidates_;
+    std::vector<PersonId> fertility_candidates_;
+    std::vector<HouseholdId> kin_households_;
+    std::vector<HouseholdId> retired_households_;
     std::vector<std::size_t> household_work_index_;
     std::vector<JobId> roster_buffer_;
     std::uint64_t next_event_id_{1};

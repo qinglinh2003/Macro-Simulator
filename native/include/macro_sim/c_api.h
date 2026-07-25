@@ -475,10 +475,15 @@ typedef struct macro_sim_m7_rules {
     uint32_t second_jobs;
     uint32_t suspensions;
     uint32_t frictional_search;
+    uint32_t relationship_wages;
+    uint32_t job_ladder;
+    uint32_t participation_margin;
+    uint32_t family_transfers;
     uint32_t relationships;
     uint32_t marriage;
     uint32_t divorce;
     uint32_t household_lifecycle;
+    uint32_t leaving_home;
     uint32_t forbid_same_household;
     uint32_t forbid_close_kin;
     uint32_t suspension_timeout_days;
@@ -486,6 +491,8 @@ typedef struct macro_sim_m7_rules {
     uint32_t marriage_minimum_age;
     uint32_t marriage_maximum_age;
     uint32_t marriage_maximum_age_gap;
+    uint32_t leave_home_min_age;
+    uint32_t leave_home_peak_end_age;
     double makeham_a;
     double gompertz_b;
     double gompertz_theta;
@@ -500,6 +507,13 @@ typedef struct macro_sim_m7_rules {
     double layoff_band;
     double target_smoothing;
     double search_intensity;
+    double ladder_search_intensity;
+    double ladder_premium;
+    double reservation_markup;
+    double welfare_quit_hazard;
+    double family_transfer_buffer;
+    double annual_leave_rate_peak;
+    double annual_leave_rate_late;
     double annual_marriage_rate;
     double annual_divorce_rate;
     double marriage_preferred_age_gap;
@@ -518,9 +532,11 @@ typedef struct macro_sim_m7_metrics {
     double mean_household_size;
     double working_age_share;
     double dependency_ratio;
+    double participation_rate;
     uint64_t estates_settled;
     uint64_t beneficial_lots_transferred;
     double inheritance_tax_share;
+    double inheritance_tax_paid;
     double beneficial_projection_error;
     double employed_fte;
     double employed_heads;
@@ -533,11 +549,21 @@ typedef struct macro_sim_m7_metrics {
     double vacancies;
     double underemployed_heads;
     double underemployment_hours;
+    double suspended_memo;
+    double second_job_heads;
+    double second_job_hours;
+    double nonsearching;
+    double job_to_job_moves;
+    double mean_hourly_wage;
+    double family_transfer_total;
+    double family_transfer_recipients;
+    double family_exposed_households;
     double hires;
     double separations;
     uint64_t marriages;
     uint64_t divorces;
     uint64_t widowhoods;
+    uint64_t leaving_home_events;
 } macro_sim_m7_metrics;
 
 typedef struct macro_sim_m7_advance_result {
@@ -569,6 +595,7 @@ typedef struct macro_sim_m7_person {
     uint32_t marriage_count;
     double efficiency;
     uint32_t participating;
+    uint32_t searching;
     uint32_t alive;
 } macro_sim_m7_person;
 
@@ -614,12 +641,19 @@ typedef struct macro_sim_m7_estate {
     uint32_t settled;
     uint64_t event_id;
     uint64_t deceased_id;
+    uint64_t heir_id;
     uint64_t household_id;
+    uint64_t destination_household_id;
     int32_t opened_day;
     int32_t settled_day;
     uint64_t transferred_lots;
     double gross_share;
     double tax_share;
+    double gross_value;
+    double liabilities;
+    double tax_paid;
+    uint32_t public_residual;
+    uint32_t reserved;
 } macro_sim_m7_estate;
 
 typedef enum macro_sim_validation_code {

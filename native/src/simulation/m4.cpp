@@ -228,13 +228,16 @@ void capture_phase(
             household.consumption_budget,
             household.spent,
             household.labor_sold,
+            household.labor_capacity,
         };
         if (!all_finite(values) || household.income_expected < 0.0
             || household.income_realized < -kTolerance
             || household.consumption_budget < 0.0
             || household.spent < 0.0
             || household.labor_sold < -kTolerance
-            || household.labor_sold > 1.0 + kTolerance) {
+            || household.labor_capacity < -kTolerance
+            || household.labor_sold >
+                household.labor_capacity + kTolerance) {
             return Status(
                 ErrorCode::invariant_violation,
                 "M4 household state is invalid"
@@ -342,6 +345,8 @@ void commit_working_state(
 ) {
     if (scratch.household_ids_.size() != state.households.alive_count()
         || scratch.firm_ids_.size() != state.firms.alive_count()
+        || scratch.household_dense_index_.size()
+            != state.households.allocator_state().next_id
         || scratch.firm_dense_index_.size()
             != state.firms.allocator_state().next_id
         || scratch.balances_.size() != state.postings.size() + 1) {
@@ -803,8 +808,15 @@ void commit_working_state(
             }
             scratch.firm_work_[firm_index].investment = allocated;
         } else {
+            const auto household_identity =
+                static_cast<std::size_t>(order.order_id);
             const auto household_index =
-                static_cast<std::size_t>(order.order_id - 1);
+                household_identity <
+                        scratch.household_dense_index_.size()
+                    ? scratch.household_dense_index_[
+                          household_identity
+                      ]
+                    : kAbsentFirmIndex;
             if (household_index >= scratch.household_work_.size()
                 || scratch.household_ids_[household_index].value()
                     != order.order_id) {
@@ -1009,8 +1021,15 @@ void commit_working_state(
                 allocation.allocated.value();
         } else {
             const auto household_id = allocation.order_id;
+            const auto household_identity =
+                static_cast<std::size_t>(household_id);
             const auto household_index =
-                static_cast<std::size_t>(household_id - 1);
+                household_identity <
+                        scratch.household_dense_index_.size()
+                    ? scratch.household_dense_index_[
+                          household_identity
+                      ]
+                    : kAbsentFirmIndex;
             if (household_index >= scratch.household_work_.size()
                 || scratch.household_ids_[household_index].value()
                     != household_id) {
@@ -1370,7 +1389,9 @@ void commit_working_state(
             const auto* household =
                 state.households.get(scratch.household_ids_[index]);
             auto& work = scratch.household_work_[index];
-            const double residual = std::max(0.0, 1.0 - work.labor_sold);
+            const double residual = std::max(
+                0.0, work.labor_capacity - work.labor_sold
+            );
             const double payment = guarantee_wage * residual;
             const auto status = transfer(
                 state,
@@ -1402,7 +1423,10 @@ void commit_working_state(
                 runtime.rules.job_guarantee
                     && runtime.rules.job_guarantee_wage_ratio > 0.0
                 ? 0.0
-                : std::max(0.0, 1.0 - work.labor_sold)
+                    : std::max(
+                          0.0,
+                          work.labor_capacity - work.labor_sold
+                      )
             );
         auto status = transfer(
             state,
@@ -1526,15 +1550,17 @@ void commit_capital(
         metrics.firm_profit += firm.profit;
         metrics.aggregate_capital += firm.closing_capital;
     }
+    double labor_capacity = 0.0;
     for (const auto& household : scratch.household_work_) {
         metrics.household_consumption += household.spent;
-        metrics.unemployment_rate += 1.0 - household.labor_sold;
+        metrics.unemployment_rate += std::max(
+            0.0, household.labor_capacity - household.labor_sold
+        );
+        labor_capacity += household.labor_capacity;
     }
-    const double household_count =
-        static_cast<double>(scratch.household_work_.size());
     metrics.unemployment_rate =
-        household_count > 0.0
-        ? metrics.unemployment_rate / household_count
+        labor_capacity > 0.0
+        ? metrics.unemployment_rate / labor_capacity
         : 0.0;
     if (sold_quantity > algorithms::kEconomicEpsilon) {
         metrics.price_index = price_value / sold_quantity;
@@ -1863,9 +1889,18 @@ void M4TickScratch::reserve(const core::RootState& state) {
     const auto household_count = state.households.alive_count();
     const auto firm_count = state.firms.alive_count();
     household_ids_.clear();
+    household_dense_index_.assign(
+        static_cast<std::size_t>(
+            state.households.allocator_state().next_id
+        ),
+        kAbsentFirmIndex
+    );
     household_ids_.reserve(household_count);
     state.households.for_each_alive(
         [this](HouseholdId id, const core::HouseholdComponent&) {
+            household_dense_index_[
+                static_cast<std::size_t>(id.value())
+            ] = household_ids_.size();
             household_ids_.push_back(id);
         }
     );
@@ -1897,6 +1932,14 @@ void M4TickScratch::reserve(const core::RootState& state) {
     );
     household_order_.resize(household_count);
     firm_order_.resize(firm_count);
+    std::iota(
+        household_order_.begin(), household_order_.end(),
+        std::size_t{0}
+    );
+    std::iota(
+        firm_order_.begin(), firm_order_.end(),
+        std::size_t{0}
+    );
     balances_.resize(state.postings.size() + 1);
     account_nodes_.resize(state.postings.size() + 1);
     reserve_balances_.resize(state.reserves.size() + 1);
@@ -1918,6 +1961,7 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
     std::uint64_t signature = 1469598103934665603ULL;
     const std::array capacities{
         household_ids_.capacity(),
+        household_dense_index_.capacity(),
         firm_ids_.capacity(),
         firm_dense_index_.capacity(),
         consumption_firm_indices_.capacity(),
@@ -2162,8 +2206,7 @@ Status validate_m4_state(
                 && household.income_expected >= 0.0
                 && household.consumption_budget >= 0.0
                 && household.spent >= 0.0
-                && household.labor_sold >= 0.0
-                && household.labor_sold <= 1.0 + kTolerance;
+                && household.labor_sold >= 0.0;
         }
     );
     std::uint64_t consumption_firms = 0;

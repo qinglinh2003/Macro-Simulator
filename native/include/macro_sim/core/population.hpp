@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <span>
 #include <vector>
 
@@ -35,6 +36,7 @@ struct PersonRecord final {
     std::uint32_t marriage_count{0};
     double efficiency{1.0};
     bool participating{false};
+    bool searching{true};
     bool alive{true};
 
     bool operator==(const PersonRecord &) const = default;
@@ -122,10 +124,18 @@ class BeneficialOwnershipBook final {
     [[nodiscard]] Status transfer(BeneficialLotId lot, PersonId destination,
                                   double share);
     [[nodiscard]] Status retire(BeneficialLotId lot);
+    [[nodiscard]] Status retire_asset(BeneficialAssetKey asset);
+    [[nodiscard]] Status retire_household(HouseholdId household);
+    [[nodiscard]] Status rekey_household(HouseholdId source,
+                                         HouseholdId destination);
     [[nodiscard]] BeneficialLot *get(BeneficialLotId id) noexcept;
     [[nodiscard]] const BeneficialLot *get(BeneficialLotId id) const noexcept;
+    [[nodiscard]] bool
+    contains_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] std::span<const BeneficialLotId>
     lots_for_person(PersonId person) const noexcept;
+    [[nodiscard]] std::span<const BeneficialLotId>
+    lots_for_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] Status
@@ -138,6 +148,8 @@ class BeneficialOwnershipBook final {
     std::vector<BeneficialLot> lots_;
     std::vector<std::vector<BeneficialLotId>> lots_by_person_{
         std::vector<BeneficialLotId>{}};
+    std::map<BeneficialAssetKey, std::vector<BeneficialLotId>>
+        lots_by_asset_;
 };
 
 } // namespace macro_sim::core

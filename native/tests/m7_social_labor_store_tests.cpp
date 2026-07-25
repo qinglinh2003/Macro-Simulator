@@ -1,6 +1,8 @@
 #include <cassert>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "macro_sim/core/social_labor.hpp"
@@ -68,8 +70,9 @@ void test_primary_second_and_roster_indexes() {
         employment.separate(*first.get_if(), 20, SeparationKind::churn)
             .ok()
     );
-    assert(!employment.primary_job(PersonId(1)).valid());
-    assert(employment.secondary_job(PersonId(1)).valid());
+    assert(employment.primary_job(PersonId(1)) == *second.get_if());
+    assert(!employment.secondary_job(PersonId(1)).valid());
+    assert(!employment.get(*second.get_if())->secondary);
     assert(employment.validate(value.persons, value.root, 1.0e-12).ok());
 }
 
@@ -108,14 +111,14 @@ void test_labor_partition_gate() {
     LaborAccounts accounts;
     accounts.employed_fte = 4.5;
     accounts.employed_heads = 5.0;
-    accounts.unemployed = 2.0;
+    accounts.unemployed = 2.5;
     accounts.suspended = 1.0;
     accounts.job_guarantee = 1.0;
     accounts.labor_supply = 9.0;
     assert(
         macro_sim::core::validate_labor_accounts(accounts, 1.0e-9).ok()
     );
-    accounts.unemployed = 3.0;
+    accounts.unemployed = 3.5;
     assert(
         !macro_sim::core::validate_labor_accounts(accounts, 1.0e-9).ok()
     );
@@ -193,6 +196,126 @@ void test_exact_marriage_order() {
     assert((*first.get_if())[0].first == PersonId(1));
 }
 
+void test_indexed_marriage_matches_brute_force() {
+    auto value = fixture();
+    value.persons = PersonStore{};
+    macro_sim::core::HouseholdMembershipBook membership;
+    constexpr std::uint64_t count = 160;
+    for (std::uint64_t index = 0; index < count; ++index) {
+        PersonRecord person;
+        person.sex =
+            index % 2U == 0U
+                ? macro_sim::core::PersonSex::female
+                : macro_sim::core::PersonSex::male;
+        person.birth_day =
+            -static_cast<std::int32_t>(
+                (18U + (index * 19U) % 63U) * 365U +
+                (index * 101U) % 365U
+            );
+        person.efficiency =
+            0.5 + static_cast<double>((index * 43U) % 175U) /
+                      100.0;
+        person.household = HouseholdId(1U + index / 3U);
+        const auto created = value.persons.create(person);
+        assert(created.ok());
+        assert(
+            membership
+                .add(*created.get_if(), person.household)
+                .ok()
+        );
+    }
+    MarriageRules rules;
+    rules.maximum_age_gap = 17;
+    rules.preferred_age_gap = 2.5;
+    rules.age_gap_penalty = 0.7;
+    rules.assortativity = 0.9;
+    rules.forbid_same_household = true;
+    rules.forbid_close_kin = true;
+
+    std::vector<PersonId> first_pool;
+    std::vector<PersonId> second_pool;
+    for (const auto id : value.persons.alive_ids()) {
+        const auto *person = value.persons.get(id);
+        const double age =
+            static_cast<double>(-person->birth_day) / 365.2425;
+        if (age < static_cast<double>(rules.minimum_age) ||
+            age > static_cast<double>(rules.maximum_age)) {
+            continue;
+        }
+        (person->sex == macro_sim::core::PersonSex::female
+             ? first_pool
+             : second_pool)
+            .push_back(id);
+    }
+    std::sort(first_pool.begin(), first_pool.end());
+    std::sort(second_pool.begin(), second_pool.end());
+    std::vector<std::uint8_t> matched(
+        value.persons.next_id(), 0U
+    );
+    std::vector<macro_sim::core::MarriageMatch> expected;
+    for (const auto first_id : first_pool) {
+        const auto *first = value.persons.get(first_id);
+        const double first_age =
+            static_cast<double>(-first->birth_day) / 365.2425;
+        macro_sim::core::MarriageMatch best;
+        best.score = std::numeric_limits<double>::infinity();
+        for (const auto second_id : second_pool) {
+            if (matched[static_cast<std::size_t>(
+                    second_id.value()
+                )] != 0U) {
+                continue;
+            }
+            const auto *second = value.persons.get(second_id);
+            const double second_age =
+                static_cast<double>(-second->birth_day) / 365.2425;
+            const double gap = second_age - first_age;
+            if (std::abs(gap) >
+                    static_cast<double>(rules.maximum_age_gap) ||
+                membership.household_of(first_id) ==
+                    membership.household_of(second_id)) {
+                continue;
+            }
+            const double score =
+                rules.age_gap_penalty *
+                    std::abs(gap - rules.preferred_age_gap) +
+                rules.assortativity *
+                    std::abs(
+                        std::log(first->efficiency) -
+                        std::log(second->efficiency)
+                    );
+            if (score < best.score ||
+                (score == best.score &&
+                 second_id < best.second)) {
+                best = {first_id, second_id, score};
+            }
+        }
+        if (best.second.valid()) {
+            matched[static_cast<std::size_t>(
+                best.second.value()
+            )] = 1U;
+            expected.push_back(best);
+        }
+    }
+    const auto actual =
+        macro_sim::core::exact_marriage_matches(
+            value.persons, membership, rules, 0
+    );
+    assert(actual.ok());
+    assert(actual.get_if()->size() == expected.size());
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        assert((*actual.get_if())[index].first ==
+               expected[index].first);
+        assert((*actual.get_if())[index].second ==
+               expected[index].second);
+        assert(
+            std::abs(
+                (*actual.get_if())[index].score -
+                expected[index].score
+            ) < 1.0e-12
+        );
+    }
+}
+
 } // namespace
 
 int main() {
@@ -201,5 +324,6 @@ int main() {
     test_labor_partition_gate();
     test_relationship_symmetry_and_lineage();
     test_exact_marriage_order();
+    test_indexed_marriage_matches_brute_force();
     return 0;
 }

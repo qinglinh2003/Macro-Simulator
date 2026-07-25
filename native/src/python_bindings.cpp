@@ -312,9 +312,11 @@ nb::dict m7_metrics_to_python(
     MACRO_SIM_M7_METRIC(mean_household_size);
     MACRO_SIM_M7_METRIC(working_age_share);
     MACRO_SIM_M7_METRIC(dependency_ratio);
+    MACRO_SIM_M7_METRIC(participation_rate);
     MACRO_SIM_M7_METRIC(estates_settled);
     MACRO_SIM_M7_METRIC(beneficial_lots_transferred);
     MACRO_SIM_M7_METRIC(inheritance_tax_share);
+    MACRO_SIM_M7_METRIC(inheritance_tax_paid);
     MACRO_SIM_M7_METRIC(beneficial_projection_error);
     MACRO_SIM_M7_METRIC(employed_fte);
     MACRO_SIM_M7_METRIC(employed_heads);
@@ -327,11 +329,21 @@ nb::dict m7_metrics_to_python(
     MACRO_SIM_M7_METRIC(vacancies);
     MACRO_SIM_M7_METRIC(underemployed_heads);
     MACRO_SIM_M7_METRIC(underemployment_hours);
+    MACRO_SIM_M7_METRIC(suspended_memo);
+    MACRO_SIM_M7_METRIC(second_job_heads);
+    MACRO_SIM_M7_METRIC(second_job_hours);
+    MACRO_SIM_M7_METRIC(nonsearching);
+    MACRO_SIM_M7_METRIC(job_to_job_moves);
+    MACRO_SIM_M7_METRIC(mean_hourly_wage);
+    MACRO_SIM_M7_METRIC(family_transfer_total);
+    MACRO_SIM_M7_METRIC(family_transfer_recipients);
+    MACRO_SIM_M7_METRIC(family_exposed_households);
     MACRO_SIM_M7_METRIC(hires);
     MACRO_SIM_M7_METRIC(separations);
     MACRO_SIM_M7_METRIC(marriages);
     MACRO_SIM_M7_METRIC(divorces);
     MACRO_SIM_M7_METRIC(widowhoods);
+    MACRO_SIM_M7_METRIC(leaving_home_events);
 #undef MACRO_SIM_M7_METRIC
     return output;
 }
@@ -381,6 +393,7 @@ nb::dict m7_snapshot_to_python(
         item["household_id"] = row.household.value();
         item["efficiency"] = row.efficiency;
         item["participating"] = row.participating;
+        item["searching"] = row.searching;
         item["alive"] = row.alive;
         persons.append(std::move(item));
     }
@@ -419,19 +432,38 @@ nb::dict m7_snapshot_to_python(
         nb::dict item;
         item["event_id"] = row.event.value();
         item["deceased_id"] = row.deceased.value();
+        item["heir_id"] = row.heir.value();
         item["household_id"] = row.household.value();
+        item["destination_household_id"] =
+            row.destination_household.value();
         item["opened_day"] = row.opened_day;
         item["settled_day"] = row.settled_day;
         item["transferred_lots"] = row.transferred_lots;
         item["gross_share"] = row.gross_share;
         item["tax_share"] = row.tax_share;
+        item["gross_value"] = row.gross_value;
+        item["liabilities"] = row.liabilities;
+        item["tax_paid"] = row.tax_paid;
+        item["public_residual"] = row.public_residual;
         item["settled"] = row.settled;
         estates.append(std::move(item));
+    }
+    nb::list leaving_home;
+    for (const auto &row : runtime->leaving_home) {
+        nb::dict item;
+        item["event_id"] = row.event.value();
+        item["person_id"] = row.person.value();
+        item["origin_household_id"] = row.origin.value();
+        item["destination_household_id"] =
+            row.destination.value();
+        item["day"] = row.day;
+        leaving_home.append(std::move(item));
     }
     output["persons"] = std::move(persons);
     output["jobs"] = std::move(jobs);
     output["unions"] = std::move(unions);
     output["estates"] = std::move(estates);
+    output["leaving_home"] = std::move(leaving_home);
     output["calendar_day"] = runtime->current_calendar_day;
     output["metrics"] = m7_metrics_to_python(runtime->last_metrics);
     return output;
@@ -932,10 +964,24 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(suspension_timeout_days);
     MACRO_SIM_BIND_M7_RULE(frictional_search);
     MACRO_SIM_BIND_M7_RULE(search_intensity);
+    MACRO_SIM_BIND_M7_RULE(relationship_wages);
+    MACRO_SIM_BIND_M7_RULE(job_ladder);
+    MACRO_SIM_BIND_M7_RULE(ladder_search_intensity);
+    MACRO_SIM_BIND_M7_RULE(ladder_premium);
+    MACRO_SIM_BIND_M7_RULE(participation_margin);
+    MACRO_SIM_BIND_M7_RULE(reservation_markup);
+    MACRO_SIM_BIND_M7_RULE(welfare_quit_hazard);
+    MACRO_SIM_BIND_M7_RULE(family_transfers);
+    MACRO_SIM_BIND_M7_RULE(family_transfer_buffer);
     MACRO_SIM_BIND_M7_RULE(relationships);
     MACRO_SIM_BIND_M7_RULE(marriage);
     MACRO_SIM_BIND_M7_RULE(divorce);
     MACRO_SIM_BIND_M7_RULE(household_lifecycle);
+    MACRO_SIM_BIND_M7_RULE(leaving_home);
+    MACRO_SIM_BIND_M7_RULE(leave_home_min_age);
+    MACRO_SIM_BIND_M7_RULE(leave_home_peak_end_age);
+    MACRO_SIM_BIND_M7_RULE(annual_leave_rate_peak);
+    MACRO_SIM_BIND_M7_RULE(annual_leave_rate_late);
     MACRO_SIM_BIND_M7_RULE(marriage_interval_days);
     MACRO_SIM_BIND_M7_RULE(annual_marriage_rate);
     MACRO_SIM_BIND_M7_RULE(annual_divorce_rate);

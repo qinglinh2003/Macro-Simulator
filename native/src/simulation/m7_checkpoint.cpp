@@ -172,10 +172,24 @@ decode_marriage_rules(const Json &row) {
         value.suspension_timeout_days,
         value.frictional_search,
         value.search_intensity,
+        value.relationship_wages,
+        value.job_ladder,
+        value.ladder_search_intensity,
+        value.ladder_premium,
+        value.participation_margin,
+        value.reservation_markup,
+        value.welfare_quit_hazard,
+        value.family_transfers,
+        value.family_transfer_buffer,
         value.relationships,
         value.marriage,
         value.divorce,
         value.household_lifecycle,
+        value.leaving_home,
+        value.leave_home_min_age,
+        value.leave_home_peak_end_age,
+        value.annual_leave_rate_peak,
+        value.annual_leave_rate_late,
         value.marriage_interval_days,
         value.annual_marriage_rate,
         value.annual_divorce_rate,
@@ -189,7 +203,7 @@ decode_marriage_rules(const Json &row) {
     value.marriage_rules =
         decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 24U) {
+    if (!row.is_array() || row.size() != 38U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -211,10 +225,28 @@ decode_marriage_rules(const Json &row) {
         row[index++].get<std::uint32_t>();
     value.frictional_search = row[index++].get<bool>();
     value.search_intensity = row[index++].get<double>();
+    value.relationship_wages = row[index++].get<bool>();
+    value.job_ladder = row[index++].get<bool>();
+    value.ladder_search_intensity = row[index++].get<double>();
+    value.ladder_premium = row[index++].get<double>();
+    value.participation_margin = row[index++].get<bool>();
+    value.reservation_markup = row[index++].get<double>();
+    value.welfare_quit_hazard = row[index++].get<double>();
+    value.family_transfers = row[index++].get<bool>();
+    value.family_transfer_buffer = row[index++].get<double>();
     value.relationships = row[index++].get<bool>();
     value.marriage = row[index++].get<bool>();
     value.divorce = row[index++].get<bool>();
     value.household_lifecycle = row[index++].get<bool>();
+    value.leaving_home = row[index++].get<bool>();
+    value.leave_home_min_age =
+        row[index++].get<std::uint32_t>();
+    value.leave_home_peak_end_age =
+        row[index++].get<std::uint32_t>();
+    value.annual_leave_rate_peak =
+        row[index++].get<double>();
+    value.annual_leave_rate_late =
+        row[index++].get<double>();
     value.marriage_interval_days =
         row[index++].get<std::uint32_t>();
     value.annual_marriage_rate = row[index++].get<double>();
@@ -241,13 +273,14 @@ decode_marriage_rules(const Json &row) {
         value.marriage_count,
         value.efficiency,
         value.participating,
+        value.searching,
         value.alive,
     });
 }
 
 [[nodiscard]] core::PersonRecord
 decode_person(const Json &row) {
-    if (!row.is_array() || row.size() != 16U) {
+    if (!row.is_array() || row.size() != 17U) {
         throw std::runtime_error("invalid M7 person");
     }
     core::PersonRecord value;
@@ -271,6 +304,7 @@ decode_person(const Json &row) {
     value.marriage_count = row[index++].get<std::uint32_t>();
     value.efficiency = row[index++].get<double>();
     value.participating = row[index++].get<bool>();
+    value.searching = row[index++].get<bool>();
     value.alive = row[index++].get<bool>();
     return value;
 }
@@ -289,6 +323,10 @@ decode_person(const Json &row) {
         value.vacancies,
         value.underemployed_heads,
         value.underemployment_hours,
+        value.suspended_memo,
+        value.second_job_heads,
+        value.second_job_hours,
+        value.nonsearching,
         value.hires_total,
         value.churn_separations_total,
         value.layoff_separations_total,
@@ -311,7 +349,7 @@ decode_person(const Json &row) {
 
 [[nodiscard]] core::LaborAccounts
 decode_labor(const Json &row) {
-    if (!row.is_array() || row.size() != 27U) {
+    if (!row.is_array() || row.size() != 31U) {
         throw std::runtime_error("invalid M7 labor accounts");
     }
     core::LaborAccounts value;
@@ -327,6 +365,10 @@ decode_labor(const Json &row) {
     M7_LABOR(vacancies);
     M7_LABOR(underemployed_heads);
     M7_LABOR(underemployment_hours);
+    M7_LABOR(suspended_memo);
+    M7_LABOR(second_job_heads);
+    M7_LABOR(second_job_hours);
+    M7_LABOR(nonsearching);
     M7_LABOR(hires_total);
     M7_LABOR(churn_separations_total);
     M7_LABOR(layoff_separations_total);
@@ -357,9 +399,11 @@ decode_labor(const Json &row) {
         value.mean_household_size,
         value.working_age_share,
         value.dependency_ratio,
+        value.participation_rate,
         value.estates_settled,
         value.beneficial_lots_transferred,
         value.inheritance_tax_share,
+        value.inheritance_tax_paid,
         value.beneficial_projection_error,
         value.employed_fte,
         value.employed_heads,
@@ -372,16 +416,26 @@ decode_labor(const Json &row) {
         value.vacancies,
         value.underemployed_heads,
         value.underemployment_hours,
+        value.suspended_memo,
+        value.second_job_heads,
+        value.second_job_hours,
+        value.nonsearching,
+        value.job_to_job_moves,
+        value.mean_hourly_wage,
+        value.family_transfer_total,
+        value.family_transfer_recipients,
+        value.family_exposed_households,
         value.hires,
         value.separations,
         value.marriages,
         value.divorces,
         value.widowhoods,
+        value.leaving_home_events,
     });
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 27U) {
+    if (!row.is_array() || row.size() != 39U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -393,10 +447,12 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.mean_household_size = row[index++].get<double>();
     value.working_age_share = row[index++].get<double>();
     value.dependency_ratio = row[index++].get<double>();
+    value.participation_rate = row[index++].get<double>();
     value.estates_settled = row[index++].get<std::uint64_t>();
     value.beneficial_lots_transferred =
         row[index++].get<std::uint64_t>();
     value.inheritance_tax_share = row[index++].get<double>();
+    value.inheritance_tax_paid = row[index++].get<double>();
     value.beneficial_projection_error =
         row[index++].get<double>();
     value.employed_fte = row[index++].get<double>();
@@ -410,11 +466,24 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.vacancies = row[index++].get<double>();
     value.underemployed_heads = row[index++].get<double>();
     value.underemployment_hours = row[index++].get<double>();
+    value.suspended_memo = row[index++].get<double>();
+    value.second_job_heads = row[index++].get<double>();
+    value.second_job_hours = row[index++].get<double>();
+    value.nonsearching = row[index++].get<double>();
+    value.job_to_job_moves = row[index++].get<double>();
+    value.mean_hourly_wage = row[index++].get<double>();
+    value.family_transfer_total = row[index++].get<double>();
+    value.family_transfer_recipients =
+        row[index++].get<double>();
+    value.family_exposed_households =
+        row[index++].get<double>();
     value.hires = row[index++].get<double>();
     value.separations = row[index++].get<double>();
     value.marriages = row[index++].get<std::uint64_t>();
     value.divorces = row[index++].get<std::uint64_t>();
     value.widowhoods = row[index++].get<std::uint64_t>();
+    value.leaving_home_events =
+        row[index++].get<std::uint64_t>();
 }
 
 [[nodiscard]] Json encode_runtime(const M7Runtime &runtime) {
@@ -485,13 +554,29 @@ void decode_metrics(const Json &row, M7Metrics &value) {
         output["estates"].push_back(Json::array({
             estate.event.value(),
             estate.deceased.value(),
+            estate.heir.value(),
             estate.household.value(),
+            estate.destination_household.value(),
             estate.opened_day,
             estate.settled_day,
             estate.transferred_lots,
             estate.gross_share,
             estate.tax_share,
+            estate.gross_value,
+            estate.liabilities,
+            estate.tax_paid,
+            estate.public_residual,
             estate.settled,
+        }));
+    }
+    output["leaving_home"] = Json::array();
+    for (const auto &event : runtime.leaving_home) {
+        output["leaving_home"].push_back(Json::array({
+            event.event.value(),
+            event.person.value(),
+            event.origin.value(),
+            event.destination.value(),
+            event.day,
         }));
     }
     return output;
@@ -616,19 +701,39 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     }
 
     for (const auto &row : input.at("estates")) {
-        if (!row.is_array() || row.size() != 9U) {
+        if (!row.is_array() || row.size() != 15U) {
             throw std::runtime_error("invalid M7 estate");
         }
         runtime.estates.push_back({
             EventId(row[0].get<std::uint64_t>()),
             PersonId(row[1].get<std::uint64_t>()),
+            PersonId(row[2].get<std::uint64_t>()),
+            HouseholdId(row[3].get<std::uint64_t>()),
+            HouseholdId(row[4].get<std::uint64_t>()),
+            row[5].get<std::int32_t>(),
+            row[6].get<std::int32_t>(),
+            row[7].get<std::uint64_t>(),
+            row[8].get<double>(),
+            row[9].get<double>(),
+            row[10].get<double>(),
+            row[11].get<double>(),
+            row[12].get<double>(),
+            row[13].get<bool>(),
+            row[14].get<bool>(),
+        });
+    }
+    for (const auto &row : input.at("leaving_home")) {
+        if (!row.is_array() || row.size() != 5U) {
+            throw std::runtime_error(
+                "invalid M7 leaving-home event"
+            );
+        }
+        runtime.leaving_home.push_back({
+            EventId(row[0].get<std::uint64_t>()),
+            PersonId(row[1].get<std::uint64_t>()),
             HouseholdId(row[2].get<std::uint64_t>()),
-            row[3].get<std::int32_t>(),
+            HouseholdId(row[3].get<std::uint64_t>()),
             row[4].get<std::int32_t>(),
-            row[5].get<std::uint64_t>(),
-            row[6].get<double>(),
-            row[7].get<double>(),
-            row[8].get<bool>(),
         });
     }
 }

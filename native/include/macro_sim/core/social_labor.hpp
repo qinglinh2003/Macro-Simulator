@@ -131,6 +131,8 @@ class EmploymentBook final {
     [[nodiscard]] Status suspend(JobId job, std::int32_t day);
     [[nodiscard]] Status recall(JobId job);
     [[nodiscard]] Status set_hours(JobId job, double hours);
+    [[nodiscard]] Status set_wage(JobId job, double wage);
+    [[nodiscard]] Status promote_secondary(PersonId person);
 
     [[nodiscard]] JobRecord *get(JobId id) noexcept;
     [[nodiscard]] const JobRecord *get(JobId id) const noexcept;
@@ -179,6 +181,10 @@ struct LaborAccounts final {
     double vacancies{0.0};
     double underemployed_heads{0.0};
     double underemployment_hours{0.0};
+    double suspended_memo{0.0};
+    double second_job_heads{0.0};
+    double second_job_hours{0.0};
+    double nonsearching{0.0};
     double hires_total{0.0};
     double churn_separations_total{0.0};
     double layoff_separations_total{0.0};

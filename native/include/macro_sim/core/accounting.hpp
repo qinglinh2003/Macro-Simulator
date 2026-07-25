@@ -191,6 +191,8 @@ class OwnershipBook final {
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] const std::vector<OwnershipLot> &records() const noexcept;
     [[nodiscard]] std::size_t retire_asset(AssetKey asset) noexcept;
+    [[nodiscard]] Status rekey_owner(OwnerId source,
+                                     OwnerId destination) noexcept;
     [[nodiscard]] Status validate_shares(double tolerance) const;
 
   private:

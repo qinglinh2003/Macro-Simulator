@@ -170,7 +170,9 @@ void test_round_trip_and_continuation() {
     assert(save(resumed) == bytes);
     advance(direct, 15);
     advance(resumed, 15);
-    assert(save(direct) == save(resumed));
+    const auto direct_bytes = save(direct);
+    const auto resumed_bytes = save(resumed);
+    assert(direct_bytes == resumed_bytes);
     const auto direct_digest =
         macro_sim::simulation::m7_state_digest(
             direct.root, direct.real_runtime,

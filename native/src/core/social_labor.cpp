@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 
 namespace macro_sim::core {
@@ -334,6 +335,20 @@ Status RelationshipBook::validate(
             return Status(ErrorCode::invariant_violation,
                           "person union projection is inconsistent");
         }
+        if (person->mother == person_id ||
+            person->father == person_id ||
+            person->guardian == person_id ||
+            (person->mother.valid() &&
+             !persons.contains(person->mother)) ||
+            (person->father.valid() &&
+             !persons.contains(person->father)) ||
+            (person->guardian.valid() &&
+             !persons.alive(person->guardian))) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "person family reference is inconsistent"
+            );
+        }
     }
     for (std::size_t parent_index = 1;
          parent_index < children_by_parent_.size(); ++parent_index) {
@@ -391,49 +406,270 @@ exact_marriage_matches(const PersonStore &persons,
     }
     std::sort(first_pool.begin(), first_pool.end());
     std::sort(second_pool.begin(), second_pool.end());
-    std::vector<std::uint8_t> matched(persons.next_id(), 0U);
+
+    struct Candidate final {
+        PersonId id{};
+        double age{0.0};
+        double log_efficiency{0.0};
+    };
+    struct SearchNode final {
+        Candidate candidate{};
+        std::int32_t left{-1};
+        std::int32_t right{-1};
+        std::int32_t parent{-1};
+        double minimum_age{0.0};
+        double maximum_age{0.0};
+        double minimum_log_efficiency{0.0};
+        double maximum_log_efficiency{0.0};
+        std::uint64_t minimum_active_id{
+            std::numeric_limits<std::uint64_t>::max()
+        };
+        std::size_t active_count{1};
+        bool active{true};
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.reserve(second_pool.size());
+    for (const auto second_id : second_pool) {
+        const auto *second = persons.get(second_id);
+        candidates.push_back(
+            {second_id, age_at(*second, day),
+             std::log(second->efficiency)}
+        );
+    }
+    std::vector<SearchNode> search;
+    search.reserve(candidates.size());
+    const auto refresh = [&search](std::int32_t index) {
+        auto &node = search[static_cast<std::size_t>(index)];
+        node.active_count = node.active ? 1U : 0U;
+        node.minimum_active_id =
+            node.active
+                ? node.candidate.id.value()
+                : std::numeric_limits<std::uint64_t>::max();
+        for (const auto child_index :
+             std::array{node.left, node.right}) {
+            if (child_index < 0) {
+                continue;
+            }
+            const auto &child =
+                search[static_cast<std::size_t>(child_index)];
+            node.active_count += child.active_count;
+            node.minimum_active_id =
+                std::min(
+                    node.minimum_active_id,
+                    child.minimum_active_id
+                );
+        }
+    };
+    std::function<std::int32_t(
+        std::size_t, std::size_t, std::uint32_t, std::int32_t
+    )>
+        build_search;
+    build_search =
+        [&](std::size_t begin, std::size_t end,
+            std::uint32_t depth, std::int32_t parent) {
+            if (begin == end) {
+                return std::int32_t{-1};
+            }
+            const auto middle = begin + (end - begin) / 2U;
+            const bool split_age = depth % 2U == 0U;
+            std::nth_element(
+                candidates.begin() +
+                    static_cast<std::ptrdiff_t>(begin),
+                candidates.begin() +
+                    static_cast<std::ptrdiff_t>(middle),
+                candidates.begin() +
+                    static_cast<std::ptrdiff_t>(end),
+                [split_age](const Candidate &left,
+                            const Candidate &right) {
+                    const double left_value =
+                        split_age ? left.age : left.log_efficiency;
+                    const double right_value =
+                        split_age ? right.age : right.log_efficiency;
+                    return left_value < right_value ||
+                           (left_value == right_value &&
+                            left.id < right.id);
+                }
+            );
+            const auto node_index =
+                static_cast<std::int32_t>(search.size());
+            SearchNode node;
+            node.candidate = candidates[middle];
+            node.parent = parent;
+            node.minimum_age = node.candidate.age;
+            node.maximum_age = node.candidate.age;
+            node.minimum_log_efficiency =
+                node.candidate.log_efficiency;
+            node.maximum_log_efficiency =
+                node.candidate.log_efficiency;
+            node.minimum_active_id = node.candidate.id.value();
+            search.push_back(node);
+            const auto left = build_search(
+                begin, middle, depth + 1U, node_index
+            );
+            const auto right = build_search(
+                middle + 1U, end, depth + 1U, node_index
+            );
+            auto &stored =
+                search[static_cast<std::size_t>(node_index)];
+            stored.left = left;
+            stored.right = right;
+            for (const auto child_index :
+                 std::array{left, right}) {
+                if (child_index < 0) {
+                    continue;
+                }
+                const auto &child =
+                    search[static_cast<std::size_t>(child_index)];
+                stored.minimum_age = std::min(
+                    stored.minimum_age, child.minimum_age
+                );
+                stored.maximum_age = std::max(
+                    stored.maximum_age, child.maximum_age
+                );
+                stored.minimum_log_efficiency = std::min(
+                    stored.minimum_log_efficiency,
+                    child.minimum_log_efficiency
+                );
+                stored.maximum_log_efficiency = std::max(
+                    stored.maximum_log_efficiency,
+                    child.maximum_log_efficiency
+                );
+            }
+            refresh(node_index);
+            return node_index;
+        };
+    const auto root = build_search(
+        0, candidates.size(), 0U, -1
+    );
+
     std::vector<MarriageMatch> result;
     result.reserve(std::min(first_pool.size(), second_pool.size()));
     for (const auto first_id : first_pool) {
         const auto *first = persons.get(first_id);
         const double first_age = age_at(*first, day);
+        const double first_log_efficiency =
+            std::log(first->efficiency);
+        const double target_age =
+            first_age + rules.preferred_age_gap;
+        const double minimum_allowed_age =
+            first_age -
+            static_cast<double>(rules.maximum_age_gap);
+        const double maximum_allowed_age =
+            first_age +
+            static_cast<double>(rules.maximum_age_gap);
         MarriageMatch best;
         best.score = std::numeric_limits<double>::infinity();
-        for (const auto second_id : second_pool) {
-            if (matched[
-                    static_cast<std::size_t>(second_id.value())] != 0U) {
-                continue;
-            }
-            const auto *second = persons.get(second_id);
-            const double second_age = age_at(*second, day);
-            const double gap = second_age - first_age;
-            if (std::abs(gap) >
-                    static_cast<double>(rules.maximum_age_gap) ||
-                (rules.forbid_same_household &&
-                 membership.household_of(first_id) ==
-                     membership.household_of(second_id)) ||
-                (rules.forbid_close_kin &&
-                 close_kin(*first, *second))) {
-                continue;
-            }
-            const double score =
-                rules.age_gap_penalty *
-                    std::abs(gap - rules.preferred_age_gap) +
-                rules.assortativity *
-                    std::abs(
-                        std::log(first->efficiency) -
-                        std::log(second->efficiency)
+        std::int32_t best_node{-1};
+        const auto lower_bound =
+            [&](const SearchNode &node) {
+                const double lower_age =
+                    std::max(
+                        node.minimum_age,
+                        minimum_allowed_age
                     );
-            if (score < best.score ||
-                (score == best.score &&
-                 second_id < best.second)) {
-                best = {first_id, second_id, score};
+                const double upper_age =
+                    std::min(
+                        node.maximum_age,
+                        maximum_allowed_age
+                    );
+                if (lower_age > upper_age ||
+                    node.active_count == 0) {
+                    return std::numeric_limits<double>::infinity();
+                }
+                const double age_distance =
+                    target_age < lower_age
+                        ? lower_age - target_age
+                        : (target_age > upper_age
+                               ? target_age - upper_age
+                               : 0.0);
+                const double efficiency_distance =
+                    first_log_efficiency <
+                            node.minimum_log_efficiency
+                        ? node.minimum_log_efficiency -
+                              first_log_efficiency
+                        : (first_log_efficiency >
+                                   node.maximum_log_efficiency
+                               ? first_log_efficiency -
+                                     node.maximum_log_efficiency
+                               : 0.0);
+                return rules.age_gap_penalty * age_distance +
+                       rules.assortativity * efficiency_distance;
+            };
+        std::function<void(std::int32_t)> search_nearest;
+        search_nearest = [&](std::int32_t node_index) {
+            if (node_index < 0) {
+                return;
             }
-        }
+            const auto &node =
+                search[static_cast<std::size_t>(node_index)];
+            const double bound = lower_bound(node);
+            if (bound > best.score ||
+                (bound == best.score && best.second.valid() &&
+                 node.minimum_active_id >= best.second.value())) {
+                return;
+            }
+            if (node.active &&
+                node.candidate.age >= minimum_allowed_age &&
+                node.candidate.age <= maximum_allowed_age) {
+                const auto second_id = node.candidate.id;
+                const auto *second = persons.get(second_id);
+                if ((!rules.forbid_same_household ||
+                     membership.household_of(first_id) !=
+                         membership.household_of(second_id)) &&
+                    (!rules.forbid_close_kin ||
+                     !close_kin(*first, *second))) {
+                    const double score =
+                        rules.age_gap_penalty *
+                            std::abs(
+                                node.candidate.age - target_age
+                            ) +
+                        rules.assortativity *
+                            std::abs(
+                                node.candidate.log_efficiency -
+                                first_log_efficiency
+                            );
+                    if (score < best.score ||
+                        (score == best.score &&
+                         second_id < best.second)) {
+                        best = {first_id, second_id, score};
+                        best_node = node_index;
+                    }
+                }
+            }
+            const auto left = node.left;
+            const auto right = node.right;
+            const double left_bound =
+                left < 0
+                    ? std::numeric_limits<double>::infinity()
+                    : lower_bound(
+                          search[static_cast<std::size_t>(left)]
+                      );
+            const double right_bound =
+                right < 0
+                    ? std::numeric_limits<double>::infinity()
+                    : lower_bound(
+                          search[static_cast<std::size_t>(right)]
+                      );
+            if (left_bound <= right_bound) {
+                search_nearest(left);
+                search_nearest(right);
+            } else {
+                search_nearest(right);
+                search_nearest(left);
+            }
+        };
+        search_nearest(root);
         if (best.second.valid()) {
-            matched[
-                static_cast<std::size_t>(best.second.value())] = 1U;
             result.push_back(best);
+            search[static_cast<std::size_t>(best_node)].active = false;
+            for (auto node_index = best_node;
+                 node_index >= 0;
+                 node_index =
+                     search[static_cast<std::size_t>(node_index)]
+                         .parent) {
+                refresh(node_index);
+            }
         }
     }
     return result;
@@ -549,6 +785,24 @@ Status EmploymentBook::separate(JobId job, std::int32_t day,
                       "employment person index is inconsistent");
     }
     slot = JobId{};
+    if (!record->secondary) {
+        auto &secondary =
+            secondary_by_person_[
+                static_cast<std::size_t>(record->person.value())];
+        if (secondary.valid()) {
+            auto *replacement = get(secondary);
+            if (replacement == nullptr || !replacement->active ||
+                !replacement->secondary) {
+                return Status(
+                    ErrorCode::invariant_violation,
+                    "secondary employment index is inconsistent"
+                );
+            }
+            slot = secondary;
+            secondary = JobId{};
+            replacement->secondary = false;
+        }
+    }
     if (record->suspended) {
         --suspended_count_;
     }
@@ -606,6 +860,48 @@ Status EmploymentBook::set_hours(JobId job, double hours) {
                       "person job hours exceed capacity");
     }
     record->hours = hours;
+    return Status::success();
+}
+
+Status EmploymentBook::set_wage(JobId job, double wage) {
+    auto *record = get(job);
+    if (record == nullptr || !record->active) {
+        return Status(ErrorCode::not_found,
+                      "active employment contract is absent");
+    }
+    if (!finite(wage) || wage <= 0.0) {
+        return Status(ErrorCode::invalid_argument,
+                      "employment wage is invalid");
+    }
+    record->wage = wage;
+    return Status::success();
+}
+
+Status EmploymentBook::promote_secondary(PersonId person) {
+    ensure_person(person);
+    auto &primary =
+        primary_by_person_[
+            static_cast<std::size_t>(person.value())];
+    auto &secondary =
+        secondary_by_person_[
+            static_cast<std::size_t>(person.value())];
+    if (primary.valid() || !secondary.valid()) {
+        return Status(
+            ErrorCode::contract_violation,
+            "secondary employment cannot be promoted"
+        );
+    }
+    auto *record = get(secondary);
+    if (record == nullptr || !record->active ||
+        !record->secondary) {
+        return Status(
+            ErrorCode::invariant_violation,
+            "secondary employment index is inconsistent"
+        );
+    }
+    primary = secondary;
+    secondary = JobId{};
+    record->secondary = false;
     return Status::success();
 }
 
@@ -830,6 +1126,10 @@ Status validate_labor_accounts(const LaborAccounts &accounts,
         accounts.vacancies,
         accounts.underemployed_heads,
         accounts.underemployment_hours,
+        accounts.suspended_memo,
+        accounts.second_job_heads,
+        accounts.second_job_hours,
+        accounts.nonsearching,
         accounts.hires_total,
         accounts.churn_separations_total,
         accounts.layoff_separations_total,
@@ -863,6 +1163,10 @@ Status validate_labor_accounts(const LaborAccounts &accounts,
         accounts.vacancies,
         accounts.underemployed_heads,
         accounts.underemployment_hours,
+        accounts.suspended_memo,
+        accounts.second_job_heads,
+        accounts.second_job_hours,
+        accounts.nonsearching,
     };
     if (std::any_of(nonnegative.begin(), nonnegative.end(),
                     [tolerance](double value) {
@@ -874,7 +1178,7 @@ Status validate_labor_accounts(const LaborAccounts &accounts,
                       "labor stock is inconsistent");
     }
     const double partition =
-        accounts.employed_heads + accounts.unemployed +
+        accounts.employed_fte + accounts.unemployed +
         accounts.suspended + accounts.job_guarantee;
     if (std::abs(partition - accounts.labor_supply) >
         tolerance * std::max(1.0, accounts.labor_supply)) {
