@@ -118,28 +118,7 @@ first_alive_member(const core::HouseholdMembershipBook &membership,
 
 [[nodiscard]] double
 beneficial_projection_error(const core::BeneficialOwnershipBook &ownership) {
-    std::vector<std::pair<core::BeneficialAssetKey, double>> rows;
-    rows.reserve(ownership.records().size());
-    for (const auto &lot : ownership.records()) {
-        if (lot.active) {
-            rows.emplace_back(lot.asset, lot.share);
-        }
-    }
-    std::sort(rows.begin(), rows.end(), [](const auto &left, const auto &right) {
-        return left.first < right.first;
-    });
-    double maximum_error = 0.0;
-    std::size_t cursor = 0;
-    while (cursor < rows.size()) {
-        const auto asset = rows[cursor].first;
-        double total = 0.0;
-        while (cursor < rows.size() && rows[cursor].first == asset) {
-            total += rows[cursor].second;
-            ++cursor;
-        }
-        maximum_error = std::max(maximum_error, std::abs(total - 1.0));
-    }
-    return maximum_error;
+    return ownership.maximum_projection_error();
 }
 
 [[nodiscard]] constexpr std::uint64_t
@@ -295,18 +274,11 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         }
     }
 
-    asset_buffer.clear();
-    for (const auto &lot : ownership.records()) {
-        if (!lot.active ||
-            canonical_claim_exists(state, real, loans, securities, lot.asset)) {
+    ownership.active_assets(asset_buffer);
+    for (const auto asset : asset_buffer) {
+        if (canonical_claim_exists(state, real, loans, securities, asset)) {
             continue;
         }
-        asset_buffer.push_back(lot.asset);
-    }
-    std::sort(asset_buffer.begin(), asset_buffer.end());
-    asset_buffer.erase(std::unique(asset_buffer.begin(), asset_buffer.end()),
-                       asset_buffer.end());
-    for (const auto asset : asset_buffer) {
         status = ownership.retire_asset(asset);
         if (!status.ok()) {
             return status;
@@ -320,10 +292,11 @@ validate_beneficial_projection(const core::RootState &state, const M4TickScratch
                                const std::vector<core::LoanRecord> &loans,
                                const core::SecurityBook &securities,
                                const core::HouseholdMembershipBook &membership,
-                               const core::BeneficialOwnershipBook &ownership) {
-    for (const auto &lot : ownership.records()) {
-        if (lot.active &&
-            !canonical_claim_exists(state, real, loans, securities, lot.asset)) {
+                               const core::BeneficialOwnershipBook &ownership,
+                               std::vector<core::BeneficialAssetKey> &asset_buffer) {
+    ownership.active_assets(asset_buffer);
+    for (const auto asset : asset_buffer) {
+        if (!canonical_claim_exists(state, real, loans, securities, asset)) {
             return Status(ErrorCode::invariant_violation,
                           "beneficial claim has no canonical position");
         }
@@ -1032,15 +1005,6 @@ class M7Extension final : public M6TickExtension {
         scratch_.next_event_id_ = runtime_.next_event_id;
         scratch_.population_rng_counter_ = runtime_.population_rng_counter;
         scratch_.working_metrics_ = M7Metrics{};
-        if (runtime_.rules.beneficial_ownership) {
-            const auto ownership_status = synchronize_beneficial_claims(
-                state, real, monetary.loans_, financial.securities_,
-                scratch_.membership_, scratch_.persons_, scratch_.beneficial_ownership_,
-                scratch_.beneficial_assets_);
-            if (!ownership_status.ok()) {
-                return ownership_status;
-            }
-        }
         const auto day = static_cast<std::int64_t>(runtime_.start_calendar_day) +
                          static_cast<std::int64_t>(tick.value()) + 1;
         if (day < std::numeric_limits<std::int32_t>::min() ||
@@ -2027,13 +1991,14 @@ class M7Extension final : public M6TickExtension {
             status = scratch_.membership_.validate(scratch_.persons_, state);
         }
         if (status.ok() && runtime_.rules.beneficial_ownership) {
-            status = scratch_.beneficial_ownership_.validate(
+            status = scratch_.beneficial_ownership_.validate_fast(
                 scratch_.persons_, state.accounting_tolerance);
         }
         if (status.ok() && runtime_.rules.beneficial_ownership) {
             status = validate_beneficial_projection(
                 state, real, monetary.loans_, financial.securities_,
-                scratch_.membership_, scratch_.beneficial_ownership_);
+                scratch_.membership_, scratch_.beneficial_ownership_,
+                scratch_.beneficial_assets_);
         }
         if (status.ok() && runtime_.rules.persistent_labor) {
             status = scratch_.employment_.validate(scratch_.persons_, state,

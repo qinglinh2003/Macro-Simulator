@@ -296,10 +296,16 @@ Status HouseholdMembershipBook::rebuild(const PersonStore &persons) {
     return Status::success();
 }
 
+void BeneficialOwnershipBook::ensure_unique_indexes() {
+    if (indexes_.use_count() != 1) {
+        indexes_ = std::make_shared<Indexes>(*indexes_);
+    }
+}
+
 void BeneficialOwnershipBook::ensure_person(PersonId person) {
     const auto size = static_cast<std::size_t>(person.value()) + 1;
-    if (lots_by_person_.size() < size) {
-        lots_by_person_.resize(size);
+    if (indexes_->lots_by_person.size() < size) {
+        indexes_->lots_by_person.resize(size);
     }
 }
 
@@ -319,14 +325,14 @@ std::size_t BeneficialOwnershipBook::asset_hash(BeneficialAssetKey asset) noexce
 
 std::size_t
 BeneficialOwnershipBook::find_asset_row(BeneficialAssetKey asset) const noexcept {
-    if (asset_slots_.empty()) {
+    if (indexes_->asset_slots.empty()) {
         return kMissingAssetRow;
     }
-    const auto mask = asset_slots_.size() - 1U;
+    const auto mask = indexes_->asset_slots.size() - 1U;
     auto slot = asset_hash(asset) & mask;
-    while (asset_slots_[slot] != 0U) {
-        const auto row = asset_slots_[slot] - 1U;
-        if (lots_by_asset_[row].asset == asset) {
+    while (indexes_->asset_slots[slot] != 0U) {
+        const auto row = indexes_->asset_slots[slot] - 1U;
+        if (indexes_->lots_by_asset[row].asset == asset) {
             return row;
         }
         slot = (slot + 1U) & mask;
@@ -335,19 +341,20 @@ BeneficialOwnershipBook::find_asset_row(BeneficialAssetKey asset) const noexcept
 }
 
 void BeneficialOwnershipBook::rebuild_asset_slots(std::size_t minimum_rows) {
-    const auto required_rows = std::max(minimum_rows, lots_by_asset_.size());
+    const auto required_rows =
+        std::max(minimum_rows, indexes_->lots_by_asset.size());
     std::size_t capacity = 8U;
     while (capacity < required_rows * 2U) {
         capacity *= 2U;
     }
-    asset_slots_.assign(capacity, 0U);
+    indexes_->asset_slots.assign(capacity, 0U);
     const auto mask = capacity - 1U;
-    for (std::size_t row = 0; row < lots_by_asset_.size(); ++row) {
-        auto slot = asset_hash(lots_by_asset_[row].asset) & mask;
-        while (asset_slots_[slot] != 0U) {
+    for (std::size_t row = 0; row < indexes_->lots_by_asset.size(); ++row) {
+        auto slot = asset_hash(indexes_->lots_by_asset[row].asset) & mask;
+        while (indexes_->asset_slots[slot] != 0U) {
             slot = (slot + 1U) & mask;
         }
-        asset_slots_[slot] = row + 1U;
+        indexes_->asset_slots[slot] = row + 1U;
     }
 }
 
@@ -356,18 +363,19 @@ std::size_t BeneficialOwnershipBook::ensure_asset_row(BeneficialAssetKey asset) 
     if (existing != kMissingAssetRow) {
         return existing;
     }
-    if (asset_slots_.empty() ||
-        (lots_by_asset_.size() + 1U) * 10U >= asset_slots_.size() * 7U) {
-        rebuild_asset_slots(lots_by_asset_.size() + 1U);
+    if (indexes_->asset_slots.empty() ||
+        (indexes_->lots_by_asset.size() + 1U) * 10U >=
+            indexes_->asset_slots.size() * 7U) {
+        rebuild_asset_slots(indexes_->lots_by_asset.size() + 1U);
     }
-    const auto row = lots_by_asset_.size();
-    lots_by_asset_.push_back({asset, {}});
-    const auto mask = asset_slots_.size() - 1U;
+    const auto row = indexes_->lots_by_asset.size();
+    indexes_->lots_by_asset.push_back({asset, {}});
+    const auto mask = indexes_->asset_slots.size() - 1U;
     auto slot = asset_hash(asset) & mask;
-    while (asset_slots_[slot] != 0U) {
+    while (indexes_->asset_slots[slot] != 0U) {
         slot = (slot + 1U) & mask;
     }
-    asset_slots_[slot] = row + 1U;
+    indexes_->asset_slots[slot] = row + 1U;
     return row;
 }
 
@@ -379,11 +387,16 @@ Result<BeneficialLotId> BeneficialOwnershipBook::create_lot(BeneficialAssetKey a
         return Status(ErrorCode::invalid_argument,
                       "beneficial ownership lot is invalid");
     }
+    ensure_unique_indexes();
     const auto id = BeneficialLotId(lots_.size() + 1);
     lots_.push_back({id, asset, owner, share, true});
     ensure_person(owner);
-    lots_by_person_[static_cast<std::size_t>(owner.value())].push_back(id);
-    lots_by_asset_[ensure_asset_row(asset)].lots.push_back(id);
+    indexes_->lots_by_person[static_cast<std::size_t>(owner.value())].push_back(id);
+    auto &asset_row = indexes_->lots_by_asset[ensure_asset_row(asset)];
+    asset_row.lots.push_back(id);
+    ++asset_row.active_lots;
+    indexes_->validation_dirty_lots.push_back(id);
+    indexes_->validation_dirty_asset_rows.push_back(find_asset_row(asset));
     return id;
 }
 
@@ -398,10 +411,16 @@ Status BeneficialOwnershipBook::transfer(BeneficialLotId lot, PersonId destinati
         return Status(ErrorCode::invalid_argument,
                       "beneficial ownership transfer is invalid");
     }
+    ensure_unique_indexes();
+    const auto asset_row = find_asset_row(source->asset);
+    if (asset_row == kMissingAssetRow) {
+        return Status(ErrorCode::invariant_violation,
+                      "beneficial asset index is inconsistent");
+    }
     const double remaining = source->share - share;
     if (remaining <= 1.0e-15) {
         auto &old_index =
-            lots_by_person_[static_cast<std::size_t>(source->owner.value())];
+            indexes_->lots_by_person[static_cast<std::size_t>(source->owner.value())];
         const auto found = std::find(old_index.begin(), old_index.end(), lot);
         if (found == old_index.end()) {
             return Status(ErrorCode::invariant_violation,
@@ -410,10 +429,15 @@ Status BeneficialOwnershipBook::transfer(BeneficialLotId lot, PersonId destinati
         old_index.erase(found);
         source->owner = destination;
         ensure_person(destination);
-        lots_by_person_[static_cast<std::size_t>(destination.value())].push_back(lot);
+        indexes_->lots_by_person[static_cast<std::size_t>(destination.value())]
+            .push_back(lot);
+        indexes_->validation_dirty_lots.push_back(lot);
+        indexes_->validation_dirty_asset_rows.push_back(asset_row);
         return Status::success();
     }
     source->share = remaining;
+    indexes_->validation_dirty_lots.push_back(lot);
+    indexes_->validation_dirty_asset_rows.push_back(asset_row);
     const auto created = create_lot(source->asset, destination, share);
     return created.ok() ? Status::success() : created.status();
 }
@@ -423,15 +447,26 @@ Status BeneficialOwnershipBook::retire(BeneficialLotId lot) {
     if (record == nullptr || !record->active) {
         return Status(ErrorCode::not_found, "beneficial ownership lot is absent");
     }
-    auto &index = lots_by_person_[static_cast<std::size_t>(record->owner.value())];
+    ensure_unique_indexes();
+    auto &index =
+        indexes_->lots_by_person[static_cast<std::size_t>(record->owner.value())];
     const auto found = std::find(index.begin(), index.end(), lot);
     if (found == index.end()) {
         return Status(ErrorCode::invariant_violation,
                       "beneficial owner index is inconsistent");
     }
+    const auto asset_row = find_asset_row(record->asset);
+    if (asset_row == kMissingAssetRow ||
+        indexes_->lots_by_asset[asset_row].active_lots == 0U) {
+        return Status(ErrorCode::invariant_violation,
+                      "beneficial asset index is inconsistent");
+    }
     index.erase(found);
+    --indexes_->lots_by_asset[asset_row].active_lots;
     record->active = false;
     record->share = 0.0;
+    indexes_->validation_dirty_lots.push_back(lot);
+    indexes_->validation_dirty_asset_rows.push_back(asset_row);
     return Status::success();
 }
 
@@ -440,7 +475,8 @@ Status BeneficialOwnershipBook::retire_asset(BeneficialAssetKey asset) {
     if (row == kMissingAssetRow) {
         return Status::success();
     }
-    const auto lots = lots_by_asset_[row].lots;
+    ensure_unique_indexes();
+    const auto lots = indexes_->lots_by_asset[row].lots;
     for (const auto lot : lots) {
         const auto *record = get(lot);
         if (record == nullptr || !record->active) {
@@ -451,7 +487,8 @@ Status BeneficialOwnershipBook::retire_asset(BeneficialAssetKey asset) {
             return status;
         }
     }
-    lots_by_asset_[row].lots.clear();
+    indexes_->lots_by_asset[row].lots.clear();
+    indexes_->lots_by_asset[row].active_lots = 0U;
     return Status::success();
 }
 
@@ -461,8 +498,8 @@ Status BeneficialOwnershipBook::retire_household(HouseholdId household) {
                       "beneficial household retirement is invalid");
     }
     std::vector<BeneficialAssetKey> assets;
-    for (const auto &row : lots_by_asset_) {
-        if (row.asset.household == household && !row.lots.empty()) {
+    for (const auto &row : indexes_->lots_by_asset) {
+        if (row.asset.household == household && row.active_lots != 0U) {
             assets.push_back(row.asset);
         }
     }
@@ -482,8 +519,8 @@ Status BeneficialOwnershipBook::rekey_household(HouseholdId source,
                       "beneficial household rekey is invalid");
     }
     std::vector<BeneficialAssetKey> source_assets;
-    for (const auto &row : lots_by_asset_) {
-        if (row.asset.household == source && !row.lots.empty()) {
+    for (const auto &row : indexes_->lots_by_asset) {
+        if (row.asset.household == source && row.active_lots != 0U) {
             source_assets.push_back(row.asset);
         }
     }
@@ -499,18 +536,36 @@ Status BeneficialOwnershipBook::rekey_household(HouseholdId source,
             return Status(ErrorCode::invariant_violation,
                           "beneficial source asset is absent");
         }
-        auto lots = std::move(lots_by_asset_[source_row].lots);
-        lots_by_asset_[source_row].lots.clear();
-        for (const auto lot : lots) {
-            auto *record = get(lot);
-            if (record != nullptr && record->active) {
-                record->asset = destination_asset;
-            }
+        ensure_unique_indexes();
+        const auto active_lots = indexes_->lots_by_asset[source_row].active_lots;
+        if (indexes_->lots_by_asset[source_row].lots.size() < active_lots) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial source asset index is inconsistent");
         }
-        auto &destination_lots =
-            lots_by_asset_[ensure_asset_row(destination_asset)].lots;
+        auto source_lots = std::move(indexes_->lots_by_asset[source_row].lots);
+        std::vector<BeneficialLotId> retained_lots;
+        std::vector<BeneficialLotId> moved_lots;
+        retained_lots.reserve(source_lots.size() - active_lots);
+        moved_lots.reserve(active_lots);
+        for (const auto lot : source_lots) {
+            auto *record = get(lot);
+            if (record == nullptr || !record->active) {
+                retained_lots.push_back(lot);
+                continue;
+            }
+            record->asset = destination_asset;
+            moved_lots.push_back(lot);
+            indexes_->validation_dirty_lots.push_back(lot);
+        }
+        indexes_->lots_by_asset[source_row].lots = std::move(retained_lots);
+        indexes_->lots_by_asset[source_row].active_lots = 0U;
+        const auto destination_row = ensure_asset_row(destination_asset);
+        auto &destination_lots = indexes_->lots_by_asset[destination_row].lots;
         destination_lots.clear();
-        destination_lots = std::move(lots);
+        destination_lots = std::move(moved_lots);
+        indexes_->lots_by_asset[destination_row].active_lots = active_lots;
+        indexes_->validation_dirty_asset_rows.push_back(source_row);
+        indexes_->validation_dirty_asset_rows.push_back(destination_row);
     }
     return Status::success();
 }
@@ -520,11 +575,7 @@ bool BeneficialOwnershipBook::contains_asset(BeneficialAssetKey asset) const noe
     if (row == kMissingAssetRow) {
         return false;
     }
-    return std::any_of(lots_by_asset_[row].lots.begin(), lots_by_asset_[row].lots.end(),
-                       [this](BeneficialLotId lot) {
-                           const auto *record = get(lot);
-                           return record != nullptr && record->active;
-                       });
+    return indexes_->lots_by_asset[row].active_lots != 0U;
 }
 
 std::span<const BeneficialLotId>
@@ -532,7 +583,8 @@ BeneficialOwnershipBook::lots_for_asset(BeneficialAssetKey asset) const noexcept
     const auto row = find_asset_row(asset);
     return row == kMissingAssetRow
                ? std::span<const BeneficialLotId>{}
-               : std::span<const BeneficialLotId>(lots_by_asset_[row].lots);
+               : std::span<const BeneficialLotId>(
+                     indexes_->lots_by_asset[row].lots);
 }
 
 BeneficialLot *BeneficialOwnershipBook::get(BeneficialLotId id) noexcept {
@@ -552,10 +604,10 @@ const BeneficialLot *BeneficialOwnershipBook::get(BeneficialLotId id) const noex
 std::span<const BeneficialLotId>
 BeneficialOwnershipBook::lots_for_person(PersonId person) const noexcept {
     if (!person.valid() || person.value() == 0 ||
-        person.value() >= lots_by_person_.size()) {
+        person.value() >= indexes_->lots_by_person.size()) {
         return {};
     }
-    return lots_by_person_[static_cast<std::size_t>(person.value())];
+    return indexes_->lots_by_person[static_cast<std::size_t>(person.value())];
 }
 
 const std::vector<BeneficialLot> &BeneficialOwnershipBook::records() const noexcept {
@@ -564,12 +616,39 @@ const std::vector<BeneficialLot> &BeneficialOwnershipBook::records() const noexc
 
 std::size_t BeneficialOwnershipBook::size() const noexcept { return lots_.size(); }
 
+void BeneficialOwnershipBook::active_assets(
+    std::vector<BeneficialAssetKey> &output) const {
+    output.clear();
+    output.reserve(indexes_->lots_by_asset.size());
+    for (const auto &row : indexes_->lots_by_asset) {
+        if (row.active_lots != 0U) {
+            output.push_back(row.asset);
+        }
+    }
+}
+
+double BeneficialOwnershipBook::maximum_projection_error() const noexcept {
+    double maximum_error = 0.0;
+    for (const auto &row : indexes_->lots_by_asset) {
+        if (row.active_lots == 0U) {
+            continue;
+        }
+        double total = 0.0;
+        for (const auto lot_id : row.lots) {
+            const auto *lot = get(lot_id);
+            if (lot != nullptr && lot->active) {
+                total += lot->share;
+            }
+        }
+        maximum_error = std::max(maximum_error, std::abs(total - 1.0));
+    }
+    return maximum_error;
+}
+
 Status BeneficialOwnershipBook::replace_records(std::vector<BeneficialLot> records) {
     lots_ = std::move(records);
-    lots_by_person_.assign(1, std::vector<BeneficialLotId>{});
-    lots_by_asset_.clear();
-    asset_slots_.clear();
-    lots_by_asset_.reserve(lots_.size());
+    indexes_ = std::make_shared<Indexes>();
+    indexes_->lots_by_asset.reserve(lots_.size());
     rebuild_asset_slots(lots_.size());
     for (std::size_t index = 0; index < lots_.size(); ++index) {
         auto &lot = lots_[index];
@@ -581,18 +660,117 @@ Status BeneficialOwnershipBook::replace_records(std::vector<BeneficialLot> recor
             continue;
         }
         ensure_person(lot.owner);
-        lots_by_person_[static_cast<std::size_t>(lot.owner.value())].push_back(lot.id);
-        lots_by_asset_[ensure_asset_row(lot.asset)].lots.push_back(lot.id);
+        indexes_->lots_by_person[static_cast<std::size_t>(lot.owner.value())]
+            .push_back(lot.id);
+        auto &asset_row = indexes_->lots_by_asset[ensure_asset_row(lot.asset)];
+        asset_row.lots.push_back(lot.id);
+        ++asset_row.active_lots;
     }
+    return Status::success();
+}
+
+Status BeneficialOwnershipBook::validate_fast(const PersonStore &persons,
+                                              double tolerance) const {
+    if (!finite(tolerance) || tolerance < 0.0) {
+        return Status(ErrorCode::invalid_argument,
+                      "beneficial ownership tolerance is invalid");
+    }
+    auto &dirty_lots = indexes_->validation_dirty_lots;
+    auto &dirty_rows = indexes_->validation_dirty_asset_rows;
+    const auto validate_lot = [&](BeneficialLotId lot_id) {
+        const auto *lot = get(lot_id);
+        if (lot == nullptr || lot->id != lot_id ||
+            (!lot->active && lot->share != 0.0) ||
+            (lot->active &&
+             (!persons.alive(lot->owner) || !finite(lot->share) ||
+              lot->share <= 0.0))) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial ownership lot is inconsistent");
+        }
+        return Status::success();
+    };
+    const auto validate_row = [&](std::size_t row_index) {
+        if (row_index >= indexes_->lots_by_asset.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial asset index is inconsistent");
+        }
+        const auto &row = indexes_->lots_by_asset[row_index];
+        if (find_asset_row(row.asset) != row_index) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial asset lookup index is inconsistent");
+        }
+        double total = 0.0;
+        std::uint32_t active_lots = 0U;
+        for (const auto lot_id : row.lots) {
+            const auto *lot = get(lot_id);
+            if (lot == nullptr || lot->asset != row.asset) {
+                return Status(ErrorCode::invariant_violation,
+                              "beneficial asset index is inconsistent");
+            }
+            if (lot->active) {
+                total += lot->share;
+                ++active_lots;
+            }
+        }
+        if (active_lots != row.active_lots ||
+            (active_lots != 0U && std::abs(total - 1.0) > tolerance)) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial ownership projection is inconsistent");
+        }
+        return Status::success();
+    };
+
+    if (indexes_->full_validation_required) {
+        for (std::size_t index = 0; index < lots_.size(); ++index) {
+            const auto status = validate_lot(BeneficialLotId(index + 1U));
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        for (std::size_t row_index = 0;
+             row_index < indexes_->lots_by_asset.size(); ++row_index) {
+            const auto status = validate_row(row_index);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+    } else {
+        std::sort(dirty_lots.begin(), dirty_lots.end());
+        dirty_lots.erase(std::unique(dirty_lots.begin(), dirty_lots.end()),
+                         dirty_lots.end());
+        for (const auto lot_id : dirty_lots) {
+            const auto status = validate_lot(lot_id);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        std::sort(dirty_rows.begin(), dirty_rows.end());
+        dirty_rows.erase(std::unique(dirty_rows.begin(), dirty_rows.end()),
+                         dirty_rows.end());
+        for (const auto row_index : dirty_rows) {
+            const auto status = validate_row(row_index);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+    }
+    dirty_lots.clear();
+    dirty_rows.clear();
+    indexes_->full_validation_required = false;
     return Status::success();
 }
 
 Status BeneficialOwnershipBook::validate(const PersonStore &persons,
                                          double tolerance) const {
+    if (!finite(tolerance) || tolerance < 0.0) {
+        return Status(ErrorCode::invalid_argument,
+                      "beneficial ownership tolerance is invalid");
+    }
     std::vector<std::uint8_t> indexed(lots_.size() + 1, 0U);
-    for (std::size_t person_index = 1; person_index < lots_by_person_.size();
+    for (std::size_t person_index = 1;
+         person_index < indexes_->lots_by_person.size();
          ++person_index) {
-        for (const auto lot_id : lots_by_person_[person_index]) {
+        for (const auto lot_id : indexes_->lots_by_person[person_index]) {
             const auto *lot = get(lot_id);
             if (lot == nullptr || !lot->active || lot->owner.value() != person_index ||
                 indexed[static_cast<std::size_t>(lot_id.value())] != 0U) {
@@ -602,10 +780,13 @@ Status BeneficialOwnershipBook::validate(const PersonStore &persons,
             indexed[static_cast<std::size_t>(lot_id.value())] = 1U;
         }
     }
-    std::vector<std::size_t> order;
-    order.reserve(lots_.size());
     for (std::size_t index = 0; index < lots_.size(); ++index) {
         const auto &lot = lots_[index];
+        if (lot.id != BeneficialLotId(index + 1U) ||
+            (!lot.active && lot.share != 0.0)) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial ownership lot is inconsistent");
+        }
         if (!lot.active) {
             if (lot.share != 0.0) {
                 return Status(ErrorCode::invariant_violation,
@@ -618,24 +799,53 @@ Status BeneficialOwnershipBook::validate(const PersonStore &persons,
             return Status(ErrorCode::invariant_violation,
                           "beneficial ownership lot is inconsistent");
         }
-        order.push_back(index);
     }
-    std::sort(order.begin(), order.end(), [this](std::size_t left, std::size_t right) {
-        return lots_[left].asset < lots_[right].asset;
-    });
-    std::size_t cursor = 0;
-    while (cursor < order.size()) {
-        const auto asset = lots_[order[cursor]].asset;
-        double total = 0.0;
-        while (cursor < order.size() && lots_[order[cursor]].asset == asset) {
-            total += lots_[order[cursor]].share;
-            ++cursor;
+
+    for (std::size_t row_index = 0;
+         row_index < indexes_->lots_by_asset.size();
+         ++row_index) {
+        const auto &row = indexes_->lots_by_asset[row_index];
+        if (find_asset_row(row.asset) != row_index) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial asset lookup index is inconsistent");
         }
-        if (std::abs(total - 1.0) > tolerance) {
+        double total = 0.0;
+        std::uint32_t active_lots = 0U;
+        for (const auto lot_id : row.lots) {
+            const auto *lot = get(lot_id);
+            if (lot == nullptr || lot->asset != row.asset) {
+                return Status(ErrorCode::invariant_violation,
+                              "beneficial asset index is inconsistent");
+            }
+            if (!lot->active) {
+                continue;
+            }
+            auto &flags = indexed[static_cast<std::size_t>(lot_id.value())];
+            if ((flags & 2U) != 0U) {
+                return Status(ErrorCode::invariant_violation,
+                              "beneficial asset index contains a duplicate lot");
+            }
+            flags |= 2U;
+            total += lot->share;
+            ++active_lots;
+        }
+        if (active_lots != row.active_lots ||
+            (active_lots != 0U && std::abs(total - 1.0) > tolerance)) {
             return Status(ErrorCode::invariant_violation,
                           "beneficial ownership projection does not sum to one");
         }
     }
+
+    for (const auto &lot : lots_) {
+        if (lot.active &&
+            indexed[static_cast<std::size_t>(lot.id.value())] != 3U) {
+            return Status(ErrorCode::invariant_violation,
+                          "beneficial ownership lot is not fully indexed");
+        }
+    }
+    indexes_->validation_dirty_lots.clear();
+    indexes_->validation_dirty_asset_rows.clear();
+    indexes_->full_validation_required = false;
     return Status::success();
 }
 

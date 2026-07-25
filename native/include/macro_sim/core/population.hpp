@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -134,7 +135,11 @@ class BeneficialOwnershipBook final {
     lots_for_asset(BeneficialAssetKey asset) const noexcept;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
+    void active_assets(std::vector<BeneficialAssetKey> &output) const;
+    [[nodiscard]] double maximum_projection_error() const noexcept;
     [[nodiscard]] Status replace_records(std::vector<BeneficialLot> records);
+    [[nodiscard]] Status validate_fast(const PersonStore &persons,
+                                       double tolerance) const;
     [[nodiscard]] Status validate(const PersonStore &persons, double tolerance) const;
 
   private:
@@ -144,8 +149,20 @@ class BeneficialOwnershipBook final {
     struct AssetIndexRow final {
         BeneficialAssetKey asset{};
         std::vector<BeneficialLotId> lots;
+        std::uint32_t active_lots{0};
     };
 
+    struct Indexes final {
+        std::vector<std::vector<BeneficialLotId>> lots_by_person{
+            std::vector<BeneficialLotId>{}};
+        std::vector<AssetIndexRow> lots_by_asset;
+        std::vector<std::size_t> asset_slots;
+        mutable std::vector<BeneficialLotId> validation_dirty_lots;
+        mutable std::vector<std::size_t> validation_dirty_asset_rows;
+        mutable bool full_validation_required{true};
+    };
+
+    void ensure_unique_indexes();
     void ensure_person(PersonId person);
     [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
     [[nodiscard]] std::size_t find_asset_row(BeneficialAssetKey asset) const noexcept;
@@ -153,10 +170,7 @@ class BeneficialOwnershipBook final {
     void rebuild_asset_slots(std::size_t minimum_rows);
 
     std::vector<BeneficialLot> lots_;
-    std::vector<std::vector<BeneficialLotId>> lots_by_person_{
-        std::vector<BeneficialLotId>{}};
-    std::vector<AssetIndexRow> lots_by_asset_;
-    std::vector<std::size_t> asset_slots_;
+    std::shared_ptr<Indexes> indexes_{std::make_shared<Indexes>()};
 };
 
 } // namespace macro_sim::core

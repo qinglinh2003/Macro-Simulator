@@ -159,6 +159,33 @@ void test_transfer_roundoff_clamp_preserves_units() {
     assert(book.validate(1.0e-9).ok());
 }
 
+void test_duplicate_pair_lots_in_batch() {
+    SecurityBook book;
+    const auto holder = OwnerId::household(HouseholdId(1));
+    const std::vector holdings{
+        InitialSecurityHolding{holder, 40.0, Money(80.0)},
+        InitialSecurityHolding{holder, 10.0, Money(20.0)},
+        InitialSecurityHolding{
+            OwnerId::household(HouseholdId(2)),
+            50.0,
+            Money(100.0),
+        },
+    };
+
+    assert(book.begin_batch().ok());
+    const auto equity = book.create_equity(equity_contract(1, 2, 100.0), holdings);
+    assert(equity.ok());
+    const auto security = SecurityId::equity(*equity.get_if());
+    assert(book.units_held(security, holder) == 50.0);
+    assert(book.issue_equity_units(*equity.get_if(), holder, 5.0, Money(10.0)).ok());
+    assert(book.units_held(security, holder) == 55.0);
+    assert(book.finish_batch().ok());
+
+    assert(book.units_held(security, holder) == 55.0);
+    assert(book.total_units(security) == 105.0);
+    assert(book.validate(1.0e-9).ok());
+}
+
 void test_fuzzed_mutations() {
     SecurityBook book;
     std::vector<EquityId> equities;
@@ -256,6 +283,7 @@ int main() {
     test_contracts_and_indexes();
     test_bank_index();
     test_transfer_roundoff_clamp_preserves_units();
+    test_duplicate_pair_lots_in_batch();
     test_fuzzed_mutations();
     test_rejections();
     return 0;

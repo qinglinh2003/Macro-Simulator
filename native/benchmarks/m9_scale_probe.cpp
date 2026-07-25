@@ -60,6 +60,7 @@ struct Measurement final {
     std::uint64_t maximum_allocations_per_day{0};
     std::uint64_t peak_rss_bytes{0};
     bool beneficial_ownership{true};
+    std::vector<std::uint64_t> day_allocations;
     std::vector<std::uint64_t> day_ns;
 };
 
@@ -237,6 +238,7 @@ template <typename Advance>
         const auto elapsed = static_cast<std::uint64_t>(
             std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count());
         samples.push_back(elapsed);
+        measurement.day_allocations.push_back(allocations);
         measurement.day_ns.push_back(elapsed);
         measurement.total_measured_ns += elapsed;
         measurement.maximum_allocations_per_day =
@@ -260,6 +262,8 @@ template <typename Advance>
     measurement.warmup_days = options.warmup_days;
     measurement.measured_days = options.measured_days;
     measurement.beneficial_ownership = options.beneficial_ownership;
+    measurement.day_allocations.reserve(
+        static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
 
     EngineSession session(33909U);
@@ -310,6 +314,8 @@ template <typename Advance>
     measurement.warmup_days = options.warmup_days;
     measurement.measured_days = options.measured_days;
     measurement.beneficial_ownership = options.beneficial_ownership;
+    measurement.day_allocations.reserve(
+        static_cast<std::size_t>(options.measured_days));
     measurement.day_ns.reserve(static_cast<std::size_t>(options.measured_days));
 
     M9WorldSpec spec;
@@ -364,6 +370,14 @@ void print(const Measurement &value) {
     std::cout << '{' << "\"banks\":" << value.banks << ','
               << "\"beneficial_ownership\":"
               << (value.beneficial_ownership ? "true" : "false") << ','
+              << "\"day_allocations\":[";
+    for (std::size_t index = 0; index < value.day_allocations.size(); ++index) {
+        if (index != 0U) {
+            std::cout << ',';
+        }
+        std::cout << value.day_allocations[index];
+    }
+    std::cout << "],"
               << "\"day_ns\":[";
     for (std::size_t index = 0; index < value.day_ns.size(); ++index) {
         if (index != 0U) {
@@ -387,7 +401,7 @@ void print(const Measurement &value) {
               << "\"peak_rss_bytes\":" << value.peak_rss_bytes << ','
               << "\"persons\":" << value.persons << ','
               << "\"scenario\":\"static-population-quiet-housing-v1\","
-              << "\"schema_version\":\"m9-scale-probe-v1\","
+              << "\"schema_version\":\"m9-scale-probe-v2\","
               << "\"total_measured_ns\":" << value.total_measured_ns << ','
               << "\"warmup_days\":" << value.warmup_days << "}\n";
 }

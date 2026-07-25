@@ -92,6 +92,38 @@ This baseline proves that the enabled model can now create and advance one
 million persons on the target machine. It does not meet the interactive target.
 The remaining gap is approximately 31 times at the median.
 
+### 3.3 Current one-million-person optimization checkpoint
+
+All accepted optimization measurements continue to use exactly 1,000,000
+persons, beneficial ownership enabled, three measured days, and the same
+scenario. The root-state digest remains
+`9c0bba0226b7c6784e82bfd330b3aae744fa60f59aaa5c287fd66970c3ebd0ce`.
+
+| Checkpoint | Median day | Peak RSS | Change from first baseline |
+| :--- | ---: | ---: | ---: |
+| First complete baseline | 30.99 s | 6.12 GiB | - |
+| Linear beneficial validation and one close-day synchronization | 23.32 s | 5.86 GiB | -24.8% |
+| Composite security-and-holder index | 17.21 s | 6.15 GiB | -44.5% |
+| Shared beneficial derived indexes | 15.40 s | 7.06 GiB | -50.3% |
+| Asset-row aggregation and no projection sort | 13.68 s | 7.54 GiB | -55.9% |
+| Mutation-tracked incremental beneficial validation | 12.40 s | 7.78 GiB | -60.0% |
+
+The latest measured days were 10.37 s, 12.40 s, and 13.13 s. Genesis remained
+8.26 s. The optimization has therefore removed 60% of median daily latency
+without changing the deterministic result, but it is still approximately 12.4
+times above the interactive target.
+
+The additional lookup structures currently increase peak resident memory. This
+is an explicit open issue, not an accepted final tradeoff. The next data-layout
+work must share or remove redundant derived security indexes and release stale
+scratch capacities while continuing to reduce daily latency.
+
+Beneficial ownership now keeps canonical lots independently in runtime and tick
+scratch, while immutable reverse indexes are shared until a mutation requires a
+copy. Daily validation checks every touched lot and asset row. Checkpoint loads,
+explicit state validation, and the acceptance suite still execute the complete
+cross-index validation.
+
 ## 4. Baseline with the current model enabled
 
 All times are per process. Peak RSS is the maximum observed after genesis and

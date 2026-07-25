@@ -108,6 +108,63 @@ void test_beneficial_ownership_split_and_transfer() {
     assert(ownership.validate(persons, 1.0e-12).ok());
 }
 
+void test_beneficial_index_copy_isolation() {
+    PersonStore persons;
+    assert(persons.create(person(-9'000, PersonSex::female)).ok());
+    assert(persons.create(person(-9'001, PersonSex::male)).ok());
+
+    const BeneficialAssetKey cash{
+        BeneficialAssetKind::household_cash,
+        HouseholdId(1),
+        1,
+    };
+    BeneficialOwnershipBook original;
+    const auto lot = original.create_lot(cash, PersonId(1), 1.0);
+    assert(lot.ok());
+
+    auto copy = original;
+    assert(copy.transfer(*lot.get_if(), PersonId(2), 1.0).ok());
+    assert(original.get(*lot.get_if())->owner == PersonId(1));
+    assert(copy.get(*lot.get_if())->owner == PersonId(2));
+    assert(original.lots_for_person(PersonId(1)).size() == 1);
+    assert(original.lots_for_person(PersonId(2)).empty());
+    assert(copy.lots_for_person(PersonId(1)).empty());
+    assert(copy.lots_for_person(PersonId(2)).size() == 1);
+    assert(original.validate(persons, 1.0e-12).ok());
+    assert(copy.validate(persons, 1.0e-12).ok());
+}
+
+void test_beneficial_rekey_retains_retired_history() {
+    PersonStore persons;
+    assert(persons.create(person(-9'000, PersonSex::female)).ok());
+    assert(persons.create(person(-9'001, PersonSex::male)).ok());
+
+    const BeneficialAssetKey asset{
+        BeneficialAssetKind::generic_position,
+        HouseholdId(1),
+        7,
+    };
+    BeneficialOwnershipBook ownership;
+    const auto first = ownership.create_lot(asset, PersonId(1), 0.5);
+    const auto second = ownership.create_lot(asset, PersonId(2), 0.5);
+    assert(first.ok());
+    assert(second.ok());
+    assert(ownership.validate(persons, 1.0e-12).ok());
+    assert(ownership.retire(*first.get_if()).ok());
+    assert(ownership.create_lot(asset, PersonId(1), 0.5).ok());
+    assert(ownership.validate_fast(persons, 1.0e-12).ok());
+
+    assert(ownership.rekey_household(HouseholdId(1), HouseholdId(2)).ok());
+    const auto destination = BeneficialAssetKey{
+        BeneficialAssetKind::generic_position,
+        HouseholdId(2),
+        7,
+    };
+    assert(!ownership.contains_asset(asset));
+    assert(ownership.contains_asset(destination));
+    assert(ownership.validate(persons, 1.0e-12).ok());
+}
+
 void test_rejections() {
     PersonStore persons;
     PersonRecord invalid;
@@ -141,6 +198,8 @@ int main() {
     test_person_dense_view_and_archive();
     test_membership_projection();
     test_beneficial_ownership_split_and_transfer();
+    test_beneficial_index_copy_isolation();
+    test_beneficial_rekey_retains_retired_history();
     test_rejections();
     return 0;
 }
