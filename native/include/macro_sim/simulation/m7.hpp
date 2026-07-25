@@ -211,6 +211,7 @@ class M7TickScratch final {
     std::vector<PersonId> labor_candidates_;
     std::vector<PersonId> second_job_candidates_;
     std::vector<PersonId> ladder_candidates_;
+    std::vector<FirmId> ladder_firms_;
     std::vector<PersonId> divorce_candidates_;
     std::vector<PersonId> fertility_candidates_;
     std::vector<HouseholdId> kin_households_;

@@ -467,8 +467,17 @@ void test_last_member_estate_moves_canonical_positions() {
     spec.financial_economy.monetary_economy.rules
         .household_credit = false;
     auto harness = build(spec);
+    auto *deceased_record =
+        harness.runtime.persons.get(PersonId(1));
+    deceased_record->mother = PersonId(2);
+    assert(
+        harness.runtime.relationships.register_birth(
+            harness.runtime.persons, PersonId(1)
+        )
+            .ok()
+    );
     const auto source_household =
-        harness.runtime.persons.get(PersonId(1))->household;
+        deceased_record->household;
     const auto destination_household =
         harness.runtime.persons.get(PersonId(2))->household;
     assert(source_household != destination_household);
@@ -540,6 +549,37 @@ void test_last_member_estate_moves_canonical_positions() {
                   << continuation.status().message() << "\n";
     }
     assert(continuation.ok());
+}
+
+void test_public_residual_estate_has_no_unrelated_heir() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 1;
+    spec.population.target_household_size = 1.0;
+    spec.policy.inheritance_tax_rate = 0.20;
+    spec.rules.marriage = false;
+    spec.rules.divorce = false;
+    spec.rules.leaving_home = false;
+    spec.financial_economy.monetary_economy.rules
+        .household_credit = false;
+    auto harness = build(spec);
+    const auto treasury =
+        harness.root.institutions.treasury_account;
+    const double opening_treasury =
+        harness.root.postings.balance(treasury).get_if()->value();
+    M7AdvanceOptions options;
+    options.force_death = PersonId(1);
+    const auto result = advance(harness, 1, options);
+    assert(result.ok());
+    assert(harness.runtime.estates.size() == 1U);
+    const auto &estate = harness.runtime.estates.front();
+    assert(!estate.heir.valid());
+    assert(!estate.destination_household.valid());
+    assert(estate.public_residual);
+    assert(
+        harness.root.postings.balance(treasury).get_if()->value() >
+        opening_treasury
+    );
+    assert(harness.root.households.alive_count() == 0U);
 }
 
 void test_forced_leaving_home_creates_canonical_household() {
@@ -889,6 +929,7 @@ int main() {
     test_persistent_labor_and_death_separation();
     test_relationship_household_lifecycle();
     test_last_member_estate_moves_canonical_positions();
+    test_public_residual_estate_has_no_unrelated_heir();
     test_forced_leaving_home_creates_canonical_household();
     test_family_transfer_uses_kin_and_conserves_cash();
     test_job_ladder_survives_firm_lifecycle();

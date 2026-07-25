@@ -348,6 +348,22 @@ Status RelationshipBook::validate(
                 "person family reference is inconsistent"
             );
         }
+        for (const auto parent :
+             std::array{person->mother, person->father}) {
+            if (!parent.valid()) {
+                continue;
+            }
+            const auto indexed_children = children(parent);
+            if (std::find(
+                    indexed_children.begin(),
+                    indexed_children.end(), person_id
+                ) == indexed_children.end()) {
+                return Status(
+                    ErrorCode::invariant_violation,
+                    "person lineage projection is incomplete"
+                );
+            }
+        }
     }
     for (std::size_t parent_index = 1;
          parent_index < children_by_parent_.size(); ++parent_index) {

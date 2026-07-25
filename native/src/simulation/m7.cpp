@@ -22,6 +22,7 @@ constexpr std::uint64_t kOffsetStream = 0x47454e455349534fULL;
 constexpr std::uint64_t kChurnStream = 0x4c41424f52434855ULL;
 constexpr std::uint64_t kWelfareStream = 0x57454c4641524551ULL;
 constexpr std::uint64_t kLadderStream = 0x4c41444445523031ULL;
+constexpr std::uint64_t kLadderFirmStream = 0x4c41444445523032ULL;
 constexpr std::uint64_t kDivorceStream = 0x4449564f52434530ULL;
 constexpr std::uint64_t kMarriageStream = 0x4d41525249414745ULL;
 constexpr std::uint64_t kLeavingHomeStream =
@@ -121,19 +122,6 @@ stable_age_weights(const algorithms::VitalRates &rates) {
     PersonId selected{};
     for (const auto candidate : membership.members(household)) {
         if (candidate != excluded && persons.alive(candidate) &&
-            (!selected.valid() || candidate < selected)) {
-            selected = candidate;
-        }
-    }
-    return selected;
-}
-
-[[nodiscard]] PersonId first_alive_person(
-    const core::PersonStore &persons, PersonId excluded
-) noexcept {
-    PersonId selected{};
-    for (const auto candidate : persons.alive_ids()) {
-        if (candidate != excluded &&
             (!selected.valid() || candidate < selected)) {
             selected = candidate;
         }
@@ -470,9 +458,7 @@ stable_age_weights(const algorithms::VitalRates &rates) {
     const auto household_heir = first_alive_member(
         membership, persons, deceased.household, deceased.id
     );
-    return household_heir.valid()
-               ? household_heir
-               : first_alive_person(persons, deceased.id);
+    return household_heir;
 }
 
 [[nodiscard]] double claim_value(
@@ -1990,66 +1976,6 @@ class M7Extension final : public M6TickExtension {
                 active_hours += hours;
             }
 
-            if (runtime_.rules.job_ladder &&
-                need > kLaborTolerance) {
-                for (auto &person_id :
-                     scratch_.ladder_candidates_) {
-                    if (!person_id.valid() ||
-                        need <= kLaborTolerance) {
-                        continue;
-                    }
-                    const auto primary_id =
-                        scratch_.employment_.primary_job(
-                            person_id
-                        );
-                    const auto *primary =
-                        scratch_.employment_.get(primary_id);
-                    if (primary == nullptr || !primary->active ||
-                        primary->suspended ||
-                        primary->firm == firm_id ||
-                        scratch_.employment_
-                            .secondary_job(person_id)
-                            .valid() ||
-                        primary->hours >
-                            need + kLaborTolerance ||
-                        work.posted_wage <
-                            primary->wage *
-                                (1.0 +
-                                 runtime_.rules.ladder_premium) ||
-                        unit_draw(
-                            state.seed, person_id.value(),
-                            calendar_day,
-                            kLadderStream ^ firm_id.value()
-                        ) >=
-                            runtime_.rules
-                                .ladder_search_intensity) {
-                        continue;
-                    }
-                    const double hours = primary->hours;
-                    const auto departure = separate_job(
-                        scratch_.employment_, primary_id,
-                        calendar_day,
-                        core::SeparationKind::job_to_job,
-                        scratch_.labor_accounts_
-                    );
-                    if (!departure.ok()) {
-                        return departure;
-                    }
-                    const auto hired = hire_job(
-                        scratch_.employment_, person_id, firm_id,
-                        calendar_day, work.posted_wage, hours,
-                        false, scratch_.labor_accounts_
-                    );
-                    if (!hired.ok()) {
-                        return hired.status();
-                    }
-                    scratch_.labor_accounts_.hires_total -= 1.0;
-                    person_id = PersonId{};
-                    need = std::max(0.0, need - hours);
-                    active_hours += hours;
-                }
-            }
-
             const auto firm_account_index =
                 static_cast<std::size_t>(
                     firm->primary_account.value()
@@ -2115,6 +2041,116 @@ class M7Extension final : public M6TickExtension {
                 }
             }
 
+        }
+
+        if (runtime_.rules.job_ladder) {
+            scratch_.ladder_firms_.clear();
+            for (std::size_t firm_index = 0;
+                 firm_index < real.firm_ids_.size();
+                 ++firm_index) {
+                const auto firm_id = real.firm_ids_[firm_index];
+                if (real.firm_work_[firm_index]
+                            .labor_demand_effective -
+                        scratch_.employment_.active_hours(firm_id) >
+                    kLaborTolerance) {
+                    scratch_.ladder_firms_.push_back(firm_id);
+                }
+            }
+            for (const auto person_id :
+                 scratch_.ladder_candidates_) {
+                if (scratch_.ladder_firms_.empty() ||
+                    unit_draw(
+                        state.seed, person_id.value(),
+                        calendar_day, kLadderStream
+                    ) >=
+                        runtime_.rules
+                            .ladder_search_intensity) {
+                    continue;
+                }
+                const auto draw = unit_draw(
+                    state.seed, person_id.value(),
+                    calendar_day, kLadderFirmStream
+                );
+                const auto firm_index = std::min(
+                    scratch_.ladder_firms_.size() - 1U,
+                    static_cast<std::size_t>(
+                        draw *
+                        static_cast<double>(
+                            scratch_.ladder_firms_.size()
+                        )
+                    )
+                );
+                const auto destination =
+                    scratch_.ladder_firms_[firm_index];
+                const auto found = std::lower_bound(
+                    real.firm_ids_.begin(),
+                    real.firm_ids_.end(), destination
+                );
+                if (found == real.firm_ids_.end() ||
+                    *found != destination) {
+                    return Status(
+                        ErrorCode::invariant_violation,
+                        "job ladder firm index is stale"
+                    );
+                }
+                const auto destination_index =
+                    static_cast<std::size_t>(
+                        std::distance(
+                            real.firm_ids_.begin(), found
+                        )
+                    );
+                const auto primary_id =
+                    scratch_.employment_.primary_job(
+                        person_id
+                    );
+                const auto *primary =
+                    scratch_.employment_.get(primary_id);
+                if (primary == nullptr || !primary->active ||
+                    primary->suspended ||
+                    primary->firm == destination ||
+                    scratch_.employment_
+                        .secondary_job(person_id)
+                        .valid()) {
+                    continue;
+                }
+                const auto &destination_work =
+                    real.firm_work_[destination_index];
+                const double need = std::max(
+                    0.0,
+                    destination_work.labor_demand_effective -
+                        scratch_.employment_.active_hours(
+                            destination
+                        )
+                );
+                if (primary->hours >
+                        need + kLaborTolerance ||
+                    destination_work.posted_wage <
+                        primary->wage *
+                            (1.0 +
+                             runtime_.rules.ladder_premium)) {
+                    continue;
+                }
+                const double hours = primary->hours;
+                const auto departure = separate_job(
+                    scratch_.employment_, primary_id,
+                    calendar_day,
+                    core::SeparationKind::job_to_job,
+                    scratch_.labor_accounts_
+                );
+                if (!departure.ok()) {
+                    return departure;
+                }
+                const auto hired = hire_job(
+                    scratch_.employment_, person_id,
+                    destination, calendar_day,
+                    destination_work.posted_wage, hours,
+                    false, scratch_.labor_accounts_
+                );
+                if (!hired.ok()) {
+                    return hired.status();
+                }
+                scratch_.labor_accounts_.hires_total -= 1.0;
+            }
         }
 
         for (std::size_t firm_index = 0;
@@ -2910,6 +2946,7 @@ void M7TickScratch::reserve(const M7Runtime &runtime) {
     labor_candidates_.reserve(runtime.persons.alive_count());
     second_job_candidates_.reserve(runtime.persons.alive_count());
     ladder_candidates_.reserve(runtime.persons.alive_count());
+    ladder_firms_.reserve(runtime.firm_target_ema.size());
     divorce_candidates_.reserve(runtime.relationships.unions().size());
     fertility_candidates_.reserve(runtime.persons.alive_count() / 4U);
     kin_households_.reserve(16);
@@ -2930,6 +2967,9 @@ std::uint64_t M7TickScratch::capacity_signature() const noexcept {
            (static_cast<std::uint64_t>(
                 ladder_candidates_.capacity()
             ) << 20U) ^
+           (static_cast<std::uint64_t>(
+                ladder_firms_.capacity()
+            ) << 60U) ^
            (static_cast<std::uint64_t>(roster_buffer_.capacity()) << 24U) ^
            (static_cast<std::uint64_t>(divorce_candidates_.capacity())
             << 40U) ^
