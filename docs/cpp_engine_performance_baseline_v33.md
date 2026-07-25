@@ -109,12 +109,13 @@ scenario. The root-state digest remains
 | Mutation-tracked incremental beneficial validation | 12.40 s | 7.78 GiB | -60.0% |
 | Fast advance-entry validation | 10.27 s | 7.80 GiB | -66.9% |
 | Monotonic sequential energy clearing | 10.05 s | 7.67 GiB | -67.6% |
+| Stable equity-order bucketing | 9.47 s | 7.86 GiB | -69.4% |
 
-The latest acceptance run measured 10.05 s, 10.27 s, and 9.25 s. A second
-profiled run measured a 9.76-second median. Genesis remained approximately
-8.25 seconds. The optimization has therefore removed approximately 68% of
+The latest acceptance run measured 9.47 s, 9.98 s, and 8.53 s. A second
+profiled run measured a 9.68-second median. Genesis remained approximately
+8.30 seconds. The optimization has therefore removed approximately 69% of
 median daily latency without changing the deterministic result, but it is still
-approximately ten times above the interactive target.
+approximately 9.5 times above the interactive target.
 
 The additional lookup structures currently increase peak resident memory. This
 is an explicit open issue, not an accepted final tradeoff. The next data-layout
@@ -134,6 +135,12 @@ in place. Sequential energy rationing now carries a monotonic cursor over
 price-ordered offers. Permanently exhausted offers are visited once rather than
 once per buyer; buyer priority, offer priority, prices, fiscal flows, and the
 resulting digest are unchanged.
+
+Equity orders are generated with globally monotonic ordinals and dense equity
+identifiers. Normal clearing therefore uses a stable counting bucket by equity
+instead of a comparison sort. The stable input order is already the required
+ordinal order within each equity. Defensive fallback to the original comparison
+sort remains for sparse identifiers or nonmonotonic externally supplied orders.
 
 ## 4. Baseline with the current model enabled
 

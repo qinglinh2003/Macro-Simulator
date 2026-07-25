@@ -911,13 +911,41 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
 [[nodiscard]] Status clear_equity_orders(const core::RootState &state,
                                          M4TickScratch &real, M5TickScratch &monetary,
                                          M6Runtime &runtime, M6TickScratch &scratch) {
-    std::sort(scratch.orders_.begin(), scratch.orders_.end(),
-              [](const M6EquityOrder &left, const M6EquityOrder &right) {
-                  if (left.equity != right.equity) {
-                      return left.equity < right.equity;
-                  }
-                  return left.ordinal < right.ordinal;
-              });
+    const auto equity_count = scratch.securities_.equities().size();
+    const bool dense_equity_ids =
+        std::all_of(scratch.orders_.begin(), scratch.orders_.end(),
+                    [equity_count](const M6EquityOrder &order) {
+                        return order.equity.value() <= equity_count;
+                    });
+    const bool monotonic_ordinals =
+        std::is_sorted(scratch.orders_.begin(), scratch.orders_.end(),
+                       [](const M6EquityOrder &left, const M6EquityOrder &right) {
+                           return left.ordinal < right.ordinal;
+                       });
+    if (dense_equity_ids && monotonic_ordinals) {
+        scratch.order_bucket_offsets_.assign(equity_count + 2U, 0U);
+        for (const auto &order : scratch.orders_) {
+            ++scratch.order_bucket_offsets_[order.equity.value() + 1U];
+        }
+        std::partial_sum(scratch.order_bucket_offsets_.begin(),
+                         scratch.order_bucket_offsets_.end(),
+                         scratch.order_bucket_offsets_.begin());
+        scratch.ordered_orders_.resize(scratch.orders_.size());
+        for (const auto &order : scratch.orders_) {
+            const auto destination =
+                scratch.order_bucket_offsets_[order.equity.value()]++;
+            scratch.ordered_orders_[destination] = order;
+        }
+        scratch.orders_.swap(scratch.ordered_orders_);
+    } else {
+        std::sort(scratch.orders_.begin(), scratch.orders_.end(),
+                  [](const M6EquityOrder &left, const M6EquityOrder &right) {
+                      if (left.equity != right.equity) {
+                          return left.equity < right.equity;
+                      }
+                      return left.ordinal < right.ordinal;
+                  });
+    }
     auto status = scratch.securities_.begin_batch();
     if (!status.ok()) {
         return status;
@@ -2683,6 +2711,7 @@ void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runti
     orders_.reserve(state.households.alive_count() *
                     static_cast<std::size_t>(runtime.rules.watchlist_size +
                                              state.banks.alive_count()));
+    order_bucket_offsets_.reserve(runtime.securities.equities().size() + 2U);
     buyers_.reserve(state.households.alive_count());
     sellers_.reserve(state.households.alive_count());
     bank_equities_.reserve(state.banks.alive_count());
@@ -2706,6 +2735,8 @@ std::uint64_t M6TickScratch::capacity_signature() const noexcept {
     const std::array capacities{
         firms_.capacity(),
         orders_.capacity(),
+        ordered_orders_.capacity(),
+        order_bucket_offsets_.capacity(),
         buyers_.capacity(),
         sellers_.capacity(),
         bank_equities_.capacity(),

@@ -244,6 +244,8 @@ class M6TickScratch final {
     core::SecurityBook securities_;
     std::vector<FirmLifecycleRecord> firms_;
     std::vector<M6EquityOrder> orders_;
+    std::vector<M6EquityOrder> ordered_orders_;
+    std::vector<std::size_t> order_bucket_offsets_;
     std::vector<M6EquityOrder> buyers_;
     std::vector<M6EquityOrder> sellers_;
     std::vector<EquityId> bank_equities_;
