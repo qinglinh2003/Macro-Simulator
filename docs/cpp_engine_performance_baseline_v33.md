@@ -110,12 +110,14 @@ scenario. The root-state digest remains
 | Fast advance-entry validation | 10.27 s | 7.80 GiB | -66.9% |
 | Monotonic sequential energy clearing | 10.05 s | 7.67 GiB | -67.6% |
 | Stable equity-order bucketing | 9.47 s | 7.86 GiB | -69.4% |
+| Compact incremental security-pair chains | 8.02 s | 8.06 GiB | -74.1% |
 
-The latest acceptance run measured 9.47 s, 9.98 s, and 8.53 s. A second
-profiled run measured a 9.68-second median. Genesis remained approximately
-8.30 seconds. The optimization has therefore removed approximately 69% of
+The latest acceptance run measured 9.09 s, 8.02 s, and 6.20 s. A second
+profiled run measured an 8.44-second median and 7.87 GiB peak RSS. Genesis
+remained approximately 8.20 seconds. The optimization has therefore removed
+approximately 74% of
 median daily latency without changing the deterministic result, but it is still
-approximately 9.5 times above the interactive target.
+approximately eight times above the interactive target.
 
 The additional lookup structures currently increase peak resident memory. This
 is an explicit open issue, not an accepted final tradeoff. The next data-layout
@@ -141,6 +143,14 @@ identifiers. Normal clearing therefore uses a stable counting bucket by equity
 instead of a comparison sort. The stable input order is already the required
 ordinal order within each equity. Defensive fallback to the original comparison
 sort remains for sparse identifiers or nonmonotonic externally supplied orders.
+
+The private security-and-holder lookup no longer duplicates the same positions
+across a sorted pair table, a lot-id table, an open-addressing table, a batch
+overlay, and a full-size sort buffer. It now stores one 32-bit next link per lot
+and one compact head/tail slot per observed pair. New lots join the index
+incrementally, including inside mutation batches. Oldest-lot-first transfer
+order is preserved, while active public holder, contract, issuer, bank, and
+maturity indexes retain their existing semantics and validation.
 
 ## 4. Baseline with the current model enabled
 

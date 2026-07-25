@@ -175,34 +175,16 @@ std::size_t SecurityBook::pair_hash(SecurityId security, OwnerId holder) noexcep
     return static_cast<std::size_t>(hash);
 }
 
-std::span<const SecurityLotId>
-SecurityBook::lots_for_pair(SecurityId security, OwnerId holder) const noexcept {
+std::size_t
+SecurityBook::find_pair_slot(SecurityId security, OwnerId holder) const noexcept {
     if (pair_slots_.empty()) {
-        return {};
+        return kMissingPairSlot;
     }
     const auto mask = pair_slots_.size() - 1U;
     auto slot = pair_hash(security, holder) & mask;
-    while (pair_slots_[slot] != 0U) {
-        const auto &entry = pair_index_[pair_slots_[slot] - 1U];
-        if (entry.security == security && entry.holder == holder) {
-            return std::span<const SecurityLotId>(
-                pair_lots_.data() + entry.offset, entry.count);
-        }
-        slot = (slot + 1U) & mask;
-    }
-    return {};
-}
-
-std::size_t
-SecurityBook::find_batch_pair_slot(SecurityId security, OwnerId holder) const noexcept {
-    if (batch_pair_slots_.empty()) {
-        return kMissingPairSlot;
-    }
-    const auto mask = batch_pair_slots_.size() - 1U;
-    auto slot = pair_hash(security, holder) & mask;
-    while (batch_pair_slots_[slot] != 0U) {
-        const auto &entry = batch_lot_index_[batch_pair_slots_[slot] - 1U];
-        if (entry.security == security && entry.holder == holder) {
+    while (pair_slots_[slot].head != 0U) {
+        const auto *lot = get(SecurityLotId(pair_slots_[slot].head));
+        if (lot != nullptr && lot->security == security && lot->holder == holder) {
             return slot;
         }
         slot = (slot + 1U) & mask;
@@ -210,32 +192,66 @@ SecurityBook::find_batch_pair_slot(SecurityId security, OwnerId holder) const no
     return slot;
 }
 
-void SecurityBook::rebuild_batch_pair_slots() {
-    std::fill(batch_pair_slots_.begin(), batch_pair_slots_.end(), 0U);
-    for (auto &entry : batch_lot_index_) {
-        entry.next = 0U;
+void SecurityBook::rebuild_pair_index() {
+    pair_next_.assign(lots_.size(), 0U);
+    pair_count_ = 0;
+    std::size_t capacity = 8U;
+    while (lots_.size() > capacity / 2U) {
+        capacity *= 2U;
     }
-    for (std::size_t index = 0; index < batch_lot_index_.size(); ++index) {
-        const auto slot = find_batch_pair_slot(batch_lot_index_[index].security,
-                                               batch_lot_index_[index].holder);
-        auto *link = &batch_pair_slots_[slot];
-        while (*link != 0U) {
-            link = &batch_lot_index_[*link - 1U].next;
+    pair_slots_.assign(capacity, PairLotSlot{});
+    const auto mask = capacity - 1U;
+    for (const auto &lot : lots_) {
+        auto slot = pair_hash(lot.security, lot.holder) & mask;
+        while (pair_slots_[slot].head != 0U) {
+            const auto *head = get(SecurityLotId(pair_slots_[slot].head));
+            if (head != nullptr && head->security == lot.security &&
+                head->holder == lot.holder) {
+                break;
+            }
+            slot = (slot + 1U) & mask;
         }
-        *link = index + 1U;
+        const auto lot_value = static_cast<std::uint32_t>(lot.id.value());
+        auto &pair = pair_slots_[slot];
+        if (pair.head == 0U) {
+            pair.head = lot_value;
+            pair.tail = lot_value;
+            ++pair_count_;
+        } else {
+            pair_next_[pair.tail - 1U] = lot_value;
+            pair.tail = lot_value;
+        }
     }
 }
 
-void SecurityBook::ensure_batch_pair_capacity(std::size_t required_rows) {
-    std::size_t capacity =
-        batch_pair_slots_.empty() ? 2048U : batch_pair_slots_.size();
-    while (required_rows > capacity / 2U) {
-        capacity *= 2U;
+void SecurityBook::append_pair_lot(SecurityLotId lot_id) {
+    if (pair_next_.size() + 1U != lots_.size()) {
+        rebuild_pair_index();
+        return;
     }
-    if (capacity != batch_pair_slots_.size()) {
-        batch_pair_slots_.assign(capacity, 0U);
-        rebuild_batch_pair_slots();
+    pair_next_.push_back(0U);
+    if (pair_slots_.empty()) {
+        rebuild_pair_index();
+        return;
     }
+    const auto *lot = get(lot_id);
+    const auto slot = find_pair_slot(lot->security, lot->holder);
+    if (slot != kMissingPairSlot && pair_slots_[slot].head != 0U) {
+        auto &pair = pair_slots_[slot];
+        pair_next_[pair.tail - 1U] =
+            static_cast<std::uint32_t>(lot_id.value());
+        pair.tail = static_cast<std::uint32_t>(lot_id.value());
+        return;
+    }
+    if (pair_count_ + 1U > pair_slots_.size() / 2U) {
+        rebuild_pair_index();
+        return;
+    }
+    pair_slots_[slot] = {
+        static_cast<std::uint32_t>(lot_id.value()),
+        static_cast<std::uint32_t>(lot_id.value()),
+    };
+    ++pair_count_;
 }
 
 Result<SecurityLotId> SecurityBook::create_lot(SecurityId security, OwnerId holder,
@@ -245,41 +261,27 @@ Result<SecurityLotId> SecurityBook::create_lot(SecurityId security, OwnerId hold
         !finite_nonnegative(cost_basis.value())) {
         return Status(ErrorCode::invalid_argument, "invalid security lot");
     }
+    if (lots_.size() >= std::numeric_limits<std::uint32_t>::max()) {
+        return Status(ErrorCode::out_of_range, "security lot index is too large");
+    }
     const auto id = SecurityLotId(static_cast<std::uint64_t>(lots_.size()) + 1);
     lots_.push_back(SecurityLot{id, security, holder, units, cost_basis, true});
-    if (batch_active_) {
-        ensure_batch_pair_capacity(batch_lot_index_.size() + 1U);
-        const auto slot = find_batch_pair_slot(security, holder);
-        batch_lot_index_.push_back({security, holder, id, 0U});
-        auto *link = &batch_pair_slots_[slot];
-        while (*link != 0U) {
-            link = &batch_lot_index_[*link - 1U].next;
-        }
-        *link = batch_lot_index_.size();
-    }
+    append_pair_lot(id);
     return id;
 }
 
 SecurityLot *SecurityBook::find_active_lot(SecurityId security,
                                            OwnerId holder) noexcept {
-    for (const auto lot_id : lots_for_pair(security, holder)) {
-        auto *lot = get(lot_id);
+    const auto slot = find_pair_slot(security, holder);
+    auto lot_value =
+        slot == kMissingPairSlot ? 0U : pair_slots_[slot].head;
+    while (lot_value != 0U) {
+        auto *lot = get(SecurityLotId(lot_value));
         if (lot != nullptr && lot->active && lot->security == security &&
             lot->holder == holder) {
             return lot;
         }
-    }
-    if (!batch_active_) {
-        return nullptr;
-    }
-    const auto slot = find_batch_pair_slot(security, holder);
-    auto entry = slot == kMissingPairSlot ? 0U : batch_pair_slots_[slot];
-    while (entry != 0U) {
-        auto *lot = get(batch_lot_index_[entry - 1U].lot);
-        if (lot != nullptr && lot->active) {
-            return lot;
-        }
-        entry = batch_lot_index_[entry - 1U].next;
+        lot_value = pair_next_[lot_value - 1U];
     }
     return nullptr;
 }
@@ -410,30 +412,15 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
             lot.active = false;
         }
     };
-    const auto source_candidates = lots_for_pair(security, source);
-    if (batch_active_) {
-        for (const auto lot_id : source_candidates) {
-            auto *lot = get(lot_id);
-            if (lot != nullptr) {
-                remove_from_lot(*lot);
-            }
+    const auto source_slot = find_pair_slot(security, source);
+    auto source_lot =
+        source_slot == kMissingPairSlot ? 0U : pair_slots_[source_slot].head;
+    while (source_lot != 0U) {
+        auto *lot = get(SecurityLotId(source_lot));
+        if (lot != nullptr) {
+            remove_from_lot(*lot);
         }
-        const auto slot = find_batch_pair_slot(security, source);
-        auto entry = slot == kMissingPairSlot ? 0U : batch_pair_slots_[slot];
-        while (entry != 0U) {
-            auto *lot = get(batch_lot_index_[entry - 1U].lot);
-            if (lot != nullptr) {
-                remove_from_lot(*lot);
-            }
-            entry = batch_lot_index_[entry - 1U].next;
-        }
-    } else {
-        for (const auto lot_id : source_candidates) {
-            auto *lot = get(lot_id);
-            if (lot != nullptr) {
-                remove_from_lot(*lot);
-            }
-        }
+        source_lot = pair_next_[source_lot - 1U];
     }
     if (remaining > scaled_tolerance(transfer_tolerance, transferred_units)) {
         return Status(ErrorCode::invariant_violation,
@@ -536,30 +523,15 @@ Status SecurityBook::retire_units(SecurityId security, OwnerId holder, double un
             lot.active = false;
         }
     };
-    const auto candidates = lots_for_pair(security, holder);
-    if (batch_active_) {
-        for (const auto lot_id : candidates) {
-            auto *lot = get(lot_id);
-            if (lot != nullptr) {
-                retire_from_lot(*lot);
-            }
+    const auto slot = find_pair_slot(security, holder);
+    auto lot_value =
+        slot == kMissingPairSlot ? 0U : pair_slots_[slot].head;
+    while (lot_value != 0U) {
+        auto *lot = get(SecurityLotId(lot_value));
+        if (lot != nullptr) {
+            retire_from_lot(*lot);
         }
-        const auto slot = find_batch_pair_slot(security, holder);
-        auto entry = slot == kMissingPairSlot ? 0U : batch_pair_slots_[slot];
-        while (entry != 0U) {
-            auto *lot = get(batch_lot_index_[entry - 1U].lot);
-            if (lot != nullptr) {
-                retire_from_lot(*lot);
-            }
-            entry = batch_lot_index_[entry - 1U].next;
-        }
-    } else {
-        for (const auto lot_id : candidates) {
-            auto *lot = get(lot_id);
-            if (lot != nullptr) {
-                retire_from_lot(*lot);
-            }
-        }
+        lot_value = pair_next_[lot_value - 1U];
     }
     if (security.kind == SecurityKind::bond) {
         auto *contract = get(BondId(security.value));
@@ -671,8 +643,6 @@ Status SecurityBook::begin_batch() noexcept {
     batch_active_ = true;
     batch_dirty_ = false;
     batch_indexes_dirty_ = false;
-    batch_lot_index_.clear();
-    std::fill(batch_pair_slots_.begin(), batch_pair_slots_.end(), 0U);
     return Status::success();
 }
 
@@ -682,8 +652,6 @@ Status SecurityBook::finish_batch() {
                       "security mutation batch is not active");
     }
     batch_active_ = false;
-    batch_lot_index_.clear();
-    std::fill(batch_pair_slots_.begin(), batch_pair_slots_.end(), 0U);
     if (!batch_dirty_) {
         return Status::success();
     }
@@ -691,7 +659,7 @@ Status SecurityBook::finish_batch() {
     const bool rebuild = batch_indexes_dirty_;
     batch_indexes_dirty_ = false;
     bump_version();
-    return rebuild ? rebuild_indexes() : Status::success();
+    return rebuild ? rebuild_active_indexes() : Status::success();
 }
 
 BondContract *SecurityBook::get(BondId id) noexcept {
@@ -762,41 +730,14 @@ std::span<const SecurityLotId> SecurityBook::bank_lots(BankId bank) const noexce
 double SecurityBook::units_held(SecurityId security, OwnerId holder) const noexcept {
     double total = 0.0;
     double correction = 0.0;
-    const auto candidates = lots_for_pair(security, holder);
-    if (batch_active_) {
-        for (const auto lot_id : candidates) {
-            const auto *lot = get(lot_id);
-            if (lot == nullptr || !lot->active || lot->security != security ||
-                lot->holder != holder) {
-                continue;
-            }
-            const double next = total + lot->units;
-            correction += std::abs(total) >= std::abs(lot->units)
-                              ? (total - next) + lot->units
-                              : (lot->units - next) + total;
-            total = next;
-        }
-        const auto slot = find_batch_pair_slot(security, holder);
-        auto entry = slot == kMissingPairSlot ? 0U : batch_pair_slots_[slot];
-        while (entry != 0U) {
-            const auto *lot = get(batch_lot_index_[entry - 1U].lot);
-            if (lot == nullptr || !lot->active) {
-                entry = batch_lot_index_[entry - 1U].next;
-                continue;
-            }
-            const double next = total + lot->units;
-            correction += std::abs(total) >= std::abs(lot->units)
-                              ? (total - next) + lot->units
-                              : (lot->units - next) + total;
-            total = next;
-            entry = batch_lot_index_[entry - 1U].next;
-        }
-        return total + correction;
-    }
-    for (const auto lot_id : candidates) {
-        const auto *lot = get(lot_id);
+    const auto slot = find_pair_slot(security, holder);
+    auto lot_value =
+        slot == kMissingPairSlot ? 0U : pair_slots_[slot].head;
+    while (lot_value != 0U) {
+        const auto *lot = get(SecurityLotId(lot_value));
         if (lot == nullptr || !lot->active || lot->security != security ||
             lot->holder != holder) {
+            lot_value = pair_next_[lot_value - 1U];
             continue;
         }
         const double next = total + lot->units;
@@ -804,6 +745,7 @@ double SecurityBook::units_held(SecurityId security, OwnerId holder) const noexc
                           ? (total - next) + lot->units
                           : (lot->units - next) + total;
         total = next;
+        lot_value = pair_next_[lot_value - 1U];
     }
     return total + correction;
 }
@@ -934,11 +876,22 @@ Status SecurityBook::validate_indexes() const {
         rebuilt.maturity_bonds_ != maturity_bonds_ ||
         rebuilt.bank_index_ != bank_index_ ||
         rebuilt.bank_lots_ != bank_lots_ ||
-        rebuilt.pair_index_ != pair_index_ ||
-        rebuilt.pair_lots_ != pair_lots_ ||
-        rebuilt.pair_slots_ != pair_slots_) {
+        rebuilt.pair_next_ != pair_next_ ||
+        rebuilt.pair_count_ != pair_count_) {
         return Status(ErrorCode::invariant_violation,
                       "security indexes are inconsistent");
+    }
+    for (const auto &lot : lots_) {
+        const auto actual_slot = find_pair_slot(lot.security, lot.holder);
+        const auto expected_slot =
+            rebuilt.find_pair_slot(lot.security, lot.holder);
+        if (actual_slot == kMissingPairSlot ||
+            expected_slot == kMissingPairSlot ||
+            pair_slots_[actual_slot].head !=
+                rebuilt.pair_slots_[expected_slot].head) {
+            return Status(ErrorCode::invariant_violation,
+                          "security pair index is inconsistent");
+        }
     }
     return Status::success();
 }
@@ -954,8 +907,6 @@ void SecurityBook::replace_records(std::vector<BondContract> bonds,
     batch_active_ = false;
     batch_dirty_ = false;
     batch_indexes_dirty_ = false;
-    batch_lot_index_.clear();
-    std::fill(batch_pair_slots_.begin(), batch_pair_slots_.end(), 0U);
     static_cast<void>(rebuild_indexes());
 }
 
@@ -985,31 +936,37 @@ Status SecurityBook::rebuild_indexes() {
         equities_.size() > std::numeric_limits<std::uint32_t>::max()) {
         return Status(ErrorCode::out_of_range, "security index is too large");
     }
+    rebuild_pair_index();
+    return rebuild_active_indexes();
+}
+
+Status SecurityBook::rebuild_active_indexes() {
+    if (lots_.size() > std::numeric_limits<std::uint32_t>::max() ||
+        bonds_.size() > std::numeric_limits<std::uint32_t>::max() ||
+        equities_.size() > std::numeric_limits<std::uint32_t>::max()) {
+        return Status(ErrorCode::out_of_range, "security index is too large");
+    }
     auto &holder_rows = holder_rows_scratch_;
     auto &bank_rows = bank_rows_scratch_;
     auto &contract_rows = contract_rows_scratch_;
     auto &issuer_rows = issuer_rows_scratch_;
     auto &maturity_rows = maturity_rows_scratch_;
-    auto &pair_rows = pair_rows_scratch_;
     holder_rows.clear();
     bank_rows.clear();
     contract_rows.clear();
     issuer_rows.clear();
     maturity_rows.clear();
-    pair_rows.clear();
     holder_rows.reserve(lots_.size());
     contract_rows.reserve(lots_.size());
     bank_rows.reserve(lots_.size());
     issuer_rows.reserve(bonds_.size() + equities_.size());
     maturity_rows.reserve(bonds_.size());
-    pair_rows.reserve(lots_.size());
     for (const auto &lot : lots_) {
         if (!lot.active) {
             continue;
         }
         holder_rows.emplace_back(lot.holder, lot.id);
         contract_rows.emplace_back(lot.security, lot.id);
-        pair_rows.push_back({lot.security, lot.holder, lot.id, 0U});
         if (lot.holder.kind == OwnerKind::bank) {
             bank_rows.emplace_back(lot.holder, lot.id);
         }
@@ -1032,54 +989,11 @@ Status SecurityBook::rebuild_indexes() {
     build_contract_index(contract_rows, contract_index_, contract_lots_);
     build_issuer_index(issuer_rows, issuer_index_, issuer_securities_);
     build_maturity_index(maturity_rows, maturity_index_, maturity_bonds_);
-    std::sort(pair_rows.begin(), pair_rows.end(), [](const auto &left,
-                                                     const auto &right) {
-        if (left.security != right.security) {
-            return left.security < right.security;
-        }
-        if (left.holder != right.holder) {
-            return left.holder < right.holder;
-        }
-        return left.lot < right.lot;
-    });
-    pair_index_.clear();
-    pair_lots_.clear();
-    pair_index_.reserve(pair_rows.size());
-    pair_lots_.reserve(pair_rows.size());
-    for (const auto &row : pair_rows) {
-        if (pair_index_.empty() ||
-            pair_index_.back().security != row.security ||
-            pair_index_.back().holder != row.holder) {
-            pair_index_.push_back({
-                row.security,
-                row.holder,
-                static_cast<std::uint32_t>(pair_lots_.size()),
-                0U,
-            });
-        }
-        pair_lots_.push_back(row.lot);
-        ++pair_index_.back().count;
-    }
-    std::size_t pair_capacity = 8U;
-    while (pair_index_.size() > pair_capacity / 2U) {
-        pair_capacity *= 2U;
-    }
-    pair_slots_.assign(pair_capacity, 0U);
-    const auto pair_mask = pair_capacity - 1U;
-    for (std::size_t index = 0; index < pair_index_.size(); ++index) {
-        const auto &entry = pair_index_[index];
-        auto slot = pair_hash(entry.security, entry.holder) & pair_mask;
-        while (pair_slots_[slot] != 0U) {
-            slot = (slot + 1U) & pair_mask;
-        }
-        pair_slots_[slot] = index + 1U;
-    }
     holder_rows.clear();
     bank_rows.clear();
     contract_rows.clear();
     issuer_rows.clear();
     maturity_rows.clear();
-    pair_rows.clear();
     return Status::success();
 }
 
@@ -1090,7 +1004,7 @@ Status SecurityBook::mutation_complete(bool indexes_dirty) {
         return Status::success();
     }
     bump_version();
-    return rebuild_indexes();
+    return indexes_dirty ? rebuild_active_indexes() : Status::success();
 }
 
 void SecurityBook::bump_version() noexcept {

@@ -184,22 +184,11 @@ class SecurityBook final {
                          std::vector<SecurityLot> lots, std::uint64_t version);
 
   private:
-    struct BatchLotIndexEntry final {
-        SecurityId security{};
-        OwnerId holder{};
-        SecurityLotId lot{};
-        std::size_t next{0};
+    struct PairLotSlot final {
+        std::uint32_t head{0};
+        std::uint32_t tail{0};
 
-        bool operator==(const BatchLotIndexEntry &) const = default;
-    };
-
-    struct PairLotIndexEntry final {
-        SecurityId security{};
-        OwnerId holder{};
-        std::uint32_t offset{0};
-        std::uint32_t count{0};
-
-        bool operator==(const PairLotIndexEntry &) const = default;
+        bool operator==(const PairLotSlot &) const = default;
     };
 
     [[nodiscard]] Result<SecurityLotId> create_lot(SecurityId security, OwnerId holder,
@@ -208,17 +197,16 @@ class SecurityBook final {
                                                OwnerId holder) noexcept;
     [[nodiscard]] const SecurityLot *find_active_lot(SecurityId security,
                                                      OwnerId holder) const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId>
-    lots_for_pair(SecurityId security, OwnerId holder) const noexcept;
     [[nodiscard]] std::size_t
-    find_batch_pair_slot(SecurityId security, OwnerId holder) const noexcept;
+    find_pair_slot(SecurityId security, OwnerId holder) const noexcept;
     [[nodiscard]] static std::size_t pair_hash(SecurityId security,
                                                OwnerId holder) noexcept;
-    void ensure_batch_pair_capacity(std::size_t required_rows);
-    void rebuild_batch_pair_slots();
+    void append_pair_lot(SecurityLotId lot);
+    void rebuild_pair_index();
     [[nodiscard]] Status validate_security(SecurityId security) const noexcept;
     [[nodiscard]] Status mutation_complete(bool indexes_dirty = true);
     [[nodiscard]] Status rebuild_indexes();
+    [[nodiscard]] Status rebuild_active_indexes();
     void bump_version() noexcept;
 
     std::vector<BondContract> bonds_;
@@ -236,20 +224,17 @@ class SecurityBook final {
     std::vector<BondId> maturity_bonds_;
     std::vector<HolderSecurityIndexEntry> bank_index_;
     std::vector<SecurityLotId> bank_lots_;
-    std::vector<PairLotIndexEntry> pair_index_;
-    std::vector<SecurityLotId> pair_lots_;
-    std::vector<std::size_t> pair_slots_;
+    std::vector<std::uint32_t> pair_next_;
+    std::vector<PairLotSlot> pair_slots_;
+    std::size_t pair_count_{0};
     std::vector<std::pair<OwnerId, SecurityLotId>> holder_rows_scratch_;
     std::vector<std::pair<OwnerId, SecurityLotId>> bank_rows_scratch_;
     std::vector<std::pair<SecurityId, SecurityLotId>> contract_rows_scratch_;
     std::vector<std::pair<OwnerId, SecurityId>> issuer_rows_scratch_;
     std::vector<std::pair<Tick, BondId>> maturity_rows_scratch_;
-    std::vector<BatchLotIndexEntry> pair_rows_scratch_;
     bool batch_active_{false};
     bool batch_dirty_{false};
     bool batch_indexes_dirty_{false};
-    std::vector<BatchLotIndexEntry> batch_lot_index_;
-    std::vector<std::size_t> batch_pair_slots_;
 };
 
 } // namespace macro_sim::core
