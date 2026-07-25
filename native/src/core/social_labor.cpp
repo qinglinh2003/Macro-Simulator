@@ -237,6 +237,58 @@ RelationshipBook::unions() const noexcept {
     return unions_;
 }
 
+Status RelationshipBook::replace_unions(
+    const PersonStore &persons,
+    std::vector<UnionRecord> unions
+) {
+    unions_ = std::move(unions);
+    active_union_by_person_.assign(
+        persons.next_id(), EventId{}
+    );
+    children_by_parent_.assign(
+        persons.next_id(), std::vector<PersonId>{}
+    );
+    for (const auto &record : unions_) {
+        if (!record.active) {
+            continue;
+        }
+        ensure_person(record.first);
+        ensure_person(record.second);
+        auto &first = active_union_by_person_[
+            static_cast<std::size_t>(record.first.value())];
+        auto &second = active_union_by_person_[
+            static_cast<std::size_t>(record.second.value())];
+        if (first.valid() || second.valid()) {
+            return Status(ErrorCode::corrupt_input,
+                          "relationship checkpoint has duplicate unions");
+        }
+        first = record.event;
+        second = record.event;
+    }
+    for (std::size_t index = 1;
+         index < persons.records().size(); ++index) {
+        const auto child = PersonId(index);
+        const auto *record = persons.get(child);
+        for (const auto parent :
+             std::array{record->mother, record->father}) {
+            if (!parent.valid()) {
+                continue;
+            }
+            if (!persons.contains(parent)) {
+                return Status(
+                    ErrorCode::corrupt_input,
+                    "relationship checkpoint parent is absent"
+                );
+            }
+            ensure_person(parent);
+            children_by_parent_[
+                static_cast<std::size_t>(parent.value())]
+                .push_back(child);
+        }
+    }
+    return validate(persons);
+}
+
 Status RelationshipBook::validate(
     const PersonStore &persons
 ) const {
@@ -601,6 +653,54 @@ EmploymentBook::roster(FirmId firm) const noexcept {
 
 const std::vector<JobRecord> &EmploymentBook::records() const noexcept {
     return jobs_;
+}
+
+Status EmploymentBook::replace_records(
+    std::vector<JobRecord> records
+) {
+    if (records.empty()) {
+        return Status(ErrorCode::corrupt_input,
+                      "employment checkpoint records are empty");
+    }
+    jobs_ = std::move(records);
+    primary_by_person_.assign(1, JobId{});
+    secondary_by_person_.assign(1, JobId{});
+    roster_by_firm_.assign(1, std::vector<JobId>{});
+    roster_position_by_job_.assign(jobs_.size(), kNoRoster);
+    active_count_ = 0;
+    suspended_count_ = 0;
+    for (std::size_t index = 1; index < jobs_.size(); ++index) {
+        auto &job = jobs_[index];
+        if (job.id != JobId(index)) {
+            return Status(ErrorCode::corrupt_input,
+                          "employment checkpoint identity is invalid");
+        }
+        if (!job.active) {
+            continue;
+        }
+        ensure_person(job.person);
+        ensure_firm(job.firm);
+        auto &slot =
+            job.secondary
+                ? secondary_by_person_[
+                      static_cast<std::size_t>(job.person.value())]
+                : primary_by_person_[
+                      static_cast<std::size_t>(job.person.value())];
+        if (slot.valid()) {
+            return Status(ErrorCode::corrupt_input,
+                          "employment checkpoint has duplicate jobs");
+        }
+        slot = job.id;
+        auto &firm_roster =
+            roster_by_firm_[
+                static_cast<std::size_t>(job.firm.value())];
+        roster_position_by_job_[index] = firm_roster.size();
+        firm_roster.push_back(job.id);
+        ++active_count_;
+        suspended_count_ += job.suspended ? 1U : 0U;
+    }
+    next_id_ = jobs_.size();
+    return Status::success();
 }
 
 std::uint64_t EmploymentBook::next_id() const noexcept {

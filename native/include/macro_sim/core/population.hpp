@@ -55,6 +55,8 @@ class PersonStore final {
     [[nodiscard]] std::span<const PersonId> alive_ids() const noexcept;
     [[nodiscard]] std::span<const PersonId> archive_ids() const noexcept;
     [[nodiscard]] const std::vector<PersonRecord> &records() const noexcept;
+    [[nodiscard]] Status
+    replace_records(std::vector<PersonRecord> records);
     [[nodiscard]] Status validate() const noexcept;
 
   private:
@@ -78,6 +80,7 @@ class HouseholdMembershipBook final {
     [[nodiscard]] std::size_t household_capacity() const noexcept;
     [[nodiscard]] Status validate(const PersonStore &persons,
                                   const RootState &state) const;
+    [[nodiscard]] Status rebuild(const PersonStore &persons);
 
   private:
     void ensure_person(PersonId person);
@@ -125,6 +128,8 @@ class BeneficialOwnershipBook final {
     lots_for_person(PersonId person) const noexcept;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] Status
+    replace_records(std::vector<BeneficialLot> records);
     [[nodiscard]] Status validate(const PersonStore &persons, double tolerance) const;
 
   private:

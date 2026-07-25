@@ -102,6 +102,73 @@ void fill_m5_metrics(macro_sim_m5_metrics &output,
     output.bank_failures = metrics.bank_failures;
 }
 
+void fill_m6_metrics(macro_sim_m6_metrics &output,
+                     const macro_sim::simulation::M6Metrics &metrics) noexcept {
+    output.reserved = 0;
+    fill_m5_metrics(output.economy, metrics.economy);
+#define MACRO_SIM_FILL_M6(field) output.field = metrics.field
+    MACRO_SIM_FILL_M6(bond_outstanding_face);
+    MACRO_SIM_FILL_M6(bond_market_value);
+    MACRO_SIM_FILL_M6(bond_issuance);
+    MACRO_SIM_FILL_M6(bond_redemption);
+    MACRO_SIM_FILL_M6(bond_coupon_paid);
+    MACRO_SIM_FILL_M6(firm_equity_market_cap);
+    MACRO_SIM_FILL_M6(bank_equity_market_cap);
+    MACRO_SIM_FILL_M6(equity_turnover);
+    MACRO_SIM_FILL_M6(primary_equity_raised);
+    MACRO_SIM_FILL_M6(margin_principal);
+    MACRO_SIM_FILL_M6(margin_originated);
+    MACRO_SIM_FILL_M6(margin_repaid);
+    MACRO_SIM_FILL_M6(margin_writeoffs);
+    MACRO_SIM_FILL_M6(total_firm_book_equity);
+    MACRO_SIM_FILL_M6(clearing_residual);
+    MACRO_SIM_FILL_M6(sector_retool_capital);
+    MACRO_SIM_FILL_M6(active_security_lots);
+    MACRO_SIM_FILL_M6(household_bankruptcies);
+    MACRO_SIM_FILL_M6(firm_births);
+    MACRO_SIM_FILL_M6(firm_exits);
+    MACRO_SIM_FILL_M6(firm_defaults);
+    MACRO_SIM_FILL_M6(sector_switches);
+    MACRO_SIM_FILL_M6(bank_births);
+    MACRO_SIM_FILL_M6(bank_equity_resolutions);
+#undef MACRO_SIM_FILL_M6
+}
+
+void fill_m7_metrics(macro_sim_m7_metrics &output,
+                     const macro_sim::simulation::M7Metrics &metrics) noexcept {
+    output.reserved = 0;
+    fill_m6_metrics(output.economy, metrics.economy);
+#define MACRO_SIM_FILL_M7(field) output.field = metrics.field
+    MACRO_SIM_FILL_M7(population);
+    MACRO_SIM_FILL_M7(births);
+    MACRO_SIM_FILL_M7(deaths);
+    MACRO_SIM_FILL_M7(households_with_members);
+    MACRO_SIM_FILL_M7(mean_household_size);
+    MACRO_SIM_FILL_M7(working_age_share);
+    MACRO_SIM_FILL_M7(dependency_ratio);
+    MACRO_SIM_FILL_M7(estates_settled);
+    MACRO_SIM_FILL_M7(beneficial_lots_transferred);
+    MACRO_SIM_FILL_M7(inheritance_tax_share);
+    MACRO_SIM_FILL_M7(beneficial_projection_error);
+    MACRO_SIM_FILL_M7(employed_fte);
+    MACRO_SIM_FILL_M7(employed_heads);
+    MACRO_SIM_FILL_M7(unemployment);
+    MACRO_SIM_FILL_M7(unemployment_rate);
+    MACRO_SIM_FILL_M7(suspended);
+    MACRO_SIM_FILL_M7(job_guarantee);
+    MACRO_SIM_FILL_M7(out_of_labor_force);
+    MACRO_SIM_FILL_M7(labor_supply);
+    MACRO_SIM_FILL_M7(vacancies);
+    MACRO_SIM_FILL_M7(underemployed_heads);
+    MACRO_SIM_FILL_M7(underemployment_hours);
+    MACRO_SIM_FILL_M7(hires);
+    MACRO_SIM_FILL_M7(separations);
+    MACRO_SIM_FILL_M7(marriages);
+    MACRO_SIM_FILL_M7(divorces);
+    MACRO_SIM_FILL_M7(widowhoods);
+#undef MACRO_SIM_FILL_M7
+}
+
 bool valid_flag(std::uint32_t value) noexcept { return value <= 1; }
 
 } // namespace
@@ -111,7 +178,8 @@ uint32_t macro_sim_abi_version(void) { return macro_sim::abi_version(); }
 uint64_t macro_sim_capabilities(void) {
     return MACRO_SIM_CAPABILITY_M2_ACCOUNTING | MACRO_SIM_CAPABILITY_M3_ALGORITHMS |
            MACRO_SIM_CAPABILITY_M4_TICK | MACRO_SIM_CAPABILITY_M5_MONETARY |
-           MACRO_SIM_CAPABILITY_M6_SECURITIES;
+           MACRO_SIM_CAPABILITY_M6_SECURITIES |
+           MACRO_SIM_CAPABILITY_M7_POPULATION;
 }
 
 const char *macro_sim_engine_version(void) { return macro_sim::kEngineVersion.data(); }
@@ -809,34 +877,7 @@ macro_sim_status macro_sim_m6_advance(macro_sim_session *session, uint64_t tick_
     output->scratch_capacity_signature = value.scratch_capacity_signature;
     output->transfer_count = value.transfer_count;
     output->trade_count = value.trade_count;
-    output->metrics.reserved = 0;
-    fill_m5_metrics(output->metrics.economy, metrics.economy);
-#define M6_METRIC(field) output->metrics.field = metrics.field
-    M6_METRIC(bond_outstanding_face);
-    M6_METRIC(bond_market_value);
-    M6_METRIC(bond_issuance);
-    M6_METRIC(bond_redemption);
-    M6_METRIC(bond_coupon_paid);
-    M6_METRIC(firm_equity_market_cap);
-    M6_METRIC(bank_equity_market_cap);
-    M6_METRIC(equity_turnover);
-    M6_METRIC(primary_equity_raised);
-    M6_METRIC(margin_principal);
-    M6_METRIC(margin_originated);
-    M6_METRIC(margin_repaid);
-    M6_METRIC(margin_writeoffs);
-    M6_METRIC(total_firm_book_equity);
-    M6_METRIC(clearing_residual);
-    M6_METRIC(sector_retool_capital);
-    M6_METRIC(active_security_lots);
-    M6_METRIC(household_bankruptcies);
-    M6_METRIC(firm_births);
-    M6_METRIC(firm_exits);
-    M6_METRIC(firm_defaults);
-    M6_METRIC(sector_switches);
-    M6_METRIC(bank_births);
-    M6_METRIC(bank_equity_resolutions);
-#undef M6_METRIC
+    fill_m6_metrics(output->metrics, metrics);
     return status(MACRO_SIM_OK, "");
 }
 
@@ -1010,6 +1051,593 @@ macro_sim_status macro_sim_m6_firm_statements(const macro_sim_session *session,
         target.borrowing_base_proxy = statement.borrowing_base_proxy;
         target.borrowing_base_headroom = statement.borrowing_base_headroom;
         target.earnings = statement.earnings;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_genesis(
+    macro_sim_session *session,
+    const macro_sim_m7_genesis_options *options
+) {
+    if (session == nullptr || options == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and M7 genesis options are required"
+        );
+    }
+    const auto &financial_options = options->financial;
+    if (options->struct_size != sizeof(macro_sim_m7_genesis_options) ||
+        financial_options.struct_size !=
+            sizeof(macro_sim_m6_genesis_options) ||
+        financial_options.matching_protocol >
+            MACRO_SIM_M4_MATCH_PRICE_SORTED ||
+        !valid_flag(financial_options.stochastic) ||
+        !valid_flag(financial_options.bonds) ||
+        !valid_flag(financial_options.firm_equity) ||
+        !valid_flag(financial_options.margin_credit) ||
+        !valid_flag(financial_options.firm_dynamics) ||
+        !valid_flag(financial_options.bank_dynamics) ||
+        financial_options.reserved != 0 ||
+        financial_options.reserved_2 != 0) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "M7 genesis options are invalid"
+        );
+    }
+
+    macro_sim::simulation::M7SimulationSpec spec;
+    auto &financial = spec.financial_economy;
+    auto &monetary = financial.monetary_economy;
+    auto &real = monetary.real_economy;
+    real.vertical = macro_sim::simulation::M4Vertical::capital_fiscal;
+    real.economy = macro_sim::EconomyId(financial_options.economy_id);
+    real.currency = macro_sim::CurrencyId(financial_options.currency_id);
+    real.market_protocol =
+        static_cast<macro_sim::algorithms::MatchingProtocol>(
+            financial_options.matching_protocol
+        );
+    real.stochastic = financial_options.stochastic != 0;
+    real.consumption_firms = financial_options.consumption_firms;
+    real.capital_firms = financial_options.capital_firms;
+    real.seed = financial_options.seed;
+    real.requested_capabilities =
+        macro_sim::simulation::capability_bit(
+            macro_sim::simulation::M4Capability::physical_capital
+        ) |
+        macro_sim::simulation::capability_bit(
+            macro_sim::simulation::M4Capability::government
+        );
+    monetary.rules.bank_count = financial_options.banks;
+    monetary.rules.opening_capital_per_bank =
+        financial_options.opening_capital_per_bank;
+    monetary.initial_policy_rate = financial_options.initial_policy_rate;
+    financial.rules.bonds = financial_options.bonds != 0;
+    financial.rules.firm_equity =
+        financial_options.firm_equity != 0;
+    financial.rules.margin_credit =
+        financial_options.margin_credit != 0;
+    financial.rules.firm_dynamics =
+        financial_options.firm_dynamics != 0;
+    financial.rules.bank_dynamics =
+        financial_options.bank_dynamics != 0;
+    financial.rules.watchlist_size =
+        financial_options.watchlist_size;
+    spec.population.initial_persons = options->initial_persons;
+    spec.population.start_calendar_day = options->start_calendar_day;
+    spec.population.target_household_size =
+        options->target_household_size;
+    return status(session->engine.initialize_m7(spec));
+}
+
+macro_sim_status macro_sim_m7_update_policy(
+    macro_sim_session *session, const macro_sim_m7_policy *policy
+) {
+    if (session == nullptr || policy == nullptr ||
+        policy->struct_size != sizeof(macro_sim_m7_policy) ||
+        policy->reserved != 0) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and valid M7 policy are required"
+        );
+    }
+    macro_sim::simulation::M7PolicyState value;
+    value.inheritance_tax_rate = policy->inheritance_tax_rate;
+    return status(session->engine.update_m7_policy(value));
+}
+
+macro_sim_status
+macro_sim_m7_policy_defaults(macro_sim_m7_policy *output) {
+    if (output == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "M7 policy output is required"
+        );
+    }
+    const macro_sim::simulation::M7PolicyState value;
+    std::memset(output, 0, sizeof(*output));
+    output->struct_size = sizeof(*output);
+    output->inheritance_tax_rate = value.inheritance_tax_rate;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status
+macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
+    if (output == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "M7 rules output is required"
+        );
+    }
+    const macro_sim::simulation::M7Rules value;
+    std::memset(output, 0, sizeof(*output));
+    output->struct_size = sizeof(*output);
+    output->working_age = value.working_age;
+    output->retirement_age = value.retirement_age;
+    output->maximum_age = value.vital_rates.maximum_age;
+#define MACRO_SIM_M7_RULE_FLAG(field) \
+    output->field = value.field ? 1U : 0U
+    MACRO_SIM_M7_RULE_FLAG(beneficial_ownership);
+    MACRO_SIM_M7_RULE_FLAG(estates);
+    MACRO_SIM_M7_RULE_FLAG(fertility);
+    MACRO_SIM_M7_RULE_FLAG(mortality);
+    MACRO_SIM_M7_RULE_FLAG(persistent_labor);
+    MACRO_SIM_M7_RULE_FLAG(fractional_hours);
+    MACRO_SIM_M7_RULE_FLAG(second_jobs);
+    MACRO_SIM_M7_RULE_FLAG(suspensions);
+    MACRO_SIM_M7_RULE_FLAG(frictional_search);
+    MACRO_SIM_M7_RULE_FLAG(relationships);
+    MACRO_SIM_M7_RULE_FLAG(marriage);
+    MACRO_SIM_M7_RULE_FLAG(divorce);
+    MACRO_SIM_M7_RULE_FLAG(household_lifecycle);
+#undef MACRO_SIM_M7_RULE_FLAG
+    output->forbid_same_household =
+        value.marriage_rules.forbid_same_household ? 1U : 0U;
+    output->forbid_close_kin =
+        value.marriage_rules.forbid_close_kin ? 1U : 0U;
+    output->suspension_timeout_days =
+        value.suspension_timeout_days;
+    output->marriage_interval_days = value.marriage_interval_days;
+    output->marriage_minimum_age =
+        value.marriage_rules.minimum_age;
+    output->marriage_maximum_age =
+        value.marriage_rules.maximum_age;
+    output->marriage_maximum_age_gap =
+        value.marriage_rules.maximum_age_gap;
+    output->makeham_a = value.vital_rates.makeham_a;
+    output->gompertz_b = value.vital_rates.gompertz_b;
+    output->gompertz_theta = value.vital_rates.gompertz_theta;
+    output->infant_extra = value.vital_rates.infant_extra;
+    output->total_fertility_rate =
+        value.vital_rates.total_fertility_rate;
+    output->fertility_peak_age =
+        value.vital_rates.fertility_peak_age;
+    output->fertility_width = value.vital_rates.fertility_width;
+    output->sex_ratio_at_birth =
+        value.vital_rates.sex_ratio_at_birth;
+    output->vital_interval = value.vital_rates.interval;
+    output->annual_churn = value.annual_churn;
+    output->firing_adjustment = value.firing_adjustment;
+    output->layoff_band = value.layoff_band;
+    output->target_smoothing = value.target_smoothing;
+    output->search_intensity = value.search_intensity;
+    output->annual_marriage_rate = value.annual_marriage_rate;
+    output->annual_divorce_rate = value.annual_divorce_rate;
+    output->marriage_preferred_age_gap =
+        value.marriage_rules.preferred_age_gap;
+    output->marriage_age_gap_penalty =
+        value.marriage_rules.age_gap_penalty;
+    output->marriage_assortativity =
+        value.marriage_rules.assortativity;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_update_rules(
+    macro_sim_session *session, const macro_sim_m7_rules *rules
+) {
+    if (session == nullptr || rules == nullptr ||
+        rules->struct_size != sizeof(macro_sim_m7_rules) ||
+        !valid_flag(rules->beneficial_ownership) ||
+        !valid_flag(rules->estates) ||
+        !valid_flag(rules->fertility) ||
+        !valid_flag(rules->mortality) ||
+        !valid_flag(rules->persistent_labor) ||
+        !valid_flag(rules->fractional_hours) ||
+        !valid_flag(rules->second_jobs) ||
+        !valid_flag(rules->suspensions) ||
+        !valid_flag(rules->frictional_search) ||
+        !valid_flag(rules->relationships) ||
+        !valid_flag(rules->marriage) ||
+        !valid_flag(rules->divorce) ||
+        !valid_flag(rules->household_lifecycle) ||
+        !valid_flag(rules->forbid_same_household) ||
+        !valid_flag(rules->forbid_close_kin)) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and valid M7 rules are required"
+        );
+    }
+    macro_sim::simulation::M7Rules value;
+    value.working_age = rules->working_age;
+    value.retirement_age = rules->retirement_age;
+    value.vital_rates.maximum_age = rules->maximum_age;
+#define MACRO_SIM_COPY_M7_FLAG(field) value.field = rules->field != 0
+    MACRO_SIM_COPY_M7_FLAG(beneficial_ownership);
+    MACRO_SIM_COPY_M7_FLAG(estates);
+    MACRO_SIM_COPY_M7_FLAG(fertility);
+    MACRO_SIM_COPY_M7_FLAG(mortality);
+    MACRO_SIM_COPY_M7_FLAG(persistent_labor);
+    MACRO_SIM_COPY_M7_FLAG(fractional_hours);
+    MACRO_SIM_COPY_M7_FLAG(second_jobs);
+    MACRO_SIM_COPY_M7_FLAG(suspensions);
+    MACRO_SIM_COPY_M7_FLAG(frictional_search);
+    MACRO_SIM_COPY_M7_FLAG(relationships);
+    MACRO_SIM_COPY_M7_FLAG(marriage);
+    MACRO_SIM_COPY_M7_FLAG(divorce);
+    MACRO_SIM_COPY_M7_FLAG(household_lifecycle);
+#undef MACRO_SIM_COPY_M7_FLAG
+    value.marriage_rules.forbid_same_household =
+        rules->forbid_same_household != 0;
+    value.marriage_rules.forbid_close_kin =
+        rules->forbid_close_kin != 0;
+    value.suspension_timeout_days =
+        rules->suspension_timeout_days;
+    value.marriage_interval_days = rules->marriage_interval_days;
+    value.marriage_rules.minimum_age =
+        rules->marriage_minimum_age;
+    value.marriage_rules.maximum_age =
+        rules->marriage_maximum_age;
+    value.marriage_rules.maximum_age_gap =
+        rules->marriage_maximum_age_gap;
+    value.vital_rates.makeham_a = rules->makeham_a;
+    value.vital_rates.gompertz_b = rules->gompertz_b;
+    value.vital_rates.gompertz_theta = rules->gompertz_theta;
+    value.vital_rates.infant_extra = rules->infant_extra;
+    value.vital_rates.total_fertility_rate =
+        rules->total_fertility_rate;
+    value.vital_rates.fertility_peak_age =
+        rules->fertility_peak_age;
+    value.vital_rates.fertility_width = rules->fertility_width;
+    value.vital_rates.sex_ratio_at_birth =
+        rules->sex_ratio_at_birth;
+    value.vital_rates.interval = rules->vital_interval;
+    value.annual_churn = rules->annual_churn;
+    value.firing_adjustment = rules->firing_adjustment;
+    value.layoff_band = rules->layoff_band;
+    value.target_smoothing = rules->target_smoothing;
+    value.search_intensity = rules->search_intensity;
+    value.annual_marriage_rate = rules->annual_marriage_rate;
+    value.annual_divorce_rate = rules->annual_divorce_rate;
+    value.marriage_rules.preferred_age_gap =
+        rules->marriage_preferred_age_gap;
+    value.marriage_rules.age_gap_penalty =
+        rules->marriage_age_gap_penalty;
+    value.marriage_rules.assortativity =
+        rules->marriage_assortativity;
+    return status(session->engine.update_m7_rules(value));
+}
+
+macro_sim_status macro_sim_m7_advance(
+    macro_sim_session *session, uint64_t tick_count,
+    macro_sim_m7_advance_result *output
+) {
+    if (session == nullptr || output == nullptr ||
+        output->struct_size != sizeof(macro_sim_m7_advance_result) ||
+        output->metrics.struct_size != sizeof(macro_sim_m7_metrics) ||
+        output->metrics.economy.struct_size !=
+            sizeof(macro_sim_m6_metrics) ||
+        output->metrics.economy.economy.struct_size !=
+            sizeof(macro_sim_m5_metrics) ||
+        output->metrics.economy.economy.economy.struct_size !=
+            sizeof(macro_sim_m4_metrics)) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "session and initialized M7 result are required"
+        );
+    }
+    const auto result = session->engine.advance_m7_ticks(tick_count);
+    if (!result.ok()) {
+        return status(result.status());
+    }
+    const auto &value = *result.get_if();
+    output->reserved = 0;
+    output->first_tick = value.first_tick.value();
+    output->next_tick = value.next_tick.value();
+    output->advanced_ticks = value.advanced_ticks;
+    output->scratch_capacity_signature =
+        value.scratch_capacity_signature;
+    output->transfer_count = value.transfer_count;
+    output->trade_count = value.trade_count;
+    fill_m7_metrics(output->metrics, value.metrics);
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_state_digest(
+    const macro_sim_session *session, uint8_t *output,
+    size_t output_size
+) {
+    return macro_sim_m2_state_digest(session, output, output_size);
+}
+
+macro_sim_status macro_sim_m7_checkpoint_save(
+    const macro_sim_session *session, macro_sim_owned_buffer *output
+) {
+    return macro_sim_m2_checkpoint_save(session, output);
+}
+
+macro_sim_status macro_sim_m7_checkpoint_load(
+    macro_sim_session *session, const uint8_t *checkpoint,
+    size_t checkpoint_size
+) {
+    return macro_sim_m2_checkpoint_load(
+        session, checkpoint, checkpoint_size
+    );
+}
+
+macro_sim_status macro_sim_m7_person_count(
+    const macro_sim_session *session, size_t *output
+) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and output are required"
+        );
+    }
+    *output =
+        session->engine.population_runtime()->persons.total_count();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_persons(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_person *output, size_t capacity, size_t *written
+) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and person output are required"
+        );
+    }
+    const auto &rows =
+        session->engine.population_runtime()->persons.records();
+    const auto logical_size = rows.empty() ? 0 : rows.size() - 1;
+    *written = 0;
+    if (offset >= logical_size) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, logical_size - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index + 1];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.sex = static_cast<std::uint32_t>(source.sex);
+        target.id = source.id.value();
+        target.birth_day = source.birth_day;
+        target.death_day = source.death_day;
+        target.mother_id = source.mother.value();
+        target.father_id = source.father.value();
+        target.partner_id = source.partner.value();
+        target.guardian_id = source.guardian.value();
+        target.household_id = source.household.value();
+        target.marriage_start_day = source.marriage_start_day;
+        target.last_divorce_day = source.last_divorce_day;
+        target.last_widowed_day = source.last_widowed_day;
+        target.marriage_count = source.marriage_count;
+        target.efficiency = source.efficiency;
+        target.participating = source.participating ? 1U : 0U;
+        target.alive = source.alive ? 1U : 0U;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_membership_count(
+    const macro_sim_session *session, size_t *output
+) {
+    return macro_sim_m7_person_count(session, output);
+}
+
+macro_sim_status macro_sim_m7_memberships(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_membership *output, size_t capacity, size_t *written
+) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and membership output are required"
+        );
+    }
+    const auto *runtime = session->engine.population_runtime();
+    const auto &rows = runtime->persons.records();
+    const auto logical_size = rows.empty() ? 0 : rows.size() - 1;
+    *written = 0;
+    if (offset >= logical_size) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, logical_size - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &person = rows[offset + index + 1];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.person_id = person.id.value();
+        target.household_id =
+            runtime->membership.household_of(person.id).value();
+        target.alive = person.alive ? 1U : 0U;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_job_count(
+    const macro_sim_session *session, size_t *output
+) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and output are required"
+        );
+    }
+    const auto &rows =
+        session->engine.population_runtime()->employment.records();
+    *output = rows.empty() ? 0 : rows.size() - 1;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_jobs(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_job *output, size_t capacity, size_t *written
+) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and job output are required"
+        );
+    }
+    const auto &rows =
+        session->engine.population_runtime()->employment.records();
+    const auto logical_size = rows.empty() ? 0 : rows.size() - 1;
+    *written = 0;
+    if (offset >= logical_size) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, logical_size - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index + 1];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.id = source.id.value();
+        target.person_id = source.person.value();
+        target.firm_id = source.firm.value();
+        target.hire_day = source.hire_day;
+        target.separation_day = source.separation_day;
+        target.suspension_day = source.suspension_day;
+        target.separation_kind =
+            static_cast<std::uint32_t>(source.separation_kind);
+        target.wage = source.wage;
+        target.hours = source.hours;
+        target.secondary = source.secondary ? 1U : 0U;
+        target.suspended = source.suspended ? 1U : 0U;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_union_count(
+    const macro_sim_session *session, size_t *output
+) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and output are required"
+        );
+    }
+    *output =
+        session->engine.population_runtime()->relationships.unions().size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_unions(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_union *output, size_t capacity, size_t *written
+) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and union output are required"
+        );
+    }
+    const auto &rows =
+        session->engine.population_runtime()->relationships.unions();
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.event_id = source.event.value();
+        target.first_id = source.first.value();
+        target.second_id = source.second.value();
+        target.first_origin_household_id =
+            source.first_origin_household.value();
+        target.second_origin_household_id =
+            source.second_origin_household.value();
+        target.start_day = source.start_day;
+        target.end_day = source.end_day;
+        target.end_kind =
+            static_cast<std::uint32_t>(source.end_kind);
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_estate_count(
+    const macro_sim_session *session, size_t *output
+) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and output are required"
+        );
+    }
+    *output =
+        session->engine.population_runtime()->estates.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m7_estates(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_estate *output, size_t capacity, size_t *written
+) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.population_runtime() == nullptr) {
+        return status(
+            MACRO_SIM_INVALID_ARGUMENT,
+            "active M7 session and estate output are required"
+        );
+    }
+    const auto &rows =
+        session->engine.population_runtime()->estates;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.settled = source.settled ? 1U : 0U;
+        target.event_id = source.event.value();
+        target.deceased_id = source.deceased.value();
+        target.household_id = source.household.value();
+        target.opened_day = source.opened_day;
+        target.settled_day = source.settled_day;
+        target.transferred_lots = source.transferred_lots;
+        target.gross_share = source.gross_share;
+        target.tax_share = source.tax_share;
     }
     *written = count;
     return status(MACRO_SIM_OK, "");

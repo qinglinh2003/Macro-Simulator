@@ -299,6 +299,144 @@ nb::dict m6_result_to_python(const macro_sim::simulation::M6AdvanceResult &resul
     return output;
 }
 
+nb::dict m7_metrics_to_python(
+    const macro_sim::simulation::M7Metrics &metrics
+) {
+    nb::dict output;
+    output["economy"] = m6_metrics_to_python(metrics.economy);
+#define MACRO_SIM_M7_METRIC(field) output[#field] = metrics.field
+    MACRO_SIM_M7_METRIC(population);
+    MACRO_SIM_M7_METRIC(births);
+    MACRO_SIM_M7_METRIC(deaths);
+    MACRO_SIM_M7_METRIC(households_with_members);
+    MACRO_SIM_M7_METRIC(mean_household_size);
+    MACRO_SIM_M7_METRIC(working_age_share);
+    MACRO_SIM_M7_METRIC(dependency_ratio);
+    MACRO_SIM_M7_METRIC(estates_settled);
+    MACRO_SIM_M7_METRIC(beneficial_lots_transferred);
+    MACRO_SIM_M7_METRIC(inheritance_tax_share);
+    MACRO_SIM_M7_METRIC(beneficial_projection_error);
+    MACRO_SIM_M7_METRIC(employed_fte);
+    MACRO_SIM_M7_METRIC(employed_heads);
+    MACRO_SIM_M7_METRIC(unemployment);
+    MACRO_SIM_M7_METRIC(unemployment_rate);
+    MACRO_SIM_M7_METRIC(suspended);
+    MACRO_SIM_M7_METRIC(job_guarantee);
+    MACRO_SIM_M7_METRIC(out_of_labor_force);
+    MACRO_SIM_M7_METRIC(labor_supply);
+    MACRO_SIM_M7_METRIC(vacancies);
+    MACRO_SIM_M7_METRIC(underemployed_heads);
+    MACRO_SIM_M7_METRIC(underemployment_hours);
+    MACRO_SIM_M7_METRIC(hires);
+    MACRO_SIM_M7_METRIC(separations);
+    MACRO_SIM_M7_METRIC(marriages);
+    MACRO_SIM_M7_METRIC(divorces);
+    MACRO_SIM_M7_METRIC(widowhoods);
+#undef MACRO_SIM_M7_METRIC
+    return output;
+}
+
+nb::dict m7_result_to_python(
+    const macro_sim::simulation::M7AdvanceResult &result
+) {
+    nb::dict output;
+    output["first_tick"] = result.first_tick.value();
+    output["next_tick"] = result.next_tick.value();
+    output["advanced_ticks"] = result.advanced_ticks;
+    output["scratch_capacity_signature"] =
+        result.scratch_capacity_signature;
+    output["transfer_count"] = result.transfer_count;
+    output["trade_count"] = result.trade_count;
+    output["metrics"] = m7_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m6_snapshot_to_python(
+    const macro_sim::EngineSession &session
+);
+
+nb::dict m7_snapshot_to_python(
+    const macro_sim::EngineSession &session
+) {
+    const auto *runtime = session.population_runtime();
+    if (runtime == nullptr) {
+        throw std::runtime_error(
+            "invalid_handle: session has no active M7 simulation"
+        );
+    }
+    auto output = m6_snapshot_to_python(session);
+    nb::list persons;
+    for (std::size_t index = 1;
+         index < runtime->persons.records().size(); ++index) {
+        const auto &row = runtime->persons.records()[index];
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["sex"] = static_cast<std::uint8_t>(row.sex);
+        item["birth_day"] = row.birth_day;
+        item["death_day"] = row.death_day;
+        item["mother_id"] = row.mother.value();
+        item["father_id"] = row.father.value();
+        item["partner_id"] = row.partner.value();
+        item["guardian_id"] = row.guardian.value();
+        item["household_id"] = row.household.value();
+        item["efficiency"] = row.efficiency;
+        item["participating"] = row.participating;
+        item["alive"] = row.alive;
+        persons.append(std::move(item));
+    }
+    nb::list jobs;
+    for (std::size_t index = 1;
+         index < runtime->employment.records().size(); ++index) {
+        const auto &row = runtime->employment.records()[index];
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["person_id"] = row.person.value();
+        item["firm_id"] = row.firm.value();
+        item["hire_day"] = row.hire_day;
+        item["separation_day"] = row.separation_day;
+        item["wage"] = row.wage;
+        item["hours"] = row.hours;
+        item["secondary"] = row.secondary;
+        item["suspended"] = row.suspended;
+        item["active"] = row.active;
+        jobs.append(std::move(item));
+    }
+    nb::list unions;
+    for (const auto &row : runtime->relationships.unions()) {
+        nb::dict item;
+        item["event_id"] = row.event.value();
+        item["first_id"] = row.first.value();
+        item["second_id"] = row.second.value();
+        item["start_day"] = row.start_day;
+        item["end_day"] = row.end_day;
+        item["end_kind"] =
+            static_cast<std::uint8_t>(row.end_kind);
+        item["active"] = row.active;
+        unions.append(std::move(item));
+    }
+    nb::list estates;
+    for (const auto &row : runtime->estates) {
+        nb::dict item;
+        item["event_id"] = row.event.value();
+        item["deceased_id"] = row.deceased.value();
+        item["household_id"] = row.household.value();
+        item["opened_day"] = row.opened_day;
+        item["settled_day"] = row.settled_day;
+        item["transferred_lots"] = row.transferred_lots;
+        item["gross_share"] = row.gross_share;
+        item["tax_share"] = row.tax_share;
+        item["settled"] = row.settled;
+        estates.append(std::move(item));
+    }
+    output["persons"] = std::move(persons);
+    output["jobs"] = std::move(jobs);
+    output["unions"] = std::move(unions);
+    output["estates"] = std::move(estates);
+    output["calendar_day"] = runtime->current_calendar_day;
+    output["metrics"] = m7_metrics_to_python(runtime->last_metrics);
+    return output;
+}
+
 nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
     const auto *runtime = session.securities_runtime();
     if (runtime == nullptr) {
@@ -728,6 +866,120 @@ NB_MODULE(_native, module) {
                 &macro_sim::simulation::M6SimulationSpec::monetary_economy)
         .def_rw("policy", &macro_sim::simulation::M6SimulationSpec::policy)
         .def_rw("rules", &macro_sim::simulation::M6SimulationSpec::rules);
+    auto vital = nb::class_<macro_sim::algorithms::VitalRates>(
+        module, "VitalRates"
+    ).def(nb::init<>());
+#define MACRO_SIM_BIND_VITAL(field) \
+    vital.def_rw(#field, &macro_sim::algorithms::VitalRates::field)
+    MACRO_SIM_BIND_VITAL(makeham_a);
+    MACRO_SIM_BIND_VITAL(gompertz_b);
+    MACRO_SIM_BIND_VITAL(gompertz_theta);
+    MACRO_SIM_BIND_VITAL(infant_extra);
+    MACRO_SIM_BIND_VITAL(total_fertility_rate);
+    MACRO_SIM_BIND_VITAL(fertility_peak_age);
+    MACRO_SIM_BIND_VITAL(fertility_width);
+    MACRO_SIM_BIND_VITAL(sex_ratio_at_birth);
+    MACRO_SIM_BIND_VITAL(maximum_age);
+    MACRO_SIM_BIND_VITAL(interval);
+#undef MACRO_SIM_BIND_VITAL
+    auto marriage_rules =
+        nb::class_<macro_sim::core::MarriageRules>(
+            module, "MarriageRules"
+        )
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_MARRIAGE(field) \
+    marriage_rules.def_rw( \
+        #field, &macro_sim::core::MarriageRules::field \
+    )
+    MACRO_SIM_BIND_MARRIAGE(minimum_age);
+    MACRO_SIM_BIND_MARRIAGE(maximum_age);
+    MACRO_SIM_BIND_MARRIAGE(maximum_age_gap);
+    MACRO_SIM_BIND_MARRIAGE(preferred_age_gap);
+    MACRO_SIM_BIND_MARRIAGE(age_gap_penalty);
+    MACRO_SIM_BIND_MARRIAGE(assortativity);
+    MACRO_SIM_BIND_MARRIAGE(forbid_same_household);
+    MACRO_SIM_BIND_MARRIAGE(forbid_close_kin);
+#undef MACRO_SIM_BIND_MARRIAGE
+    nb::class_<macro_sim::simulation::M7PolicyState>(
+        module, "M7Policy"
+    )
+        .def(nb::init<>())
+        .def_rw(
+            "inheritance_tax_rate",
+            &macro_sim::simulation::M7PolicyState::
+                inheritance_tax_rate
+        );
+    auto m7_rules = nb::class_<macro_sim::simulation::M7Rules>(
+        module, "M7Rules"
+    ).def(nb::init<>());
+#define MACRO_SIM_BIND_M7_RULE(field) \
+    m7_rules.def_rw(#field, &macro_sim::simulation::M7Rules::field)
+    MACRO_SIM_BIND_M7_RULE(vital_rates);
+    MACRO_SIM_BIND_M7_RULE(working_age);
+    MACRO_SIM_BIND_M7_RULE(retirement_age);
+    MACRO_SIM_BIND_M7_RULE(beneficial_ownership);
+    MACRO_SIM_BIND_M7_RULE(estates);
+    MACRO_SIM_BIND_M7_RULE(fertility);
+    MACRO_SIM_BIND_M7_RULE(mortality);
+    MACRO_SIM_BIND_M7_RULE(persistent_labor);
+    MACRO_SIM_BIND_M7_RULE(fractional_hours);
+    MACRO_SIM_BIND_M7_RULE(second_jobs);
+    MACRO_SIM_BIND_M7_RULE(suspensions);
+    MACRO_SIM_BIND_M7_RULE(annual_churn);
+    MACRO_SIM_BIND_M7_RULE(firing_adjustment);
+    MACRO_SIM_BIND_M7_RULE(layoff_band);
+    MACRO_SIM_BIND_M7_RULE(target_smoothing);
+    MACRO_SIM_BIND_M7_RULE(suspension_timeout_days);
+    MACRO_SIM_BIND_M7_RULE(frictional_search);
+    MACRO_SIM_BIND_M7_RULE(search_intensity);
+    MACRO_SIM_BIND_M7_RULE(relationships);
+    MACRO_SIM_BIND_M7_RULE(marriage);
+    MACRO_SIM_BIND_M7_RULE(divorce);
+    MACRO_SIM_BIND_M7_RULE(household_lifecycle);
+    MACRO_SIM_BIND_M7_RULE(marriage_interval_days);
+    MACRO_SIM_BIND_M7_RULE(annual_marriage_rate);
+    MACRO_SIM_BIND_M7_RULE(annual_divorce_rate);
+    MACRO_SIM_BIND_M7_RULE(marriage_rules);
+#undef MACRO_SIM_BIND_M7_RULE
+    nb::class_<macro_sim::simulation::M7PopulationSpec>(
+        module, "M7PopulationSpec"
+    )
+        .def(nb::init<>())
+        .def_rw(
+            "initial_persons",
+            &macro_sim::simulation::M7PopulationSpec::initial_persons
+        )
+        .def_rw(
+            "start_calendar_day",
+            &macro_sim::simulation::M7PopulationSpec::
+                start_calendar_day
+        )
+        .def_rw(
+            "target_household_size",
+            &macro_sim::simulation::M7PopulationSpec::
+                target_household_size
+        );
+    nb::class_<macro_sim::simulation::M7SimulationSpec>(
+        module, "M7SimulationSpec"
+    )
+        .def(nb::init<>())
+        .def_rw(
+            "financial_economy",
+            &macro_sim::simulation::M7SimulationSpec::
+                financial_economy
+        )
+        .def_rw(
+            "policy",
+            &macro_sim::simulation::M7SimulationSpec::policy
+        )
+        .def_rw(
+            "rules",
+            &macro_sim::simulation::M7SimulationSpec::rules
+        )
+        .def_rw(
+            "population",
+            &macro_sim::simulation::M7SimulationSpec::population
+        );
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")
         .value("HOUSEHOLD", macro_sim::core::OwnerKind::household)
         .value("FIRM", macro_sim::core::OwnerKind::firm)
@@ -917,6 +1169,14 @@ NB_MODULE(_native, module) {
             },
             nb::arg("spec"))
         .def(
+            "initialize_m7",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::M7SimulationSpec &spec) {
+                nb::gil_scoped_release release;
+                require_status(session.initialize_m7(spec));
+            },
+            nb::arg("spec"))
+        .def(
             "update_m5_policy",
             [](macro_sim::EngineSession &session,
                const macro_sim::simulation::M5PolicyState &policy) {
@@ -930,6 +1190,20 @@ NB_MODULE(_native, module) {
                 require_status(session.update_m6_policy(policy));
             },
             nb::arg("policy"))
+        .def(
+            "update_m7_policy",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::M7PolicyState &policy) {
+                require_status(session.update_m7_policy(policy));
+            },
+            nb::arg("policy"))
+        .def(
+            "update_m7_rules",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::M7Rules &rules) {
+                require_status(session.update_m7_rules(rules));
+            },
+            nb::arg("rules"))
         .def(
             "advance_ticks",
             [](macro_sim::EngineSession &session, std::uint64_t count,
@@ -960,6 +1234,18 @@ NB_MODULE(_native, module) {
                 return m6_result_to_python(*result.get_if());
             },
             nb::arg("count"))
+        .def(
+            "advance_m7_ticks",
+            [](macro_sim::EngineSession &session,
+               std::uint64_t count) {
+                auto result = [&session, count]() {
+                    nb::gil_scoped_release release;
+                    return session.advance_m7_ticks(count);
+                }();
+                require_status(result.status());
+                return m7_result_to_python(*result.get_if());
+            },
+            nb::arg("count"))
         .def("simulation_snapshot",
              [](const macro_sim::EngineSession &session) {
                  return m4_snapshot_to_python(session);
@@ -971,6 +1257,10 @@ NB_MODULE(_native, module) {
         .def("m6_snapshot",
              [](const macro_sim::EngineSession &session) {
                  return m6_snapshot_to_python(session);
+             })
+        .def("m7_snapshot",
+             [](const macro_sim::EngineSession &session) {
+                 return m7_snapshot_to_python(session);
              })
         .def(
             "apply_batch",
@@ -1017,4 +1307,5 @@ NB_MODULE(_native, module) {
             }
         });
     module.attr("M6Session") = module.attr("EngineSession");
+    module.attr("M7Session") = module.attr("EngineSession");
 }

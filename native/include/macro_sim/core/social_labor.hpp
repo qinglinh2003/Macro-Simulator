@@ -71,6 +71,9 @@ class RelationshipBook final {
     [[nodiscard]] std::span<const PersonId>
     children(PersonId parent) const noexcept;
     [[nodiscard]] const std::vector<UnionRecord> &unions() const noexcept;
+    [[nodiscard]] Status
+    replace_unions(const PersonStore &persons,
+                   std::vector<UnionRecord> unions);
     [[nodiscard]] Status validate(const PersonStore &persons) const;
 
   private:
@@ -136,6 +139,8 @@ class EmploymentBook final {
     [[nodiscard]] std::span<const JobId>
     roster(FirmId firm) const noexcept;
     [[nodiscard]] const std::vector<JobRecord> &records() const noexcept;
+    [[nodiscard]] Status
+    replace_records(std::vector<JobRecord> records);
     [[nodiscard]] std::uint64_t next_id() const noexcept;
     [[nodiscard]] std::size_t active_count() const noexcept;
     [[nodiscard]] std::size_t suspended_count() const noexcept;

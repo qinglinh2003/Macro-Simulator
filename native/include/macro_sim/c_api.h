@@ -16,6 +16,7 @@ extern "C" {
 #define MACRO_SIM_CAPABILITY_M4_TICK (UINT64_C(1) << 2)
 #define MACRO_SIM_CAPABILITY_M5_MONETARY (UINT64_C(1) << 3)
 #define MACRO_SIM_CAPABILITY_M6_SECURITIES (UINT64_C(1) << 4)
+#define MACRO_SIM_CAPABILITY_M7_POPULATION (UINT64_C(1) << 5)
 #define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
 #define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
@@ -446,6 +447,181 @@ typedef struct macro_sim_m6_firm_statement {
     double earnings;
 } macro_sim_m6_firm_statement;
 
+typedef struct macro_sim_m7_genesis_options {
+    uint32_t struct_size;
+    int32_t start_calendar_day;
+    macro_sim_m6_genesis_options financial;
+    uint64_t initial_persons;
+    double target_household_size;
+} macro_sim_m7_genesis_options;
+
+typedef struct macro_sim_m7_policy {
+    uint32_t struct_size;
+    uint32_t reserved;
+    double inheritance_tax_rate;
+} macro_sim_m7_policy;
+
+typedef struct macro_sim_m7_rules {
+    uint32_t struct_size;
+    uint32_t working_age;
+    uint32_t retirement_age;
+    uint32_t maximum_age;
+    uint32_t beneficial_ownership;
+    uint32_t estates;
+    uint32_t fertility;
+    uint32_t mortality;
+    uint32_t persistent_labor;
+    uint32_t fractional_hours;
+    uint32_t second_jobs;
+    uint32_t suspensions;
+    uint32_t frictional_search;
+    uint32_t relationships;
+    uint32_t marriage;
+    uint32_t divorce;
+    uint32_t household_lifecycle;
+    uint32_t forbid_same_household;
+    uint32_t forbid_close_kin;
+    uint32_t suspension_timeout_days;
+    uint32_t marriage_interval_days;
+    uint32_t marriage_minimum_age;
+    uint32_t marriage_maximum_age;
+    uint32_t marriage_maximum_age_gap;
+    double makeham_a;
+    double gompertz_b;
+    double gompertz_theta;
+    double infant_extra;
+    double total_fertility_rate;
+    double fertility_peak_age;
+    double fertility_width;
+    double sex_ratio_at_birth;
+    double vital_interval;
+    double annual_churn;
+    double firing_adjustment;
+    double layoff_band;
+    double target_smoothing;
+    double search_intensity;
+    double annual_marriage_rate;
+    double annual_divorce_rate;
+    double marriage_preferred_age_gap;
+    double marriage_age_gap_penalty;
+    double marriage_assortativity;
+} macro_sim_m7_rules;
+
+typedef struct macro_sim_m7_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    macro_sim_m6_metrics economy;
+    uint64_t population;
+    uint64_t births;
+    uint64_t deaths;
+    uint64_t households_with_members;
+    double mean_household_size;
+    double working_age_share;
+    double dependency_ratio;
+    uint64_t estates_settled;
+    uint64_t beneficial_lots_transferred;
+    double inheritance_tax_share;
+    double beneficial_projection_error;
+    double employed_fte;
+    double employed_heads;
+    double unemployment;
+    double unemployment_rate;
+    double suspended;
+    double job_guarantee;
+    double out_of_labor_force;
+    double labor_supply;
+    double vacancies;
+    double underemployed_heads;
+    double underemployment_hours;
+    double hires;
+    double separations;
+    uint64_t marriages;
+    uint64_t divorces;
+    uint64_t widowhoods;
+} macro_sim_m7_metrics;
+
+typedef struct macro_sim_m7_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t scratch_capacity_signature;
+    uint64_t transfer_count;
+    uint64_t trade_count;
+    macro_sim_m7_metrics metrics;
+} macro_sim_m7_advance_result;
+
+typedef struct macro_sim_m7_person {
+    uint32_t struct_size;
+    uint32_t sex;
+    uint64_t id;
+    int32_t birth_day;
+    int32_t death_day;
+    uint64_t mother_id;
+    uint64_t father_id;
+    uint64_t partner_id;
+    uint64_t guardian_id;
+    uint64_t household_id;
+    int32_t marriage_start_day;
+    int32_t last_divorce_day;
+    int32_t last_widowed_day;
+    uint32_t marriage_count;
+    double efficiency;
+    uint32_t participating;
+    uint32_t alive;
+} macro_sim_m7_person;
+
+typedef struct macro_sim_m7_membership {
+    uint32_t struct_size;
+    uint32_t alive;
+    uint64_t person_id;
+    uint64_t household_id;
+} macro_sim_m7_membership;
+
+typedef struct macro_sim_m7_job {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t id;
+    uint64_t person_id;
+    uint64_t firm_id;
+    int32_t hire_day;
+    int32_t separation_day;
+    int32_t suspension_day;
+    uint32_t separation_kind;
+    double wage;
+    double hours;
+    uint32_t secondary;
+    uint32_t suspended;
+} macro_sim_m7_job;
+
+typedef struct macro_sim_m7_union {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t event_id;
+    uint64_t first_id;
+    uint64_t second_id;
+    uint64_t first_origin_household_id;
+    uint64_t second_origin_household_id;
+    int32_t start_day;
+    int32_t end_day;
+    uint32_t end_kind;
+    uint32_t reserved;
+} macro_sim_m7_union;
+
+typedef struct macro_sim_m7_estate {
+    uint32_t struct_size;
+    uint32_t settled;
+    uint64_t event_id;
+    uint64_t deceased_id;
+    uint64_t household_id;
+    int32_t opened_day;
+    int32_t settled_day;
+    uint64_t transferred_lots;
+    double gross_share;
+    double tax_share;
+} macro_sim_m7_estate;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -542,6 +718,50 @@ macro_sim_m6_firm_statement_count(const macro_sim_session *session, size_t *outp
 MACRO_SIM_C_API macro_sim_status macro_sim_m6_firm_statements(
     const macro_sim_session *session, size_t offset,
     macro_sim_m6_firm_statement *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_genesis(
+    macro_sim_session *session, const macro_sim_m7_genesis_options *options);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_update_policy(
+    macro_sim_session *session, const macro_sim_m7_policy *policy);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_policy_defaults(macro_sim_m7_policy *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_update_rules(
+    macro_sim_session *session, const macro_sim_m7_rules *rules);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_rules_defaults(macro_sim_m7_rules *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_advance(macro_sim_session *session, uint64_t tick_count,
+                     macro_sim_m7_advance_result *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_state_digest(
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_checkpoint_save(
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_checkpoint_load(
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_person_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_persons(
+    const macro_sim_session *session, size_t offset, macro_sim_m7_person *output,
+    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_membership_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_memberships(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m7_membership *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_job_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_jobs(
+    const macro_sim_session *session, size_t offset, macro_sim_m7_job *output,
+    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_union_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_unions(
+    const macro_sim_session *session, size_t offset, macro_sim_m7_union *output,
+    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_estate_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_estates(
+    const macro_sim_session *session, size_t offset, macro_sim_m7_estate *output,
+    size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_owned_buffer_release(macro_sim_owned_buffer *buffer);
 

@@ -94,6 +94,34 @@ const std::vector<PersonRecord> &PersonStore::records() const noexcept {
     return records_;
 }
 
+Status PersonStore::replace_records(
+    std::vector<PersonRecord> records
+) {
+    if (records.empty()) {
+        return Status(ErrorCode::corrupt_input,
+                      "person checkpoint records are empty");
+    }
+    records_ = std::move(records);
+    alive_ids_.clear();
+    archive_ids_.clear();
+    alive_dense_by_id_.assign(records_.size(), kNoDense);
+    for (std::size_t index = 1; index < records_.size(); ++index) {
+        const auto id = PersonId(index);
+        if (records_[index].id != id) {
+            return Status(ErrorCode::corrupt_input,
+                          "person checkpoint identity is invalid");
+        }
+        if (records_[index].alive) {
+            alive_dense_by_id_[index] = alive_ids_.size();
+            alive_ids_.push_back(id);
+        } else {
+            archive_ids_.push_back(id);
+        }
+    }
+    next_id_ = records_.size();
+    return validate();
+}
+
 Status PersonStore::validate() const noexcept {
     if (records_.empty() || alive_dense_by_id_.size() != records_.size() ||
         next_id_ != records_.size()) {
@@ -254,6 +282,21 @@ Status HouseholdMembershipBook::validate(const PersonStore &persons,
     return Status::success();
 }
 
+Status HouseholdMembershipBook::rebuild(
+    const PersonStore &persons
+) {
+    household_by_person_.assign(1, HouseholdId{});
+    members_by_household_.assign(1, std::vector<PersonId>{});
+    for (const auto person : persons.alive_ids()) {
+        const auto *record = persons.get(person);
+        const auto status = add(person, record->household);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    return Status::success();
+}
+
 void BeneficialOwnershipBook::ensure_person(PersonId person) {
     const auto size = static_cast<std::size_t>(person.value()) + 1;
     if (lots_by_person_.size() < size) {
@@ -352,6 +395,28 @@ const std::vector<BeneficialLot> &BeneficialOwnershipBook::records() const noexc
 }
 
 std::size_t BeneficialOwnershipBook::size() const noexcept { return lots_.size(); }
+
+Status BeneficialOwnershipBook::replace_records(
+    std::vector<BeneficialLot> records
+) {
+    lots_ = std::move(records);
+    lots_by_person_.assign(1, std::vector<BeneficialLotId>{});
+    for (std::size_t index = 0; index < lots_.size(); ++index) {
+        auto &lot = lots_[index];
+        if (lot.id != BeneficialLotId(index + 1U)) {
+            return Status(ErrorCode::corrupt_input,
+                          "beneficial checkpoint identity is invalid");
+        }
+        if (!lot.active) {
+            continue;
+        }
+        ensure_person(lot.owner);
+        lots_by_person_[
+            static_cast<std::size_t>(lot.owner.value())]
+            .push_back(lot.id);
+    }
+    return Status::success();
+}
 
 Status BeneficialOwnershipBook::validate(const PersonStore &persons,
                                          double tolerance) const {

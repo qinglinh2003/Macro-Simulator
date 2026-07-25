@@ -15,6 +15,7 @@
 #include "macro_sim/simulation/m4.hpp"
 #include "macro_sim/simulation/m5.hpp"
 #include "macro_sim/simulation/m6.hpp"
+#include "macro_sim/simulation/m7.hpp"
 #include "macro_sim/units.hpp"
 
 namespace macro_sim {
@@ -49,6 +50,14 @@ class EngineSession final {
     [[nodiscard]] const simulation::M4TickScratch *tick_scratch() const noexcept;
     [[nodiscard]] const simulation::M5Runtime *monetary_runtime() const noexcept;
     [[nodiscard]] const simulation::M6Runtime *securities_runtime() const noexcept;
+    [[nodiscard]] const simulation::M7Runtime *population_runtime() const noexcept;
+    [[nodiscard]] Status initialize_m7(const simulation::M7SimulationSpec &spec);
+    [[nodiscard]] Status update_m7_policy(const simulation::M7PolicyState &policy);
+    [[nodiscard]] Status update_m7_rules(const simulation::M7Rules &rules);
+    [[nodiscard]] Result<simulation::M7AdvanceResult>
+    advance_m7_ticks(std::uint64_t count, const simulation::M7AdvanceOptions &options);
+    [[nodiscard]] Result<simulation::M7AdvanceResult>
+    advance_m7_ticks(std::uint64_t count);
     [[nodiscard]] Status initialize_m6(const simulation::M6SimulationSpec &spec);
     [[nodiscard]] Status update_m6_policy(const simulation::M6PolicyState &policy);
     [[nodiscard]] Result<simulation::M6AdvanceResult>
@@ -89,6 +98,8 @@ class EngineSession final {
     std::unique_ptr<simulation::M5TickScratch> monetary_scratch_;
     std::unique_ptr<simulation::M6Runtime> securities_runtime_;
     std::unique_ptr<simulation::M6TickScratch> securities_scratch_;
+    std::unique_ptr<simulation::M7Runtime> population_runtime_;
+    std::unique_ptr<simulation::M7TickScratch> population_scratch_;
 };
 
 } // namespace macro_sim
