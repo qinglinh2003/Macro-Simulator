@@ -1,6 +1,6 @@
 # C++ Engine M8 Execution Plan
 
-Status: implementation baseline
+Status: implemented and accepted locally
 
 Base: accepted M7 integration head
 
@@ -266,14 +266,16 @@ orphan tenancy, and cross-domain reference errors.
 
 The C ABI and Python binding expose:
 
-- M8 capability discovery, genesis, policy/rules update, and multi-day advance;
+- M8 capability discovery, genesis rules, live policy/input update, and
+  multi-day advance;
 - energy, deprivation, housing, mortgage, rental, and construction metrics;
 - paged stable-ID views of producers, inventories, dwellings, listings,
   mortgages, tenancies, and builders;
 - stable digest and checkpoint save/load.
 
-Bindings release the GIL for genesis, advance, checkpoint, restore, digest,
-and paged bulk views. No public view leaks dense indexes or native addresses.
+Bindings release the GIL for M8 genesis and advance. Snapshot conversion keeps
+the GIL while materializing Python objects. No public view leaks dense indexes
+or native addresses.
 
 ## 10. Performance design
 
