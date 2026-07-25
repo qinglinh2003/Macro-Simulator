@@ -143,6 +143,32 @@ EngineSession::update_m8_housing_policy(const simulation::HousingPolicyState &po
     return Status::success();
 }
 
+Status
+EngineSession::update_m8_energy_input(const simulation::EnergyExogenousInput &input) {
+    if (closed() || housing_runtime_ == nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M8 simulation");
+    }
+    const auto validated = simulation::validate_energy_input(input);
+    if (!validated.ok()) {
+        return validated;
+    }
+    housing_runtime_->energy_input = input;
+    return Status::success();
+}
+
+Status
+EngineSession::update_m8_housing_input(const simulation::HousingExogenousInput &input) {
+    if (closed() || housing_runtime_ == nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M8 simulation");
+    }
+    const auto validated = simulation::validate_housing_input(input);
+    if (!validated.ok()) {
+        return validated;
+    }
+    housing_runtime_->housing_input = input;
+    return Status::success();
+}
+
 Result<simulation::M8AdvanceResult>
 EngineSession::advance_m8_ticks(std::uint64_t count,
                                 const simulation::M8AdvanceOptions &options) {

@@ -1,0 +1,20 @@
+{
+  "absolute_p95_ns": 120000000,
+  "absolute_p95_ns_by_platform": {
+    "darwin": 120000000,
+    "linux": 120000000,
+    "win32": 120000000
+  },
+  "maximum_active_allocations_per_day": 5000,
+  "maximum_normalized_entity_scaling_ratio": 2.5,
+  "maximum_quiet_allocations_per_day": 2500,
+  "maximum_quiet_housing_over_energy_ratio": 1.2,
+  "p0": {
+    "measured_days": 60,
+    "persons": 2000,
+    "seed": 808,
+    "warmup_days": 11
+  },
+  "require_stable_quiet_scratch": true,
+  "schema_version": "m8-performance-budget-v1"
+}

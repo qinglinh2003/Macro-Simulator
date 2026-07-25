@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -77,8 +78,12 @@ def validate_contracts() -> None:
     version = (
         ROOT / "native/include/macro_sim/version.hpp"
     ).read_text(encoding="utf-8")
-    if '"0.7.0-m7"' not in version:
-        raise AssertionError("M7 is not the current native engine version")
+    match = re.search(
+        r'kEngineVersion\s*=\s*"(\d+)\.(\d+)\.(\d+)-m(\d+)"',
+        version,
+    )
+    if match is None or tuple(map(int, match.groups())) < (0, 7, 0, 7):
+        raise AssertionError("native engine predates the M7 frontier")
 
     forbidden_target = "v" + "124"
     for relative in (

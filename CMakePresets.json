@@ -157,6 +157,22 @@
     {
       "name": "m7-benchmark",
       "inherits": "m6-benchmark"
+    },
+    {
+      "name": "m8-debug",
+      "inherits": "m7-debug"
+    },
+    {
+      "name": "m8-release",
+      "inherits": "m7-release"
+    },
+    {
+      "name": "m8-asan",
+      "inherits": "m7-asan"
+    },
+    {
+      "name": "m8-benchmark",
+      "inherits": "m7-benchmark"
     }
   ],
   "buildPresets": [
@@ -279,6 +295,22 @@
     {
       "name": "m7-benchmark",
       "configurePreset": "m7-benchmark"
+    },
+    {
+      "name": "m8-debug",
+      "configurePreset": "m8-debug"
+    },
+    {
+      "name": "m8-release",
+      "configurePreset": "m8-release"
+    },
+    {
+      "name": "m8-asan",
+      "configurePreset": "m8-asan"
+    },
+    {
+      "name": "m8-benchmark",
+      "configurePreset": "m8-benchmark"
     }
   ],
   "testPresets": [
@@ -464,6 +496,32 @@
     {
       "name": "m7-asan",
       "configurePreset": "m7-asan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m8-debug",
+      "configurePreset": "m8-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m8-release",
+      "configurePreset": "m8-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m8-asan",
+      "configurePreset": "m8-asan",
       "filter": {
         "exclude": {
           "label": "python-binding"

@@ -58,6 +58,10 @@ class EngineSession final {
     update_m8_energy_policy(const simulation::EnergyPolicyState &policy);
     [[nodiscard]] Status
     update_m8_housing_policy(const simulation::HousingPolicyState &policy);
+    [[nodiscard]] Status
+    update_m8_energy_input(const simulation::EnergyExogenousInput &input);
+    [[nodiscard]] Status
+    update_m8_housing_input(const simulation::HousingExogenousInput &input);
     [[nodiscard]] Result<simulation::M8AdvanceResult>
     advance_m8_ticks(std::uint64_t count, const simulation::M8AdvanceOptions &options);
     [[nodiscard]] Result<simulation::M8AdvanceResult>

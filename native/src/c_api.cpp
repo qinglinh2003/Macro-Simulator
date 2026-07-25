@@ -183,6 +183,428 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
 
 bool valid_flag(std::uint32_t value) noexcept { return value <= 1; }
 
+bool valid_m7_genesis_options(const macro_sim_m7_genesis_options &options) noexcept {
+    const auto &financial = options.financial;
+    return options.struct_size == sizeof(macro_sim_m7_genesis_options) &&
+           financial.struct_size == sizeof(macro_sim_m6_genesis_options) &&
+           financial.matching_protocol <= MACRO_SIM_M4_MATCH_PRICE_SORTED &&
+           valid_flag(financial.stochastic) && valid_flag(financial.bonds) &&
+           valid_flag(financial.firm_equity) && valid_flag(financial.margin_credit) &&
+           valid_flag(financial.firm_dynamics) && valid_flag(financial.bank_dynamics) &&
+           financial.reserved == 0 && financial.reserved_2 == 0;
+}
+
+macro_sim::simulation::M7SimulationSpec
+make_m7_spec(const macro_sim_m7_genesis_options &options) {
+    macro_sim::simulation::M7SimulationSpec spec;
+    const auto &source = options.financial;
+    auto &financial = spec.financial_economy;
+    auto &monetary = financial.monetary_economy;
+    auto &real = monetary.real_economy;
+    real.vertical = macro_sim::simulation::M4Vertical::capital_fiscal;
+    real.economy = macro_sim::EconomyId(source.economy_id);
+    real.currency = macro_sim::CurrencyId(source.currency_id);
+    real.market_protocol =
+        static_cast<macro_sim::algorithms::MatchingProtocol>(source.matching_protocol);
+    real.stochastic = source.stochastic != 0;
+    real.consumption_firms = source.consumption_firms;
+    real.capital_firms = source.capital_firms;
+    real.seed = source.seed;
+    real.requested_capabilities =
+        macro_sim::simulation::capability_bit(
+            macro_sim::simulation::M4Capability::physical_capital) |
+        macro_sim::simulation::capability_bit(
+            macro_sim::simulation::M4Capability::government);
+    monetary.rules.bank_count = source.banks;
+    monetary.rules.opening_capital_per_bank = source.opening_capital_per_bank;
+    monetary.initial_policy_rate = source.initial_policy_rate;
+    financial.rules.bonds = source.bonds != 0;
+    financial.rules.firm_equity = source.firm_equity != 0;
+    financial.rules.margin_credit = source.margin_credit != 0;
+    financial.rules.firm_dynamics = source.firm_dynamics != 0;
+    financial.rules.bank_dynamics = source.bank_dynamics != 0;
+    financial.rules.watchlist_size = source.watchlist_size;
+    spec.population.initial_persons = options.initial_persons;
+    spec.population.start_calendar_day = options.start_calendar_day;
+    spec.population.target_household_size = options.target_household_size;
+    return spec;
+}
+
+void fill_energy_policy(
+    macro_sim_m8_energy_policy &output,
+    const macro_sim::simulation::EnergyPolicyState &value) noexcept {
+    output.struct_size = sizeof(output);
+    output.price_cap_compensation = value.price_cap_compensation ? 1U : 0U;
+    output.state_owned_price_at_cost = value.state_owned_price_at_cost ? 1U : 0U;
+    output.rationing = static_cast<std::uint32_t>(value.rationing);
+    output.excise_rate = value.excise_rate;
+    output.household_subsidy_rate = value.household_subsidy_rate;
+    output.subsidy_deposit_threshold = value.subsidy_deposit_threshold;
+    output.price_cap = value.price_cap;
+    output.strategic_reserve_target = value.strategic_reserve_target;
+    output.strategic_reserve_flow_cap = value.strategic_reserve_flow_cap;
+}
+
+macro_sim::simulation::EnergyPolicyState
+energy_policy_from_c(const macro_sim_m8_energy_policy &value) noexcept {
+    macro_sim::simulation::EnergyPolicyState output;
+    output.price_cap_compensation = value.price_cap_compensation != 0;
+    output.state_owned_price_at_cost = value.state_owned_price_at_cost != 0;
+    output.rationing =
+        static_cast<macro_sim::simulation::EnergyRationing>(value.rationing);
+    output.excise_rate = value.excise_rate;
+    output.household_subsidy_rate = value.household_subsidy_rate;
+    output.subsidy_deposit_threshold = value.subsidy_deposit_threshold;
+    output.price_cap = value.price_cap;
+    output.strategic_reserve_target = value.strategic_reserve_target;
+    output.strategic_reserve_flow_cap = value.strategic_reserve_flow_cap;
+    return output;
+}
+
+void fill_energy_rules(macro_sim_m8_energy_rules &output,
+                       const macro_sim::simulation::EnergyRules &value) noexcept {
+    std::memset(&output, 0, sizeof(output));
+    output.struct_size = sizeof(output);
+#define MACRO_SIM_FILL_ENERGY_FLAG(field) output.field = value.field ? 1U : 0U
+    MACRO_SIM_FILL_ENERGY_FLAG(enabled);
+    MACRO_SIM_FILL_ENERGY_FLAG(household_energy);
+    MACRO_SIM_FILL_ENERGY_FLAG(deprivation);
+    MACRO_SIM_FILL_ENERGY_FLAG(state_owned_first_producer);
+#undef MACRO_SIM_FILL_ENERGY_FLAG
+#define MACRO_SIM_FILL_ENERGY(field) output.field = value.field
+    MACRO_SIM_FILL_ENERGY(deprivation_burnin_years);
+    MACRO_SIM_FILL_ENERGY(deprivation_acute_days);
+    MACRO_SIM_FILL_ENERGY(deprivation_chronic_days);
+    MACRO_SIM_FILL_ENERGY(producer_count);
+    MACRO_SIM_FILL_ENERGY(initial_producer_cash);
+    MACRO_SIM_FILL_ENERGY(initial_price);
+    MACRO_SIM_FILL_ENERGY(initial_wage);
+    MACRO_SIM_FILL_ENERGY(initial_markup);
+    MACRO_SIM_FILL_ENERGY(producer_productivity);
+    MACRO_SIM_FILL_ENERGY(capacity_per_capital);
+    MACRO_SIM_FILL_ENERGY(initial_utilization);
+    MACRO_SIM_FILL_ENERGY(producer_inventory_ratio);
+    MACRO_SIM_FILL_ENERGY(demand_adjustment);
+    MACRO_SIM_FILL_ENERGY(markup_adjustment);
+    MACRO_SIM_FILL_ENERGY(markup_minimum);
+    MACRO_SIM_FILL_ENERGY(markup_maximum);
+    MACRO_SIM_FILL_ENERGY(household_need);
+    MACRO_SIM_FILL_ENERGY(downstream_intensity);
+    MACRO_SIM_FILL_ENERGY(downstream_coverage_days);
+    MACRO_SIM_FILL_ENERGY(downstream_gap_close);
+    MACRO_SIM_FILL_ENERGY(hoarding_beta);
+    MACRO_SIM_FILL_ENERGY(slow_price_days);
+    MACRO_SIM_FILL_ENERGY(deprivation_subsistence_share);
+    MACRO_SIM_FILL_ENERGY(fuel_poverty_threshold);
+    MACRO_SIM_FILL_ENERGY(fuel_poverty_mortality_gamma);
+    MACRO_SIM_FILL_ENERGY(fuel_poverty_mortality_cap);
+#undef MACRO_SIM_FILL_ENERGY
+}
+
+macro_sim::simulation::EnergyRules
+energy_rules_from_c(const macro_sim_m8_energy_rules &value) noexcept {
+    macro_sim::simulation::EnergyRules output;
+#define MACRO_SIM_COPY_ENERGY_FLAG(field) output.field = value.field != 0
+    MACRO_SIM_COPY_ENERGY_FLAG(enabled);
+    MACRO_SIM_COPY_ENERGY_FLAG(household_energy);
+    MACRO_SIM_COPY_ENERGY_FLAG(deprivation);
+    MACRO_SIM_COPY_ENERGY_FLAG(state_owned_first_producer);
+#undef MACRO_SIM_COPY_ENERGY_FLAG
+#define MACRO_SIM_COPY_ENERGY(field) output.field = value.field
+    MACRO_SIM_COPY_ENERGY(deprivation_burnin_years);
+    MACRO_SIM_COPY_ENERGY(deprivation_acute_days);
+    MACRO_SIM_COPY_ENERGY(deprivation_chronic_days);
+    MACRO_SIM_COPY_ENERGY(producer_count);
+    MACRO_SIM_COPY_ENERGY(initial_producer_cash);
+    MACRO_SIM_COPY_ENERGY(initial_price);
+    MACRO_SIM_COPY_ENERGY(initial_wage);
+    MACRO_SIM_COPY_ENERGY(initial_markup);
+    MACRO_SIM_COPY_ENERGY(producer_productivity);
+    MACRO_SIM_COPY_ENERGY(capacity_per_capital);
+    MACRO_SIM_COPY_ENERGY(initial_utilization);
+    MACRO_SIM_COPY_ENERGY(producer_inventory_ratio);
+    MACRO_SIM_COPY_ENERGY(demand_adjustment);
+    MACRO_SIM_COPY_ENERGY(markup_adjustment);
+    MACRO_SIM_COPY_ENERGY(markup_minimum);
+    MACRO_SIM_COPY_ENERGY(markup_maximum);
+    MACRO_SIM_COPY_ENERGY(household_need);
+    MACRO_SIM_COPY_ENERGY(downstream_intensity);
+    MACRO_SIM_COPY_ENERGY(downstream_coverage_days);
+    MACRO_SIM_COPY_ENERGY(downstream_gap_close);
+    MACRO_SIM_COPY_ENERGY(hoarding_beta);
+    MACRO_SIM_COPY_ENERGY(slow_price_days);
+    MACRO_SIM_COPY_ENERGY(deprivation_subsistence_share);
+    MACRO_SIM_COPY_ENERGY(fuel_poverty_threshold);
+    MACRO_SIM_COPY_ENERGY(fuel_poverty_mortality_gamma);
+    MACRO_SIM_COPY_ENERGY(fuel_poverty_mortality_cap);
+#undef MACRO_SIM_COPY_ENERGY
+    return output;
+}
+
+void fill_energy_input(
+    macro_sim_m8_energy_input &output,
+    const macro_sim::simulation::EnergyExogenousInput &value) noexcept {
+    std::memset(&output, 0, sizeof(output));
+    output.struct_size = sizeof(output);
+#define MACRO_SIM_FILL_ENERGY_INPUT(field) output.field = value.field
+    MACRO_SIM_FILL_ENERGY_INPUT(capacity_multiplier);
+    MACRO_SIM_FILL_ENERGY_INPUT(labor_availability_multiplier);
+    MACRO_SIM_FILL_ENERGY_INPUT(supply_multiplier);
+    MACRO_SIM_FILL_ENERGY_INPUT(household_demand_multiplier);
+    MACRO_SIM_FILL_ENERGY_INPUT(industry_demand_multiplier);
+    MACRO_SIM_FILL_ENERGY_INPUT(reference_price_multiplier);
+#undef MACRO_SIM_FILL_ENERGY_INPUT
+}
+
+macro_sim::simulation::EnergyExogenousInput
+energy_input_from_c(const macro_sim_m8_energy_input &value) noexcept {
+    return {
+        value.capacity_multiplier,        value.labor_availability_multiplier,
+        value.supply_multiplier,          value.household_demand_multiplier,
+        value.industry_demand_multiplier, value.reference_price_multiplier,
+    };
+}
+
+void fill_housing_policy(
+    macro_sim_m8_housing_policy &output,
+    const macro_sim::simulation::HousingPolicyState &value) noexcept {
+    std::memset(&output, 0, sizeof(output));
+    output.struct_size = sizeof(output);
+    output.mortgage_underwriting = value.mortgage_underwriting ? 1U : 0U;
+#define MACRO_SIM_FILL_HOUSING_POLICY(field) output.field = value.field
+    MACRO_SIM_FILL_HOUSING_POLICY(rental_eviction_arrears);
+    MACRO_SIM_FILL_HOUSING_POLICY(annual_housing_permits);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_ltv_cap);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_dsti_cap);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_stress_rate_addon);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_risk_weight);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_minimum_capital_ratio);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_foreclosure_ltv);
+    MACRO_SIM_FILL_HOUSING_POLICY(mortgage_arrears_floor);
+    MACRO_SIM_FILL_HOUSING_POLICY(land_fee_share);
+    MACRO_SIM_FILL_HOUSING_POLICY(land_fee_stock_elasticity);
+    MACRO_SIM_FILL_HOUSING_POLICY(transfer_tax_rate);
+    MACRO_SIM_FILL_HOUSING_POLICY(property_tax_rate);
+#undef MACRO_SIM_FILL_HOUSING_POLICY
+}
+
+macro_sim::simulation::HousingPolicyState
+housing_policy_from_c(const macro_sim_m8_housing_policy &value) noexcept {
+    macro_sim::simulation::HousingPolicyState output;
+    output.mortgage_underwriting = value.mortgage_underwriting != 0;
+#define MACRO_SIM_COPY_HOUSING_POLICY(field) output.field = value.field
+    MACRO_SIM_COPY_HOUSING_POLICY(rental_eviction_arrears);
+    MACRO_SIM_COPY_HOUSING_POLICY(annual_housing_permits);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_ltv_cap);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_dsti_cap);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_stress_rate_addon);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_risk_weight);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_minimum_capital_ratio);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_foreclosure_ltv);
+    MACRO_SIM_COPY_HOUSING_POLICY(mortgage_arrears_floor);
+    MACRO_SIM_COPY_HOUSING_POLICY(land_fee_share);
+    MACRO_SIM_COPY_HOUSING_POLICY(land_fee_stock_elasticity);
+    MACRO_SIM_COPY_HOUSING_POLICY(transfer_tax_rate);
+    MACRO_SIM_COPY_HOUSING_POLICY(property_tax_rate);
+#undef MACRO_SIM_COPY_HOUSING_POLICY
+    return output;
+}
+
+void fill_housing_rules(macro_sim_m8_housing_rules &output,
+                        const macro_sim::simulation::HousingRules &value) noexcept {
+    std::memset(&output, 0, sizeof(output));
+    output.struct_size = sizeof(output);
+#define MACRO_SIM_FILL_HOUSING_FLAG(field) output.field = value.field ? 1U : 0U
+    MACRO_SIM_FILL_HOUSING_FLAG(enabled);
+    MACRO_SIM_FILL_HOUSING_FLAG(resale_market);
+    MACRO_SIM_FILL_HOUSING_FLAG(mortgages);
+    MACRO_SIM_FILL_HOUSING_FLAG(rentals);
+    MACRO_SIM_FILL_HOUSING_FLAG(construction);
+    MACRO_SIM_FILL_HOUSING_FLAG(builder_land_fee_credit);
+#undef MACRO_SIM_FILL_HOUSING_FLAG
+#define MACRO_SIM_FILL_HOUSING_RULE(field) output.field = value.field
+    MACRO_SIM_FILL_HOUSING_RULE(location_count);
+    MACRO_SIM_FILL_HOUSING_RULE(market_interval_days);
+    MACRO_SIM_FILL_HOUSING_RULE(buyer_search_count);
+    MACRO_SIM_FILL_HOUSING_RULE(affordability_burnin_years);
+    MACRO_SIM_FILL_HOUSING_RULE(builder_count);
+    MACRO_SIM_FILL_HOUSING_RULE(house_price_income_years);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_dwellings_per_household);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_homeownership_share);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_floor_area);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_quality);
+    MACRO_SIM_FILL_HOUSING_RULE(voluntary_ask_markup);
+    MACRO_SIM_FILL_HOUSING_RULE(forced_sale_discount);
+    MACRO_SIM_FILL_HOUSING_RULE(ask_decay);
+    MACRO_SIM_FILL_HOUSING_RULE(demand_price_step);
+    MACRO_SIM_FILL_HOUSING_RULE(ask_floor_annual_wage_share);
+    MACRO_SIM_FILL_HOUSING_RULE(buyer_liquidity_buffer);
+    MACRO_SIM_FILL_HOUSING_RULE(distress_deposit_floor);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_rent_yield);
+    MACRO_SIM_FILL_HOUSING_RULE(rent_adjustment);
+    MACRO_SIM_FILL_HOUSING_RULE(rent_burden_cap);
+    MACRO_SIM_FILL_HOUSING_RULE(rental_investor_premium);
+    MACRO_SIM_FILL_HOUSING_RULE(rental_vacancy_deadband);
+    MACRO_SIM_FILL_HOUSING_RULE(rent_floor_wage_share);
+    MACRO_SIM_FILL_HOUSING_RULE(initial_builder_cash_buffer);
+    MACRO_SIM_FILL_HOUSING_RULE(builder_productivity);
+    MACRO_SIM_FILL_HOUSING_RULE(builder_demand_seed);
+    MACRO_SIM_FILL_HOUSING_RULE(builder_demand_price_gain);
+    MACRO_SIM_FILL_HOUSING_RULE(builder_finished_inventory_buffer);
+    MACRO_SIM_FILL_HOUSING_RULE(leave_home_elasticity);
+    MACRO_SIM_FILL_HOUSING_RULE(leave_home_multiplier_minimum);
+    MACRO_SIM_FILL_HOUSING_RULE(leave_home_multiplier_maximum);
+    MACRO_SIM_FILL_HOUSING_RULE(fertility_elasticity);
+    MACRO_SIM_FILL_HOUSING_RULE(fertility_multiplier_minimum);
+    MACRO_SIM_FILL_HOUSING_RULE(fertility_multiplier_maximum);
+#undef MACRO_SIM_FILL_HOUSING_RULE
+}
+
+macro_sim::simulation::HousingRules
+housing_rules_from_c(const macro_sim_m8_housing_rules &value) noexcept {
+    macro_sim::simulation::HousingRules output;
+#define MACRO_SIM_COPY_HOUSING_FLAG(field) output.field = value.field != 0
+    MACRO_SIM_COPY_HOUSING_FLAG(enabled);
+    MACRO_SIM_COPY_HOUSING_FLAG(resale_market);
+    MACRO_SIM_COPY_HOUSING_FLAG(mortgages);
+    MACRO_SIM_COPY_HOUSING_FLAG(rentals);
+    MACRO_SIM_COPY_HOUSING_FLAG(construction);
+    MACRO_SIM_COPY_HOUSING_FLAG(builder_land_fee_credit);
+#undef MACRO_SIM_COPY_HOUSING_FLAG
+#define MACRO_SIM_COPY_HOUSING_RULE(field) output.field = value.field
+    MACRO_SIM_COPY_HOUSING_RULE(location_count);
+    MACRO_SIM_COPY_HOUSING_RULE(market_interval_days);
+    MACRO_SIM_COPY_HOUSING_RULE(buyer_search_count);
+    MACRO_SIM_COPY_HOUSING_RULE(affordability_burnin_years);
+    MACRO_SIM_COPY_HOUSING_RULE(builder_count);
+    MACRO_SIM_COPY_HOUSING_RULE(house_price_income_years);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_dwellings_per_household);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_homeownership_share);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_floor_area);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_quality);
+    MACRO_SIM_COPY_HOUSING_RULE(voluntary_ask_markup);
+    MACRO_SIM_COPY_HOUSING_RULE(forced_sale_discount);
+    MACRO_SIM_COPY_HOUSING_RULE(ask_decay);
+    MACRO_SIM_COPY_HOUSING_RULE(demand_price_step);
+    MACRO_SIM_COPY_HOUSING_RULE(ask_floor_annual_wage_share);
+    MACRO_SIM_COPY_HOUSING_RULE(buyer_liquidity_buffer);
+    MACRO_SIM_COPY_HOUSING_RULE(distress_deposit_floor);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_rent_yield);
+    MACRO_SIM_COPY_HOUSING_RULE(rent_adjustment);
+    MACRO_SIM_COPY_HOUSING_RULE(rent_burden_cap);
+    MACRO_SIM_COPY_HOUSING_RULE(rental_investor_premium);
+    MACRO_SIM_COPY_HOUSING_RULE(rental_vacancy_deadband);
+    MACRO_SIM_COPY_HOUSING_RULE(rent_floor_wage_share);
+    MACRO_SIM_COPY_HOUSING_RULE(initial_builder_cash_buffer);
+    MACRO_SIM_COPY_HOUSING_RULE(builder_productivity);
+    MACRO_SIM_COPY_HOUSING_RULE(builder_demand_seed);
+    MACRO_SIM_COPY_HOUSING_RULE(builder_demand_price_gain);
+    MACRO_SIM_COPY_HOUSING_RULE(builder_finished_inventory_buffer);
+    MACRO_SIM_COPY_HOUSING_RULE(leave_home_elasticity);
+    MACRO_SIM_COPY_HOUSING_RULE(leave_home_multiplier_minimum);
+    MACRO_SIM_COPY_HOUSING_RULE(leave_home_multiplier_maximum);
+    MACRO_SIM_COPY_HOUSING_RULE(fertility_elasticity);
+    MACRO_SIM_COPY_HOUSING_RULE(fertility_multiplier_minimum);
+    MACRO_SIM_COPY_HOUSING_RULE(fertility_multiplier_maximum);
+#undef MACRO_SIM_COPY_HOUSING_RULE
+    return output;
+}
+
+void fill_housing_input(
+    macro_sim_m8_housing_input &output,
+    const macro_sim::simulation::HousingExogenousInput &value) noexcept {
+    std::memset(&output, 0, sizeof(output));
+    output.struct_size = sizeof(output);
+#define MACRO_SIM_FILL_HOUSING_INPUT(field) output.field = value.field
+    MACRO_SIM_FILL_HOUSING_INPUT(house_price_reference_multiplier);
+    MACRO_SIM_FILL_HOUSING_INPUT(buyer_demand_multiplier);
+    MACRO_SIM_FILL_HOUSING_INPUT(rental_demand_multiplier);
+    MACRO_SIM_FILL_HOUSING_INPUT(construction_productivity_multiplier);
+    MACRO_SIM_FILL_HOUSING_INPUT(land_cost_multiplier);
+#undef MACRO_SIM_FILL_HOUSING_INPUT
+}
+
+macro_sim::simulation::HousingExogenousInput
+housing_input_from_c(const macro_sim_m8_housing_input &value) noexcept {
+    return {
+        value.house_price_reference_multiplier,
+        value.buyer_demand_multiplier,
+        value.rental_demand_multiplier,
+        value.construction_productivity_multiplier,
+        value.land_cost_multiplier,
+    };
+}
+
+void fill_m8_metrics(macro_sim_m8_metrics &output,
+                     const macro_sim::simulation::M8Metrics &value) noexcept {
+    output.reserved = 0;
+    fill_m7_metrics(output.economy, value.economy);
+    output.energy.deprivation_boundary = value.energy.deprivation_boundary ? 1U : 0U;
+#define MACRO_SIM_FILL_M8_ENERGY(field) output.energy.field = value.energy.field
+    MACRO_SIM_FILL_M8_ENERGY(production);
+    MACRO_SIM_FILL_M8_ENERGY(capacity);
+    MACRO_SIM_FILL_M8_ENERGY(utilization);
+    MACRO_SIM_FILL_M8_ENERGY(opening_supply);
+    MACRO_SIM_FILL_M8_ENERGY(requested_total);
+    MACRO_SIM_FILL_M8_ENERGY(requested_households);
+    MACRO_SIM_FILL_M8_ENERGY(requested_industry);
+    MACRO_SIM_FILL_M8_ENERGY(requested_public);
+    MACRO_SIM_FILL_M8_ENERGY(sold);
+    MACRO_SIM_FILL_M8_ENERGY(unfilled);
+    MACRO_SIM_FILL_M8_ENERGY(transaction_price);
+    MACRO_SIM_FILL_M8_ENERGY(household_units);
+    MACRO_SIM_FILL_M8_ENERGY(household_spending);
+    MACRO_SIM_FILL_M8_ENERGY(industry_units);
+    MACRO_SIM_FILL_M8_ENERGY(industry_spending);
+    MACRO_SIM_FILL_M8_ENERGY(excise_paid);
+    MACRO_SIM_FILL_M8_ENERGY(subsidy_paid);
+    MACRO_SIM_FILL_M8_ENERGY(cap_compensation);
+    MACRO_SIM_FILL_M8_ENERGY(strategic_reserve_stock);
+    MACRO_SIM_FILL_M8_ENERGY(strategic_reserve_flow);
+    MACRO_SIM_FILL_M8_ENERGY(strategic_reserve_purchase_paid);
+    MACRO_SIM_FILL_M8_ENERGY(strategic_reserve_sale_revenue);
+    MACRO_SIM_FILL_M8_ENERGY(fuel_poverty_share);
+    MACRO_SIM_FILL_M8_ENERGY(fuel_poverty_mortality_multiplier);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_below_100_share);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_below_60_share);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_below_30_share);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_destitute_share);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_acute_stock);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_chronic_stock);
+    MACRO_SIM_FILL_M8_ENERGY(deprivation_max_spell_days);
+#undef MACRO_SIM_FILL_M8_ENERGY
+    output.housing.reserved = 0;
+#define MACRO_SIM_FILL_M8_HOUSING(field) output.housing.field = value.housing.field
+    MACRO_SIM_FILL_M8_HOUSING(house_price);
+    MACRO_SIM_FILL_M8_HOUSING(rent_level);
+    MACRO_SIM_FILL_M8_HOUSING(housing_stock);
+    MACRO_SIM_FILL_M8_HOUSING(homeownership_share);
+    MACRO_SIM_FILL_M8_HOUSING(vacancy_share);
+    MACRO_SIM_FILL_M8_HOUSING(active_listings);
+    MACRO_SIM_FILL_M8_HOUSING(forced_listing_share);
+    MACRO_SIM_FILL_M8_HOUSING(session_sales);
+    MACRO_SIM_FILL_M8_HOUSING(session_volume);
+    MACRO_SIM_FILL_M8_HOUSING(mean_time_on_market_days);
+    MACRO_SIM_FILL_M8_HOUSING(mortgage_originations);
+    MACRO_SIM_FILL_M8_HOUSING(mortgage_principal_originated);
+    MACRO_SIM_FILL_M8_HOUSING(mortgage_principal_outstanding);
+    MACRO_SIM_FILL_M8_HOUSING(foreclosures);
+    MACRO_SIM_FILL_M8_HOUSING(rent_paid);
+    MACRO_SIM_FILL_M8_HOUSING(rent_unpaid);
+    MACRO_SIM_FILL_M8_HOUSING(evictions);
+    MACRO_SIM_FILL_M8_HOUSING(property_tax_paid);
+    MACRO_SIM_FILL_M8_HOUSING(transfer_tax_paid);
+    MACRO_SIM_FILL_M8_HOUSING(land_fee_paid);
+    MACRO_SIM_FILL_M8_HOUSING(construction_output);
+    MACRO_SIM_FILL_M8_HOUSING(dwellings_completed);
+    MACRO_SIM_FILL_M8_HOUSING(permits_used);
+    MACRO_SIM_FILL_M8_HOUSING(price_to_income_ratio);
+    MACRO_SIM_FILL_M8_HOUSING(rent_burden_ratio);
+    MACRO_SIM_FILL_M8_HOUSING(leave_home_multiplier);
+    MACRO_SIM_FILL_M8_HOUSING(fertility_multiplier);
+#undef MACRO_SIM_FILL_M8_HOUSING
+}
+
 } // namespace
 
 uint32_t macro_sim_abi_version(void) { return macro_sim::abi_version(); }
@@ -190,8 +612,8 @@ uint32_t macro_sim_abi_version(void) { return macro_sim::abi_version(); }
 uint64_t macro_sim_capabilities(void) {
     return MACRO_SIM_CAPABILITY_M2_ACCOUNTING | MACRO_SIM_CAPABILITY_M3_ALGORITHMS |
            MACRO_SIM_CAPABILITY_M4_TICK | MACRO_SIM_CAPABILITY_M5_MONETARY |
-           MACRO_SIM_CAPABILITY_M6_SECURITIES |
-           MACRO_SIM_CAPABILITY_M7_POPULATION;
+           MACRO_SIM_CAPABILITY_M6_SECURITIES | MACRO_SIM_CAPABILITY_M7_POPULATION |
+           MACRO_SIM_CAPABILITY_M8_ENERGY_HOUSING;
 }
 
 const char *macro_sim_engine_version(void) { return macro_sim::kEngineVersion.data(); }
@@ -1068,34 +1490,24 @@ macro_sim_status macro_sim_m6_firm_statements(const macro_sim_session *session,
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_genesis(
-    macro_sim_session *session,
-    const macro_sim_m7_genesis_options *options
-) {
+macro_sim_status macro_sim_m7_genesis(macro_sim_session *session,
+                                      const macro_sim_m7_genesis_options *options) {
     if (session == nullptr || options == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "session and M7 genesis options are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and M7 genesis options are required");
     }
     const auto &financial_options = options->financial;
     if (options->struct_size != sizeof(macro_sim_m7_genesis_options) ||
-        financial_options.struct_size !=
-            sizeof(macro_sim_m6_genesis_options) ||
-        financial_options.matching_protocol >
-            MACRO_SIM_M4_MATCH_PRICE_SORTED ||
+        financial_options.struct_size != sizeof(macro_sim_m6_genesis_options) ||
+        financial_options.matching_protocol > MACRO_SIM_M4_MATCH_PRICE_SORTED ||
         !valid_flag(financial_options.stochastic) ||
         !valid_flag(financial_options.bonds) ||
         !valid_flag(financial_options.firm_equity) ||
         !valid_flag(financial_options.margin_credit) ||
         !valid_flag(financial_options.firm_dynamics) ||
         !valid_flag(financial_options.bank_dynamics) ||
-        financial_options.reserved != 0 ||
-        financial_options.reserved_2 != 0) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "M7 genesis options are invalid"
-        );
+        financial_options.reserved != 0 || financial_options.reserved_2 != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT, "M7 genesis options are invalid");
     }
 
     macro_sim::simulation::M7SimulationSpec spec;
@@ -1105,66 +1517,48 @@ macro_sim_status macro_sim_m7_genesis(
     real.vertical = macro_sim::simulation::M4Vertical::capital_fiscal;
     real.economy = macro_sim::EconomyId(financial_options.economy_id);
     real.currency = macro_sim::CurrencyId(financial_options.currency_id);
-    real.market_protocol =
-        static_cast<macro_sim::algorithms::MatchingProtocol>(
-            financial_options.matching_protocol
-        );
+    real.market_protocol = static_cast<macro_sim::algorithms::MatchingProtocol>(
+        financial_options.matching_protocol);
     real.stochastic = financial_options.stochastic != 0;
     real.consumption_firms = financial_options.consumption_firms;
     real.capital_firms = financial_options.capital_firms;
     real.seed = financial_options.seed;
     real.requested_capabilities =
         macro_sim::simulation::capability_bit(
-            macro_sim::simulation::M4Capability::physical_capital
-        ) |
+            macro_sim::simulation::M4Capability::physical_capital) |
         macro_sim::simulation::capability_bit(
-            macro_sim::simulation::M4Capability::government
-        );
+            macro_sim::simulation::M4Capability::government);
     monetary.rules.bank_count = financial_options.banks;
     monetary.rules.opening_capital_per_bank =
         financial_options.opening_capital_per_bank;
     monetary.initial_policy_rate = financial_options.initial_policy_rate;
     financial.rules.bonds = financial_options.bonds != 0;
-    financial.rules.firm_equity =
-        financial_options.firm_equity != 0;
-    financial.rules.margin_credit =
-        financial_options.margin_credit != 0;
-    financial.rules.firm_dynamics =
-        financial_options.firm_dynamics != 0;
-    financial.rules.bank_dynamics =
-        financial_options.bank_dynamics != 0;
-    financial.rules.watchlist_size =
-        financial_options.watchlist_size;
+    financial.rules.firm_equity = financial_options.firm_equity != 0;
+    financial.rules.margin_credit = financial_options.margin_credit != 0;
+    financial.rules.firm_dynamics = financial_options.firm_dynamics != 0;
+    financial.rules.bank_dynamics = financial_options.bank_dynamics != 0;
+    financial.rules.watchlist_size = financial_options.watchlist_size;
     spec.population.initial_persons = options->initial_persons;
     spec.population.start_calendar_day = options->start_calendar_day;
-    spec.population.target_household_size =
-        options->target_household_size;
+    spec.population.target_household_size = options->target_household_size;
     return status(session->engine.initialize_m7(spec));
 }
 
-macro_sim_status macro_sim_m7_update_policy(
-    macro_sim_session *session, const macro_sim_m7_policy *policy
-) {
+macro_sim_status macro_sim_m7_update_policy(macro_sim_session *session,
+                                            const macro_sim_m7_policy *policy) {
     if (session == nullptr || policy == nullptr ||
-        policy->struct_size != sizeof(macro_sim_m7_policy) ||
-        policy->reserved != 0) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "session and valid M7 policy are required"
-        );
+        policy->struct_size != sizeof(macro_sim_m7_policy) || policy->reserved != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M7 policy are required");
     }
     macro_sim::simulation::M7PolicyState value;
     value.inheritance_tax_rate = policy->inheritance_tax_rate;
     return status(session->engine.update_m7_policy(value));
 }
 
-macro_sim_status
-macro_sim_m7_policy_defaults(macro_sim_m7_policy *output) {
+macro_sim_status macro_sim_m7_policy_defaults(macro_sim_m7_policy *output) {
     if (output == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "M7 policy output is required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT, "M7 policy output is required");
     }
     const macro_sim::simulation::M7PolicyState value;
     std::memset(output, 0, sizeof(*output));
@@ -1173,13 +1567,9 @@ macro_sim_m7_policy_defaults(macro_sim_m7_policy *output) {
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status
-macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
+macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     if (output == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "M7 rules output is required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT, "M7 rules output is required");
     }
     const macro_sim::simulation::M7Rules value;
     std::memset(output, 0, sizeof(*output));
@@ -1187,8 +1577,7 @@ macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->working_age = value.working_age;
     output->retirement_age = value.retirement_age;
     output->maximum_age = value.vital_rates.maximum_age;
-#define MACRO_SIM_M7_RULE_FLAG(field) \
-    output->field = value.field ? 1U : 0U
+#define MACRO_SIM_M7_RULE_FLAG(field) output->field = value.field ? 1U : 0U
     MACRO_SIM_M7_RULE_FLAG(beneficial_ownership);
     MACRO_SIM_M7_RULE_FLAG(estates);
     MACRO_SIM_M7_RULE_FLAG(fertility);
@@ -1210,90 +1599,61 @@ macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
 #undef MACRO_SIM_M7_RULE_FLAG
     output->forbid_same_household =
         value.marriage_rules.forbid_same_household ? 1U : 0U;
-    output->forbid_close_kin =
-        value.marriage_rules.forbid_close_kin ? 1U : 0U;
-    output->suspension_timeout_days =
-        value.suspension_timeout_days;
+    output->forbid_close_kin = value.marriage_rules.forbid_close_kin ? 1U : 0U;
+    output->suspension_timeout_days = value.suspension_timeout_days;
     output->marriage_interval_days = value.marriage_interval_days;
-    output->marriage_minimum_age =
-        value.marriage_rules.minimum_age;
-    output->marriage_maximum_age =
-        value.marriage_rules.maximum_age;
-    output->marriage_maximum_age_gap =
-        value.marriage_rules.maximum_age_gap;
-    output->leave_home_min_age =
-        value.leave_home_min_age;
-    output->leave_home_peak_end_age =
-        value.leave_home_peak_end_age;
+    output->marriage_minimum_age = value.marriage_rules.minimum_age;
+    output->marriage_maximum_age = value.marriage_rules.maximum_age;
+    output->marriage_maximum_age_gap = value.marriage_rules.maximum_age_gap;
+    output->leave_home_min_age = value.leave_home_min_age;
+    output->leave_home_peak_end_age = value.leave_home_peak_end_age;
     output->makeham_a = value.vital_rates.makeham_a;
     output->gompertz_b = value.vital_rates.gompertz_b;
     output->gompertz_theta = value.vital_rates.gompertz_theta;
     output->infant_extra = value.vital_rates.infant_extra;
-    output->total_fertility_rate =
-        value.vital_rates.total_fertility_rate;
-    output->fertility_peak_age =
-        value.vital_rates.fertility_peak_age;
+    output->total_fertility_rate = value.vital_rates.total_fertility_rate;
+    output->fertility_peak_age = value.vital_rates.fertility_peak_age;
     output->fertility_width = value.vital_rates.fertility_width;
-    output->sex_ratio_at_birth =
-        value.vital_rates.sex_ratio_at_birth;
+    output->sex_ratio_at_birth = value.vital_rates.sex_ratio_at_birth;
     output->vital_interval = value.vital_rates.interval;
     output->annual_churn = value.annual_churn;
     output->firing_adjustment = value.firing_adjustment;
     output->layoff_band = value.layoff_band;
     output->target_smoothing = value.target_smoothing;
     output->search_intensity = value.search_intensity;
-    output->ladder_search_intensity =
-        value.ladder_search_intensity;
+    output->ladder_search_intensity = value.ladder_search_intensity;
     output->ladder_premium = value.ladder_premium;
     output->reservation_markup = value.reservation_markup;
-    output->welfare_quit_hazard =
-        value.welfare_quit_hazard;
-    output->family_transfer_buffer =
-        value.family_transfer_buffer;
-    output->annual_leave_rate_peak =
-        value.annual_leave_rate_peak;
-    output->annual_leave_rate_late =
-        value.annual_leave_rate_late;
+    output->welfare_quit_hazard = value.welfare_quit_hazard;
+    output->family_transfer_buffer = value.family_transfer_buffer;
+    output->annual_leave_rate_peak = value.annual_leave_rate_peak;
+    output->annual_leave_rate_late = value.annual_leave_rate_late;
     output->annual_marriage_rate = value.annual_marriage_rate;
     output->annual_divorce_rate = value.annual_divorce_rate;
-    output->marriage_preferred_age_gap =
-        value.marriage_rules.preferred_age_gap;
-    output->marriage_age_gap_penalty =
-        value.marriage_rules.age_gap_penalty;
-    output->marriage_assortativity =
-        value.marriage_rules.assortativity;
+    output->marriage_preferred_age_gap = value.marriage_rules.preferred_age_gap;
+    output->marriage_age_gap_penalty = value.marriage_rules.age_gap_penalty;
+    output->marriage_assortativity = value.marriage_rules.assortativity;
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_update_rules(
-    macro_sim_session *session, const macro_sim_m7_rules *rules
-) {
+macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
+                                           const macro_sim_m7_rules *rules) {
     if (session == nullptr || rules == nullptr ||
         rules->struct_size != sizeof(macro_sim_m7_rules) ||
-        !valid_flag(rules->beneficial_ownership) ||
-        !valid_flag(rules->estates) ||
-        !valid_flag(rules->fertility) ||
-        !valid_flag(rules->mortality) ||
-        !valid_flag(rules->persistent_labor) ||
-        !valid_flag(rules->fractional_hours) ||
-        !valid_flag(rules->second_jobs) ||
-        !valid_flag(rules->suspensions) ||
+        !valid_flag(rules->beneficial_ownership) || !valid_flag(rules->estates) ||
+        !valid_flag(rules->fertility) || !valid_flag(rules->mortality) ||
+        !valid_flag(rules->persistent_labor) || !valid_flag(rules->fractional_hours) ||
+        !valid_flag(rules->second_jobs) || !valid_flag(rules->suspensions) ||
         !valid_flag(rules->frictional_search) ||
-        !valid_flag(rules->relationship_wages) ||
-        !valid_flag(rules->job_ladder) ||
+        !valid_flag(rules->relationship_wages) || !valid_flag(rules->job_ladder) ||
         !valid_flag(rules->participation_margin) ||
-        !valid_flag(rules->family_transfers) ||
-        !valid_flag(rules->relationships) ||
-        !valid_flag(rules->marriage) ||
-        !valid_flag(rules->divorce) ||
-        !valid_flag(rules->household_lifecycle) ||
-        !valid_flag(rules->leaving_home) ||
+        !valid_flag(rules->family_transfers) || !valid_flag(rules->relationships) ||
+        !valid_flag(rules->marriage) || !valid_flag(rules->divorce) ||
+        !valid_flag(rules->household_lifecycle) || !valid_flag(rules->leaving_home) ||
         !valid_flag(rules->forbid_same_household) ||
         !valid_flag(rules->forbid_close_kin)) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "session and valid M7 rules are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M7 rules are required");
     }
     macro_sim::simulation::M7Rules value;
     value.working_age = rules->working_age;
@@ -1319,80 +1679,55 @@ macro_sim_status macro_sim_m7_update_rules(
     MACRO_SIM_COPY_M7_FLAG(household_lifecycle);
     MACRO_SIM_COPY_M7_FLAG(leaving_home);
 #undef MACRO_SIM_COPY_M7_FLAG
-    value.marriage_rules.forbid_same_household =
-        rules->forbid_same_household != 0;
-    value.marriage_rules.forbid_close_kin =
-        rules->forbid_close_kin != 0;
-    value.suspension_timeout_days =
-        rules->suspension_timeout_days;
+    value.marriage_rules.forbid_same_household = rules->forbid_same_household != 0;
+    value.marriage_rules.forbid_close_kin = rules->forbid_close_kin != 0;
+    value.suspension_timeout_days = rules->suspension_timeout_days;
     value.marriage_interval_days = rules->marriage_interval_days;
-    value.marriage_rules.minimum_age =
-        rules->marriage_minimum_age;
-    value.marriage_rules.maximum_age =
-        rules->marriage_maximum_age;
-    value.marriage_rules.maximum_age_gap =
-        rules->marriage_maximum_age_gap;
-    value.leave_home_min_age =
-        rules->leave_home_min_age;
-    value.leave_home_peak_end_age =
-        rules->leave_home_peak_end_age;
+    value.marriage_rules.minimum_age = rules->marriage_minimum_age;
+    value.marriage_rules.maximum_age = rules->marriage_maximum_age;
+    value.marriage_rules.maximum_age_gap = rules->marriage_maximum_age_gap;
+    value.leave_home_min_age = rules->leave_home_min_age;
+    value.leave_home_peak_end_age = rules->leave_home_peak_end_age;
     value.vital_rates.makeham_a = rules->makeham_a;
     value.vital_rates.gompertz_b = rules->gompertz_b;
     value.vital_rates.gompertz_theta = rules->gompertz_theta;
     value.vital_rates.infant_extra = rules->infant_extra;
-    value.vital_rates.total_fertility_rate =
-        rules->total_fertility_rate;
-    value.vital_rates.fertility_peak_age =
-        rules->fertility_peak_age;
+    value.vital_rates.total_fertility_rate = rules->total_fertility_rate;
+    value.vital_rates.fertility_peak_age = rules->fertility_peak_age;
     value.vital_rates.fertility_width = rules->fertility_width;
-    value.vital_rates.sex_ratio_at_birth =
-        rules->sex_ratio_at_birth;
+    value.vital_rates.sex_ratio_at_birth = rules->sex_ratio_at_birth;
     value.vital_rates.interval = rules->vital_interval;
     value.annual_churn = rules->annual_churn;
     value.firing_adjustment = rules->firing_adjustment;
     value.layoff_band = rules->layoff_band;
     value.target_smoothing = rules->target_smoothing;
     value.search_intensity = rules->search_intensity;
-    value.ladder_search_intensity =
-        rules->ladder_search_intensity;
+    value.ladder_search_intensity = rules->ladder_search_intensity;
     value.ladder_premium = rules->ladder_premium;
     value.reservation_markup = rules->reservation_markup;
-    value.welfare_quit_hazard =
-        rules->welfare_quit_hazard;
-    value.family_transfer_buffer =
-        rules->family_transfer_buffer;
-    value.annual_leave_rate_peak =
-        rules->annual_leave_rate_peak;
-    value.annual_leave_rate_late =
-        rules->annual_leave_rate_late;
+    value.welfare_quit_hazard = rules->welfare_quit_hazard;
+    value.family_transfer_buffer = rules->family_transfer_buffer;
+    value.annual_leave_rate_peak = rules->annual_leave_rate_peak;
+    value.annual_leave_rate_late = rules->annual_leave_rate_late;
     value.annual_marriage_rate = rules->annual_marriage_rate;
     value.annual_divorce_rate = rules->annual_divorce_rate;
-    value.marriage_rules.preferred_age_gap =
-        rules->marriage_preferred_age_gap;
-    value.marriage_rules.age_gap_penalty =
-        rules->marriage_age_gap_penalty;
-    value.marriage_rules.assortativity =
-        rules->marriage_assortativity;
+    value.marriage_rules.preferred_age_gap = rules->marriage_preferred_age_gap;
+    value.marriage_rules.age_gap_penalty = rules->marriage_age_gap_penalty;
+    value.marriage_rules.assortativity = rules->marriage_assortativity;
     return status(session->engine.update_m7_rules(value));
 }
 
-macro_sim_status macro_sim_m7_advance(
-    macro_sim_session *session, uint64_t tick_count,
-    macro_sim_m7_advance_result *output
-) {
+macro_sim_status macro_sim_m7_advance(macro_sim_session *session, uint64_t tick_count,
+                                      macro_sim_m7_advance_result *output) {
     if (session == nullptr || output == nullptr ||
         output->struct_size != sizeof(macro_sim_m7_advance_result) ||
         output->metrics.struct_size != sizeof(macro_sim_m7_metrics) ||
-        output->metrics.economy.struct_size !=
-            sizeof(macro_sim_m6_metrics) ||
-        output->metrics.economy.economy.struct_size !=
-            sizeof(macro_sim_m5_metrics) ||
+        output->metrics.economy.struct_size != sizeof(macro_sim_m6_metrics) ||
+        output->metrics.economy.economy.struct_size != sizeof(macro_sim_m5_metrics) ||
         output->metrics.economy.economy.economy.struct_size !=
             sizeof(macro_sim_m4_metrics)) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "session and initialized M7 result are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and initialized M7 result are required");
     }
     const auto result = session->engine.advance_m7_ticks(tick_count);
     if (!result.ok()) {
@@ -1403,65 +1738,50 @@ macro_sim_status macro_sim_m7_advance(
     output->first_tick = value.first_tick.value();
     output->next_tick = value.next_tick.value();
     output->advanced_ticks = value.advanced_ticks;
-    output->scratch_capacity_signature =
-        value.scratch_capacity_signature;
+    output->scratch_capacity_signature = value.scratch_capacity_signature;
     output->transfer_count = value.transfer_count;
     output->trade_count = value.trade_count;
     fill_m7_metrics(output->metrics, value.metrics);
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_state_digest(
-    const macro_sim_session *session, uint8_t *output,
-    size_t output_size
-) {
+macro_sim_status macro_sim_m7_state_digest(const macro_sim_session *session,
+                                           uint8_t *output, size_t output_size) {
     return macro_sim_m2_state_digest(session, output, output_size);
 }
 
-macro_sim_status macro_sim_m7_checkpoint_save(
-    const macro_sim_session *session, macro_sim_owned_buffer *output
-) {
+macro_sim_status macro_sim_m7_checkpoint_save(const macro_sim_session *session,
+                                              macro_sim_owned_buffer *output) {
     return macro_sim_m2_checkpoint_save(session, output);
 }
 
-macro_sim_status macro_sim_m7_checkpoint_load(
-    macro_sim_session *session, const uint8_t *checkpoint,
-    size_t checkpoint_size
-) {
-    return macro_sim_m2_checkpoint_load(
-        session, checkpoint, checkpoint_size
-    );
+macro_sim_status macro_sim_m7_checkpoint_load(macro_sim_session *session,
+                                              const uint8_t *checkpoint,
+                                              size_t checkpoint_size) {
+    return macro_sim_m2_checkpoint_load(session, checkpoint, checkpoint_size);
 }
 
-macro_sim_status macro_sim_m7_person_count(
-    const macro_sim_session *session, size_t *output
-) {
+macro_sim_status macro_sim_m7_person_count(const macro_sim_session *session,
+                                           size_t *output) {
     if (session == nullptr || output == nullptr ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and output are required");
     }
-    *output =
-        session->engine.population_runtime()->persons.total_count();
+    *output = session->engine.population_runtime()->persons.total_count();
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_persons(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_person *output, size_t capacity, size_t *written
-) {
+macro_sim_status macro_sim_m7_persons(const macro_sim_session *session, size_t offset,
+                                      macro_sim_m7_person *output, size_t capacity,
+                                      size_t *written) {
     if (session == nullptr || written == nullptr ||
         (capacity != 0 && output == nullptr) ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and person output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and person output are required");
     }
-    const auto &rows =
-        session->engine.population_runtime()->persons.records();
+    const auto &rows = session->engine.population_runtime()->persons.records();
     const auto logical_size = rows.empty() ? 0 : rows.size() - 1;
     *written = 0;
     if (offset >= logical_size) {
@@ -1495,23 +1815,20 @@ macro_sim_status macro_sim_m7_persons(
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_membership_count(
-    const macro_sim_session *session, size_t *output
-) {
+macro_sim_status macro_sim_m7_membership_count(const macro_sim_session *session,
+                                               size_t *output) {
     return macro_sim_m7_person_count(session, output);
 }
 
-macro_sim_status macro_sim_m7_memberships(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_membership *output, size_t capacity, size_t *written
-) {
+macro_sim_status macro_sim_m7_memberships(const macro_sim_session *session,
+                                          size_t offset,
+                                          macro_sim_m7_membership *output,
+                                          size_t capacity, size_t *written) {
     if (session == nullptr || written == nullptr ||
         (capacity != 0 && output == nullptr) ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and membership output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and membership output are required");
     }
     const auto *runtime = session->engine.population_runtime();
     const auto &rows = runtime->persons.records();
@@ -1527,44 +1844,35 @@ macro_sim_status macro_sim_m7_memberships(
         std::memset(&target, 0, sizeof(target));
         target.struct_size = sizeof(target);
         target.person_id = person.id.value();
-        target.household_id =
-            runtime->membership.household_of(person.id).value();
+        target.household_id = runtime->membership.household_of(person.id).value();
         target.alive = person.alive ? 1U : 0U;
     }
     *written = count;
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_job_count(
-    const macro_sim_session *session, size_t *output
-) {
+macro_sim_status macro_sim_m7_job_count(const macro_sim_session *session,
+                                        size_t *output) {
     if (session == nullptr || output == nullptr ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and output are required");
     }
-    const auto &rows =
-        session->engine.population_runtime()->employment.records();
+    const auto &rows = session->engine.population_runtime()->employment.records();
     *output = rows.empty() ? 0 : rows.size() - 1;
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_jobs(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_job *output, size_t capacity, size_t *written
-) {
+macro_sim_status macro_sim_m7_jobs(const macro_sim_session *session, size_t offset,
+                                   macro_sim_m7_job *output, size_t capacity,
+                                   size_t *written) {
     if (session == nullptr || written == nullptr ||
         (capacity != 0 && output == nullptr) ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and job output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and job output are required");
     }
-    const auto &rows =
-        session->engine.population_runtime()->employment.records();
+    const auto &rows = session->engine.population_runtime()->employment.records();
     const auto logical_size = rows.empty() ? 0 : rows.size() - 1;
     *written = 0;
     if (offset >= logical_size) {
@@ -1583,8 +1891,7 @@ macro_sim_status macro_sim_m7_jobs(
         target.hire_day = source.hire_day;
         target.separation_day = source.separation_day;
         target.suspension_day = source.suspension_day;
-        target.separation_kind =
-            static_cast<std::uint32_t>(source.separation_kind);
+        target.separation_kind = static_cast<std::uint32_t>(source.separation_kind);
         target.wage = source.wage;
         target.hours = source.hours;
         target.secondary = source.secondary ? 1U : 0U;
@@ -1594,35 +1901,27 @@ macro_sim_status macro_sim_m7_jobs(
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_union_count(
-    const macro_sim_session *session, size_t *output
-) {
+macro_sim_status macro_sim_m7_union_count(const macro_sim_session *session,
+                                          size_t *output) {
     if (session == nullptr || output == nullptr ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and output are required");
     }
-    *output =
-        session->engine.population_runtime()->relationships.unions().size();
+    *output = session->engine.population_runtime()->relationships.unions().size();
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_unions(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_union *output, size_t capacity, size_t *written
-) {
+macro_sim_status macro_sim_m7_unions(const macro_sim_session *session, size_t offset,
+                                     macro_sim_m7_union *output, size_t capacity,
+                                     size_t *written) {
     if (session == nullptr || written == nullptr ||
         (capacity != 0 && output == nullptr) ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and union output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and union output are required");
     }
-    const auto &rows =
-        session->engine.population_runtime()->relationships.unions();
+    const auto &rows = session->engine.population_runtime()->relationships.unions();
     *written = 0;
     if (offset >= rows.size()) {
         return status(MACRO_SIM_OK, "");
@@ -1637,48 +1936,37 @@ macro_sim_status macro_sim_m7_unions(
         target.event_id = source.event.value();
         target.first_id = source.first.value();
         target.second_id = source.second.value();
-        target.first_origin_household_id =
-            source.first_origin_household.value();
-        target.second_origin_household_id =
-            source.second_origin_household.value();
+        target.first_origin_household_id = source.first_origin_household.value();
+        target.second_origin_household_id = source.second_origin_household.value();
         target.start_day = source.start_day;
         target.end_day = source.end_day;
-        target.end_kind =
-            static_cast<std::uint32_t>(source.end_kind);
+        target.end_kind = static_cast<std::uint32_t>(source.end_kind);
     }
     *written = count;
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_estate_count(
-    const macro_sim_session *session, size_t *output
-) {
+macro_sim_status macro_sim_m7_estate_count(const macro_sim_session *session,
+                                           size_t *output) {
     if (session == nullptr || output == nullptr ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and output are required");
     }
-    *output =
-        session->engine.population_runtime()->estates.size();
+    *output = session->engine.population_runtime()->estates.size();
     return status(MACRO_SIM_OK, "");
 }
 
-macro_sim_status macro_sim_m7_estates(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_estate *output, size_t capacity, size_t *written
-) {
+macro_sim_status macro_sim_m7_estates(const macro_sim_session *session, size_t offset,
+                                      macro_sim_m7_estate *output, size_t capacity,
+                                      size_t *written) {
     if (session == nullptr || written == nullptr ||
         (capacity != 0 && output == nullptr) ||
         session->engine.population_runtime() == nullptr) {
-        return status(
-            MACRO_SIM_INVALID_ARGUMENT,
-            "active M7 session and estate output are required"
-        );
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M7 session and estate output are required");
     }
-    const auto &rows =
-        session->engine.population_runtime()->estates;
+    const auto &rows = session->engine.population_runtime()->estates;
     *written = 0;
     if (offset >= rows.size()) {
         return status(MACRO_SIM_OK, "");
@@ -1694,8 +1982,7 @@ macro_sim_status macro_sim_m7_estates(
         target.deceased_id = source.deceased.value();
         target.heir_id = source.heir.value();
         target.household_id = source.household.value();
-        target.destination_household_id =
-            source.destination_household.value();
+        target.destination_household_id = source.destination_household.value();
         target.opened_day = source.opened_day;
         target.settled_day = source.settled_day;
         target.transferred_lots = source.transferred_lots;
@@ -1704,8 +1991,457 @@ macro_sim_status macro_sim_m7_estates(
         target.gross_value = source.gross_value;
         target.liabilities = source.liabilities;
         target.tax_paid = source.tax_paid;
-        target.public_residual =
-            source.public_residual ? 1U : 0U;
+        target.public_residual = source.public_residual ? 1U : 0U;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_defaults(macro_sim_m8_genesis_options *output) {
+    if (output == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT, "M8 genesis output is required");
+    }
+    std::memset(output, 0, sizeof(*output));
+    output->struct_size = sizeof(*output);
+    auto &domestic = output->domestic_economy;
+    domestic.struct_size = sizeof(domestic);
+    domestic.start_calendar_day = 0;
+    domestic.initial_persons = 100;
+    domestic.target_household_size = 2.5;
+    auto &financial = domestic.financial;
+    financial.struct_size = sizeof(financial);
+    financial.matching_protocol = MACRO_SIM_M4_MATCH_PRICE_SORTED;
+    financial.economy_id = 1;
+    financial.currency_id = 1;
+    financial.bonds = 1;
+    financial.firm_equity = 1;
+    financial.margin_credit = 1;
+    financial.consumption_firms = 6;
+    financial.capital_firms = 2;
+    financial.banks = 2;
+    financial.seed = 8;
+    financial.watchlist_size = 3;
+    financial.opening_capital_per_bank = 1'000.0;
+    financial.initial_policy_rate = 0.002;
+    fill_energy_policy(output->energy_policy, {});
+    fill_energy_rules(output->energy_rules, {});
+    fill_energy_input(output->energy_input, {});
+    fill_housing_policy(output->housing_policy, {});
+    fill_housing_rules(output->housing_rules, {});
+    fill_housing_input(output->housing_input, {});
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_genesis(macro_sim_session *session,
+                                      const macro_sim_m8_genesis_options *options) {
+    if (session == nullptr || options == nullptr ||
+        options->struct_size != sizeof(*options) || options->reserved != 0 ||
+        !valid_m7_genesis_options(options->domestic_economy) ||
+        options->energy_policy.struct_size != sizeof(options->energy_policy) ||
+        options->energy_rules.struct_size != sizeof(options->energy_rules) ||
+        options->energy_input.struct_size != sizeof(options->energy_input) ||
+        options->housing_policy.struct_size != sizeof(options->housing_policy) ||
+        options->housing_rules.struct_size != sizeof(options->housing_rules) ||
+        options->housing_input.struct_size != sizeof(options->housing_input) ||
+        !valid_flag(options->energy_policy.price_cap_compensation) ||
+        !valid_flag(options->energy_policy.state_owned_price_at_cost) ||
+        options->energy_policy.rationing > MACRO_SIM_M8_ENERGY_RATION_INDUSTRY_FIRST ||
+        !valid_flag(options->energy_rules.enabled) ||
+        !valid_flag(options->energy_rules.household_energy) ||
+        !valid_flag(options->energy_rules.deprivation) ||
+        !valid_flag(options->energy_rules.state_owned_first_producer) ||
+        options->energy_rules.reserved != 0 || options->energy_input.reserved != 0 ||
+        !valid_flag(options->housing_policy.mortgage_underwriting) ||
+        options->housing_policy.reserved != 0 ||
+        !valid_flag(options->housing_rules.enabled) ||
+        !valid_flag(options->housing_rules.resale_market) ||
+        !valid_flag(options->housing_rules.mortgages) ||
+        !valid_flag(options->housing_rules.rentals) ||
+        !valid_flag(options->housing_rules.construction) ||
+        !valid_flag(options->housing_rules.builder_land_fee_credit) ||
+        options->housing_rules.reserved != 0 || options->housing_input.reserved != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M8 genesis options are required");
+    }
+    macro_sim::simulation::M8SimulationSpec spec;
+    spec.domestic_economy = make_m7_spec(options->domestic_economy);
+    spec.energy_policy = energy_policy_from_c(options->energy_policy);
+    spec.energy_rules = energy_rules_from_c(options->energy_rules);
+    spec.energy_input = energy_input_from_c(options->energy_input);
+    spec.housing_policy = housing_policy_from_c(options->housing_policy);
+    spec.housing_rules = housing_rules_from_c(options->housing_rules);
+    spec.housing_input = housing_input_from_c(options->housing_input);
+    return status(session->engine.initialize_m8(spec));
+}
+
+macro_sim_status
+macro_sim_m8_update_energy_policy(macro_sim_session *session,
+                                  const macro_sim_m8_energy_policy *policy) {
+    if (session == nullptr || policy == nullptr ||
+        policy->struct_size != sizeof(*policy) ||
+        !valid_flag(policy->price_cap_compensation) ||
+        !valid_flag(policy->state_owned_price_at_cost) ||
+        policy->rationing > MACRO_SIM_M8_ENERGY_RATION_INDUSTRY_FIRST) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M8 energy policy are required");
+    }
+    return status(
+        session->engine.update_m8_energy_policy(energy_policy_from_c(*policy)));
+}
+
+macro_sim_status
+macro_sim_m8_update_housing_policy(macro_sim_session *session,
+                                   const macro_sim_m8_housing_policy *policy) {
+    if (session == nullptr || policy == nullptr ||
+        policy->struct_size != sizeof(*policy) ||
+        !valid_flag(policy->mortgage_underwriting) || policy->reserved != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M8 housing policy are required");
+    }
+    return status(
+        session->engine.update_m8_housing_policy(housing_policy_from_c(*policy)));
+}
+
+macro_sim_status
+macro_sim_m8_update_energy_input(macro_sim_session *session,
+                                 const macro_sim_m8_energy_input *input) {
+    if (session == nullptr || input == nullptr ||
+        input->struct_size != sizeof(*input) || input->reserved != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M8 energy input are required");
+    }
+    return status(session->engine.update_m8_energy_input(energy_input_from_c(*input)));
+}
+
+macro_sim_status
+macro_sim_m8_update_housing_input(macro_sim_session *session,
+                                  const macro_sim_m8_housing_input *input) {
+    if (session == nullptr || input == nullptr ||
+        input->struct_size != sizeof(*input) || input->reserved != 0) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and valid M8 housing input are required");
+    }
+    return status(
+        session->engine.update_m8_housing_input(housing_input_from_c(*input)));
+}
+
+macro_sim_status macro_sim_m8_advance(macro_sim_session *session, uint64_t tick_count,
+                                      macro_sim_m8_advance_result *output) {
+    if (session == nullptr || output == nullptr ||
+        output->struct_size != sizeof(*output) ||
+        output->metrics.struct_size != sizeof(output->metrics) ||
+        output->metrics.economy.struct_size != sizeof(output->metrics.economy) ||
+        output->metrics.economy.economy.struct_size !=
+            sizeof(output->metrics.economy.economy) ||
+        output->metrics.economy.economy.economy.struct_size !=
+            sizeof(output->metrics.economy.economy.economy) ||
+        output->metrics.economy.economy.economy.economy.struct_size !=
+            sizeof(output->metrics.economy.economy.economy.economy) ||
+        output->metrics.energy.struct_size != sizeof(output->metrics.energy) ||
+        output->metrics.housing.struct_size != sizeof(output->metrics.housing)) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "session and initialized M8 result are required");
+    }
+    const auto result = session->engine.advance_m8_ticks(tick_count);
+    if (!result.ok()) {
+        return status(result.status());
+    }
+    const auto &value = *result.get_if();
+    output->reserved = 0;
+    output->first_tick = value.first_tick.value();
+    output->next_tick = value.next_tick.value();
+    output->advanced_ticks = value.advanced_ticks;
+    output->scratch_capacity_signature = value.scratch_capacity_signature;
+    output->transfer_count = value.transfer_count;
+    output->trade_count = value.trade_count;
+    fill_m8_metrics(output->metrics, value.metrics);
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_state_digest(const macro_sim_session *session,
+                                           uint8_t *output, size_t output_size) {
+    return macro_sim_m2_state_digest(session, output, output_size);
+}
+
+macro_sim_status macro_sim_m8_checkpoint_save(const macro_sim_session *session,
+                                              macro_sim_owned_buffer *output) {
+    return macro_sim_m2_checkpoint_save(session, output);
+}
+
+macro_sim_status macro_sim_m8_checkpoint_load(macro_sim_session *session,
+                                              const uint8_t *checkpoint,
+                                              size_t checkpoint_size) {
+    return macro_sim_m2_checkpoint_load(session, checkpoint, checkpoint_size);
+}
+
+macro_sim_status macro_sim_m8_dwelling_count(const macro_sim_session *session,
+                                             size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->properties.minted_count();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_dwellings(const macro_sim_session *session, size_t offset,
+                                        macro_sim_m8_dwelling *output, size_t capacity,
+                                        size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and dwelling output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->properties.records();
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.id = source.id.value();
+        target.owner_kind = static_cast<std::uint32_t>(source.owner.kind);
+        target.location = source.location;
+        target.owner_id = source.owner.value;
+        target.occupant_household_id = source.occupant.value();
+        target.collateral_loan_id = source.collateral.value();
+        target.minted_tick = source.minted_tick.value();
+        target.last_title_tick = source.last_title_tick.value();
+        target.age_days = source.age_days;
+        target.floor_area = source.floor_area;
+        target.quality = source.quality;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_listing_count(const macro_sim_session *session,
+                                            size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->housing_listings.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_listings(const macro_sim_session *session, size_t offset,
+                                       macro_sim_m8_listing *output, size_t capacity,
+                                       size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and listing output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->housing_listings;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.dwelling_id = source.dwelling.value();
+        target.seller_kind = static_cast<std::uint32_t>(source.seller.kind);
+        target.forced = source.forced ? 1U : 0U;
+        target.seller_id = source.seller.value;
+        target.listed_tick = source.listed_tick.value();
+        target.asking_price = source.asking_price;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_mortgage_count(const macro_sim_session *session,
+                                             size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->mortgages.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_mortgages(const macro_sim_session *session, size_t offset,
+                                        macro_sim_m8_mortgage *output, size_t capacity,
+                                        size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and mortgage output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->mortgages;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.loan_id = source.loan.value();
+        target.borrower_household_id = source.borrower.value();
+        target.lender_bank_id = source.lender.value();
+        target.collateral_dwelling_id = source.collateral.value();
+        target.originated_tick = source.originated_tick.value();
+        target.foreclosed = source.foreclosed ? 1U : 0U;
+        target.original_principal = source.original_principal;
+        target.purchase_price = source.purchase_price;
+        target.qualifying_income = source.qualifying_income;
+        target.stressed_payment = source.stressed_payment;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_tenancy_count(const macro_sim_session *session,
+                                            size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->tenancies.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_tenancies(const macro_sim_session *session, size_t offset,
+                                        macro_sim_m8_tenancy *output, size_t capacity,
+                                        size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and tenancy output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->tenancies;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.id = source.id.value();
+        target.dwelling_id = source.dwelling.value();
+        target.landlord_household_id = source.landlord.value();
+        target.tenant_household_id = source.tenant.value();
+        target.started_tick = source.started_tick.value();
+        target.ended_tick = source.ended_tick.value();
+        target.missed_days = source.missed_days;
+        target.daily_rent = source.daily_rent;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_builder_count(const macro_sim_session *session,
+                                            size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->builders.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_builders(const macro_sim_session *session, size_t offset,
+                                       macro_sim_m8_builder *output, size_t capacity,
+                                       size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and builder output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->builders;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.firm_id = source.firm.value();
+        target.dwellings_minted = source.dwellings_minted;
+        target.work_in_progress = source.work_in_progress;
+        target.finished_inventory = source.finished_inventory;
+        target.demand_expected = source.demand_expected;
+        target.produced_today = source.produced_today;
+    }
+    *written = count;
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_energy_producer_count(const macro_sim_session *session,
+                                                    size_t *output) {
+    if (session == nullptr || output == nullptr ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and output are required");
+    }
+    *output = session->engine.housing_runtime()->energy_producers.size();
+    return status(MACRO_SIM_OK, "");
+}
+
+macro_sim_status macro_sim_m8_energy_producers(const macro_sim_session *session,
+                                               size_t offset,
+                                               macro_sim_m8_energy_producer *output,
+                                               size_t capacity, size_t *written) {
+    if (session == nullptr || written == nullptr ||
+        (capacity != 0 && output == nullptr) ||
+        session->engine.housing_runtime() == nullptr) {
+        return status(MACRO_SIM_INVALID_ARGUMENT,
+                      "active M8 session and energy producer output are required");
+    }
+    const auto &rows = session->engine.housing_runtime()->energy_producers;
+    *written = 0;
+    if (offset >= rows.size()) {
+        return status(MACRO_SIM_OK, "");
+    }
+    const auto count = std::min(capacity, rows.size() - offset);
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto &source = rows[offset + index];
+        auto &target = output[index];
+        std::memset(&target, 0, sizeof(target));
+        target.struct_size = sizeof(target);
+        target.active = source.active ? 1U : 0U;
+        target.state_owned = source.state_owned ? 1U : 0U;
+        target.firm_id = source.firm.value();
+        target.capacity_per_capital = source.capacity_per_capital;
+        target.inventory = source.inventory;
+        target.inventory_cost = source.inventory_cost;
+        target.produced = source.produced;
+        target.sales = source.sales;
+        target.revenue = source.revenue;
+        target.demand_expected = source.demand_expected;
     }
     *written = count;
     return status(MACRO_SIM_OK, "");

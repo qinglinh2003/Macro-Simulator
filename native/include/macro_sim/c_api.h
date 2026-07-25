@@ -17,6 +17,7 @@ extern "C" {
 #define MACRO_SIM_CAPABILITY_M5_MONETARY (UINT64_C(1) << 3)
 #define MACRO_SIM_CAPABILITY_M6_SECURITIES (UINT64_C(1) << 4)
 #define MACRO_SIM_CAPABILITY_M7_POPULATION (UINT64_C(1) << 5)
+#define MACRO_SIM_CAPABILITY_M8_ENERGY_HOUSING (UINT64_C(1) << 6)
 #define MACRO_SIM_M4_CAPABILITY_PHYSICAL_CAPITAL (UINT64_C(1) << 0)
 #define MACRO_SIM_M4_CAPABILITY_GOVERNMENT (UINT64_C(1) << 1)
 
@@ -656,6 +657,330 @@ typedef struct macro_sim_m7_estate {
     uint32_t reserved;
 } macro_sim_m7_estate;
 
+typedef enum macro_sim_m8_energy_rationing {
+    MACRO_SIM_M8_ENERGY_RATION_MARKET = 0,
+    MACRO_SIM_M8_ENERGY_RATION_PROPORTIONAL = 1,
+    MACRO_SIM_M8_ENERGY_RATION_HOUSEHOLD_FIRST = 2,
+    MACRO_SIM_M8_ENERGY_RATION_INDUSTRY_FIRST = 3
+} macro_sim_m8_energy_rationing;
+
+typedef struct macro_sim_m8_energy_policy {
+    uint32_t struct_size;
+    uint32_t price_cap_compensation;
+    uint32_t state_owned_price_at_cost;
+    uint32_t rationing;
+    double excise_rate;
+    double household_subsidy_rate;
+    double subsidy_deposit_threshold;
+    double price_cap;
+    double strategic_reserve_target;
+    double strategic_reserve_flow_cap;
+} macro_sim_m8_energy_policy;
+
+typedef struct macro_sim_m8_energy_rules {
+    uint32_t struct_size;
+    uint32_t enabled;
+    uint32_t household_energy;
+    uint32_t deprivation;
+    uint32_t state_owned_first_producer;
+    uint32_t deprivation_burnin_years;
+    uint32_t deprivation_acute_days;
+    uint32_t deprivation_chronic_days;
+    uint32_t reserved;
+    uint64_t producer_count;
+    double initial_producer_cash;
+    double initial_price;
+    double initial_wage;
+    double initial_markup;
+    double producer_productivity;
+    double capacity_per_capital;
+    double initial_utilization;
+    double producer_inventory_ratio;
+    double demand_adjustment;
+    double markup_adjustment;
+    double markup_minimum;
+    double markup_maximum;
+    double household_need;
+    double downstream_intensity;
+    double downstream_coverage_days;
+    double downstream_gap_close;
+    double hoarding_beta;
+    double slow_price_days;
+    double deprivation_subsistence_share;
+    double fuel_poverty_threshold;
+    double fuel_poverty_mortality_gamma;
+    double fuel_poverty_mortality_cap;
+} macro_sim_m8_energy_rules;
+
+typedef struct macro_sim_m8_energy_input {
+    uint32_t struct_size;
+    uint32_t reserved;
+    double capacity_multiplier;
+    double labor_availability_multiplier;
+    double supply_multiplier;
+    double household_demand_multiplier;
+    double industry_demand_multiplier;
+    double reference_price_multiplier;
+} macro_sim_m8_energy_input;
+
+typedef struct macro_sim_m8_housing_policy {
+    uint32_t struct_size;
+    uint32_t mortgage_underwriting;
+    uint32_t rental_eviction_arrears;
+    uint32_t reserved;
+    uint64_t annual_housing_permits;
+    double mortgage_ltv_cap;
+    double mortgage_dsti_cap;
+    double mortgage_stress_rate_addon;
+    double mortgage_risk_weight;
+    double mortgage_minimum_capital_ratio;
+    double mortgage_foreclosure_ltv;
+    double mortgage_arrears_floor;
+    double land_fee_share;
+    double land_fee_stock_elasticity;
+    double transfer_tax_rate;
+    double property_tax_rate;
+} macro_sim_m8_housing_policy;
+
+typedef struct macro_sim_m8_housing_rules {
+    uint32_t struct_size;
+    uint32_t enabled;
+    uint32_t resale_market;
+    uint32_t mortgages;
+    uint32_t rentals;
+    uint32_t construction;
+    uint32_t location_count;
+    uint32_t market_interval_days;
+    uint32_t buyer_search_count;
+    uint32_t builder_land_fee_credit;
+    uint32_t affordability_burnin_years;
+    uint32_t reserved;
+    uint64_t builder_count;
+    double house_price_income_years;
+    double initial_dwellings_per_household;
+    double initial_homeownership_share;
+    double initial_floor_area;
+    double initial_quality;
+    double voluntary_ask_markup;
+    double forced_sale_discount;
+    double ask_decay;
+    double demand_price_step;
+    double ask_floor_annual_wage_share;
+    double buyer_liquidity_buffer;
+    double distress_deposit_floor;
+    double initial_rent_yield;
+    double rent_adjustment;
+    double rent_burden_cap;
+    double rental_investor_premium;
+    double rental_vacancy_deadband;
+    double rent_floor_wage_share;
+    double initial_builder_cash_buffer;
+    double builder_productivity;
+    double builder_demand_seed;
+    double builder_demand_price_gain;
+    double builder_finished_inventory_buffer;
+    double leave_home_elasticity;
+    double leave_home_multiplier_minimum;
+    double leave_home_multiplier_maximum;
+    double fertility_elasticity;
+    double fertility_multiplier_minimum;
+    double fertility_multiplier_maximum;
+} macro_sim_m8_housing_rules;
+
+typedef struct macro_sim_m8_housing_input {
+    uint32_t struct_size;
+    uint32_t reserved;
+    double house_price_reference_multiplier;
+    double buyer_demand_multiplier;
+    double rental_demand_multiplier;
+    double construction_productivity_multiplier;
+    double land_cost_multiplier;
+} macro_sim_m8_housing_input;
+
+typedef struct macro_sim_m8_genesis_options {
+    uint32_t struct_size;
+    uint32_t reserved;
+    macro_sim_m7_genesis_options domestic_economy;
+    macro_sim_m8_energy_policy energy_policy;
+    macro_sim_m8_energy_rules energy_rules;
+    macro_sim_m8_energy_input energy_input;
+    macro_sim_m8_housing_policy housing_policy;
+    macro_sim_m8_housing_rules housing_rules;
+    macro_sim_m8_housing_input housing_input;
+} macro_sim_m8_genesis_options;
+
+typedef struct macro_sim_m8_energy_metrics {
+    uint32_t struct_size;
+    uint32_t deprivation_boundary;
+    double production;
+    double capacity;
+    double utilization;
+    double opening_supply;
+    double requested_total;
+    double requested_households;
+    double requested_industry;
+    double requested_public;
+    double sold;
+    double unfilled;
+    double transaction_price;
+    double household_units;
+    double household_spending;
+    double industry_units;
+    double industry_spending;
+    double excise_paid;
+    double subsidy_paid;
+    double cap_compensation;
+    double strategic_reserve_stock;
+    double strategic_reserve_flow;
+    double strategic_reserve_purchase_paid;
+    double strategic_reserve_sale_revenue;
+    double fuel_poverty_share;
+    double fuel_poverty_mortality_multiplier;
+    double deprivation_below_100_share;
+    double deprivation_below_60_share;
+    double deprivation_below_30_share;
+    double deprivation_destitute_share;
+    double deprivation_acute_stock;
+    double deprivation_chronic_stock;
+    double deprivation_max_spell_days;
+} macro_sim_m8_energy_metrics;
+
+typedef struct macro_sim_m8_housing_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    double house_price;
+    double rent_level;
+    double housing_stock;
+    double homeownership_share;
+    double vacancy_share;
+    double active_listings;
+    double forced_listing_share;
+    double session_sales;
+    double session_volume;
+    double mean_time_on_market_days;
+    double mortgage_originations;
+    double mortgage_principal_originated;
+    double mortgage_principal_outstanding;
+    double foreclosures;
+    double rent_paid;
+    double rent_unpaid;
+    double evictions;
+    double property_tax_paid;
+    double transfer_tax_paid;
+    double land_fee_paid;
+    double construction_output;
+    double dwellings_completed;
+    double permits_used;
+    double price_to_income_ratio;
+    double rent_burden_ratio;
+    double leave_home_multiplier;
+    double fertility_multiplier;
+} macro_sim_m8_housing_metrics;
+
+typedef struct macro_sim_m8_metrics {
+    uint32_t struct_size;
+    uint32_t reserved;
+    macro_sim_m7_metrics economy;
+    macro_sim_m8_energy_metrics energy;
+    macro_sim_m8_housing_metrics housing;
+} macro_sim_m8_metrics;
+
+typedef struct macro_sim_m8_advance_result {
+    uint32_t struct_size;
+    uint32_t reserved;
+    uint64_t first_tick;
+    uint64_t next_tick;
+    uint64_t advanced_ticks;
+    uint64_t scratch_capacity_signature;
+    uint64_t transfer_count;
+    uint64_t trade_count;
+    macro_sim_m8_metrics metrics;
+} macro_sim_m8_advance_result;
+
+typedef struct macro_sim_m8_dwelling {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t id;
+    uint32_t owner_kind;
+    uint32_t location;
+    uint64_t owner_id;
+    uint64_t occupant_household_id;
+    uint64_t collateral_loan_id;
+    uint64_t minted_tick;
+    uint64_t last_title_tick;
+    uint32_t age_days;
+    uint32_t reserved;
+    double floor_area;
+    double quality;
+} macro_sim_m8_dwelling;
+
+typedef struct macro_sim_m8_listing {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t dwelling_id;
+    uint32_t seller_kind;
+    uint32_t forced;
+    uint64_t seller_id;
+    uint64_t listed_tick;
+    double asking_price;
+} macro_sim_m8_listing;
+
+typedef struct macro_sim_m8_mortgage {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t loan_id;
+    uint64_t borrower_household_id;
+    uint64_t lender_bank_id;
+    uint64_t collateral_dwelling_id;
+    uint64_t originated_tick;
+    uint32_t foreclosed;
+    uint32_t reserved;
+    double original_principal;
+    double purchase_price;
+    double qualifying_income;
+    double stressed_payment;
+} macro_sim_m8_mortgage;
+
+typedef struct macro_sim_m8_tenancy {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t id;
+    uint64_t dwelling_id;
+    uint64_t landlord_household_id;
+    uint64_t tenant_household_id;
+    uint64_t started_tick;
+    uint64_t ended_tick;
+    uint32_t missed_days;
+    uint32_t reserved;
+    double daily_rent;
+} macro_sim_m8_tenancy;
+
+typedef struct macro_sim_m8_builder {
+    uint32_t struct_size;
+    uint32_t active;
+    uint64_t firm_id;
+    uint64_t dwellings_minted;
+    double work_in_progress;
+    double finished_inventory;
+    double demand_expected;
+    double produced_today;
+} macro_sim_m8_builder;
+
+typedef struct macro_sim_m8_energy_producer {
+    uint32_t struct_size;
+    uint32_t active;
+    uint32_t state_owned;
+    uint32_t reserved;
+    uint64_t firm_id;
+    double capacity_per_capital;
+    double inventory;
+    double inventory_cost;
+    double produced;
+    double sales;
+    double revenue;
+    double demand_expected;
+} macro_sim_m8_energy_producer;
+
 typedef enum macro_sim_validation_code {
     MACRO_SIM_VALIDATION_OK = 0,
     MACRO_SIM_VALIDATION_UNKNOWN_CONTRACT = 1,
@@ -758,8 +1083,8 @@ MACRO_SIM_C_API macro_sim_status macro_sim_m7_update_policy(
     macro_sim_session *session, const macro_sim_m7_policy *policy);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_policy_defaults(macro_sim_m7_policy *output);
-MACRO_SIM_C_API macro_sim_status macro_sim_m7_update_rules(
-    macro_sim_session *session, const macro_sim_m7_rules *rules);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m7_update_rules(macro_sim_session *session, const macro_sim_m7_rules *rules);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_rules_defaults(macro_sim_m7_rules *output);
 MACRO_SIM_C_API macro_sim_status
@@ -773,29 +1098,88 @@ MACRO_SIM_C_API macro_sim_status macro_sim_m7_checkpoint_load(
     macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_person_count(const macro_sim_session *session, size_t *output);
-MACRO_SIM_C_API macro_sim_status macro_sim_m7_persons(
-    const macro_sim_session *session, size_t offset, macro_sim_m7_person *output,
-    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_persons(const macro_sim_session *session,
+                                                      size_t offset,
+                                                      macro_sim_m7_person *output,
+                                                      size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_membership_count(const macro_sim_session *session, size_t *output);
 MACRO_SIM_C_API macro_sim_status macro_sim_m7_memberships(
-    const macro_sim_session *session, size_t offset,
-    macro_sim_m7_membership *output, size_t capacity, size_t *written);
+    const macro_sim_session *session, size_t offset, macro_sim_m7_membership *output,
+    size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_job_count(const macro_sim_session *session, size_t *output);
-MACRO_SIM_C_API macro_sim_status macro_sim_m7_jobs(
-    const macro_sim_session *session, size_t offset, macro_sim_m7_job *output,
-    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_jobs(const macro_sim_session *session,
+                                                   size_t offset,
+                                                   macro_sim_m7_job *output,
+                                                   size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_union_count(const macro_sim_session *session, size_t *output);
-MACRO_SIM_C_API macro_sim_status macro_sim_m7_unions(
-    const macro_sim_session *session, size_t offset, macro_sim_m7_union *output,
-    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_unions(const macro_sim_session *session,
+                                                     size_t offset,
+                                                     macro_sim_m7_union *output,
+                                                     size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_m7_estate_count(const macro_sim_session *session, size_t *output);
-MACRO_SIM_C_API macro_sim_status macro_sim_m7_estates(
-    const macro_sim_session *session, size_t offset, macro_sim_m7_estate *output,
-    size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status macro_sim_m7_estates(const macro_sim_session *session,
+                                                      size_t offset,
+                                                      macro_sim_m7_estate *output,
+                                                      size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_defaults(macro_sim_m8_genesis_options *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_genesis(
+    macro_sim_session *session, const macro_sim_m8_genesis_options *options);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_update_energy_policy(
+    macro_sim_session *session, const macro_sim_m8_energy_policy *policy);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_update_housing_policy(
+    macro_sim_session *session, const macro_sim_m8_housing_policy *policy);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_update_energy_input(
+    macro_sim_session *session, const macro_sim_m8_energy_input *input);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_update_housing_input(
+    macro_sim_session *session, const macro_sim_m8_housing_input *input);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_advance(macro_sim_session *session, uint64_t tick_count,
+                     macro_sim_m8_advance_result *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_state_digest(
+    const macro_sim_session *session, uint8_t *output, size_t output_size);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_checkpoint_save(
+    const macro_sim_session *session, macro_sim_owned_buffer *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_checkpoint_load(
+    macro_sim_session *session, const uint8_t *checkpoint, size_t checkpoint_size);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_dwelling_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_dwellings(const macro_sim_session *session, size_t offset,
+                       macro_sim_m8_dwelling *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_listing_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_listings(const macro_sim_session *session,
+                                                       size_t offset,
+                                                       macro_sim_m8_listing *output,
+                                                       size_t capacity,
+                                                       size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_mortgage_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_mortgages(const macro_sim_session *session, size_t offset,
+                       macro_sim_m8_mortgage *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_tenancy_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_tenancies(const macro_sim_session *session, size_t offset,
+                       macro_sim_m8_tenancy *output, size_t capacity, size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_builder_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_builders(const macro_sim_session *session,
+                                                       size_t offset,
+                                                       macro_sim_m8_builder *output,
+                                                       size_t capacity,
+                                                       size_t *written);
+MACRO_SIM_C_API macro_sim_status
+macro_sim_m8_energy_producer_count(const macro_sim_session *session, size_t *output);
+MACRO_SIM_C_API macro_sim_status macro_sim_m8_energy_producers(
+    const macro_sim_session *session, size_t offset,
+    macro_sim_m8_energy_producer *output, size_t capacity, size_t *written);
 MACRO_SIM_C_API macro_sim_status
 macro_sim_owned_buffer_release(macro_sim_owned_buffer *buffer);
 

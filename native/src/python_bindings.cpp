@@ -299,9 +299,7 @@ nb::dict m6_result_to_python(const macro_sim::simulation::M6AdvanceResult &resul
     return output;
 }
 
-nb::dict m7_metrics_to_python(
-    const macro_sim::simulation::M7Metrics &metrics
-) {
+nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     nb::dict output;
     output["economy"] = m6_metrics_to_python(metrics.economy);
 #define MACRO_SIM_M7_METRIC(field) output[#field] = metrics.field
@@ -348,38 +346,123 @@ nb::dict m7_metrics_to_python(
     return output;
 }
 
-nb::dict m7_result_to_python(
-    const macro_sim::simulation::M7AdvanceResult &result
-) {
+nb::dict m7_result_to_python(const macro_sim::simulation::M7AdvanceResult &result) {
     nb::dict output;
     output["first_tick"] = result.first_tick.value();
     output["next_tick"] = result.next_tick.value();
     output["advanced_ticks"] = result.advanced_ticks;
-    output["scratch_capacity_signature"] =
-        result.scratch_capacity_signature;
+    output["scratch_capacity_signature"] = result.scratch_capacity_signature;
     output["transfer_count"] = result.transfer_count;
     output["trade_count"] = result.trade_count;
     output["metrics"] = m7_metrics_to_python(result.metrics);
     return output;
 }
 
-nb::dict m6_snapshot_to_python(
-    const macro_sim::EngineSession &session
-);
+nb::dict
+m8_energy_metrics_to_python(const macro_sim::simulation::EnergyMetrics &metrics) {
+    nb::dict output;
+#define MACRO_SIM_M8_ENERGY_METRIC(field) output[#field] = metrics.field
+    MACRO_SIM_M8_ENERGY_METRIC(production);
+    MACRO_SIM_M8_ENERGY_METRIC(capacity);
+    MACRO_SIM_M8_ENERGY_METRIC(utilization);
+    MACRO_SIM_M8_ENERGY_METRIC(opening_supply);
+    MACRO_SIM_M8_ENERGY_METRIC(requested_total);
+    MACRO_SIM_M8_ENERGY_METRIC(requested_households);
+    MACRO_SIM_M8_ENERGY_METRIC(requested_industry);
+    MACRO_SIM_M8_ENERGY_METRIC(requested_public);
+    MACRO_SIM_M8_ENERGY_METRIC(sold);
+    MACRO_SIM_M8_ENERGY_METRIC(unfilled);
+    MACRO_SIM_M8_ENERGY_METRIC(transaction_price);
+    MACRO_SIM_M8_ENERGY_METRIC(household_units);
+    MACRO_SIM_M8_ENERGY_METRIC(household_spending);
+    MACRO_SIM_M8_ENERGY_METRIC(industry_units);
+    MACRO_SIM_M8_ENERGY_METRIC(industry_spending);
+    MACRO_SIM_M8_ENERGY_METRIC(excise_paid);
+    MACRO_SIM_M8_ENERGY_METRIC(subsidy_paid);
+    MACRO_SIM_M8_ENERGY_METRIC(cap_compensation);
+    MACRO_SIM_M8_ENERGY_METRIC(strategic_reserve_stock);
+    MACRO_SIM_M8_ENERGY_METRIC(strategic_reserve_flow);
+    MACRO_SIM_M8_ENERGY_METRIC(strategic_reserve_purchase_paid);
+    MACRO_SIM_M8_ENERGY_METRIC(strategic_reserve_sale_revenue);
+    MACRO_SIM_M8_ENERGY_METRIC(fuel_poverty_share);
+    MACRO_SIM_M8_ENERGY_METRIC(fuel_poverty_mortality_multiplier);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_below_100_share);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_below_60_share);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_below_30_share);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_destitute_share);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_acute_stock);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_chronic_stock);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_max_spell_days);
+    MACRO_SIM_M8_ENERGY_METRIC(deprivation_boundary);
+#undef MACRO_SIM_M8_ENERGY_METRIC
+    return output;
+}
 
-nb::dict m7_snapshot_to_python(
-    const macro_sim::EngineSession &session
-) {
+nb::dict
+m8_housing_metrics_to_python(const macro_sim::simulation::HousingMetrics &metrics) {
+    nb::dict output;
+#define MACRO_SIM_M8_HOUSING_METRIC(field) output[#field] = metrics.field
+    MACRO_SIM_M8_HOUSING_METRIC(house_price);
+    MACRO_SIM_M8_HOUSING_METRIC(rent_level);
+    MACRO_SIM_M8_HOUSING_METRIC(housing_stock);
+    MACRO_SIM_M8_HOUSING_METRIC(homeownership_share);
+    MACRO_SIM_M8_HOUSING_METRIC(vacancy_share);
+    MACRO_SIM_M8_HOUSING_METRIC(active_listings);
+    MACRO_SIM_M8_HOUSING_METRIC(forced_listing_share);
+    MACRO_SIM_M8_HOUSING_METRIC(session_sales);
+    MACRO_SIM_M8_HOUSING_METRIC(session_volume);
+    MACRO_SIM_M8_HOUSING_METRIC(mean_time_on_market_days);
+    MACRO_SIM_M8_HOUSING_METRIC(mortgage_originations);
+    MACRO_SIM_M8_HOUSING_METRIC(mortgage_principal_originated);
+    MACRO_SIM_M8_HOUSING_METRIC(mortgage_principal_outstanding);
+    MACRO_SIM_M8_HOUSING_METRIC(foreclosures);
+    MACRO_SIM_M8_HOUSING_METRIC(rent_paid);
+    MACRO_SIM_M8_HOUSING_METRIC(rent_unpaid);
+    MACRO_SIM_M8_HOUSING_METRIC(evictions);
+    MACRO_SIM_M8_HOUSING_METRIC(property_tax_paid);
+    MACRO_SIM_M8_HOUSING_METRIC(transfer_tax_paid);
+    MACRO_SIM_M8_HOUSING_METRIC(land_fee_paid);
+    MACRO_SIM_M8_HOUSING_METRIC(construction_output);
+    MACRO_SIM_M8_HOUSING_METRIC(dwellings_completed);
+    MACRO_SIM_M8_HOUSING_METRIC(permits_used);
+    MACRO_SIM_M8_HOUSING_METRIC(price_to_income_ratio);
+    MACRO_SIM_M8_HOUSING_METRIC(rent_burden_ratio);
+    MACRO_SIM_M8_HOUSING_METRIC(leave_home_multiplier);
+    MACRO_SIM_M8_HOUSING_METRIC(fertility_multiplier);
+#undef MACRO_SIM_M8_HOUSING_METRIC
+    return output;
+}
+
+nb::dict m8_metrics_to_python(const macro_sim::simulation::M8Metrics &metrics) {
+    nb::dict output;
+    output["economy"] = m7_metrics_to_python(metrics.economy);
+    output["energy"] = m8_energy_metrics_to_python(metrics.energy);
+    output["housing"] = m8_housing_metrics_to_python(metrics.housing);
+    return output;
+}
+
+nb::dict m8_result_to_python(const macro_sim::simulation::M8AdvanceResult &result) {
+    nb::dict output;
+    output["first_tick"] = result.first_tick.value();
+    output["next_tick"] = result.next_tick.value();
+    output["advanced_ticks"] = result.advanced_ticks;
+    output["scratch_capacity_signature"] = result.scratch_capacity_signature;
+    output["transfer_count"] = result.transfer_count;
+    output["trade_count"] = result.trade_count;
+    output["metrics"] = m8_metrics_to_python(result.metrics);
+    return output;
+}
+
+nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session);
+
+nb::dict m7_snapshot_to_python(const macro_sim::EngineSession &session) {
     const auto *runtime = session.population_runtime();
     if (runtime == nullptr) {
-        throw std::runtime_error(
-            "invalid_handle: session has no active M7 simulation"
-        );
+        throw std::runtime_error("invalid_handle: session has no active M7 simulation");
     }
     auto output = m6_snapshot_to_python(session);
     nb::list persons;
-    for (std::size_t index = 1;
-         index < runtime->persons.records().size(); ++index) {
+    for (std::size_t index = 1; index < runtime->persons.records().size(); ++index) {
         const auto &row = runtime->persons.records()[index];
         nb::dict item;
         item["id"] = row.id.value();
@@ -398,8 +481,7 @@ nb::dict m7_snapshot_to_python(
         persons.append(std::move(item));
     }
     nb::list jobs;
-    for (std::size_t index = 1;
-         index < runtime->employment.records().size(); ++index) {
+    for (std::size_t index = 1; index < runtime->employment.records().size(); ++index) {
         const auto &row = runtime->employment.records()[index];
         nb::dict item;
         item["id"] = row.id.value();
@@ -422,8 +504,7 @@ nb::dict m7_snapshot_to_python(
         item["second_id"] = row.second.value();
         item["start_day"] = row.start_day;
         item["end_day"] = row.end_day;
-        item["end_kind"] =
-            static_cast<std::uint8_t>(row.end_kind);
+        item["end_kind"] = static_cast<std::uint8_t>(row.end_kind);
         item["active"] = row.active;
         unions.append(std::move(item));
     }
@@ -434,8 +515,7 @@ nb::dict m7_snapshot_to_python(
         item["deceased_id"] = row.deceased.value();
         item["heir_id"] = row.heir.value();
         item["household_id"] = row.household.value();
-        item["destination_household_id"] =
-            row.destination_household.value();
+        item["destination_household_id"] = row.destination_household.value();
         item["opened_day"] = row.opened_day;
         item["settled_day"] = row.settled_day;
         item["transferred_lots"] = row.transferred_lots;
@@ -454,8 +534,7 @@ nb::dict m7_snapshot_to_python(
         item["event_id"] = row.event.value();
         item["person_id"] = row.person.value();
         item["origin_household_id"] = row.origin.value();
-        item["destination_household_id"] =
-            row.destination.value();
+        item["destination_household_id"] = row.destination.value();
         item["day"] = row.day;
         leaving_home.append(std::move(item));
     }
@@ -466,6 +545,162 @@ nb::dict m7_snapshot_to_python(
     output["leaving_home"] = std::move(leaving_home);
     output["calendar_day"] = runtime->current_calendar_day;
     output["metrics"] = m7_metrics_to_python(runtime->last_metrics);
+    return output;
+}
+
+nb::dict m8_snapshot_to_python(const macro_sim::EngineSession &session) {
+    const auto *runtime = session.housing_runtime();
+    if (runtime == nullptr) {
+        throw std::runtime_error("invalid_handle: session has no active M8 simulation");
+    }
+    auto output = m7_snapshot_to_python(session);
+    nb::list energy_producers;
+    for (const auto &row : runtime->energy_producers) {
+        nb::dict item;
+        item["firm_id"] = row.firm.value();
+        item["active"] = row.active;
+        item["state_owned"] = row.state_owned;
+        item["capacity_per_capital"] = row.capacity_per_capital;
+        item["inventory"] = row.inventory;
+        item["inventory_cost"] = row.inventory_cost;
+        item["produced"] = row.produced;
+        item["sales"] = row.sales;
+        item["revenue"] = row.revenue;
+        item["demand_expected"] = row.demand_expected;
+        energy_producers.append(std::move(item));
+    }
+    nb::list energy_inputs;
+    for (const auto &row : runtime->energy_inputs) {
+        nb::dict item;
+        item["firm_id"] = row.firm.value();
+        item["active"] = row.active;
+        item["intensity"] = row.intensity;
+        item["coverage_days"] = row.coverage_days;
+        item["stock"] = row.stock;
+        item["stock_cost"] = row.stock_cost;
+        item["average_cost"] = row.average_cost;
+        item["bought"] = row.bought;
+        item["used"] = row.used;
+        item["unmet"] = row.unmet;
+        energy_inputs.append(std::move(item));
+    }
+    nb::list household_energy;
+    for (const auto &row : runtime->household_energy) {
+        nb::dict item;
+        item["household_id"] = row.household.value();
+        item["active"] = row.active;
+        item["need"] = row.need;
+        item["bought"] = row.bought;
+        item["spent"] = row.spent;
+        item["subsidy"] = row.subsidy;
+        item["coverage"] = row.coverage;
+        item["deprivation_spells"] =
+            nb::make_tuple(row.deprivation_spells[0], row.deprivation_spells[1],
+                           row.deprivation_spells[2]);
+        household_energy.append(std::move(item));
+    }
+    nb::list dwellings;
+    for (const auto &row : runtime->properties.records()) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["owner_kind"] = static_cast<std::uint8_t>(row.owner.kind);
+        item["owner_id"] = row.owner.value;
+        item["occupant_household_id"] = row.occupant.value();
+        item["collateral_loan_id"] = row.collateral.value();
+        item["minted_tick"] = row.minted_tick.value();
+        item["last_title_tick"] = row.last_title_tick.value();
+        item["floor_area"] = row.floor_area;
+        item["quality"] = row.quality;
+        item["location"] = row.location;
+        item["age_days"] = row.age_days;
+        item["active"] = row.active;
+        dwellings.append(std::move(item));
+    }
+    nb::list title_events;
+    for (const auto &row : runtime->properties.title_events()) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["dwelling_id"] = row.dwelling.value();
+        item["kind"] = static_cast<std::uint8_t>(row.kind);
+        item["previous_owner_kind"] =
+            static_cast<std::uint8_t>(row.previous_owner.kind);
+        item["previous_owner_id"] = row.previous_owner.value;
+        item["next_owner_kind"] = static_cast<std::uint8_t>(row.next_owner.kind);
+        item["next_owner_id"] = row.next_owner.value;
+        item["tick"] = row.tick.value();
+        title_events.append(std::move(item));
+    }
+    nb::list listings;
+    for (const auto &row : runtime->housing_listings) {
+        nb::dict item;
+        item["dwelling_id"] = row.dwelling.value();
+        item["seller_kind"] = static_cast<std::uint8_t>(row.seller.kind);
+        item["seller_id"] = row.seller.value;
+        item["asking_price"] = row.asking_price;
+        item["listed_tick"] = row.listed_tick.value();
+        item["forced"] = row.forced;
+        item["active"] = row.active;
+        listings.append(std::move(item));
+    }
+    nb::list mortgages;
+    for (const auto &row : runtime->mortgages) {
+        nb::dict item;
+        item["loan_id"] = row.loan.value();
+        item["borrower_household_id"] = row.borrower.value();
+        item["lender_bank_id"] = row.lender.value();
+        item["collateral_dwelling_id"] = row.collateral.value();
+        item["original_principal"] = row.original_principal;
+        item["purchase_price"] = row.purchase_price;
+        item["qualifying_income"] = row.qualifying_income;
+        item["stressed_payment"] = row.stressed_payment;
+        item["originated_tick"] = row.originated_tick.value();
+        item["active"] = row.active;
+        item["foreclosed"] = row.foreclosed;
+        mortgages.append(std::move(item));
+    }
+    nb::list tenancies;
+    for (const auto &row : runtime->tenancies) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["dwelling_id"] = row.dwelling.value();
+        item["landlord_household_id"] = row.landlord.value();
+        item["tenant_household_id"] = row.tenant.value();
+        item["daily_rent"] = row.daily_rent;
+        item["missed_days"] = row.missed_days;
+        item["started_tick"] = row.started_tick.value();
+        item["ended_tick"] = row.ended_tick.value();
+        item["active"] = row.active;
+        tenancies.append(std::move(item));
+    }
+    nb::list builders;
+    for (const auto &row : runtime->builders) {
+        nb::dict item;
+        item["firm_id"] = row.firm.value();
+        item["active"] = row.active;
+        item["work_in_progress"] = row.work_in_progress;
+        item["finished_inventory"] = row.finished_inventory;
+        item["demand_expected"] = row.demand_expected;
+        item["produced_today"] = row.produced_today;
+        item["dwellings_minted"] = row.dwellings_minted;
+        builders.append(std::move(item));
+    }
+    output["energy_producers"] = std::move(energy_producers);
+    output["energy_inputs"] = std::move(energy_inputs);
+    output["household_energy"] = std::move(household_energy);
+    output["dwellings"] = std::move(dwellings);
+    output["title_events"] = std::move(title_events);
+    output["housing_listings"] = std::move(listings);
+    output["mortgages"] = std::move(mortgages);
+    output["tenancies"] = std::move(tenancies);
+    output["builders"] = std::move(builders);
+    output["strategic_reserve_stock"] = runtime->strategic_reserve_stock;
+    output["strategic_reserve_cost"] = runtime->strategic_reserve_cost;
+    output["energy_price"] = runtime->energy_price;
+    output["slow_energy_price"] = runtime->slow_energy_price;
+    output["house_price"] = runtime->house_price;
+    output["rent_level"] = runtime->rent_level;
+    output["permits_used"] = runtime->permits_used;
+    output["metrics"] = m8_metrics_to_python(runtime->last_metrics);
     return output;
 }
 
@@ -898,10 +1133,9 @@ NB_MODULE(_native, module) {
                 &macro_sim::simulation::M6SimulationSpec::monetary_economy)
         .def_rw("policy", &macro_sim::simulation::M6SimulationSpec::policy)
         .def_rw("rules", &macro_sim::simulation::M6SimulationSpec::rules);
-    auto vital = nb::class_<macro_sim::algorithms::VitalRates>(
-        module, "VitalRates"
-    ).def(nb::init<>());
-#define MACRO_SIM_BIND_VITAL(field) \
+    auto vital = nb::class_<macro_sim::algorithms::VitalRates>(module, "VitalRates")
+                     .def(nb::init<>());
+#define MACRO_SIM_BIND_VITAL(field)                                                    \
     vital.def_rw(#field, &macro_sim::algorithms::VitalRates::field)
     MACRO_SIM_BIND_VITAL(makeham_a);
     MACRO_SIM_BIND_VITAL(gompertz_b);
@@ -915,14 +1149,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_VITAL(interval);
 #undef MACRO_SIM_BIND_VITAL
     auto marriage_rules =
-        nb::class_<macro_sim::core::MarriageRules>(
-            module, "MarriageRules"
-        )
+        nb::class_<macro_sim::core::MarriageRules>(module, "MarriageRules")
             .def(nb::init<>());
-#define MACRO_SIM_BIND_MARRIAGE(field) \
-    marriage_rules.def_rw( \
-        #field, &macro_sim::core::MarriageRules::field \
-    )
+#define MACRO_SIM_BIND_MARRIAGE(field)                                                 \
+    marriage_rules.def_rw(#field, &macro_sim::core::MarriageRules::field)
     MACRO_SIM_BIND_MARRIAGE(minimum_age);
     MACRO_SIM_BIND_MARRIAGE(maximum_age);
     MACRO_SIM_BIND_MARRIAGE(maximum_age_gap);
@@ -932,19 +1162,13 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_MARRIAGE(forbid_same_household);
     MACRO_SIM_BIND_MARRIAGE(forbid_close_kin);
 #undef MACRO_SIM_BIND_MARRIAGE
-    nb::class_<macro_sim::simulation::M7PolicyState>(
-        module, "M7Policy"
-    )
+    nb::class_<macro_sim::simulation::M7PolicyState>(module, "M7Policy")
         .def(nb::init<>())
-        .def_rw(
-            "inheritance_tax_rate",
-            &macro_sim::simulation::M7PolicyState::
-                inheritance_tax_rate
-        );
-    auto m7_rules = nb::class_<macro_sim::simulation::M7Rules>(
-        module, "M7Rules"
-    ).def(nb::init<>());
-#define MACRO_SIM_BIND_M7_RULE(field) \
+        .def_rw("inheritance_tax_rate",
+                &macro_sim::simulation::M7PolicyState::inheritance_tax_rate);
+    auto m7_rules =
+        nb::class_<macro_sim::simulation::M7Rules>(module, "M7Rules").def(nb::init<>());
+#define MACRO_SIM_BIND_M7_RULE(field)                                                  \
     m7_rules.def_rw(#field, &macro_sim::simulation::M7Rules::field)
     MACRO_SIM_BIND_M7_RULE(vital_rates);
     MACRO_SIM_BIND_M7_RULE(working_age);
@@ -987,45 +1211,182 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(annual_divorce_rate);
     MACRO_SIM_BIND_M7_RULE(marriage_rules);
 #undef MACRO_SIM_BIND_M7_RULE
-    nb::class_<macro_sim::simulation::M7PopulationSpec>(
-        module, "M7PopulationSpec"
-    )
+    nb::class_<macro_sim::simulation::M7PopulationSpec>(module, "M7PopulationSpec")
         .def(nb::init<>())
-        .def_rw(
-            "initial_persons",
-            &macro_sim::simulation::M7PopulationSpec::initial_persons
-        )
-        .def_rw(
-            "start_calendar_day",
-            &macro_sim::simulation::M7PopulationSpec::
-                start_calendar_day
-        )
-        .def_rw(
-            "target_household_size",
-            &macro_sim::simulation::M7PopulationSpec::
-                target_household_size
-        );
-    nb::class_<macro_sim::simulation::M7SimulationSpec>(
-        module, "M7SimulationSpec"
-    )
+        .def_rw("initial_persons",
+                &macro_sim::simulation::M7PopulationSpec::initial_persons)
+        .def_rw("start_calendar_day",
+                &macro_sim::simulation::M7PopulationSpec::start_calendar_day)
+        .def_rw("target_household_size",
+                &macro_sim::simulation::M7PopulationSpec::target_household_size);
+    nb::class_<macro_sim::simulation::M7SimulationSpec>(module, "M7SimulationSpec")
         .def(nb::init<>())
-        .def_rw(
-            "financial_economy",
-            &macro_sim::simulation::M7SimulationSpec::
-                financial_economy
-        )
-        .def_rw(
-            "policy",
-            &macro_sim::simulation::M7SimulationSpec::policy
-        )
-        .def_rw(
-            "rules",
-            &macro_sim::simulation::M7SimulationSpec::rules
-        )
-        .def_rw(
-            "population",
-            &macro_sim::simulation::M7SimulationSpec::population
-        );
+        .def_rw("financial_economy",
+                &macro_sim::simulation::M7SimulationSpec::financial_economy)
+        .def_rw("policy", &macro_sim::simulation::M7SimulationSpec::policy)
+        .def_rw("rules", &macro_sim::simulation::M7SimulationSpec::rules)
+        .def_rw("population", &macro_sim::simulation::M7SimulationSpec::population);
+    nb::enum_<macro_sim::simulation::EnergyRationing>(module, "EnergyRationing")
+        .value("MARKET", macro_sim::simulation::EnergyRationing::market)
+        .value("PROPORTIONAL", macro_sim::simulation::EnergyRationing::proportional)
+        .value("HOUSEHOLD_FIRST",
+               macro_sim::simulation::EnergyRationing::household_first)
+        .value("INDUSTRY_FIRST",
+               macro_sim::simulation::EnergyRationing::industry_first);
+    auto energy_policy =
+        nb::class_<macro_sim::simulation::EnergyPolicyState>(module, "EnergyPolicy")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_ENERGY_POLICY(field)                                            \
+    energy_policy.def_rw(#field, &macro_sim::simulation::EnergyPolicyState::field)
+    MACRO_SIM_BIND_ENERGY_POLICY(excise_rate);
+    MACRO_SIM_BIND_ENERGY_POLICY(household_subsidy_rate);
+    MACRO_SIM_BIND_ENERGY_POLICY(subsidy_deposit_threshold);
+    MACRO_SIM_BIND_ENERGY_POLICY(price_cap);
+    MACRO_SIM_BIND_ENERGY_POLICY(price_cap_compensation);
+    MACRO_SIM_BIND_ENERGY_POLICY(strategic_reserve_target);
+    MACRO_SIM_BIND_ENERGY_POLICY(strategic_reserve_flow_cap);
+    MACRO_SIM_BIND_ENERGY_POLICY(state_owned_price_at_cost);
+    MACRO_SIM_BIND_ENERGY_POLICY(rationing);
+#undef MACRO_SIM_BIND_ENERGY_POLICY
+    auto energy_rules =
+        nb::class_<macro_sim::simulation::EnergyRules>(module, "EnergyRules")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_ENERGY_RULE(field)                                              \
+    energy_rules.def_rw(#field, &macro_sim::simulation::EnergyRules::field)
+    MACRO_SIM_BIND_ENERGY_RULE(enabled);
+    MACRO_SIM_BIND_ENERGY_RULE(household_energy);
+    MACRO_SIM_BIND_ENERGY_RULE(deprivation);
+    MACRO_SIM_BIND_ENERGY_RULE(state_owned_first_producer);
+    MACRO_SIM_BIND_ENERGY_RULE(producer_count);
+    MACRO_SIM_BIND_ENERGY_RULE(initial_producer_cash);
+    MACRO_SIM_BIND_ENERGY_RULE(initial_price);
+    MACRO_SIM_BIND_ENERGY_RULE(initial_wage);
+    MACRO_SIM_BIND_ENERGY_RULE(initial_markup);
+    MACRO_SIM_BIND_ENERGY_RULE(producer_productivity);
+    MACRO_SIM_BIND_ENERGY_RULE(capacity_per_capital);
+    MACRO_SIM_BIND_ENERGY_RULE(initial_utilization);
+    MACRO_SIM_BIND_ENERGY_RULE(producer_inventory_ratio);
+    MACRO_SIM_BIND_ENERGY_RULE(demand_adjustment);
+    MACRO_SIM_BIND_ENERGY_RULE(markup_adjustment);
+    MACRO_SIM_BIND_ENERGY_RULE(markup_minimum);
+    MACRO_SIM_BIND_ENERGY_RULE(markup_maximum);
+    MACRO_SIM_BIND_ENERGY_RULE(household_need);
+    MACRO_SIM_BIND_ENERGY_RULE(downstream_intensity);
+    MACRO_SIM_BIND_ENERGY_RULE(downstream_coverage_days);
+    MACRO_SIM_BIND_ENERGY_RULE(downstream_gap_close);
+    MACRO_SIM_BIND_ENERGY_RULE(hoarding_beta);
+    MACRO_SIM_BIND_ENERGY_RULE(slow_price_days);
+    MACRO_SIM_BIND_ENERGY_RULE(deprivation_burnin_years);
+    MACRO_SIM_BIND_ENERGY_RULE(deprivation_subsistence_share);
+    MACRO_SIM_BIND_ENERGY_RULE(deprivation_acute_days);
+    MACRO_SIM_BIND_ENERGY_RULE(deprivation_chronic_days);
+    MACRO_SIM_BIND_ENERGY_RULE(fuel_poverty_threshold);
+    MACRO_SIM_BIND_ENERGY_RULE(fuel_poverty_mortality_gamma);
+    MACRO_SIM_BIND_ENERGY_RULE(fuel_poverty_mortality_cap);
+#undef MACRO_SIM_BIND_ENERGY_RULE
+    auto energy_input =
+        nb::class_<macro_sim::simulation::EnergyExogenousInput>(module, "EnergyInput")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_ENERGY_INPUT(field)                                             \
+    energy_input.def_rw(#field, &macro_sim::simulation::EnergyExogenousInput::field)
+    MACRO_SIM_BIND_ENERGY_INPUT(capacity_multiplier);
+    MACRO_SIM_BIND_ENERGY_INPUT(labor_availability_multiplier);
+    MACRO_SIM_BIND_ENERGY_INPUT(supply_multiplier);
+    MACRO_SIM_BIND_ENERGY_INPUT(household_demand_multiplier);
+    MACRO_SIM_BIND_ENERGY_INPUT(industry_demand_multiplier);
+    MACRO_SIM_BIND_ENERGY_INPUT(reference_price_multiplier);
+#undef MACRO_SIM_BIND_ENERGY_INPUT
+    auto housing_policy =
+        nb::class_<macro_sim::simulation::HousingPolicyState>(module, "HousingPolicy")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_HOUSING_POLICY(field)                                           \
+    housing_policy.def_rw(#field, &macro_sim::simulation::HousingPolicyState::field)
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_ltv_cap);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_underwriting);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_dsti_cap);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_stress_rate_addon);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_risk_weight);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_minimum_capital_ratio);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_foreclosure_ltv);
+    MACRO_SIM_BIND_HOUSING_POLICY(mortgage_arrears_floor);
+    MACRO_SIM_BIND_HOUSING_POLICY(rental_eviction_arrears);
+    MACRO_SIM_BIND_HOUSING_POLICY(annual_housing_permits);
+    MACRO_SIM_BIND_HOUSING_POLICY(land_fee_share);
+    MACRO_SIM_BIND_HOUSING_POLICY(land_fee_stock_elasticity);
+    MACRO_SIM_BIND_HOUSING_POLICY(transfer_tax_rate);
+    MACRO_SIM_BIND_HOUSING_POLICY(property_tax_rate);
+#undef MACRO_SIM_BIND_HOUSING_POLICY
+    auto housing_rules =
+        nb::class_<macro_sim::simulation::HousingRules>(module, "HousingRules")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_HOUSING_RULE(field)                                             \
+    housing_rules.def_rw(#field, &macro_sim::simulation::HousingRules::field)
+    MACRO_SIM_BIND_HOUSING_RULE(enabled);
+    MACRO_SIM_BIND_HOUSING_RULE(resale_market);
+    MACRO_SIM_BIND_HOUSING_RULE(mortgages);
+    MACRO_SIM_BIND_HOUSING_RULE(rentals);
+    MACRO_SIM_BIND_HOUSING_RULE(construction);
+    MACRO_SIM_BIND_HOUSING_RULE(house_price_income_years);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_dwellings_per_household);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_homeownership_share);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_floor_area);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_quality);
+    MACRO_SIM_BIND_HOUSING_RULE(location_count);
+    MACRO_SIM_BIND_HOUSING_RULE(market_interval_days);
+    MACRO_SIM_BIND_HOUSING_RULE(voluntary_ask_markup);
+    MACRO_SIM_BIND_HOUSING_RULE(forced_sale_discount);
+    MACRO_SIM_BIND_HOUSING_RULE(ask_decay);
+    MACRO_SIM_BIND_HOUSING_RULE(demand_price_step);
+    MACRO_SIM_BIND_HOUSING_RULE(ask_floor_annual_wage_share);
+    MACRO_SIM_BIND_HOUSING_RULE(buyer_search_count);
+    MACRO_SIM_BIND_HOUSING_RULE(buyer_liquidity_buffer);
+    MACRO_SIM_BIND_HOUSING_RULE(distress_deposit_floor);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_rent_yield);
+    MACRO_SIM_BIND_HOUSING_RULE(rent_adjustment);
+    MACRO_SIM_BIND_HOUSING_RULE(rent_burden_cap);
+    MACRO_SIM_BIND_HOUSING_RULE(rental_investor_premium);
+    MACRO_SIM_BIND_HOUSING_RULE(rental_vacancy_deadband);
+    MACRO_SIM_BIND_HOUSING_RULE(rent_floor_wage_share);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_count);
+    MACRO_SIM_BIND_HOUSING_RULE(initial_builder_cash_buffer);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_productivity);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_demand_seed);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_demand_price_gain);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_finished_inventory_buffer);
+    MACRO_SIM_BIND_HOUSING_RULE(builder_land_fee_credit);
+    MACRO_SIM_BIND_HOUSING_RULE(affordability_burnin_years);
+    MACRO_SIM_BIND_HOUSING_RULE(leave_home_elasticity);
+    MACRO_SIM_BIND_HOUSING_RULE(leave_home_multiplier_minimum);
+    MACRO_SIM_BIND_HOUSING_RULE(leave_home_multiplier_maximum);
+    MACRO_SIM_BIND_HOUSING_RULE(fertility_elasticity);
+    MACRO_SIM_BIND_HOUSING_RULE(fertility_multiplier_minimum);
+    MACRO_SIM_BIND_HOUSING_RULE(fertility_multiplier_maximum);
+#undef MACRO_SIM_BIND_HOUSING_RULE
+    auto housing_input =
+        nb::class_<macro_sim::simulation::HousingExogenousInput>(module, "HousingInput")
+            .def(nb::init<>());
+#define MACRO_SIM_BIND_HOUSING_INPUT(field)                                            \
+    housing_input.def_rw(#field, &macro_sim::simulation::HousingExogenousInput::field)
+    MACRO_SIM_BIND_HOUSING_INPUT(house_price_reference_multiplier);
+    MACRO_SIM_BIND_HOUSING_INPUT(buyer_demand_multiplier);
+    MACRO_SIM_BIND_HOUSING_INPUT(rental_demand_multiplier);
+    MACRO_SIM_BIND_HOUSING_INPUT(construction_productivity_multiplier);
+    MACRO_SIM_BIND_HOUSING_INPUT(land_cost_multiplier);
+#undef MACRO_SIM_BIND_HOUSING_INPUT
+    nb::class_<macro_sim::simulation::M8SimulationSpec>(module, "M8SimulationSpec")
+        .def(nb::init<>())
+        .def_rw("domestic_economy",
+                &macro_sim::simulation::M8SimulationSpec::domestic_economy)
+        .def_rw("energy_policy",
+                &macro_sim::simulation::M8SimulationSpec::energy_policy)
+        .def_rw("energy_rules", &macro_sim::simulation::M8SimulationSpec::energy_rules)
+        .def_rw("energy_input", &macro_sim::simulation::M8SimulationSpec::energy_input)
+        .def_rw("housing_policy",
+                &macro_sim::simulation::M8SimulationSpec::housing_policy)
+        .def_rw("housing_rules",
+                &macro_sim::simulation::M8SimulationSpec::housing_rules)
+        .def_rw("housing_input",
+                &macro_sim::simulation::M8SimulationSpec::housing_input);
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")
         .value("HOUSEHOLD", macro_sim::core::OwnerKind::household)
         .value("FIRM", macro_sim::core::OwnerKind::firm)
@@ -1223,6 +1584,14 @@ NB_MODULE(_native, module) {
             },
             nb::arg("spec"))
         .def(
+            "initialize_m8",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::M8SimulationSpec &spec) {
+                nb::gil_scoped_release release;
+                require_status(session.initialize_m8(spec));
+            },
+            nb::arg("spec"))
+        .def(
             "update_m5_policy",
             [](macro_sim::EngineSession &session,
                const macro_sim::simulation::M5PolicyState &policy) {
@@ -1250,6 +1619,34 @@ NB_MODULE(_native, module) {
                 require_status(session.update_m7_rules(rules));
             },
             nb::arg("rules"))
+        .def(
+            "update_m8_energy_policy",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::EnergyPolicyState &policy) {
+                require_status(session.update_m8_energy_policy(policy));
+            },
+            nb::arg("policy"))
+        .def(
+            "update_m8_housing_policy",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::HousingPolicyState &policy) {
+                require_status(session.update_m8_housing_policy(policy));
+            },
+            nb::arg("policy"))
+        .def(
+            "update_m8_energy_input",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::EnergyExogenousInput &input) {
+                require_status(session.update_m8_energy_input(input));
+            },
+            nb::arg("input"))
+        .def(
+            "update_m8_housing_input",
+            [](macro_sim::EngineSession &session,
+               const macro_sim::simulation::HousingExogenousInput &input) {
+                require_status(session.update_m8_housing_input(input));
+            },
+            nb::arg("input"))
         .def(
             "advance_ticks",
             [](macro_sim::EngineSession &session, std::uint64_t count,
@@ -1282,14 +1679,24 @@ NB_MODULE(_native, module) {
             nb::arg("count"))
         .def(
             "advance_m7_ticks",
-            [](macro_sim::EngineSession &session,
-               std::uint64_t count) {
+            [](macro_sim::EngineSession &session, std::uint64_t count) {
                 auto result = [&session, count]() {
                     nb::gil_scoped_release release;
                     return session.advance_m7_ticks(count);
                 }();
                 require_status(result.status());
                 return m7_result_to_python(*result.get_if());
+            },
+            nb::arg("count"))
+        .def(
+            "advance_m8_ticks",
+            [](macro_sim::EngineSession &session, std::uint64_t count) {
+                auto result = [&session, count]() {
+                    nb::gil_scoped_release release;
+                    return session.advance_m8_ticks(count);
+                }();
+                require_status(result.status());
+                return m8_result_to_python(*result.get_if());
             },
             nb::arg("count"))
         .def("simulation_snapshot",
@@ -1307,6 +1714,10 @@ NB_MODULE(_native, module) {
         .def("m7_snapshot",
              [](const macro_sim::EngineSession &session) {
                  return m7_snapshot_to_python(session);
+             })
+        .def("m8_snapshot",
+             [](const macro_sim::EngineSession &session) {
+                 return m8_snapshot_to_python(session);
              })
         .def(
             "apply_batch",
@@ -1354,4 +1765,5 @@ NB_MODULE(_native, module) {
         });
     module.attr("M6Session") = module.attr("EngineSession");
     module.attr("M7Session") = module.attr("EngineSession");
+    module.attr("M8Session") = module.attr("EngineSession");
 }
