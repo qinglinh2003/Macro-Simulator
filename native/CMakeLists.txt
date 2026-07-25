@@ -83,6 +83,7 @@ add_library(
         src/core/digest.cpp
         src/core/financial.cpp
         src/core/genesis.cpp
+        src/core/housing.cpp
         src/core/invariants.cpp
         src/core/population.cpp
         src/core/securities.cpp
@@ -471,6 +472,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m8_energy
         COMMAND macro_sim_m8_energy_tests
+    )
+
+    add_executable(
+        macro_sim_m8_property_registry_tests
+        tests/m8_property_registry_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m8_property_registry_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m8_property_registry_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m8_property_registry_tests
+    )
+    add_test(
+        NAME macro_sim.m8_property_registry
+        COMMAND macro_sim_m8_property_registry_tests
     )
 
     if(TARGET _native)

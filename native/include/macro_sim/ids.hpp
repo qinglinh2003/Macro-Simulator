@@ -44,6 +44,7 @@ struct BeneficialLotIdTag;
 struct BondIdTag;
 struct CentralBankOperationIdTag;
 struct CurrencyIdTag;
+struct DwellingIdTag;
 struct EconomyIdTag;
 struct EntityIdTag;
 struct EquityIdTag;
@@ -59,6 +60,8 @@ struct OwnershipLotIdTag;
 struct SecurityLotIdTag;
 struct SessionIdTag;
 struct SettlementNodeIdTag;
+struct TenancyIdTag;
+struct TitleEventIdTag;
 
 using AccountId = StrongId<AccountIdTag>;
 using BankId = StrongId<BankIdTag>;
@@ -66,6 +69,7 @@ using BeneficialLotId = StrongId<BeneficialLotIdTag>;
 using BondId = StrongId<BondIdTag>;
 using CentralBankOperationId = StrongId<CentralBankOperationIdTag>;
 using CurrencyId = StrongId<CurrencyIdTag, std::uint32_t>;
+using DwellingId = StrongId<DwellingIdTag>;
 using EconomyId = StrongId<EconomyIdTag>;
 using EntityId = StrongId<EntityIdTag>;
 using EquityId = StrongId<EquityIdTag>;
@@ -81,6 +85,8 @@ using OwnershipLotId = StrongId<OwnershipLotIdTag>;
 using SecurityLotId = StrongId<SecurityLotIdTag>;
 using SessionId = StrongId<SessionIdTag>;
 using SettlementNodeId = StrongId<SettlementNodeIdTag>;
+using TenancyId = StrongId<TenancyIdTag>;
+using TitleEventId = StrongId<TitleEventIdTag>;
 
 template <typename Id> struct StrongIdHash final {
     [[nodiscard]] std::size_t operator()(Id value) const noexcept {
