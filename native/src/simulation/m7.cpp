@@ -1975,6 +1975,14 @@ class M7Extension final : public M6TickExtension {
                 return residual_status;
             }
         }
+        if (extension_ != nullptr) {
+            const auto extension_status = extension_->close_day(
+                state, real_runtime, real, monetary, monetary_scratch,
+                financial_runtime, financial, runtime_, scratch_, tick, rng);
+            if (!extension_status.ok()) {
+                return extension_status;
+            }
+        }
         if (runtime_.rules.beneficial_ownership) {
             const auto ownership_status = synchronize_beneficial_claims(
                 state, real, monetary_scratch.loans_, financial.securities_,
@@ -1995,11 +2003,6 @@ class M7Extension final : public M6TickExtension {
         }
         scratch_.working_metrics_.beneficial_projection_error =
             beneficial_projection_error(scratch_.beneficial_ownership_);
-        if (extension_ != nullptr) {
-            return extension_->close_day(state, real_runtime, real, monetary,
-                                         monetary_scratch, financial_runtime, financial,
-                                         runtime_, scratch_, tick, rng);
-        }
         return Status::success();
     }
 

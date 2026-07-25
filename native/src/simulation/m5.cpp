@@ -1906,7 +1906,8 @@ Status stage_m5_loan_writeoff(const core::RootState &state, M4TickScratch &real_
     pnl->net_income = pnl->loan_interest + pnl->interbank_interest_income -
                       pnl->interbank_interest_expense - pnl->deposit_funding_cost -
                       pnl->realized_loan_losses - pnl->realized_interbank_losses;
-    capital->closing_capital = real_economy.balances_[bank_cash];
+    capital->closing_capital = capital->opening_capital + pnl->net_income +
+                               pnl->resolution_flow - pnl->distributions;
     capital->last_closed_tick = tick;
     scratch.bank_capital_live_[lender_slot] = capital->closing_capital;
     scratch.debt_by_account_[account_slot] =

@@ -473,6 +473,7 @@ class M8TickScratch final {
     std::vector<MortgageRecord> mortgages_;
     std::vector<TenancyRecord> tenancies_;
     std::vector<BuilderComponent> builders_;
+    std::optional<core::PropertyRegistry> staged_properties_;
     HousingAffordabilityState housing_affordability_{};
     HousingExogenousInput housing_input_{};
     double house_price_{0.0};

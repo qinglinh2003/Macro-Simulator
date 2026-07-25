@@ -523,6 +523,23 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m8_housing_genesis_tests
     )
 
+    add_executable(
+        macro_sim_m8_housing_market_tests
+        tests/m8_housing_market_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m8_housing_market_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m8_housing_market_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m8_housing_market_tests
+    )
+    add_test(
+        NAME macro_sim.m8_housing_market
+        COMMAND macro_sim_m8_housing_market_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
