@@ -416,7 +416,7 @@ make_crisis_scenario(CrisisScenario scenario, const CrisisScenarioOptions &optio
     case CrisisScenario::pandemic: {
         const auto duration = configured_duration(540U);
         const auto ramp_out = std::min<std::uint64_t>(180U, duration / 3U);
-        for (const auto [kind, magnitude] :
+        for (const auto& [kind, magnitude] :
              {std::pair{ShockKind::labor_availability, 0.25},
               std::pair{ShockKind::productivity, 0.12},
               std::pair{ShockKind::household_demand, 0.16},
