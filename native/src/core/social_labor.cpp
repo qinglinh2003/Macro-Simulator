@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <functional>
 #include <limits>
 
 namespace macro_sim::core {
@@ -437,6 +436,14 @@ exact_marriage_matches(const PersonStore &persons,
              std::log(second->efficiency)}
         );
     }
+    std::sort(
+        candidates.begin(), candidates.end(),
+        [](const Candidate &left, const Candidate &right) {
+            return left.age < right.age ||
+                   (left.age == right.age &&
+                    left.id < right.id);
+        }
+    );
     std::vector<SearchNode> search;
     search.reserve(candidates.size());
     const auto refresh = [&search](std::int32_t index) {
@@ -461,36 +468,13 @@ exact_marriage_matches(const PersonStore &persons,
                 );
         }
     };
-    std::function<std::int32_t(
-        std::size_t, std::size_t, std::uint32_t, std::int32_t
-    )>
-        build_search;
-    build_search =
-        [&](std::size_t begin, std::size_t end,
-            std::uint32_t depth, std::int32_t parent) {
+    const auto build_search =
+        [&](auto &&self, std::size_t begin, std::size_t end,
+            std::int32_t parent) -> std::int32_t {
             if (begin == end) {
                 return std::int32_t{-1};
             }
             const auto middle = begin + (end - begin) / 2U;
-            const bool split_age = depth % 2U == 0U;
-            std::nth_element(
-                candidates.begin() +
-                    static_cast<std::ptrdiff_t>(begin),
-                candidates.begin() +
-                    static_cast<std::ptrdiff_t>(middle),
-                candidates.begin() +
-                    static_cast<std::ptrdiff_t>(end),
-                [split_age](const Candidate &left,
-                            const Candidate &right) {
-                    const double left_value =
-                        split_age ? left.age : left.log_efficiency;
-                    const double right_value =
-                        split_age ? right.age : right.log_efficiency;
-                    return left_value < right_value ||
-                           (left_value == right_value &&
-                            left.id < right.id);
-                }
-            );
             const auto node_index =
                 static_cast<std::int32_t>(search.size());
             SearchNode node;
@@ -504,11 +488,11 @@ exact_marriage_matches(const PersonStore &persons,
                 node.candidate.log_efficiency;
             node.minimum_active_id = node.candidate.id.value();
             search.push_back(node);
-            const auto left = build_search(
-                begin, middle, depth + 1U, node_index
+            const auto left = self(
+                self, begin, middle, node_index
             );
-            const auto right = build_search(
-                middle + 1U, end, depth + 1U, node_index
+            const auto right = self(
+                self, middle + 1U, end, node_index
             );
             auto &stored =
                 search[static_cast<std::size_t>(node_index)];
@@ -540,7 +524,7 @@ exact_marriage_matches(const PersonStore &persons,
             return node_index;
         };
     const auto root = build_search(
-        0, candidates.size(), 0U, -1
+        build_search, 0, candidates.size(), -1
     );
 
     std::vector<MarriageMatch> result;
@@ -596,8 +580,8 @@ exact_marriage_matches(const PersonStore &persons,
                 return rules.age_gap_penalty * age_distance +
                        rules.assortativity * efficiency_distance;
             };
-        std::function<void(std::int32_t)> search_nearest;
-        search_nearest = [&](std::int32_t node_index) {
+        const auto search_nearest =
+            [&](auto &&self, std::int32_t node_index) -> void {
             if (node_index < 0) {
                 return;
             }
@@ -652,14 +636,14 @@ exact_marriage_matches(const PersonStore &persons,
                           search[static_cast<std::size_t>(right)]
                       );
             if (left_bound <= right_bound) {
-                search_nearest(left);
-                search_nearest(right);
+                self(self, left);
+                self(self, right);
             } else {
-                search_nearest(right);
-                search_nearest(left);
+                self(self, right);
+                self(self, left);
             }
         };
-        search_nearest(root);
+        search_nearest(search_nearest, root);
         if (best.second.valid()) {
             result.push_back(best);
             search[static_cast<std::size_t>(best_node)].active = false;

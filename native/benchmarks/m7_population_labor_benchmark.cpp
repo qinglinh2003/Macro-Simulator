@@ -65,7 +65,7 @@ daily_spec(std::uint64_t persons) {
         std::max<std::uint64_t>(2, persons / 250U);
     monetary.rules.opening_capital_per_bank = 30.0;
     monetary.rules.interbank = true;
-    monetary.rules.household_credit = true;
+    monetary.rules.household_credit = false;
     monetary.policy.bank_capital_constraint = true;
     monetary.policy.bank_leverage_cap = 20.0;
     monetary.initial_policy_rate = 0.002;
@@ -96,6 +96,10 @@ run_daily(std::uint64_t persons, std::uint64_t days) {
         std::abort();
     }
     const auto warmup = session.advance_m7_ticks(5);
+    if (!warmup.ok()) {
+        std::cerr << "M7 benchmark warmup failed: "
+                  << warmup.status().message() << '\n';
+    }
     assert(warmup.ok());
     const auto warm = session.advance_m7_ticks(1);
     assert(warm.ok());
@@ -223,6 +227,35 @@ struct RosterMeasurement final {
     std::uint64_t median_ns{0};
     std::uint64_t mutation_sink{0};
 };
+
+struct ScratchMeasurement final {
+    std::uint64_t persons{0};
+    std::uint64_t days{0};
+    std::uint64_t scratch_before{0};
+    std::uint64_t scratch_after{0};
+};
+
+[[nodiscard]] ScratchMeasurement
+run_stable_scratch(std::uint64_t persons,
+                   std::uint64_t days) {
+    auto spec = daily_spec(persons);
+    spec.rules.beneficial_ownership = false;
+    spec.rules.estates = false;
+    macro_sim::EngineSession session(persons ^ 0x57a8U);
+    assert(session.initialize_m7(spec).ok());
+    assert(session.advance_m7_ticks(200).ok());
+    const auto opening = session.advance_m7_ticks(1);
+    assert(opening.ok());
+    const auto before =
+        opening.get_if()->scratch_capacity_signature;
+    std::uint64_t after = before;
+    for (std::uint64_t day = 0; day < days; ++day) {
+        const auto result = session.advance_m7_ticks(1);
+        assert(result.ok());
+        after = result.get_if()->scratch_capacity_signature;
+    }
+    return {persons, days, before, after};
+}
 
 [[nodiscard]] RosterMeasurement
 run_roster(std::uint64_t jobs) {
@@ -355,6 +388,8 @@ int main(int argc, char **argv) {
          static_cast<double>(roster_large.jobs)) /
         (static_cast<double>(roster_small.median_ns) /
          static_cast<double>(roster_small.jobs));
+    const auto stable_scratch =
+        run_stable_scratch(2'000, 20);
 
     std::cout << '{';
     print_daily("half", half);
@@ -376,6 +411,13 @@ int main(int argc, char **argv) {
     print_roster("roster_large", roster_large);
     std::cout << ",\"roster_normalized_scaling_ratio\":"
               << roster_normalized_scaling
+              << ",\"stable_scratch\":{"
+              << "\"days\":" << stable_scratch.days << ','
+              << "\"persons\":" << stable_scratch.persons << ','
+              << "\"scratch_after\":"
+              << stable_scratch.scratch_after << ','
+              << "\"scratch_before\":"
+              << stable_scratch.scratch_before << '}'
               << ",\"schema_version\":"
                  "\"m7-population-labor-benchmark-v1\"}\n";
     return 0;

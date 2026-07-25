@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <span>
 #include <vector>
 
@@ -143,13 +142,17 @@ class BeneficialOwnershipBook final {
     [[nodiscard]] Status validate(const PersonStore &persons, double tolerance) const;
 
   private:
+    struct AssetIndexRow final {
+        BeneficialAssetKey asset{};
+        std::vector<BeneficialLotId> lots;
+    };
+
     void ensure_person(PersonId person);
 
     std::vector<BeneficialLot> lots_;
     std::vector<std::vector<BeneficialLotId>> lots_by_person_{
         std::vector<BeneficialLotId>{}};
-    std::map<BeneficialAssetKey, std::vector<BeneficialLotId>>
-        lots_by_asset_;
+    std::vector<AssetIndexRow> lots_by_asset_;
 };
 
 } // namespace macro_sim::core

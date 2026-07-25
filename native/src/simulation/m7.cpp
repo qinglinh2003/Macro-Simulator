@@ -212,13 +212,15 @@ stable_age_weights(const algorithms::VitalRates &rates) {
                 !persons.alive(lot->owner)) {
                 continue;
             }
+            const auto owner = lot->owner;
+            const double share = lot->share;
             const auto created = ownership.create_lot(
-                asset, lot->owner, lot->share
+                asset, owner, share
             );
             if (!created.ok()) {
                 return created.status();
             }
-            projected += lot->share;
+            projected += share;
         }
         return projected >= 1.0 - kLaborTolerance
                    ? Status::success()

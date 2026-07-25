@@ -1,0 +1,24 @@
+{
+  "absolute_p95_ns": 120000000,
+  "absolute_p95_ns_by_platform": {
+    "darwin": 120000000,
+    "linux": 120000000,
+    "win32": 120000000
+  },
+  "maximum_allocations_per_day": 2200,
+  "maximum_daily_scaling_ratio": 3.2,
+  "maximum_matching_normalized_scaling_ratio": 2.6,
+  "maximum_roster_normalized_scaling_ratio": 1.5,
+  "p0": {
+    "banks": 8,
+    "firms": 120,
+    "households": 800,
+    "measured_days": 60,
+    "persons": 2000,
+    "seed": 707,
+    "warmup_days": 6,
+    "watchlist_size": 12
+  },
+  "require_stable_no_topology_scratch": true,
+  "schema_version": "m7-performance-budget-v1"
+}

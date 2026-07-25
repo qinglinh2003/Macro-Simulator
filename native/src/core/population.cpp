@@ -327,7 +327,20 @@ Result<BeneficialLotId> BeneficialOwnershipBook::create_lot(BeneficialAssetKey a
     lots_.push_back({id, asset, owner, share, true});
     ensure_person(owner);
     lots_by_person_[static_cast<std::size_t>(owner.value())].push_back(id);
-    lots_by_asset_[asset].push_back(id);
+    auto asset_row = std::lower_bound(
+        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
+        [](const AssetIndexRow &row,
+           BeneficialAssetKey key) {
+            return row.asset < key;
+        }
+    );
+    if (asset_row == lots_by_asset_.end() ||
+        asset_row->asset != asset) {
+        asset_row = lots_by_asset_.insert(
+            asset_row, AssetIndexRow{asset, {}}
+        );
+    }
+    asset_row->lots.push_back(id);
     return id;
 }
 
@@ -382,11 +395,18 @@ Status BeneficialOwnershipBook::retire(BeneficialLotId lot) {
 Status BeneficialOwnershipBook::retire_asset(
     BeneficialAssetKey asset
 ) {
-    const auto found = lots_by_asset_.find(asset);
-    if (found == lots_by_asset_.end()) {
+    const auto found = std::lower_bound(
+        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
+        [](const AssetIndexRow &row,
+           BeneficialAssetKey key) {
+            return row.asset < key;
+        }
+    );
+    if (found == lots_by_asset_.end() ||
+        found->asset != asset) {
         return Status::success();
     }
-    const auto lots = found->second;
+    const auto lots = found->lots;
     for (const auto lot : lots) {
         const auto *record = get(lot);
         if (record == nullptr || !record->active) {
@@ -397,7 +417,7 @@ Status BeneficialOwnershipBook::retire_asset(
             return status;
         }
     }
-    lots_by_asset_.erase(asset);
+    lots_by_asset_.erase(found);
     return Status::success();
 }
 
@@ -411,9 +431,10 @@ Status BeneficialOwnershipBook::retire_household(
         );
     }
     std::vector<BeneficialAssetKey> assets;
-    for (const auto &[asset, lots] : lots_by_asset_) {
-        if (asset.household == household && !lots.empty()) {
-            assets.push_back(asset);
+    for (const auto &row : lots_by_asset_) {
+        if (row.asset.household == household &&
+            !row.lots.empty()) {
+            assets.push_back(row.asset);
         }
     }
     for (const auto asset : assets) {
@@ -436,9 +457,10 @@ Status BeneficialOwnershipBook::rekey_household(
         );
     }
     std::vector<BeneficialAssetKey> source_assets;
-    for (const auto &[asset, lots] : lots_by_asset_) {
-        if (asset.household == source && !lots.empty()) {
-            source_assets.push_back(asset);
+    for (const auto &row : lots_by_asset_) {
+        if (row.asset.household == source &&
+            !row.lots.empty()) {
+            source_assets.push_back(row.asset);
         }
     }
     for (const auto source_asset : source_assets) {
@@ -450,15 +472,43 @@ Status BeneficialOwnershipBook::rekey_household(
                 "beneficial destination asset already exists"
             );
         }
-        auto node = lots_by_asset_.extract(source_asset);
-        node.key() = destination_asset;
-        for (const auto lot : node.mapped()) {
+        auto source_row = std::lower_bound(
+            lots_by_asset_.begin(), lots_by_asset_.end(),
+            source_asset,
+            [](const AssetIndexRow &row,
+               BeneficialAssetKey key) {
+                return row.asset < key;
+            }
+        );
+        if (source_row == lots_by_asset_.end() ||
+            source_row->asset != source_asset) {
+            return Status(
+                ErrorCode::invariant_violation,
+                "beneficial source asset is absent"
+            );
+        }
+        auto lots = std::move(source_row->lots);
+        lots_by_asset_.erase(source_row);
+        for (const auto lot : lots) {
             auto *record = get(lot);
             if (record != nullptr && record->active) {
                 record->asset = destination_asset;
             }
         }
-        lots_by_asset_.insert(std::move(node));
+        const auto destination_row = std::lower_bound(
+            lots_by_asset_.begin(), lots_by_asset_.end(),
+            destination_asset,
+            [](const AssetIndexRow &row,
+               BeneficialAssetKey key) {
+                return row.asset < key;
+            }
+        );
+        lots_by_asset_.insert(
+            destination_row,
+            AssetIndexRow{
+                destination_asset, std::move(lots)
+            }
+        );
     }
     return Status::success();
 }
@@ -466,12 +516,19 @@ Status BeneficialOwnershipBook::rekey_household(
 bool BeneficialOwnershipBook::contains_asset(
     BeneficialAssetKey asset
 ) const noexcept {
-    const auto found = lots_by_asset_.find(asset);
-    if (found == lots_by_asset_.end()) {
+    const auto found = std::lower_bound(
+        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
+        [](const AssetIndexRow &row,
+           BeneficialAssetKey key) {
+            return row.asset < key;
+        }
+    );
+    if (found == lots_by_asset_.end() ||
+        found->asset != asset) {
         return false;
     }
     return std::any_of(
-        found->second.begin(), found->second.end(),
+        found->lots.begin(), found->lots.end(),
         [this](BeneficialLotId lot) {
             const auto *record = get(lot);
             return record != nullptr && record->active;
@@ -483,10 +540,17 @@ std::span<const BeneficialLotId>
 BeneficialOwnershipBook::lots_for_asset(
     BeneficialAssetKey asset
 ) const noexcept {
-    const auto found = lots_by_asset_.find(asset);
-    return found == lots_by_asset_.end()
+    const auto found = std::lower_bound(
+        lots_by_asset_.begin(), lots_by_asset_.end(), asset,
+        [](const AssetIndexRow &row,
+           BeneficialAssetKey key) {
+            return row.asset < key;
+        }
+    );
+    return found == lots_by_asset_.end() ||
+                   found->asset != asset
                ? std::span<const BeneficialLotId>{}
-               : std::span<const BeneficialLotId>(found->second);
+               : std::span<const BeneficialLotId>(found->lots);
 }
 
 BeneficialLot *BeneficialOwnershipBook::get(BeneficialLotId id) noexcept {
@@ -537,7 +601,21 @@ Status BeneficialOwnershipBook::replace_records(
         lots_by_person_[
             static_cast<std::size_t>(lot.owner.value())]
             .push_back(lot.id);
-        lots_by_asset_[lot.asset].push_back(lot.id);
+        auto asset_row = std::lower_bound(
+            lots_by_asset_.begin(), lots_by_asset_.end(),
+            lot.asset,
+            [](const AssetIndexRow &row,
+               BeneficialAssetKey key) {
+                return row.asset < key;
+            }
+        );
+        if (asset_row == lots_by_asset_.end() ||
+            asset_row->asset != lot.asset) {
+            asset_row = lots_by_asset_.insert(
+                asset_row, AssetIndexRow{lot.asset, {}}
+            );
+        }
+        asset_row->lots.push_back(lot.id);
     }
     return Status::success();
 }
