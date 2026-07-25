@@ -23,7 +23,7 @@ int main(void) {
     if (value != 0 || macro_sim_session_destroy(&session).code != MACRO_SIM_OK) {
         return 4;
     }
-    if (session != NULL || strcmp(macro_sim_engine_version(), "0.6.0-m6") != 0) {
+    if (session != NULL || strcmp(macro_sim_engine_version(), "0.7.0-m7") != 0) {
         return 5;
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M3_ALGORITHMS) == 0) {
@@ -37,6 +37,9 @@ int main(void) {
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M6_SECURITIES) == 0) {
         return 11;
+    }
+    if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M7_POPULATION) == 0) {
+        return 12;
     }
     if (macro_sim_validate_scalar("config.a", 8, &invalid_scalar, &validation).code !=
         MACRO_SIM_OK) {

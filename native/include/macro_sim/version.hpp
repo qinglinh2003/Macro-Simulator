@@ -7,7 +7,7 @@
 namespace macro_sim {
 
 inline constexpr std::uint32_t kAbiVersion = 1;
-inline constexpr std::string_view kEngineVersion = "0.6.0-m6";
+inline constexpr std::string_view kEngineVersion = "0.7.0-m7";
 
 [[nodiscard]] std::string_view engine_version() noexcept;
 [[nodiscard]] std::uint32_t abi_version() noexcept;

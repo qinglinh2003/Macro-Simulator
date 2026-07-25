@@ -13,7 +13,7 @@ int main(void) {
     if (macro_sim_abi_version() != MACRO_SIM_ABI_VERSION) {
         return 1;
     }
-    if (strcmp(macro_sim_engine_version(), "0.6.0-m6") != 0) {
+    if (strcmp(macro_sim_engine_version(), "0.7.0-m7") != 0) {
         return 2;
     }
     if ((macro_sim_capabilities() & MACRO_SIM_CAPABILITY_M2_ACCOUNTING) == 0) {
