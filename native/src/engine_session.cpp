@@ -11,6 +11,8 @@
 #include "macro_sim/simulation/m6_checkpoint.hpp"
 #include "macro_sim/simulation/m7.hpp"
 #include "macro_sim/simulation/m7_checkpoint.hpp"
+#include "macro_sim/simulation/m8.hpp"
+#include "macro_sim/simulation/m8_checkpoint.hpp"
 
 namespace macro_sim {
 
@@ -52,20 +54,131 @@ const simulation::M6Runtime *EngineSession::securities_runtime() const noexcept 
     return securities_runtime_.get();
 }
 
-const simulation::M7Runtime *
-EngineSession::population_runtime() const noexcept {
+const simulation::M7Runtime *EngineSession::population_runtime() const noexcept {
     return population_runtime_.get();
 }
 
-Status EngineSession::initialize_m7(
-    const simulation::M7SimulationSpec &spec
-) {
+const simulation::M8Runtime *EngineSession::housing_runtime() const noexcept {
+    return housing_runtime_.get();
+}
+
+Status EngineSession::initialize_m8(const simulation::M8SimulationSpec &spec) {
     if (closed()) {
         return Status(ErrorCode::invalid_handle, "session is closed");
     }
     if (initialized()) {
-        return Status(ErrorCode::already_exists,
-                      "session already has canonical state");
+        return Status(ErrorCode::already_exists, "session already has canonical state");
+    }
+    try {
+        auto initialization = simulation::build_m8_genesis(spec);
+        if (!initialization.ok()) {
+            return initialization.status();
+        }
+        auto *value = initialization.get_if();
+        auto root = std::make_unique<core::RootState>(std::move(value->root));
+        auto real = std::make_unique<simulation::M4Runtime>(
+            std::move(value->real_economy_runtime));
+        auto monetary =
+            std::make_unique<simulation::M5Runtime>(std::move(value->monetary_runtime));
+        auto financial = std::make_unique<simulation::M6Runtime>(
+            std::move(value->financial_runtime));
+        auto population = std::make_unique<simulation::M7Runtime>(
+            std::move(value->population_runtime));
+        auto housing =
+            std::make_unique<simulation::M8Runtime>(std::move(value->runtime));
+        auto real_scratch = std::make_unique<simulation::M4TickScratch>();
+        auto monetary_scratch = std::make_unique<simulation::M5TickScratch>();
+        auto financial_scratch = std::make_unique<simulation::M6TickScratch>();
+        auto population_scratch = std::make_unique<simulation::M7TickScratch>();
+        auto housing_scratch = std::make_unique<simulation::M8TickScratch>();
+        real_scratch->reserve(*root);
+        monetary_scratch->reserve(*root);
+        financial_scratch->reserve(*root, *financial);
+        population_scratch->reserve(*population);
+        housing_scratch->reserve(*root, *housing);
+        root_ = std::move(root);
+        simulation_runtime_ = std::move(real);
+        tick_scratch_ = std::move(real_scratch);
+        monetary_runtime_ = std::move(monetary);
+        monetary_scratch_ = std::move(monetary_scratch);
+        securities_runtime_ = std::move(financial);
+        securities_scratch_ = std::move(financial_scratch);
+        population_runtime_ = std::move(population);
+        population_scratch_ = std::move(population_scratch);
+        housing_runtime_ = std::move(housing);
+        housing_scratch_ = std::move(housing_scratch);
+        tick_ = Tick(0);
+        return Status::success();
+    } catch (const std::bad_alloc &) {
+        return Status(ErrorCode::allocation_failure,
+                      "M8 simulation genesis allocation failed");
+    } catch (...) {
+        return Status(ErrorCode::internal_error, "M8 simulation genesis failed");
+    }
+}
+
+Status
+EngineSession::update_m8_energy_policy(const simulation::EnergyPolicyState &policy) {
+    if (closed() || housing_runtime_ == nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M8 simulation");
+    }
+    const auto validated = simulation::validate_energy_policy(policy);
+    if (!validated.ok()) {
+        return validated;
+    }
+    housing_runtime_->energy_policy = policy;
+    return Status::success();
+}
+
+Status
+EngineSession::update_m8_housing_policy(const simulation::HousingPolicyState &policy) {
+    if (closed() || housing_runtime_ == nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M8 simulation");
+    }
+    const auto validated = simulation::validate_housing_policy(policy);
+    if (!validated.ok()) {
+        return validated;
+    }
+    housing_runtime_->housing_policy = policy;
+    return Status::success();
+}
+
+Result<simulation::M8AdvanceResult>
+EngineSession::advance_m8_ticks(std::uint64_t count,
+                                const simulation::M8AdvanceOptions &options) {
+    if (closed() || !initialized() || simulation_runtime_ == nullptr ||
+        tick_scratch_ == nullptr || monetary_runtime_ == nullptr ||
+        monetary_scratch_ == nullptr || securities_runtime_ == nullptr ||
+        securities_scratch_ == nullptr || population_runtime_ == nullptr ||
+        population_scratch_ == nullptr || housing_runtime_ == nullptr ||
+        housing_scratch_ == nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M8 simulation");
+    }
+    try {
+        return simulation::advance_m8_ticks(
+            *root_, *simulation_runtime_, *tick_scratch_, *monetary_runtime_,
+            *monetary_scratch_, *securities_runtime_, *securities_scratch_,
+            *population_runtime_, *population_scratch_, *housing_runtime_,
+            *housing_scratch_, tick_, count, options);
+    } catch (const std::bad_alloc &) {
+        return Status(ErrorCode::allocation_failure,
+                      "M8 tick execution allocation failed");
+    } catch (...) {
+        return Status(ErrorCode::internal_error, "M8 tick execution failed");
+    }
+}
+
+Result<simulation::M8AdvanceResult>
+EngineSession::advance_m8_ticks(std::uint64_t count) {
+    return advance_m8_ticks(count, simulation::M8AdvanceOptions{});
+}
+
+Status EngineSession::initialize_m7(const simulation::M7SimulationSpec &spec) {
+    if (closed()) {
+        return Status(ErrorCode::invalid_handle, "session is closed");
+    }
+    if (initialized()) {
+        return Status(ErrorCode::already_exists, "session already has canonical state");
     }
     try {
         auto initialization = simulation::build_m7_genesis(spec);
@@ -73,28 +186,19 @@ Status EngineSession::initialize_m7(
             return initialization.status();
         }
         auto *value = initialization.get_if();
-        auto root =
-            std::make_unique<core::RootState>(std::move(value->root));
+        auto root = std::make_unique<core::RootState>(std::move(value->root));
         auto real = std::make_unique<simulation::M4Runtime>(
-            std::move(value->real_economy_runtime)
-        );
-        auto monetary = std::make_unique<simulation::M5Runtime>(
-            std::move(value->monetary_runtime)
-        );
+            std::move(value->real_economy_runtime));
+        auto monetary =
+            std::make_unique<simulation::M5Runtime>(std::move(value->monetary_runtime));
         auto financial = std::make_unique<simulation::M6Runtime>(
-            std::move(value->financial_runtime)
-        );
-        auto population = std::make_unique<simulation::M7Runtime>(
-            std::move(value->runtime)
-        );
-        auto real_scratch =
-            std::make_unique<simulation::M4TickScratch>();
-        auto monetary_scratch =
-            std::make_unique<simulation::M5TickScratch>();
-        auto financial_scratch =
-            std::make_unique<simulation::M6TickScratch>();
-        auto population_scratch =
-            std::make_unique<simulation::M7TickScratch>();
+            std::move(value->financial_runtime));
+        auto population =
+            std::make_unique<simulation::M7Runtime>(std::move(value->runtime));
+        auto real_scratch = std::make_unique<simulation::M4TickScratch>();
+        auto monetary_scratch = std::make_unique<simulation::M5TickScratch>();
+        auto financial_scratch = std::make_unique<simulation::M6TickScratch>();
+        auto population_scratch = std::make_unique<simulation::M7TickScratch>();
         real_scratch->reserve(*root);
         monetary_scratch->reserve(*root);
         financial_scratch->reserve(*root, *financial);
@@ -111,22 +215,16 @@ Status EngineSession::initialize_m7(
         tick_ = Tick(0);
         return Status::success();
     } catch (const std::bad_alloc &) {
-        return Status(
-            ErrorCode::allocation_failure,
-            "M7 simulation genesis allocation failed"
-        );
+        return Status(ErrorCode::allocation_failure,
+                      "M7 simulation genesis allocation failed");
     } catch (...) {
-        return Status(ErrorCode::internal_error,
-                      "M7 simulation genesis failed");
+        return Status(ErrorCode::internal_error, "M7 simulation genesis failed");
     }
 }
 
-Status EngineSession::update_m7_policy(
-    const simulation::M7PolicyState &policy
-) {
+Status EngineSession::update_m7_policy(const simulation::M7PolicyState &policy) {
     if (closed() || population_runtime_ == nullptr) {
-        return Status(ErrorCode::invalid_handle,
-                      "session has no active M7 simulation");
+        return Status(ErrorCode::invalid_handle, "session has no active M7 simulation");
     }
     const auto validated = simulation::validate_m7_policy(policy);
     if (!validated.ok()) {
@@ -138,8 +236,7 @@ Status EngineSession::update_m7_policy(
 
 Status EngineSession::update_m7_rules(const simulation::M7Rules &rules) {
     if (closed() || population_runtime_ == nullptr) {
-        return Status(ErrorCode::invalid_handle,
-                      "session has no active M7 simulation");
+        return Status(ErrorCode::invalid_handle, "session has no active M7 simulation");
     }
     const auto validated = simulation::validate_m7_rules(rules);
     if (!validated.ok()) {
@@ -150,38 +247,25 @@ Status EngineSession::update_m7_rules(const simulation::M7Rules &rules) {
 }
 
 Result<simulation::M7AdvanceResult>
-EngineSession::advance_m7_ticks(
-    std::uint64_t count,
-    const simulation::M7AdvanceOptions &options
-) {
-    if (closed() || !initialized() ||
-        simulation_runtime_ == nullptr ||
-        tick_scratch_ == nullptr ||
-        monetary_runtime_ == nullptr ||
-        monetary_scratch_ == nullptr ||
-        securities_runtime_ == nullptr ||
-        securities_scratch_ == nullptr ||
-        population_runtime_ == nullptr ||
-        population_scratch_ == nullptr) {
-        return Status(ErrorCode::invalid_handle,
-                      "session has no active M7 simulation");
+EngineSession::advance_m7_ticks(std::uint64_t count,
+                                const simulation::M7AdvanceOptions &options) {
+    if (closed() || !initialized() || simulation_runtime_ == nullptr ||
+        tick_scratch_ == nullptr || monetary_runtime_ == nullptr ||
+        monetary_scratch_ == nullptr || securities_runtime_ == nullptr ||
+        securities_scratch_ == nullptr || population_runtime_ == nullptr ||
+        population_scratch_ == nullptr || housing_runtime_ != nullptr) {
+        return Status(ErrorCode::invalid_handle, "session has no active M7 simulation");
     }
     try {
         return simulation::advance_m7_ticks(
-            *root_, *simulation_runtime_, *tick_scratch_,
-            *monetary_runtime_, *monetary_scratch_,
-            *securities_runtime_, *securities_scratch_,
-            *population_runtime_, *population_scratch_, tick_,
-            count, options
-        );
+            *root_, *simulation_runtime_, *tick_scratch_, *monetary_runtime_,
+            *monetary_scratch_, *securities_runtime_, *securities_scratch_,
+            *population_runtime_, *population_scratch_, tick_, count, options);
     } catch (const std::bad_alloc &) {
-        return Status(
-            ErrorCode::allocation_failure,
-            "M7 tick execution allocation failed"
-        );
+        return Status(ErrorCode::allocation_failure,
+                      "M7 tick execution allocation failed");
     } catch (...) {
-        return Status(ErrorCode::internal_error,
-                      "M7 tick execution failed");
+        return Status(ErrorCode::internal_error, "M7 tick execution failed");
     }
 }
 
@@ -342,8 +426,7 @@ EngineSession::advance_m6_ticks(std::uint64_t count,
     if (closed() || !initialized() || simulation_runtime_ == nullptr ||
         tick_scratch_ == nullptr || monetary_runtime_ == nullptr ||
         monetary_scratch_ == nullptr || securities_runtime_ == nullptr ||
-        securities_scratch_ == nullptr ||
-        population_runtime_ != nullptr) {
+        securities_scratch_ == nullptr || population_runtime_ != nullptr) {
         return Status(ErrorCode::invalid_handle, "session has no active M6 simulation");
     }
     try {
@@ -465,10 +548,15 @@ Result<core::StateDigest> EngineSession::digest() const {
     }
     if (securities_runtime_ != nullptr) {
         if (population_runtime_ != nullptr) {
-            return simulation::m7_state_digest(
-                *root_, *simulation_runtime_, *monetary_runtime_,
-                *securities_runtime_, *population_runtime_, tick_
-            );
+            if (housing_runtime_ != nullptr) {
+                return simulation::m8_state_digest(
+                    *root_, *simulation_runtime_, *monetary_runtime_,
+                    *securities_runtime_, *population_runtime_, *housing_runtime_,
+                    tick_);
+            }
+            return simulation::m7_state_digest(*root_, *simulation_runtime_,
+                                               *monetary_runtime_, *securities_runtime_,
+                                               *population_runtime_, tick_);
         }
         return simulation::m6_state_digest(*root_, *simulation_runtime_,
                                            *monetary_runtime_, *securities_runtime_,
@@ -500,10 +588,15 @@ Result<std::vector<std::uint8_t>> EngineSession::checkpoint() const {
     }
     if (securities_runtime_ != nullptr) {
         if (population_runtime_ != nullptr) {
+            if (housing_runtime_ != nullptr) {
+                return simulation::save_m8_checkpoint(
+                    *root_, *simulation_runtime_, *monetary_runtime_,
+                    *securities_runtime_, *population_runtime_, *housing_runtime_,
+                    tick_);
+            }
             return simulation::save_m7_checkpoint(
-                *root_, *simulation_runtime_, *monetary_runtime_,
-                *securities_runtime_, *population_runtime_, tick_
-            );
+                *root_, *simulation_runtime_, *monetary_runtime_, *securities_runtime_,
+                *population_runtime_, tick_);
         }
         return simulation::save_m6_checkpoint(*root_, *simulation_runtime_,
                                               *monetary_runtime_, *securities_runtime_,
@@ -523,6 +616,55 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
     if (closed()) {
         return Status(ErrorCode::invalid_handle, "session is closed");
     }
+    if (simulation::is_m8_checkpoint(checkpoint)) {
+        auto loaded = simulation::load_m8_checkpoint(checkpoint);
+        if (!loaded.ok()) {
+            return loaded.status();
+        }
+        try {
+            auto *value = loaded.get_if();
+            auto replacement =
+                std::make_unique<core::RootState>(std::move(value->root));
+            auto real = std::make_unique<simulation::M4Runtime>(
+                std::move(value->real_economy_runtime));
+            auto monetary = std::make_unique<simulation::M5Runtime>(
+                std::move(value->monetary_runtime));
+            auto financial = std::make_unique<simulation::M6Runtime>(
+                std::move(value->financial_runtime));
+            auto population = std::make_unique<simulation::M7Runtime>(
+                std::move(value->population_runtime));
+            auto housing =
+                std::make_unique<simulation::M8Runtime>(std::move(value->runtime));
+            auto real_scratch = std::make_unique<simulation::M4TickScratch>();
+            auto monetary_scratch = std::make_unique<simulation::M5TickScratch>();
+            auto financial_scratch = std::make_unique<simulation::M6TickScratch>();
+            auto population_scratch = std::make_unique<simulation::M7TickScratch>();
+            auto housing_scratch = std::make_unique<simulation::M8TickScratch>();
+            real_scratch->reserve(*replacement);
+            monetary_scratch->reserve(*replacement);
+            financial_scratch->reserve(*replacement, *financial);
+            population_scratch->reserve(*population);
+            housing_scratch->reserve(*replacement, *housing);
+            root_ = std::move(replacement);
+            simulation_runtime_ = std::move(real);
+            tick_scratch_ = std::move(real_scratch);
+            monetary_runtime_ = std::move(monetary);
+            monetary_scratch_ = std::move(monetary_scratch);
+            securities_runtime_ = std::move(financial);
+            securities_scratch_ = std::move(financial_scratch);
+            population_runtime_ = std::move(population);
+            population_scratch_ = std::move(population_scratch);
+            housing_runtime_ = std::move(housing);
+            housing_scratch_ = std::move(housing_scratch);
+            tick_ = value->tick;
+            return Status::success();
+        } catch (const std::bad_alloc &) {
+            return Status(ErrorCode::allocation_failure,
+                          "M8 checkpoint restore allocation failed");
+        } catch (...) {
+            return Status(ErrorCode::internal_error, "M8 checkpoint restore failed");
+        }
+    }
     if (simulation::is_m7_checkpoint(checkpoint)) {
         auto loaded = simulation::load_m7_checkpoint(checkpoint);
         if (!loaded.ok()) {
@@ -531,29 +673,19 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
         try {
             auto *value = loaded.get_if();
             auto replacement =
-                std::make_unique<core::RootState>(
-                    std::move(value->root)
-                );
+                std::make_unique<core::RootState>(std::move(value->root));
             auto real = std::make_unique<simulation::M4Runtime>(
-                std::move(value->real_economy_runtime)
-            );
+                std::move(value->real_economy_runtime));
             auto monetary = std::make_unique<simulation::M5Runtime>(
-                std::move(value->monetary_runtime)
-            );
+                std::move(value->monetary_runtime));
             auto financial = std::make_unique<simulation::M6Runtime>(
-                std::move(value->financial_runtime)
-            );
-            auto population = std::make_unique<simulation::M7Runtime>(
-                std::move(value->runtime)
-            );
-            auto real_scratch =
-                std::make_unique<simulation::M4TickScratch>();
-            auto monetary_scratch =
-                std::make_unique<simulation::M5TickScratch>();
-            auto financial_scratch =
-                std::make_unique<simulation::M6TickScratch>();
-            auto population_scratch =
-                std::make_unique<simulation::M7TickScratch>();
+                std::move(value->financial_runtime));
+            auto population =
+                std::make_unique<simulation::M7Runtime>(std::move(value->runtime));
+            auto real_scratch = std::make_unique<simulation::M4TickScratch>();
+            auto monetary_scratch = std::make_unique<simulation::M5TickScratch>();
+            auto financial_scratch = std::make_unique<simulation::M6TickScratch>();
+            auto population_scratch = std::make_unique<simulation::M7TickScratch>();
             real_scratch->reserve(*replacement);
             monetary_scratch->reserve(*replacement);
             financial_scratch->reserve(*replacement, *financial);
@@ -567,16 +699,15 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
             securities_scratch_ = std::move(financial_scratch);
             population_runtime_ = std::move(population);
             population_scratch_ = std::move(population_scratch);
+            housing_runtime_.reset();
+            housing_scratch_.reset();
             tick_ = value->tick;
             return Status::success();
         } catch (const std::bad_alloc &) {
-            return Status(
-                ErrorCode::allocation_failure,
-                "M7 checkpoint restore allocation failed"
-            );
+            return Status(ErrorCode::allocation_failure,
+                          "M7 checkpoint restore allocation failed");
         } catch (...) {
-            return Status(ErrorCode::internal_error,
-                          "M7 checkpoint restore failed");
+            return Status(ErrorCode::internal_error, "M7 checkpoint restore failed");
         }
     }
     if (simulation::is_m6_checkpoint(checkpoint)) {
@@ -609,6 +740,8 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
             securities_scratch_ = std::move(securities_scratch);
             population_runtime_.reset();
             population_scratch_.reset();
+            housing_runtime_.reset();
+            housing_scratch_.reset();
             tick_ = value->tick;
             return Status::success();
         } catch (const std::bad_alloc &) {
@@ -644,6 +777,8 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
             securities_scratch_.reset();
             population_runtime_.reset();
             population_scratch_.reset();
+            housing_runtime_.reset();
+            housing_scratch_.reset();
             tick_ = value->tick;
             return Status::success();
         } catch (const std::bad_alloc &) {
@@ -675,6 +810,8 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
             securities_scratch_.reset();
             population_runtime_.reset();
             population_scratch_.reset();
+            housing_runtime_.reset();
+            housing_scratch_.reset();
             tick_ = value->tick;
             return Status::success();
         } catch (const std::bad_alloc &) {
@@ -700,6 +837,8 @@ Status EngineSession::restore_checkpoint(std::span<const std::uint8_t> checkpoin
         securities_scratch_.reset();
         population_runtime_.reset();
         population_scratch_.reset();
+        housing_runtime_.reset();
+        housing_scratch_.reset();
         tick_ = Tick(0);
         return Status::success();
     } catch (const std::bad_alloc &) {
@@ -723,6 +862,8 @@ Status EngineSession::close() noexcept {
     securities_scratch_.reset();
     population_runtime_.reset();
     population_scratch_.reset();
+    housing_runtime_.reset();
+    housing_scratch_.reset();
     state_ = SessionState::closed;
     return Status::success();
 }

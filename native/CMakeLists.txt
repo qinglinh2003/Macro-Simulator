@@ -98,6 +98,7 @@ add_library(
         src/simulation/m7.cpp
         src/simulation/m7_checkpoint.cpp
         src/simulation/m8.cpp
+        src/simulation/m8_checkpoint.cpp
         src/engine_session.cpp
         src/rng.cpp
         src/version.cpp
@@ -538,6 +539,21 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m8_housing_market
         COMMAND macro_sim_m8_housing_market_tests
+    )
+
+    add_executable(
+        macro_sim_m8_checkpoint_tests
+        tests/m8_checkpoint_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m8_checkpoint_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m8_checkpoint_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m8_checkpoint_tests)
+    add_test(
+        NAME macro_sim.m8_checkpoint
+        COMMAND macro_sim_m8_checkpoint_tests
     )
 
     if(TARGET _native)

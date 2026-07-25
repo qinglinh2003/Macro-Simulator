@@ -480,15 +480,17 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
         return Status(ErrorCode::invariant_violation,
                       "M8 housing price or stock state is invalid");
     }
-    for (const auto &dwelling : properties.records()) {
-        if (!valid_housing_owner(state, dwelling.owner)) {
-            return Status(ErrorCode::invariant_violation,
-                          "M8 dwelling owner is absent");
-        }
-        if (dwelling.active && dwelling.occupant.valid() &&
-            state.households.get(dwelling.occupant) == nullptr) {
-            return Status(ErrorCode::invariant_violation,
-                          "M8 dwelling occupant is absent");
+    if (deep_property_validation) {
+        for (const auto &dwelling : properties.records()) {
+            if (!valid_housing_owner(state, dwelling.owner)) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 dwelling owner is absent");
+            }
+            if (dwelling.active && dwelling.occupant.valid() &&
+                state.households.get(dwelling.occupant) == nullptr) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 dwelling occupant is absent");
+            }
         }
     }
     std::vector<DwellingId> listed;
