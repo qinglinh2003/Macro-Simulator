@@ -1,6 +1,6 @@
 # C++ Engine M9 Execution Plan
 
-Status: in progress
+Status: accepted locally and on hosted CI
 
 Base: accepted M8 integration head `a5e6eee`
 
