@@ -24,6 +24,21 @@ constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
+template <typename Value>
+[[nodiscard]] std::uint64_t capacity_bytes(const std::vector<Value> &values) noexcept {
+    return static_cast<std::uint64_t>(values.capacity()) * sizeof(Value);
+}
+
+template <typename Value>
+[[nodiscard]] std::uint64_t
+nested_capacity_bytes(const std::vector<std::vector<Value>> &values) noexcept {
+    std::uint64_t bytes = capacity_bytes(values);
+    for (const auto &row : values) {
+        bytes += capacity_bytes(row);
+    }
+    return bytes;
+}
+
 [[nodiscard]] bool valid_economy(EconomyId economy, std::size_t count) noexcept {
     return economy.valid() && economy.value() < count;
 }
@@ -578,6 +593,172 @@ const M8Runtime *M9World::economy_runtime(EconomyId economy) const noexcept {
     return valid_economy(economy, economies_.size())
                ? &economies_[static_cast<std::size_t>(economy.value())].domestic
                : nullptr;
+}
+
+M9MemoryUsage M9World::memory_usage() const noexcept {
+    M9MemoryUsage usage;
+    for (const auto &economy : economies_) {
+        const auto &root = economy.root;
+        usage.root_state += root.households.retained_bytes() +
+                            root.firms.retained_bytes() + root.banks.retained_bytes() +
+                            capacity_bytes(root.postings.records()) +
+                            capacity_bytes(root.reserves.records()) +
+                            capacity_bytes(root.loans.records()) +
+                            capacity_bytes(root.interbank.records()) +
+                            capacity_bytes(root.central_bank_operations.records()) +
+                            capacity_bytes(root.bank_pnl.records()) +
+                            capacity_bytes(root.bank_capital.records()) +
+                            capacity_bytes(root.ownership.records()) +
+                            capacity_bytes(root.named_counters.records());
+
+        const auto &real = economy.real_economy_scratch;
+        usage.real_economy_scratch +=
+            capacity_bytes(real.household_ids_) +
+            capacity_bytes(real.household_dense_index_) +
+            capacity_bytes(real.firm_ids_) + capacity_bytes(real.firm_dense_index_) +
+            capacity_bytes(real.consumption_firm_indices_) +
+            capacity_bytes(real.capital_firm_indices_) +
+            capacity_bytes(real.energy_firm_indices_) +
+            capacity_bytes(real.construction_firm_indices_) +
+            capacity_bytes(real.household_order_) + capacity_bytes(real.firm_order_) +
+            capacity_bytes(real.balances_) + capacity_bytes(real.account_nodes_) +
+            capacity_bytes(real.reserve_balances_) +
+            capacity_bytes(real.reserve_minimum_) +
+            capacity_bytes(real.household_work_) + capacity_bytes(real.firm_work_) +
+            capacity_bytes(real.orders_) + capacity_bytes(real.offers_) +
+            capacity_bytes(real.market_buyer_order_) +
+            capacity_bytes(real.market_active_offers_) +
+            capacity_bytes(real.market_offer_remaining_) +
+            capacity_bytes(real.clearing_.trades) +
+            capacity_bytes(real.clearing_.allocations) +
+            capacity_bytes(real.clearing_.stock_commands) +
+            capacity_bytes(real.phase_trace_);
+
+        const auto &monetary = economy.monetary_scratch;
+        usage.monetary_scratch += capacity_bytes(monetary.loans_) +
+                                  capacity_bytes(monetary.interbank_) +
+                                  capacity_bytes(monetary.central_bank_operations_) +
+                                  capacity_bytes(monetary.bank_pnl_) +
+                                  capacity_bytes(monetary.bank_capital_) +
+                                  capacity_bytes(monetary.debt_by_account_) +
+                                  capacity_bytes(monetary.exposure_by_bank_) +
+                                  capacity_bytes(monetary.deposits_by_bank_) +
+                                  capacity_bytes(monetary.bank_capital_live_) +
+                                  capacity_bytes(monetary.bank_alive_) +
+                                  capacity_bytes(monetary.bank_by_node_) +
+                                  capacity_bytes(monetary.firm_index_by_id_) +
+                                  capacity_bytes(monetary.household_order_) +
+                                  capacity_bytes(monetary.candidate_banks_) +
+                                  capacity_bytes(monetary.alive_banks_) +
+                                  capacity_bytes(monetary.failed_banks_);
+
+        const auto &financial = economy.financial;
+        usage.financial_runtime += financial.securities.memory_usage().total() +
+                                   capacity_bytes(financial.firms) +
+                                   capacity_bytes(financial.watchlist_rows) +
+                                   capacity_bytes(financial.watchlist_equities) +
+                                   capacity_bytes(financial.margin_loans);
+        const auto &financial_scratch = economy.financial_scratch;
+        usage.financial_scratch +=
+            financial_scratch.securities_.memory_usage().total() +
+            capacity_bytes(financial_scratch.firms_) +
+            capacity_bytes(financial_scratch.orders_) +
+            capacity_bytes(financial_scratch.ordered_orders_) +
+            capacity_bytes(financial_scratch.order_bucket_offsets_) +
+            capacity_bytes(financial_scratch.buyers_) +
+            capacity_bytes(financial_scratch.sellers_) +
+            capacity_bytes(financial_scratch.bank_equities_) +
+            capacity_bytes(financial_scratch.bond_demands_) +
+            capacity_bytes(financial_scratch.watch_current_) +
+            capacity_bytes(financial_scratch.watch_attractiveness_) +
+            capacity_bytes(financial_scratch.margin_loans_) +
+            capacity_bytes(financial_scratch.debt_by_account_) +
+            capacity_bytes(financial_scratch.margin_by_account_) +
+            capacity_bytes(financial_scratch.firm_return_) +
+            capacity_bytes(financial_scratch.firm_exits_) +
+            capacity_bytes(financial_scratch.firm_entries_) +
+            capacity_bytes(financial_scratch.bank_entries_);
+
+        const auto &population = economy.population;
+        usage.person_store += population.persons.retained_bytes();
+        usage.household_membership += population.membership.retained_bytes();
+        const auto beneficial_memory = population.beneficial_ownership.memory_usage();
+        usage.beneficial_lots += beneficial_memory.lots;
+        usage.beneficial_indexes +=
+            beneficial_memory.asset_indexes + beneficial_memory.person_indexes +
+            beneficial_memory.query_indexes + beneficial_memory.validation_scratch;
+        const auto employment_bytes = population.employment.retained_bytes();
+        const auto relationship_bytes = population.relationships.retained_bytes();
+        usage.employment += employment_bytes;
+        usage.relationships += relationship_bytes;
+        usage.social_labor += employment_bytes + relationship_bytes;
+        usage.population_scratch +=
+            capacity_bytes(economy.population_scratch.opening_alive_) +
+            capacity_bytes(economy.population_scratch.deceased_lots_) +
+            capacity_bytes(economy.population_scratch.beneficial_assets_) +
+            capacity_bytes(economy.population_scratch.estate_securities_) +
+            capacity_bytes(economy.population_scratch.labor_candidates_) +
+            capacity_bytes(economy.population_scratch.second_job_candidates_) +
+            capacity_bytes(economy.population_scratch.ladder_candidates_) +
+            capacity_bytes(economy.population_scratch.ladder_firms_) +
+            capacity_bytes(economy.population_scratch.divorce_candidates_) +
+            capacity_bytes(economy.population_scratch.fertility_candidates_) +
+            capacity_bytes(economy.population_scratch.kin_households_) +
+            capacity_bytes(economy.population_scratch.retired_households_) +
+            capacity_bytes(economy.population_scratch.household_work_index_) +
+            capacity_bytes(economy.population_scratch.roster_buffer_) +
+            capacity_bytes(economy.population_scratch.firm_target_ema_) +
+            capacity_bytes(economy.population_scratch.estates_) +
+            capacity_bytes(economy.population_scratch.leaving_home_) +
+            capacity_bytes(economy.population_scratch.pending_leaving_home_) +
+            economy.population_scratch.persons_.retained_bytes() +
+            economy.population_scratch.membership_.retained_bytes() +
+            economy.population_scratch.beneficial_ownership_.memory_usage().total() +
+            economy.population_scratch.employment_.retained_bytes() +
+            economy.population_scratch.relationships_.retained_bytes();
+
+        const auto &domestic = economy.domestic;
+        usage.housing_registry += domestic.properties.retained_bytes();
+        usage.domestic_runtime += capacity_bytes(domestic.energy_producers) +
+                                  capacity_bytes(domestic.energy_inputs) +
+                                  capacity_bytes(domestic.household_energy) +
+                                  capacity_bytes(domestic.housing_listings) +
+                                  capacity_bytes(domestic.mortgages) +
+                                  capacity_bytes(domestic.tenancies) +
+                                  capacity_bytes(domestic.builders);
+        const auto &domestic_scratch = economy.domestic_scratch;
+        usage.domestic_scratch +=
+            capacity_bytes(domestic_scratch.energy_producers_) +
+            capacity_bytes(domestic_scratch.energy_inputs_) +
+            capacity_bytes(domestic_scratch.household_energy_) +
+            capacity_bytes(domestic_scratch.orders_) +
+            capacity_bytes(domestic_scratch.offers_) +
+            capacity_bytes(domestic_scratch.buyer_order_) +
+            capacity_bytes(domestic_scratch.seller_order_) +
+            capacity_bytes(domestic_scratch.industry_use_need_) +
+            capacity_bytes(domestic_scratch.household_consumption_) +
+            capacity_bytes(domestic_scratch.opening_balances_) +
+            capacity_bytes(domestic_scratch.housing_listings_) +
+            capacity_bytes(domestic_scratch.mortgages_) +
+            capacity_bytes(domestic_scratch.tenancies_) +
+            capacity_bytes(domestic_scratch.builders_);
+        if (domestic_scratch.staged_properties_.has_value()) {
+            usage.domestic_scratch +=
+                domestic_scratch.staged_properties_->retained_bytes();
+        }
+    }
+
+    usage.world =
+        capacity_bytes(economies_) + capacity_bytes(external_policies_) +
+        capacity_bytes(rates_.log_rates) + capacity_bytes(dealer_inventory_) +
+        nested_capacity_bytes(external_principal_) +
+        nested_capacity_bytes(interest_arrears_) + capacity_bytes(pegs_) +
+        capacity_bytes(migration_routes_) + capacity_bytes(shocks_) +
+        capacity_bytes(announced_shock_ids_) + capacity_bytes(active_shock_ids_) +
+        capacity_bytes(realized_shock_ids_) + capacity_bytes(shock_events_) +
+        capacity_bytes(trade_reservations_) + capacity_bytes(smoothed_real_wages_) +
+        capacity_bytes(last_metrics_.domestic) + capacity_bytes(last_metrics_.external);
+    return usage;
 }
 
 Status M9World::validate_policy_vector(

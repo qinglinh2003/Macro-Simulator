@@ -246,6 +246,34 @@ struct M9AdvanceResult final {
     std::uint64_t digest{0};
 };
 
+struct M9MemoryUsage final {
+    std::uint64_t root_state{0};
+    std::uint64_t real_economy_scratch{0};
+    std::uint64_t monetary_scratch{0};
+    std::uint64_t financial_runtime{0};
+    std::uint64_t financial_scratch{0};
+    std::uint64_t person_store{0};
+    std::uint64_t household_membership{0};
+    std::uint64_t beneficial_lots{0};
+    std::uint64_t beneficial_indexes{0};
+    std::uint64_t social_labor{0};
+    std::uint64_t employment{0};
+    std::uint64_t relationships{0};
+    std::uint64_t population_scratch{0};
+    std::uint64_t housing_registry{0};
+    std::uint64_t domestic_runtime{0};
+    std::uint64_t domestic_scratch{0};
+    std::uint64_t world{0};
+
+    [[nodiscard]] constexpr std::uint64_t total_known() const noexcept {
+        return root_state + real_economy_scratch + monetary_scratch +
+               financial_runtime + financial_scratch + person_store +
+               household_membership + beneficial_lots + beneficial_indexes +
+               social_labor + population_scratch + housing_registry + domestic_runtime +
+               domestic_scratch + world;
+    }
+};
+
 class M9World final {
   public:
     M9World(const M9World &) = default;
@@ -284,6 +312,7 @@ class M9World final {
     [[nodiscard]] const M7Runtime *
     economy_population_runtime(EconomyId economy) const noexcept;
     [[nodiscard]] const M8Runtime *economy_runtime(EconomyId economy) const noexcept;
+    [[nodiscard]] M9MemoryUsage memory_usage() const noexcept;
 
     [[nodiscard]] Status
     update_external_policies(std::span<const ExternalPolicyState> policies);

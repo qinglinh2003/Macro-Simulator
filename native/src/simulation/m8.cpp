@@ -582,6 +582,10 @@ class M8Extension final : public M7TickExtension {
             runtime_.mortgages = std::move(scratch_.mortgages_);
             runtime_.tenancies = std::move(scratch_.tenancies_);
             runtime_.builders = std::move(scratch_.builders_);
+            if (scratch_.staged_properties_.has_value()) {
+                runtime_.properties = std::move(*scratch_.staged_properties_);
+                scratch_.staged_properties_.reset();
+            }
         }
     }
 
@@ -1076,7 +1080,11 @@ class M8Extension final : public M7TickExtension {
         runtime_.energy_event_counter = scratch_.energy_event_counter_;
         runtime_.housing_input = scratch_.housing_input_;
         if (scratch_.staged_properties_.has_value()) {
-            std::swap(runtime_.properties, *scratch_.staged_properties_);
+            if (memory_efficient_staging_) {
+                runtime_.properties = std::move(*scratch_.staged_properties_);
+            } else {
+                std::swap(runtime_.properties, *scratch_.staged_properties_);
+            }
             scratch_.staged_properties_.reset();
         }
         if (memory_efficient_staging_) {
@@ -1227,7 +1235,11 @@ class M8Extension final : public M7TickExtension {
 
     [[nodiscard]] core::PropertyRegistry &mutable_properties() {
         if (!scratch_.staged_properties_.has_value()) {
-            scratch_.staged_properties_.emplace(runtime_.properties);
+            if (memory_efficient_staging_) {
+                scratch_.staged_properties_.emplace(std::move(runtime_.properties));
+            } else {
+                scratch_.staged_properties_.emplace(runtime_.properties);
+            }
         }
         return *scratch_.staged_properties_;
     }

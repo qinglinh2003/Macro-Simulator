@@ -82,8 +82,22 @@ struct Measurement final {
     std::uint64_t peak_rss_bytes{0};
     std::uint64_t final_live_heap_bytes{0};
     std::uint64_t security_lots{0};
+    std::uint64_t active_security_lots{0};
+    std::uint64_t security_contract_bytes{0};
+    std::uint64_t security_lot_bytes{0};
+    std::uint64_t security_query_index_bytes{0};
+    std::uint64_t security_pair_index_bytes{0};
+    std::uint64_t security_scratch_bytes{0};
+    M9MemoryUsage world_memory{};
     std::uint64_t beneficial_lots{0};
     std::uint64_t active_beneficial_lots{0};
+    std::uint64_t beneficial_asset_index_bytes{0};
+    std::uint64_t beneficial_person_index_bytes{0};
+    std::uint64_t beneficial_query_index_bytes{0};
+    std::uint64_t beneficial_validation_scratch_bytes{0};
+    std::uint64_t employment_records{0};
+    std::uint64_t active_jobs{0};
+    std::uint64_t union_records{0};
     std::uint64_t portfolio_review_interval_days{30U};
     bool beneficial_ownership{true};
     bool open_economy{false};
@@ -133,8 +147,8 @@ struct Measurement final {
     return true;
 }
 
-[[nodiscard]] constexpr std::string_view workload_name(
-    WorkloadProfile workload) noexcept {
+[[nodiscard]] constexpr std::string_view
+workload_name(WorkloadProfile workload) noexcept {
     switch (workload) {
     case WorkloadProfile::static_only:
         return "static";
@@ -232,12 +246,10 @@ struct Measurement final {
         }
     }
     return options.persons >= 100U && options.measured_days >= 3U &&
-           options.economies >= 1U &&
-           options.economies <= kM9MaximumEconomies &&
+           options.economies >= 1U && options.economies <= kM9MaximumEconomies &&
            options.workers >= 1U &&
            options.workers <=
-               static_cast<std::uint64_t>(
-                   std::numeric_limits<std::uint32_t>::max()) &&
+               static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) &&
            options.persons / options.economies >= 100U &&
            (options.mode == ProbeMode::m9 ||
             (options.economies == 1U && !options.open_economy &&
@@ -283,7 +295,7 @@ struct Measurement final {
     monetary.policy.bank_leverage_cap = 20.0;
     monetary.initial_policy_rate = 0.002;
 
-    financial.rules.watchlist_size = 12U;
+    financial.rules.watchlist_size = 4U;
     financial.rules.portfolio_review_interval_days = 30U;
     const bool population_dynamics =
         workload == WorkloadProfile::population || workload == WorkloadProfile::full;
@@ -401,8 +413,8 @@ template <typename Advance>
     EngineSession session(33909U);
     begin_allocation_measurement();
     const auto start = Clock::now();
-    const auto initialized = session.initialize_m8(make_spec(
-        options.persons, options.beneficial_ownership, options.workload));
+    const auto initialized = session.initialize_m8(
+        make_spec(options.persons, options.beneficial_ownership, options.workload));
     const auto stop = Clock::now();
     measurement.genesis_allocations = end_allocation_measurement();
     if (!initialized.ok()) {
@@ -440,14 +452,22 @@ template <typename Advance>
     const auto *population = session.population_runtime();
     if (financial != nullptr) {
         measurement.security_lots = financial->securities.lots().size();
+        measurement.active_security_lots = static_cast<std::uint64_t>(std::count_if(
+            financial->securities.lots().begin(), financial->securities.lots().end(),
+            [](const core::SecurityLot &lot) { return lot.active; }));
+        const auto memory = financial->securities.memory_usage();
+        measurement.security_contract_bytes = memory.contracts;
+        measurement.security_lot_bytes = memory.lots;
+        measurement.security_query_index_bytes = memory.query_indexes;
+        measurement.security_pair_index_bytes = memory.pair_index;
+        measurement.security_scratch_bytes = memory.scratch;
     }
     if (population != nullptr) {
         measurement.beneficial_lots = population->beneficial_ownership.size();
-        measurement.active_beneficial_lots =
-            static_cast<std::uint64_t>(std::count_if(
-                population->beneficial_ownership.records().begin(),
-                population->beneficial_ownership.records().end(),
-                [](const core::BeneficialLot &lot) { return lot.active; }));
+        measurement.active_beneficial_lots = static_cast<std::uint64_t>(
+            std::count_if(population->beneficial_ownership.records().begin(),
+                          population->beneficial_ownership.records().end(),
+                          [](const core::BeneficialLot &lot) { return lot.active; }));
     }
     measurement.digest = core::state_digest(*session.root()).hex();
     return measurement;
@@ -477,8 +497,8 @@ template <typename Advance>
     for (std::uint64_t index = 0U; index < options.economies; ++index) {
         const auto population =
             population_per_economy + (index < population_remainder ? 1U : 0U);
-        spec.economies.push_back(make_spec(
-            population, options.beneficial_ownership, options.workload, index));
+        spec.economies.push_back(make_spec(population, options.beneficial_ownership,
+                                           options.workload, index));
     }
     spec.external_policies.resize(static_cast<std::size_t>(options.economies));
     if (options.open_economy) {
@@ -493,13 +513,10 @@ template <typename Advance>
         shock.id = 1U;
         shock.kind = ShockKind::household_demand;
         shock.start = Tick(0U);
-        shock.duration = std::min<std::uint64_t>(
-            30U,
-            options.warmup_days + options.measured_days
-        );
+        shock.duration =
+            std::min<std::uint64_t>(30U, options.warmup_days + options.measured_days);
         shock.magnitude = 0.1;
-        shock.ramp_out_ticks =
-            std::min<std::uint64_t>(10U, shock.duration / 3U);
+        shock.ramp_out_ticks = std::min<std::uint64_t>(10U, shock.duration / 3U);
         spec.shocks.push_back(shock);
     }
     begin_allocation_measurement();
@@ -551,8 +568,8 @@ template <typename Advance>
     }
     const auto validation = world.validate();
     if (!validation.ok()) {
-        std::cerr << "M9 scale probe final validation failed: "
-                  << validation.message() << '\n';
+        std::cerr << "M9 scale probe final validation failed: " << validation.message()
+                  << '\n';
         std::abort();
     }
     measurement.households = 0U;
@@ -567,24 +584,51 @@ template <typename Advance>
         measurement.firms += root->firms.alive_count();
         measurement.banks += root->banks.alive_count();
         measurement.security_lots += financial->securities.lots().size();
+        measurement.active_security_lots += static_cast<std::uint64_t>(std::count_if(
+            financial->securities.lots().begin(), financial->securities.lots().end(),
+            [](const core::SecurityLot &lot) { return lot.active; }));
+        const auto memory = financial->securities.memory_usage();
+        measurement.security_contract_bytes += memory.contracts;
+        measurement.security_lot_bytes += memory.lots;
+        measurement.security_query_index_bytes += memory.query_indexes;
+        measurement.security_pair_index_bytes += memory.pair_index;
+        measurement.security_scratch_bytes += memory.scratch;
         measurement.beneficial_lots += population->beneficial_ownership.size();
-        measurement.active_beneficial_lots +=
-            static_cast<std::uint64_t>(std::count_if(
-                population->beneficial_ownership.records().begin(),
-                population->beneficial_ownership.records().end(),
-                [](const core::BeneficialLot &lot) { return lot.active; }));
+        const auto beneficial_memory = population->beneficial_ownership.memory_usage();
+        measurement.beneficial_asset_index_bytes += beneficial_memory.asset_indexes;
+        measurement.beneficial_person_index_bytes += beneficial_memory.person_indexes;
+        measurement.beneficial_query_index_bytes += beneficial_memory.query_indexes;
+        measurement.beneficial_validation_scratch_bytes +=
+            beneficial_memory.validation_scratch;
+        measurement.employment_records += population->employment.records().size();
+        measurement.active_jobs += population->employment.active_count();
+        measurement.union_records += population->relationships.unions().size();
+        measurement.active_beneficial_lots += static_cast<std::uint64_t>(
+            std::count_if(population->beneficial_ownership.records().begin(),
+                          population->beneficial_ownership.records().end(),
+                          [](const core::BeneficialLot &lot) { return lot.active; }));
     }
     measurement.digest = std::to_string(world.digest());
+    measurement.world_memory = world.memory_usage();
     return measurement;
 }
 
 void print(const Measurement &value) {
-    std::cout << '{'
-              << "\"active_beneficial_lots\":" << value.active_beneficial_lots << ','
+    std::cout << '{' << "\"active_beneficial_lots\":" << value.active_beneficial_lots
+              << ',' << "\"active_security_lots\":" << value.active_security_lots << ','
+              << "\"active_jobs\":" << value.active_jobs << ','
               << "\"banks\":" << value.banks << ','
               << "\"beneficial_security_claim_granularity\":"
                  "\"household_portfolio\","
               << "\"beneficial_lots\":" << value.beneficial_lots << ','
+              << "\"beneficial_asset_index_bytes\":"
+              << value.beneficial_asset_index_bytes << ','
+              << "\"beneficial_person_index_bytes\":"
+              << value.beneficial_person_index_bytes << ','
+              << "\"beneficial_query_index_bytes\":"
+              << value.beneficial_query_index_bytes << ','
+              << "\"beneficial_validation_scratch_bytes\":"
+              << value.beneficial_validation_scratch_bytes << ','
               << "\"beneficial_ownership\":"
               << (value.beneficial_ownership ? "true" : "false") << ','
               << "\"day_allocations\":[";
@@ -610,38 +654,68 @@ void print(const Measurement &value) {
         }
         std::cout << value.day_ns[index];
     }
-    std::cout << "],"
-              << "\"digest\":\"" << value.digest << "\","
-              << "\"economies\":" << value.economies << ','
-              << "\"firms\":" << value.firms << ','
-              << "\"workload\":\"" << value.workload << "\","
-              << "\"genesis_allocations\":" << value.genesis_allocations << ','
-              << "\"genesis_live_heap_bytes\":" << value.genesis_live_heap_bytes
-              << ','
-              << "\"genesis_ns\":" << value.genesis_ns << ','
-              << "\"genesis_peak_rss_bytes\":" << value.genesis_peak_rss_bytes << ','
-              << "\"households\":" << value.households << ','
-              << "\"final_live_heap_bytes\":" << value.final_live_heap_bytes << ','
-              << "\"maximum_allocations_per_day\":" << value.maximum_allocations_per_day
-              << ',' << "\"maximum_day_ns\":" << value.maximum_day_ns << ','
-              << "\"measured_days\":" << value.measured_days << ','
-              << "\"median_day_ns\":" << value.median_day_ns << ',' << "\"mode\":\""
-              << value.mode << "\","
-              << "\"open_economy\":"
-              << (value.open_economy ? "true" : "false") << ','
-              << "\"p95_day_ns\":" << value.p95_day_ns << ','
-              << "\"peak_rss_bytes\":" << value.peak_rss_bytes << ','
-              << "\"persons\":" << value.persons << ','
-              << "\"portfolio_review_interval_days\":"
-              << value.portfolio_review_interval_days << ','
-              << "\"scenario\":\"one-million-playable-v6\","
-              << "\"schema_version\":\"m9-scale-probe-v7\","
-              << "\"security_lots\":" << value.security_lots << ','
-              << "\"shock_active\":"
-              << (value.active_shock ? "true" : "false") << ','
-              << "\"total_measured_ns\":" << value.total_measured_ns << ','
-              << "\"warmup_days\":" << value.warmup_days << ','
-              << "\"workers\":" << value.workers << "}\n";
+    std::cout
+        << "],"
+        << "\"digest\":\"" << value.digest << "\","
+        << "\"economies\":" << value.economies << ',' << "\"firms\":" << value.firms
+        << ',' << "\"workload\":\"" << value.workload << "\","
+        << "\"genesis_allocations\":" << value.genesis_allocations << ','
+        << "\"genesis_live_heap_bytes\":" << value.genesis_live_heap_bytes << ','
+        << "\"genesis_ns\":" << value.genesis_ns << ','
+        << "\"genesis_peak_rss_bytes\":" << value.genesis_peak_rss_bytes << ','
+        << "\"households\":" << value.households << ','
+        << "\"final_live_heap_bytes\":" << value.final_live_heap_bytes << ','
+        << "\"maximum_allocations_per_day\":" << value.maximum_allocations_per_day
+        << ',' << "\"maximum_day_ns\":" << value.maximum_day_ns << ','
+        << "\"measured_days\":" << value.measured_days << ','
+        << "\"median_day_ns\":" << value.median_day_ns << ',' << "\"mode\":\""
+        << value.mode << "\","
+        << "\"memory_beneficial_indexes_bytes\":"
+        << value.world_memory.beneficial_indexes << ','
+        << "\"memory_beneficial_lots_bytes\":" << value.world_memory.beneficial_lots
+        << ','
+        << "\"memory_domestic_runtime_bytes\":" << value.world_memory.domestic_runtime
+        << ','
+        << "\"memory_domestic_scratch_bytes\":" << value.world_memory.domestic_scratch
+        << ','
+        << "\"memory_financial_runtime_bytes\":" << value.world_memory.financial_runtime
+        << ','
+        << "\"memory_financial_scratch_bytes\":" << value.world_memory.financial_scratch
+        << ',' << "\"memory_employment_bytes\":" << value.world_memory.employment << ','
+        << "\"memory_household_membership_bytes\":"
+        << value.world_memory.household_membership << ','
+        << "\"memory_housing_registry_bytes\":" << value.world_memory.housing_registry
+        << ',' << "\"memory_known_total_bytes\":" << value.world_memory.total_known()
+        << ','
+        << "\"memory_monetary_scratch_bytes\":" << value.world_memory.monetary_scratch
+        << ',' << "\"memory_person_store_bytes\":" << value.world_memory.person_store
+        << ',' << "\"memory_population_scratch_bytes\":"
+        << value.world_memory.population_scratch << ','
+        << "\"memory_real_economy_scratch_bytes\":"
+        << value.world_memory.real_economy_scratch << ','
+        << "\"memory_root_state_bytes\":" << value.world_memory.root_state << ','
+        << "\"memory_social_labor_bytes\":" << value.world_memory.social_labor << ','
+        << "\"memory_relationships_bytes\":" << value.world_memory.relationships << ','
+        << "\"memory_world_bytes\":" << value.world_memory.world << ','
+        << "\"open_economy\":" << (value.open_economy ? "true" : "false") << ','
+        << "\"p95_day_ns\":" << value.p95_day_ns << ','
+        << "\"peak_rss_bytes\":" << value.peak_rss_bytes << ','
+        << "\"persons\":" << value.persons << ','
+        << "\"portfolio_review_interval_days\":" << value.portfolio_review_interval_days
+        << ',' << "\"scenario\":\"one-million-playable-v6\","
+        << "\"schema_version\":\"m9-scale-probe-v9\","
+        << "\"security_contract_bytes\":" << value.security_contract_bytes << ','
+        << "\"security_lot_bytes\":" << value.security_lot_bytes << ','
+        << "\"security_lots\":" << value.security_lots << ','
+        << "\"security_pair_index_bytes\":" << value.security_pair_index_bytes << ','
+        << "\"security_query_index_bytes\":" << value.security_query_index_bytes << ','
+        << "\"security_scratch_bytes\":" << value.security_scratch_bytes << ','
+        << "\"employment_records\":" << value.employment_records << ','
+        << "\"shock_active\":" << (value.active_shock ? "true" : "false") << ','
+        << "\"total_measured_ns\":" << value.total_measured_ns << ','
+        << "\"union_records\":" << value.union_records << ','
+        << "\"warmup_days\":" << value.warmup_days << ','
+        << "\"workers\":" << value.workers << "}\n";
 }
 
 } // namespace

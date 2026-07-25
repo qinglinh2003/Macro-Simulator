@@ -917,6 +917,10 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
 [[nodiscard]] Status clear_equity_orders(const core::RootState &state,
                                          M4TickScratch &real, M5TickScratch &monetary,
                                          M6Runtime &runtime, M6TickScratch &scratch) {
+    auto status = scratch.securities_.reserve_additional_lots(scratch.orders_.size());
+    if (!status.ok()) {
+        return status;
+    }
     const auto equity_count = scratch.securities_.equities().size();
     const bool dense_equity_ids =
         std::all_of(scratch.orders_.begin(), scratch.orders_.end(),
@@ -952,7 +956,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                       return left.ordinal < right.ordinal;
                   });
     }
-    auto status = scratch.securities_.begin_batch();
+    status = scratch.securities_.begin_batch();
     if (!status.ok()) {
         return status;
     }
@@ -1797,7 +1801,11 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     contract.original_face = Money(issue);
     const auto clearing_owner =
         core::OwnerId::institutional(core::OwnerKind::institution, 2);
-    auto status = scratch.securities_.begin_batch();
+    auto status = scratch.securities_.reserve_additional_lots(demands.size() + 1U);
+    if (!status.ok()) {
+        return status;
+    }
+    status = scratch.securities_.begin_batch();
     if (!status.ok()) {
         return status;
     }
@@ -2655,6 +2663,37 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
         }
     });
     build_genesis_watchlists(value.root, equity_firms, runtime.rules, runtime);
+    const auto household_count = value.root.households.alive_count();
+    const auto expected_bank_positions =
+        runtime.rules.bank_equity && runtime.rules.bank_equity_trading
+            ? std::min<std::size_t>(3U, value.root.banks.alive_count())
+            : 0U;
+    const auto expected_bond_positions = runtime.rules.bonds ? 1U : 0U;
+    const auto expected_positions_per_household =
+        static_cast<std::size_t>(runtime.rules.watchlist_size) +
+        expected_bank_positions + expected_bond_positions;
+    const auto expected_active_positions_per_household =
+        static_cast<std::size_t>(runtime.rules.watchlist_size) +
+        (runtime.rules.bank_equity && runtime.rules.bank_equity_trading
+             ? std::min<std::size_t>(2U, value.root.banks.alive_count())
+             : 0U) +
+        expected_bond_positions;
+    if (expected_positions_per_household >
+        SecurityLotId::max_valid_value() / std::max<std::size_t>(1U, household_count)) {
+        return Status(ErrorCode::out_of_range,
+                      "expected security position capacity is too large");
+    }
+    const auto expected_active_pairs =
+        household_count * expected_active_positions_per_household;
+    const auto expected_active_pairs_with_slack =
+        expected_active_pairs + expected_active_pairs / 50U +
+        value.root.firms.alive_count() + value.root.banks.alive_count();
+    auto position_capacity = runtime.securities.reserve_position_capacity(
+        household_count * expected_positions_per_household,
+        expected_active_pairs_with_slack);
+    if (!position_capacity.ok()) {
+        return position_capacity;
+    }
     std::vector<std::vector<HouseholdId>> watchers(equity_firms.size());
     for (std::size_t household_index = 1;
          household_index < runtime.watchlist_rows.size(); ++household_index) {
@@ -2777,12 +2816,19 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
 
 void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runtime) {
     firms_.reserve(runtime.firms.size() + 16);
-    orders_.reserve(state.households.alive_count() *
-                    static_cast<std::size_t>(runtime.rules.watchlist_size +
-                                             state.banks.alive_count()));
+    const auto household_count = state.households.alive_count();
+    const auto review_interval =
+        std::max<std::size_t>(1U, runtime.rules.portfolio_review_interval_days);
+    const auto reviewer_count =
+        (household_count + review_interval - 1U) / review_interval;
+    const auto order_capacity =
+        reviewer_count * static_cast<std::size_t>(runtime.rules.watchlist_size +
+                                                  state.banks.alive_count());
+    orders_.reserve(order_capacity);
+    ordered_orders_.reserve(order_capacity);
     order_bucket_offsets_.reserve(runtime.securities.equities().size() + 2U);
-    buyers_.reserve(state.households.alive_count());
-    sellers_.reserve(state.households.alive_count());
+    buyers_.reserve(reviewer_count);
+    sellers_.reserve(reviewer_count);
     bank_equities_.reserve(state.banks.alive_count());
     bond_demands_.reserve(state.households.alive_count() + state.banks.alive_count());
     const auto observation_width =

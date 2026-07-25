@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -25,8 +26,21 @@ enum class EquityIssuerKind : std::uint8_t {
 };
 
 struct SecurityId final {
-    SecurityKind kind{SecurityKind::bond};
-    std::uint32_t value{0};
+    static constexpr std::uint32_t kMaximumPackedValue = (1U << 31U) - 1U;
+    SecurityKind kind : 1 = SecurityKind::bond;
+    std::uint32_t value : 31 = 0;
+
+    constexpr SecurityId() noexcept = default;
+
+    template <typename Source>
+        requires std::is_integral_v<Source>
+    constexpr SecurityId(SecurityKind security_kind, Source security_value) noexcept
+        : kind(security_kind),
+          value(std::in_range<std::uint32_t>(security_value) &&
+                        static_cast<std::uint32_t>(security_value) <=
+                            kMaximumPackedValue
+                    ? static_cast<std::uint32_t>(security_value)
+                    : 0U) {}
 
     [[nodiscard]] static constexpr SecurityId bond(BondId id) noexcept {
         return {SecurityKind::bond, id.value()};
@@ -36,10 +50,18 @@ struct SecurityId final {
         return {SecurityKind::equity, id.value()};
     }
 
-    [[nodiscard]] constexpr bool valid() const noexcept { return value != 0; }
+    [[nodiscard]] static constexpr std::uint32_t max_packed_value() noexcept {
+        return kMaximumPackedValue;
+    }
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return kind <= SecurityKind::equity && value != 0;
+    }
 
     constexpr auto operator<=>(const SecurityId &) const noexcept = default;
 };
+
+static_assert(sizeof(SecurityId) == sizeof(std::uint32_t));
 
 struct BondContract final {
     BondId id{};
@@ -77,15 +99,23 @@ struct EquityContract final {
 };
 
 struct SecurityLot final {
-    SecurityLotId id{};
-    SecurityId security{};
-    OwnerId holder{};
     double units{0.0};
     Money cost_basis{};
+    SecurityId security{};
+    OwnerId holder{};
+    SecurityLotId id{};
     bool active{true};
+
+    SecurityLot() = default;
+    SecurityLot(SecurityLotId lot_id, SecurityId security_id, OwnerId owner,
+                double held_units, Money basis, bool is_active = true) noexcept
+        : units(held_units), cost_basis(basis), security(security_id), holder(owner),
+          id(lot_id), active(is_active) {}
 
     bool operator==(const SecurityLot &) const = default;
 };
+
+static_assert(sizeof(SecurityLot) == 32U);
 
 struct HouseholdSecurityPositionChange final {
     SecurityId security{};
@@ -133,6 +163,18 @@ struct MaturityIndexEntry final {
     bool operator==(const MaturityIndexEntry &) const = default;
 };
 
+struct SecurityBookMemoryUsage final {
+    std::uint64_t contracts{0};
+    std::uint64_t lots{0};
+    std::uint64_t query_indexes{0};
+    std::uint64_t pair_index{0};
+    std::uint64_t scratch{0};
+
+    [[nodiscard]] constexpr std::uint64_t total() const noexcept {
+        return contracts + lots + query_indexes + pair_index + scratch;
+    }
+};
+
 class SecurityBook final {
   public:
     [[nodiscard]] Result<BondId> issue_bond(BondContract contract, OwnerId holder,
@@ -157,6 +199,9 @@ class SecurityBook final {
                                                  double income_signal);
     [[nodiscard]] Status consolidate();
     [[nodiscard]] Status compact_inactive_lots();
+    [[nodiscard]] Status reserve_position_capacity(std::size_t expected_lots,
+                                                   std::size_t expected_active_pairs);
+    [[nodiscard]] Status reserve_additional_lots(std::size_t additional);
     [[nodiscard]] Status begin_batch() noexcept;
     [[nodiscard]] Status finish_batch();
 
@@ -187,6 +232,7 @@ class SecurityBook final {
     [[nodiscard]] double total_units(SecurityId security) const noexcept;
     [[nodiscard]] Money total_bond_face() const noexcept;
     [[nodiscard]] std::uint64_t version() const noexcept;
+    [[nodiscard]] SecurityBookMemoryUsage memory_usage() const noexcept;
     [[nodiscard]] Status validate_records(double tolerance) const;
     [[nodiscard]] Status validate(double tolerance) const;
     [[nodiscard]] Status validate_indexes() const;
@@ -196,12 +242,6 @@ class SecurityBook final {
                          std::vector<SecurityLot> lots, std::uint64_t version);
 
   private:
-    struct PairLotSlot final {
-        std::uint32_t head{0};
-        std::uint32_t tail{0};
-
-        bool operator==(const PairLotSlot &) const = default;
-    };
 
     [[nodiscard]] Result<SecurityLotId> create_lot(SecurityId security, OwnerId holder,
                                                    double units, Money cost_basis);
@@ -237,8 +277,7 @@ class SecurityBook final {
     std::vector<BondId> maturity_bonds_;
     std::vector<HolderSecurityIndexEntry> bank_index_;
     std::vector<SecurityLotId> bank_lots_;
-    std::vector<std::uint32_t> pair_next_;
-    std::vector<PairLotSlot> pair_slots_;
+    std::vector<std::uint32_t> pair_slots_;
     std::size_t pair_count_{0};
     std::vector<HouseholdSecurityPositionChange> household_position_changes_;
     std::vector<std::pair<OwnerId, SecurityLotId>> holder_rows_scratch_;
@@ -246,9 +285,7 @@ class SecurityBook final {
     std::vector<std::pair<OwnerId, SecurityId>> issuer_rows_scratch_;
     std::vector<std::pair<Tick, BondId>> maturity_rows_scratch_;
     std::vector<std::uint32_t> holder_counts_scratch_;
-    std::vector<std::uint32_t> holder_offsets_scratch_;
     std::vector<std::uint32_t> contract_counts_scratch_;
-    std::vector<std::uint32_t> contract_offsets_scratch_;
     bool batch_active_{false};
     bool batch_dirty_{false};
     bool batch_indexes_dirty_{false};

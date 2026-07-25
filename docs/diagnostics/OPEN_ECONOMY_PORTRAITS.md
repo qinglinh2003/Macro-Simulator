@@ -254,7 +254,9 @@ are ECONOMIC observations to study, NOT identity failures or bugs:
 The audit stage (n=3, pop 500, 10 y) was impractically slow — a single arm ran >56 min without
 finishing. Root-caused it is NOT the obvious suspects:
 - **Per-tick cost is LINEAR in population** (pop 200→500 = 15→37 ms/tick ≈ 2.5×). The per-firm equity
-  market's watchlist is capped (`watchlist_size = 15`), so it is O(n_households), not O(pop²).
+  market's default watchlist is capped (`watchlist_size = 4`), so it is
+  O(n_households), not O(pop²). Advanced scenarios can raise this cap when
+  deeper household diversification is worth the additional memory.
 - **The WorldProbeCollector adds ~0% overhead** (measured 1.00×) — the identity gates are cheap.
 - **Nothing else accumulates**: over 1400 ticks, ledger accounts (~385), claims persons (~510),
   loans (~385) and households (~300) are all FLAT.

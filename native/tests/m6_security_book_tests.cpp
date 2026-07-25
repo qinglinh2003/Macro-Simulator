@@ -29,6 +29,7 @@ using macro_sim::core::InitialSecurityHolding;
 using macro_sim::core::OwnerId;
 using macro_sim::core::SecurityBook;
 using macro_sim::core::SecurityId;
+using macro_sim::core::SecurityKind;
 
 [[nodiscard]] BondContract bond_contract(std::uint64_t issuer, std::uint64_t account,
                                          std::uint64_t issue, std::uint64_t maturity,
@@ -320,6 +321,27 @@ void test_rejections() {
     assert(book.validate(1.0e-9).ok());
 }
 
+void test_packed_identity_boundaries_reject_overflow() {
+    const auto maximum_owner =
+        OwnerId(macro_sim::core::OwnerKind::household,
+                OwnerId::max_packed_value());
+    const auto overflow_owner =
+        OwnerId(macro_sim::core::OwnerKind::household,
+                static_cast<std::uint64_t>(OwnerId::max_packed_value()) + 1U);
+    assert(maximum_owner.valid());
+    assert(!overflow_owner.valid());
+
+    const auto maximum_security =
+        SecurityId(SecurityKind::equity, SecurityId::max_packed_value());
+    const auto overflow_security =
+        SecurityId(
+            SecurityKind::equity,
+            static_cast<std::uint64_t>(SecurityId::max_packed_value()) + 1U
+        );
+    assert(maximum_security.valid());
+    assert(!overflow_security.valid());
+}
+
 } // namespace
 
 int main() {
@@ -333,5 +355,6 @@ int main() {
     test_fuzzed_mutations();
     test_inactive_lot_compaction_preserves_positions();
     test_rejections();
+    test_packed_identity_boundaries_reject_overflow();
     return 0;
 }

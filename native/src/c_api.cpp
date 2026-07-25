@@ -948,10 +948,8 @@ macro_sim_status macro_sim_m2_apply_batch(macro_sim_session *session,
                               "command structure is invalid");
             }
             if (command.owner_kind > MACRO_SIM_M2_OWNER_INSTITUTION ||
-                command.tertiary_id >
-                    std::numeric_limits<std::uint32_t>::max()) {
-                return status(MACRO_SIM_INVALID_ARGUMENT,
-                              "command owner is invalid");
+                command.tertiary_id > macro_sim::core::OwnerId::max_packed_value()) {
+                return status(MACRO_SIM_INVALID_ARGUMENT, "command owner is invalid");
             }
             const macro_sim::core::OwnerId owner{
                 static_cast<macro_sim::core::OwnerKind>(command.owner_kind),
@@ -1374,8 +1372,7 @@ macro_sim_status macro_sim_m6_genesis(macro_sim_session *session,
         !valid_flag(options->stochastic) || !valid_flag(options->bonds) ||
         !valid_flag(options->firm_equity) || !valid_flag(options->margin_credit) ||
         !valid_flag(options->firm_dynamics) || !valid_flag(options->bank_dynamics) ||
-        options->reserved != 0 ||
-        options->portfolio_review_interval_days > 3'650U) {
+        options->reserved != 0 || options->portfolio_review_interval_days > 3'650U) {
         return status(MACRO_SIM_INVALID_ARGUMENT, "M6 genesis options are invalid");
     }
     macro_sim::simulation::M6SimulationSpec spec;

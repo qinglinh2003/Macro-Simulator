@@ -91,6 +91,8 @@ class PropertyRegistry final {
     [[nodiscard]] std::size_t occupied_count() const noexcept;
     [[nodiscard]] std::size_t owner_occupied_count() const noexcept;
 
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
+
     [[nodiscard]] Status validate_fast() const noexcept;
     [[nodiscard]] Status validate() const noexcept;
     [[nodiscard]] Status replace_state(std::vector<DwellingRecord> records,

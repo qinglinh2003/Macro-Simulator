@@ -576,7 +576,7 @@ class Config:
     # market valuation q lifts investment. per_firm_equity=False => v6 aggregate, bit-identical.
     # ======================================================================
     per_firm_equity: bool = False   # v6.1 master switch (per-firm stock market)
-    watchlist_size: int = 15        # # firms each household actively trades (sparse portfolio) -- scale
+    watchlist_size: int = 4         # representative firms actively traded per household
     shares_per_firm: float = 100.0  # each firm's fixed share float -- scale
     resid_income_lambda: float = 0.1  # smoothing of residual income for valuation -- anchored
     lambda_q: float = 0.0           # q -> investment sensitivity (v6.1b; 0 = side-pot, no feedback) -- FREE

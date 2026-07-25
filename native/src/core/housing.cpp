@@ -10,6 +10,11 @@ namespace {
 
 constexpr double kMinimumFloorArea = 1.0e-9;
 
+template <typename Value>
+[[nodiscard]] std::uint64_t capacity_bytes(const std::vector<Value> &values) noexcept {
+    return static_cast<std::uint64_t>(values.capacity()) * sizeof(Value);
+}
+
 [[nodiscard]] bool finite_positive(double value) noexcept {
     return std::isfinite(value) && value > kMinimumFloorArea;
 }
@@ -318,6 +323,24 @@ std::size_t PropertyRegistry::occupied_count() const noexcept {
 
 std::size_t PropertyRegistry::owner_occupied_count() const noexcept {
     return owner_occupied_count_;
+}
+
+std::uint64_t PropertyRegistry::retained_bytes() const noexcept {
+    std::uint64_t bytes = capacity_bytes(records_) + capacity_bytes(title_events_) +
+                          capacity_bytes(household_owner_primary_) +
+                          capacity_bytes(occupant_index_) +
+                          capacity_bytes(collateral_index_);
+    for (const auto &[owner, dwellings] : household_owner_overflow_) {
+        static_cast<void>(owner);
+        bytes += sizeof(decltype(household_owner_overflow_)::value_type) +
+                 3U * sizeof(void *) + capacity_bytes(dwellings);
+    }
+    for (const auto &[owner, dwellings] : non_household_owner_index_) {
+        static_cast<void>(owner);
+        bytes += sizeof(decltype(non_household_owner_index_)::value_type) +
+                 3U * sizeof(void *) + capacity_bytes(dwellings);
+    }
+    return bytes;
 }
 
 Status PropertyRegistry::validate_fast() const noexcept {

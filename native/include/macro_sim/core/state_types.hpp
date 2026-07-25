@@ -22,8 +22,20 @@ enum class OwnerKind : std::uint8_t {
 };
 
 struct OwnerId final {
-    OwnerKind kind{OwnerKind::institution};
-    std::uint32_t value{0};
+    static constexpr std::uint32_t kMaximumPackedValue = (1U << 29U) - 1U;
+    OwnerKind kind : 3 = OwnerKind::institution;
+    std::uint32_t value : 29 = 0;
+
+    constexpr OwnerId() noexcept = default;
+
+    template <typename Source>
+        requires std::is_integral_v<Source>
+    constexpr OwnerId(OwnerKind owner_kind, Source owner_value) noexcept
+        : kind(owner_kind),
+          value(std::in_range<std::uint32_t>(owner_value) &&
+                        static_cast<std::uint32_t>(owner_value) <= kMaximumPackedValue
+                    ? static_cast<std::uint32_t>(owner_value)
+                    : 0U) {}
 
     [[nodiscard]] static constexpr OwnerId household(HouseholdId id) noexcept {
         return {OwnerKind::household, id.value()};
@@ -45,18 +57,25 @@ struct OwnerId final {
     ) noexcept {
         return {
             kind,
-            std::in_range<std::uint32_t>(value)
+            std::in_range<std::uint32_t>(value) &&
+                    static_cast<std::uint32_t>(value) <= kMaximumPackedValue
                 ? static_cast<std::uint32_t>(value)
                 : std::uint32_t{0},
         };
     }
 
+    [[nodiscard]] static constexpr std::uint32_t max_packed_value() noexcept {
+        return kMaximumPackedValue;
+    }
+
     [[nodiscard]] constexpr bool valid() const noexcept {
-        return value != 0;
+        return kind <= OwnerKind::institution && value != 0;
     }
 
     constexpr auto operator<=>(const OwnerId&) const noexcept = default;
 };
+
+static_assert(sizeof(OwnerId) == sizeof(std::uint32_t));
 
 enum class AccountKind : std::uint8_t {
     deposit = 0,

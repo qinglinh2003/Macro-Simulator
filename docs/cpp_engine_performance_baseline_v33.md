@@ -1,7 +1,7 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person latency target met; memory footprint reduced and
-validated over 60 full-play days
+Status: one-million-person latency target met; normal-play memory reduced to
+approximately 1.05 GiB and validated over 60 full-play days
 
 Date: 2026-07-26
 
@@ -12,6 +12,8 @@ Branch: `perf/cpp-scale-v33`
 Memory refinement base: `c93c4af75c0ba2a1ec59760906221f21d1309723`
 
 Memory refinement branch: `perf/cpp-memory-v33`
+
+Second memory refinement branch: `perf/cpp-memory-history-v33`
 
 ## 1. Purpose
 
@@ -601,8 +603,74 @@ Relative to the preceding accepted run, day-60 peak RSS fell by approximately
 47 percent without changing either deterministic digest. Median day latency
 also improved by approximately 20 percent. Allocation counts and beneficial and
 security lot counts are now emitted for M9 rather than silently reporting zero.
-The remaining long-session memory growth is persistent security-position
-history, not duplicate tick staging.
+The 6.03 million lots in this checkpoint are active holder-security positions,
+not inactive history. This distinction motivated the next refinement: reduce
+the number and representation cost of live positions, then remove transient
+copies around them.
+
+### 8.5 Lightweight normal-play memory profile
+
+The second memory refinement targets the normal desktop game rather than the
+strong-rollback diagnostic path. It makes retained memory attributable, removes
+capacity sampled gameplay never consumes, and adopts two bounded gameplay
+defaults:
+
+- `OwnerId` and `SecurityId` are packed into 32 bits with checked limits.
+  Oversized C, C++, checkpoint, and Python inputs are rejected rather than
+  truncated.
+- A holder-security pair has one canonical active lot. New units are netted into
+  that position, pair lookup uses a compact open-addressed table, dense query
+  indexes use 32-bit lot IDs, and temporary count arrays are reused as cursors.
+- Security-lot and property staging compacts or moves in place. A single retired
+  lot no longer causes a complete position-vector copy, and a housing market day
+  no longer copies the complete property registry under normal move staging.
+- The sampled real-goods market settles directly and no longer preallocates
+  replay tables used only by alternative matching protocols.
+- Beneficial-owner lookup uses a singly linked per-person index. Full validation
+  no longer materializes a dense all-person query table, and genesis validation
+  capacity is released after use. Asset-level retired-lot history remains
+  queryable.
+- Portfolio order buffers are sized for the daily review cohort rather than all
+  households.
+- The default household watchlist is four representative firms instead of
+  fifteen. This is a configurable normal-play default, not a hard engine limit.
+  Raising `watchlist_size` increases diversification and memory approximately
+  linearly.
+- Inactive individual job contracts are compacted after they exceed the larger
+  of 4,096 records or one eighth of active contracts. Current employment,
+  cumulative labor-flow accounts, and aggregate history remain available;
+  unbounded per-contract employment history does not. A future detailed career
+  log should be streamed or kept in a bounded history ring.
+
+The last two items deliberately change normal-play semantics. Consequently the
+digests below establish a new deterministic baseline rather than matching the
+earlier 12-firm-watchlist, append-only-employment baseline.
+
+The final acceptance uses exactly 1,000,000 opening persons, eight countries,
+eight workers, open trade, capital, and migration, beneficial ownership, every
+full-play domestic subsystem, and two complete 30-day portfolio and housing
+cycles:
+
+| Scenario | Genesis | Median day | P95 day | Maximum day | Peak RSS | Final live heap | Security lots | Digest |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| Full play, no shock | 2.08 s | 0.127 s | 0.520 s | 0.640 s | 1.046 GiB | 1.046 GiB | 2,834,230 | `12741682867193949295` |
+| Full play, bounded demand shock | 2.13 s | 0.126 s | 0.534 s | 0.589 s | 1.051 GiB | 1.049 GiB | 2,835,835 | `2339037212008328974` |
+
+All 120 measured days remain below one second. Relative to the original
+4.84-4.85 GiB full-play result, peak RSS is approximately 78 percent lower.
+Relative to the first 2.58-2.67 GiB memory pass, it is approximately 60 percent
+lower. The no-shock run retains about 1,123 bytes of live heap per opening
+person. This is the high-scale setting; smaller normal game populations have a
+correspondingly lighter footprint.
+
+The scale-probe schema is now `m9-scale-probe-v9`. In addition to process memory,
+it reports retained capacity for root state, each tick scratch layer, securities,
+population, beneficial ownership, employment, relationships, housing, and world
+state. The reported categories explain approximately 1.04 GB of the final
+1.13 GB live heap, making future regressions attributable rather than opaque.
+
+The complete native and Python compatibility suite passes with eight workers:
+49 of 49 tests.
 
 ## 9. Optimization order
 
@@ -611,15 +679,16 @@ incremental synchronization and validation, stable order bucketing, linear
 security-index construction, staggered portfolio scheduling, aggregate
 household portfolio claims, copy-free normal M9 staging, locally audited trade
 settlement, deterministic country-level parallelism, compact internal IDs,
-dense housing indexes, compact lineage storage, and move-based M6-M8 tick
-staging.
+dense housing indexes, compact lineage storage, move-based M6-M8 tick staging,
+canonical security positions, in-place compaction, bounded inactive employment
+records, and protocol-specific scratch allocation.
 
 The next measured order is:
 
-1. Remove repeated account-index rebuilds and root-wide transaction digests from
-   batched firm exit and entry commit paths.
-2. Bound or compact inactive public-security position history across long game
-   sessions while retaining the audit information required by gameplay.
+1. Compact root entity stores and remaining per-person social indexes without
+   losing stable external identities.
+2. Stream detailed employment and title history into bounded UI-facing history
+   rings when that gameplay surface is implemented.
 3. Rebuild public security indexes no more than once per mutation phase.
 4. Replace copied rollback staging with chunked copy-on-write storage or mutation
    journals where strong rollback is required.

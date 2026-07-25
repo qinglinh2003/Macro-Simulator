@@ -71,6 +71,7 @@ class RelationshipBook final {
     [[nodiscard]] std::span<const PersonId>
     children(PersonId parent) const;
     [[nodiscard]] const std::vector<UnionRecord> &unions() const noexcept;
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
     [[nodiscard]] Status
     replace_unions(const PersonStore &persons,
                    std::vector<UnionRecord> unions);
@@ -153,6 +154,8 @@ class EmploymentBook final {
     [[nodiscard]] std::uint64_t next_id() const noexcept;
     [[nodiscard]] std::size_t active_count() const noexcept;
     [[nodiscard]] std::size_t suspended_count() const noexcept;
+    [[nodiscard]] Status compact_inactive();
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
     [[nodiscard]] double active_hours(PersonId person) const noexcept;
     [[nodiscard]] double active_hours(FirmId firm) const noexcept;
     [[nodiscard]] Status validate(const PersonStore &persons,

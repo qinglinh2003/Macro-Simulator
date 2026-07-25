@@ -76,6 +76,35 @@ void test_primary_second_and_roster_indexes() {
     assert(employment.validate(value.persons, value.root, 1.0e-12).ok());
 }
 
+void test_inactive_job_compaction_rebuilds_live_indexes() {
+    auto value = fixture();
+    EmploymentBook employment;
+    const auto retired =
+        employment.hire(PersonId(1), FirmId(1), 10, 2.0, 1.0);
+    const auto first_live =
+        employment.hire(PersonId(2), FirmId(1), 11, 2.5, 0.75);
+    const auto second_live =
+        employment.hire(PersonId(3), FirmId(2), 12, 3.0, 0.5);
+    assert(retired.ok());
+    assert(first_live.ok());
+    assert(second_live.ok());
+    assert(
+        employment
+            .separate(*retired.get_if(), 20, SeparationKind::churn)
+            .ok()
+    );
+
+    assert(employment.compact_inactive().ok());
+    assert(employment.records().size() == 3U);
+    assert(employment.active_count() == 2U);
+    assert(employment.primary_job(PersonId(1)) == JobId{});
+    assert(employment.primary_job(PersonId(2)) == JobId(1));
+    assert(employment.primary_job(PersonId(3)) == JobId(2));
+    assert(employment.roster(FirmId(1)).size() == 1U);
+    assert(employment.roster(FirmId(2)).size() == 1U);
+    assert(employment.validate(value.persons, value.root, 1.0e-12).ok());
+}
+
 void test_swap_erase_suspension_and_stable_ids() {
     auto value = fixture();
     EmploymentBook employment;
@@ -320,6 +349,7 @@ void test_indexed_marriage_matches_brute_force() {
 
 int main() {
     test_primary_second_and_roster_indexes();
+    test_inactive_job_compaction_rebuilds_live_indexes();
     test_swap_erase_suspension_and_stable_ids();
     test_labor_partition_gate();
     test_relationship_symmetry_and_lineage();

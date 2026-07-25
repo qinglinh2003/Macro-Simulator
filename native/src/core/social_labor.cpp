@@ -8,8 +8,11 @@
 namespace macro_sim::core {
 namespace {
 
-[[nodiscard]] bool finite(double value) noexcept {
-    return std::isfinite(value);
+[[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
+
+template <typename Value>
+[[nodiscard]] std::uint64_t capacity_bytes(const std::vector<Value> &values) noexcept {
+    return static_cast<std::uint64_t>(values.capacity()) * sizeof(Value);
 }
 
 constexpr double kDaysPerYear = 365.2425;
@@ -257,6 +260,12 @@ RelationshipBook::children(PersonId parent) const {
 const std::vector<UnionRecord> &
 RelationshipBook::unions() const noexcept {
     return unions_;
+}
+
+std::uint64_t RelationshipBook::retained_bytes() const noexcept {
+    return capacity_bytes(unions_) + capacity_bytes(active_union_by_person_) +
+           capacity_bytes(child_head_by_parent_) + capacity_bytes(child_links_) +
+           capacity_bytes(child_query_);
 }
 
 Status RelationshipBook::replace_unions(
@@ -1034,6 +1043,70 @@ std::size_t EmploymentBook::active_count() const noexcept {
 
 std::size_t EmploymentBook::suspended_count() const noexcept {
     return suspended_count_;
+}
+
+Status EmploymentBook::compact_inactive() {
+    if (jobs_.empty()) {
+        return Status(ErrorCode::invariant_violation,
+                      "employment store has no sentinel record");
+    }
+    std::size_t write = 1U;
+    for (std::size_t read = 1U; read < jobs_.size(); ++read) {
+        if (!jobs_[read].active) {
+            continue;
+        }
+        if (write != read) {
+            jobs_[write] = std::move(jobs_[read]);
+        }
+        jobs_[write].id = JobId(write);
+        ++write;
+    }
+    jobs_.resize(write);
+
+    std::fill(primary_by_person_.begin(), primary_by_person_.end(), JobId{});
+    std::fill(secondary_by_person_.begin(), secondary_by_person_.end(), JobId{});
+    for (auto &roster : roster_by_firm_) {
+        roster.clear();
+    }
+    roster_position_by_job_.assign(jobs_.size(), kNoRoster);
+    active_count_ = 0U;
+    suspended_count_ = 0U;
+    for (std::size_t index = 1U; index < jobs_.size(); ++index) {
+        auto &job = jobs_[index];
+        ensure_person(job.person);
+        ensure_firm(job.firm);
+        auto &person_slot =
+            job.secondary
+                ? secondary_by_person_[static_cast<std::size_t>(job.person.value())]
+                : primary_by_person_[static_cast<std::size_t>(job.person.value())];
+        if (person_slot.valid()) {
+            return Status(ErrorCode::invariant_violation,
+                          "employment compaction found duplicate jobs");
+        }
+        person_slot = job.id;
+        auto &firm_roster = roster_by_firm_[static_cast<std::size_t>(job.firm.value())];
+        if (firm_roster.size() >= std::numeric_limits<std::uint32_t>::max()) {
+            return Status(ErrorCode::out_of_range,
+                          "employment roster exceeds compact position range");
+        }
+        roster_position_by_job_[index] = static_cast<std::uint32_t>(firm_roster.size());
+        firm_roster.push_back(job.id);
+        ++active_count_;
+        suspended_count_ += job.suspended ? 1U : 0U;
+    }
+    next_id_ = jobs_.size();
+    return Status::success();
+}
+
+std::uint64_t EmploymentBook::retained_bytes() const noexcept {
+    std::uint64_t bytes = capacity_bytes(jobs_) + capacity_bytes(primary_by_person_) +
+                          capacity_bytes(secondary_by_person_) +
+                          capacity_bytes(roster_by_firm_) +
+                          capacity_bytes(roster_position_by_job_);
+    for (const auto &roster : roster_by_firm_) {
+        bytes += capacity_bytes(roster);
+    }
+    return bytes;
 }
 
 double EmploymentBook::active_hours(PersonId person) const noexcept {

@@ -2121,9 +2121,6 @@ void M4TickScratch::reserve(const core::RootState& state) {
     market_buyer_order_.reserve(std::max(household_count, firm_count));
     market_active_offers_.reserve(firm_count);
     market_offer_remaining_.reserve(firm_count);
-    clearing_.trades.reserve(household_count + firm_count);
-    clearing_.allocations.reserve(std::max(household_count, firm_count));
-    clearing_.stock_commands.reserve(firm_count);
     phase_trace_.reserve(10);
 }
 

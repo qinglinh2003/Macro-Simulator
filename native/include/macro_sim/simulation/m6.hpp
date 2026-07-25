@@ -37,7 +37,7 @@ struct M6Rules final {
     std::uint64_t bond_maturity_bucket{30};
     bool firm_equity{true};
     double shares_per_firm{100.0};
-    std::uint32_t watchlist_size{15};
+    std::uint32_t watchlist_size{4};
     bool founder_owned_genesis{true};
     double genesis_founder_pool{0.10};
     double equity_price_adjustment{0.05};

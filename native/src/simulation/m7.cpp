@@ -636,8 +636,8 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
         }
         dependent->guardian = replacement;
     }
-    lot_buffer.assign(ownership.lots_for_person(deceased).begin(),
-                      ownership.lots_for_person(deceased).end());
+    const auto deceased_claims = ownership.lots_for_person(deceased);
+    lot_buffer.assign(deceased_claims.begin(), deceased_claims.end());
     EstateRecord estate;
     estate.event = EventId(next_event_id++);
     estate.deceased = deceased;
@@ -2029,6 +2029,20 @@ class M7Extension final : public M6TickExtension {
             measure_labor(state, runtime_.rules, monetary.policy, scratch_.persons_,
                           scratch_.employment_, real, calendar_day,
                           scratch_.labor_accounts_, scratch_.working_metrics_);
+            const auto job_records = scratch_.employment_.records().size();
+            const auto active_jobs = scratch_.employment_.active_count();
+            const auto inactive_jobs =
+                job_records > 0U && job_records - 1U > active_jobs
+                    ? job_records - 1U - active_jobs
+                    : 0U;
+            const auto compaction_threshold =
+                std::max<std::size_t>(4096U, active_jobs / 8U);
+            if (inactive_jobs > compaction_threshold) {
+                const auto compacted = scratch_.employment_.compact_inactive();
+                if (!compacted.ok()) {
+                    return compacted;
+                }
+            }
         }
         scratch_.working_metrics_.beneficial_projection_error =
             beneficial_projection_error(scratch_.beneficial_ownership_);
@@ -2291,7 +2305,6 @@ class M7Extension final : public M6TickExtension {
 void M7TickScratch::reserve(const M7Runtime &runtime) {
     opening_alive_.reserve(runtime.persons.alive_count());
     deceased_lots_.reserve(8);
-    beneficial_assets_.reserve(runtime.beneficial_ownership.size());
     estate_securities_.reserve(16);
     estates_.reserve(runtime.estates.size() + 8U);
     leaving_home_.reserve(runtime.leaving_home.size() + 8U);
@@ -2304,7 +2317,6 @@ void M7TickScratch::reserve(const M7Runtime &runtime) {
     fertility_candidates_.reserve(runtime.persons.alive_count() / 4U);
     kin_households_.reserve(16);
     retired_households_.reserve(4);
-    roster_buffer_.reserve(runtime.employment.active_count());
     firm_target_ema_.reserve(runtime.firm_target_ema.size());
 }
 

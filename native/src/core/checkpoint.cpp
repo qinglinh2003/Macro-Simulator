@@ -238,7 +238,7 @@ template <typename Id>
     if (*kind.get_if() > static_cast<std::uint8_t>(OwnerKind::institution)) {
         return corrupt("state payload contains an unknown owner kind");
     }
-    if (*value.get_if() > std::numeric_limits<std::uint32_t>::max()) {
+    if (*value.get_if() > OwnerId::max_packed_value()) {
         return corrupt("state payload owner exceeds the compact ID range");
     }
     OwnerId owner{

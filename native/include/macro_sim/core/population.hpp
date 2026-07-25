@@ -57,6 +57,7 @@ class PersonStore final {
     [[nodiscard]] std::span<const PersonId> alive_ids() const noexcept;
     [[nodiscard]] std::span<const PersonId> archive_ids() const noexcept;
     [[nodiscard]] const std::vector<PersonRecord> &records() const noexcept;
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
     [[nodiscard]] Status replace_records(std::vector<PersonRecord> records);
     [[nodiscard]] Status validate() const noexcept;
 
@@ -80,6 +81,7 @@ class HouseholdMembershipBook final {
     [[nodiscard]] std::span<const PersonId>
     members(HouseholdId household) const noexcept;
     [[nodiscard]] std::size_t household_capacity() const noexcept;
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
     [[nodiscard]] Status validate(const PersonStore &persons,
                                   const RootState &state) const;
     [[nodiscard]] Status rebuild(const PersonStore &persons);
@@ -124,6 +126,19 @@ struct BeneficialLot final {
     bool operator==(const BeneficialLot &) const = default;
 };
 
+struct BeneficialOwnershipMemoryUsage final {
+    std::uint64_t lots{0};
+    std::uint64_t asset_indexes{0};
+    std::uint64_t person_indexes{0};
+    std::uint64_t query_indexes{0};
+    std::uint64_t validation_scratch{0};
+
+    [[nodiscard]] constexpr std::uint64_t total() const noexcept {
+        return lots + asset_indexes + person_indexes + query_indexes +
+               validation_scratch;
+    }
+};
+
 class BeneficialOwnershipBook final {
   public:
     [[nodiscard]] Result<BeneficialLotId> create_lot(BeneficialAssetKey asset,
@@ -143,6 +158,7 @@ class BeneficialOwnershipBook final {
     lots_for_asset(BeneficialAssetKey asset) const;
     [[nodiscard]] const std::vector<BeneficialLot> &records() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] BeneficialOwnershipMemoryUsage memory_usage() const noexcept;
     void active_assets(std::vector<BeneficialAssetKey> &output) const;
     void active_assets_except(BeneficialAssetKind excluded,
                               std::vector<BeneficialAssetKey> &output) const;
@@ -178,14 +194,10 @@ class BeneficialOwnershipBook final {
         std::vector<std::uint8_t> asset_lot_indexed;
         std::vector<std::uint32_t> asset_presence_epochs;
         std::vector<std::uint32_t> person_heads{0U};
-        std::vector<std::uint32_t> person_tails{0U};
         std::vector<std::uint32_t> person_next;
-        std::vector<std::uint32_t> person_previous;
-        mutable std::vector<std::size_t> person_offsets;
-        mutable std::vector<BeneficialLotId> lots_by_person;
+        mutable std::vector<BeneficialLotId> person_query;
         mutable std::vector<std::size_t> asset_offsets;
         mutable std::vector<BeneficialLotId> lots_by_asset_flat;
-        mutable bool person_index_dirty{true};
         mutable bool asset_lot_index_dirty{true};
         std::uint32_t asset_presence_epoch{0U};
         BeneficialAssetKind refreshed_asset_kind{
@@ -200,7 +212,6 @@ class BeneficialOwnershipBook final {
     void ensure_person_links(PersonId person);
     void append_person_lot(BeneficialLotId lot, PersonId person);
     [[nodiscard]] Status unlink_person_lot(BeneficialLotId lot, PersonId person);
-    void rebuild_person_index() const;
     void rebuild_asset_lot_index() const;
     [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
     [[nodiscard]] static std::uint32_t

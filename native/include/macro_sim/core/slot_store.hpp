@@ -265,6 +265,15 @@ public:
         return iteration_order_;
     }
 
+    [[nodiscard]] std::uint64_t retained_bytes() const noexcept {
+        return static_cast<std::uint64_t>(slots_.capacity()) * sizeof(Slot) +
+               static_cast<std::uint64_t>(id_to_handle_.capacity()) *
+                   sizeof(SlotHandle) +
+               static_cast<std::uint64_t>(free_slots_.capacity()) *
+                   sizeof(std::uint32_t) +
+               static_cast<std::uint64_t>(iteration_order_.capacity()) * sizeof(Id);
+    }
+
     [[nodiscard]] AllocatorState allocator_state() const {
         return AllocatorState{next_id_, next_sequence_, free_slots_};
     }
