@@ -18,6 +18,8 @@ constexpr std::uint64_t kSexStream = 0x4249525448534558ULL;
 constexpr std::uint64_t kAgeStream = 0x47454e4553495341ULL;
 constexpr std::uint64_t kOffsetStream = 0x47454e455349534fULL;
 constexpr std::uint64_t kChurnStream = 0x4c41424f52434855ULL;
+constexpr std::uint64_t kDivorceStream = 0x4449564f52434530ULL;
+constexpr std::uint64_t kMarriageStream = 0x4d41525249414745ULL;
 constexpr double kLaborTolerance = 1.0e-8;
 
 [[nodiscard]] bool finite(double value) noexcept {
@@ -208,6 +210,7 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     core::HouseholdMembershipBook &membership,
     core::BeneficialOwnershipBook &ownership,
     core::EmploymentBook &employment,
+    core::RelationshipBook &relationships,
     core::LaborAccounts &labor_accounts,
     std::vector<EstateRecord> &estates, std::uint64_t &next_event_id,
     PersonId deceased, std::int32_t day,
@@ -220,6 +223,15 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
                       "death target is not alive");
     }
     const auto household = record->household;
+    const bool was_partnered = record->partner.valid();
+    auto relationship_status =
+        relationships.widow(persons, deceased, day);
+    if (!relationship_status.ok()) {
+        return relationship_status;
+    }
+    if (was_partnered) {
+        ++metrics.widowhoods;
+    }
     auto heir =
         first_alive_member(membership, persons, household, deceased);
     if (!heir.valid()) {
@@ -492,6 +504,7 @@ class M7Extension final : public M6TickExtension {
         scratch_.membership_ = runtime_.membership;
         scratch_.beneficial_ownership_ = runtime_.beneficial_ownership;
         scratch_.employment_ = runtime_.employment;
+        scratch_.relationships_ = runtime_.relationships;
         scratch_.labor_accounts_ = runtime_.labor_accounts;
         scratch_.firm_target_ema_ = runtime_.firm_target_ema;
         scratch_.estates_ = runtime_.estates;
@@ -543,7 +556,8 @@ class M7Extension final : public M6TickExtension {
                 const auto status = settle_death(
                     scratch_.persons_, scratch_.membership_,
                     scratch_.beneficial_ownership_,
-                    scratch_.employment_, scratch_.labor_accounts_,
+                    scratch_.employment_, scratch_.relationships_,
+                    scratch_.labor_accounts_,
                     scratch_.estates_, scratch_.next_event_id_, person_id,
                     calendar_day, runtime_.policy,
                     scratch_.working_metrics_, scratch_.deceased_lots_
@@ -992,6 +1006,136 @@ class M7Extension final : public M6TickExtension {
             }
         }
 
+        if (runtime_.rules.relationships &&
+            runtime_.rules.divorce) {
+            const double daily_divorce =
+                runtime_.rules.annual_divorce_rate >= 1.0
+                    ? 1.0
+                    : 1.0 -
+                          std::pow(
+                              1.0 -
+                                  runtime_.rules.annual_divorce_rate,
+                              kDailyYear
+                          );
+            std::vector<PersonId> divorces;
+            for (const auto &union_record :
+                 scratch_.relationships_.unions()) {
+                if (!union_record.active) {
+                    continue;
+                }
+                if (unit_draw(
+                        state.seed, union_record.event.value(),
+                        calendar_day, kDivorceStream
+                    ) < daily_divorce) {
+                    divorces.push_back(union_record.first);
+                }
+            }
+            for (const auto person_id : divorces) {
+                const auto event =
+                    scratch_.relationships_.active_union(person_id);
+                const auto found = std::find_if(
+                    scratch_.relationships_.unions().begin(),
+                    scratch_.relationships_.unions().end(),
+                    [event](const core::UnionRecord &record) {
+                        return record.event == event;
+                    }
+                );
+                if (found ==
+                    scratch_.relationships_.unions().end()) {
+                    return Status(
+                        ErrorCode::invariant_violation,
+                        "divorce union is absent"
+                    );
+                }
+                const auto second = found->second;
+                const auto second_origin =
+                    found->second_origin_household;
+                const auto status =
+                    scratch_.relationships_.divorce(
+                        scratch_.persons_, person_id, calendar_day
+                    );
+                if (!status.ok()) {
+                    return status;
+                }
+                if (runtime_.rules.household_lifecycle &&
+                    state.households.get(second_origin) != nullptr) {
+                    auto move_status = scratch_.membership_.move(
+                        second, second_origin
+                    );
+                    if (!move_status.ok()) {
+                        return move_status;
+                    }
+                    scratch_.persons_.get(second)->household =
+                        second_origin;
+                }
+                ++scratch_.working_metrics_.divorces;
+            }
+        }
+
+        if (runtime_.rules.relationships &&
+            runtime_.rules.marriage &&
+            calendar_day %
+                    static_cast<std::int32_t>(
+                        runtime_.rules.marriage_interval_days
+                    ) ==
+                0) {
+            const auto matches = core::exact_marriage_matches(
+                scratch_.persons_, scratch_.membership_,
+                runtime_.rules.marriage_rules, calendar_day
+            );
+            if (!matches.ok()) {
+                return matches.status();
+            }
+            const double interval_years =
+                static_cast<double>(
+                    runtime_.rules.marriage_interval_days
+                ) /
+                kDaysPerYear;
+            const double acceptance =
+                runtime_.rules.annual_marriage_rate >= 1.0
+                    ? 1.0
+                    : 1.0 -
+                          std::pow(
+                              1.0 -
+                                  runtime_.rules.annual_marriage_rate,
+                              interval_years
+                          );
+            for (const auto &match : *matches.get_if()) {
+                const auto pair_identity =
+                    splitmix64(match.first.value()) ^
+                    splitmix64(match.second.value());
+                if (unit_draw(
+                        state.seed, pair_identity, calendar_day,
+                        kMarriageStream
+                    ) >= acceptance) {
+                    continue;
+                }
+                const auto event =
+                    EventId(scratch_.next_event_id_++);
+                const auto status =
+                    scratch_.relationships_.marry(
+                        scratch_.persons_, event, match.first,
+                        match.second, calendar_day
+                    );
+                if (!status.ok()) {
+                    return status;
+                }
+                if (runtime_.rules.household_lifecycle) {
+                    const auto destination =
+                        scratch_.membership_.household_of(match.first);
+                    auto move_status = scratch_.membership_.move(
+                        match.second, destination
+                    );
+                    if (!move_status.ok()) {
+                        return move_status;
+                    }
+                    scratch_.persons_.get(match.second)->household =
+                        destination;
+                }
+                ++scratch_.working_metrics_.marriages;
+            }
+        }
+
         if (runtime_.rules.fertility ||
             options_.force_birth.has_value()) {
             std::vector<PersonId> mothers;
@@ -1063,6 +1207,13 @@ class M7Extension final : public M6TickExtension {
                 if (!status.ok()) {
                     return status;
                 }
+                const auto lineage =
+                    scratch_.relationships_.register_birth(
+                        scratch_.persons_, *created.get_if()
+                    );
+                if (!lineage.ok()) {
+                    return lineage;
+                }
                 ++scratch_.working_metrics_.births;
             }
         }
@@ -1106,6 +1257,10 @@ class M7Extension final : public M6TickExtension {
                 scratch_.labor_accounts_, state.accounting_tolerance
             );
         }
+        if (status.ok() && runtime_.rules.relationships) {
+            status =
+                scratch_.relationships_.validate(scratch_.persons_);
+        }
         if (!status.ok()) {
             return status;
         }
@@ -1124,6 +1279,8 @@ class M7Extension final : public M6TickExtension {
         std::swap(runtime_.beneficial_ownership,
                   scratch_.beneficial_ownership_);
         std::swap(runtime_.employment, scratch_.employment_);
+        std::swap(runtime_.relationships,
+                  scratch_.relationships_);
         runtime_.labor_accounts = scratch_.labor_accounts_;
         std::swap(runtime_.firm_target_ema,
                   scratch_.firm_target_ema_);
@@ -1179,6 +1336,8 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.layoff_band,
         rules.target_smoothing,
         rules.search_intensity,
+        rules.annual_marriage_rate,
+        rules.annual_divorce_rate,
     };
     if (rules.working_age < 1U ||
         rules.retirement_age <= rules.working_age ||
@@ -1197,7 +1356,26 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.suspension_timeout_days == 0 ||
         rules.search_intensity < 0.0 ||
         rules.search_intensity > 1.0 ||
-        (rules.second_jobs && !rules.fractional_hours)) {
+        rules.marriage_interval_days == 0 ||
+        rules.annual_marriage_rate < 0.0 ||
+        rules.annual_marriage_rate > 1.0 ||
+        rules.annual_divorce_rate < 0.0 ||
+        rules.annual_divorce_rate > 1.0 ||
+        (rules.second_jobs && !rules.fractional_hours) ||
+        rules.marriage_rules.minimum_age == 0 ||
+        rules.marriage_rules.maximum_age <
+            rules.marriage_rules.minimum_age ||
+        rules.marriage_rules.maximum_age_gap >
+            rules.marriage_rules.maximum_age -
+                rules.marriage_rules.minimum_age ||
+        !finite(rules.marriage_rules.preferred_age_gap) ||
+        !finite(rules.marriage_rules.age_gap_penalty) ||
+        !finite(rules.marriage_rules.assortativity) ||
+        rules.marriage_rules.age_gap_penalty < 0.0 ||
+        rules.marriage_rules.assortativity < 0.0 ||
+        ((rules.marriage || rules.divorce ||
+          rules.household_lifecycle) &&
+         !rules.relationships)) {
         return Status(ErrorCode::invalid_argument, "M7 rules are invalid");
     }
     return validate_vital_rates(rules.vital_rates);
@@ -1283,6 +1461,12 @@ Status validate_m7_state(const core::RootState &state,
         status = core::validate_labor_accounts(
             runtime.labor_accounts, state.accounting_tolerance
         );
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    if (runtime.rules.relationships) {
+        status = runtime.relationships.validate(runtime.persons);
         if (!status.ok()) {
             return status;
         }

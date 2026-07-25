@@ -12,7 +12,380 @@ namespace {
     return std::isfinite(value);
 }
 
+constexpr double kDaysPerYear = 365.2425;
+
+[[nodiscard]] double age_at(const PersonRecord &person,
+                            std::int32_t day) noexcept {
+    return std::max(
+        0.0,
+        static_cast<double>(day - person.birth_day) / kDaysPerYear
+    );
+}
+
+[[nodiscard]] bool close_kin(const PersonRecord &left,
+                             const PersonRecord &right) noexcept {
+    if (left.mother == right.id || left.father == right.id ||
+        right.mother == left.id || right.father == left.id) {
+        return true;
+    }
+    return (left.mother.valid() && left.mother == right.mother) ||
+           (left.father.valid() && left.father == right.father);
+}
+
 } // namespace
+
+void RelationshipBook::ensure_person(PersonId person) {
+    const auto size = static_cast<std::size_t>(person.value()) + 1U;
+    if (active_union_by_person_.size() < size) {
+        active_union_by_person_.resize(size);
+        children_by_parent_.resize(size);
+    }
+}
+
+UnionRecord *RelationshipBook::get(EventId event) noexcept {
+    if (!event.valid() || event.value() == 0) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        unions_.begin(), unions_.end(),
+        [event](const UnionRecord &record) {
+            return record.event == event;
+        }
+    );
+    return found == unions_.end() ? nullptr : &*found;
+}
+
+const UnionRecord *RelationshipBook::get(EventId event) const noexcept {
+    if (!event.valid() || event.value() == 0) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        unions_.begin(), unions_.end(),
+        [event](const UnionRecord &record) {
+            return record.event == event;
+        }
+    );
+    return found == unions_.end() ? nullptr : &*found;
+}
+
+Status RelationshipBook::marry(PersonStore &persons, EventId event,
+                               PersonId first, PersonId second,
+                               std::int32_t day) {
+    auto *left = persons.get(first);
+    auto *right = persons.get(second);
+    if (!event.valid() || event.value() == 0 || first == second ||
+        left == nullptr || right == nullptr || !left->alive ||
+        !right->alive || left->partner.valid() ||
+        right->partner.valid() || get(event) != nullptr) {
+        return Status(ErrorCode::invalid_argument,
+                      "union creation is invalid");
+    }
+    ensure_person(first);
+    ensure_person(second);
+    if (active_union(first).valid() ||
+        active_union(second).valid()) {
+        return Status(ErrorCode::already_exists,
+                      "person already has an active union");
+    }
+    unions_.push_back({
+        event,
+        first,
+        second,
+        left->household,
+        right->household,
+        day,
+        -1,
+        UnionEndKind::active,
+        true,
+    });
+    active_union_by_person_[
+        static_cast<std::size_t>(first.value())] = event;
+    active_union_by_person_[
+        static_cast<std::size_t>(second.value())] = event;
+    left->partner = second;
+    right->partner = first;
+    left->marriage_start_day = day;
+    right->marriage_start_day = day;
+    ++left->marriage_count;
+    ++right->marriage_count;
+    return Status::success();
+}
+
+Status RelationshipBook::divorce(PersonStore &persons,
+                                 PersonId person,
+                                 std::int32_t day) {
+    const auto event = active_union(person);
+    auto *record = get(event);
+    if (record == nullptr || !record->active) {
+        return Status(ErrorCode::not_found,
+                      "active union is absent");
+    }
+    auto *first = persons.get(record->first);
+    auto *second = persons.get(record->second);
+    if (first == nullptr || second == nullptr ||
+        first->partner != second->id ||
+        second->partner != first->id) {
+        return Status(ErrorCode::invariant_violation,
+                      "active union projection is inconsistent");
+    }
+    first->partner = PersonId{};
+    second->partner = PersonId{};
+    first->marriage_start_day = -1;
+    second->marriage_start_day = -1;
+    first->last_divorce_day = day;
+    second->last_divorce_day = day;
+    active_union_by_person_[
+        static_cast<std::size_t>(first->id.value())] = EventId{};
+    active_union_by_person_[
+        static_cast<std::size_t>(second->id.value())] = EventId{};
+    record->active = false;
+    record->end_day = day;
+    record->end_kind = UnionEndKind::divorce;
+    return Status::success();
+}
+
+Status RelationshipBook::widow(PersonStore &persons,
+                               PersonId deceased,
+                               std::int32_t day) {
+    const auto event = active_union(deceased);
+    if (!event.valid()) {
+        return Status::success();
+    }
+    auto *record = get(event);
+    auto *dead = persons.get(deceased);
+    if (record == nullptr || !record->active || dead == nullptr) {
+        return Status(ErrorCode::invariant_violation,
+                      "widowhood union is inconsistent");
+    }
+    const auto survivor_id =
+        record->first == deceased ? record->second : record->first;
+    auto *survivor = persons.get(survivor_id);
+    if (survivor == nullptr || !survivor->alive ||
+        dead->partner != survivor_id ||
+        survivor->partner != deceased) {
+        return Status(ErrorCode::invariant_violation,
+                      "widowhood partner projection is inconsistent");
+    }
+    dead->partner = PersonId{};
+    survivor->partner = PersonId{};
+    dead->marriage_start_day = -1;
+    survivor->marriage_start_day = -1;
+    dead->last_widowed_day = day;
+    survivor->last_widowed_day = day;
+    active_union_by_person_[
+        static_cast<std::size_t>(deceased.value())] = EventId{};
+    active_union_by_person_[
+        static_cast<std::size_t>(survivor_id.value())] = EventId{};
+    record->active = false;
+    record->end_day = day;
+    record->end_kind = UnionEndKind::widowhood;
+    return Status::success();
+}
+
+Status RelationshipBook::register_birth(const PersonStore &persons,
+                                        PersonId child) {
+    const auto *record = persons.get(child);
+    if (record == nullptr) {
+        return Status(ErrorCode::not_found, "child is absent");
+    }
+    for (const auto parent :
+         std::array{record->mother, record->father}) {
+        if (!parent.valid()) {
+            continue;
+        }
+        if (!persons.contains(parent)) {
+            return Status(ErrorCode::invariant_violation,
+                          "child references an absent parent");
+        }
+        ensure_person(parent);
+        auto &children =
+            children_by_parent_[
+                static_cast<std::size_t>(parent.value())];
+        if (std::find(children.begin(), children.end(), child) !=
+            children.end()) {
+            return Status(ErrorCode::already_exists,
+                          "child lineage is already registered");
+        }
+        children.push_back(child);
+    }
+    ensure_person(child);
+    return Status::success();
+}
+
+EventId
+RelationshipBook::active_union(PersonId person) const noexcept {
+    if (!person.valid() || person.value() == 0 ||
+        person.value() >= active_union_by_person_.size()) {
+        return EventId{};
+    }
+    return active_union_by_person_[
+        static_cast<std::size_t>(person.value())];
+}
+
+std::span<const PersonId>
+RelationshipBook::children(PersonId parent) const noexcept {
+    if (!parent.valid() || parent.value() == 0 ||
+        parent.value() >= children_by_parent_.size()) {
+        return {};
+    }
+    return children_by_parent_[
+        static_cast<std::size_t>(parent.value())];
+}
+
+const std::vector<UnionRecord> &
+RelationshipBook::unions() const noexcept {
+    return unions_;
+}
+
+Status RelationshipBook::validate(
+    const PersonStore &persons
+) const {
+    std::vector<std::uint8_t> active_seen(persons.next_id(), 0U);
+    for (const auto &record : unions_) {
+        const auto *first = persons.get(record.first);
+        const auto *second = persons.get(record.second);
+        if (!record.event.valid() || record.event.value() == 0 ||
+            first == nullptr || second == nullptr ||
+            record.first == record.second) {
+            return Status(ErrorCode::invariant_violation,
+                          "union record is invalid");
+        }
+        if (!record.active) {
+            if (record.end_day < record.start_day ||
+                record.end_kind == UnionEndKind::active) {
+                return Status(ErrorCode::invariant_violation,
+                              "closed union is inconsistent");
+            }
+            continue;
+        }
+        if (!first->alive || !second->alive ||
+            first->partner != second->id ||
+            second->partner != first->id ||
+            active_union(first->id) != record.event ||
+            active_union(second->id) != record.event ||
+            active_seen[
+                static_cast<std::size_t>(first->id.value())] != 0U ||
+            active_seen[
+                static_cast<std::size_t>(second->id.value())] != 0U) {
+            return Status(ErrorCode::invariant_violation,
+                          "active union is inconsistent");
+        }
+        active_seen[
+            static_cast<std::size_t>(first->id.value())] = 1U;
+        active_seen[
+            static_cast<std::size_t>(second->id.value())] = 1U;
+    }
+    for (const auto person_id : persons.alive_ids()) {
+        const auto *person = persons.get(person_id);
+        const bool partnered = person->partner.valid();
+        if (partnered != active_union(person_id).valid()) {
+            return Status(ErrorCode::invariant_violation,
+                          "person union projection is inconsistent");
+        }
+    }
+    for (std::size_t parent_index = 1;
+         parent_index < children_by_parent_.size(); ++parent_index) {
+        std::vector<PersonId> seen;
+        for (const auto child :
+             children_by_parent_[parent_index]) {
+            const auto *record = persons.get(child);
+            const auto parent = PersonId(parent_index);
+            if (record == nullptr ||
+                (record->mother != parent &&
+                 record->father != parent) ||
+                std::find(seen.begin(), seen.end(), child) !=
+                    seen.end()) {
+                return Status(ErrorCode::invariant_violation,
+                              "lineage index is inconsistent");
+            }
+            seen.push_back(child);
+        }
+    }
+    return Status::success();
+}
+
+Result<std::vector<MarriageMatch>>
+exact_marriage_matches(const PersonStore &persons,
+                       const HouseholdMembershipBook &membership,
+                       const MarriageRules &rules,
+                       std::int32_t day) {
+    const std::array values{
+        rules.preferred_age_gap,
+        rules.age_gap_penalty,
+        rules.assortativity,
+    };
+    if (rules.minimum_age == 0 ||
+        rules.maximum_age < rules.minimum_age ||
+        rules.maximum_age_gap >
+            rules.maximum_age - rules.minimum_age ||
+        !std::all_of(values.begin(), values.end(), finite) ||
+        rules.age_gap_penalty < 0.0 ||
+        rules.assortativity < 0.0) {
+        return Status(ErrorCode::invalid_argument,
+                      "marriage rules are invalid");
+    }
+    std::vector<PersonId> first_pool;
+    std::vector<PersonId> second_pool;
+    for (const auto person_id : persons.alive_ids()) {
+        const auto *person = persons.get(person_id);
+        const double age = age_at(*person, day);
+        if (person->partner.valid() ||
+            age < static_cast<double>(rules.minimum_age) ||
+            age > static_cast<double>(rules.maximum_age)) {
+            continue;
+        }
+        (person->sex == PersonSex::female ? first_pool : second_pool)
+            .push_back(person_id);
+    }
+    std::sort(first_pool.begin(), first_pool.end());
+    std::sort(second_pool.begin(), second_pool.end());
+    std::vector<std::uint8_t> matched(persons.next_id(), 0U);
+    std::vector<MarriageMatch> result;
+    result.reserve(std::min(first_pool.size(), second_pool.size()));
+    for (const auto first_id : first_pool) {
+        const auto *first = persons.get(first_id);
+        const double first_age = age_at(*first, day);
+        MarriageMatch best;
+        best.score = std::numeric_limits<double>::infinity();
+        for (const auto second_id : second_pool) {
+            if (matched[
+                    static_cast<std::size_t>(second_id.value())] != 0U) {
+                continue;
+            }
+            const auto *second = persons.get(second_id);
+            const double second_age = age_at(*second, day);
+            const double gap = second_age - first_age;
+            if (std::abs(gap) >
+                    static_cast<double>(rules.maximum_age_gap) ||
+                (rules.forbid_same_household &&
+                 membership.household_of(first_id) ==
+                     membership.household_of(second_id)) ||
+                (rules.forbid_close_kin &&
+                 close_kin(*first, *second))) {
+                continue;
+            }
+            const double score =
+                rules.age_gap_penalty *
+                    std::abs(gap - rules.preferred_age_gap) +
+                rules.assortativity *
+                    std::abs(
+                        std::log(first->efficiency) -
+                        std::log(second->efficiency)
+                    );
+            if (score < best.score ||
+                (score == best.score &&
+                 second_id < best.second)) {
+                best = {first_id, second_id, score};
+            }
+        }
+        if (best.second.valid()) {
+            matched[
+                static_cast<std::size_t>(best.second.value())] = 1U;
+            result.push_back(best);
+        }
+    }
+    return result;
+}
 
 void EmploymentBook::ensure_person(PersonId person) {
     const auto size = static_cast<std::size_t>(person.value()) + 1U;

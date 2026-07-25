@@ -332,6 +332,74 @@ void test_persistent_labor_and_death_separation() {
     );
 }
 
+void test_relationship_household_lifecycle() {
+    auto spec = base_spec();
+    spec.population.start_calendar_day = 29;
+    spec.rules.marriage_interval_days = 30;
+    spec.rules.annual_marriage_rate = 1.0;
+    spec.rules.annual_divorce_rate = 0.0;
+    auto harness = build(spec);
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.marriages > 0);
+    assert(
+        harness.runtime.relationships
+            .validate(harness.runtime.persons)
+            .ok()
+    );
+    PersonId partnered{};
+    for (const auto person : harness.runtime.persons.alive_ids()) {
+        if (harness.runtime.persons.get(person)->partner.valid()) {
+            partnered = person;
+            break;
+        }
+    }
+    assert(partnered.valid());
+    const auto partner =
+        harness.runtime.persons.get(partnered)->partner;
+    assert(
+        harness.runtime.membership.household_of(partnered) ==
+        harness.runtime.membership.household_of(partner)
+    );
+
+    harness.runtime.rules.annual_divorce_rate = 1.0;
+    result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.divorces > 0);
+    assert(
+        harness.runtime.relationships
+            .validate(harness.runtime.persons)
+            .ok()
+    );
+
+    spec = base_spec();
+    spec.population.start_calendar_day = 29;
+    spec.rules.marriage_interval_days = 30;
+    spec.rules.annual_marriage_rate = 1.0;
+    spec.rules.annual_divorce_rate = 0.0;
+    harness = build(spec);
+    result = advance(harness, 1);
+    assert(result.ok());
+    partnered = PersonId{};
+    for (const auto person : harness.runtime.persons.alive_ids()) {
+        if (harness.runtime.persons.get(person)->partner.valid()) {
+            partnered = person;
+            break;
+        }
+    }
+    assert(partnered.valid());
+    M7AdvanceOptions death;
+    death.force_death = partnered;
+    result = advance(harness, 1, death);
+    assert(result.ok());
+    assert(result.get_if()->metrics.widowhoods == 1);
+    assert(
+        harness.runtime.relationships
+            .validate(harness.runtime.persons)
+            .ok()
+    );
+}
+
 void test_validation_rejects_invalid_population() {
     auto spec = base_spec();
     spec.population.initial_persons = 0;
@@ -353,6 +421,7 @@ int main() {
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();
     test_persistent_labor_and_death_separation();
+    test_relationship_household_lifecycle();
     test_validation_rejects_invalid_population();
     return 0;
 }

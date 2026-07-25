@@ -14,6 +14,82 @@
 
 namespace macro_sim::core {
 
+enum class UnionEndKind : std::uint8_t {
+    active = 0,
+    divorce = 1,
+    widowhood = 2,
+};
+
+struct UnionRecord final {
+    EventId event{};
+    PersonId first{};
+    PersonId second{};
+    HouseholdId first_origin_household{};
+    HouseholdId second_origin_household{};
+    std::int32_t start_day{0};
+    std::int32_t end_day{-1};
+    UnionEndKind end_kind{UnionEndKind::active};
+    bool active{true};
+
+    bool operator==(const UnionRecord &) const = default;
+};
+
+struct MarriageRules final {
+    std::uint32_t minimum_age{18};
+    std::uint32_t maximum_age{80};
+    std::uint32_t maximum_age_gap{20};
+    double preferred_age_gap{0.0};
+    double age_gap_penalty{1.0};
+    double assortativity{0.25};
+    bool forbid_same_household{true};
+    bool forbid_close_kin{true};
+
+    bool operator==(const MarriageRules &) const = default;
+};
+
+struct MarriageMatch final {
+    PersonId first{};
+    PersonId second{};
+    double score{0.0};
+
+    bool operator==(const MarriageMatch &) const = default;
+};
+
+class RelationshipBook final {
+  public:
+    [[nodiscard]] Status marry(PersonStore &persons, EventId event,
+                               PersonId first, PersonId second,
+                               std::int32_t day);
+    [[nodiscard]] Status divorce(PersonStore &persons, PersonId person,
+                                 std::int32_t day);
+    [[nodiscard]] Status widow(PersonStore &persons, PersonId deceased,
+                               std::int32_t day);
+    [[nodiscard]] Status register_birth(const PersonStore &persons,
+                                        PersonId child);
+
+    [[nodiscard]] EventId active_union(PersonId person) const noexcept;
+    [[nodiscard]] std::span<const PersonId>
+    children(PersonId parent) const noexcept;
+    [[nodiscard]] const std::vector<UnionRecord> &unions() const noexcept;
+    [[nodiscard]] Status validate(const PersonStore &persons) const;
+
+  private:
+    void ensure_person(PersonId person);
+    [[nodiscard]] UnionRecord *get(EventId event) noexcept;
+    [[nodiscard]] const UnionRecord *get(EventId event) const noexcept;
+
+    std::vector<UnionRecord> unions_;
+    std::vector<EventId> active_union_by_person_{EventId{}};
+    std::vector<std::vector<PersonId>> children_by_parent_{
+        std::vector<PersonId>{}};
+};
+
+[[nodiscard]] Result<std::vector<MarriageMatch>>
+exact_marriage_matches(const PersonStore &persons,
+                       const HouseholdMembershipBook &membership,
+                       const MarriageRules &rules,
+                       std::int32_t day);
+
 enum class SeparationKind : std::uint8_t {
     churn = 0,
     demand_layoff = 1,

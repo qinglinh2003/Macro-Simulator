@@ -38,6 +38,14 @@ struct M7Rules final {
     std::uint32_t suspension_timeout_days{45};
     bool frictional_search{false};
     double search_intensity{0.15};
+    bool relationships{true};
+    bool marriage{true};
+    bool divorce{true};
+    bool household_lifecycle{true};
+    std::uint32_t marriage_interval_days{30};
+    double annual_marriage_rate{0.08};
+    double annual_divorce_rate{0.02};
+    core::MarriageRules marriage_rules{};
 
     bool operator==(const M7Rules &) const = default;
 };
@@ -95,6 +103,9 @@ struct M7Metrics final {
     double underemployment_hours{0.0};
     double hires{0.0};
     double separations{0.0};
+    std::uint64_t marriages{0};
+    std::uint64_t divorces{0};
+    std::uint64_t widowhoods{0};
 
     bool operator==(const M7Metrics &) const = default;
 };
@@ -108,6 +119,7 @@ struct M7Runtime final {
     core::HouseholdMembershipBook membership{};
     core::BeneficialOwnershipBook beneficial_ownership{};
     core::EmploymentBook employment{};
+    core::RelationshipBook relationships{};
     core::LaborAccounts labor_accounts{};
     std::vector<double> firm_target_ema;
     std::vector<EstateRecord> estates;
@@ -142,6 +154,7 @@ class M7TickScratch final {
     core::HouseholdMembershipBook membership_;
     core::BeneficialOwnershipBook beneficial_ownership_;
     core::EmploymentBook employment_;
+    core::RelationshipBook relationships_;
     core::LaborAccounts labor_accounts_{};
     std::vector<double> firm_target_ema_;
     std::vector<EstateRecord> estates_;
