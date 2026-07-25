@@ -309,55 +309,14 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
                                   M5Runtime &runtime, M5TickScratch &scratch,
                                   AccountId account, double requested,
                                   double borrower_limit, Tick tick) {
-    if (requested <= algorithms::kEconomicEpsilon ||
-        borrower_limit <= algorithms::kEconomicEpsilon) {
+    const auto quote = quote_m5_credit(state, real, runtime, scratch, account,
+                                       Money(requested), Money(borrower_limit));
+    if (!quote.ok()) {
         return 0.0;
     }
-    const auto account_slot = account_index(account);
-    const double existing = scratch.debt_by_account_[account_slot];
-    const auto lender = choose_bank(state, runtime, real, scratch, account,
-                                    std::min(requested, borrower_limit));
-    if (!lender.valid()) {
-        return 0.0;
-    }
-    double room = bank_capacity(state, runtime, scratch, lender);
-    if (runtime.policy.bank_exposure_limit > 0.0) {
-        const auto bank_slot = bank_index(lender);
-        const double capital = std::max(0.0, scratch.bank_capital_live_[bank_slot]);
-        room = std::min(room, runtime.policy.bank_exposure_limit * capital - existing);
-    }
-    const double granted = std::min({requested, borrower_limit, std::max(0.0, room)});
-    if (granted <= algorithms::kEconomicEpsilon) {
-        return 0.0;
-    }
-    if (existing <= algorithms::kEconomicEpsilon) {
-        const auto status =
-            migrate_account(state, real, scratch, account, lender, true);
-        if (!status.ok()) {
-            return 0.0;
-        }
-    }
-    real.balances_[account_slot] += granted;
-    const auto *account_record = state.postings.get(account);
-    const auto *bank = state.banks.get(lender);
-    scratch.loans_.push_back({
-        LoanId(scratch.loans_.size() + 1),
-        lender,
-        account_record->key.owner,
-        account,
-        Money(granted),
-        0.0,
-        {
-            Rate(std::max(0.0, runtime.policy_rate + bank->loan_spread)),
-            tick,
-            Tick(tick.value() + 3650),
-        },
-        true,
-    });
-    scratch.debt_by_account_[account_slot] += granted;
-    scratch.exposure_by_bank_[bank_index(lender)] += granted;
-    scratch.working_metrics_.new_credit += granted;
-    return granted;
+    const auto staged =
+        stage_m5_credit(state, real, runtime, scratch, *quote.get_if(), tick);
+    return staged.ok() ? quote.get_if()->principal.value() : 0.0;
 }
 
 [[nodiscard]] Status set_policy_rate(M5Runtime &runtime) noexcept {
@@ -1767,6 +1726,197 @@ std::uint64_t M5TickScratch::capacity_signature() const noexcept {
         signature *= 1099511628211ULL;
     }
     return signature;
+}
+
+Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
+                                      const M4TickScratch &real_economy,
+                                      const M5Runtime &runtime, M5TickScratch &scratch,
+                                      AccountId borrower_account, Money requested,
+                                      Money borrower_limit) {
+    if (!finite(requested.value()) || !finite(borrower_limit.value()) ||
+        requested.value() <= algorithms::kEconomicEpsilon ||
+        borrower_limit.value() <= algorithms::kEconomicEpsilon) {
+        return Status(ErrorCode::invalid_argument, "invalid M5 credit request");
+    }
+    const auto *account = state.postings.get(borrower_account);
+    const auto slot = account_index(borrower_account);
+    if (account == nullptr || !account->open || !account->key.owner.valid() ||
+        slot >= real_economy.account_nodes_.size() ||
+        slot >= scratch.debt_by_account_.size()) {
+        return Status(ErrorCode::not_found, "M5 credit borrower account is absent");
+    }
+    const double existing = scratch.debt_by_account_[slot];
+    const double requested_principal =
+        std::min(requested.value(), borrower_limit.value());
+    const auto lender = choose_bank(state, runtime, real_economy, scratch,
+                                    borrower_account, requested_principal);
+    if (!lender.valid()) {
+        return Status(ErrorCode::insufficient_funds,
+                      "M5 credit has no eligible lender");
+    }
+    const auto lender_slot = bank_index(lender);
+    const auto *bank = state.banks.get(lender);
+    if (bank == nullptr || lender_slot >= scratch.bank_alive_.size() ||
+        scratch.bank_alive_[lender_slot] == 0U) {
+        return Status(ErrorCode::insufficient_funds, "M5 credit lender is unavailable");
+    }
+    double room = bank_capacity(state, runtime, scratch, lender);
+    if (runtime.policy.bank_exposure_limit > 0.0) {
+        if (lender_slot >= scratch.bank_capital_live_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M5 bank capital projection is stale");
+        }
+        const double capital = std::max(0.0, scratch.bank_capital_live_[lender_slot]);
+        room = std::min(room, runtime.policy.bank_exposure_limit * capital - existing);
+    }
+    const double approved = std::min(requested_principal, std::max(0.0, room));
+    if (approved <= algorithms::kEconomicEpsilon) {
+        return Status(ErrorCode::insufficient_funds, "M5 credit capacity is exhausted");
+    }
+    return M5CreditQuote{
+        borrower_account,
+        account->key.owner,
+        lender,
+        Money(approved),
+        Rate(std::max(0.0, runtime.policy_rate + bank->loan_spread)),
+        real_economy.account_nodes_[slot],
+        existing,
+        scratch.loans_.size(),
+    };
+}
+
+Result<LoanId> stage_m5_credit(const core::RootState &state,
+                               M4TickScratch &real_economy, const M5Runtime &runtime,
+                               M5TickScratch &scratch, const M5CreditQuote &quote,
+                               Tick tick) {
+    if (!quote.borrower_account.valid() || !quote.borrower.valid() ||
+        !quote.lender.valid() || !finite(quote.principal.value()) ||
+        quote.principal.value() <= algorithms::kEconomicEpsilon ||
+        !finite(quote.annual_rate.value()) || quote.annual_rate.value() < 0.0 ||
+        !finite(quote.expected_existing_debt) || quote.expected_existing_debt < 0.0) {
+        return Status(ErrorCode::invalid_argument, "invalid M5 credit quote");
+    }
+    const auto account_slot = account_index(quote.borrower_account);
+    const auto lender_slot = bank_index(quote.lender);
+    const auto *account = state.postings.get(quote.borrower_account);
+    const auto *bank = state.banks.get(quote.lender);
+    if (account == nullptr || bank == nullptr || !account->open ||
+        account->key.owner != quote.borrower ||
+        account_slot >= real_economy.account_nodes_.size() ||
+        account_slot >= real_economy.balances_.size() ||
+        account_slot >= scratch.debt_by_account_.size() ||
+        lender_slot >= scratch.bank_alive_.size() ||
+        lender_slot >= scratch.exposure_by_bank_.size() ||
+        scratch.bank_alive_[lender_slot] == 0U) {
+        return Status(ErrorCode::not_found, "M5 credit quote references absent state");
+    }
+    if (quote.expected_loan_count != scratch.loans_.size() ||
+        quote.expected_settlement_node != real_economy.account_nodes_[account_slot] ||
+        std::abs(quote.expected_existing_debt -
+                 scratch.debt_by_account_[account_slot]) > kTolerance) {
+        return Status(ErrorCode::stale_handle, "M5 credit quote is stale");
+    }
+    const double current_rate = std::max(0.0, runtime.policy_rate + bank->loan_spread);
+    double room = bank_capacity(state, runtime, scratch, quote.lender);
+    if (runtime.policy.bank_exposure_limit > 0.0) {
+        if (lender_slot >= scratch.bank_capital_live_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M5 bank capital projection is stale");
+        }
+        const double capital = std::max(0.0, scratch.bank_capital_live_[lender_slot]);
+        room = std::min(room, runtime.policy.bank_exposure_limit * capital -
+                                  quote.expected_existing_debt);
+    }
+    if (std::abs(current_rate - quote.annual_rate.value()) > kTolerance ||
+        room + kTolerance < quote.principal.value()) {
+        return Status(ErrorCode::stale_handle,
+                      "M5 credit capacity changed after quote");
+    }
+    if (quote.expected_existing_debt <= algorithms::kEconomicEpsilon) {
+        const auto destination = node_index(bank->settlement_node);
+        const auto source = node_index(real_economy.account_nodes_[account_slot]);
+        if (source >= real_economy.reserve_balances_.size() ||
+            destination >= real_economy.reserve_balances_.size()) {
+            return Status(ErrorCode::not_found, "M5 credit settlement node is absent");
+        }
+    }
+    if (scratch.loans_.size() ==
+        static_cast<std::size_t>(std::numeric_limits<std::uint64_t>::max())) {
+        return Status(ErrorCode::out_of_range, "M5 loan id space exhausted");
+    }
+
+    const auto id = LoanId(static_cast<std::uint64_t>(scratch.loans_.size()) + 1);
+    scratch.loans_.push_back({
+        id,
+        quote.lender,
+        quote.borrower,
+        quote.borrower_account,
+        quote.principal,
+        0.0,
+        {
+            quote.annual_rate,
+            tick,
+            Tick(tick.value() + 3650),
+        },
+        true,
+    });
+    if (quote.expected_existing_debt <= algorithms::kEconomicEpsilon) {
+        const auto status = migrate_account(state, real_economy, scratch,
+                                            quote.borrower_account, quote.lender, true);
+        if (!status.ok()) {
+            scratch.loans_.pop_back();
+            return status;
+        }
+    }
+    real_economy.balances_[account_slot] += quote.principal.value();
+    scratch.debt_by_account_[account_slot] += quote.principal.value();
+    scratch.exposure_by_bank_[lender_slot] += quote.principal.value();
+    scratch.working_metrics_.new_credit += quote.principal.value();
+    return id;
+}
+
+Status stage_m5_loan_writeoff(const core::RootState &state, M4TickScratch &real_economy,
+                              M5TickScratch &scratch, LoanId loan_id,
+                              Tick tick) noexcept {
+    if (!loan_id.valid() || loan_id.value() > scratch.loans_.size()) {
+        return Status(ErrorCode::not_found, "M5 loan is absent");
+    }
+    auto &loan = scratch.loans_[static_cast<std::size_t>(loan_id.value() - 1)];
+    if (loan.id != loan_id || !loan.active ||
+        loan.principal.value() <= algorithms::kEconomicEpsilon) {
+        return Status(ErrorCode::contract_violation, "M5 loan is not active");
+    }
+    const auto account_slot = account_index(loan.borrower_account);
+    const auto lender_slot = bank_index(loan.lender);
+    const auto *bank = state.banks.get(loan.lender);
+    auto *pnl = pnl_for(scratch, loan.lender);
+    auto *capital = capital_for(scratch, loan.lender);
+    if (bank == nullptr || pnl == nullptr || capital == nullptr ||
+        account_slot >= scratch.debt_by_account_.size() ||
+        lender_slot >= scratch.exposure_by_bank_.size() ||
+        lender_slot >= scratch.bank_capital_live_.size() ||
+        account_index(bank->cash_account) >= real_economy.balances_.size()) {
+        return Status(ErrorCode::not_found, "M5 loan writeoff projection is stale");
+    }
+
+    const double loss = loan.principal.value();
+    const auto bank_cash = account_index(bank->cash_account);
+    real_economy.balances_[bank_cash] -= loss;
+    pnl->realized_loan_losses += loss;
+    pnl->net_income = pnl->loan_interest + pnl->interbank_interest_income -
+                      pnl->interbank_interest_expense - pnl->deposit_funding_cost -
+                      pnl->realized_loan_losses - pnl->realized_interbank_losses;
+    capital->closing_capital = real_economy.balances_[bank_cash];
+    capital->last_closed_tick = tick;
+    scratch.bank_capital_live_[lender_slot] = capital->closing_capital;
+    scratch.debt_by_account_[account_slot] =
+        std::max(0.0, scratch.debt_by_account_[account_slot] - loss);
+    scratch.exposure_by_bank_[lender_slot] =
+        std::max(0.0, scratch.exposure_by_bank_[lender_slot] - loss);
+    scratch.working_metrics_.realized_credit_losses += loss;
+    loan.principal = Money(0.0);
+    loan.active = false;
+    return Status::success();
 }
 
 Status validate_m5_policy(const M5PolicyState &policy) noexcept {

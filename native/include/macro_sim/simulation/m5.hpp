@@ -194,6 +194,33 @@ class M5TickScratch final {
     M5Metrics working_metrics_{};
 };
 
+struct M5CreditQuote final {
+    AccountId borrower_account{};
+    core::OwnerId borrower{};
+    BankId lender{};
+    Money principal{};
+    Rate annual_rate{};
+    SettlementNodeId expected_settlement_node{};
+    double expected_existing_debt{0.0};
+    std::size_t expected_loan_count{0};
+
+    bool operator==(const M5CreditQuote &) const = default;
+};
+
+[[nodiscard]] Result<M5CreditQuote>
+quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
+                const M5Runtime &runtime, M5TickScratch &scratch,
+                AccountId borrower_account, Money requested, Money borrower_limit);
+[[nodiscard]] Result<LoanId> stage_m5_credit(const core::RootState &state,
+                                             M4TickScratch &real_economy,
+                                             const M5Runtime &runtime,
+                                             M5TickScratch &scratch,
+                                             const M5CreditQuote &quote, Tick tick);
+[[nodiscard]] Status stage_m5_loan_writeoff(const core::RootState &state,
+                                            M4TickScratch &real_economy,
+                                            M5TickScratch &scratch, LoanId loan,
+                                            Tick tick) noexcept;
+
 class M5TickExtension {
   public:
     M5TickExtension() = default;
@@ -210,11 +237,9 @@ class M5TickExtension {
                    M4TickScratch &real_economy_scratch, M5Runtime &runtime,
                    M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
-    run_labor(const core::RootState &state,
-              M4Runtime &real_economy_runtime,
+    run_labor(const core::RootState &state, M4Runtime &real_economy_runtime,
               M4TickScratch &real_economy_scratch, M5Runtime &runtime,
-              M5TickScratch &scratch, Tick tick, PhiloxRng &rng,
-              bool &handled) = 0;
+              M5TickScratch &scratch, Tick tick, PhiloxRng &rng, bool &handled) = 0;
     [[nodiscard]] virtual Status
     before_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
                       M4TickScratch &real_economy_scratch, M5Runtime &runtime,

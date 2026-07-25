@@ -491,6 +491,21 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m8_property_registry_tests
     )
 
+    add_executable(
+        macro_sim_m8_credit_port_tests
+        tests/m8_credit_port_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m8_credit_port_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m8_credit_port_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m8_credit_port_tests)
+    add_test(
+        NAME macro_sim.m8_credit_port
+        COMMAND macro_sim_m8_credit_port_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
