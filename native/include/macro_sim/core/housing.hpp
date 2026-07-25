@@ -61,6 +61,10 @@ struct TitleEvent final {
 
 class PropertyRegistry final {
   public:
+    [[nodiscard]] bool operator==(const PropertyRegistry &other) const noexcept {
+        return records_ == other.records_ && title_events_ == other.title_events_;
+    }
+
     [[nodiscard]] Result<DwellingId> mint(const DwellingMintSpec &spec);
     [[nodiscard]] Status transfer_title(DwellingId dwelling, OwnerId expected_owner,
                                         OwnerId next_owner, Tick tick);
