@@ -113,6 +113,8 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"chartist_weight", value.chartist_weight},
         {"household_equity_target", value.household_equity_target},
         {"portfolio_adjustment", value.portfolio_adjustment},
+        {"portfolio_review_interval_days",
+         value.portfolio_review_interval_days},
         {"equity_finance", value.equity_finance},
         {"equity_issue_lambda", value.equity_issue_lambda},
         {"margin_credit", value.margin_credit},
@@ -163,6 +165,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(chartist_weight, double);
     M6_RULE(household_equity_target, double);
     M6_RULE(portfolio_adjustment, double);
+    M6_RULE(portfolio_review_interval_days, std::uint32_t);
     M6_RULE(equity_finance, bool);
     M6_RULE(equity_issue_lambda, double);
     M6_RULE(margin_credit, bool);

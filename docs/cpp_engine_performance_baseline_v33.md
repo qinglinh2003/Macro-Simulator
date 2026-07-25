@@ -1,6 +1,6 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person M8 baseline established; optimization in progress
+Status: one-million-person M8 median target met; tail optimization continues
 
 Date: 2026-07-25
 
@@ -21,9 +21,11 @@ native engine after M9. It answers four questions:
 4. Is one million simulated persons at no more than one second per simulated day
    plausible without changing the economic model?
 
-The answer to the last question is not yet yes. The survey found several specific,
-removable implementation bottlenecks. It did not find evidence that the economic
-mechanisms themselves impose the current limit.
+The median answer to the last question is now yes for the committed
+static-population M8 acceptance scenario. Across days 31 through 60, 25 of 30 days
+complete in less than one second. P95 is 1.054 seconds and the maximum is 1.190
+seconds, so the tail target is close but not yet complete. This is not a claim
+that dynamic, open-economy, or M9 workloads meet the same budget.
 
 ## 2. Test environment
 
@@ -54,6 +56,9 @@ with population growth:
 - eight banks
 - static population and household topology
 - persistent labor and financial markets enabled
+- twelve equity watchlist entries per household
+- one portfolio review per household every 30 days, deterministically staggered
+  across households
 - housing stock enabled, with the active housing market disabled
 - firm and bank entry dynamics disabled
 
@@ -94,10 +99,10 @@ The remaining gap is approximately 31 times at the median.
 
 ### 3.3 Current one-million-person optimization checkpoint
 
-All accepted optimization measurements continue to use exactly 1,000,000
-persons, beneficial ownership enabled, three measured days, and the same
-scenario. The root-state digest remains
-`9c0bba0226b7c6784e82bfd330b3aae744fa60f59aaa5c287fd66970c3ebd0ce`.
+All accepted optimization measurements use exactly 1,000,000 persons with
+beneficial ownership enabled. The original daily-review digest remains historical
+evidence. The current deterministic digest changed intentionally when household
+portfolio review moved to a realistic staggered 30-day cadence.
 
 | Checkpoint | Median day | Peak RSS | Change from first baseline |
 | :--- | ---: | ---: | ---: |
@@ -113,79 +118,57 @@ scenario. The root-state digest remains
 | Compact incremental security-pair chains | 8.02 s | 8.06 GiB | -74.1% |
 | Contiguous beneficial indexes and one synchronization boundary | 7.48 s | 7.83 GiB | -75.9% |
 | Presence epochs and fingerprinted asset slots | 6.82 s | 7.23 GiB | -78.0% |
+| Staggered review, change journal, and linear indexes, first cycle | 0.674 s | 6.88 GiB | -97.8% |
+| Staggered review, second 30-day cycle | 0.760 s | 6.71 GiB | -97.5% |
 
-The latest profiled acceptance run measured 6.82 s, 7.01 s, and 6.19 s. A
-preceding run measured a 7.02-second median. Genesis remained approximately
-8.21 seconds. The optimization has therefore removed approximately 78% of
-median daily latency without changing the deterministic result, but it is still
-approximately 6.8 times above the interactive target. First- and second-day
-allocation counts fell from 26.86 million and 11.47 million to approximately
-544 thousand and 24 thousand.
+The final first-cycle run used schema `m9-scale-probe-v3` and scenario
+`static-population-staggered-portfolio-v2`. Genesis took 8.22 seconds. Across
+days 1 through 30 the median was 0.674 seconds, p95 was 1.491 seconds, and the
+maximum was 1.539 seconds. The deterministic root digest was
+`5f23e4becd18f3e3d29595a0c12127682b0340c2cfcf0ef736e017e8cc7ad73f`.
 
-Peak resident memory remains above the first complete baseline because later
-security lookup structures trade memory for latency. The latest ownership layout
-recovered approximately 0.83 GiB relative to the compact security-pair
-checkpoint. Further
-data-layout work must continue removing redundant derived indexes and stale
-scratch capacities while reducing daily latency.
+The first cycle is a materialization ramp: each household cohort creates its
+positions for the first time. At day 30 the economy contains 5,748,680 active
+security lots and 15,392,650 active person-level beneficial lots.
 
-Beneficial ownership now keeps canonical lots independently in runtime and tick
-scratch, while immutable reverse indexes are shared until a mutation requires a
-copy. Daily validation checks every touched lot and asset row. Checkpoint loads,
-explicit state validation, and the acceptance suite still execute the complete
-cross-index validation.
+The complete second-cycle run, days 31 through 60, has a 0.760-second median,
+1.054-second p95, and 1.190-second maximum. Twenty-five of the thirty measured
+days are below one second. Position materialization has not completely stopped:
+the run ends with 6,093,687 security lots and 16,259,051 beneficial lots. The
+tail result is therefore a real remaining workload rather than measurement
+noise. Its digest is
+`5b95c26e27d6015df5274f76888f876074e99007d8e84f17cafcb27bffc791d5`.
+Genesis remains a one-time cost and is not part of daily latency acceptance.
 
-Normal single-day advancement now uses the existing fast M6 record validation at
-its entry boundary. Explicit state validation and checkpoint boundaries retain
-the full security-index check, and the per-day working-state validation remains
-in place. Sequential energy rationing now carries a monotonic cursor over
-price-ordered offers. Permanently exhausted offers are visited once rather than
-once per buyer; buyer priority, offer priority, prices, fiscal flows, and the
-resulting digest are unchanged.
+The result comes from model-preserving algorithm and data-layout changes plus
+one documented scheduling rule:
 
-Equity orders are generated with globally monotonic ordinals and dense equity
-identifiers. Normal clearing therefore uses a stable counting bucket by equity
-instead of a comparison sort. The stable input order is already the required
-ordinal order within each equity. Defensive fallback to the original comparison
-sort remains for sparse identifiers or nonmonotonic externally supplied orders.
+- Household portfolio decisions occur every 30 days rather than every day.
+  Households are deterministically staggered, so one thirtieth reviews on each
+  day. The watchlist size, order calculation, clearing, ownership, prices, and
+  settlement mechanisms are unchanged.
+- Security mutations publish a compact household-position change journal.
+  Beneficial ownership updates only changed positions instead of rescanning all
+  canonical security lots.
+- Active holder and contract indexes use linear dense counting when identifiers
+  are dense. Sparse inputs retain the comparison-sort fallback.
+- Beneficial asset rows maintain active share totals incrementally. Daily
+  validation checks dirty lots and verifies that each dirty active asset sums to
+  one without rebuilding the complete reverse lot index.
+- Daily security validation checks canonical records and accounting identities.
+  Full index reconstruction and comparison remains at explicit state validation,
+  checkpoint, and test boundaries.
+- Inactive security lots are compacted at the daily close. `SecurityLotId` is
+  therefore an internal transient identity across days; security identity,
+  holder balances, cost basis, and public position semantics are preserved.
+- Bond allocation is capped by the clearing holder's actual remaining units,
+  preventing floating-point over-allocation at large scale.
 
-The private security-and-holder lookup no longer duplicates the same positions
-across a sorted pair table, a lot-id table, an open-addressing table, a batch
-overlay, and a full-size sort buffer. It now stores one 32-bit next link per lot
-and one compact head/tail slot per observed pair. New lots join the index
-incrementally, including inside mutation batches. Oldest-lot-first transfer
-order is preserved, while active public holder, contract, issuer, bank, and
-maturity indexes retain their existing semantics and validation.
-
-Beneficial reverse indexes no longer use one independently allocated vector per
-person and per asset. Canonical lots now carry compact row metadata, while
-person projections preserve append order with compact head, tail, previous, and
-next arrays; query spans and asset projections use contiguous offset-and-ID
-arrays rebuilt only when invalidated. Copy-on-write tick staging therefore
-copies a small number of contiguous buffers instead of millions of heap
-allocations. Individual
-retirement, whole-asset retirement, household rekeying, inactive history,
-checkpoint reconstruction, and public span ordering retain their previous
-semantics. Canonical household-cash assets also use a dense household lookup;
-noncanonical keys retain the general hash path.
-
-Security-position synchronization now marks each beneficial asset row with the
-current refresh epoch while it already scans active canonical security lots.
-After the scan, unseen security-position rows retire in deterministic row order.
-This removes the prior second pass of random `SecurityBook::units_held` lookups.
-Cash, debt, and generic claims retain their prior canonical validation paths.
-Asset hash slots now pack a 32-bit fingerprint beside the 32-bit row index in
-the same eight-byte footprint. Failed probes normally reject inside the slot and
-only matching fingerprints dereference the larger asset-row table.
-
-Close-day synchronization already creates every missing beneficial claim and
-retires every claim whose canonical position disappeared. The immediately
-following validation used to repeat the same complete household, security,
-loan, and asset scans before commit. Normal advancement now performs that
-projection work once, followed by the existing mutation-tracked lot and
-asset-row validation. Explicit ownership validation, checkpoint round trips,
-fault injection, accounting validation, and deterministic digest checks remain
-unchanged.
+The retained full 8-worker acceptance suite passes all 49 tests, including C and
+Python bindings, checkpoint round trips, semantic panels, extension seams, and
+fault-injection coverage. Further work should reduce the approximately 6.9 GiB
+peak RSS and remove the remaining full tick-staging copies before treating M9
+multi-economy or highly dynamic population workloads as complete.
 
 ## 4. Baseline with the current model enabled
 
@@ -328,42 +311,46 @@ The current layering duplicates memory, allocation, and some validation work.
 
 ## 8. One-million-person projection
 
-The current enabled engine is already above one second on a normal M9 day at
-50,000 persons and has approximately five-second ownership expansion days. It
-cannot support one million persons at interactive speed in its present form.
+Direct M8 execution now demonstrates the median target rather than projecting it:
 
-Even the diagnostic lower bound reaches 596 ms per M9 day and 1.22 GiB peak RSS
-at 100,000 persons. A simple linear projection gives approximately:
+- 8.22 seconds for one-time genesis
+- 0.760-second median across days 31 through 60
+- 1.054-second p95 and 1.190-second maximum
+- 25 of 30 second-cycle days below one second
+- approximately 6.7 GiB peak RSS
 
-- 6 seconds per simulated day at one million persons
-- 12.2 GiB peak RSS for the simulation process
+The first-cycle p95 remains above one second while millions of direct positions
+and person-level claims are materialized. Product startup can hide or explicitly
+report this market-initialization phase, but the engine should continue reducing
+it rather than treating it as free work.
 
-The measured latency slope is slightly worse than linear, so these are optimistic
-lower bounds. The current genesis slope would imply tens of minutes at one
-million persons.
-
-The one-million-person, one-second target therefore requires all of the primary
-complexity fixes. Removing only the `World` copy or adding threads will not be
-enough.
+M9 is still outside the claim. Its world-level transactional staging deep-copies
+the domestic economy and can multiply the M8 memory footprint. One million
+persons in one M9 economy therefore remains blocked on removing the world copy,
+not on the domestic economic mechanisms measured here.
 
 ## 9. Optimization order
 
-The recommended order is based on measured benefit and dependency risk:
+Completed work includes quadratic genesis removal, compact ownership indexes,
+incremental synchronization and validation, stable order bucketing, linear
+security-index construction, and staggered portfolio scheduling.
 
-1. Replace per-lot sorted-vector insertion with deterministic batch index
-   construction, and make beneficial synchronization incremental.
-2. Batch genesis transfers so that all energy producers share one transaction
-   commit and one validation boundary.
-3. Replace daily `M9World` deep copy with an atomic prepare/commit or undo-journal
-   protocol that reuses domestic scratch state.
-4. Batch securities mutations and rebuild holder/security indexes once per
-   mutation phase.
-5. Remove redundant whole-state validation and digest work from hot runtime paths
-   while preserving explicit debug and acceptance checks.
-6. Reprofile before changing data layout or adding deterministic multithreading.
+The next measured order is:
 
-Complexity and allocation fixes come before multithreading. Parallel execution
-would otherwise multiply memory pressure and hide avoidable serial work.
+1. Remove the M9 daily world deep copy with a reusable atomic prepare/commit or
+   undo-journal protocol.
+2. Replace remaining full M6 and M7 tick-staging copies with chunked copy-on-write
+   storage or mutation journals.
+3. Reduce the approximately 15.4 million materialized beneficial lots through a
+   compact household-equal-claim representation with explicit exception records.
+4. Rebuild public security indexes no more than once per mutation phase.
+5. Profile dynamic population, firm entry and exit, active housing, and
+   multi-economy workloads at one million persons.
+6. Add deterministic parallel phases only after their read/write sets and memory
+   budgets are measured.
+
+Complexity and memory-layout fixes continue to precede multithreading. Parallel
+execution would otherwise multiply the remaining staging footprint.
 
 ## 10. Next acceptance gates
 
@@ -391,14 +378,25 @@ uv run cmake --preset m9-release
 uv run cmake --build --preset m9-release --parallel 8
 ```
 
-Run the current one-million-person M8 acceptance probe:
+Run the one-million-person first-cycle probe:
 
 ```bash
 build/native/m9-release/native/macro_sim_m9_scale_probe \
   --mode m8 \
   --persons 1000000 \
   --warmup-days 0 \
-  --days 3 \
+  --days 30 \
+  --beneficial-ownership enabled
+```
+
+Run the post-materialization steady-state probe:
+
+```bash
+build/native/m9-release/native/macro_sim_m9_scale_probe \
+  --mode m8 \
+  --persons 1000000 \
+  --warmup-days 30 \
+  --days 5 \
   --beneficial-ownership enabled
 ```
 

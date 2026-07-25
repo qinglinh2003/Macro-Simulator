@@ -154,6 +154,7 @@ class BeneficialOwnershipBook final {
     struct AssetIndexRow final {
         BeneficialAssetKey asset{};
         std::uint32_t active_lots{0};
+        double active_share{0.0};
     };
 
     struct AssetSlot final {

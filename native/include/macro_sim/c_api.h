@@ -327,7 +327,7 @@ typedef struct macro_sim_m6_genesis_options {
     uint64_t banks;
     uint64_t seed;
     uint32_t watchlist_size;
-    uint32_t reserved_2;
+    uint32_t portfolio_review_interval_days;
     double opening_capital_per_bank;
     double initial_policy_rate;
 } macro_sim_m6_genesis_options;

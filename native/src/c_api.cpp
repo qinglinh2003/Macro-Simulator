@@ -201,7 +201,8 @@ bool valid_m7_genesis_options(const macro_sim_m7_genesis_options &options) noexc
            valid_flag(financial.stochastic) && valid_flag(financial.bonds) &&
            valid_flag(financial.firm_equity) && valid_flag(financial.margin_credit) &&
            valid_flag(financial.firm_dynamics) && valid_flag(financial.bank_dynamics) &&
-           financial.reserved == 0 && financial.reserved_2 == 0;
+           financial.reserved == 0 &&
+           financial.portfolio_review_interval_days <= 3'650U;
 }
 
 macro_sim::simulation::M7SimulationSpec
@@ -234,6 +235,10 @@ make_m7_spec(const macro_sim_m7_genesis_options &options) {
     financial.rules.firm_dynamics = source.firm_dynamics != 0;
     financial.rules.bank_dynamics = source.bank_dynamics != 0;
     financial.rules.watchlist_size = source.watchlist_size;
+    if (source.portfolio_review_interval_days != 0U) {
+        financial.rules.portfolio_review_interval_days =
+            source.portfolio_review_interval_days;
+    }
     spec.population.initial_persons = options.initial_persons;
     spec.population.start_calendar_day = options.start_calendar_day;
     spec.population.target_household_size = options.target_household_size;
@@ -1367,7 +1372,8 @@ macro_sim_status macro_sim_m6_genesis(macro_sim_session *session,
         !valid_flag(options->stochastic) || !valid_flag(options->bonds) ||
         !valid_flag(options->firm_equity) || !valid_flag(options->margin_credit) ||
         !valid_flag(options->firm_dynamics) || !valid_flag(options->bank_dynamics) ||
-        options->reserved != 0 || options->reserved_2 != 0) {
+        options->reserved != 0 ||
+        options->portfolio_review_interval_days > 3'650U) {
         return status(MACRO_SIM_INVALID_ARGUMENT, "M6 genesis options are invalid");
     }
     macro_sim::simulation::M6SimulationSpec spec;
@@ -1397,6 +1403,10 @@ macro_sim_status macro_sim_m6_genesis(macro_sim_session *session,
     spec.rules.firm_dynamics = options->firm_dynamics != 0;
     spec.rules.bank_dynamics = options->bank_dynamics != 0;
     spec.rules.watchlist_size = options->watchlist_size;
+    if (options->portfolio_review_interval_days != 0U) {
+        spec.rules.portfolio_review_interval_days =
+            options->portfolio_review_interval_days;
+    }
     return status(session->engine.initialize_m6(spec));
 }
 
@@ -1663,7 +1673,8 @@ macro_sim_status macro_sim_m7_genesis(macro_sim_session *session,
         !valid_flag(financial_options.margin_credit) ||
         !valid_flag(financial_options.firm_dynamics) ||
         !valid_flag(financial_options.bank_dynamics) ||
-        financial_options.reserved != 0 || financial_options.reserved_2 != 0) {
+        financial_options.reserved != 0 ||
+        financial_options.portfolio_review_interval_days > 3'650U) {
         return status(MACRO_SIM_INVALID_ARGUMENT, "M7 genesis options are invalid");
     }
 
@@ -1695,6 +1706,10 @@ macro_sim_status macro_sim_m7_genesis(macro_sim_session *session,
     financial.rules.firm_dynamics = financial_options.firm_dynamics != 0;
     financial.rules.bank_dynamics = financial_options.bank_dynamics != 0;
     financial.rules.watchlist_size = financial_options.watchlist_size;
+    if (financial_options.portfolio_review_interval_days != 0U) {
+        financial.rules.portfolio_review_interval_days =
+            financial_options.portfolio_review_interval_days;
+    }
     spec.population.initial_persons = options->initial_persons;
     spec.population.start_calendar_day = options->start_calendar_day;
     spec.population.target_household_size = options->target_household_size;
@@ -2178,6 +2193,7 @@ macro_sim_status macro_sim_m8_defaults(macro_sim_m8_genesis_options *output) {
     financial.banks = 2;
     financial.seed = 8;
     financial.watchlist_size = 3;
+    financial.portfolio_review_interval_days = 30;
     financial.opening_capital_per_bank = 1'000.0;
     financial.initial_policy_rate = 0.002;
     fill_energy_policy(output->energy_policy, {});

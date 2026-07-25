@@ -231,7 +231,7 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
 
 [[nodiscard]] Status synchronize_beneficial_claims(
     const core::RootState &state, const M4TickScratch &real,
-    const std::vector<core::LoanRecord> &loans, const core::SecurityBook &securities,
+    const std::vector<core::LoanRecord> &loans, core::SecurityBook &securities,
     const core::HouseholdMembershipBook &membership, const core::PersonStore &persons,
     core::BeneficialOwnershipBook &ownership,
     std::vector<core::BeneficialAssetKey> &asset_buffer) {
@@ -252,30 +252,30 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
     if (!status.ok()) {
         return status;
     }
-    status = ownership.begin_asset_presence_refresh(
-        core::BeneficialAssetKind::security_position);
-    if (!status.ok()) {
-        return status;
+    asset_buffer.clear();
+    asset_buffer.reserve(securities.household_position_changes().size());
+    for (const auto &change : securities.household_position_changes()) {
+        asset_buffer.push_back({
+            core::BeneficialAssetKind::security_position,
+            HouseholdId(change.holder.value),
+            security_token(change.security),
+        });
     }
-    for (const auto &lot : securities.lots()) {
-        if (!lot.active || lot.holder.kind != core::OwnerKind::household) {
-            continue;
+    std::sort(asset_buffer.begin(), asset_buffer.end());
+    asset_buffer.erase(std::unique(asset_buffer.begin(), asset_buffer.end()),
+                       asset_buffer.end());
+    for (const auto asset : asset_buffer) {
+        const auto security = security_from_token(asset.value);
+        const auto holder = core::OwnerId::household(asset.household);
+        if (securities.units_held(security, holder) > kLaborTolerance) {
+            status = create_equal_claims(
+                asset, membership, persons, ownership);
+        } else if (ownership.contains_asset(asset)) {
+            status = ownership.retire_asset(asset);
         }
-        const auto household = HouseholdId(lot.holder.value);
-        status = create_equal_claims(
-            {
-                core::BeneficialAssetKind::security_position,
-                household,
-                security_token(lot.security),
-            },
-            membership, persons, ownership, true);
         if (!status.ok()) {
             return status;
         }
-    }
-    status = ownership.finish_asset_presence_refresh();
-    if (!status.ok()) {
-        return status;
     }
     for (const auto &loan : loans) {
         if (!loan.active || loan.borrower.kind != core::OwnerKind::household) {
@@ -305,6 +305,7 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
             return status;
         }
     }
+    securities.clear_household_position_changes();
     return Status::success();
 }
 

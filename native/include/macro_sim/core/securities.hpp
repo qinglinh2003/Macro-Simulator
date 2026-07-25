@@ -87,6 +87,14 @@ struct SecurityLot final {
     bool operator==(const SecurityLot &) const = default;
 };
 
+struct HouseholdSecurityPositionChange final {
+    SecurityId security{};
+    OwnerId holder{};
+
+    constexpr auto
+    operator<=>(const HouseholdSecurityPositionChange &) const noexcept = default;
+};
+
 struct InitialSecurityHolding final {
     OwnerId holder{};
     double units{0.0};
@@ -148,6 +156,7 @@ class SecurityBook final {
                                                  Price fundamental, double trend,
                                                  double income_signal);
     [[nodiscard]] Status consolidate();
+    [[nodiscard]] Status compact_inactive_lots();
     [[nodiscard]] Status begin_batch() noexcept;
     [[nodiscard]] Status finish_batch();
 
@@ -161,6 +170,9 @@ class SecurityBook final {
     [[nodiscard]] const std::vector<BondContract> &bonds() const noexcept;
     [[nodiscard]] const std::vector<EquityContract> &equities() const noexcept;
     [[nodiscard]] const std::vector<SecurityLot> &lots() const noexcept;
+    [[nodiscard]] std::span<const HouseholdSecurityPositionChange>
+    household_position_changes() const noexcept;
+    void clear_household_position_changes() noexcept;
     [[nodiscard]] std::span<const SecurityLotId>
     lots_for_holder(OwnerId holder) const noexcept;
     [[nodiscard]] std::span<const SecurityLotId>
@@ -202,6 +214,7 @@ class SecurityBook final {
     [[nodiscard]] static std::size_t pair_hash(SecurityId security,
                                                OwnerId holder) noexcept;
     void append_pair_lot(SecurityLotId lot);
+    void record_household_position_change(SecurityId security, OwnerId holder);
     void rebuild_pair_index();
     [[nodiscard]] Status validate_security(SecurityId security) const noexcept;
     [[nodiscard]] Status mutation_complete(bool indexes_dirty = true);
@@ -227,11 +240,15 @@ class SecurityBook final {
     std::vector<std::uint32_t> pair_next_;
     std::vector<PairLotSlot> pair_slots_;
     std::size_t pair_count_{0};
+    std::vector<HouseholdSecurityPositionChange> household_position_changes_;
     std::vector<std::pair<OwnerId, SecurityLotId>> holder_rows_scratch_;
-    std::vector<std::pair<OwnerId, SecurityLotId>> bank_rows_scratch_;
     std::vector<std::pair<SecurityId, SecurityLotId>> contract_rows_scratch_;
     std::vector<std::pair<OwnerId, SecurityId>> issuer_rows_scratch_;
     std::vector<std::pair<Tick, BondId>> maturity_rows_scratch_;
+    std::vector<std::uint32_t> holder_counts_scratch_;
+    std::vector<std::uint32_t> holder_offsets_scratch_;
+    std::vector<std::uint32_t> contract_counts_scratch_;
+    std::vector<std::uint32_t> contract_offsets_scratch_;
     bool batch_active_{false};
     bool batch_dirty_{false};
     bool batch_indexes_dirty_{false};

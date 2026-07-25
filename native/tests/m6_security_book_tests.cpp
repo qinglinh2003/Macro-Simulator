@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -19,6 +20,7 @@ using macro_sim::HouseholdId;
 using macro_sim::Money;
 using macro_sim::Price;
 using macro_sim::Rate;
+using macro_sim::SecurityLotId;
 using macro_sim::Tick;
 using macro_sim::core::BondContract;
 using macro_sim::core::EquityContract;
@@ -99,11 +101,23 @@ void test_contracts_and_indexes() {
     assert(equity.ok());
     assert(book.validate(1.0e-9).ok());
     assert(book.securities_for_issuer(OwnerId::firm(macro_sim::FirmId(1))).size() == 1);
+    book.clear_household_position_changes();
+    assert(book.household_position_changes().empty());
 
     auto status = book.transfer_units(
         SecurityId::equity(*equity.get_if()), OwnerId::household(HouseholdId(1)),
         OwnerId::household(HouseholdId(3)), 15.0, Money(31.5));
     assert(status.ok());
+    const auto changes = book.household_position_changes();
+    assert(changes.size() == 2U);
+    assert(std::find(changes.begin(), changes.end(),
+                     macro_sim::core::HouseholdSecurityPositionChange{
+                         SecurityId::equity(*equity.get_if()),
+                         OwnerId::household(HouseholdId(1))}) != changes.end());
+    assert(std::find(changes.begin(), changes.end(),
+                     macro_sim::core::HouseholdSecurityPositionChange{
+                         SecurityId::equity(*equity.get_if()),
+                         OwnerId::household(HouseholdId(3))}) != changes.end());
     assert(book.units_held(SecurityId::equity(*equity.get_if()),
                            OwnerId::household(HouseholdId(1))) == 45.0);
     assert(book.units_held(SecurityId::equity(*equity.get_if()),
@@ -258,6 +272,38 @@ void test_fuzzed_mutations() {
     assert(book.validate(1.0e-8).ok());
 }
 
+void test_inactive_lot_compaction_preserves_positions() {
+    SecurityBook book;
+    const std::array holdings{
+        InitialSecurityHolding{
+            OwnerId::household(HouseholdId(1)), 60.0, Money(120.0)},
+        InitialSecurityHolding{
+            OwnerId::household(HouseholdId(2)), 40.0, Money(80.0)},
+    };
+    const auto equity =
+        book.create_equity(equity_contract(1, 2, 100.0), holdings);
+    assert(equity.ok());
+    const auto security = SecurityId::equity(*equity.get_if());
+    assert(book.transfer_units(
+                   security, OwnerId::household(HouseholdId(2)),
+                   OwnerId::household(HouseholdId(3)), 40.0, Money(80.0))
+               .ok());
+    assert(book.lots().size() == 3U);
+    const auto changes_before = book.household_position_changes().size();
+    assert(book.compact_inactive_lots().ok());
+    assert(book.lots().size() == 2U);
+    assert(book.lots()[0].id == SecurityLotId(1));
+    assert(book.lots()[1].id == SecurityLotId(2));
+    assert(book.units_held(security, OwnerId::household(HouseholdId(1))) ==
+           60.0);
+    assert(book.units_held(security, OwnerId::household(HouseholdId(2))) ==
+           0.0);
+    assert(book.units_held(security, OwnerId::household(HouseholdId(3))) ==
+           40.0);
+    assert(book.household_position_changes().size() == changes_before);
+    assert(book.validate(1.0e-9).ok());
+}
+
 void test_rejections() {
     SecurityBook book;
     auto invalid = bond_contract(1, 1, 4, 3, 10.0);
@@ -285,6 +331,7 @@ int main() {
     test_transfer_roundoff_clamp_preserves_units();
     test_duplicate_pair_lots_in_batch();
     test_fuzzed_mutations();
+    test_inactive_lot_compaction_preserves_positions();
     test_rejections();
     return 0;
 }

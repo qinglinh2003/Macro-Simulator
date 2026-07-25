@@ -103,6 +103,142 @@ void build_contract_index(std::vector<std::pair<SecurityId, SecurityLotId>> &row
     }
 }
 
+[[nodiscard]] bool build_dense_holder_index(
+    const std::vector<SecurityLot> &lots,
+    std::vector<HolderSecurityIndexEntry> &entries,
+    std::vector<SecurityLotId> &values, std::vector<std::uint32_t> &counts,
+    std::vector<std::uint32_t> &offsets) {
+    constexpr std::size_t kind_count =
+        static_cast<std::size_t>(OwnerKind::institution) + 1U;
+    std::uint64_t maximum_value = 0U;
+    std::size_t active_count = 0U;
+    for (const auto &lot : lots) {
+        if (lot.active) {
+            if (static_cast<std::size_t>(lot.holder.kind) >= kind_count) {
+                return false;
+            }
+            maximum_value = std::max(maximum_value, lot.holder.value);
+            ++active_count;
+        }
+    }
+    if (maximum_value >= std::numeric_limits<std::size_t>::max() / kind_count) {
+        return false;
+    }
+    const auto stride = static_cast<std::size_t>(maximum_value) + 1U;
+    const auto slot_count = stride * kind_count;
+    const auto dense_limit = std::max<std::size_t>(1024U, active_count * 2U);
+    if (slot_count > dense_limit) {
+        return false;
+    }
+    counts.resize(slot_count);
+    std::fill(counts.begin(), counts.end(), 0U);
+    for (const auto &lot : lots) {
+        if (!lot.active) {
+            continue;
+        }
+        const auto slot = static_cast<std::size_t>(lot.holder.kind) * stride +
+                          static_cast<std::size_t>(lot.holder.value);
+        ++counts[slot];
+    }
+    entries.clear();
+    values.resize(active_count);
+    offsets.resize(slot_count);
+    std::uint32_t offset = 0U;
+    for (std::size_t kind = 0U; kind < kind_count; ++kind) {
+        for (std::size_t value = 1U; value < stride; ++value) {
+            const auto slot = kind * stride + value;
+            const auto count = counts[slot];
+            offsets[slot] = offset;
+            if (count == 0U) {
+                continue;
+            }
+            entries.push_back({
+                OwnerId{static_cast<OwnerKind>(kind), value},
+                offset,
+                count,
+            });
+            offset += count;
+        }
+    }
+    for (const auto &lot : lots) {
+        if (!lot.active) {
+            continue;
+        }
+        const auto slot = static_cast<std::size_t>(lot.holder.kind) * stride +
+                          static_cast<std::size_t>(lot.holder.value);
+        values[offsets[slot]++] = lot.id;
+    }
+    return true;
+}
+
+[[nodiscard]] bool build_dense_contract_index(
+    const std::vector<SecurityLot> &lots,
+    std::vector<ContractLotIndexEntry> &entries,
+    std::vector<SecurityLotId> &values, std::vector<std::uint32_t> &counts,
+    std::vector<std::uint32_t> &offsets) {
+    constexpr std::size_t kind_count =
+        static_cast<std::size_t>(SecurityKind::equity) + 1U;
+    std::uint64_t maximum_value = 0U;
+    std::size_t active_count = 0U;
+    for (const auto &lot : lots) {
+        if (lot.active) {
+            if (static_cast<std::size_t>(lot.security.kind) >= kind_count) {
+                return false;
+            }
+            maximum_value = std::max(maximum_value, lot.security.value);
+            ++active_count;
+        }
+    }
+    if (maximum_value >= std::numeric_limits<std::size_t>::max() / kind_count) {
+        return false;
+    }
+    const auto stride = static_cast<std::size_t>(maximum_value) + 1U;
+    const auto slot_count = stride * kind_count;
+    const auto dense_limit = std::max<std::size_t>(1024U, active_count * 2U);
+    if (slot_count > dense_limit) {
+        return false;
+    }
+    counts.resize(slot_count);
+    std::fill(counts.begin(), counts.end(), 0U);
+    for (const auto &lot : lots) {
+        if (!lot.active) {
+            continue;
+        }
+        const auto slot = static_cast<std::size_t>(lot.security.kind) * stride +
+                          static_cast<std::size_t>(lot.security.value);
+        ++counts[slot];
+    }
+    entries.clear();
+    values.resize(active_count);
+    offsets.resize(slot_count);
+    std::uint32_t offset = 0U;
+    for (std::size_t kind = 0U; kind < kind_count; ++kind) {
+        for (std::size_t value = 1U; value < stride; ++value) {
+            const auto slot = kind * stride + value;
+            const auto count = counts[slot];
+            offsets[slot] = offset;
+            if (count == 0U) {
+                continue;
+            }
+            entries.push_back({
+                SecurityId{static_cast<SecurityKind>(kind), value},
+                offset,
+                count,
+            });
+            offset += count;
+        }
+    }
+    for (const auto &lot : lots) {
+        if (!lot.active) {
+            continue;
+        }
+        const auto slot = static_cast<std::size_t>(lot.security.kind) * stride +
+                          static_cast<std::size_t>(lot.security.value);
+        values[offsets[slot]++] = lot.id;
+    }
+    return true;
+}
+
 void build_issuer_index(std::vector<std::pair<OwnerId, SecurityId>> &rows,
                         std::vector<IssuerSecurityIndexEntry> &entries,
                         std::vector<SecurityId> &values) {
@@ -254,6 +390,13 @@ void SecurityBook::append_pair_lot(SecurityLotId lot_id) {
     ++pair_count_;
 }
 
+void SecurityBook::record_household_position_change(SecurityId security,
+                                                    OwnerId holder) {
+    if (holder.kind == OwnerKind::household) {
+        household_position_changes_.push_back({security, holder});
+    }
+}
+
 Result<SecurityLotId> SecurityBook::create_lot(SecurityId security, OwnerId holder,
                                                double units, Money cost_basis) {
     if (!validate_security(security).ok() || !holder.valid() ||
@@ -267,6 +410,7 @@ Result<SecurityLotId> SecurityBook::create_lot(SecurityId security, OwnerId hold
     const auto id = SecurityLotId(static_cast<std::uint64_t>(lots_.size()) + 1);
     lots_.push_back(SecurityLot{id, security, holder, units, cost_basis, true});
     append_pair_lot(id);
+    record_household_position_change(security, holder);
     return id;
 }
 
@@ -442,7 +586,9 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
         destination_lot->units += transferred_units;
         destination_lot->cost_basis =
             Money(destination_lot->cost_basis.value() + assigned_cost);
+        record_household_position_change(security, destination);
     }
+    record_household_position_change(security, source);
     return mutation_complete();
 }
 
@@ -465,6 +611,7 @@ Status SecurityBook::issue_equity_units(EquityId equity, OwnerId destination,
         destination_lot->units += units;
         destination_lot->cost_basis =
             Money(destination_lot->cost_basis.value() + cost_basis.value());
+        record_household_position_change(security, destination);
     }
     contract->outstanding_shares += units;
     return mutation_complete();
@@ -489,6 +636,7 @@ Status SecurityBook::issue_bond_units(BondId bond, OwnerId destination, double u
         destination_lot->units += units;
         destination_lot->cost_basis =
             Money(destination_lot->cost_basis.value() + cost_basis.value());
+        record_household_position_change(security, destination);
     }
     contract->original_face = Money(contract->original_face.value() + units);
     contract->outstanding_face = Money(contract->outstanding_face.value() + units);
@@ -542,6 +690,7 @@ Status SecurityBook::retire_units(SecurityId security, OwnerId holder, double un
         contract->outstanding_shares =
             std::max(0.0, contract->outstanding_shares - units);
     }
+    record_household_position_change(security, holder);
     return mutation_complete();
 }
 
@@ -553,6 +702,7 @@ Status SecurityBook::settle_bond(BondId bond) {
     const auto security = SecurityId::bond(bond);
     for (auto &lot : lots_) {
         if (lot.active && lot.security == security) {
+            record_household_position_change(security, lot.holder);
             lot.units = 0.0;
             lot.cost_basis = Money(0.0);
             lot.active = false;
@@ -572,6 +722,7 @@ Status SecurityBook::resolve_equity(EquityId equity) {
     const auto security = SecurityId::equity(equity);
     for (auto &lot : lots_) {
         if (lot.active && lot.security == security) {
+            record_household_position_change(security, lot.holder);
             lot.units = 0.0;
             lot.cost_basis = Money(0.0);
             lot.active = false;
@@ -635,6 +786,29 @@ Status SecurityBook::consolidate() {
     return mutation_complete();
 }
 
+Status SecurityBook::compact_inactive_lots() {
+    if (batch_active_) {
+        return Status(ErrorCode::invalid_transaction_state,
+                      "security lot compaction cannot run inside a batch");
+    }
+    if (holder_lots_.size() == lots_.size()) {
+        return Status::success();
+    }
+    std::vector<SecurityLot> compacted;
+    compacted.reserve(holder_lots_.size());
+    for (const auto &lot : lots_) {
+        if (!lot.active) {
+            continue;
+        }
+        auto active = lot;
+        active.id =
+            SecurityLotId(static_cast<std::uint64_t>(compacted.size()) + 1U);
+        compacted.push_back(active);
+    }
+    lots_.swap(compacted);
+    return rebuild_indexes();
+}
+
 Status SecurityBook::begin_batch() noexcept {
     if (batch_active_) {
         return Status(ErrorCode::invalid_transaction_state,
@@ -693,6 +867,15 @@ const std::vector<EquityContract> &SecurityBook::equities() const noexcept {
 }
 
 const std::vector<SecurityLot> &SecurityBook::lots() const noexcept { return lots_; }
+
+std::span<const HouseholdSecurityPositionChange>
+SecurityBook::household_position_changes() const noexcept {
+    return household_position_changes_;
+}
+
+void SecurityBook::clear_household_position_changes() noexcept {
+    household_position_changes_.clear();
+}
 
 std::span<const SecurityLotId>
 SecurityBook::lots_for_holder(OwnerId holder) const noexcept {
@@ -907,6 +1090,7 @@ void SecurityBook::replace_records(std::vector<BondContract> bonds,
     batch_active_ = false;
     batch_dirty_ = false;
     batch_indexes_dirty_ = false;
+    household_position_changes_.clear();
     static_cast<void>(rebuild_indexes());
 }
 
@@ -947,30 +1131,15 @@ Status SecurityBook::rebuild_active_indexes() {
         return Status(ErrorCode::out_of_range, "security index is too large");
     }
     auto &holder_rows = holder_rows_scratch_;
-    auto &bank_rows = bank_rows_scratch_;
     auto &contract_rows = contract_rows_scratch_;
     auto &issuer_rows = issuer_rows_scratch_;
     auto &maturity_rows = maturity_rows_scratch_;
     holder_rows.clear();
-    bank_rows.clear();
     contract_rows.clear();
     issuer_rows.clear();
     maturity_rows.clear();
-    holder_rows.reserve(lots_.size());
-    contract_rows.reserve(lots_.size());
-    bank_rows.reserve(lots_.size());
     issuer_rows.reserve(bonds_.size() + equities_.size());
     maturity_rows.reserve(bonds_.size());
-    for (const auto &lot : lots_) {
-        if (!lot.active) {
-            continue;
-        }
-        holder_rows.emplace_back(lot.holder, lot.id);
-        contract_rows.emplace_back(lot.security, lot.id);
-        if (lot.holder.kind == OwnerKind::bank) {
-            bank_rows.emplace_back(lot.holder, lot.id);
-        }
-    }
     for (const auto &bond : bonds_) {
         if (!bond.active) {
             continue;
@@ -984,13 +1153,45 @@ Status SecurityBook::rebuild_active_indexes() {
         }
         issuer_rows.emplace_back(equity.issuer, SecurityId::equity(equity.id));
     }
-    build_flat_index(holder_rows, holder_index_, holder_lots_);
-    build_flat_index(bank_rows, bank_index_, bank_lots_);
-    build_contract_index(contract_rows, contract_index_, contract_lots_);
+    if (!build_dense_holder_index(lots_, holder_index_, holder_lots_,
+                                  holder_counts_scratch_,
+                                  holder_offsets_scratch_)) {
+        holder_rows.reserve(lots_.size());
+        for (const auto &lot : lots_) {
+            if (lot.active) {
+                holder_rows.emplace_back(lot.holder, lot.id);
+            }
+        }
+        build_flat_index(holder_rows, holder_index_, holder_lots_);
+    }
+    bank_index_.clear();
+    bank_lots_.clear();
+    for (const auto &entry : holder_index_) {
+        if (entry.holder.kind != OwnerKind::bank) {
+            continue;
+        }
+        bank_index_.push_back({
+            entry.holder,
+            static_cast<std::uint32_t>(bank_lots_.size()),
+            entry.count,
+        });
+        const auto begin = holder_lots_.begin() + entry.offset;
+        bank_lots_.insert(bank_lots_.end(), begin, begin + entry.count);
+    }
+    if (!build_dense_contract_index(lots_, contract_index_, contract_lots_,
+                                    contract_counts_scratch_,
+                                    contract_offsets_scratch_)) {
+        contract_rows.reserve(lots_.size());
+        for (const auto &lot : lots_) {
+            if (lot.active) {
+                contract_rows.emplace_back(lot.security, lot.id);
+            }
+        }
+        build_contract_index(contract_rows, contract_index_, contract_lots_);
+    }
     build_issuer_index(issuer_rows, issuer_index_, issuer_securities_);
     build_maturity_index(maturity_rows, maturity_index_, maturity_bonds_);
     holder_rows.clear();
-    bank_rows.clear();
     contract_rows.clear();
     issuer_rows.clear();
     maturity_rows.clear();

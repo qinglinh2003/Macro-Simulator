@@ -1261,6 +1261,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_RULE(chartist_weight);
     MACRO_SIM_BIND_M6_RULE(household_equity_target);
     MACRO_SIM_BIND_M6_RULE(portfolio_adjustment);
+    MACRO_SIM_BIND_M6_RULE(portfolio_review_interval_days);
     MACRO_SIM_BIND_M6_RULE(equity_finance);
     MACRO_SIM_BIND_M6_RULE(equity_issue_lambda);
     MACRO_SIM_BIND_M6_RULE(margin_credit);

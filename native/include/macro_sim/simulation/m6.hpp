@@ -48,6 +48,7 @@ struct M6Rules final {
     double chartist_weight{0.30};
     double household_equity_target{0.25};
     double portfolio_adjustment{0.20};
+    std::uint32_t portfolio_review_interval_days{30};
     bool equity_finance{true};
     double equity_issue_lambda{0.20};
     bool margin_credit{true};

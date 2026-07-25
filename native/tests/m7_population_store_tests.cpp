@@ -98,10 +98,12 @@ void test_beneficial_ownership_split_and_transfer() {
     const auto second = ownership.create_lot(cash, PersonId(2), 0.4);
     assert(first.ok());
     assert(second.ok());
+    assert(ownership.maximum_projection_error() < 1.0e-12);
     assert(ownership.validate(persons, 1.0e-12).ok());
     assert(ownership.transfer(*first.get_if(), PersonId(3), 0.2).ok());
     assert(std::abs(ownership.get(*first.get_if())->share - 0.4) < 1.0e-12);
     assert(ownership.lots_for_person(PersonId(3)).size() == 1);
+    assert(ownership.maximum_projection_error() < 1.0e-12);
     assert(ownership.validate(persons, 1.0e-12).ok());
     assert(ownership.transfer(*second.get_if(), PersonId(3), 0.4).ok());
     assert(ownership.get(*second.get_if())->owner == PersonId(3));
@@ -109,6 +111,7 @@ void test_beneficial_ownership_split_and_transfer() {
     assert(destination_lots.size() == 2);
     assert(destination_lots[0] == BeneficialLotId(3));
     assert(destination_lots[1] == *second.get_if());
+    assert(ownership.maximum_projection_error() < 1.0e-12);
     assert(ownership.validate(persons, 1.0e-12).ok());
 }
 

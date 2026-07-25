@@ -59,6 +59,10 @@ struct Measurement final {
     std::uint64_t total_measured_ns{0};
     std::uint64_t maximum_allocations_per_day{0};
     std::uint64_t peak_rss_bytes{0};
+    std::uint64_t security_lots{0};
+    std::uint64_t beneficial_lots{0};
+    std::uint64_t active_beneficial_lots{0};
+    std::uint64_t portfolio_review_interval_days{30U};
     bool beneficial_ownership{true};
     std::vector<std::uint64_t> day_allocations;
     std::vector<std::uint64_t> day_ns;
@@ -170,6 +174,7 @@ struct Measurement final {
     monetary.initial_policy_rate = 0.002;
 
     financial.rules.watchlist_size = 12U;
+    financial.rules.portfolio_review_interval_days = 30U;
     financial.rules.firm_dynamics = false;
     financial.rules.bank_dynamics = false;
 
@@ -303,6 +308,19 @@ template <typename Advance>
                   << advance_status.message() << '\n';
         std::abort();
     }
+    const auto *financial = session.securities_runtime();
+    const auto *population = session.population_runtime();
+    if (financial != nullptr) {
+        measurement.security_lots = financial->securities.lots().size();
+    }
+    if (population != nullptr) {
+        measurement.beneficial_lots = population->beneficial_ownership.size();
+        measurement.active_beneficial_lots =
+            static_cast<std::uint64_t>(std::count_if(
+                population->beneficial_ownership.records().begin(),
+                population->beneficial_ownership.records().end(),
+                [](const core::BeneficialLot &lot) { return lot.active; }));
+    }
     measurement.digest = core::state_digest(*session.root()).hex();
     return measurement;
 }
@@ -367,7 +385,10 @@ template <typename Advance>
 }
 
 void print(const Measurement &value) {
-    std::cout << '{' << "\"banks\":" << value.banks << ','
+    std::cout << '{'
+              << "\"active_beneficial_lots\":" << value.active_beneficial_lots << ','
+              << "\"banks\":" << value.banks << ','
+              << "\"beneficial_lots\":" << value.beneficial_lots << ','
               << "\"beneficial_ownership\":"
               << (value.beneficial_ownership ? "true" : "false") << ','
               << "\"day_allocations\":[";
@@ -400,8 +421,11 @@ void print(const Measurement &value) {
               << "\"p95_day_ns\":" << value.p95_day_ns << ','
               << "\"peak_rss_bytes\":" << value.peak_rss_bytes << ','
               << "\"persons\":" << value.persons << ','
-              << "\"scenario\":\"static-population-quiet-housing-v1\","
-              << "\"schema_version\":\"m9-scale-probe-v2\","
+              << "\"portfolio_review_interval_days\":"
+              << value.portfolio_review_interval_days << ','
+              << "\"scenario\":\"static-population-staggered-portfolio-v2\","
+              << "\"schema_version\":\"m9-scale-probe-v3\","
+              << "\"security_lots\":" << value.security_lots << ','
               << "\"total_measured_ns\":" << value.total_measured_ns << ','
               << "\"warmup_days\":" << value.warmup_days << "}\n";
 }

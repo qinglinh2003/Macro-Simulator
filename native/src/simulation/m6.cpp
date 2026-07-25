@@ -298,15 +298,11 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
 [[nodiscard]] double bank_bond_face(const core::SecurityBook &book,
                                     BankId bank) noexcept {
     double value = 0.0;
-    for (const auto lot_id : book.bank_lots(bank)) {
-        const auto *lot = book.get(lot_id);
-        if (lot == nullptr || !lot->active ||
-            lot->security.kind != core::SecurityKind::bond) {
-            continue;
-        }
-        const auto *contract = book.get(BondId(lot->security.value));
-        if (contract != nullptr && contract->active) {
-            value += lot->units;
+    const auto holder = core::OwnerId::bank(bank);
+    for (const auto &bond : book.bonds()) {
+        if (bond.active) {
+            value +=
+                book.units_held(core::SecurityId::bond(bond.id), holder);
         }
     }
     return value;
@@ -689,6 +685,11 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
                                  double credit_supply_multiplier) {
     state.households.for_each_alive([&](HouseholdId household_id,
                                         const core::HouseholdComponent &household) {
+        if ((household_id.value() - 1U + tick.value()) %
+                runtime.rules.portfolio_review_interval_days !=
+            0U) {
+            return;
+        }
         const auto watch = household_watchlist(runtime, household_id);
         if (watch.empty()) {
             return;
@@ -781,7 +782,7 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
 
 void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &real,
                                  const M6Runtime &runtime, M6TickScratch &scratch,
-                                 std::uint64_t &ordinal) {
+                                 Tick tick, std::uint64_t &ordinal) {
     auto &bank_equities = scratch.bank_equities_;
     bank_equities.clear();
     state.banks.for_each_alive([&](BankId bank, const core::BankComponent &component) {
@@ -798,6 +799,11 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
     }
     state.households.for_each_alive([&](HouseholdId household_id,
                                         const core::HouseholdComponent &household) {
+        if ((household_id.value() - 1U + tick.value()) %
+                runtime.rules.portfolio_review_interval_days !=
+            0U) {
+            return;
+        }
         const auto holder = core::OwnerId::household(household_id);
         const double deposits = projected_balance(real, household.primary_account);
         double value = 0.0;
@@ -1828,7 +1834,9 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
                 ? remaining_issue
                 : std::min(demands[index].amount,
                            issue * demands[index].amount / total_demand);
-        const double amount = std::min(remaining_issue, planned);
+        const double available = scratch.securities_.units_held(
+            core::SecurityId::bond(bond_id), clearing_owner);
+        const double amount = std::min({remaining_issue, planned, available});
         if (amount <= kEconomicEpsilon) {
             continue;
         }
@@ -1917,7 +1925,7 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
                                          const M6Runtime &runtime,
                                          const M6TickScratch &scratch) {
     const auto security_status =
-        scratch.securities_.validate(state.accounting_tolerance);
+        scratch.securities_.validate_records(state.accounting_tolerance);
     if (!security_status.ok()) {
         return security_status;
     }
@@ -2083,6 +2091,7 @@ class M6Extension final : public M5TickExtension {
                         M4TickScratch &real, M5Runtime &monetary_runtime,
                         M5TickScratch &monetary, Tick tick, PhiloxRng &rng) override {
         scratch_.securities_ = runtime_.securities;
+        scratch_.securities_.clear_household_position_changes();
         scratch_.firms_ = runtime_.firms;
         scratch_.margin_loans_ = runtime_.margin_loans;
         scratch_.orders_.clear();
@@ -2146,7 +2155,8 @@ class M6Extension final : public M5TickExtension {
                                         options_.base.credit_supply_multiplier);
         }
         if (runtime_.rules.bank_equity && runtime_.rules.bank_equity_trading) {
-            generate_bank_equity_orders(state, real, runtime_, scratch_, ordinal);
+            generate_bank_equity_orders(state, real, runtime_, scratch_, tick,
+                                        ordinal);
         }
         status = clear_equity_orders(state, real, monetary, runtime_, scratch_);
         if (!status.ok()) {
@@ -2184,6 +2194,10 @@ class M6Extension final : public M5TickExtension {
             return status;
         }
         close_bank_security_books(state, real, scratch_.securities_, monetary);
+        status = scratch_.securities_.compact_inactive_lots();
+        if (!status.ok()) {
+            return status;
+        }
         measure_m6(state, monetary, runtime_, scratch_, tick);
         if (extension_ == nullptr) {
             return Status::success();
@@ -2381,6 +2395,7 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.bank_entry_beta,
     };
     if (!all_finite(values) || spec.rules.bond_maturity_bucket == 0 ||
+        spec.rules.portfolio_review_interval_days == 0U ||
         spec.rules.shares_per_firm <= 0.0 || spec.rules.watchlist_size > 100'000 ||
         spec.rules.genesis_founder_pool <= 0.0 ||
         spec.rules.genesis_founder_pool > 1.0 ||
@@ -2698,6 +2713,7 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     if (!state_validation.ok()) {
         return state_validation;
     }
+    runtime.securities.clear_household_position_changes();
     return M6Initialization{
         std::move(value.root),
         std::move(value.real_economy_runtime),

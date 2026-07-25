@@ -32,6 +32,7 @@ using namespace macro_sim::simulation;
     monetary.rules.household_amortization = 0.0;
     monetary.rules.opening_capital_per_bank = 1'000.0;
     monetary.policy.household_credit_limit = 1'000.0;
+    population.financial_economy.rules.portfolio_review_interval_days = 1U;
     population.population.initial_persons = 20;
     population.population.target_household_size = 2.0;
     population.population.start_calendar_day = 18'000;
