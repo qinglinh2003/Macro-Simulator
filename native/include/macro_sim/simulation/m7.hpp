@@ -218,6 +218,8 @@ class M7TickScratch final {
     std::vector<HouseholdId> retired_households_;
     std::vector<std::size_t> household_work_index_;
     std::vector<JobId> roster_buffer_;
+    double external_leave_home_multiplier_{1.0};
+    double external_fertility_multiplier_{1.0};
     std::uint64_t next_event_id_{1};
     std::uint64_t population_rng_counter_{0};
     M7Metrics working_metrics_{};

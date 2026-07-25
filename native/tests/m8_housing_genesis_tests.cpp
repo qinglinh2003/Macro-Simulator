@@ -205,6 +205,125 @@ void test_capability_dependencies_are_rejected() {
     assert(!validate_m8_spec(value).ok());
 }
 
+void test_builders_create_permitted_real_stock() {
+    auto value = housing_spec();
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 1;
+    value.housing_rules.builder_productivity = 1.0;
+    value.housing_rules.builder_demand_seed = 5.0;
+    value.housing_rules.initial_builder_cash_buffer = 1'000.0;
+    value.housing_rules.market_interval_days = 30;
+    value.housing_policy.land_fee_share = 0.0;
+    value.housing_policy.annual_housing_permits = 2;
+    auto harness = build(value);
+    assert(harness.runtime.builders.size() == 1);
+    const auto builder = harness.runtime.builders.front().firm;
+    const auto *firm = harness.root.firms.get(builder);
+    assert(firm != nullptr);
+    assert(firm->sector == macro_sim::core::FirmSector::construction);
+    const auto stock_before = harness.runtime.properties.active_count();
+    const auto money_before = harness.root.genesis_money;
+    const auto result = advance(harness, 200);
+    if (!result.ok()) {
+        std::cerr << "builder advance failed: " << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    if (harness.runtime.properties.active_count() != stock_before + 2) {
+        std::cerr << "builder stock=" << harness.runtime.properties.active_count()
+                  << " before=" << stock_before
+                  << " wip=" << harness.runtime.builders.front().work_in_progress
+                  << " minted=" << harness.runtime.builders.front().dwellings_minted
+                  << " permits=" << harness.runtime.permits_used << "\n";
+    }
+    assert(harness.runtime.properties.active_count() == stock_before + 2);
+    assert(harness.runtime.permits_used == 2);
+    assert(harness.runtime.builders.front().dwellings_minted == 2);
+    assert(harness.runtime.properties
+               .dwellings_for_owner(macro_sim::core::OwnerId::firm(builder))
+               .size() == 2);
+    assert(harness.root.genesis_money == money_before);
+}
+
+void test_builder_energy_input_is_canonical() {
+    auto value = housing_spec();
+    value.energy_rules.enabled = true;
+    value.energy_rules.producer_count = 1;
+    value.energy_rules.initial_producer_cash = 100.0;
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 1;
+    value.housing_rules.initial_builder_cash_buffer = 100.0;
+    value.housing_policy.land_fee_share = 0.0;
+    auto harness = build(value);
+    const auto builder = harness.runtime.builders.front().firm;
+    const auto index = static_cast<std::size_t>(builder.value());
+    assert(index < harness.runtime.energy_inputs.size());
+    assert(harness.runtime.energy_inputs[index].active);
+    assert(harness.runtime.energy_inputs[index].firm == builder);
+    const auto result = advance(harness, 2);
+    assert(result.ok());
+}
+
+void test_affordability_feedback_reaches_demographic_port() {
+    auto value = housing_spec();
+    value.domestic_economy.population.start_calendar_day = 0;
+    value.housing_rules.affordability_burnin_years = 0;
+    value.housing_rules.leave_home_elasticity = 1.0;
+    value.housing_rules.fertility_elasticity = 1.0;
+    value.housing_rules.leave_home_multiplier_minimum = 0.1;
+    value.housing_rules.fertility_multiplier_minimum = 0.1;
+    auto harness = build(value);
+    auto result = advance(harness, 366);
+    assert(result.ok());
+    assert(harness.runtime.housing_affordability.years_completed >= 1);
+    assert(harness.runtime.housing_affordability.price_to_income_baseline > 0.0);
+    harness.runtime.house_price *= 10.0;
+    harness.runtime.rent_level *= 10.0;
+    result = advance(harness, 366);
+    assert(result.ok());
+    assert(harness.runtime.housing_affordability.years_completed >= 2);
+    assert(harness.runtime.housing_affordability.leave_home_multiplier < 1.0);
+    assert(harness.runtime.housing_affordability.fertility_multiplier < 1.0);
+    result = advance(harness, 1);
+    assert(result.ok());
+    assert(std::abs(harness.population_scratch.external_leave_home_multiplier_ -
+                    harness.runtime.housing_affordability.leave_home_multiplier) <
+           1.0e-12);
+    assert(std::abs(harness.population_scratch.external_fertility_multiplier_ -
+                    harness.runtime.housing_affordability.fertility_multiplier) <
+           1.0e-12);
+}
+
+void test_last_death_transfers_title_to_public_estate() {
+    auto value = housing_spec();
+    value.domestic_economy.population.initial_persons = 1;
+    value.domestic_economy.population.target_household_size = 1.0;
+    auto harness = build(value);
+    const auto dwelling =
+        harness.runtime.properties.dwelling_for_occupant(macro_sim::HouseholdId(1));
+    assert(dwelling.valid());
+    M8AdvanceOptions options;
+    options.base.force_death = macro_sim::PersonId(1);
+    const auto result =
+        advance_m8_ticks(harness.root, harness.real_runtime, harness.real_scratch,
+                         harness.monetary_runtime, harness.monetary_scratch,
+                         harness.financial_runtime, harness.financial_scratch,
+                         harness.population_runtime, harness.population_scratch,
+                         harness.runtime, harness.scratch, harness.tick, 1, options);
+    if (!result.ok()) {
+        std::cerr << "housing estate failed: " << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    assert(harness.root.households.get(macro_sim::HouseholdId(1)) == nullptr);
+    const auto *record = harness.runtime.properties.get(dwelling);
+    assert(record != nullptr);
+    assert(record->owner == macro_sim::core::OwnerId::institutional(
+                                macro_sim::core::OwnerKind::treasury));
+    assert(!record->occupant.valid());
+    assert(harness.runtime.properties.validate().ok());
+}
+
 } // namespace
 
 int main() {
@@ -213,5 +332,9 @@ int main() {
     test_disabled_housing_has_no_state();
     test_quiet_days_preserve_title_exactly();
     test_capability_dependencies_are_rejected();
+    test_builders_create_permitted_real_stock();
+    test_builder_energy_input_is_canonical();
+    test_affordability_feedback_reaches_demographic_port();
+    test_last_death_transfers_title_to_public_estate();
     return 0;
 }

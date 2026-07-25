@@ -38,6 +38,8 @@ void test_mint_transfer_and_indexes() {
     assert(registry.minted_count() == 2);
     assert(registry.active_count() == 2);
     assert(registry.destroyed_count() == 0);
+    assert(registry.occupied_count() == 2);
+    assert(registry.owner_occupied_count() == 1);
     assert(registry.dwellings_for_owner(OwnerId::household(HouseholdId(1))).size() ==
            2);
     assert(registry.dwelling_for_occupant(HouseholdId(2)) == *second.get_if());
@@ -53,6 +55,8 @@ void test_mint_transfer_and_indexes() {
            1);
     assert(registry.title_events().size() == 3);
     assert(registry.title_events().back().kind == TitleEventKind::transfer);
+    assert(registry.owner_occupied_count() == 0);
+    assert(registry.validate_fast().ok());
     assert(registry.validate().ok());
 }
 
@@ -66,7 +70,9 @@ void test_occupancy_and_collateral() {
     assert(
         !registry.set_occupant(*first.get_if(), HouseholdId(1), HouseholdId(2)).ok());
     assert(registry.set_occupant(*first.get_if(), HouseholdId(1), HouseholdId{}).ok());
+    assert(registry.occupied_count() == 1);
     assert(registry.set_occupant(*first.get_if(), HouseholdId{}, HouseholdId(3)).ok());
+    assert(registry.occupied_count() == 2);
     assert(registry.dwelling_for_occupant(HouseholdId(3)) == *first.get_if());
 
     assert(registry.attach_collateral(*first.get_if(), LoanId(11)).ok());
@@ -101,6 +107,7 @@ void test_mint_only_stock_and_stale_titles() {
     assert(registry.minted_count() == stock);
     assert(registry.active_count() == 0);
     assert(registry.destroyed_count() == 1);
+    assert(registry.occupied_count() == 0);
     assert(registry.title_events().back().kind == TitleEventKind::destroy);
     assert(registry.validate().ok());
 }

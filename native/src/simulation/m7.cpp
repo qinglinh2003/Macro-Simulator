@@ -1021,6 +1021,8 @@ class M7Extension final : public M6TickExtension {
                                        runtime_.persons.alive_ids().end());
         std::sort(scratch_.opening_alive_.begin(), scratch_.opening_alive_.end());
         scratch_.retired_households_.clear();
+        scratch_.external_leave_home_multiplier_ = 1.0;
+        scratch_.external_fertility_multiplier_ = 1.0;
         scratch_.next_event_id_ = runtime_.next_event_id;
         scratch_.population_rng_counter_ = runtime_.population_rng_counter;
         scratch_.working_metrics_ = M7Metrics{};
@@ -1864,7 +1866,9 @@ class M7Extension final : public M6TickExtension {
                         ? runtime_.rules.annual_leave_rate_peak
                         : runtime_.rules.annual_leave_rate_late;
                 const double probability =
-                    std::clamp(annual_rate / kDaysPerYear, 0.0, 1.0);
+                    std::clamp(annual_rate * scratch_.external_leave_home_multiplier_ /
+                                   kDaysPerYear,
+                               0.0, 1.0);
                 if (!forced && unit_draw(state.seed, person_id.value(), calendar_day,
                                          kLeavingHomeStream) >= probability) {
                     continue;
@@ -1910,7 +1914,9 @@ class M7Extension final : public M6TickExtension {
                 }
                 const double probability =
                     runtime_.rules.fertility
-                        ? 1.0 - std::exp(-*annual_rate.get_if() * kDailyYear)
+                        ? 1.0 - std::exp(-*annual_rate.get_if() *
+                                         scratch_.external_fertility_multiplier_ *
+                                         kDailyYear)
                         : 0.0;
                 if (forced || unit_draw(state.seed, person_id.value(), calendar_day,
                                         kFertilityStream) < probability) {
@@ -2033,6 +2039,13 @@ class M7Extension final : public M6TickExtension {
         }
         if (status.ok() && runtime_.rules.relationships) {
             status = scratch_.relationships_.validate(scratch_.persons_);
+        }
+        if (status.ok() && (!std::isfinite(scratch_.external_leave_home_multiplier_) ||
+                            scratch_.external_leave_home_multiplier_ <= 0.0 ||
+                            !std::isfinite(scratch_.external_fertility_multiplier_) ||
+                            scratch_.external_fertility_multiplier_ <= 0.0)) {
+            status = Status(ErrorCode::invariant_violation,
+                            "M7 external demographic multiplier is invalid");
         }
         if (!status.ok()) {
             return status;

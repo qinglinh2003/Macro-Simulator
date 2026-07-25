@@ -62,6 +62,10 @@ Result<DwellingId> PropertyRegistry::mint(const DwellingMintSpec &spec) {
     owner_index_[spec.owner].push_back(id);
     if (spec.occupant.valid()) {
         occupant_index_.emplace(spec.occupant, id);
+        ++occupied_count_;
+        if (spec.owner == OwnerId::household(spec.occupant)) {
+            ++owner_occupied_count_;
+        }
     }
     title_events_.push_back({
         event_id,
@@ -97,6 +101,14 @@ Status PropertyRegistry::transfer_title(DwellingId dwelling, OwnerId expected_ow
         return Status(ErrorCode::out_of_range, "title event id space exhausted");
     }
 
+    if (record->occupant.valid()) {
+        if (record->owner == OwnerId::household(record->occupant)) {
+            --owner_occupied_count_;
+        }
+        if (next_owner == OwnerId::household(record->occupant)) {
+            ++owner_occupied_count_;
+        }
+    }
     auto &next_holdings = owner_index_[next_owner];
     next_holdings.insert(
         std::lower_bound(next_holdings.begin(), next_holdings.end(), dwelling),
@@ -167,10 +179,18 @@ Status PropertyRegistry::set_occupant(DwellingId dwelling,
                       "household already occupies a dwelling");
     }
     if (expected_occupant.valid()) {
+        --occupied_count_;
+        if (record->owner == OwnerId::household(expected_occupant)) {
+            --owner_occupied_count_;
+        }
         occupant_index_.erase(expected_occupant);
     }
     if (next_occupant.valid()) {
         occupant_index_.emplace(next_occupant, dwelling);
+        ++occupied_count_;
+        if (record->owner == OwnerId::household(next_occupant)) {
+            ++owner_occupied_count_;
+        }
     }
     record->occupant = next_occupant;
     return Status::success();
@@ -255,15 +275,35 @@ std::size_t PropertyRegistry::destroyed_count() const noexcept {
     return destroyed_count_;
 }
 
-Status PropertyRegistry::validate() const noexcept {
+std::size_t PropertyRegistry::occupied_count() const noexcept {
+    return occupied_count_;
+}
+
+std::size_t PropertyRegistry::owner_occupied_count() const noexcept {
+    return owner_occupied_count_;
+}
+
+Status PropertyRegistry::validate_fast() const noexcept {
     if (active_count_ + destroyed_count_ != records_.size() ||
-        title_events_.size() < records_.size()) {
+        title_events_.size() < records_.size() ||
+        occupied_count_ != occupant_index_.size() ||
+        owner_occupied_count_ > occupied_count_ || occupied_count_ > active_count_) {
         return Status(ErrorCode::invariant_violation,
                       "invalid dwelling stock counters");
+    }
+    return Status::success();
+}
+
+Status PropertyRegistry::validate() const noexcept {
+    auto status = validate_fast();
+    if (!status.ok()) {
+        return status;
     }
 
     std::size_t active = 0;
     std::size_t destroyed = 0;
+    std::size_t occupied = 0;
+    std::size_t owner_occupied = 0;
     for (std::size_t index = 0; index < records_.size(); ++index) {
         const auto &record = records_[index];
         if (record.id.value() != index + 1 || !record.owner.valid() ||
@@ -282,6 +322,9 @@ Status PropertyRegistry::validate() const noexcept {
                               "invalid dwelling owner index");
             }
             if (record.occupant.valid()) {
+                ++occupied;
+                owner_occupied +=
+                    record.owner == OwnerId::household(record.occupant) ? 1U : 0U;
                 const auto occupant = occupant_index_.find(record.occupant);
                 if (occupant == occupant_index_.end() ||
                     occupant->second != record.id) {
@@ -312,7 +355,8 @@ Status PropertyRegistry::validate() const noexcept {
             }
         }
     }
-    if (active != active_count_ || destroyed != destroyed_count_) {
+    if (active != active_count_ || destroyed != destroyed_count_ ||
+        occupied != occupied_count_ || owner_occupied != owner_occupied_count_) {
         return Status(ErrorCode::invariant_violation,
                       "dwelling stock counter mismatch");
     }
@@ -425,6 +469,8 @@ Status PropertyRegistry::rebuild_indexes() {
     collateral_index_.clear();
     active_count_ = 0;
     destroyed_count_ = 0;
+    occupied_count_ = 0;
+    owner_occupied_count_ = 0;
     for (const auto &record : records_) {
         if (record.active) {
             owner_index_[record.owner].push_back(record.id);
@@ -432,6 +478,11 @@ Status PropertyRegistry::rebuild_indexes() {
                 !occupant_index_.emplace(record.occupant, record.id).second) {
                 return Status(ErrorCode::invariant_violation,
                               "duplicate dwelling occupant");
+            }
+            if (record.occupant.valid()) {
+                ++occupied_count_;
+                owner_occupied_count_ +=
+                    record.owner == OwnerId::household(record.occupant) ? 1U : 0U;
             }
             if (record.collateral.valid() &&
                 !collateral_index_.emplace(record.collateral, record.id).second) {

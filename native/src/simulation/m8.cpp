@@ -201,6 +201,77 @@ create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
     return Status::success();
 }
 
+[[nodiscard]] Status create_builder_firm(core::RootState &state,
+                                         M6Runtime &financial_runtime,
+                                         const HousingRules &rules, double wage,
+                                         SettlementNodeId settlement_node,
+                                         BuilderComponent &builder) {
+    core::FirmComponent component;
+    component.sector = core::FirmSector::construction;
+    component.goods_inventory = Goods(0.0);
+    component.physical_capital = Capital(1.0);
+    component.productivity = rules.builder_productivity;
+    component.technology = core::FirmTechnology::linear;
+    component.total_factor_productivity = 1.0;
+    component.capital_share = 0.0;
+    component.capital_output_ratio = 0.0;
+    component.investment_adjustment = 0.0;
+    component.capital_depreciation = 0.0;
+    component.demand_adjustment = 0.05;
+    component.inventory_ratio = rules.builder_finished_inventory_buffer;
+    component.markup_adjustment = 0.0;
+    component.markup_minimum = 0.0;
+    component.markup_maximum = 1.0;
+    component.shortage_adjustment = 0.0;
+    component.dividend_payout = 0.5;
+    component.posted_price = Price(1.0);
+    component.posted_wage = Money(1.1 * wage);
+    component.markup = 0.0;
+    component.demand_expected = rules.builder_demand_seed;
+    component.target_inventory_previous = rules.builder_finished_inventory_buffer;
+
+    auto created = state.firms.create(component);
+    if (!created.ok()) {
+        return created.status();
+    }
+    const auto firm_id = created.get_if()->id;
+    auto account = state.postings.create_account(
+        {
+            core::AccountKind::deposit,
+            state.economy,
+            core::OwnerId::firm(firm_id),
+            state.currency,
+            settlement_node,
+        },
+        Money(0.0));
+    if (!account.ok()) {
+        return account.status();
+    }
+    state.firms.get(firm_id)->primary_account = *account.get_if();
+    if (rules.initial_builder_cash_buffer > kEconomicEpsilon) {
+        core::SettlementTransaction transaction(state);
+        auto status =
+            transaction.transfer(state.institutions.treasury_account, *account.get_if(),
+                                 Money(rules.initial_builder_cash_buffer));
+        if (!status.ok()) {
+            return status;
+        }
+        const auto committed = transaction.commit();
+        if (!committed.ok()) {
+            return committed.status();
+        }
+    }
+    if (financial_runtime.firms.size() <= firm_id.value()) {
+        financial_runtime.firms.resize(static_cast<std::size_t>(firm_id.value() + 1U));
+    }
+    financial_runtime.firms[static_cast<std::size_t>(firm_id.value())] =
+        lifecycle_for_energy_firm(state, financial_runtime, firm_id);
+    builder.firm = firm_id;
+    builder.active = true;
+    builder.demand_expected = rules.builder_demand_seed;
+    return Status::success();
+}
+
 void ensure_runtime_indexes(const core::RootState &state, M8Runtime &runtime) {
     const auto firm_slots =
         static_cast<std::size_t>(state.firms.allocator_state().next_id);
@@ -267,7 +338,8 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
         };
         if (input.firm.value() != index || (firm == nullptr && !pending_entry) ||
             (firm != nullptr && firm->sector != core::FirmSector::consumption &&
-             firm->sector != core::FirmSector::capital) ||
+             firm->sector != core::FirmSector::capital &&
+             firm->sector != core::FirmSector::construction) ||
             !all_finite(values) || input.intensity < 0.0 || input.coverage_days < 0.0 ||
             input.stock < -kTolerance || input.stock_cost < -kTolerance ||
             input.average_cost < 0.0 || input.bought < -kTolerance ||
@@ -309,7 +381,8 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
                                          "M8 live producer has no energy component");
             }
         } else if (firm.sector == core::FirmSector::consumption ||
-                   firm.sector == core::FirmSector::capital) {
+                   firm.sector == core::FirmSector::capital ||
+                   firm.sector == core::FirmSector::construction) {
             const bool active = index < runtime.energy_inputs.size() &&
                                 runtime.energy_inputs[index].active;
             if (!active && !(allow_pending_lifecycle && exiting(id))) {
@@ -352,7 +425,9 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
     const core::PropertyRegistry *property_projection = nullptr,
     const std::vector<HousingListing> *listing_projection = nullptr,
     const std::vector<MortgageRecord> *mortgage_projection = nullptr,
-    const std::vector<TenancyRecord> *tenancy_projection = nullptr) noexcept {
+    const std::vector<TenancyRecord> *tenancy_projection = nullptr,
+    const std::vector<BuilderComponent> *builder_projection = nullptr,
+    bool deep_property_validation = true) noexcept {
     const auto &properties =
         property_projection == nullptr ? runtime.properties : *property_projection;
     const auto &listings =
@@ -361,21 +436,47 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
         mortgage_projection == nullptr ? runtime.mortgages : *mortgage_projection;
     const auto &tenancies =
         tenancy_projection == nullptr ? runtime.tenancies : *tenancy_projection;
+    const auto &builders =
+        builder_projection == nullptr ? runtime.builders : *builder_projection;
     if (!runtime.housing_rules.enabled) {
         if (properties.active_count() != 0 || !listings.empty() || !mortgages.empty() ||
-            !tenancies.empty() || !runtime.builders.empty()) {
+            !tenancies.empty() || !builders.empty()) {
             return Status(ErrorCode::invariant_violation,
                           "disabled M8 housing retains active state");
         }
         return Status::success();
     }
-    auto status = properties.validate();
+    auto status =
+        deep_property_validation ? properties.validate() : properties.validate_fast();
     if (!status.ok()) {
         return status;
     }
     if (!finite(runtime.house_price) || runtime.house_price <= 0.0 ||
         !finite(runtime.rent_level) || runtime.rent_level < 0.0 ||
-        runtime.genesis_dwelling_count > properties.minted_count()) {
+        runtime.genesis_dwelling_count > properties.minted_count() ||
+        runtime.permits_used > runtime.housing_policy.annual_housing_permits ||
+        !all_finite(std::array{
+            runtime.housing_affordability.price_sum,
+            runtime.housing_affordability.rent_sum,
+            runtime.housing_affordability.wage_sum,
+            runtime.housing_affordability.labor_sum,
+            runtime.housing_affordability.price_to_income_baseline,
+            runtime.housing_affordability.rent_burden_baseline,
+            runtime.housing_affordability.price_to_income_ratio,
+            runtime.housing_affordability.rent_burden_ratio,
+            runtime.housing_affordability.leave_home_multiplier,
+            runtime.housing_affordability.fertility_multiplier,
+        }) ||
+        runtime.housing_affordability.price_sum < 0.0 ||
+        runtime.housing_affordability.rent_sum < 0.0 ||
+        runtime.housing_affordability.wage_sum < 0.0 ||
+        runtime.housing_affordability.labor_sum < 0.0 ||
+        runtime.housing_affordability.price_to_income_baseline < 0.0 ||
+        runtime.housing_affordability.rent_burden_baseline < 0.0 ||
+        runtime.housing_affordability.price_to_income_ratio < 0.0 ||
+        runtime.housing_affordability.rent_burden_ratio < 0.0 ||
+        runtime.housing_affordability.leave_home_multiplier <= 0.0 ||
+        runtime.housing_affordability.fertility_multiplier <= 0.0) {
         return Status(ErrorCode::invariant_violation,
                       "M8 housing price or stock state is invalid");
     }
@@ -396,15 +497,18 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
         const auto *dwelling = properties.get(listing.dwelling);
         if (!finite(listing.asking_price) || listing.asking_price < 0.0 ||
             (listing.active && (dwelling == nullptr || !dwelling->active ||
-                                dwelling->owner != listing.seller ||
-                                std::find(listed.begin(), listed.end(),
-                                          listing.dwelling) != listed.end()))) {
+                                dwelling->owner != listing.seller))) {
             return Status(ErrorCode::invariant_violation,
                           "M8 housing listing projection is invalid");
         }
         if (listing.active) {
             listed.push_back(listing.dwelling);
         }
+    }
+    std::sort(listed.begin(), listed.end());
+    if (std::adjacent_find(listed.begin(), listed.end()) != listed.end()) {
+        return Status(ErrorCode::invariant_violation,
+                      "M8 dwelling has duplicate active listings");
     }
     for (std::size_t index = 0; index < tenancies.size(); ++index) {
         const auto &tenancy = tenancies[index];
@@ -435,6 +539,24 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
                           "M8 mortgage projection is invalid");
         }
     }
+    for (const auto &builder : builders) {
+        const auto *firm = state.firms.get(builder.firm);
+        if (!all_finite(std::array{
+                builder.work_in_progress,
+                builder.finished_inventory,
+                builder.demand_expected,
+                builder.produced_today,
+            }) ||
+            builder.work_in_progress < -kTolerance ||
+            builder.finished_inventory < -kTolerance ||
+            builder.demand_expected < -kTolerance ||
+            builder.produced_today < -kTolerance ||
+            (builder.active &&
+             (firm == nullptr || firm->sector != core::FirmSector::construction))) {
+            return Status(ErrorCode::invariant_violation,
+                          "M8 builder projection is invalid");
+        }
+    }
     return Status::success();
 }
 
@@ -462,7 +584,8 @@ class M8Extension final : public M7TickExtension {
 
     Status prepare_tick(const core::RootState &state, M4Runtime &, M4TickScratch &real,
                         M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
-                        M7Runtime &, M7TickScratch &, Tick, PhiloxRng &) override {
+                        M7Runtime &, M7TickScratch &population, Tick,
+                        PhiloxRng &) override {
         scratch_.energy_producers_ = runtime_.energy_producers;
         scratch_.energy_inputs_ = runtime_.energy_inputs;
         scratch_.household_energy_ = runtime_.household_energy;
@@ -485,6 +608,14 @@ class M8Extension final : public M7TickExtension {
         scratch_.permit_year_ = runtime_.permit_year;
         scratch_.permits_used_ = runtime_.permits_used;
         scratch_.housing_event_counter_ = runtime_.housing_event_counter;
+        population.external_leave_home_multiplier_ =
+            runtime_.housing_rules.enabled
+                ? runtime_.housing_affordability.leave_home_multiplier
+                : 1.0;
+        population.external_fertility_multiplier_ =
+            runtime_.housing_rules.enabled
+                ? runtime_.housing_affordability.fertility_multiplier
+                : 1.0;
         scratch_.working_metrics_ = M8Metrics{};
         scratch_.working_metrics_.housing.house_price = scratch_.house_price_;
         scratch_.working_metrics_.housing.rent_level = scratch_.rent_level_;
@@ -549,6 +680,12 @@ class M8Extension final : public M7TickExtension {
     Status before_labor(const core::RootState &state, M4Runtime &, M4TickScratch &real,
                         M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
                         M7Runtime &, M7TickScratch &, Tick, PhiloxRng &) override {
+        if (runtime_.housing_rules.construction) {
+            const auto status = plan_builders(state, real);
+            if (!status.ok()) {
+                return status;
+            }
+        }
         if (!runtime_.energy_rules.enabled) {
             return Status::success();
         }
@@ -717,23 +854,27 @@ class M8Extension final : public M7TickExtension {
     Status after_labor(const core::RootState &state, M4Runtime &, M4TickScratch &real,
                        M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
                        M7Runtime &, M7TickScratch &, Tick, PhiloxRng &rng) override {
-        if (!runtime_.energy_rules.enabled) {
-            return Status::success();
+        if (runtime_.energy_rules.enabled) {
+            auto status = produce_and_build_offers(state, real);
+            if (!status.ok()) {
+                return status;
+            }
+            build_strategic_reserve_offer(state);
+            status = clear_energy_market(state, real, rng);
+            if (!status.ok()) {
+                return status;
+            }
+            status = settle_energy_results(state, real);
+            if (!status.ok()) {
+                return status;
+            }
+            status = injected_fault(options_, M8FaultPoint::after_energy_clearing);
+            if (!status.ok()) {
+                return status;
+            }
         }
-        auto status = produce_and_build_offers(state, real);
-        if (!status.ok()) {
-            return status;
-        }
-        build_strategic_reserve_offer(state);
-        status = clear_energy_market(state, real, rng);
-        if (!status.ok()) {
-            return status;
-        }
-        status = settle_energy_results(state, real);
-        if (!status.ok()) {
-            return status;
-        }
-        return injected_fault(options_, M8FaultPoint::after_energy_clearing);
+        return runtime_.housing_rules.construction ? produce_builder_output(state, real)
+                                                   : Status::success();
     }
 
     Status close_day(const core::RootState &state, M4Runtime &, M4TickScratch &real,
@@ -785,6 +926,10 @@ class M8Extension final : public M7TickExtension {
             ++scratch_.energy_event_counter_;
         }
         if (runtime_.housing_rules.enabled) {
+            const auto lifecycle = handle_builder_exits(state, financial, tick);
+            if (!lifecycle.ok()) {
+                return lifecycle;
+            }
             const auto status =
                 close_housing_day(state, real, monetary, monetary_scratch, population,
                                   population_scratch, tick);
@@ -820,20 +965,37 @@ class M8Extension final : public M7TickExtension {
         }
         status = validate_housing_projection(
             state, runtime_, &projected_properties(), &scratch_.housing_listings_,
-            &scratch_.mortgages_, &scratch_.tenancies_);
+            &scratch_.mortgages_, &scratch_.tenancies_, &scratch_.builders_,
+            scratch_.staged_properties_.has_value());
         if (!status.ok()) {
             return status;
         }
         if (!all_finite(std::array{
                 scratch_.house_price_,
                 scratch_.rent_level_,
+                scratch_.housing_affordability_.price_sum,
+                scratch_.housing_affordability_.rent_sum,
+                scratch_.housing_affordability_.wage_sum,
+                scratch_.housing_affordability_.labor_sum,
+                scratch_.housing_affordability_.price_to_income_baseline,
+                scratch_.housing_affordability_.rent_burden_baseline,
                 scratch_.housing_affordability_.price_to_income_ratio,
                 scratch_.housing_affordability_.rent_burden_ratio,
                 scratch_.housing_affordability_.leave_home_multiplier,
                 scratch_.housing_affordability_.fertility_multiplier,
             }) ||
             (runtime_.housing_rules.enabled && scratch_.house_price_ <= 0.0) ||
-            scratch_.rent_level_ < 0.0) {
+            scratch_.rent_level_ < 0.0 ||
+            scratch_.housing_affordability_.price_sum < 0.0 ||
+            scratch_.housing_affordability_.rent_sum < 0.0 ||
+            scratch_.housing_affordability_.wage_sum < 0.0 ||
+            scratch_.housing_affordability_.labor_sum < 0.0 ||
+            scratch_.housing_affordability_.price_to_income_baseline < 0.0 ||
+            scratch_.housing_affordability_.rent_burden_baseline < 0.0 ||
+            scratch_.housing_affordability_.price_to_income_ratio < 0.0 ||
+            scratch_.housing_affordability_.rent_burden_ratio < 0.0 ||
+            scratch_.housing_affordability_.leave_home_multiplier <= 0.0 ||
+            scratch_.housing_affordability_.fertility_multiplier <= 0.0) {
             return Status(ErrorCode::invariant_violation,
                           "M8 staged housing state is not finite");
         }
@@ -911,6 +1073,129 @@ class M8Extension final : public M7TickExtension {
     }
 
   private:
+    [[nodiscard]] Status plan_builders(const core::RootState &state,
+                                       M4TickScratch &real) {
+        std::size_t houseless = 0;
+        for (const auto household : real.household_ids_) {
+            houseless +=
+                runtime_.properties.dwelling_for_occupant(household).valid() ? 0U : 1U;
+        }
+        const auto active = static_cast<std::size_t>(std::count_if(
+            scratch_.builders_.begin(), scratch_.builders_.end(),
+            [](const BuilderComponent &builder) { return builder.active; }));
+        const double per_builder =
+            static_cast<double>(houseless) /
+            static_cast<double>(std::max<std::size_t>(1, active));
+        for (auto &builder : scratch_.builders_) {
+            builder.produced_today = 0.0;
+            if (!builder.active) {
+                continue;
+            }
+            const auto *firm = state.firms.get(builder.firm);
+            const auto dense = firm_index(real, builder.firm);
+            if (firm == nullptr || dense == kAbsentIndex ||
+                dense >= real.firm_work_.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 builder firm projection is stale");
+            }
+            auto &work = real.firm_work_[dense];
+            const double signal =
+                runtime_.housing_rules.builder_demand_seed +
+                scratch_.housing_input_.buyer_demand_multiplier * per_builder +
+                runtime_.housing_rules.builder_demand_price_gain *
+                    std::max(0.0,
+                             scratch_.housing_affordability_.price_to_income_ratio -
+                                 1.0);
+            builder.demand_expected =
+                std::max(0.0, builder.demand_expected +
+                                  0.05 * (signal - builder.demand_expected));
+            const double inventory_gap =
+                std::max(0.0, runtime_.housing_rules.builder_finished_inventory_buffer -
+                                  builder.finished_inventory);
+            work.production_target =
+                std::max(0.0, builder.demand_expected + inventory_gap);
+            work.labor_demand_notional =
+                work.production_target / std::max(kEconomicEpsilon, firm->productivity);
+            work.posted_wage = firm->posted_wage.value();
+            work.posted_price = scratch_.house_price_;
+            work.markup = firm->markup;
+            const double balance = projected_balance(real, firm->primary_account);
+            work.labor_demand_effective =
+                work.posted_wage > kEconomicEpsilon
+                    ? std::min(work.labor_demand_notional, balance / work.posted_wage)
+                    : 0.0;
+            work.closing_inventory =
+                builder.work_in_progress + builder.finished_inventory;
+            work.closing_capital = firm->physical_capital.value();
+        }
+        return Status::success();
+    }
+
+    [[nodiscard]] Status produce_builder_output(const core::RootState &state,
+                                                M4TickScratch &real) {
+        for (auto &builder : scratch_.builders_) {
+            if (!builder.active) {
+                continue;
+            }
+            const auto *firm = state.firms.get(builder.firm);
+            const auto dense = firm_index(real, builder.firm);
+            if (firm == nullptr || dense == kAbsentIndex ||
+                dense >= real.firm_work_.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 builder production projection is stale");
+            }
+            auto &work = real.firm_work_[dense];
+            const double output = std::max(
+                0.0, firm->productivity * work.hired * work.production_input_factor *
+                         scratch_.housing_input_.construction_productivity_multiplier);
+            builder.produced_today = output;
+            builder.work_in_progress += output;
+            work.produced = output;
+            work.closing_inventory =
+                builder.work_in_progress + builder.finished_inventory;
+            work.profit = -work.wage_bill;
+            scratch_.working_metrics_.housing.construction_output += output;
+        }
+        return Status::success();
+    }
+
+    [[nodiscard]] Status handle_builder_exits(const core::RootState &,
+                                              const M6TickScratch &financial,
+                                              Tick tick) {
+        for (const auto &exit : financial.firm_exits_) {
+            const auto builder =
+                std::find_if(scratch_.builders_.begin(), scratch_.builders_.end(),
+                             [&exit](const BuilderComponent &record) {
+                                 return record.active && record.firm == exit.firm;
+                             });
+            if (builder == scratch_.builders_.end()) {
+                continue;
+            }
+            const auto source = core::OwnerId::firm(exit.firm);
+            const auto destination =
+                core::OwnerId::institutional(core::OwnerKind::treasury);
+            std::vector<DwellingId> holdings(
+                projected_properties().dwellings_for_owner(source).begin(),
+                projected_properties().dwellings_for_owner(source).end());
+            for (const auto dwelling : holdings) {
+                const auto status = mutable_properties().transfer_title(
+                    dwelling, source, destination, tick);
+                if (!status.ok()) {
+                    return status;
+                }
+            }
+            for (auto &listing : scratch_.housing_listings_) {
+                if (listing.active && listing.seller == source) {
+                    listing.seller = destination;
+                }
+            }
+            builder->active = false;
+            builder->work_in_progress = 0.0;
+            builder->finished_inventory = 0.0;
+        }
+        return Status::success();
+    }
+
     [[nodiscard]] core::PropertyRegistry &mutable_properties() {
         if (!scratch_.staged_properties_.has_value()) {
             scratch_.staged_properties_.emplace(runtime_.properties);
@@ -1186,19 +1471,19 @@ class M8Extension final : public M7TickExtension {
         return Status::success();
     }
 
-    [[nodiscard]] bool has_active_listing(DwellingId dwelling) const noexcept {
-        return std::any_of(scratch_.housing_listings_.begin(),
-                           scratch_.housing_listings_.end(),
-                           [dwelling](const HousingListing &listing) {
-                               return listing.active && listing.dwelling == dwelling;
-                           });
-    }
-
     void seed_housing_listings(const core::RootState &state, const M4TickScratch &real,
                                Tick tick) {
         const auto &rules = runtime_.housing_rules;
+        std::vector<std::uint8_t> listed(projected_properties().minted_count() + 1U,
+                                         0U);
+        for (const auto &listing : scratch_.housing_listings_) {
+            if (listing.active && listing.dwelling.value() < listed.size()) {
+                listed[static_cast<std::size_t>(listing.dwelling.value())] = 1U;
+            }
+        }
         for (const auto &dwelling : projected_properties().records()) {
-            if (!dwelling.active || has_active_listing(dwelling.id)) {
+            if (!dwelling.active ||
+                listed[static_cast<std::size_t>(dwelling.id.value())] != 0U) {
                 continue;
             }
             bool list = !dwelling.occupant.valid();
@@ -1223,6 +1508,7 @@ class M8Extension final : public M7TickExtension {
                 forced,
                 true,
             });
+            listed[static_cast<std::size_t>(dwelling.id.value())] = 1U;
         }
     }
 
@@ -1249,6 +1535,116 @@ class M8Extension final : public M7TickExtension {
                 return status;
             }
             scratch_.working_metrics_.housing.property_tax_paid += paid;
+        }
+        return Status::success();
+    }
+
+    [[nodiscard]] Status complete_construction(const core::RootState &state,
+                                               M4TickScratch &real, M5Runtime &monetary,
+                                               M5TickScratch &monetary_scratch,
+                                               const M7Runtime &population, Tick tick) {
+        if (!runtime_.housing_rules.construction) {
+            return Status::success();
+        }
+        const auto calendar_day =
+            static_cast<std::int64_t>(population.start_calendar_day) +
+            static_cast<std::int64_t>(tick.value()) + 1;
+        const auto year = static_cast<std::int32_t>(
+            std::floor(static_cast<double>(calendar_day) / kDaysPerYear));
+        if (scratch_.permit_year_ != year) {
+            scratch_.permit_year_ = year;
+            scratch_.permits_used_ = 0;
+        }
+        const auto permit_cap = runtime_.housing_policy.annual_housing_permits;
+        if (scratch_.permits_used_ >= permit_cap) {
+            return Status::success();
+        }
+        const double stock = static_cast<double>(projected_properties().active_count());
+        const double genesis = static_cast<double>(
+            std::max<std::uint64_t>(1, runtime_.genesis_dwelling_count));
+        const double stock_pressure =
+            std::pow(genesis / std::max(1.0, stock),
+                     runtime_.housing_policy.land_fee_stock_elasticity);
+        const double land_fee =
+            scratch_.house_price_ * runtime_.housing_policy.land_fee_share *
+            stock_pressure * scratch_.housing_input_.land_cost_multiplier;
+        for (auto &builder : scratch_.builders_) {
+            if (!builder.active || scratch_.permits_used_ >= permit_cap) {
+                continue;
+            }
+            const auto *firm = state.firms.get(builder.firm);
+            if (firm == nullptr) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 builder completion firm is absent");
+            }
+            auto available_units = static_cast<std::uint64_t>(
+                std::floor(std::max(0.0, builder.work_in_progress)));
+            available_units =
+                std::min(available_units, permit_cap - scratch_.permits_used_);
+            for (std::uint64_t unit = 0; unit < available_units; ++unit) {
+                if (land_fee > kEconomicEpsilon) {
+                    const double balance =
+                        std::max(0.0, projected_balance(real, firm->primary_account));
+                    if (balance + kTolerance < land_fee) {
+                        if (!runtime_.housing_rules.builder_land_fee_credit) {
+                            break;
+                        }
+                        const double shortfall = land_fee - balance;
+                        const auto quote = quote_m5_credit(
+                            state, real, monetary, monetary_scratch,
+                            firm->primary_account, Money(shortfall), Money(shortfall));
+                        if (!quote.ok() ||
+                            quote.get_if()->principal.value() + kTolerance <
+                                shortfall) {
+                            break;
+                        }
+                        const auto loan =
+                            stage_m5_credit(state, real, monetary, monetary_scratch,
+                                            *quote.get_if(), tick);
+                        if (!loan.ok()) {
+                            return loan.status();
+                        }
+                    }
+                    const auto fee_status = stage_m4_transfer(
+                        state, real, firm->primary_account,
+                        state.institutions.treasury_account, land_fee);
+                    if (!fee_status.ok()) {
+                        return fee_status;
+                    }
+                    scratch_.working_metrics_.housing.land_fee_paid += land_fee;
+                }
+                auto minted = mutable_properties().mint({
+                    core::OwnerId::firm(builder.firm),
+                    HouseholdId{},
+                    tick,
+                    runtime_.housing_rules.initial_floor_area,
+                    runtime_.housing_rules.initial_quality,
+                    static_cast<std::uint32_t>(scratch_.housing_event_counter_ %
+                                               runtime_.housing_rules.location_count),
+                    0,
+                });
+                if (!minted.ok()) {
+                    return minted.status();
+                }
+                scratch_.housing_listings_.push_back({
+                    *minted.get_if(),
+                    core::OwnerId::firm(builder.firm),
+                    std::max(
+                        kEconomicEpsilon,
+                        scratch_.house_price_ *
+                            scratch_.housing_input_.house_price_reference_multiplier),
+                    tick,
+                    false,
+                    true,
+                });
+                builder.work_in_progress -= 1.0;
+                builder.finished_inventory += 1.0;
+                ++builder.dwellings_minted;
+                ++scratch_.permits_used_;
+                ++scratch_.housing_event_counter_;
+                ++scratch_.working_metrics_.housing.dwellings_completed;
+                ++scratch_.working_metrics_.housing.permits_used;
+            }
         }
         return Status::success();
     }
@@ -1348,6 +1744,17 @@ class M8Extension final : public M7TickExtension {
         status = properties.set_occupant(listing.dwelling, HouseholdId{}, buyer);
         if (!status.ok()) {
             return status;
+        }
+        if (listing.seller.kind == core::OwnerKind::firm) {
+            const auto found =
+                std::find_if(scratch_.builders_.begin(), scratch_.builders_.end(),
+                             [&listing](const BuilderComponent &builder) {
+                                 return builder.firm == FirmId(listing.seller.value);
+                             });
+            if (found != scratch_.builders_.end()) {
+                found->finished_inventory =
+                    std::max(0.0, found->finished_inventory - 1.0);
+            }
         }
         if (mortgage_loan.valid()) {
             status = properties.attach_collateral(listing.dwelling, mortgage_loan);
@@ -1475,6 +1882,13 @@ class M8Extension final : public M7TickExtension {
                     tenants.push_back(household);
                 }
             });
+        std::vector<std::uint8_t> listed(projected_properties().minted_count() + 1U,
+                                         0U);
+        for (const auto &listing : scratch_.housing_listings_) {
+            if (listing.active && listing.dwelling.value() < listed.size()) {
+                listed[static_cast<std::size_t>(listing.dwelling.value())] = 1U;
+            }
+        }
         std::size_t tenant_index = 0;
         for (const auto &record : projected_properties().records()) {
             if (tenant_index >= tenants.size()) {
@@ -1482,7 +1896,7 @@ class M8Extension final : public M7TickExtension {
             }
             if (!record.active || record.occupant.valid() ||
                 record.owner.kind != core::OwnerKind::household ||
-                has_active_listing(record.id)) {
+                listed[static_cast<std::size_t>(record.id.value())] != 0U) {
                 continue;
             }
             const auto landlord = HouseholdId(record.owner.value);
@@ -1513,19 +1927,9 @@ class M8Extension final : public M7TickExtension {
 
     void measure_housing() noexcept {
         const auto &properties = projected_properties();
-        double occupied = 0.0;
-        double owner_occupied = 0.0;
-        for (const auto &record : properties.records()) {
-            if (!record.active) {
-                continue;
-            }
-            occupied += record.occupant.valid() ? 1.0 : 0.0;
-            owner_occupied +=
-                record.occupant.valid() &&
-                        record.owner == core::OwnerId::household(record.occupant)
-                    ? 1.0
-                    : 0.0;
-        }
+        const double occupied = static_cast<double>(properties.occupied_count());
+        const double owner_occupied =
+            static_cast<double>(properties.owner_occupied_count());
         double active_listings = 0.0;
         double forced = 0.0;
         for (const auto &listing : scratch_.housing_listings_) {
@@ -1546,15 +1950,110 @@ class M8Extension final : public M7TickExtension {
             active_listings > 0.0 ? forced / active_listings : 0.0;
     }
 
+    void update_housing_affordability(const M4TickScratch &real,
+                                      const M7Runtime &population, Tick tick) noexcept {
+        double wage_bill = 0.0;
+        double labor = 0.0;
+        for (const auto &work : real.firm_work_) {
+            wage_bill += std::max(0.0, work.wage_bill);
+            labor += std::max(0.0, work.hired);
+        }
+        const double daily_wage =
+            labor > kEconomicEpsilon
+                ? wage_bill / labor
+                : std::max(kEconomicEpsilon,
+                           runtime_.last_metrics.economy.mean_hourly_wage);
+        const double price_to_income =
+            scratch_.house_price_ /
+            std::max(kEconomicEpsilon, daily_wage * kDaysPerYear);
+        const double rent_burden =
+            scratch_.rent_level_ / std::max(kEconomicEpsilon, daily_wage);
+        auto &state = scratch_.housing_affordability_;
+        const auto calendar_day =
+            static_cast<std::int64_t>(population.start_calendar_day) +
+            static_cast<std::int64_t>(tick.value()) + 1;
+        const auto year = static_cast<std::int32_t>(
+            std::floor(static_cast<double>(calendar_day) / kDaysPerYear));
+        if (state.observed_days == 0 && state.years_completed == 0 &&
+            state.price_sum == 0.0 && state.rent_sum == 0.0) {
+            state.current_year = year;
+        } else if (state.current_year != year) {
+            const double days =
+                static_cast<double>(std::max<std::uint32_t>(1, state.observed_days));
+            const double annual_price_to_income =
+                (state.price_sum / days) /
+                std::max(kEconomicEpsilon, (state.wage_sum / days) * kDaysPerYear);
+            const double annual_rent_burden =
+                (state.rent_sum / days) /
+                std::max(kEconomicEpsilon, state.wage_sum / days);
+            if (state.years_completed <
+                    runtime_.housing_rules.affordability_burnin_years ||
+                state.price_to_income_baseline <= kEconomicEpsilon ||
+                state.rent_burden_baseline <= kEconomicEpsilon) {
+                const double weight = static_cast<double>(state.years_completed);
+                state.price_to_income_baseline =
+                    (weight * state.price_to_income_baseline + annual_price_to_income) /
+                    (weight + 1.0);
+                state.rent_burden_baseline =
+                    (weight * state.rent_burden_baseline + annual_rent_burden) /
+                    (weight + 1.0);
+                state.leave_home_multiplier = 1.0;
+                state.fertility_multiplier = 1.0;
+            } else {
+                const double price_relative =
+                    annual_price_to_income /
+                    std::max(kEconomicEpsilon, state.price_to_income_baseline);
+                const double rent_relative =
+                    annual_rent_burden /
+                    std::max(kEconomicEpsilon, state.rent_burden_baseline);
+                const double pressure =
+                    0.5 * (price_relative - 1.0) + 0.5 * (rent_relative - 1.0);
+                state.leave_home_multiplier = std::clamp(
+                    std::exp(-runtime_.housing_rules.leave_home_elasticity * pressure),
+                    runtime_.housing_rules.leave_home_multiplier_minimum,
+                    runtime_.housing_rules.leave_home_multiplier_maximum);
+                state.fertility_multiplier = std::clamp(
+                    std::exp(-runtime_.housing_rules.fertility_elasticity * pressure),
+                    runtime_.housing_rules.fertility_multiplier_minimum,
+                    runtime_.housing_rules.fertility_multiplier_maximum);
+            }
+            ++state.years_completed;
+            state.current_year = year;
+            state.price_sum = 0.0;
+            state.rent_sum = 0.0;
+            state.wage_sum = 0.0;
+            state.labor_sum = 0.0;
+            state.observed_days = 0;
+        }
+        state.price_sum += scratch_.house_price_;
+        state.rent_sum += scratch_.rent_level_;
+        state.wage_sum += daily_wage;
+        state.labor_sum += labor;
+        ++state.observed_days;
+        state.price_to_income_ratio = price_to_income;
+        state.rent_burden_ratio = rent_burden;
+        auto &metrics = scratch_.working_metrics_.housing;
+        metrics.price_to_income_ratio = price_to_income;
+        metrics.rent_burden_ratio = rent_burden;
+        metrics.leave_home_multiplier = state.leave_home_multiplier;
+        metrics.fertility_multiplier = state.fertility_multiplier;
+    }
+
     [[nodiscard]] Status close_housing_day(const core::RootState &state,
                                            M4TickScratch &real, M5Runtime &monetary,
-                                           M5TickScratch &monetary_scratch, M7Runtime &,
+                                           M5TickScratch &monetary_scratch,
+                                           M7Runtime &population_runtime,
                                            const M7TickScratch &population, Tick tick) {
         auto status = settle_retired_housing(state, population, tick);
         if (!status.ok()) {
             return status;
         }
         status = synchronize_mortgages(state, real, monetary_scratch, tick);
+        if (!status.ok()) {
+            return status;
+        }
+        status = complete_construction(state, real, monetary, monetary_scratch,
+                                       population_runtime, tick);
         if (!status.ok()) {
             return status;
         }
@@ -1578,6 +2077,7 @@ class M8Extension final : public M7TickExtension {
                 return status;
             }
         }
+        update_housing_affordability(real, population_runtime, tick);
         measure_housing();
         ++scratch_.housing_event_counter_;
         return Status::success();
@@ -2619,6 +3119,48 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
     if (spec.housing_rules.enabled) {
         const auto &real_spec =
             spec.domestic_economy.financial_economy.monetary_economy.real_economy;
+        if (spec.housing_rules.construction) {
+            const auto settlement_node = genesis_settlement_node(base.root);
+            if (!settlement_node.valid()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 builder genesis has no settlement node");
+            }
+            runtime.builders.reserve(
+                static_cast<std::size_t>(spec.housing_rules.builder_count));
+            for (std::uint64_t index = 0; index < spec.housing_rules.builder_count;
+                 ++index) {
+                BuilderComponent builder;
+                const auto status = create_builder_firm(
+                    base.root, base.financial_runtime, spec.housing_rules,
+                    real_spec.rules.initial_wage, settlement_node, builder);
+                if (!status.ok()) {
+                    return status;
+                }
+                runtime.builders.push_back(builder);
+            }
+            ensure_runtime_indexes(base.root, runtime);
+            if (spec.energy_rules.enabled) {
+                for (const auto &builder : runtime.builders) {
+                    const auto *firm = base.root.firms.get(builder.firm);
+                    const auto index = static_cast<std::size_t>(builder.firm.value());
+                    auto &input = runtime.energy_inputs[index];
+                    input.firm = builder.firm;
+                    input.active = true;
+                    input.intensity = spec.energy_rules.downstream_intensity;
+                    input.coverage_days = spec.energy_rules.downstream_coverage_days;
+                    input.stock =
+                        input.coverage_days * input.intensity * firm->demand_expected;
+                    input.stock_cost = input.stock * spec.energy_rules.initial_price;
+                    input.average_cost = spec.energy_rules.initial_price;
+                }
+            }
+            if (base.runtime.firm_target_ema.size() <
+                base.root.firms.allocator_state().next_id) {
+                base.runtime.firm_target_ema.resize(
+                    static_cast<std::size_t>(base.root.firms.allocator_state().next_id),
+                    0.0);
+            }
+        }
         runtime.house_price = spec.housing_rules.house_price_income_years * 365.0 *
                               real_spec.rules.initial_wage;
         runtime.rent_level =
@@ -2731,9 +3273,42 @@ advance_m8_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,
         };
     }
-    const auto state_status =
-        validate_m8_state(state, real_economy_runtime, monetary_runtime,
-                          financial_runtime, population_runtime, runtime, tick);
+    auto state_status = validate_energy_policy(runtime.energy_policy);
+    if (state_status.ok()) {
+        state_status = validate_energy_rules(runtime.energy_rules);
+    }
+    if (state_status.ok()) {
+        state_status = validate_energy_input(runtime.energy_input);
+    }
+    if (state_status.ok()) {
+        state_status = validate_housing_policy(runtime.housing_policy);
+    }
+    if (state_status.ok()) {
+        state_status = validate_housing_rules(runtime.housing_rules);
+    }
+    if (state_status.ok()) {
+        state_status = validate_housing_input(runtime.housing_input);
+    }
+    if (state_status.ok() &&
+        (!all_finite(std::array{
+             runtime.strategic_reserve_stock,
+             runtime.strategic_reserve_cost,
+             runtime.energy_price,
+             runtime.slow_energy_price,
+         }) ||
+         runtime.strategic_reserve_stock < 0.0 ||
+         runtime.strategic_reserve_cost < 0.0 || runtime.energy_price <= 0.0 ||
+         runtime.slow_energy_price <= 0.0)) {
+        state_status = Status(ErrorCode::invariant_violation,
+                              "M8 persistent energy state is invalid");
+    }
+    if (state_status.ok()) {
+        state_status = validate_energy_projection(state, runtime, false);
+    }
+    if (state_status.ok()) {
+        state_status = validate_housing_projection(state, runtime, nullptr, nullptr,
+                                                   nullptr, nullptr, nullptr, false);
+    }
     if (!state_status.ok()) {
         return Status(ErrorCode::invariant_violation,
                       "M8 cannot advance an invalid state");

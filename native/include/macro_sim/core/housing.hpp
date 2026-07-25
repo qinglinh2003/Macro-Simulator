@@ -88,7 +88,10 @@ class PropertyRegistry final {
     [[nodiscard]] std::size_t active_count() const noexcept;
     [[nodiscard]] std::size_t minted_count() const noexcept;
     [[nodiscard]] std::size_t destroyed_count() const noexcept;
+    [[nodiscard]] std::size_t occupied_count() const noexcept;
+    [[nodiscard]] std::size_t owner_occupied_count() const noexcept;
 
+    [[nodiscard]] Status validate_fast() const noexcept;
     [[nodiscard]] Status validate() const noexcept;
     [[nodiscard]] Status replace_state(std::vector<DwellingRecord> records,
                                        std::vector<TitleEvent> events);
@@ -105,6 +108,8 @@ class PropertyRegistry final {
     std::map<LoanId, DwellingId> collateral_index_;
     std::size_t active_count_{0};
     std::size_t destroyed_count_{0};
+    std::size_t occupied_count_{0};
+    std::size_t owner_occupied_count_{0};
 };
 
 } // namespace macro_sim::core
