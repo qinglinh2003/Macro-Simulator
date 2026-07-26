@@ -66,6 +66,7 @@ class PostingBook final {
     void ensure_account_slot_capacity(std::size_t required_rows);
     void rebuild_account_slots();
     void insert_account_row(std::size_t row) noexcept;
+    void erase_account_row(AccountKey key) noexcept;
 
     std::vector<AccountRecord> accounts_;
     std::vector<std::size_t> account_slots_;

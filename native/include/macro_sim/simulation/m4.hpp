@@ -178,6 +178,8 @@ struct M4AdvanceOptions final {
     double household_demand_multiplier{1.0};
     std::optional<M4ExternalGoodsOffer> external_goods_offer{};
     bool memory_efficient_staging{false};
+    bool validate_preconditions{true};
+    bool audit_extended_state{true};
 };
 
 struct M4AdvanceResult final {

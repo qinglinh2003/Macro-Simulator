@@ -882,7 +882,13 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         options.fault_point == M9FaultPoint::none) {
         auto domestic_options =
             options.domestic.empty() ? M8AdvanceOptions{} : options.domestic.front();
-        domestic_options.base.base.base.base.memory_efficient_staging = true;
+        auto &m4_options = domestic_options.base.base.base.base;
+        m4_options.memory_efficient_staging = true;
+        if (options.domestic.empty() &&
+            !options.require_world_rollback) {
+            m4_options.validate_preconditions = false;
+            m4_options.audit_extended_state = false;
+        }
         auto &economy = economies_.front();
         auto result = advance_m8_ticks(
             economy.root, economy.real_economy, economy.real_economy_scratch,
@@ -1194,6 +1200,12 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
 
         auto &m4_options = domestic_options.base.base.base.base;
         m4_options.memory_efficient_staging = true;
+        if (options.domestic.empty() &&
+            options.fault_point == M9FaultPoint::none &&
+            !options.require_world_rollback) {
+            m4_options.validate_preconditions = false;
+            m4_options.audit_extended_state = false;
+        }
         m4_options.household_demand_multiplier *= household_demand;
         if (reserved_import_units[index] > kEpsilon) {
             m4_options.external_goods_offer = M4ExternalGoodsOffer{

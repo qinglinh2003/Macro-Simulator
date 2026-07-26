@@ -8,6 +8,8 @@ namespace macro_sim::core {
 namespace {
 
 constexpr std::size_t kMissingAccountRow = std::numeric_limits<std::size_t>::max();
+constexpr std::size_t kDeletedAccountSlot =
+    std::numeric_limits<std::size_t>::max();
 
 struct RoundedAdd final {
     double value{0.0};
@@ -113,8 +115,8 @@ Status PostingBook::close_account(AccountId id) {
         return Status(ErrorCode::contract_violation,
                       "nonzero account cannot be closed");
     }
+    erase_account_row(account->key);
     account->open = false;
-    rebuild_account_slots();
     return Status::success();
 }
 
@@ -207,10 +209,12 @@ std::size_t PostingBook::find_account_row(AccountKey key) const noexcept {
     const auto mask = account_slots_.size() - 1;
     auto slot = account_hash(key) & mask;
     while (account_slots_[slot] != 0) {
-        const auto row = account_slots_[slot] - 1;
-        const auto &account = accounts_[row];
-        if (account.open && account.key == key) {
-            return row;
+        if (account_slots_[slot] != kDeletedAccountSlot) {
+            const auto row = account_slots_[slot] - 1;
+            const auto &account = accounts_[row];
+            if (account.open && account.key == key) {
+                return row;
+            }
         }
         slot = (slot + 1) & mask;
     }
@@ -240,10 +244,33 @@ void PostingBook::rebuild_account_slots() {
 void PostingBook::insert_account_row(std::size_t row) noexcept {
     const auto mask = account_slots_.size() - 1;
     auto slot = account_hash(accounts_[row].key) & mask;
+    auto deleted = kMissingAccountRow;
     while (account_slots_[slot] != 0) {
+        if (account_slots_[slot] == kDeletedAccountSlot &&
+            deleted == kMissingAccountRow) {
+            deleted = slot;
+        }
         slot = (slot + 1) & mask;
     }
-    account_slots_[slot] = row + 1;
+    account_slots_[deleted == kMissingAccountRow ? slot : deleted] = row + 1;
+}
+
+void PostingBook::erase_account_row(AccountKey key) noexcept {
+    if (account_slots_.empty()) {
+        return;
+    }
+    const auto mask = account_slots_.size() - 1;
+    auto slot = account_hash(key) & mask;
+    while (account_slots_[slot] != 0) {
+        if (account_slots_[slot] != kDeletedAccountSlot) {
+            const auto row = account_slots_[slot] - 1;
+            if (accounts_[row].open && accounts_[row].key == key) {
+                account_slots_[slot] = kDeletedAccountSlot;
+                return;
+            }
+        }
+        slot = (slot + 1) & mask;
+    }
 }
 
 Status PostingBook::validate_finite() const noexcept {

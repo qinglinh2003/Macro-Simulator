@@ -1974,7 +1974,7 @@ void commit_capital(
     if (!status.ok()) {
         return status;
     }
-    if (extension != nullptr) {
+    if (extension != nullptr && options.audit_extended_state) {
         status = extension->validate(
             state,
             runtime,

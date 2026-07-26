@@ -2190,7 +2190,8 @@ advance_m5_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,
         };
     }
-    if (!validate_m5_state(state, real_economy_runtime, runtime, tick).ok()) {
+    if (options.base.validate_preconditions &&
+        !validate_m5_state(state, real_economy_runtime, runtime, tick).ok()) {
         return Status(ErrorCode::invariant_violation,
                       "M5 cannot advance an invalid state");
     }

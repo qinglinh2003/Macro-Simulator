@@ -1,6 +1,7 @@
 #include "macro_sim/core/securities.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <tuple>
@@ -113,19 +114,25 @@ build_dense_holder_index(const std::vector<SecurityLot> &lots,
                          std::vector<std::uint32_t> &counts) {
     constexpr std::size_t kind_count =
         static_cast<std::size_t>(OwnerKind::institution) + 1U;
-    std::uint32_t maximum_value = 0U;
+    std::array<std::uint32_t, kind_count> maximum_values{};
     std::size_t active_count = 0U;
     for (const auto &lot : lots) {
         if (lot.active) {
-            if (static_cast<std::size_t>(lot.holder.kind) >= kind_count) {
+            const auto kind = static_cast<std::size_t>(lot.holder.kind);
+            if (kind >= kind_count) {
                 return false;
             }
-            maximum_value = std::max(maximum_value, lot.holder.value);
+            maximum_values[kind] =
+                std::max(maximum_values[kind], lot.holder.value);
             ++active_count;
         }
     }
-    const auto stride = static_cast<std::size_t>(maximum_value) + 1U;
-    const auto slot_count = stride * kind_count;
+    std::array<std::size_t, kind_count> kind_offsets{};
+    std::size_t slot_count = 0U;
+    for (std::size_t kind = 0U; kind < kind_count; ++kind) {
+        kind_offsets[kind] = slot_count;
+        slot_count += static_cast<std::size_t>(maximum_values[kind]) + 1U;
+    }
     const auto dense_limit = std::max<std::size_t>(1024U, active_count * 2U);
     if (slot_count > dense_limit) {
         return false;
@@ -136,7 +143,8 @@ build_dense_holder_index(const std::vector<SecurityLot> &lots,
         if (!lot.active) {
             continue;
         }
-        const auto slot = static_cast<std::size_t>(lot.holder.kind) * stride +
+        const auto kind = static_cast<std::size_t>(lot.holder.kind);
+        const auto slot = kind_offsets[kind] +
                           static_cast<std::size_t>(lot.holder.value);
         ++counts[slot];
     }
@@ -144,8 +152,9 @@ build_dense_holder_index(const std::vector<SecurityLot> &lots,
     values.resize(active_count);
     std::uint32_t offset = 0U;
     for (std::size_t kind = 0U; kind < kind_count; ++kind) {
-        for (std::size_t value = 1U; value < stride; ++value) {
-            const auto slot = kind * stride + value;
+        const auto limit = static_cast<std::size_t>(maximum_values[kind]) + 1U;
+        for (std::size_t value = 1U; value < limit; ++value) {
+            const auto slot = kind_offsets[kind] + value;
             const auto count = counts[slot];
             counts[slot] = offset;
             if (count == 0U) {
@@ -166,7 +175,8 @@ build_dense_holder_index(const std::vector<SecurityLot> &lots,
         if (!lot.active) {
             continue;
         }
-        const auto slot = static_cast<std::size_t>(lot.holder.kind) * stride +
+        const auto kind = static_cast<std::size_t>(lot.holder.kind);
+        const auto slot = kind_offsets[kind] +
                           static_cast<std::size_t>(lot.holder.value);
         values[counts[slot]++] = lot.id;
     }
@@ -775,11 +785,8 @@ Status SecurityBook::consolidate() {
 }
 
 Status SecurityBook::compact_inactive_lots() {
-    if (batch_active_) {
-        return Status(ErrorCode::invalid_transaction_state,
-                      "security lot compaction cannot run inside a batch");
-    }
-    if (holder_lots_.size() == lots_.size()) {
+    if (std::all_of(lots_.begin(), lots_.end(),
+                    [](const SecurityLot &lot) { return lot.active; })) {
         return Status::success();
     }
     std::size_t write = 0U;
@@ -794,6 +801,12 @@ Status SecurityBook::compact_inactive_lots() {
         ++write;
     }
     lots_.resize(write);
+    if (batch_active_) {
+        rebuild_pair_index();
+        batch_dirty_ = true;
+        batch_indexes_dirty_ = true;
+        return Status::success();
+    }
     return rebuild_indexes();
 }
 

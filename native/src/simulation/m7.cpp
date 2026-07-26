@@ -2757,12 +2757,14 @@ advance_m7_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
                       M7TickScratch &scratch, Tick &tick, std::uint64_t count,
                       M7TickExtension *nested_extension,
                       const M7AdvanceOptions &options) {
-    const auto status =
-        validate_m7_state_impl(state, real_economy_runtime, monetary_runtime,
-                               financial_runtime, runtime, tick, false);
-    if (!status.ok()) {
-        return Status(ErrorCode::invariant_violation,
-                      "M7 cannot advance an invalid state");
+    if (options.base.base.base.validate_preconditions) {
+        const auto status =
+            validate_m7_state_impl(state, real_economy_runtime, monetary_runtime,
+                                   financial_runtime, runtime, tick, false);
+        if (!status.ok()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 cannot advance an invalid state");
+        }
     }
     M7Extension extension(runtime, scratch, options, nested_extension);
     auto result = advance_m6_ticks_extended(

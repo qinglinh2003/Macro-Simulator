@@ -1,7 +1,7 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person latency target met; normal-play memory reduced to
-approximately 1.05 GiB and validated over 60 full-play days
+Status: one-million-person latency target met; normal-play peak RSS reduced below
+0.95 GiB and full-play P95 latency reduced to approximately 0.10 seconds
 
 Date: 2026-07-26
 
@@ -14,6 +14,8 @@ Memory refinement base: `c93c4af75c0ba2a1ec59760906221f21d1309723`
 Memory refinement branch: `perf/cpp-memory-v33`
 
 Second memory refinement branch: `perf/cpp-memory-history-v33`
+
+Final latency refinement branch: `perf/cpp-final-pass-v33`
 
 ## 1. Purpose
 
@@ -49,7 +51,7 @@ deprivation, and the active housing market.
 The probe reports process peak RSS through `getrusage`. Genesis and simulated days
 are timed with `std::chrono::steady_clock`. Heap allocation counts use the same
 global allocation counter pattern as the existing milestone performance gates.
-On macOS, schema `m9-scale-probe-v7` also reports allocator live heap bytes from
+On macOS, schema `m9-scale-probe-v9` also reports allocator live heap bytes from
 the default malloc zone. The allocator statistic is useful for trends but can
 exceed physical RSS because it includes allocator-managed regions and rounded
 size classes; peak RSS remains the acceptance measure.
@@ -653,24 +655,24 @@ cycles:
 
 | Scenario | Genesis | Median day | P95 day | Maximum day | Peak RSS | Final live heap | Security lots | Digest |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
-| Full play, no shock | 2.08 s | 0.127 s | 0.520 s | 0.640 s | 1.046 GiB | 1.046 GiB | 2,834,230 | `12741682867193949295` |
-| Full play, bounded demand shock | 2.13 s | 0.126 s | 0.534 s | 0.589 s | 1.051 GiB | 1.049 GiB | 2,835,835 | `2339037212008328974` |
+| Full play, no shock | 2.03 s | 0.083 s | 0.102 s | 0.123 s | 0.945 GiB | 1.011 GiB | 2,834,230 | `12741682867193949295` |
+| Full play, bounded demand shock | 2.07 s | 0.083 s | 0.102 s | 0.115 s | 0.941 GiB | 1.015 GiB | 2,835,835 | `2339037212008328974` |
 
 All 120 measured days remain below one second. Relative to the original
-4.84-4.85 GiB full-play result, peak RSS is approximately 78 percent lower.
+4.84-4.85 GiB full-play result, peak RSS is approximately 81 percent lower.
 Relative to the first 2.58-2.67 GiB memory pass, it is approximately 60 percent
-lower. The no-shock run retains about 1,123 bytes of live heap per opening
+lower. The no-shock run retains about 1,086 bytes of live heap per opening
 person. This is the high-scale setting; smaller normal game populations have a
 correspondingly lighter footprint.
 
 The scale-probe schema is now `m9-scale-probe-v9`. In addition to process memory,
 it reports retained capacity for root state, each tick scratch layer, securities,
 population, beneficial ownership, employment, relationships, housing, and world
-state. The reported categories explain approximately 1.04 GB of the final
-1.13 GB live heap, making future regressions attributable rather than opaque.
+state. The reported categories explain approximately 1.01 GB of the final
+1.09 GB live heap, making future regressions attributable rather than opaque.
 
 The complete native and Python compatibility suite passes with eight workers:
-49 of 49 tests.
+49 of 49 tests in 14.63 seconds.
 
 ## 9. Optimization order
 
@@ -681,7 +683,12 @@ household portfolio claims, copy-free normal M9 staging, locally audited trade
 settlement, deterministic country-level parallelism, compact internal IDs,
 dense housing indexes, compact lineage storage, move-based M6-M8 tick staging,
 canonical security positions, in-place compaction, bounded inactive employment
-records, and protocol-specific scratch allocation.
+records, protocol-specific scratch allocation, tombstone-based account removal,
+single-phase security index rebuilding, dense per-owner-kind holder indexing,
+batched founder watchlist updates, constant-time founder sampling, and removal
+of redundant normal-play preflight audits. The final latency pass preserved both
+accepted deterministic digests while reducing no-shock P95 latency from 0.520
+seconds to 0.102 seconds and maximum latency from 0.640 seconds to 0.123 seconds.
 
 The next measured order is:
 
@@ -689,10 +696,9 @@ The next measured order is:
    losing stable external identities.
 2. Stream detailed employment and title history into bounded UI-facing history
    rings when that gameplay surface is implemented.
-3. Rebuild public security indexes no more than once per mutation phase.
-4. Replace copied rollback staging with chunked copy-on-write storage or mutation
+3. Replace copied rollback staging with chunked copy-on-write storage or mutation
    journals where strong rollback is required.
-5. Extend deterministic parallelism inside a single large country only after
+4. Extend deterministic parallelism inside a single large country only after
    phase read/write sets and memory-bandwidth limits are measured.
 
 Country-level parallelism is now active because economies have disjoint domestic

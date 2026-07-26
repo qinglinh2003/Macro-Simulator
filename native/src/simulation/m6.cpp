@@ -1302,6 +1302,14 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
     if (!runtime.rules.firm_dynamics && !options.force_firm_exit.has_value()) {
         return Status::success();
     }
+    std::array<std::uint64_t, 4> active_by_sector{};
+    for (const auto firm_id : real.firm_ids_) {
+        const auto *firm = state.firms.get(firm_id);
+        const auto *lifecycle = firm_record(scratch.firms_, firm_id);
+        if (firm != nullptr && lifecycle != nullptr && lifecycle->active) {
+            ++active_by_sector[static_cast<std::size_t>(firm->sector)];
+        }
+    }
     for (const auto firm_id : real.firm_ids_) {
         const auto *firm = state.firms.get(firm_id);
         auto *lifecycle = firm_record(scratch.firms_, firm_id);
@@ -1322,16 +1330,9 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         if (!(defaulted || voluntary)) {
             continue;
         }
-        std::uint64_t active_in_sector = 0;
-        state.firms.for_each_alive(
-            [&](FirmId candidate, const core::FirmComponent &component) {
-                const auto *record = firm_record(scratch.firms_, candidate);
-                if (record != nullptr && record->active &&
-                    component.sector == firm->sector) {
-                    ++active_in_sector;
-                }
-            });
-        if (active_in_sector <= 1) {
+        auto &active_in_sector =
+            active_by_sector[static_cast<std::size_t>(firm->sector)];
+        if (active_in_sector <= 1U) {
             continue;
         }
         const auto status =
@@ -1339,6 +1340,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         if (!status.ok()) {
             return status;
         }
+        --active_in_sector;
     }
     return Status::success();
 }
@@ -1418,22 +1420,15 @@ void run_sector_switching(const core::RootState &state, M4TickScratch &real,
 [[nodiscard]] std::optional<HouseholdId>
 pick_founder(const core::RootState &state, const M4TickScratch &real, double need,
              std::uint64_t seed, std::uint64_t &counter, std::uint64_t stream) {
-    const auto count = state.households.alive_count();
-    if (count == 0) {
+    const auto next_id = state.households.allocator_state().next_id;
+    if (next_id <= 1U) {
         return std::nullopt;
     }
     for (std::uint64_t attempt = 0; attempt < 16; ++attempt) {
-        const auto ordinal = static_cast<std::uint64_t>(
-            unit_draw(seed, counter++, stream) * static_cast<double>(count));
-        HouseholdId candidate{};
-        std::uint64_t position = 0;
-        state.households.for_each_alive([&](HouseholdId id,
-                                            const core::HouseholdComponent &) {
-            if (position == std::min(ordinal, static_cast<std::uint64_t>(count - 1))) {
-                candidate = id;
-            }
-            ++position;
-        });
+        const auto candidate = HouseholdId(
+            1U + static_cast<std::uint64_t>(
+                     unit_draw(seed, counter++, stream) *
+                     static_cast<double>(next_id - 1U)));
         const auto *household = state.households.get(candidate);
         if (household != nullptr &&
             projected_balance(real, household->primary_account) >= need) {
@@ -1805,10 +1800,6 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     if (!status.ok()) {
         return status;
     }
-    status = scratch.securities_.begin_batch();
-    if (!status.ok()) {
-        return status;
-    }
     BondId bond_id{};
     for (const auto &candidate : scratch.securities_.bonds()) {
         if (candidate.active && candidate.issuer == contract.issuer &&
@@ -1862,10 +1853,6 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         if (allocated >= issue - kTolerance) {
             break;
         }
-    }
-    status = scratch.securities_.finish_batch();
-    if (!status.ok()) {
-        return status;
     }
     scratch.working_metrics_.bond_issuance += allocated;
     return Status::success();
@@ -1974,25 +1961,48 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     return Status::success();
 }
 
-void append_founder_watchlist(M6Runtime &runtime, HouseholdId founder,
-                              EquityId equity) {
+void append_founder_watchlists(
+    M6Runtime &runtime,
+    std::span<const M6FirmEntryCommand> entries) {
+    if (entries.empty()) {
+        return;
+    }
+    std::vector<std::pair<HouseholdId, EquityId>> additions;
+    additions.reserve(entries.size());
+    for (const auto &entry : entries) {
+        additions.emplace_back(entry.founder, entry.equity);
+    }
+    std::sort(additions.begin(), additions.end());
+
     std::vector<M6WatchlistRow> rows(runtime.watchlist_rows.size());
     std::vector<EquityId> values;
-    values.reserve(runtime.watchlist_equities.size() + 1);
+    values.reserve(runtime.watchlist_equities.size() + additions.size());
+    std::size_t addition = 0U;
     for (std::size_t index = 1; index < runtime.watchlist_rows.size(); ++index) {
         const auto &old = runtime.watchlist_rows[index];
         if (!old.household.valid()) {
             continue;
+        }
+        while (addition < additions.size() &&
+               additions[addition].first < old.household) {
+            ++addition;
         }
         M6WatchlistRow row;
         row.household = old.household;
         row.offset = static_cast<std::uint32_t>(values.size());
         const auto existing = household_watchlist(runtime, old.household);
         values.insert(values.end(), existing.begin(), existing.end());
-        if (old.household == founder &&
-            std::find(existing.begin(), existing.end(), equity) == existing.end()) {
-            values.push_back(equity);
+        auto candidate = addition;
+        while (candidate < additions.size() &&
+               additions[candidate].first == old.household) {
+            const auto equity = additions[candidate].second;
+            if (std::find(values.begin() + row.offset, values.end(), equity) ==
+                values.end()) {
+                values.push_back(equity);
+            }
+            ++candidate;
         }
+        addition = candidate;
         row.count = static_cast<std::uint32_t>(values.size() - row.offset);
         rows[index] = row;
     }
@@ -2060,12 +2070,11 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         if (!transfer.ok()) {
             std::terminate();
         }
-        const auto committed = transaction.commit();
-        if (!committed.ok()) {
+        if (!transaction.commit_locally_validated().ok()) {
             std::terminate();
         }
-        append_founder_watchlist(runtime, entry.founder, entry.equity);
     }
+    append_founder_watchlists(runtime, scratch.firm_entries_);
     for (const auto &entry : scratch.bank_entries_) {
         auto created = state.banks.create(entry.component);
         if (!created.ok() || created.get_if()->id != entry.bank) {
@@ -2102,8 +2111,7 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         if (!transfer_status.ok()) {
             std::terminate();
         }
-        const auto committed = transaction.commit();
-        if (!committed.ok()) {
+        if (!transaction.commit_locally_validated().ok()) {
             std::terminate();
         }
     }
@@ -2123,6 +2131,10 @@ class M6Extension final : public M5TickExtension {
           extension_(extension) {}
 
     ~M6Extension() override {
+        if (security_batch_open_) {
+            static_cast<void>(scratch_.securities_.finish_batch());
+            security_batch_open_ = false;
+        }
         if (memory_efficient_staging_ && !committed_) {
             runtime_.securities = std::move(scratch_.securities_);
             runtime_.firms = std::move(scratch_.firms_);
@@ -2218,7 +2230,14 @@ class M6Extension final : public M5TickExtension {
         if (!status.ok()) {
             return status;
         }
-        return run_firm_exits(state, real, monetary, runtime_, scratch_, options_);
+        status = scratch_.securities_.begin_batch();
+        if (!status.ok()) {
+            return status;
+        }
+        security_batch_open_ = true;
+        status =
+            run_firm_exits(state, real, monetary, runtime_, scratch_, options_);
+        return status.ok() ? status : finish_security_batch(status);
     }
 
     Status close_institutions(const core::RootState &state, M4Runtime &real_runtime,
@@ -2227,26 +2246,30 @@ class M6Extension final : public M5TickExtension {
                               PhiloxRng &rng) override {
         auto status = resolve_dead_bank_equity(state, monetary, scratch_);
         if (!status.ok()) {
-            return status;
+            return finish_security_batch(status);
         }
         run_sector_switching(state, real, runtime_, scratch_, lifecycle_counter_);
         status =
             stage_firm_entries(state, real, runtime_, scratch_, lifecycle_counter_);
         if (!status.ok()) {
-            return status;
+            return finish_security_batch(status);
         }
         status =
             stage_bank_entries(state, real, monetary_runtime, monetary, runtime_,
                                scratch_, lifecycle_counter_, options_.force_bank_entry);
         if (!status.ok()) {
-            return status;
+            return finish_security_batch(status);
         }
         status = run_bond_issuance(state, real, monetary, runtime_, scratch_, tick);
         if (!status.ok()) {
-            return status;
+            return finish_security_batch(status);
         }
         close_bank_security_books(state, real, scratch_.securities_, monetary);
         status = scratch_.securities_.compact_inactive_lots();
+        if (!status.ok()) {
+            return finish_security_batch(status);
+        }
+        status = finish_security_batch(Status::success());
         if (!status.ok()) {
             return status;
         }
@@ -2299,6 +2322,15 @@ class M6Extension final : public M5TickExtension {
     }
 
   private:
+    Status finish_security_batch(Status primary) {
+        if (!security_batch_open_) {
+            return primary;
+        }
+        const auto finished = scratch_.securities_.finish_batch();
+        security_batch_open_ = false;
+        return primary.ok() ? finished : primary;
+    }
+
     M6Runtime &runtime_;
     M6TickScratch &scratch_;
     const M6AdvanceOptions &options_;
@@ -2308,6 +2340,7 @@ class M6Extension final : public M5TickExtension {
     std::uint64_t opening_security_version_{0};
     bool memory_efficient_staging_{false};
     bool committed_{false};
+    bool security_batch_open_{false};
 };
 
 [[nodiscard]] core::EquityContract
@@ -2885,8 +2918,9 @@ advance_m6_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,
         };
     }
-    if (!validate_m6_state_fast(state, real_economy_runtime, monetary_runtime, runtime,
-                                tick)
+    if (options.base.base.validate_preconditions &&
+        !validate_m6_state_fast(state, real_economy_runtime, monetary_runtime,
+                                runtime, tick)
              .ok()) {
         return Status(ErrorCode::invariant_violation,
                       "M6 cannot advance an invalid state");
