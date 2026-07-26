@@ -47,6 +47,23 @@ template <typename Range> [[nodiscard]] bool all_finite(const Range &values) noe
     return index < scratch.balances_.size() ? scratch.balances_[index] : 0.0;
 }
 
+[[nodiscard]] double
+entry_capital_reserved(const M6TickScratch &scratch,
+                       AccountId founder_account) noexcept {
+    double reserved = 0.0;
+    for (const auto &entry : scratch.firm_entries_) {
+        if (entry.founder_account == founder_account) {
+            reserved += entry.startup_cash;
+        }
+    }
+    for (const auto &entry : scratch.bank_entries_) {
+        if (entry.founder_account == founder_account) {
+            reserved += entry.capital;
+        }
+    }
+    return reserved;
+}
+
 [[nodiscard]] Status move_reserves(M4TickScratch &scratch, SettlementNodeId source,
                                    SettlementNodeId destination,
                                    double amount) noexcept {
@@ -1545,7 +1562,8 @@ void run_sector_switching(const core::RootState &state, M4TickScratch &real,
 
 [[nodiscard]] std::optional<HouseholdId>
 pick_founder(const core::RootState &state, const M4TickScratch &real, double need,
-             std::uint64_t seed, std::uint64_t &counter, std::uint64_t stream) {
+             const M6TickScratch &financial, std::uint64_t seed,
+             std::uint64_t &counter, std::uint64_t stream) {
     const auto next_id = state.households.allocator_state().next_id;
     if (next_id <= 1U) {
         return std::nullopt;
@@ -1557,7 +1575,10 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
                      static_cast<double>(next_id - 1U)));
         const auto *household = state.households.get(candidate);
         if (household != nullptr &&
-            projected_balance(real, household->primary_account) >= need) {
+            projected_balance(real, household->primary_account) -
+                    entry_capital_reserved(
+                        financial, household->primary_account) >=
+                need) {
             return candidate;
         }
     }
@@ -1605,8 +1626,9 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     entries = std::min(entries, runtime.rules.entry_max);
     for (std::uint32_t entry = 0; entry < entries; ++entry) {
         const auto founder =
-            pick_founder(state, real, runtime.rules.startup_deposits, state.seed,
-                         lifecycle_counter, 0x464f554e444552ULL);
+            pick_founder(state, real, runtime.rules.startup_deposits, scratch,
+                         state.seed, lifecycle_counter,
+                         0x464f554e444552ULL);
         if (!founder.has_value()) {
             break;
         }
@@ -1768,8 +1790,9 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
             continue;
         }
         const auto founder =
-            pick_founder(state, real, runtime.policy.bank_minimum_capital, state.seed,
-                         lifecycle_counter, 0x42414e4b464f554eULL);
+            pick_founder(state, real, runtime.policy.bank_minimum_capital,
+                         scratch, state.seed, lifecycle_counter,
+                         0x42414e4b464f554eULL);
         if (!founder.has_value()) {
             break;
         }
@@ -1857,7 +1880,11 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     state.households.for_each_alive(
         [&](HouseholdId id, const core::HouseholdComponent &household) {
             const auto holder = core::OwnerId::household(id);
-            const double deposits = projected_balance(real, household.primary_account);
+            const double deposits = std::max(
+                0.0,
+                projected_balance(real, household.primary_account) -
+                    entry_capital_reserved(
+                        scratch, household.primary_account));
             const double bonds =
                 household_bond_value(scratch.securities_, holder, tick,
                                      runtime.last_metrics.economy.policy_rate);

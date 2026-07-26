@@ -930,6 +930,22 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m10_native_desktop
             PROPERTIES LABELS "python-binding;desktop"
         )
+        add_test(
+            NAME macro_sim.m10_policy_stress
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/reproduce_policy_stress.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+                --ticks
+                550
+        )
+        set_tests_properties(
+            macro_sim.m10_policy_stress
+            PROPERTIES LABELS "python-binding;controller;longevity"
+        )
     endif()
 endif()
 
