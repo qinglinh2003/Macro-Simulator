@@ -901,6 +901,93 @@ nb::dict m9_snapshot_to_python(const macro_sim::simulation::M9World &world) {
     return output;
 }
 
+nb::dict m9_memory_usage_to_python(
+    const macro_sim::simulation::M9MemoryUsage &usage) {
+    nb::dict output;
+#define MACRO_SIM_M9_MEMORY(field) output[#field] = usage.field
+    MACRO_SIM_M9_MEMORY(root_state);
+    MACRO_SIM_M9_MEMORY(root_households);
+    MACRO_SIM_M9_MEMORY(root_firms);
+    MACRO_SIM_M9_MEMORY(root_banks);
+    MACRO_SIM_M9_MEMORY(root_postings);
+    MACRO_SIM_M9_MEMORY(root_reserves);
+    MACRO_SIM_M9_MEMORY(root_loans);
+    MACRO_SIM_M9_MEMORY(root_interbank);
+    MACRO_SIM_M9_MEMORY(root_central_bank_operations);
+    MACRO_SIM_M9_MEMORY(root_bank_pnl);
+    MACRO_SIM_M9_MEMORY(root_bank_capital);
+    MACRO_SIM_M9_MEMORY(root_ownership);
+    MACRO_SIM_M9_MEMORY(root_named_counters);
+    MACRO_SIM_M9_MEMORY(real_economy_scratch);
+    MACRO_SIM_M9_MEMORY(monetary_scratch);
+    MACRO_SIM_M9_MEMORY(financial_runtime);
+    MACRO_SIM_M9_MEMORY(financial_scratch);
+    MACRO_SIM_M9_MEMORY(person_store);
+    MACRO_SIM_M9_MEMORY(household_membership);
+    MACRO_SIM_M9_MEMORY(beneficial_lots);
+    MACRO_SIM_M9_MEMORY(beneficial_indexes);
+    MACRO_SIM_M9_MEMORY(social_labor);
+    MACRO_SIM_M9_MEMORY(employment);
+    MACRO_SIM_M9_MEMORY(relationships);
+    MACRO_SIM_M9_MEMORY(population_scratch);
+    MACRO_SIM_M9_MEMORY(housing_registry);
+    MACRO_SIM_M9_MEMORY(domestic_runtime);
+    MACRO_SIM_M9_MEMORY(domestic_scratch);
+    MACRO_SIM_M9_MEMORY(world);
+#undef MACRO_SIM_M9_MEMORY
+    output["total_known"] = usage.total_known();
+    return output;
+}
+
+nb::dict m9_storage_counts_to_python(
+    const macro_sim::simulation::M9World &world) {
+    std::uint64_t accounts = 0;
+    std::uint64_t reserves = 0;
+    std::uint64_t loans = 0;
+    std::uint64_t interbank = 0;
+    std::uint64_t central_bank_operations = 0;
+    std::uint64_t bank_pnl = 0;
+    std::uint64_t bank_capital = 0;
+    std::uint64_t ownership = 0;
+    std::uint64_t persons = 0;
+    std::uint64_t jobs = 0;
+    std::uint64_t unions = 0;
+    for (std::size_t index = 0; index < world.economy_count(); ++index) {
+        const auto economy = macro_sim::EconomyId(index);
+        const auto *root = world.economy_root(economy);
+        const auto *population = world.economy_population_runtime(economy);
+        if (root != nullptr) {
+            accounts += root->postings.records().size();
+            reserves += root->reserves.records().size();
+            loans += root->loans.records().size();
+            interbank += root->interbank.records().size();
+            central_bank_operations +=
+                root->central_bank_operations.records().size();
+            bank_pnl += root->bank_pnl.records().size();
+            bank_capital += root->bank_capital.records().size();
+            ownership += root->ownership.records().size();
+        }
+        if (population != nullptr) {
+            persons += population->persons.total_count();
+            jobs += population->employment.records().size();
+            unions += population->relationships.unions().size();
+        }
+    }
+    nb::dict output;
+    output["accounts"] = accounts;
+    output["reserves"] = reserves;
+    output["loans"] = loans;
+    output["interbank"] = interbank;
+    output["central_bank_operations"] = central_bank_operations;
+    output["bank_pnl"] = bank_pnl;
+    output["bank_capital"] = bank_capital;
+    output["ownership"] = ownership;
+    output["persons"] = persons;
+    output["jobs"] = jobs;
+    output["unions"] = unions;
+    return output;
+}
+
 nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session);
 
 nb::dict m7_snapshot_to_python(const macro_sim::EngineSession &session) {
@@ -2275,6 +2362,11 @@ NB_MODULE(_native, module) {
              [](const macro_sim::simulation::M9World &world) {
                  return m9_snapshot_to_python(world);
              })
+        .def("memory_usage",
+             [](const macro_sim::simulation::M9World &world) {
+                 return m9_memory_usage_to_python(world.memory_usage());
+             })
+        .def("storage_counts", &m9_storage_counts_to_python)
         .def("shock_events",
              [](const macro_sim::simulation::M9World &world) {
                  nb::list output;
@@ -2486,6 +2578,26 @@ NB_MODULE(_native, module) {
                  return output;
              },
              nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
+        .def("maintained_history_page",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t first_sequence, std::size_t maximum_frames) {
+                 auto result = value.metrics().history().page(
+                     first_sequence, maximum_frames);
+                 require_status(result.status());
+                 nb::dict output;
+                 output["first_sequence"] =
+                     result.get_if()->first_sequence;
+                 output["next_sequence"] =
+                     result.get_if()->next_sequence;
+                 nb::list frames;
+                 for (const auto &frame : result.get_if()->frames) {
+                     frames.append(
+                         m10_maintained_metric_frame_to_python(frame));
+                 }
+                 output["frames"] = std::move(frames);
+                 return output;
+             },
+             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
         .def("history_bounds",
              [](const macro_sim::control::EngineSession &value) {
                  nb::dict output;
@@ -2494,7 +2606,17 @@ NB_MODULE(_native, module) {
                  output["next_sequence"] = history.next_sequence();
                  output["capacity"] = history.capacity();
                  output["size"] = history.size();
+                 output["retained_bytes"] = history.retained_bytes();
                  return output;
+             })
+        .def("memory_usage",
+             [](const macro_sim::control::EngineSession &value) {
+                 return m9_memory_usage_to_python(
+                     value.world().memory_usage());
+             })
+        .def("storage_counts",
+             [](const macro_sim::control::EngineSession &value) {
+                 return m9_storage_counts_to_python(value.world());
              })
         .def("clone",
              [](const macro_sim::control::EngineSession &value) {
@@ -2759,6 +2881,27 @@ NB_MODULE(_native, module) {
                  return output;
              },
              nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
+        .def("maintained_history_page",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t first_sequence, std::size_t maximum_frames) {
+                 require_status(value.query_status());
+                 auto result = value.engine().metrics().history().page(
+                     first_sequence, maximum_frames);
+                 require_status(result.status());
+                 nb::dict output;
+                 output["first_sequence"] =
+                     result.get_if()->first_sequence;
+                 output["next_sequence"] =
+                     result.get_if()->next_sequence;
+                 nb::list frames;
+                 for (const auto &frame : result.get_if()->frames) {
+                     frames.append(
+                         m10_maintained_metric_frame_to_python(frame));
+                 }
+                 output["frames"] = std::move(frames);
+                 return output;
+             },
+             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
         .def("history_bounds",
              [](const macro_sim::control::HybridControlledBridge &value) {
                  require_status(value.query_status());
@@ -2769,7 +2912,20 @@ NB_MODULE(_native, module) {
                  output["next_sequence"] = history.next_sequence();
                  output["capacity"] = history.capacity();
                  output["size"] = history.size();
+                 output["retained_bytes"] = history.retained_bytes();
                  return output;
+             })
+        .def("memory_usage",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 require_status(value.query_status());
+                 return m9_memory_usage_to_python(
+                     value.engine().world().memory_usage());
+             })
+        .def("storage_counts",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 require_status(value.query_status());
+                 return m9_storage_counts_to_python(
+                     value.engine().world());
              })
         .def("clone",
              [](const macro_sim::control::HybridControlledBridge &value) {

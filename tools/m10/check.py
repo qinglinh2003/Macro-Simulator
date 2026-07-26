@@ -28,6 +28,11 @@ def validate_contracts() -> None:
         raise AssertionError("M10 performance contract changed")
     if budget["history_capacity_frames"] <= 0:
         raise AssertionError("M10 history must be bounded")
+    dense_history_bytes = budget["history_capacity_frames"] * (
+        300 * (8 + 1) + 8
+    )
+    if dense_history_bytes > budget["maximum_history_bytes_per_economy"]:
+        raise AssertionError("M10 default history exceeds its memory budget")
 
     metrics = json.loads(
         (ROOT / "schemas/m10/public_metrics.json").read_text(
@@ -118,6 +123,7 @@ def validate_contracts() -> None:
         "schemas/m10/maintained_metrics.json",
         "schemas/m10/typed_probes.json",
         "macro_sim/native_backend.py",
+        "macro_sim/reporting/native_stream.py",
         "macro_sim/controllers/native_observation.py",
         "macro_sim/desktop/native_runtime.py",
         "macro_sim/diagnostics/native_probes.py",
@@ -129,6 +135,8 @@ def validate_contracts() -> None:
         "tools/m10/check.py",
         "tools/m10/metric_contract.py",
         "tools/m10/native_facade_smoke.py",
+        "tools/m10/native_history_stream_smoke.py",
+        "tools/m10/p7_longevity.py",
         "tools/m10/native_controller_smoke.py",
         "tools/m10/native_desktop_smoke.py",
     )

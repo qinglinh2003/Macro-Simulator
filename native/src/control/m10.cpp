@@ -11,6 +11,15 @@
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#elif defined(__GLIBC__)
+#include <malloc.h>
+#elif defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace macro_sim::control {
 namespace {
 
@@ -54,6 +63,16 @@ void append_vector(std::vector<std::uint8_t> &bytes,
                   "injected M10 controlled-boundary fault");
 }
 
+void release_allocator_memory() noexcept {
+#if defined(__APPLE__)
+    (void)malloc_zone_pressure_relief(nullptr, 0U);
+#elif defined(__GLIBC__)
+    (void)malloc_trim(0);
+#elif defined(_WIN32)
+    (void)HeapCompact(GetProcessHeap(), 0U);
+#endif
+}
+
 [[nodiscard]] core::StateDigest
 transition_hash(const ControllerEnvelopeTransition &transition) noexcept {
     std::vector<std::uint8_t> bytes;
@@ -86,7 +105,8 @@ struct PreparedBoundaryLease::Impl final {
          simulation::M9World world_value,
          simulation::M9AdvanceResult advance_result_value)
         : authority(std::move(authority_value)), generation(generation_value),
-          preview(std::move(preview_value)), staged_world(std::move(world_value)),
+          preview(std::move(preview_value)),
+          staged_world(std::move(world_value)),
           advance_result(std::move(advance_result_value)) {}
 
     void release() noexcept {
@@ -385,6 +405,7 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
     if (!advanced.ok()) {
         return advanced.status();
     }
+    staged.compact_rebuildable_capacity();
     if (batch.fault_point == M10FaultPoint::prepare_after_advance) {
         return injected_fault();
     }
@@ -410,7 +431,8 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
     };
     auto impl = std::make_unique<PreparedBoundaryLease::Impl>(
         authority_, authority_->generation, std::move(preview),
-        std::move(staged), std::move(*advanced.get_if()));
+        std::move(staged),
+        std::move(*advanced.get_if()));
     return PreparedBoundaryLease(std::move(impl));
 }
 
@@ -447,6 +469,12 @@ HybridControlledBridge::commit_boundary(PreparedBoundaryLease &&lease,
     auto result = lease.impl_->advance_result;
     lease.impl_->release();
     lease.impl_.reset();
+    // Whole-World staging is released after every boundary.  Periodically ask
+    // the system allocator to return its now-unused pages so long interactive
+    // runs are bounded by live state rather than allocator cache history.
+    if (engine_.tick().value() % 30U == 0U) {
+        release_allocator_memory();
+    }
     return result;
 }
 

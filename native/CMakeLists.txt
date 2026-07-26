@@ -875,6 +875,20 @@ if(MACRO_SIM_BUILD_TESTS)
             PROPERTIES LABELS "python-binding"
         )
         add_test(
+            NAME macro_sim.m10_native_history_stream
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/native_history_stream_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+        )
+        set_tests_properties(
+            macro_sim.m10_native_history_stream
+            PROPERTIES LABELS "python-binding;history"
+        )
+        add_test(
             NAME macro_sim.m10_native_controller
             COMMAND
                 "${Python_EXECUTABLE}"

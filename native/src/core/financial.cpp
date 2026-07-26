@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 
 namespace macro_sim::core {
 namespace {
@@ -63,6 +64,25 @@ template <typename Record>
         : nullptr;
 }
 
+template <typename Value>
+void compact_excess(std::vector<Value>& values) {
+    constexpr std::size_t kMaximumSlack = 4096U;
+    const auto size = values.size();
+    const auto proportional =
+        size > std::numeric_limits<std::size_t>::max() / 4U
+            ? std::numeric_limits<std::size_t>::max()
+            : size * 4U;
+    const auto additive =
+        size > std::numeric_limits<std::size_t>::max() - kMaximumSlack
+            ? std::numeric_limits<std::size_t>::max()
+            : size + kMaximumSlack;
+    if (values.capacity() <= std::max(proportional, additive)) {
+        return;
+    }
+    auto tight = values;
+    values.swap(tight);
+}
+
 }  // namespace
 
 InterbankRecord* InterbankBook::get(InterbankContractId id) noexcept {
@@ -119,6 +139,10 @@ void InterbankBook::replace_records(
     std::vector<InterbankRecord>& projection
 ) noexcept {
     records_.swap(projection);
+}
+
+void InterbankBook::compact_excess_capacity() {
+    compact_excess(records_);
 }
 
 CentralBankOperationRecord* CentralBankOperationBook::get(
@@ -180,6 +204,10 @@ void CentralBankOperationBook::replace_records(
     records_.swap(projection);
 }
 
+void CentralBankOperationBook::compact_excess_capacity() {
+    compact_excess(records_);
+}
+
 BankPnlRecord* BankPnlJournal::get(BankId bank) noexcept {
     return bank_get(records_, bank);
 }
@@ -231,6 +259,10 @@ void BankPnlJournal::replace_records(
     records_.swap(projection);
 }
 
+void BankPnlJournal::compact_excess_capacity() {
+    compact_excess(records_);
+}
+
 BankCapitalRecord* BankCapitalState::get(BankId bank) noexcept {
     return bank_get(records_, bank);
 }
@@ -269,6 +301,10 @@ void BankCapitalState::replace_records(
     std::vector<BankCapitalRecord>& projection
 ) noexcept {
     records_.swap(projection);
+}
+
+void BankCapitalState::compact_excess_capacity() {
+    compact_excess(records_);
 }
 
 }  // namespace macro_sim::core

@@ -47,6 +47,7 @@ class PostingBook final {
     [[nodiscard]] const std::vector<AccountRecord> &records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     [[nodiscard]] Status validate_nonnegative(double tolerance) const noexcept;
+    void compact_excess_capacity();
 
   private:
     friend class AccountingBenchmarkAccess;
@@ -98,6 +99,7 @@ class ReserveBook final {
     [[nodiscard]] const std::vector<ReserveRecord> &records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     void commit_projected_stock(Money stock) noexcept;
+    void compact_excess_capacity();
 
   private:
     friend class CheckpointCodec;
@@ -159,6 +161,7 @@ class LoanBook final {
     [[nodiscard]] const std::vector<LoanRecord> &records() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     void replace_records(std::vector<LoanRecord> &projection) noexcept;
+    void compact_excess_capacity();
 
   private:
     friend class CheckpointCodec;
@@ -207,6 +210,7 @@ class OwnershipBook final {
     [[nodiscard]] std::size_t retire_asset(AssetKey asset) noexcept;
     [[nodiscard]] Status rekey_owner(OwnerId source, OwnerId destination) noexcept;
     [[nodiscard]] Status validate_shares(double tolerance) const;
+    void compact_excess_capacity();
 
   private:
     friend class CheckpointCodec;
@@ -233,6 +237,7 @@ class NamedCounterBook final {
     [[nodiscard]] Result<std::uint64_t> increment(std::uint64_t stream_id);
     [[nodiscard]] const std::vector<std::pair<std::uint64_t, std::uint64_t>> &
     records() const noexcept;
+    void compact_excess_capacity();
 
   private:
     friend class CheckpointCodec;

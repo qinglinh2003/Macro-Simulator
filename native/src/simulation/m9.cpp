@@ -636,17 +636,26 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
     M9MemoryUsage usage;
     for (const auto &economy : economies_) {
         const auto &root = economy.root;
-        usage.root_state += root.households.retained_bytes() +
-                            root.firms.retained_bytes() + root.banks.retained_bytes() +
-                            capacity_bytes(root.postings.records()) +
-                            capacity_bytes(root.reserves.records()) +
-                            capacity_bytes(root.loans.records()) +
-                            capacity_bytes(root.interbank.records()) +
-                            capacity_bytes(root.central_bank_operations.records()) +
-                            capacity_bytes(root.bank_pnl.records()) +
-                            capacity_bytes(root.bank_capital.records()) +
-                            capacity_bytes(root.ownership.records()) +
-                            capacity_bytes(root.named_counters.records());
+        usage.root_households += root.households.retained_bytes();
+        usage.root_firms += root.firms.retained_bytes();
+        usage.root_banks += root.banks.retained_bytes();
+        usage.root_postings += capacity_bytes(root.postings.records());
+        usage.root_reserves += capacity_bytes(root.reserves.records());
+        usage.root_loans += capacity_bytes(root.loans.records());
+        usage.root_interbank += capacity_bytes(root.interbank.records());
+        usage.root_central_bank_operations +=
+            capacity_bytes(root.central_bank_operations.records());
+        usage.root_bank_pnl += capacity_bytes(root.bank_pnl.records());
+        usage.root_bank_capital += capacity_bytes(root.bank_capital.records());
+        usage.root_ownership += capacity_bytes(root.ownership.records());
+        usage.root_named_counters +=
+            capacity_bytes(root.named_counters.records());
+        usage.root_state =
+            usage.root_households + usage.root_firms + usage.root_banks +
+            usage.root_postings + usage.root_reserves + usage.root_loans +
+            usage.root_interbank + usage.root_central_bank_operations +
+            usage.root_bank_pnl + usage.root_bank_capital +
+            usage.root_ownership + usage.root_named_counters;
 
         const auto &real = economy.real_economy_scratch;
         usage.real_economy_scratch +=
@@ -807,6 +816,21 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
         capacity_bytes(trade_reservations_) + capacity_bytes(smoothed_real_wages_) +
         capacity_bytes(last_metrics_.domestic) + capacity_bytes(last_metrics_.external);
     return usage;
+}
+
+void M9World::compact_rebuildable_capacity() {
+    for (auto &economy : economies_) {
+        auto &root = economy.root;
+        root.postings.compact_excess_capacity();
+        root.reserves.compact_excess_capacity();
+        root.loans.compact_excess_capacity();
+        root.interbank.compact_excess_capacity();
+        root.central_bank_operations.compact_excess_capacity();
+        root.bank_pnl.compact_excess_capacity();
+        root.bank_capital.compact_excess_capacity();
+        root.ownership.compact_excess_capacity();
+        root.named_counters.compact_excess_capacity();
+    }
 }
 
 Status M9World::validate_policy_vector(

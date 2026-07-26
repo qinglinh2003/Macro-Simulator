@@ -40,6 +40,11 @@ def main() -> int:
     spec = NewGameSpec.default(seed=942)
     session = NativeSimulationSession.create(spec)
     assert session.tick == 0
+    assert session.history_bounds()["capacity"] == 2048
+    assert (
+        session.history_bounds()["retained_bytes"]
+        <= 8 * 1024 * 1024 * int(session.maintained_metrics()["economy_count"])
+    )
     assert set(NATIVE_POLICY_LEVERS) == set(REGISTRY)
     opening_policy = Policy.from_config(spec.configs()[0])
     opening_external = ExternalPolicy()

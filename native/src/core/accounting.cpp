@@ -79,6 +79,25 @@ template <typename Record, typename Id>
     return &records[index];
 }
 
+template <typename Value>
+void compact_excess(std::vector<Value> &values) {
+    constexpr std::size_t kMaximumSlack = 4096U;
+    const auto size = values.size();
+    const auto proportional =
+        size > std::numeric_limits<std::size_t>::max() / 4U
+            ? std::numeric_limits<std::size_t>::max()
+            : size * 4U;
+    const auto additive =
+        size > std::numeric_limits<std::size_t>::max() - kMaximumSlack
+            ? std::numeric_limits<std::size_t>::max()
+            : size + kMaximumSlack;
+    if (values.capacity() <= std::max(proportional, additive)) {
+        return;
+    }
+    auto tight = values;
+    values.swap(tight);
+}
+
 } // namespace
 
 double neumaier_sum(std::span<const double> values) noexcept {
@@ -191,6 +210,11 @@ std::vector<AccountRecord> &PostingBook::records() noexcept { return accounts_; 
 
 const std::vector<AccountRecord> &PostingBook::records() const noexcept {
     return accounts_;
+}
+
+void PostingBook::compact_excess_capacity() {
+    compact_excess(accounts_);
+    compact_excess(account_slots_);
 }
 
 std::size_t PostingBook::account_hash(AccountKey key) noexcept {
@@ -391,6 +415,8 @@ const std::vector<ReserveRecord> &ReserveBook::records() const noexcept {
     return positions_;
 }
 
+void ReserveBook::compact_excess_capacity() { compact_excess(positions_); }
+
 Status ReserveBook::validate_finite() const noexcept {
     for (const auto &position : positions_) {
         if (!std::isfinite(position.balance.value()) ||
@@ -487,6 +513,8 @@ Status LoanBook::validate_finite() const noexcept {
 void LoanBook::replace_records(std::vector<LoanRecord> &projection) noexcept {
     loans_.swap(projection);
 }
+
+void LoanBook::compact_excess_capacity() { compact_excess(loans_); }
 
 LoanBook::CreateResult LoanBook::create_unchecked(BankId lender, OwnerId borrower,
                                                   AccountId borrower_account,
@@ -641,6 +669,8 @@ Status OwnershipBook::validate_shares(double tolerance) const {
     return Status::success();
 }
 
+void OwnershipBook::compact_excess_capacity() { compact_excess(lots_); }
+
 OwnershipBook::MutationResult OwnershipBook::mutate_unchecked(OwnershipLotId id,
                                                               OwnerId owner,
                                                               double share) noexcept {
@@ -703,6 +733,10 @@ Result<std::uint64_t> NamedCounterBook::increment(std::uint64_t stream_id) {
 const std::vector<std::pair<std::uint64_t, std::uint64_t>> &
 NamedCounterBook::records() const noexcept {
     return counters_;
+}
+
+void NamedCounterBook::compact_excess_capacity() {
+    compact_excess(counters_);
 }
 
 void NamedCounterBook::set_unchecked(std::uint64_t stream_id, std::uint64_t value) {

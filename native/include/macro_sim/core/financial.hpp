@@ -35,6 +35,7 @@ public:
     [[nodiscard]] Money total_principal() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     void replace_records(std::vector<InterbankRecord>& projection) noexcept;
+    void compact_excess_capacity();
 
 private:
     std::vector<InterbankRecord> records_;
@@ -78,6 +79,7 @@ public:
     void replace_records(
         std::vector<CentralBankOperationRecord>& projection
     ) noexcept;
+    void compact_excess_capacity();
 
 private:
     std::vector<CentralBankOperationRecord> records_;
@@ -107,6 +109,7 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     void replace_records(std::vector<BankPnlRecord>& projection) noexcept;
+    void compact_excess_capacity();
 
 private:
     std::vector<BankPnlRecord> records_;
@@ -132,6 +135,7 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] Status validate_finite() const noexcept;
     void replace_records(std::vector<BankCapitalRecord>& projection) noexcept;
+    void compact_excess_capacity();
 
 private:
     std::vector<BankCapitalRecord> records_;

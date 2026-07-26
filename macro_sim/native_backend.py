@@ -704,7 +704,7 @@ class NativeSimulationSession:
         spec: NewGameSpec | Mapping[str, Any],
         *,
         worker_count: int = 8,
-        history_capacity_frames: int = 4096,
+        history_capacity_frames: int = 2048,
     ) -> "NativeSimulationSession":
         if not isinstance(spec, NewGameSpec):
             spec = NewGameSpec.from_mapping(spec)
@@ -727,7 +727,7 @@ class NativeSimulationSession:
         *,
         player_country: int = 0,
         worker_count: int = 8,
-        history_capacity_frames: int = 4096,
+        history_capacity_frames: int = 2048,
     ) -> "NativeSimulationSession":
         checked = tuple(configs)
         if not 0 <= player_country < len(checked):
@@ -769,10 +769,31 @@ class NativeSimulationSession:
     ) -> dict[str, Any]:
         return dict(self.bridge.history_page(first_sequence, maximum_frames))
 
+    def maintained_history_page(
+        self, first_sequence: int, maximum_frames: int = 256
+    ) -> dict[str, Any]:
+        return dict(self.bridge.maintained_history_page(
+            first_sequence, maximum_frames,
+        ))
+
     def history_bounds(self) -> dict[str, int]:
         return {
             key: int(value)
             for key, value in dict(self.bridge.history_bounds()).items()
+        }
+
+    def memory_usage(self) -> dict[str, int]:
+        """Return capacity-accounted native World memory by subsystem."""
+        return {
+            key: int(value)
+            for key, value in dict(self.bridge.memory_usage()).items()
+        }
+
+    def storage_counts(self) -> dict[str, int]:
+        """Return logical row counts for long-lived native stores."""
+        return {
+            key: int(value)
+            for key, value in dict(self.bridge.storage_counts()).items()
         }
 
     def clone(self) -> "NativeSimulationSession":

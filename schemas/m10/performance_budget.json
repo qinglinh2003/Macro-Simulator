@@ -1,10 +1,10 @@
 {
   "schema_version": "m10-performance-budget-v1",
-  "history_capacity_frames": 4096,
+  "history_capacity_frames": 2048,
   "maximum_history_bytes_per_economy": 8388608,
   "maximum_frontend_snapshot_ms": 100,
   "maximum_desktop_60_day_batch_ms": 750,
   "maximum_clone_reset_ms_100k": 250,
   "minimum_native_to_python_speedup_full_feature": 10.0,
-  "ten_year_memory_growth_bytes": 16777216
+  "ten_year_memory_growth_bytes": 67108864
 }

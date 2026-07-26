@@ -265,6 +265,19 @@ struct M9AdvanceResult final {
 
 struct M9MemoryUsage final {
     std::uint64_t root_state{0};
+    // Root-state detail is diagnostic and is already included in root_state.
+    std::uint64_t root_households{0};
+    std::uint64_t root_firms{0};
+    std::uint64_t root_banks{0};
+    std::uint64_t root_postings{0};
+    std::uint64_t root_reserves{0};
+    std::uint64_t root_loans{0};
+    std::uint64_t root_interbank{0};
+    std::uint64_t root_central_bank_operations{0};
+    std::uint64_t root_bank_pnl{0};
+    std::uint64_t root_bank_capital{0};
+    std::uint64_t root_ownership{0};
+    std::uint64_t root_named_counters{0};
     std::uint64_t real_economy_scratch{0};
     std::uint64_t monetary_scratch{0};
     std::uint64_t financial_runtime{0};
@@ -338,6 +351,7 @@ class M9World final {
     economy_population_runtime(EconomyId economy) const noexcept;
     [[nodiscard]] const M8Runtime *economy_runtime(EconomyId economy) const noexcept;
     [[nodiscard]] M9MemoryUsage memory_usage() const noexcept;
+    void compact_rebuildable_capacity();
 
     [[nodiscard]] Status
     update_external_policies(std::span<const ExternalPolicyState> policies);
