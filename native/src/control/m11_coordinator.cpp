@@ -988,7 +988,6 @@ Result<M11PolicyDecision> M11PolicyCoordinator::submit(
         proposal.reason.size() > kMaximumReasonBytes ||
         proposal.reason.find('\0') != std::string::npos ||
         proposal.actions.size() > kM11MaximumProposalActions ||
-        proposal.actions.empty() ||
         (proposal.supersedes_proposal_id.has_value() &&
          !valid_identifier(*proposal.supersedes_proposal_id))) {
         return Status(ErrorCode::invalid_argument,

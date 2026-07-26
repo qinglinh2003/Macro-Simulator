@@ -110,6 +110,7 @@ add_library(
         src/control/m11_coordinator.cpp
         src/control/m11_kernel.cpp
         src/control/m11_policy.cpp
+        src/control/m11_release.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -718,6 +719,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_coordinator
         COMMAND macro_sim_m11_coordinator_tests
+    )
+
+    add_executable(
+        macro_sim_m11_release_tests
+        tests/m11_release_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_release_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_release_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_release_tests
+    )
+    add_test(
+        NAME macro_sim.m11_release
+        COMMAND macro_sim_m11_release_tests
     )
     if(TARGET _native)
         add_test(
