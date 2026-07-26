@@ -345,6 +345,10 @@ class M9World final {
         return last_metrics_;
     }
     [[nodiscard]] const core::RootState *economy_root(EconomyId economy) const noexcept;
+    [[nodiscard]] const M4Runtime *
+    economy_real_runtime(EconomyId economy) const noexcept;
+    [[nodiscard]] const M5Runtime *
+    economy_monetary_runtime(EconomyId economy) const noexcept;
     [[nodiscard]] const M6Runtime *
     economy_financial_runtime(EconomyId economy) const noexcept;
     [[nodiscard]] const M7Runtime *

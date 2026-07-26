@@ -595,6 +595,20 @@ const core::RootState *M9World::economy_root(EconomyId economy) const noexcept {
                : nullptr;
 }
 
+const M4Runtime *
+M9World::economy_real_runtime(EconomyId economy) const noexcept {
+    const auto index = static_cast<std::size_t>(economy.value());
+    return index < economies_.size() ? &economies_[index].real_economy
+                                     : nullptr;
+}
+
+const M5Runtime *
+M9World::economy_monetary_runtime(EconomyId economy) const noexcept {
+    const auto index = static_cast<std::size_t>(economy.value());
+    return index < economies_.size() ? &economies_[index].monetary
+                                     : nullptr;
+}
+
 const M6Runtime *
 M9World::economy_financial_runtime(EconomyId economy) const noexcept {
     return valid_economy(economy, economies_.size())

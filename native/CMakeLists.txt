@@ -107,6 +107,7 @@ add_library(
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
         src/control/m11_artifact.cpp
+        src/control/m11_coordinator.cpp
         src/control/m11_kernel.cpp
         src/control/m11_policy.cpp
         src/reporting/m10.cpp
@@ -700,6 +701,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_kernel
         COMMAND macro_sim_m11_kernel_tests
+    )
+
+    add_executable(
+        macro_sim_m11_coordinator_tests
+        tests/m11_coordinator_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_coordinator_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_coordinator_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_coordinator_tests
+    )
+    add_test(
+        NAME macro_sim.m11_coordinator
+        COMMAND macro_sim_m11_coordinator_tests
     )
     if(TARGET _native)
         add_test(
