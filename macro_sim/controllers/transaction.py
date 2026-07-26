@@ -165,6 +165,9 @@ def _policy_projection_blob(world: Any) -> bytes:
 
 def clone_world_for_policy_projection(world: Any) -> Any:
     """Return a pickle-isolated current-state graph with empty metric histories."""
+    native_clone = getattr(world, "clone_policy_projection", None)
+    if callable(native_clone):
+        return native_clone()
     return pickle.loads(_policy_projection_blob(world))
 
 
@@ -197,6 +200,11 @@ def prepare_world_policy_transaction(
 ) -> PreparedWorldPolicyTransaction:
     """Prepare all due decisions on an isolated full-World projection."""
     session.assert_boundary_integrity()
+    native_prepare = getattr(
+        session.world, "prepare_controller_policy_transaction", None,
+    )
+    if callable(native_prepare):
+        return native_prepare(session, due_decisions, transaction_id)
     due = tuple(sorted(
         due_decisions,
         key=lambda item: (
@@ -316,6 +324,11 @@ def commit_world_policy_transaction(
     previous roots if an unexpected assignment failure occurs.
     """
     session.assert_boundary_integrity()
+    native_commit = getattr(
+        session.world, "commit_controller_policy_transaction", None,
+    )
+    if callable(native_commit):
+        return native_commit(session, prepared)
     if prepared.boundary_tick != session.boundary_tick:
         raise PolicyTransactionError("prepared transaction belongs to another boundary")
     if world_policy_fingerprint(session.world) != prepared.base_fingerprint:

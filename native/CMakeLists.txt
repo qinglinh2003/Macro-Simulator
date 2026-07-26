@@ -106,6 +106,7 @@ add_library(
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
         src/reporting/m10.cpp
+        src/reporting/probes.cpp
         src/simulation/m4.cpp
         src/simulation/m4_checkpoint.cpp
         src/simulation/m5.cpp
@@ -886,6 +887,20 @@ if(MACRO_SIM_BUILD_TESTS)
         set_tests_properties(
             macro_sim.m10_native_controller
             PROPERTIES LABELS "python-binding;controller;rl"
+        )
+        add_test(
+            NAME macro_sim.m10_native_desktop
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/native_desktop_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+        )
+        set_tests_properties(
+            macro_sim.m10_native_desktop
+            PROPERTIES LABELS "python-binding;desktop"
         )
     endif()
 endif()

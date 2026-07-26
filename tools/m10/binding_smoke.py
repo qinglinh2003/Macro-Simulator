@@ -77,10 +77,11 @@ def main() -> int:
     batch.advance_ticks = 1
     batch.worker_count = 1
 
+    previous_envelope = bridge.controller_envelope
     lease = bridge.prepare_boundary(batch)
     assert lease.active
     assert lease.preview["next_tick"] == 1
-    next_envelope = bridge.controller_envelope
+    next_envelope = previous_envelope
     next_envelope.boundary = 1
     next_envelope.policy_generation = 1
     next_envelope.event_sequence = 1

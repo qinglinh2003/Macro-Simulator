@@ -1,0 +1,49 @@
+{
+  "schema_version": "m10-typed-probes-v1",
+  "access": "privileged_diagnostic",
+  "snapshot_epoch": "committed_boundary",
+  "maximum_page_rows": 1024,
+  "cursor": "exclusive_stable_id",
+  "probes": [
+    {
+      "id": "probe.households",
+      "key": "household_id",
+      "fields": ["account_id", "cash", "debt", "income_expected", "income_realized", "consumption_budget", "spent", "labor_sold", "member_ids"]
+    },
+    {
+      "id": "probe.firms",
+      "key": "firm_id",
+      "fields": ["sector", "account_id", "cash", "debt", "goods_inventory", "physical_capital", "productivity", "total_factor_productivity", "posted_price", "posted_wage", "markup", "demand_expected", "previous_sales", "previous_hires", "active", "employee_ids"]
+    },
+    {
+      "id": "probe.banks",
+      "key": "bank_id",
+      "fields": ["cash_account_id", "reserve_node_id", "cash", "reserves", "loan_principal", "opening_capital", "closing_capital", "deposit_interest_arrears", "leverage_appetite", "loan_spread", "deposit_spread", "alive", "resolved"]
+    },
+    {
+      "id": "probe.persons",
+      "key": "person_id",
+      "fields": ["sex", "birth_day", "death_day", "age_days", "mother_id", "father_id", "partner_id", "guardian_id", "household_id", "primary_job_id", "secondary_job_id", "efficiency", "participating", "searching", "alive"]
+    },
+    {
+      "id": "probe.jobs",
+      "key": "job_id",
+      "fields": ["person_id", "firm_id", "hire_day", "separation_day", "wage", "hours", "secondary", "suspended", "active"]
+    },
+    {
+      "id": "probe.dwellings",
+      "key": "dwelling_id",
+      "fields": ["owner_kind", "owner_id", "occupant_household_id", "collateral_loan_id", "floor_area", "quality", "location", "age_days", "active"]
+    },
+    {
+      "id": "probe.economy.deep",
+      "key": "economy_id",
+      "fields": ["digest", "households", "firms", "banks", "persons_alive", "jobs_active", "dwellings_active", "account_balance_total", "loan_principal_total", "reserve_total", "goods_inventory_total", "physical_capital_total", "energy_stock_total"]
+    },
+    {
+      "id": "probe.shock.bulletins",
+      "key": "shock_id",
+      "fields": ["kind", "target", "announcement_tick", "start_tick", "duration_ticks", "expected_end_tick", "magnitude", "intensity", "status", "visibility"]
+    }
+  ]
+}

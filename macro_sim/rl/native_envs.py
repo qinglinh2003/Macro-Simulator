@@ -362,10 +362,13 @@ class NativeFiscalStabilizationEnv:
         self, *, seed: int | None = None, options: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, Mapping[str, Any]]:
         del options
-        if seed is not None and int(seed) != self.seed:
-            raise ValueError(
-                "reseed by constructing the seed-specific native environment"
-            )
+        if seed is not None:
+            if isinstance(seed, bool) or not isinstance(seed, Integral):
+                raise TypeError("environment seed must be an integer")
+            if int(seed) != self.seed:
+                raise ValueError(
+                    "reseed by constructing the seed-specific native environment"
+                )
         self._session, objective = NativeSimulationSession.restore(
             self._session.spec,
             self._genesis_checkpoint,
@@ -548,20 +551,13 @@ class NativeFiscalStabilizationEnv:
         return self._session.checkpoint(self._objective_envelope())
 
     def clone(self) -> "NativeFiscalStabilizationEnv":
-        """Clone the current boundary through the structured native checkpoint."""
+        """Clone the current boundary through the native composite clone API."""
         if self._pending is not None:
             raise RuntimeError("cannot clone with an in-flight policy action")
         clone = type(self)(
             self.seed, self.config, worker_count=self.worker_count,
         )
-        checkpoint = self._session.checkpoint(self._objective_envelope())
-        clone._session, objective = NativeSimulationSession.restore(
-            clone._session.spec,
-            checkpoint,
-            worker_count=self.worker_count,
-        )
-        if objective != self._objective_envelope():
-            raise RuntimeError("native fiscal clone objective drifted")
+        clone._session = self._session.clone()
         clone._policy_version = self._policy_version
         clone._last_effective_tick = self._last_effective_tick
         clone._previous_decision_tick = self._previous_decision_tick

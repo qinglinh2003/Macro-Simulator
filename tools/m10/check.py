@@ -64,16 +64,42 @@ def validate_contracts() -> None:
                 f"native source {expected_id!r}"
             )
 
+    probes = json.loads(
+        (ROOT / "schemas/m10/typed_probes.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if probes["schema_version"] != "m10-typed-probes-v1":
+        raise AssertionError("M10 typed probe contract changed")
+    probe_ids = [item["id"] for item in probes["probes"]]
+    if len(probe_ids) != 8 or len(probe_ids) != len(set(probe_ids)):
+        raise AssertionError("M10 typed probes must contain eight unique IDs")
+    if probes["maximum_page_rows"] != 1024:
+        raise AssertionError("M10 native probe page ceiling drifted")
+    for probe in probes["probes"]:
+        if not probe["fields"] or len(probe["fields"]) != len(
+            set(probe["fields"])
+        ):
+            raise AssertionError(
+                f"M10 typed probe {probe['id']!r} has invalid fields"
+            )
+
     required = (
         "docs/cpp_engine_m10_execution_plan_v34.md",
         "schemas/m10/performance_budget.json",
         "schemas/m10/public_metrics.json",
+        "schemas/m10/typed_probes.json",
         "macro_sim/native_backend.py",
         "macro_sim/controllers/native_observation.py",
+        "macro_sim/desktop/native_runtime.py",
+        "macro_sim/diagnostics/native_probes.py",
         "macro_sim/rl/native_envs.py",
+        "native/include/macro_sim/reporting/probes.hpp",
+        "native/src/reporting/probes.cpp",
         "tools/m10/check.py",
         "tools/m10/native_facade_smoke.py",
         "tools/m10/native_controller_smoke.py",
+        "tools/m10/native_desktop_smoke.py",
     )
     for relative in required:
         if not (ROOT / relative).is_file():

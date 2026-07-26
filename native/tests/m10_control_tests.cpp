@@ -101,6 +101,9 @@ void test_controller_updates_are_idempotent_and_monotonic() {
     assert(seal_controller_envelope(transition.next).ok());
     assert(session.update_controller(transition).status().code() ==
            ErrorCode::already_exists);
+    assert(session.acknowledge_receipt("controller-update-1").ok());
+    assert(session.acknowledge_receipt("controller-update-1").code() ==
+           ErrorCode::not_found);
 }
 
 void test_prepare_blocks_queries_and_abort_exposes_old_composite() {
@@ -120,10 +123,44 @@ void test_prepare_blocks_queries_and_abort_exposes_old_composite() {
     assert(lease.ok());
     assert(lease.get_if()->preview().first_tick == opening_tick);
     assert(lease.get_if()->preview().next_tick == Tick(opening_tick.value() + 1U));
+    assert(!session.query_status().ok());
     assert(!session.clone().ok());
+    assert(!session.probe_households(EconomyId(0U), 0U, 4U).ok());
+    assert(!session.probe_economy_diagnostics(EconomyId(0U)).ok());
     assert(session.abort_boundary(std::move(*lease.get_if())).ok());
     assert(session.engine().tick() == opening_tick);
     assert(session.engine().world().digest() == opening_digest);
+    assert(session.query_status().ok());
+    assert(session.probe_households(EconomyId(0U), 0U, 4U).ok());
+}
+
+void test_policy_validation_is_non_mutating_and_respects_query_lock() {
+    auto session = bridge();
+    const auto opening_digest = session.engine().world().digest();
+    const auto opening_generation = session.engine().policy_generation();
+
+    auto valid = policy_batch(session.engine());
+    valid.domestic[0].fiscal_monetary.income_tax_rate = 0.33;
+    assert(session.validate_policy_batch(valid).ok());
+    assert(session.engine().world().digest() == opening_digest);
+    assert(session.engine().policy_generation() == opening_generation);
+
+    auto invalid = policy_batch(session.engine());
+    invalid.domestic[0].fiscal_monetary.income_tax_rate = 2.0;
+    assert(!session.validate_policy_batch(invalid).ok());
+    assert(session.engine().world().digest() == opening_digest);
+
+    SealedControlBatch boundary{
+        "validation-query-lock",
+        session.controller_envelope().hash,
+        policy_batch(session.engine()),
+        1U,
+        {},
+    };
+    auto lease = session.prepare_boundary(boundary);
+    assert(lease.ok());
+    assert(!session.validate_policy_batch(valid).ok());
+    assert(session.abort_boundary(std::move(*lease.get_if())).ok());
 }
 
 void test_commit_swaps_complete_engine_and_envelope() {
@@ -250,15 +287,70 @@ void test_checkpoint_rejects_prepared_and_corrupt_state() {
            ErrorCode::corrupt_input);
 }
 
+void test_every_hybrid_fault_exposes_only_old_or_new_composite() {
+    for (const auto fault : {
+             M10FaultPoint::prepare_after_policy,
+             M10FaultPoint::prepare_after_advance,
+             M10FaultPoint::prepare_after_metrics,
+         }) {
+        auto session = bridge();
+        const auto opening_tick = session.engine().tick();
+        const auto opening_digest = session.engine().world().digest();
+        const auto opening_envelope = session.controller_envelope();
+        SealedControlBatch batch{
+            "prepare-fault-" +
+                std::to_string(static_cast<std::uint8_t>(fault)),
+            opening_envelope.hash,
+            policy_batch(session.engine()),
+            1U,
+            {},
+            fault,
+        };
+        assert(!session.prepare_boundary(batch).ok());
+        assert(session.query_status().ok());
+        assert(session.engine().tick() == opening_tick);
+        assert(session.engine().world().digest() == opening_digest);
+        assert(session.controller_envelope() == opening_envelope);
+    }
+
+    auto session = bridge();
+    const auto opening_digest = session.engine().world().digest();
+    const auto opening_envelope = session.controller_envelope();
+    SealedControlBatch batch{
+        "commit-fault",
+        opening_envelope.hash,
+        policy_batch(session.engine()),
+        1U,
+        {},
+        M10FaultPoint::commit_before_swap,
+    };
+    auto lease = session.prepare_boundary(batch);
+    assert(lease.ok());
+    auto next = opening_envelope;
+    next.boundary = lease.get_if()->preview().next_tick;
+    next.policy_generation = lease.get_if()->preview().policy_generation;
+    ++next.event_sequence;
+    assert(seal_controller_envelope(next).ok());
+    assert(!session.commit_boundary(std::move(*lease.get_if()), next).ok());
+    assert(lease.get_if()->active());
+    assert(!session.query_status().ok());
+    assert(session.abort_boundary(std::move(*lease.get_if())).ok());
+    assert(session.engine().tick() == Tick(0U));
+    assert(session.engine().world().digest() == opening_digest);
+    assert(session.controller_envelope() == opening_envelope);
+}
+
 } // namespace
 
 int main() {
     test_controller_updates_are_idempotent_and_monotonic();
     test_prepare_blocks_queries_and_abort_exposes_old_composite();
+    test_policy_validation_is_non_mutating_and_respects_query_lock();
     test_commit_swaps_complete_engine_and_envelope();
     test_invalid_next_envelope_keeps_prepared_lease_abortable();
     test_hybrid_checkpoint_split_run_is_exact();
     test_checkpoint_rejects_prepared_and_corrupt_state();
+    test_every_hybrid_fault_exposes_only_old_or_new_composite();
     std::cout << "M10 control tests passed\n";
     return 0;
 }

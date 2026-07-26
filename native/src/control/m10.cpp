@@ -44,6 +44,16 @@ void append_vector(std::vector<std::uint8_t> &bytes,
     });
 }
 
+[[nodiscard]] bool valid_fault(M10FaultPoint point) noexcept {
+    return static_cast<std::uint8_t>(point) <=
+           static_cast<std::uint8_t>(M10FaultPoint::commit_before_swap);
+}
+
+[[nodiscard]] Status injected_fault() noexcept {
+    return Status(ErrorCode::internal_error,
+                  "injected M10 controlled-boundary fault");
+}
+
 [[nodiscard]] core::StateDigest
 transition_hash(const ControllerEnvelopeTransition &transition) noexcept {
     std::vector<std::uint8_t> bytes;
@@ -122,6 +132,54 @@ EngineSession::advance_ticks(std::uint64_t count,
 }
 
 Result<EngineSession> EngineSession::clone() const { return *this; }
+
+Result<reporting::HouseholdProbePage>
+EngineSession::probe_households(EconomyId economy, std::uint64_t after_id,
+                                std::size_t maximum_rows) const {
+    return reporting::probe_households(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::FirmProbePage>
+EngineSession::probe_firms(EconomyId economy, std::uint64_t after_id,
+                           std::size_t maximum_rows) const {
+    return reporting::probe_firms(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::BankProbePage>
+EngineSession::probe_banks(EconomyId economy, std::uint64_t after_id,
+                           std::size_t maximum_rows) const {
+    return reporting::probe_banks(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::PersonProbePage>
+EngineSession::probe_persons(EconomyId economy, std::uint64_t after_id,
+                             std::size_t maximum_rows) const {
+    return reporting::probe_persons(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::JobProbePage>
+EngineSession::probe_jobs(EconomyId economy, std::uint64_t after_id,
+                          std::size_t maximum_rows) const {
+    return reporting::probe_jobs(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::DwellingProbePage>
+EngineSession::probe_dwellings(EconomyId economy, std::uint64_t after_id,
+                               std::size_t maximum_rows) const {
+    return reporting::probe_dwellings(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::EconomyDiagnosticProbe>
+EngineSession::probe_economy_diagnostics(EconomyId economy) const {
+    return reporting::probe_economy_diagnostics(world_, economy);
+}
+
+Result<std::vector<reporting::ShockBulletinProbeRow>>
+EngineSession::probe_shock_bulletins(EconomyId economy,
+                                     Tick as_of_boundary) const {
+    return reporting::probe_shock_bulletins(
+        world_, economy, as_of_boundary);
+}
 
 PreparedBoundaryLease::PreparedBoundaryLease(std::unique_ptr<Impl> impl)
     : impl_(std::move(impl)) {}
@@ -282,8 +340,21 @@ Status HybridControlledBridge::acknowledge_receipt(
     if (found == receipts_.end()) {
         return Status(ErrorCode::not_found, "controller receipt was not found");
     }
-    found->acknowledged = true;
+    // Acknowledgement transfers retry responsibility back to the caller.  Drop
+    // the receipt so long-running interactive sessions have a strict memory
+    // bound; unacknowledged receipts remain checkpointed and idempotent.
+    receipts_.erase(found);
     return Status::success();
+}
+
+Status HybridControlledBridge::validate_policy_batch(
+    const simulation::WorldPolicyBatch &batch) const {
+    auto available = require_available();
+    if (!available.ok()) {
+        return available;
+    }
+    auto projected = engine_.world_;
+    return projected.update_policy_batch(batch);
 }
 
 Result<PreparedBoundaryLease>
@@ -293,6 +364,7 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
         return available;
     }
     if (!valid_operation_id(batch.operation_id) ||
+        !valid_fault(batch.fault_point) ||
         batch.expected_controller_hash != envelope_.hash ||
         batch.advance_ticks == 0U ||
         batch.policies.expected_tick != engine_.tick() ||
@@ -306,14 +378,23 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
     if (!policy_status.ok()) {
         return policy_status;
     }
+    if (batch.fault_point == M10FaultPoint::prepare_after_policy) {
+        return injected_fault();
+    }
     auto advanced = staged.advance(batch.advance_ticks, batch.advance_options);
     if (!advanced.ok()) {
         return advanced.status();
+    }
+    if (batch.fault_point == M10FaultPoint::prepare_after_advance) {
+        return injected_fault();
     }
     auto frame = reporting::build_public_metric_frame(
         staged, &engine_.metrics_.current());
     if (!frame.ok()) {
         return frame.status();
+    }
+    if (batch.fault_point == M10FaultPoint::prepare_after_metrics) {
+        return injected_fault();
     }
 
     authority_->active = true;
@@ -324,6 +405,7 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
         staged.tick(),
         staged.policy_generation(),
         staged.digest(),
+        batch.fault_point,
         std::move(*frame.get_if()),
     };
     auto impl = std::make_unique<PreparedBoundaryLease::Impl>(
@@ -349,6 +431,10 @@ HybridControlledBridge::commit_boundary(PreparedBoundaryLease &&lease,
         next.release_cursor < envelope_.release_cursor) {
         return Status(ErrorCode::contract_violation,
                       "committed controller cursors cannot move backward");
+    }
+    if (lease.impl_->preview.fault_point ==
+        M10FaultPoint::commit_before_swap) {
+        return injected_fault();
     }
 
     auto history_status =
@@ -383,6 +469,81 @@ Result<HybridControlledBridge> HybridControlledBridge::clone() const {
     HybridControlledBridge result(engine_, envelope_);
     result.receipts_ = receipts_;
     return std::move(result);
+}
+
+Result<reporting::HouseholdProbePage>
+HybridControlledBridge::probe_households(EconomyId economy,
+                                         std::uint64_t after_id,
+                                         std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_households(economy, after_id, maximum_rows)
+               : Result<reporting::HouseholdProbePage>(available);
+}
+
+Result<reporting::FirmProbePage>
+HybridControlledBridge::probe_firms(EconomyId economy, std::uint64_t after_id,
+                                    std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_firms(economy, after_id, maximum_rows)
+               : Result<reporting::FirmProbePage>(available);
+}
+
+Result<reporting::BankProbePage>
+HybridControlledBridge::probe_banks(EconomyId economy, std::uint64_t after_id,
+                                    std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_banks(economy, after_id, maximum_rows)
+               : Result<reporting::BankProbePage>(available);
+}
+
+Result<reporting::PersonProbePage>
+HybridControlledBridge::probe_persons(EconomyId economy,
+                                      std::uint64_t after_id,
+                                      std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_persons(economy, after_id, maximum_rows)
+               : Result<reporting::PersonProbePage>(available);
+}
+
+Result<reporting::JobProbePage>
+HybridControlledBridge::probe_jobs(EconomyId economy, std::uint64_t after_id,
+                                   std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_jobs(economy, after_id, maximum_rows)
+               : Result<reporting::JobProbePage>(available);
+}
+
+Result<reporting::DwellingProbePage>
+HybridControlledBridge::probe_dwellings(EconomyId economy,
+                                        std::uint64_t after_id,
+                                        std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_dwellings(economy, after_id, maximum_rows)
+               : Result<reporting::DwellingProbePage>(available);
+}
+
+Result<reporting::EconomyDiagnosticProbe>
+HybridControlledBridge::probe_economy_diagnostics(EconomyId economy) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_economy_diagnostics(economy)
+               : Result<reporting::EconomyDiagnosticProbe>(available);
+}
+
+Result<std::vector<reporting::ShockBulletinProbeRow>>
+HybridControlledBridge::probe_shock_bulletins(
+    EconomyId economy, Tick as_of_boundary) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_shock_bulletins(economy, as_of_boundary)
+               : Result<std::vector<reporting::ShockBulletinProbeRow>>(
+                     available);
 }
 
 core::StateDigest

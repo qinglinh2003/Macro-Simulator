@@ -29,6 +29,11 @@ from .observation import (
     ReleaseService,
 )
 from .native_observation import NativeObservationSource
+from .native_session import (
+    NativeControlledWorld,
+    create_native_controlled_session,
+    restore_native_controlled_session,
+)
 from .occupants import (
     HeuristicOccupant,
     HumanQueueOccupant,
@@ -58,7 +63,10 @@ __all__ = [
     "PublicObservation",
     "Release",
     "ReleaseService",
+    "NativeControlledWorld",
     "NativeObservationSource",
+    "create_native_controlled_session",
+    "restore_native_controlled_session",
     "HeuristicOccupant",
     "HumanQueueOccupant",
     "NullOccupant",

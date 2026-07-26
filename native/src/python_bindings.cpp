@@ -114,6 +114,271 @@ nb::dict m10_metric_frame_to_python(
     return output;
 }
 
+nb::dict probe_page_info_to_python(
+    const macro_sim::reporting::ProbePageInfo &page) {
+    nb::dict output;
+    output["boundary"] = page.boundary.value();
+    output["economy_id"] = page.economy.value();
+    output["next_after_id"] = page.next_after_id;
+    output["total_rows"] = page.total_rows;
+    output["has_more"] = page.has_more;
+    return output;
+}
+
+nb::dict household_probe_to_python(
+    const macro_sim::reporting::HouseholdProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["account_id"] = row.account.value();
+        item["cash"] = row.cash;
+        item["debt"] = row.debt;
+        item["income_expected"] = row.income_expected;
+        item["income_realized"] = row.income_realized;
+        item["consumption_budget"] = row.consumption_budget;
+        item["spent"] = row.spent;
+        item["labor_sold"] = row.labor_sold;
+        nb::list members;
+        for (const auto person : row.members) {
+            members.append(person.value());
+        }
+        item["member_ids"] = std::move(members);
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict firm_probe_to_python(
+    const macro_sim::reporting::FirmProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["sector"] = static_cast<std::uint8_t>(row.sector);
+        item["account_id"] = row.account.value();
+        item["cash"] = row.cash;
+        item["debt"] = row.debt;
+        item["goods_inventory"] = row.goods_inventory;
+        item["physical_capital"] = row.physical_capital;
+        item["productivity"] = row.productivity;
+        item["total_factor_productivity"] =
+            row.total_factor_productivity;
+        item["posted_price"] = row.posted_price;
+        item["posted_wage"] = row.posted_wage;
+        item["markup"] = row.markup;
+        item["demand_expected"] = row.demand_expected;
+        item["previous_sales"] = row.previous_sales;
+        item["previous_hires"] = row.previous_hires;
+        item["active"] = row.active;
+        nb::list employees;
+        for (const auto person : row.employees) {
+            employees.append(person.value());
+        }
+        item["employee_ids"] = std::move(employees);
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict bank_probe_to_python(
+    const macro_sim::reporting::BankProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["cash_account_id"] = row.cash_account.value();
+        item["reserve_node_id"] = row.reserve_node.value();
+        item["cash"] = row.cash;
+        item["reserves"] = row.reserves;
+        item["loan_principal"] = row.loan_principal;
+        item["opening_capital"] = row.opening_capital;
+        item["closing_capital"] = row.closing_capital;
+        item["deposit_interest_arrears"] =
+            row.deposit_interest_arrears;
+        item["leverage_appetite"] = row.leverage_appetite;
+        item["loan_spread"] = row.loan_spread;
+        item["deposit_spread"] = row.deposit_spread;
+        item["alive"] = row.alive;
+        item["resolved"] = row.resolved;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict person_probe_to_python(
+    const macro_sim::reporting::PersonProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["sex"] = static_cast<std::uint8_t>(row.sex);
+        item["birth_day"] = row.birth_day;
+        item["death_day"] = row.death_day;
+        item["age_days"] = row.age_days;
+        item["mother_id"] = row.mother.value();
+        item["father_id"] = row.father.value();
+        item["partner_id"] = row.partner.value();
+        item["guardian_id"] = row.guardian.value();
+        item["household_id"] = row.household.value();
+        item["primary_job_id"] = row.primary_job.value();
+        item["secondary_job_id"] = row.secondary_job.value();
+        item["efficiency"] = row.efficiency;
+        item["participating"] = row.participating;
+        item["searching"] = row.searching;
+        item["alive"] = row.alive;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict job_probe_to_python(
+    const macro_sim::reporting::JobProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["person_id"] = row.person.value();
+        item["firm_id"] = row.firm.value();
+        item["hire_day"] = row.hire_day;
+        item["separation_day"] = row.separation_day;
+        item["wage"] = row.wage;
+        item["hours"] = row.hours;
+        item["secondary"] = row.secondary;
+        item["suspended"] = row.suspended;
+        item["active"] = row.active;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict dwelling_probe_to_python(
+    const macro_sim::reporting::DwellingProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["owner_kind"] = static_cast<std::uint8_t>(row.owner_kind);
+        item["owner_id"] = row.owner_id;
+        item["occupant_household_id"] =
+            row.occupant_household.value();
+        item["collateral_loan_id"] = row.collateral_loan.value();
+        item["floor_area"] = row.floor_area;
+        item["quality"] = row.quality;
+        item["location"] = row.location;
+        item["age_days"] = row.age_days;
+        item["active"] = row.active;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict diagnostic_probe_to_python(
+    const macro_sim::reporting::EconomyDiagnosticProbe &probe) {
+    nb::dict output;
+    output["boundary"] = probe.boundary.value();
+    output["economy_id"] = probe.economy.value();
+    output["digest"] = probe.digest;
+    output["households"] = probe.households;
+    output["firms"] = probe.firms;
+    output["banks"] = probe.banks;
+    output["persons_alive"] = probe.persons_alive;
+    output["jobs_active"] = probe.jobs_active;
+    output["dwellings_active"] = probe.dwellings_active;
+    output["account_balance_total"] = probe.account_balance_total;
+    output["loan_principal_total"] = probe.loan_principal_total;
+    output["reserve_total"] = probe.reserve_total;
+    output["goods_inventory_total"] = probe.goods_inventory_total;
+    output["physical_capital_total"] = probe.physical_capital_total;
+    output["energy_stock_total"] = probe.energy_stock_total;
+    return output;
+}
+
+std::string_view shock_kind_id(
+    macro_sim::simulation::ShockKind kind) noexcept {
+    using macro_sim::simulation::ShockKind;
+    switch (kind) {
+    case ShockKind::productivity:
+        return "productivity";
+    case ShockKind::labor_availability:
+        return "labor_availability";
+    case ShockKind::energy_capacity:
+        return "energy_capacity";
+    case ShockKind::household_demand:
+        return "household_demand";
+    case ShockKind::import_capacity:
+        return "import_capacity";
+    case ShockKind::export_capacity:
+        return "export_capacity";
+    case ShockKind::credit_supply:
+        return "credit_supply";
+    case ShockKind::capital_destruction:
+        return "capital_destruction";
+    }
+    return "unknown";
+}
+
+std::string_view shock_bulletin_status_id(
+    macro_sim::reporting::ShockBulletinStatus status) noexcept {
+    using macro_sim::reporting::ShockBulletinStatus;
+    switch (status) {
+    case ShockBulletinStatus::upcoming:
+        return "upcoming";
+    case ShockBulletinStatus::active:
+        return "active";
+    case ShockBulletinStatus::realizing:
+        return "realizing";
+    }
+    return "unknown";
+}
+
+nb::list shock_bulletins_to_python(
+    const std::vector<macro_sim::reporting::ShockBulletinProbeRow> &rows) {
+    nb::list output;
+    for (const auto &row : rows) {
+        nb::dict item;
+        item["announcement_tick"] = row.announcement.value();
+        item["duration_ticks"] = row.duration;
+        item["expected_end_tick"] = row.expected_end.value();
+        item["intensity"] = row.intensity;
+        item["kind"] = shock_kind_id(row.kind);
+        item["magnitude"] = row.magnitude;
+        item["shock_id"] = std::to_string(row.shock_id);
+        item["start_tick"] = row.start.value();
+        item["status"] = shock_bulletin_status_id(row.status);
+        nb::dict target;
+        if (row.economy.has_value()) {
+            nb::list economies;
+            economies.append(row.economy->value());
+            target["economy_ids"] = std::move(economies);
+        } else {
+            target["economy_ids"] = nb::none();
+        }
+        if (row.sector.has_value()) {
+            target["sector"] =
+                static_cast<std::uint8_t>(*row.sector);
+        } else {
+            target["sector"] = nb::none();
+        }
+        item["target"] = std::move(target);
+        item["visibility"] = "public";
+        output.append(std::move(item));
+    }
+    return output;
+}
+
 nb::dict receipt_to_python(const macro_sim::core::TransactionReceipt &receipt) {
     nb::list loans;
     for (const auto loan : receipt.created_loans) {
@@ -2097,6 +2362,17 @@ NB_MODULE(_native, module) {
             })
         .def_rw("next",
                 &macro_sim::control::ControllerEnvelopeTransition::next);
+    nb::enum_<macro_sim::control::M10FaultPoint>(
+        module, "M10FaultPoint")
+        .value("NONE", macro_sim::control::M10FaultPoint::none)
+        .value("PREPARE_AFTER_POLICY",
+               macro_sim::control::M10FaultPoint::prepare_after_policy)
+        .value("PREPARE_AFTER_ADVANCE",
+               macro_sim::control::M10FaultPoint::prepare_after_advance)
+        .value("PREPARE_AFTER_METRICS",
+               macro_sim::control::M10FaultPoint::prepare_after_metrics)
+        .value("COMMIT_BEFORE_SWAP",
+               macro_sim::control::M10FaultPoint::commit_before_swap);
     nb::class_<macro_sim::control::SealedControlBatch>(
         module, "SealedControlBatch")
         .def(nb::init<>())
@@ -2115,6 +2391,8 @@ NB_MODULE(_native, module) {
                 &macro_sim::control::SealedControlBatch::policies)
         .def_rw("advance_ticks",
                 &macro_sim::control::SealedControlBatch::advance_ticks)
+        .def_rw("fault_point",
+                &macro_sim::control::SealedControlBatch::fault_point)
         .def_prop_rw(
             "worker_count",
             [](const macro_sim::control::SealedControlBatch &value) {
@@ -2179,7 +2457,108 @@ NB_MODULE(_native, module) {
                  output["frames"] = std::move(frames);
                  return output;
              },
-             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U);
+             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
+        .def("history_bounds",
+             [](const macro_sim::control::EngineSession &value) {
+                 nb::dict output;
+                 const auto &history = value.metrics().history();
+                 output["oldest_sequence"] = history.oldest_sequence();
+                 output["next_sequence"] = history.next_sequence();
+                 output["capacity"] = history.capacity();
+                 output["size"] = history.size();
+                 return output;
+             })
+        .def("clone",
+             [](const macro_sim::control::EngineSession &value) {
+                 auto result = value.clone();
+                 require_status(result.status());
+                 return std::move(*result.get_if());
+             })
+        .def("probe_households",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_households(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return household_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_firms",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_firms(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return firm_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_banks",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_banks(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return bank_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_persons",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_persons(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return person_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_jobs",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_jobs(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return job_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_dwellings",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_dwellings(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return dwelling_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_economy_diagnostics",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy) {
+                 auto result = value.probe_economy_diagnostics(
+                     macro_sim::EconomyId(economy));
+                 require_status(result.status());
+                 return diagnostic_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"))
+        .def("probe_shock_bulletins",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t as_of_boundary) {
+                 auto result = value.probe_shock_bulletins(
+                     macro_sim::EconomyId(economy),
+                     macro_sim::Tick(as_of_boundary));
+                 require_status(result.status());
+                 return shock_bulletins_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("as_of_boundary"));
     nb::class_<macro_sim::control::PreparedBoundaryLease>(
         module, "PreparedBoundaryLease")
         .def_prop_ro("active",
@@ -2215,22 +2594,26 @@ NB_MODULE(_native, module) {
         .def_prop_ro(
             "tick",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return value.engine().tick().value();
             })
         .def_prop_ro(
             "policy_generation",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return value.engine().policy_generation();
             })
         .def_prop_ro(
             "economy_count",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return value.engine().world().economy_count();
             })
         .def(
             "domestic_policy",
             [](const macro_sim::control::HybridControlledBridge &value,
                std::uint64_t economy) {
+                require_status(value.query_status());
                 auto result = value.engine().world().domestic_policy(
                     macro_sim::EconomyId(economy));
                 require_status(result.status());
@@ -2240,16 +2623,19 @@ NB_MODULE(_native, module) {
         .def(
             "external_policies",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return value.engine().world().external_policies();
             })
         .def(
             "native_snapshot",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return m9_snapshot_to_python(value.engine().world());
             })
         .def_prop_ro(
             "controller_envelope",
             [](const macro_sim::control::HybridControlledBridge &value) {
+                require_status(value.query_status());
                 return value.controller_envelope();
             })
         .def("update_controller",
@@ -2274,6 +2660,18 @@ NB_MODULE(_native, module) {
                  return output;
              },
              nb::arg("transition"))
+        .def("acknowledge_receipt",
+             [](macro_sim::control::HybridControlledBridge &value,
+                const std::string &operation_id) {
+                 require_status(value.acknowledge_receipt(operation_id));
+             },
+             nb::arg("operation_id"))
+        .def("validate_policy_batch",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                const macro_sim::simulation::WorldPolicyBatch &batch) {
+                 require_status(value.validate_policy_batch(batch));
+             },
+             nb::arg("batch"))
         .def("prepare_boundary",
              [](macro_sim::control::HybridControlledBridge &value,
                 const macro_sim::control::SealedControlBatch &batch) {
@@ -2303,12 +2701,14 @@ NB_MODULE(_native, module) {
              nb::arg("lease"))
         .def("public_metrics",
              [](const macro_sim::control::HybridControlledBridge &value) {
+                 require_status(value.query_status());
                  return m10_metric_frame_to_python(
                      value.engine().metrics().current());
              })
         .def("history_page",
              [](const macro_sim::control::HybridControlledBridge &value,
                 std::uint64_t first_sequence, std::size_t maximum_frames) {
+                 require_status(value.query_status());
                  auto result = value.engine().metrics().history().page(
                      first_sequence, maximum_frames);
                  require_status(result.status());
@@ -2325,6 +2725,109 @@ NB_MODULE(_native, module) {
                  return output;
              },
              nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
+        .def("history_bounds",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 require_status(value.query_status());
+                 nb::dict output;
+                 const auto &history =
+                     value.engine().metrics().history();
+                 output["oldest_sequence"] = history.oldest_sequence();
+                 output["next_sequence"] = history.next_sequence();
+                 output["capacity"] = history.capacity();
+                 output["size"] = history.size();
+                 return output;
+             })
+        .def("clone",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 auto result = value.clone();
+                 require_status(result.status());
+                 return std::move(*result.get_if());
+             })
+        .def("probe_households",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_households(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return household_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_firms",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_firms(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return firm_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_banks",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_banks(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return bank_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_persons",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_persons(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return person_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_jobs",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_jobs(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return job_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_dwellings",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_dwellings(
+                     macro_sim::EconomyId(economy), after_id, maximum_rows);
+                 require_status(result.status());
+                 return dwelling_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_economy_diagnostics",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy) {
+                 auto result = value.probe_economy_diagnostics(
+                     macro_sim::EconomyId(economy));
+                 require_status(result.status());
+                 return diagnostic_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"))
+        .def("probe_shock_bulletins",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t as_of_boundary) {
+                 auto result = value.probe_shock_bulletins(
+                     macro_sim::EconomyId(economy),
+                     macro_sim::Tick(as_of_boundary));
+                 require_status(result.status());
+                 return shock_bulletins_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("as_of_boundary"))
         .def("checkpoint",
              [](const macro_sim::control::HybridControlledBridge &value,
                 const nb::bytes &objective) {

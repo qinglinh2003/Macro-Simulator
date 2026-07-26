@@ -208,6 +208,22 @@ class ControlledSimulationSession:
     def pending(self):
         return self.coordinator.pending
 
+    def _sync_native_controller_state(self) -> None:
+        sync = getattr(self.world, "sync_controller_state", None)
+        if callable(sync):
+            sync(self)
+
+    def _capture_native_controller_state(self) -> bytes | None:
+        capture = getattr(self.world, "capture_controller_state", None)
+        return capture(self) if callable(capture) else None
+
+    def _restore_native_controller_state(self, payload: bytes | None) -> None:
+        if payload is None:
+            return
+        restore = getattr(self.world, "restore_controller_state", None)
+        if callable(restore):
+            restore(self, payload)
+
     def assign_seat(
         self,
         economy_id: int,
@@ -286,29 +302,37 @@ class ControlledSimulationSession:
         # application input.  Complete all of them before changing assignment,
         # archive, or sequence state.
         replay_spec = occupant_spec(occupant) if log_event else None
+        native_before = self._capture_native_controller_state()
         key = (economy_id, seat)
         old = self.seat_assignments.get(key)
         assignment_id = f"assignment:{self.next_assignment_sequence:012d}"
         archived_outgoing_id = (
             f"occupant:{assignment_id}" if old is not None else None
         )
-        if log_event:
-            self.events.append(
-                "seat_assignment", "input", self.boundary_tick, self.phase,
-                economy_id=economy_id, seat=seat, actor=actor,
-                payload={
-                    "assignment_id": assignment_id,
-                    "archived_outgoing_id": archived_outgoing_id,
-                    "old_occupant": type(old).__name__ if old is not None else None,
-                    "new_occupant": type(occupant).__name__,
-                    "occupant_spec": replay_spec,
-                    "initialization": initialization,
-                },
-            )
-        if archived_outgoing_id is not None:
-            self.assignment_archive[archived_outgoing_id] = old
-        self.seat_assignments[key] = occupant
-        self.next_assignment_sequence += 1
+        try:
+            if log_event:
+                self.events.append(
+                    "seat_assignment", "input", self.boundary_tick, self.phase,
+                    economy_id=economy_id, seat=seat, actor=actor,
+                    payload={
+                        "assignment_id": assignment_id,
+                        "archived_outgoing_id": archived_outgoing_id,
+                        "old_occupant": (
+                            type(old).__name__ if old is not None else None
+                        ),
+                        "new_occupant": type(occupant).__name__,
+                        "occupant_spec": replay_spec,
+                        "initialization": initialization,
+                    },
+                )
+            if archived_outgoing_id is not None:
+                self.assignment_archive[archived_outgoing_id] = old
+            self.seat_assignments[key] = occupant
+            self.next_assignment_sequence += 1
+            self._sync_native_controller_state()
+        except Exception:
+            self._restore_native_controller_state(native_before)
+            raise
 
     def restore_seat(
         self,
@@ -337,7 +361,13 @@ class ControlledSimulationSession:
         context = self._opened_contexts.get(proposal.context_id)
         if context is None:
             # Let the Coordinator produce a canonical unknown-context rejection.
-            self.coordinator.submit(self, proposal, actor=actor)
+            native_before = self._capture_native_controller_state()
+            try:
+                self.coordinator.submit(self, proposal, actor=actor)
+                self._sync_native_controller_state()
+            except Exception:
+                self._restore_native_controller_state(native_before)
+                raise
             return
         occupant = self.seat_assignments.get((context.economy_id, context.seat))
         if self.phase != AWAITING_HUMAN \
@@ -346,6 +376,7 @@ class ControlledSimulationSession:
                     and occupant.accept_idempotent_retry(
                 proposal, actor=actor,
             ):
+                self._sync_native_controller_state()
                 return
             raise ValueError("context is not awaiting a human proposal")
         if not isinstance(occupant, HumanQueueOccupant):
@@ -362,6 +393,7 @@ class ControlledSimulationSession:
                 context, proposal, actor,
             )
             self._recorded_human_context_ids.add(context.context_id)
+            self._sync_native_controller_state()
         except Exception:
             _restore_object_state(occupant, occupant_snapshot)
             self._recorded_human_context_ids = recorded_before
@@ -414,6 +446,7 @@ class ControlledSimulationSession:
             )
             if not self.missing_context_ids:
                 self.phase = READY_TO_COMMIT
+            self._sync_native_controller_state()
         except Exception:
             self._collected = before_collected
             self.missing_context_ids = before_missing
@@ -424,9 +457,31 @@ class ControlledSimulationSession:
 
     def cancel_pending(self, decision_id: str, *, actor: str = "human") -> PolicyDecision:
         self.assert_boundary_integrity()
-        return self.coordinator.cancel(self, decision_id, actor=actor)
+        native_before = self._capture_native_controller_state()
+        try:
+            decision = self.coordinator.cancel(self, decision_id, actor=actor)
+            self._sync_native_controller_state()
+            return decision
+        except Exception:
+            self._restore_native_controller_state(native_before)
+            raise
 
     def advance(
+        self,
+        *,
+        engine_step: Callable[[Any], Any] | None = None,
+    ) -> BoundaryResult:
+        """Advance atomically, restoring native-backed controller state on failure."""
+        native_before = self._capture_native_controller_state()
+        opening_tick = self.boundary_tick
+        try:
+            return self._advance_boundary(engine_step=engine_step)
+        except Exception:
+            if int(getattr(self.world, "t", opening_tick)) == opening_tick:
+                self._restore_native_controller_state(native_before)
+            raise
+
+    def _advance_boundary(
         self,
         *,
         engine_step: Callable[[Any], Any] | None = None,
@@ -438,12 +493,14 @@ class ControlledSimulationSession:
         if self.phase == AWAITING_HUMAN:
             self._collect_waiting_humans()
             if self.missing_context_ids:
-                return BoundaryResult(
+                result = BoundaryResult(
                     status=AWAITING_HUMAN,
                     boundary_tick=self.boundary_tick,
                     contexts=tuple(self._opened_contexts[key] for key in self.current_context_ids),
                     missing_context_ids=self.missing_context_ids,
                 )
+                self._sync_native_controller_state()
+                return result
             self.phase = READY_TO_COMMIT
 
         decisions: list[PolicyDecision] = []
@@ -467,10 +524,38 @@ class ControlledSimulationSession:
         decisions.extend(self.coordinator.execute_due(self))
 
         completed_tick = self.boundary_tick
-        if engine_step is None:
-            records = self.world.step()
-        else:
-            records = engine_step(self.world)
+        native_prepare = getattr(
+            self.world, "prepare_controller_boundary", None,
+        )
+        if engine_step is None and callable(native_prepare):
+            boundary = native_prepare()
+            try:
+                result = self._complete_boundary(
+                    completed_tick, decisions, boundary.records,
+                )
+                self.world.commit_controller_boundary(self, boundary)
+                return result
+            except Exception:
+                abort = getattr(self.world, "abort_controller_boundary", None)
+                if boundary.prepared.lease.active and callable(abort):
+                    abort(boundary)
+                raise
+
+        records = (
+            self.world.step()
+            if engine_step is None else engine_step(self.world)
+        )
+        result = self._complete_boundary(completed_tick, decisions, records)
+        self._sync_native_controller_state()
+        return result
+
+    def _complete_boundary(
+        self,
+        completed_tick: int,
+        decisions: list[PolicyDecision],
+        records: Any,
+    ) -> BoundaryResult:
+        """Finalize Python controller/release state around one accepted engine day."""
         self.assert_boundary_integrity(expected_tick=completed_tick + 1)
         self._drain_engine_policy_events()
         self._drain_engine_shock_events()
@@ -484,13 +569,14 @@ class ControlledSimulationSession:
         self._collected.clear()
         self._opened_contexts.clear()
         self._recorded_human_context_ids.clear()
-        return BoundaryResult(
+        result = BoundaryResult(
             status="advanced",
             boundary_tick=completed_tick,
             contexts=contexts,
             decisions=_final_decisions(decisions, self.coordinator.decisions),
             records=records,
         )
+        return result
 
     def run(self, n_ticks: int) -> list[Any]:
         if n_ticks < 0:

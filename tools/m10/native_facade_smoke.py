@@ -15,6 +15,11 @@ def main() -> int:
     sys.path.insert(1, str(args.source_dir))
 
     from macro_sim.desktop.new_game import NewGameSpec
+    from macro_sim.controllers.native_observation import NativeObservationSource
+    from macro_sim.diagnostics import (
+        NativeDeepProbeCollector,
+        NativeWorldProbeCollector,
+    )
     from macro_sim.core.external_policy import ExternalPolicy
     from macro_sim.core.policy import Policy
     from macro_sim.core.policy_registry import REGISTRY
@@ -57,12 +62,40 @@ def main() -> int:
     session.advance()
     assert session.tick == 2
     assert session.bridge.policy_generation == generation
+    household_page = session.probe_page(
+        "households", economy_id=0, maximum_rows=3,
+    )
+    assert household_page["boundary"] == session.tick
+    assert 0 < len(household_page["rows"]) <= 3
+    assert household_page["rows"][0]["id"] > 0
+    assert session.probe_economy_diagnostics(0)["households"] > 0
+    diagnostic = NativeDeepProbeCollector().collect(session)
+    assert diagnostic.boundary == session.tick
+    assert diagnostic.aggregates["households"] > 0
+    world_probe = NativeWorldProbeCollector(session)
+    decomposition = world_probe.step()
+    assert decomposition["next_tick"] == decomposition["first_tick"] + 1
+
+    cloned = session.clone()
+    cloned.advance()
+    session.advance()
+    assert cloned.native_snapshot()["digest"] == session.native_snapshot()["digest"]
+    assert cloned.history_bounds() == session.history_bounds()
 
     checkpoint = session.checkpoint(b'{"objective":"native"}')
     restored, objective = NativeSimulationSession.restore(spec, checkpoint)
     assert restored.tick == session.tick
     assert objective == b'{"objective":"native"}'
     assert restored.native_snapshot()["digest"] == session.native_snapshot()["digest"]
+
+    wrapped = NativeSimulationSession.create(
+        spec, history_capacity_frames=2,
+    )
+    wrapped.advance(3)
+    assert wrapped.history_bounds()["oldest_sequence"] > 0
+    wrapped_source = NativeObservationSource(wrapped)
+    assert wrapped_source.boundary_tick == wrapped.tick
+    assert wrapped_source.economies[0].records
     return 0
 
 

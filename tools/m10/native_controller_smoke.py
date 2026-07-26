@@ -27,6 +27,223 @@ def main() -> int:
         NativeFiscalStabilizationEnvFactory,
         make_native_fiscal_stabilization_env,
     )
+    from macro_sim.controllers.coordinator import SEATS
+    from macro_sim.controllers.native_session import (
+        create_native_controlled_session,
+        restore_native_controlled_session,
+    )
+    from macro_sim.controllers.native_envelope import decode_controller_state
+    from macro_sim.controllers.occupants import HumanQueueOccupant, NullOccupant
+    from macro_sim.controllers.protocol import PolicyAction, PolicyProposal
+    from macro_sim.desktop.new_game import NewGameSpec
+
+    controlled_spec = NewGameSpec.default(seed=1199)
+    controlled_world, controlled = create_native_controlled_session(
+        controlled_spec,
+    )
+    opening_target = controlled_world.native_session.policy_values(0)[
+        "gov_deficit_target"
+    ]
+    for seat in SEATS:
+        occupant = (
+            HumanQueueOccupant()
+            if seat == "treasury" else NullOccupant()
+        )
+        controlled.assign_seat(0, seat, occupant, actor="native-smoke")
+    awaiting = controlled.advance()
+    assert awaiting.status == "awaiting_human"
+    assert controlled.boundary_tick == 0
+    assert len(awaiting.contexts) == 11
+    assert len(awaiting.missing_context_ids) == 3
+    checkpoint = controlled_world.checkpoint_controller(
+        controlled, b'{"objective":"controlled-split"}',
+    )
+    split_world, split, split_objective = restore_native_controlled_session(
+        controlled_spec, checkpoint,
+    )
+    assert split_objective == b'{"objective":"controlled-split"}'
+    assert split.phase == controlled.phase
+    assert split.missing_context_ids == controlled.missing_context_ids
+    assert split.events.head_hash == controlled.events.head_hash
+
+    def submit_treasury(target):
+        for context_id in target.current_context_ids:
+            context = target.coordinator.contexts[context_id]
+            if context.seat != "treasury":
+                continue
+            actions = ()
+            if context.decision_group == "fiscal_stance":
+                current = next(
+                    item.current_value
+                    for item in context.permitted_actions
+                    if item.lever == "gov_deficit_target"
+                )
+                actions = (
+                    PolicyAction(
+                        "gov_deficit_target", float(current) + 0.005,
+                    ),
+                )
+            proposal_id = f"proposal:{context.context_id}:native-smoke"
+            target.submit_human_proposal(
+                PolicyProposal(
+                    proposal_id=proposal_id,
+                    idempotency_key=proposal_id,
+                    context_id=context.context_id,
+                    actions=actions,
+                    reason="native controller smoke",
+                    based_on_policy_versions=dict(context.policy_versions),
+                ),
+                actor="native-smoke-human",
+            )
+
+    submit_treasury(controlled)
+    submit_treasury(split)
+    first = controlled.advance()
+    split_first = split.advance()
+    assert first.status == "advanced"
+    assert split_first == first
+    assert controlled.boundary_tick == 1
+    assert controlled_world.native_session.tick == 1
+    assert len(first.contexts) == 11
+    fiscal = [
+        decision for decision in first.decisions
+        if decision.proposal_id.endswith("fiscal_stance:0:regular:native-smoke")
+    ]
+    assert len(fiscal) == 1
+    assert fiscal[0].status == "accepted_pending"
+    assert fiscal[0].effective_tick == 7
+    assert (
+        controlled_world.native_session.policy_values(0)[
+            "gov_deficit_target"
+        ]
+        == opening_target
+    )
+    for _ in range(6):
+        assert split.advance() == controlled.advance()
+        assert (
+            split_world.native_session.native_snapshot()["digest"]
+            == controlled_world.native_session.native_snapshot()["digest"]
+        )
+        assert split.events.head_hash == controlled.events.head_hash
+    assert controlled.boundary_tick == 7
+    assert (
+        controlled_world.native_session.policy_values(0)[
+            "gov_deficit_target"
+        ]
+        == opening_target
+    )
+    effective = controlled.advance()
+    split_effective = split.advance()
+    assert split_effective == effective
+    assert any(
+        decision.decision_id == fiscal[0].decision_id
+        and decision.status == "effective"
+        for decision in effective.decisions
+    )
+    assert (
+        controlled_world.native_session.policy_values(0)[
+            "gov_deficit_target"
+        ]
+        == opening_target + 0.005
+    )
+    assert (
+        split_world.native_session.native_snapshot()["digest"]
+        == controlled_world.native_session.native_snapshot()["digest"]
+    )
+    assert bytes(
+        split_world.native_session.bridge.controller_envelope.canonical_payload
+    ) == bytes(
+        controlled_world.native_session.bridge.controller_envelope.canonical_payload
+    )
+
+    fault_world, fault_session = create_native_controlled_session(
+        NewGameSpec.default(seed=1200),
+    )
+    for seat in SEATS:
+        fault_session.assign_seat(
+            0, seat, NullOccupant(), actor="native-fault-smoke",
+        )
+    opening_native = fault_world.native_session.native_snapshot()
+    opening_payload = bytes(
+        fault_world.native_session.bridge.controller_envelope.canonical_payload
+    )
+    opening_hash = fault_world.native_session.bridge.controller_envelope.hash
+    opening_event_head = fault_session.events.head_hash
+    for fault_point in (
+        "prepare_after_policy",
+        "prepare_after_advance",
+        "prepare_after_metrics",
+        "commit_before_swap",
+    ):
+        fault_world.inject_controller_fault_for_test(fault_point)
+        try:
+            fault_session.advance()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(f"{fault_point} did not fail")
+        assert fault_session.boundary_tick == 0
+        assert fault_world.native_session.tick == 0
+        assert fault_world.native_session.native_snapshot() == opening_native
+        assert fault_session.events.head_hash == opening_event_head
+        assert (
+            fault_world.native_session.bridge.controller_envelope.hash
+            == opening_hash
+        )
+        assert bytes(
+            fault_world.native_session.bridge.controller_envelope.canonical_payload
+        ) == opening_payload
+    fault_world.inject_controller_fault_for_test("none")
+    assert fault_session.advance().status == "advanced"
+    assert fault_session.boundary_tick == 1
+
+    build_world, build_session = create_native_controlled_session(
+        NewGameSpec.default(seed=1203),
+    )
+    for seat in SEATS:
+        build_session.assign_seat(
+            0, seat, NullOccupant(), actor="native-build-fault",
+        )
+    build_opening = build_world.native_session.native_snapshot()
+    build_payload = bytes(
+        build_world.native_session.bridge.controller_envelope.canonical_payload
+    )
+    build_world.inject_controller_fault_for_test("controller_build")
+    try:
+        build_session.advance()
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("controller-build fault did not fail")
+    assert build_session.boundary_tick == 0
+    assert build_world.native_session.native_snapshot() == build_opening
+    assert bytes(
+        build_world.native_session.bridge.controller_envelope.canonical_payload
+    ) == build_payload
+
+    for index, fault_point in enumerate(("cache_rebuild", "publication")):
+        post_world, post_session = create_native_controlled_session(
+            NewGameSpec.default(seed=1204 + index),
+        )
+        for seat in SEATS:
+            post_session.assign_seat(
+                0, seat, NullOccupant(), actor=f"native-{fault_point}",
+            )
+        post_world.inject_controller_fault_for_test(fault_point)
+        try:
+            post_session.advance()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(f"{fault_point} did not fail")
+        assert post_session.boundary_tick == 1
+        assert post_world.native_session.tick == 1
+        restored_state = decode_controller_state(bytes(
+            post_world.native_session.bridge.controller_envelope.canonical_payload
+        ))
+        assert restored_state["session"]["boundary_tick"] == 1
+        assert restored_state["session"]["phase"] == "boundary_start"
+        assert restored_state["events"].head_hash == post_session.events.head_hash
 
     artifact_path = (
         args.source_dir

@@ -681,6 +681,16 @@ def _controller_envelope(native: Any, world: Any) -> Any:
 
 
 @dataclass
+class NativePreparedBoundary:
+    """Exclusive native boundary lease plus its immutable controller predecessor."""
+
+    lease: Any
+    previous_envelope: Any
+    operation_id: str
+    canonical_actions: tuple[dict[str, Any], ...]
+
+
+@dataclass
 class NativeSimulationSession:
     """Product-level owner of a native M9 world and M10 control bridge."""
 
@@ -754,6 +764,117 @@ class NativeSimulationSession:
         self, first_sequence: int, maximum_frames: int = 256
     ) -> dict[str, Any]:
         return dict(self.bridge.history_page(first_sequence, maximum_frames))
+
+    def history_bounds(self) -> dict[str, int]:
+        return {
+            key: int(value)
+            for key, value in dict(self.bridge.history_bounds()).items()
+        }
+
+    def clone(self) -> "NativeSimulationSession":
+        """Clone the committed native composite without Python world state."""
+        return type(self)(
+            spec=self.spec,
+            bridge=self.bridge.clone(),
+            worker_count=self.worker_count,
+        )
+
+    def probe_page(
+        self, kind: str, *, economy_id: int = 0, after_id: int = 0,
+        maximum_rows: int = 256,
+    ) -> dict[str, Any]:
+        methods = {
+            "households": self.bridge.probe_households,
+            "firms": self.bridge.probe_firms,
+            "banks": self.bridge.probe_banks,
+            "persons": self.bridge.probe_persons,
+            "jobs": self.bridge.probe_jobs,
+            "dwellings": self.bridge.probe_dwellings,
+        }
+        try:
+            method = methods[kind]
+        except KeyError as exc:
+            raise ValueError(f"unknown native probe kind {kind!r}") from exc
+        return dict(method(economy_id, after_id, maximum_rows))
+
+    def probe_economy_diagnostics(
+        self, economy_id: int = 0,
+    ) -> dict[str, Any]:
+        return dict(self.bridge.probe_economy_diagnostics(economy_id))
+
+    def shock_bulletins(
+        self, economy_id: int, as_of_boundary: int,
+    ) -> tuple[dict[str, Any], ...]:
+        return tuple(
+            dict(row) for row in self.bridge.probe_shock_bulletins(
+                economy_id, as_of_boundary,
+            )
+        )
+
+    def policy_values(self, economy_id: int = 0) -> dict[str, Any]:
+        """Return all 102 current policy values through the generated bridge."""
+        if not 0 <= economy_id < int(self.bridge.economy_count):
+            raise IndexError(f"economy_id {economy_id} out of range")
+        native = _load_native()
+        domestic = self.bridge.domestic_policy(economy_id)
+        external = self.bridge.external_policies()[economy_id]
+        return self._policy_values_from_bundle(native, domestic, external)
+
+    @staticmethod
+    def _policy_values_from_bundle(
+        native: Any, domestic: Any, external: Any,
+    ) -> dict[str, Any]:
+        output: dict[str, Any] = {}
+        for name, lever in REGISTRY.items():
+            if lever.scope == "external":
+                if name == "fx_regime":
+                    output[name] = (
+                        "peg"
+                        if external.fx_regime == native.FxRegime.PEG
+                        else "float"
+                    )
+                elif name == "sanctions_imposed_on":
+                    output[name] = sorted(external.sanctions_imposed_on)
+                else:
+                    output[name] = getattr(external, name)
+                continue
+            if name == "monetary_regime":
+                regime = domestic.fiscal_monetary.monetary_regime
+                output[name] = {
+                    native.MonetaryRegime.EXOGENOUS: "exogenous",
+                    native.MonetaryRegime.TAYLOR: "taylor",
+                    native.MonetaryRegime.MANUAL: "manual",
+                }[regime]
+            elif name == "energy_rationing":
+                output[name] = {
+                    native.EnergyRationing.MARKET: "market",
+                    native.EnergyRationing.PROPORTIONAL: "proportional",
+                    native.EnergyRationing.HOUSEHOLD_FIRST: "household_first",
+                    native.EnergyRationing.INDUSTRY_FIRST: "industry_first",
+                }[domestic.energy.rationing]
+            elif name == "bank_resolution_fund":
+                output[name] = domestic.financial.bank_resolution_fund
+            else:
+                section_name, field_name = DOMESTIC_POLICY_BINDINGS[name]
+                output[name] = getattr(
+                    getattr(domestic, section_name), field_name,
+                )
+        return output
+
+    def projected_policy_values(
+        self, actions: Iterable[Mapping[str, Any]],
+    ) -> tuple[dict[str, Any], ...]:
+        """Return the complete policy view after a validated, non-mutating batch."""
+        native = _load_native()
+        batch, _canonical = self._policy_batch(actions)
+        self.bridge.validate_policy_batch(batch)
+        return tuple(
+            self._policy_values_from_bundle(
+                native, batch.domestic[economy_id],
+                batch.external[economy_id],
+            )
+            for economy_id in range(int(self.bridge.economy_count))
+        )
 
     @staticmethod
     def _set_domestic_lever(
@@ -883,6 +1004,157 @@ class NativeSimulationSession:
         batch.external = external
         return batch, canonical_actions
 
+    def validate_actions(
+        self, actions: Iterable[Mapping[str, Any]],
+    ) -> tuple[dict[str, Any], ...]:
+        """Validate and canonicalize an atomic policy batch without mutation."""
+        _batch, canonical = self._policy_batch(actions)
+        return tuple(canonical)
+
+    def sync_controller_envelope(
+        self,
+        payload: bytes,
+        *,
+        event_sequence: int,
+        release_cursor: int,
+        decision_versions: Iterable[int],
+        effective_versions: Iterable[int],
+        operation_id: str,
+    ) -> str:
+        """Atomically publish a complete neutral controller cache root."""
+        if not isinstance(payload, bytes):
+            raise TypeError("controller payload must be bytes")
+        if not isinstance(operation_id, str) or not operation_id:
+            raise ValueError("controller operation_id must be non-empty")
+        for name, value in (
+            ("event_sequence", event_sequence),
+            ("release_cursor", release_cursor),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        decisions = list(decision_versions)
+        effective = list(effective_versions)
+        if len(decisions) != len(effective):
+            raise ValueError("controller policy version vectors differ in length")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in (*decisions, *effective)
+        ):
+            raise ValueError("controller policy versions must be non-negative integers")
+
+        previous = self.bridge.controller_envelope
+        if (
+            bytes(previous.canonical_payload) == payload
+            and int(previous.event_sequence) == event_sequence
+            and int(previous.release_cursor) == release_cursor
+            and list(previous.decision_versions) == decisions
+            and list(previous.effective_versions) == effective
+        ):
+            return str(previous.hash)
+
+        native = _load_native()
+        envelope = native.CanonicalControllerEnvelope()
+        envelope.schema_version = previous.schema_version
+        envelope.boundary = self.tick
+        envelope.policy_generation = int(self.bridge.policy_generation)
+        envelope.event_sequence = event_sequence
+        envelope.release_cursor = release_cursor
+        envelope.decision_versions = decisions
+        envelope.effective_versions = effective
+        envelope.canonical_payload = payload
+        envelope.seal()
+        transition = native.ControllerEnvelopeTransition()
+        transition.operation_id = operation_id
+        transition.expected_prior_hash = previous.hash
+        transition.next = envelope
+        receipt = dict(self.bridge.update_controller(transition))
+        self.bridge.acknowledge_receipt(operation_id)
+        return str(receipt["result_hash"])
+
+    def prepare_boundary(
+        self,
+        *,
+        actions: Iterable[Mapping[str, Any]] = (),
+        fault_point: str = "none",
+    ) -> NativePreparedBoundary:
+        """Prepare one economic day while keeping the public composite unchanged."""
+        native = _load_native()
+        fault_points = {
+            "none": native.M10FaultPoint.NONE,
+            "prepare_after_policy":
+                native.M10FaultPoint.PREPARE_AFTER_POLICY,
+            "prepare_after_advance":
+                native.M10FaultPoint.PREPARE_AFTER_ADVANCE,
+            "prepare_after_metrics":
+                native.M10FaultPoint.PREPARE_AFTER_METRICS,
+            "commit_before_swap":
+                native.M10FaultPoint.COMMIT_BEFORE_SWAP,
+        }
+        try:
+            native_fault = fault_points[fault_point]
+        except KeyError as exc:
+            raise ValueError(
+                f"unknown native M10 fault point {fault_point!r}"
+            ) from exc
+        policies, canonical_actions = self._policy_batch(actions)
+        previous = self.bridge.controller_envelope
+        operation_id = (
+            f"native-boundary:{self.tick}:"
+            f"{int(previous.event_sequence) + 1}"
+        )
+        sealed = native.SealedControlBatch()
+        sealed.operation_id = operation_id
+        sealed.expected_controller_hash = previous.hash
+        sealed.policies = policies
+        sealed.advance_ticks = 1
+        sealed.worker_count = self.worker_count
+        sealed.fault_point = native_fault
+        lease = self.bridge.prepare_boundary(sealed)
+        return NativePreparedBoundary(
+            lease=lease,
+            previous_envelope=previous,
+            operation_id=operation_id,
+            canonical_actions=tuple(canonical_actions),
+        )
+
+    def commit_prepared_boundary(
+        self,
+        prepared: NativePreparedBoundary,
+        *,
+        payload: bytes,
+        event_sequence: int,
+        release_cursor: int,
+        decision_versions: Iterable[int],
+        effective_versions: Iterable[int],
+    ) -> dict[str, Any]:
+        """Commit a prepared economy together with the complete controller root."""
+        if not prepared.lease.active:
+            raise RuntimeError("native prepared boundary lease is inactive")
+        native = _load_native()
+        decisions = list(decision_versions)
+        effective = list(effective_versions)
+        if len(decisions) != len(effective):
+            raise ValueError("controller policy version vectors differ in length")
+        envelope = native.CanonicalControllerEnvelope()
+        envelope.schema_version = prepared.previous_envelope.schema_version
+        envelope.boundary = int(prepared.lease.preview["next_tick"])
+        envelope.policy_generation = int(
+            prepared.lease.preview["policy_generation"]
+        )
+        envelope.event_sequence = int(event_sequence)
+        envelope.release_cursor = int(release_cursor)
+        envelope.decision_versions = decisions
+        envelope.effective_versions = effective
+        envelope.canonical_payload = payload
+        envelope.seal()
+        return dict(self.bridge.commit_boundary(prepared.lease, envelope))
+
+    def abort_prepared_boundary(
+        self, prepared: NativePreparedBoundary,
+    ) -> None:
+        if prepared.lease.active:
+            self.bridge.abort_boundary(prepared.lease)
+
     def advance(
         self,
         ticks: int = 1,
@@ -892,54 +1164,39 @@ class NativeSimulationSession:
         """Commit one or more native day boundaries atomically, action first."""
         if isinstance(ticks, bool) or not isinstance(ticks, int) or ticks < 1:
             raise ValueError("ticks must be a positive integer")
-        native = _load_native()
         result: dict[str, Any] = {}
         pending_actions = tuple(actions)
         for offset in range(ticks):
-            policies, canonical_actions = self._policy_batch(
-                pending_actions if offset == 0 else ()
+            prepared = self.prepare_boundary(
+                actions=pending_actions if offset == 0 else (),
             )
-            operation_id = (
-                f"native-boundary:{self.tick}:"
-                f"{int(self.bridge.controller_envelope.event_sequence) + 1}"
-            )
-            sealed = native.SealedControlBatch()
-            sealed.operation_id = operation_id
-            sealed.expected_controller_hash = self.bridge.controller_envelope.hash
-            sealed.policies = policies
-            sealed.advance_ticks = 1
-            sealed.worker_count = self.worker_count
-            lease = self.bridge.prepare_boundary(sealed)
             try:
-                previous = self.bridge.controller_envelope
-                envelope = native.CanonicalControllerEnvelope()
-                envelope.schema_version = previous.schema_version
-                envelope.boundary = int(lease.preview["next_tick"])
-                envelope.policy_generation = int(
-                    lease.preview["policy_generation"]
-                )
-                envelope.event_sequence = (
-                    int(previous.event_sequence) + len(canonical_actions)
-                )
-                envelope.release_cursor = int(previous.release_cursor) + 1
-                envelope.decision_versions = list(previous.decision_versions)
-                envelope.effective_versions = list(previous.effective_versions)
-                envelope.canonical_payload = json.dumps(
+                previous = prepared.previous_envelope
+                # The authoritative Python controller envelope is republished
+                # after the completed boundary.  The economic commit must not
+                # invent controller/release sequence positions that the final
+                # neutral state could then be unable to decrease.
+                payload = json.dumps(
                     {
-                        "actions": canonical_actions,
-                        "operation_id": operation_id,
+                        "actions": prepared.canonical_actions,
+                        "operation_id": prepared.operation_id,
                         "phase": "boundary_start",
                         "schema_version": 1,
-                        "tick": envelope.boundary,
+                        "tick": int(prepared.lease.preview["next_tick"]),
                     },
                     sort_keys=True,
                     separators=(",", ":"),
                 ).encode("utf-8")
-                envelope.seal()
-                result = dict(self.bridge.commit_boundary(lease, envelope))
+                result = self.commit_prepared_boundary(
+                    prepared,
+                    payload=payload,
+                    event_sequence=int(previous.event_sequence),
+                    release_cursor=int(previous.release_cursor),
+                    decision_versions=list(previous.decision_versions),
+                    effective_versions=list(previous.effective_versions),
+                )
             except Exception:
-                if lease.active:
-                    self.bridge.abort_boundary(lease)
+                self.abort_prepared_boundary(prepared)
                 raise
         return result
 

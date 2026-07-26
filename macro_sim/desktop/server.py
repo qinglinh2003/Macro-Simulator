@@ -14,8 +14,11 @@ class _Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], runtime: SimulationRuntime) -> None:
+    def __init__(self, address: tuple[str, int], runtime: Any) -> None:
         self.runtime = runtime
+        self.protocol_version = int(
+            getattr(runtime, "protocol_version", PROTOCOL_VERSION)
+        )
         self.runtime_lock = threading.Lock()
         super().__init__(address, _Handler)
 
@@ -38,14 +41,14 @@ class _Handler(socketserver.StreamRequestHandler):
                 response = {
                     "ok": True,
                     "request_id": request_id,
-                    "protocol_version": PROTOCOL_VERSION,
+                    "protocol_version": self.server.protocol_version,  # type: ignore[attr-defined]
                     "snapshot": snapshot,
                 }
             except Exception as exc:  # Keep protocol failures contained to one request.
                 response = {
                     "ok": False,
                     "request_id": request_id,
-                    "protocol_version": PROTOCOL_VERSION,
+                    "protocol_version": self.server.protocol_version,  # type: ignore[attr-defined]
                     "error": {"type": type(exc).__name__, "message": str(exc)},
                 }
             self.wfile.write(
@@ -60,8 +63,18 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=47_821)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--backend",
+        choices=("python-oracle", "native-m10"),
+        default="python-oracle",
+    )
     args = parser.parse_args()
-    runtime = SimulationRuntime(seed=args.seed, free_policy_mode=True)
+    if args.backend == "native-m10":
+        from .native_runtime import NativeSimulationRuntime
+
+        runtime = NativeSimulationRuntime(seed=args.seed)
+    else:
+        runtime = SimulationRuntime(seed=args.seed, free_policy_mode=True)
     with _Server((args.host, args.port), runtime) as server:
         print(
             json.dumps({"status": "ready", "host": args.host, "port": args.port}),

@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "macro_sim/reporting/m10.hpp"
+#include "macro_sim/reporting/probes.hpp"
 
 namespace {
 
@@ -153,6 +154,14 @@ void test_shock_metrics_respect_announcement_boundary() {
                 ->value(
                     0U, metric("metric.shock.severity.productivity"))
                 .get_if() == 0.2);
+    auto opening_bulletins =
+        probe_shock_bulletins(world, EconomyId(0U), Tick(0U));
+    assert(opening_bulletins.ok());
+    assert(opening_bulletins.get_if()->size() == 1U);
+    assert(opening_bulletins.get_if()->front().shock_id == 801U);
+    assert(opening_bulletins.get_if()->front().status ==
+           ShockBulletinStatus::upcoming);
+    assert(opening_bulletins.get_if()->front().intensity == 0.0);
 
     assert(world.advance(5U).ok());
     auto active = build_public_metric_frame(world, opening.get_if());
@@ -163,6 +172,55 @@ void test_shock_metrics_respect_announcement_boundary() {
     assert(*active.get_if()
                 ->value(0U, metric("metric.shock.max_severity"))
                 .get_if() == 0.2);
+    auto active_bulletins =
+        probe_shock_bulletins(world, EconomyId(0U), Tick(5U));
+    assert(active_bulletins.ok());
+    assert(active_bulletins.get_if()->front().status ==
+           ShockBulletinStatus::active);
+    assert(active_bulletins.get_if()->front().intensity == 1.0);
+    assert(!probe_shock_bulletins(world, EconomyId(0U), Tick(6U)).ok());
+}
+
+void test_typed_probes_are_stable_and_paged() {
+    auto world = build_world();
+    auto first = probe_households(world, EconomyId(0U), 0U, 5U);
+    assert(first.ok());
+    assert(first.get_if()->page.boundary == Tick(0U));
+    assert(first.get_if()->page.total_rows > 5U);
+    assert(first.get_if()->rows.size() == 5U);
+    assert(first.get_if()->page.has_more);
+    assert(first.get_if()->page.next_after_id == 5U);
+    assert(first.get_if()->rows.front().id == HouseholdId(1U));
+    assert(first.get_if()->rows.front().cash >= 0.0);
+
+    auto second = probe_households(
+        world, EconomyId(0U), first.get_if()->page.next_after_id,
+        kMaximumProbePageRows);
+    assert(second.ok());
+    assert(second.get_if()->rows.size() ==
+           first.get_if()->page.total_rows - first.get_if()->rows.size());
+    assert(!second.get_if()->page.has_more);
+    assert(second.get_if()->rows.front().id == HouseholdId(6U));
+
+    auto persons = probe_persons(world, EconomyId(0U), 0U, 4U);
+    assert(persons.ok());
+    assert(persons.get_if()->page.total_rows == 24U);
+    assert(persons.get_if()->rows.front().household.valid());
+
+    auto firms = probe_firms(world, EconomyId(0U), 0U, 8U);
+    auto banks = probe_banks(world, EconomyId(0U), 0U, 8U);
+    auto diagnostic = probe_economy_diagnostics(world, EconomyId(0U));
+    assert(firms.ok());
+    assert(banks.ok());
+    assert(diagnostic.ok());
+    assert(firms.get_if()->page.total_rows >= 4U);
+    assert(banks.get_if()->page.total_rows == 2U);
+    assert(diagnostic.get_if()->households ==
+           first.get_if()->page.total_rows);
+    assert(diagnostic.get_if()->persons_alive == 24U);
+    assert(diagnostic.get_if()->account_balance_total > 0.0);
+    assert(!probe_households(world, EconomyId(1U), 0U, 1U).ok());
+    assert(!probe_households(world, EconomyId(0U), 0U, 0U).ok());
 }
 
 } // namespace
@@ -173,6 +231,7 @@ int main() {
     test_history_is_bounded_and_cursor_checked();
     test_inflation_uses_only_previous_committed_frame();
     test_shock_metrics_respect_announcement_boundary();
+    test_typed_probes_are_stable_and_paged();
     std::cout << "M10 reporting tests passed\n";
     return 0;
 }

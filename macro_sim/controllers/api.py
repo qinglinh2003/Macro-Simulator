@@ -167,12 +167,20 @@ class ControllerService:
         """Read the same disclosed shock bulletin available to this policy seat."""
         economy_id = self._economy_id(economy_id)
         seat = self._seat(seat)
-        from macro_sim.shocks import get_shock_engine
-
-        shock_engine = get_shock_engine(self.session.world)
-        rows = () if shock_engine is None else shock_engine.bulletins(
-            economy_id, self.session.boundary_tick, role=seat,
+        native_provider = getattr(
+            self.session.world, "native_shock_bulletins", None,
         )
+        if callable(native_provider):
+            rows = native_provider(
+                economy_id, self.session.boundary_tick, role=seat,
+            )
+        else:
+            from macro_sim.shocks import get_shock_engine
+
+            shock_engine = get_shock_engine(self.session.world)
+            rows = () if shock_engine is None else shock_engine.bulletins(
+                economy_id, self.session.boundary_tick, role=seat,
+            )
         return canonical_value({
             "schema_version": CONTROLLER_SCHEMA_VERSION,
             "boundary_tick": self.session.boundary_tick,

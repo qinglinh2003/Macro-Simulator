@@ -13,6 +13,7 @@
 #include "macro_sim/core/digest.hpp"
 #include "macro_sim/error.hpp"
 #include "macro_sim/reporting/m10.hpp"
+#include "macro_sim/reporting/probes.hpp"
 #include "macro_sim/simulation/m9.hpp"
 
 namespace macro_sim::control {
@@ -53,12 +54,21 @@ struct ControllerUpdateReceipt final {
     bool operator==(const ControllerUpdateReceipt &) const = default;
 };
 
+enum class M10FaultPoint : std::uint8_t {
+    none = 0,
+    prepare_after_policy = 1,
+    prepare_after_advance = 2,
+    prepare_after_metrics = 3,
+    commit_before_swap = 4,
+};
+
 struct SealedControlBatch final {
     std::string operation_id;
     core::StateDigest expected_controller_hash{};
     simulation::WorldPolicyBatch policies{};
     std::uint64_t advance_ticks{1};
     simulation::M9AdvanceOptions advance_options{};
+    M10FaultPoint fault_point{M10FaultPoint::none};
 };
 
 struct BoundaryPreview final {
@@ -67,6 +77,7 @@ struct BoundaryPreview final {
     Tick next_tick{};
     std::uint64_t policy_generation{0};
     std::uint64_t engine_digest{0};
+    M10FaultPoint fault_point{M10FaultPoint::none};
     reporting::MetricFrame public_metrics{};
 };
 
@@ -105,6 +116,28 @@ class EngineSession final {
     advance_ticks(std::uint64_t count,
                   const simulation::M9AdvanceOptions &options = {});
     [[nodiscard]] Result<EngineSession> clone() const;
+    [[nodiscard]] Result<reporting::HouseholdProbePage>
+    probe_households(EconomyId economy, std::uint64_t after_id,
+                     std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::FirmProbePage>
+    probe_firms(EconomyId economy, std::uint64_t after_id,
+                std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::BankProbePage>
+    probe_banks(EconomyId economy, std::uint64_t after_id,
+                std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::PersonProbePage>
+    probe_persons(EconomyId economy, std::uint64_t after_id,
+                  std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::JobProbePage>
+    probe_jobs(EconomyId economy, std::uint64_t after_id,
+               std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::DwellingProbePage>
+    probe_dwellings(EconomyId economy, std::uint64_t after_id,
+                    std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::EconomyDiagnosticProbe>
+    probe_economy_diagnostics(EconomyId economy) const;
+    [[nodiscard]] Result<std::vector<reporting::ShockBulletinProbeRow>>
+    probe_shock_bulletins(EconomyId economy, Tick as_of_boundary) const;
 
   private:
     friend class HybridControlledBridge;
@@ -151,9 +184,14 @@ class HybridControlledBridge final {
         return envelope_;
     }
     [[nodiscard]] const EngineSession &engine() const noexcept { return engine_; }
+    [[nodiscard]] Status query_status() const noexcept {
+        return require_available();
+    }
     [[nodiscard]] Result<ControllerUpdateReceipt>
     update_controller(const ControllerEnvelopeTransition &transition);
     [[nodiscard]] Status acknowledge_receipt(std::string_view operation_id);
+    [[nodiscard]] Status
+    validate_policy_batch(const simulation::WorldPolicyBatch &batch) const;
     [[nodiscard]] Result<PreparedBoundaryLease>
     prepare_boundary(const SealedControlBatch &batch);
     [[nodiscard]] Result<simulation::M9AdvanceResult>
@@ -161,6 +199,28 @@ class HybridControlledBridge final {
                     CanonicalControllerEnvelope next);
     [[nodiscard]] Status abort_boundary(PreparedBoundaryLease &&lease);
     [[nodiscard]] Result<HybridControlledBridge> clone() const;
+    [[nodiscard]] Result<reporting::HouseholdProbePage>
+    probe_households(EconomyId economy, std::uint64_t after_id,
+                     std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::FirmProbePage>
+    probe_firms(EconomyId economy, std::uint64_t after_id,
+                std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::BankProbePage>
+    probe_banks(EconomyId economy, std::uint64_t after_id,
+                std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::PersonProbePage>
+    probe_persons(EconomyId economy, std::uint64_t after_id,
+                  std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::JobProbePage>
+    probe_jobs(EconomyId economy, std::uint64_t after_id,
+               std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::DwellingProbePage>
+    probe_dwellings(EconomyId economy, std::uint64_t after_id,
+                    std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::EconomyDiagnosticProbe>
+    probe_economy_diagnostics(EconomyId economy) const;
+    [[nodiscard]] Result<std::vector<reporting::ShockBulletinProbeRow>>
+    probe_shock_bulletins(EconomyId economy, Tick as_of_boundary) const;
 
   private:
     friend class PreparedBoundaryLease;

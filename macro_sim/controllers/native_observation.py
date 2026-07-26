@@ -23,6 +23,15 @@ class _EconomyRecordView:
     records: list[dict[str, Any]]
 
 
+@dataclass(frozen=True, slots=True)
+class _PreviewToken:
+    boundary_tick: int
+    economy_lengths: tuple[int, ...]
+    world_length: int
+    previous_last_frame_tick: int
+    previous_shock_frame: tuple[dict[str, float], ...] | None
+
+
 class NativeObservationSource:
     """Project C++ metric history into the read-only ReleaseService protocol."""
 
@@ -38,8 +47,14 @@ class NativeObservationSource:
         )
         self.world_records: list[dict[str, Any]] = []
         self._shock_frames: dict[int, tuple[dict[str, float], ...]] = {}
-        self._next_sequence = 0
+        bounds_method = getattr(session, "history_bounds", None)
+        bounds = bounds_method() if callable(bounds_method) else {}
+        oldest = bounds.get("oldest_sequence", 0)
+        if isinstance(oldest, bool) or not isinstance(oldest, Integral):
+            raise TypeError("native metric history oldest cursor must be an integer")
+        self._next_sequence = int(oldest)
         self._last_frame_tick = -1
+        self._preview_token: _PreviewToken | None = None
         self.refresh()
 
     @property
@@ -115,6 +130,8 @@ class NativeObservationSource:
 
     def refresh(self) -> None:
         """Consume every newly committed native frame exactly once."""
+        if self._preview_token is not None:
+            raise RuntimeError("cannot refresh native history during a preview")
         while True:
             page = self._session.history_page(self._next_sequence, 256)
             frames = page.get("frames")
@@ -137,13 +154,53 @@ class NativeObservationSource:
             if not progressed or len(frames) < 256:
                 break
 
+    def begin_preview(self, frame: Mapping[str, Any]) -> _PreviewToken:
+        """Temporarily expose a prepared frame to release/controller builders."""
+        if self._preview_token is not None:
+            raise RuntimeError("native metric preview is already active")
+        raw_tick = frame.get("tick")
+        if isinstance(raw_tick, bool) or not isinstance(raw_tick, Integral):
+            raise TypeError("native metric preview tick must be an integer")
+        boundary_tick = int(raw_tick)
+        token = _PreviewToken(
+            boundary_tick=boundary_tick,
+            economy_lengths=tuple(
+                len(view.records) for view in self.economies
+            ),
+            world_length=len(self.world_records),
+            previous_last_frame_tick=self._last_frame_tick,
+            previous_shock_frame=self._shock_frames.get(boundary_tick),
+        )
+        self._ingest_frame(frame)
+        self._preview_token = token
+        return token
+
+    def end_preview(self, token: _PreviewToken) -> None:
+        """Remove a prepared frame before either native commit or abort."""
+        if self._preview_token is not token:
+            raise RuntimeError("native metric preview token is stale")
+        for view, length in zip(
+            self.economies, token.economy_lengths, strict=True,
+        ):
+            del view.records[length:]
+        del self.world_records[token.world_length:]
+        if token.previous_shock_frame is None:
+            self._shock_frames.pop(token.boundary_tick, None)
+        else:
+            self._shock_frames[token.boundary_tick] = (
+                token.previous_shock_frame
+            )
+        self._last_frame_tick = token.previous_last_frame_tick
+        self._preview_token = None
+
     def native_shock_observable(
         self, key: str, economy_id: int, as_of_tick: int,
         *, role: str = "public",
     ) -> float:
         """Return only the native disclosure scalar available at this boundary."""
         del role  # Native frame already enforces announcement-time disclosure.
-        self.refresh()
+        if self._preview_token is None:
+            self.refresh()
         if not 0 <= economy_id < len(self.economies):
             raise IndexError(f"economy_id {economy_id} out of range")
         eligible = [
@@ -161,13 +218,8 @@ class NativeObservationSource:
     def native_shock_bulletins(
         self, economy_id: int, as_of_tick: int, *, role: str = "public",
     ) -> tuple[dict[str, Any], ...]:
-        """Return typed bulletins once the C++ probe surface supplies them.
-
-        Numeric context features are already authoritative and release-safe.
-        The empty tuple avoids fabricating prose or future tape details while the
-        typed M10 shock bulletin probe is implemented.
-        """
-        del as_of_tick, role
+        """Return the public native bulletin fields disclosed by this boundary."""
+        del role  # Native M10 shock tapes currently have public visibility only.
         if not 0 <= economy_id < len(self.economies):
             raise IndexError(f"economy_id {economy_id} out of range")
-        return ()
+        return self._session.shock_bulletins(economy_id, int(as_of_tick))

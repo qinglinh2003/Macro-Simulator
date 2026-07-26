@@ -7,5 +7,18 @@ exactly once per accepted tick.
 """
 
 from macro_sim.diagnostics.models import Finding, Intervention, RunOutcome, RunSpec
+from macro_sim.diagnostics.native_probes import (
+    NativeDeepProbeCollector,
+    NativeDiagnosticSnapshot,
+    NativeWorldProbeCollector,
+)
 
-__all__ = ["Finding", "Intervention", "RunOutcome", "RunSpec"]
+__all__ = [
+    "Finding",
+    "Intervention",
+    "NativeDeepProbeCollector",
+    "NativeDiagnosticSnapshot",
+    "NativeWorldProbeCollector",
+    "RunOutcome",
+    "RunSpec",
+]
