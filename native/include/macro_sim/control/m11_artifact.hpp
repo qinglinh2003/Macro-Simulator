@@ -29,6 +29,7 @@ struct NativePolicyArtifactInfo final {
     std::string action_contract_hash;
     std::string model_contract_hash;
     std::string metadata_json;
+    std::vector<std::string> action_levers;
     std::size_t observation_dimension{0};
     std::size_t action_dimension{0};
     std::size_t layer_count{0};

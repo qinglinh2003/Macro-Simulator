@@ -503,6 +503,24 @@ parse_artifact(std::span<const std::uint8_t> artifact) {
             dimensions.empty()) {
             throw std::runtime_error("artifact action codec is invalid");
         }
+        std::vector<std::string> action_levers;
+        action_levers.reserve(dimensions.size());
+        std::set<std::string> unique_action_levers;
+        for (const auto &dimension : dimensions) {
+            if (!dimension.is_array() || dimension.size() != 2U ||
+                !dimension[0U].is_string() ||
+                !dimension[1U].is_null()) {
+                throw UnsupportedArtifact(
+                    "targeted action dimensions are not supported");
+            }
+            auto lever = dimension[0U].get<std::string>();
+            if (lever.empty() ||
+                !unique_action_levers.insert(lever).second) {
+                throw std::runtime_error(
+                    "artifact action dimensions are invalid");
+            }
+            action_levers.push_back(std::move(lever));
+        }
 
         const auto &model = manifest.at("model");
         if (!exact_keys(
@@ -613,6 +631,7 @@ parse_artifact(std::span<const std::uint8_t> artifact) {
             manifest.at("action_contract_hash").get<std::string>(),
             manifest.at("model_contract_hash").get<std::string>(),
             manifest.at("metadata").dump(),
+            std::move(action_levers),
             feature_names.size(),
             dimensions.size(),
             layer_count,

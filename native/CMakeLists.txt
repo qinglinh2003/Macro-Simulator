@@ -111,6 +111,7 @@ add_library(
         src/control/m11_kernel.cpp
         src/control/m11_policy.cpp
         src/control/m11_release.cpp
+        src/control/m11_session.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -736,6 +737,27 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_release
         COMMAND macro_sim_m11_release_tests
+    )
+
+    add_executable(
+        macro_sim_m11_session_tests
+        tests/m11_session_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_session_tests
+        PRIVATE macro_sim_core
+    )
+    target_compile_definitions(
+        macro_sim_m11_session_tests
+        PRIVATE MACRO_SIM_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    )
+    macro_sim_project_options(macro_sim_m11_session_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_session_tests
+    )
+    add_test(
+        NAME macro_sim.m11_session
+        COMMAND macro_sim_m11_session_tests
     )
     if(TARGET _native)
         add_test(

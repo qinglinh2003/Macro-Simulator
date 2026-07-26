@@ -771,7 +771,8 @@ Result<M11DecisionContext> M11PolicyCoordinator::open_context(
     const M11DecisionScheduler &scheduler, Tick boundary,
     EconomyId economy, std::string seat,
     std::string decision_group, Tick expires_at, bool emergency,
-    std::string emergency_trigger, std::uint64_t elapsed_ticks) {
+    std::string emergency_trigger, std::uint64_t elapsed_ticks,
+    std::span<const M11ReleasedObservation> observation) {
     if (boundary != world.tick() ||
         static_cast<std::size_t>(economy.value()) >=
             world.economy_count() ||
@@ -812,6 +813,7 @@ Result<M11DecisionContext> M11PolicyCoordinator::open_context(
     context.boundary = boundary;
     context.expires_at = expires_at;
     context.administrative_window = budget->window_marker;
+    context.observation.assign(observation.begin(), observation.end());
     context.administrative_remaining = budget->remaining;
     context.administrative_reserved = budget->reserved;
     context.administrative_capacity = budget->capacity;

@@ -12,6 +12,7 @@
 
 #include "macro_sim/control/m11_kernel.hpp"
 #include "macro_sim/control/m11_policy.hpp"
+#include "macro_sim/control/m11_release.hpp"
 #include "macro_sim/error.hpp"
 #include "macro_sim/simulation/m9.hpp"
 
@@ -62,6 +63,7 @@ struct M11DecisionContext final {
     Tick boundary{};
     Tick expires_at{};
     Tick administrative_window{};
+    std::vector<M11ReleasedObservation> observation;
     std::vector<M11PermittedAction> permitted_actions;
     std::vector<M11PolicyVersion> policy_versions;
     double administrative_remaining{0.0};
@@ -212,7 +214,8 @@ class M11PolicyCoordinator final {
                  std::string decision_group, Tick expires_at,
                  bool emergency = false,
                  std::string emergency_trigger = {},
-                 std::uint64_t elapsed_ticks = 0U);
+                 std::uint64_t elapsed_ticks = 0U,
+                 std::span<const M11ReleasedObservation> observation = {});
     [[nodiscard]] Result<M11PolicyDecision>
     submit(const simulation::M9World &world,
            const M11DecisionScheduler &scheduler, Tick boundary,
