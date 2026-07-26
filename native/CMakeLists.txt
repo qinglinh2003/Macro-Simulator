@@ -2,6 +2,7 @@ include(GNUInstallDirs)
 include(CTest)
 include(CMakePackageConfigHelpers)
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
 
 option(MACRO_SIM_BUILD_BENCHMARKS "Build native benchmark executables" ON)
 option(MACRO_SIM_BUILD_PYTHON "Build the nanobind Python extension" ON)
@@ -105,6 +106,7 @@ add_library(
         src/core/transaction.cpp
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
+        src/control/m11_artifact.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -139,7 +141,7 @@ target_include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/picosha2"
 )
-target_link_libraries(macro_sim_core PUBLIC Threads::Threads)
+target_link_libraries(macro_sim_core PUBLIC Threads::Threads ZLIB::ZLIB)
 macro_sim_project_options(macro_sim_core)
 
 add_library(macro_sim_c SHARED src/c_api.cpp)
@@ -647,7 +649,42 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m10_control_tests
     )
 
+    add_executable(
+        macro_sim_m11_artifact_tests
+        tests/m11_artifact_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_artifact_tests
+        PRIVATE macro_sim_core
+    )
+    target_compile_definitions(
+        macro_sim_m11_artifact_tests
+        PRIVATE MACRO_SIM_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    )
+    macro_sim_project_options(macro_sim_m11_artifact_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m11_artifact_tests)
+    add_test(
+        NAME macro_sim.m11_artifact
+        COMMAND macro_sim_m11_artifact_tests
+    )
+
     if(TARGET _native)
+        add_test(
+            NAME macro_sim.m11_artifact_golden
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m11/artifact_golden.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+                --artifact
+                "${PROJECT_SOURCE_DIR}/macro_sim/rl/artifacts/fiscal_stabilization_v1.msrl"
+        )
+        set_tests_properties(
+            macro_sim.m11_artifact_golden
+            PROPERTIES LABELS "python-binding;m11"
+        )
         add_test(
             NAME macro_sim.m2_python_oracle
             COMMAND

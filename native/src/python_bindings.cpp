@@ -15,6 +15,7 @@
 
 #include "macro_sim/engine_session.hpp"
 #include "macro_sim/control/m10.hpp"
+#include "macro_sim/control/m11_artifact.hpp"
 #include "macro_sim/generated/contracts.hpp"
 #include "macro_sim/rng.hpp"
 #include "macro_sim/simulation/m9.hpp"
@@ -2611,6 +2612,87 @@ NB_MODULE(_native, module) {
                std::uint32_t workers) {
                 value.advance_options.worker_count = workers;
             });
+    nb::class_<macro_sim::control::NativePolicyArtifact>(
+        module, "NativePolicyArtifact")
+        .def_static(
+            "load_file",
+            [](const std::string &path) {
+                auto result =
+                    macro_sim::control::NativePolicyArtifact::load_file(path);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("path"))
+        .def_prop_ro(
+            "info",
+            [](const macro_sim::control::NativePolicyArtifact &artifact) {
+                const auto &info = artifact.info();
+                nb::dict output;
+                output["inference_capability"] =
+                    info.inference_capability;
+                output["artifact_sha256"] = info.artifact_sha256;
+                output["context_contract_hash"] =
+                    info.context_contract_hash;
+                output["action_contract_hash"] =
+                    info.action_contract_hash;
+                output["model_contract_hash"] =
+                    info.model_contract_hash;
+                output["metadata_json"] = info.metadata_json;
+                output["observation_dimension"] =
+                    info.observation_dimension;
+                output["action_dimension"] = info.action_dimension;
+                output["layer_count"] = info.layer_count;
+                output["float32"] = info.float32;
+                output["deterministic"] = info.deterministic;
+                output["temperature"] = info.temperature;
+                return output;
+            })
+        .def_prop_ro(
+            "feature_names",
+            [](const macro_sim::control::NativePolicyArtifact &artifact) {
+                return artifact.feature_names();
+            })
+        .def(
+            "logits",
+            [](const macro_sim::control::NativePolicyArtifact &artifact,
+               const std::vector<double> &observation) {
+                auto result = artifact.logits(observation);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("observation"))
+        .def(
+            "normalized_input",
+            [](const macro_sim::control::NativePolicyArtifact &artifact,
+               const std::vector<double> &observation) {
+                auto result = artifact.normalized_input(observation);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("observation"))
+        .def(
+            "probabilities",
+            [](const macro_sim::control::NativePolicyArtifact &artifact,
+               const std::vector<double> &observation,
+               const std::vector<std::uint8_t> &action_mask) {
+                auto result =
+                    artifact.probabilities(observation, action_mask);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("observation"), nb::arg("action_mask"))
+        .def(
+            "predict_codes",
+            [](const macro_sim::control::NativePolicyArtifact &artifact,
+               const std::vector<double> &observation,
+               const std::vector<std::uint8_t> &action_mask) {
+                auto result =
+                    artifact.predict_codes(observation, action_mask);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("observation"), nb::arg("action_mask"));
+
     nb::class_<macro_sim::control::EngineSession>(
         module, "NativeWorldEngineSession")
         .def_static(
