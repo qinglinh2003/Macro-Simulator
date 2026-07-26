@@ -114,6 +114,7 @@ add_library(
         src/control/m11_policy.cpp
         src/control/m11_release.cpp
         src/control/m11_session.cpp
+        src/desktop/m11_new_game.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -777,6 +778,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_frontend
         COMMAND macro_sim_m11_frontend_tests
+    )
+
+    add_executable(
+        macro_sim_m11_new_game_tests
+        tests/m11_new_game_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_new_game_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_new_game_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_new_game_tests
+    )
+    add_test(
+        NAME macro_sim.m11_new_game
+        COMMAND macro_sim_m11_new_game_tests
     )
 
     if(TARGET _native)
