@@ -73,6 +73,7 @@ is_base_firm_sector(core::FirmSector sector) noexcept {
     AccountId destination,
     double amount
 ) noexcept {
+    static_cast<void>(state);
     if (!std::isfinite(amount) ||
         amount < -algorithms::kEconomicEpsilon) {
         return Status(
@@ -83,23 +84,25 @@ is_base_firm_sector(core::FirmSector sector) noexcept {
     if (amount <= algorithms::kEconomicEpsilon || source == destination) {
         return Status::success();
     }
-    const auto* source_record = state.postings.get(source);
-    const auto* destination_record = state.postings.get(destination);
-    if (source_record == nullptr || destination_record == nullptr
-        || !source_record->open || !destination_record->open) {
-        return Status(ErrorCode::not_found, "M4 transfer account is absent");
-    }
     const auto source_index = static_cast<std::size_t>(source.value());
     const auto destination_index =
         static_cast<std::size_t>(destination.value());
     if (source_index >= scratch.balances_.size()
-        || destination_index >= scratch.balances_.size()) {
+        || destination_index >= scratch.balances_.size()
+        || source_index >= scratch.account_flags_.size()
+        || destination_index >= scratch.account_flags_.size()) {
         return Status(
             ErrorCode::internal_error,
             "M4 account projection is stale"
         );
     }
-    if (!source_record->allow_negative
+    const auto source_flags = scratch.account_flags_[source_index];
+    const auto destination_flags = scratch.account_flags_[destination_index];
+    if ((source_flags & M4TickScratch::kAccountOpen) == 0U
+        || (destination_flags & M4TickScratch::kAccountOpen) == 0U) {
+        return Status(ErrorCode::not_found, "M4 transfer account is absent");
+    }
+    if ((source_flags & M4TickScratch::kAccountAllowsNegative) == 0U
         && scratch.balances_[source_index] + kTolerance < amount) {
         return Status(
             ErrorCode::insufficient_funds,
@@ -402,7 +405,8 @@ void commit_working_state(
             != state.households.allocator_state().next_id
         || scratch.firm_dense_index_.size()
             != state.firms.allocator_state().next_id
-        || scratch.balances_.size() != state.postings.size() + 1) {
+        || scratch.balances_.size() != state.postings.size() + 1
+        || scratch.account_flags_.size() != state.postings.size() + 1) {
         scratch.reserve(state);
     }
     std::fill(scratch.balances_.begin(), scratch.balances_.end(), 0.0);
@@ -411,11 +415,17 @@ void commit_working_state(
         scratch.account_nodes_.end(),
         SettlementNodeId{}
     );
+    std::fill(scratch.account_flags_.begin(), scratch.account_flags_.end(), 0U);
     for (const auto& account : state.postings.records()) {
         const auto index = static_cast<std::size_t>(account.id.value());
         scratch.balances_[index] =
             account.balance.value();
         scratch.account_nodes_[index] = account.key.settlement_node;
+        scratch.account_flags_[index] =
+            (account.open ? M4TickScratch::kAccountOpen : 0U)
+            | (account.allow_negative
+                   ? M4TickScratch::kAccountAllowsNegative
+                   : 0U);
     }
     std::fill(
         scratch.reserve_balances_.begin(),
@@ -2112,6 +2122,7 @@ void M4TickScratch::reserve(const core::RootState& state) {
     );
     balances_.resize(state.postings.size() + 1);
     account_nodes_.resize(state.postings.size() + 1);
+    account_flags_.resize(state.postings.size() + 1);
     reserve_balances_.resize(state.reserves.size() + 1);
     reserve_minimum_.resize(state.reserves.size() + 1);
     household_work_.resize(household_count);
@@ -2139,6 +2150,7 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
         firm_order_.capacity(),
         balances_.capacity(),
         account_nodes_.capacity(),
+        account_flags_.capacity(),
         reserve_balances_.capacity(),
         reserve_minimum_.capacity(),
         household_work_.capacity(),

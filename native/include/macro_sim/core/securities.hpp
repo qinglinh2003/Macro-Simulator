@@ -1,8 +1,10 @@
 #ifndef MACRO_SIM_CORE_SECURITIES_HPP
 #define MACRO_SIM_CORE_SECURITIES_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -103,19 +105,22 @@ struct SecurityLot final {
     Money cost_basis{};
     SecurityId security{};
     OwnerId holder{};
-    SecurityLotId id{};
-    bool active{true};
 
     SecurityLot() = default;
     SecurityLot(SecurityLotId lot_id, SecurityId security_id, OwnerId owner,
                 double held_units, Money basis, bool is_active = true) noexcept
-        : units(held_units), cost_basis(basis), security(security_id), holder(owner),
-          id(lot_id), active(is_active) {}
+        : units(is_active ? held_units : 0.0),
+          cost_basis(is_active ? basis : Money(0.0)),
+          security(security_id), holder(owner) {
+        static_cast<void>(lot_id);
+    }
+
+    [[nodiscard]] bool active() const noexcept { return units > 0.0; }
 
     bool operator==(const SecurityLot &) const = default;
 };
 
-static_assert(sizeof(SecurityLot) == 32U);
+static_assert(sizeof(SecurityLot) == 24U);
 
 struct HouseholdSecurityPositionChange final {
     SecurityId security{};
@@ -177,6 +182,51 @@ struct SecurityBookMemoryUsage final {
 
 class SecurityBook final {
   public:
+    class LotRange final {
+      public:
+        class Iterator final {
+          public:
+            using iterator_category = std::forward_iterator_tag;
+            using value_type = SecurityLotId;
+            using difference_type = std::ptrdiff_t;
+            using reference = SecurityLotId;
+            using pointer = void;
+
+            Iterator() noexcept = default;
+            [[nodiscard]] SecurityLotId operator*() const noexcept;
+            Iterator &operator++() noexcept;
+            Iterator operator++(int) noexcept;
+            bool operator==(const Iterator &) const noexcept = default;
+
+          private:
+            friend class LotRange;
+            Iterator(const std::vector<SecurityLot> *lots,
+                     const std::vector<std::uint32_t> *next,
+                     std::uint32_t current) noexcept;
+            void advance_to_active() noexcept;
+
+            const std::vector<SecurityLot> *lots_{nullptr};
+            const std::vector<std::uint32_t> *next_{nullptr};
+            std::uint32_t current_{0U};
+        };
+
+        LotRange() noexcept = default;
+        [[nodiscard]] Iterator begin() const noexcept;
+        [[nodiscard]] Iterator end() const noexcept;
+        [[nodiscard]] std::size_t size() const noexcept;
+        [[nodiscard]] bool empty() const noexcept;
+
+      private:
+        friend class SecurityBook;
+        LotRange(const std::vector<SecurityLot> *lots,
+                 const std::vector<std::uint32_t> *next,
+                 std::uint32_t head) noexcept;
+
+        const std::vector<SecurityLot> *lots_{nullptr};
+        const std::vector<std::uint32_t> *next_{nullptr};
+        std::uint32_t head_{0U};
+    };
+
     [[nodiscard]] Result<BondId> issue_bond(BondContract contract, OwnerId holder,
                                             Money cost_basis);
     [[nodiscard]] Result<EquityId>
@@ -199,6 +249,9 @@ class SecurityBook final {
                                                  double income_signal);
     [[nodiscard]] Status consolidate();
     [[nodiscard]] Status compact_inactive_lots();
+    [[nodiscard]] bool inactive_lot_compaction_due() const noexcept;
+    [[nodiscard]] std::size_t active_lot_count() const noexcept;
+    [[nodiscard]] std::size_t inactive_lot_count() const noexcept;
     [[nodiscard]] Status reserve_position_capacity(std::size_t expected_lots,
                                                    std::size_t expected_active_pairs);
     [[nodiscard]] Status reserve_additional_lots(std::size_t additional);
@@ -218,15 +271,14 @@ class SecurityBook final {
     [[nodiscard]] std::span<const HouseholdSecurityPositionChange>
     household_position_changes() const noexcept;
     void clear_household_position_changes() noexcept;
-    [[nodiscard]] std::span<const SecurityLotId>
-    lots_for_holder(OwnerId holder) const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId>
+    [[nodiscard]] LotRange lots_for_holder(OwnerId holder) const noexcept;
+    [[nodiscard]] LotRange
     lots_for_security(SecurityId security) const noexcept;
     [[nodiscard]] std::span<const SecurityId>
     securities_for_issuer(OwnerId issuer) const noexcept;
     [[nodiscard]] std::span<const BondId>
     bonds_maturing_at(Tick maturity) const noexcept;
-    [[nodiscard]] std::span<const SecurityLotId> bank_lots(BankId bank) const noexcept;
+    [[nodiscard]] LotRange bank_lots(BankId bank) const noexcept;
 
     [[nodiscard]] double units_held(SecurityId security, OwnerId holder) const noexcept;
     [[nodiscard]] double total_units(SecurityId security) const noexcept;
@@ -242,6 +294,12 @@ class SecurityBook final {
                          std::vector<SecurityLot> lots, std::uint64_t version);
 
   private:
+    struct LotChain final {
+        std::uint32_t head{0U};
+        std::uint32_t tail{0U};
+
+        bool operator==(const LotChain &) const = default;
+    };
 
     [[nodiscard]] Result<SecurityLotId> create_lot(SecurityId security, OwnerId holder,
                                                    double units, Money cost_basis);
@@ -249,17 +307,24 @@ class SecurityBook final {
                                                OwnerId holder) noexcept;
     [[nodiscard]] const SecurityLot *find_active_lot(SecurityId security,
                                                      OwnerId holder) const noexcept;
+    [[nodiscard]] SecurityLotId
+    id_for_lot(const SecurityLot &lot) const noexcept;
     [[nodiscard]] std::size_t
     find_pair_slot(SecurityId security, OwnerId holder) const noexcept;
     [[nodiscard]] static std::size_t pair_hash(SecurityId security,
                                                OwnerId holder) noexcept;
     void append_pair_lot(SecurityLotId lot);
+    void append_query_lot(SecurityLotId lot);
+    void append_pending_query_lots();
+    void unlink_query_lot(SecurityLotId lot);
+    void deactivate_lot(SecurityLot &lot);
     void record_household_position_change(SecurityId security, OwnerId holder);
     void rebuild_pair_index();
+    void rebuild_query_indexes();
     [[nodiscard]] Status validate_security(SecurityId security) const noexcept;
-    [[nodiscard]] Status mutation_complete(bool indexes_dirty = true);
+    [[nodiscard]] Status mutation_complete(bool contract_indexes_dirty = false);
     [[nodiscard]] Status rebuild_indexes();
-    [[nodiscard]] Status rebuild_active_indexes();
+    [[nodiscard]] Status rebuild_contract_indexes();
     void bump_version() noexcept;
 
     std::vector<BondContract> bonds_;
@@ -267,28 +332,26 @@ class SecurityBook final {
     std::vector<SecurityLot> lots_;
     std::uint64_t version_{0};
 
-    std::vector<HolderSecurityIndexEntry> holder_index_;
-    std::vector<SecurityLotId> holder_lots_;
-    std::vector<ContractLotIndexEntry> contract_index_;
-    std::vector<SecurityLotId> contract_lots_;
+    std::array<std::vector<LotChain>, 8U> holder_chains_;
+    std::array<std::vector<LotChain>, 2U> contract_chains_;
+    std::vector<std::uint32_t> holder_next_;
+    std::vector<std::uint32_t> contract_next_;
+    std::size_t indexed_lot_count_{0U};
     std::vector<IssuerSecurityIndexEntry> issuer_index_;
     std::vector<SecurityId> issuer_securities_;
     std::vector<MaturityIndexEntry> maturity_index_;
     std::vector<BondId> maturity_bonds_;
-    std::vector<HolderSecurityIndexEntry> bank_index_;
-    std::vector<SecurityLotId> bank_lots_;
     std::vector<std::uint32_t> pair_slots_;
     std::size_t pair_count_{0};
+    bool duplicate_active_pairs_{false};
+    std::size_t active_lot_count_{0};
+    std::size_t inactive_lot_count_{0};
     std::vector<HouseholdSecurityPositionChange> household_position_changes_;
-    std::vector<std::pair<OwnerId, SecurityLotId>> holder_rows_scratch_;
-    std::vector<std::pair<SecurityId, SecurityLotId>> contract_rows_scratch_;
     std::vector<std::pair<OwnerId, SecurityId>> issuer_rows_scratch_;
     std::vector<std::pair<Tick, BondId>> maturity_rows_scratch_;
-    std::vector<std::uint32_t> holder_counts_scratch_;
-    std::vector<std::uint32_t> contract_counts_scratch_;
     bool batch_active_{false};
     bool batch_dirty_{false};
-    bool batch_indexes_dirty_{false};
+    bool batch_contract_indexes_dirty_{false};
 };
 
 } // namespace macro_sim::core

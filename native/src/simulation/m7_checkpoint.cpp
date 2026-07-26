@@ -506,16 +506,17 @@ void decode_metrics(const Json &row, M7Metrics &value) {
         output["persons"].push_back(encode_person(person));
     }
     output["beneficial"] = Json::array();
+    std::uint32_t beneficial_lot_id = 1U;
     for (const auto &lot :
          runtime.beneficial_ownership.records()) {
         output["beneficial"].push_back(Json::array({
-            lot.id.value(),
+            beneficial_lot_id++,
             static_cast<std::uint8_t>(lot.asset.kind),
             lot.asset.household.value(),
             lot.asset.value,
             lot.owner.value(),
             lot.share,
-            lot.active,
+            lot.is_active(),
         }));
     }
     output["jobs"] = Json::array();
@@ -624,8 +625,15 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
         if (!row.is_array() || row.size() != 7U) {
             throw std::runtime_error("invalid M7 beneficial lot");
         }
+        const auto expected_id =
+            static_cast<std::uint64_t>(beneficial.size()) + 1U;
+        const auto share = row[5].get<double>();
+        const auto active = row[6].get<bool>();
+        if (row[0].get<std::uint64_t>() != expected_id ||
+            active != (share > 0.0)) {
+            throw std::runtime_error("invalid M7 beneficial lot");
+        }
         beneficial.push_back({
-            BeneficialLotId(row[0].get<std::uint64_t>()),
             {
                 static_cast<core::BeneficialAssetKind>(
                     row[1].get<std::uint8_t>()
@@ -634,8 +642,7 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
                 row[3].get<std::uint32_t>(),
             },
             PersonId(row[4].get<std::uint64_t>()),
-            row[5].get<double>(),
-            row[6].get<bool>(),
+            share,
         });
     }
     status = runtime.beneficial_ownership.replace_records(

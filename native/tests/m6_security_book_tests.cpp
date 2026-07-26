@@ -201,6 +201,78 @@ void test_duplicate_pair_lots_in_batch() {
     assert(book.validate(1.0e-9).ok());
 }
 
+void test_incremental_query_visibility_and_order() {
+    SecurityBook book;
+    const auto source = OwnerId::household(HouseholdId(1));
+    const auto destination = OwnerId::household(HouseholdId(2));
+    const auto additional = OwnerId::household(HouseholdId(3));
+    const auto bond =
+        book.issue_bond(bond_contract(1, 1, 0, 30, 10.0), source, Money(10.0));
+    assert(bond.ok());
+    const auto security = SecurityId::bond(*bond.get_if());
+
+    assert(book.begin_batch().ok());
+    assert(book.transfer_units(security, source, destination, 10.0, Money(10.0))
+               .ok());
+    assert(book.issue_bond_units(*bond.get_if(), additional, 5.0, Money(5.0)).ok());
+
+    assert(book.lots_for_holder(source).empty());
+    assert(book.lots_for_holder(destination).empty());
+    assert(book.lots_for_holder(additional).empty());
+    assert(book.lots_for_security(security).empty());
+    assert(book.units_held(security, destination) == 10.0);
+    assert(book.units_held(security, additional) == 5.0);
+
+    assert(book.finish_batch().ok());
+    const auto destination_lots = book.lots_for_holder(destination);
+    assert(destination_lots.size() == 1U);
+    assert(*destination_lots.begin() == SecurityLotId(2));
+    const auto additional_lots = book.lots_for_holder(additional);
+    assert(additional_lots.size() == 1U);
+    assert(*additional_lots.begin() == SecurityLotId(3));
+
+    std::vector<SecurityLotId> contract_lots;
+    for (const auto lot : book.lots_for_security(security)) {
+        contract_lots.push_back(lot);
+    }
+    assert((contract_lots ==
+            std::vector{SecurityLotId(2), SecurityLotId(3)}));
+    assert(book.validate_indexes().ok());
+
+    assert(book.compact_inactive_lots().ok());
+    contract_lots.clear();
+    for (const auto lot : book.lots_for_security(security)) {
+        contract_lots.push_back(lot);
+    }
+    assert((contract_lots ==
+            std::vector{SecurityLotId(1), SecurityLotId(2)}));
+    assert(book.validate(1.0e-9).ok());
+}
+
+void test_duplicate_pair_consolidation_is_on_demand() {
+    SecurityBook book;
+    auto contract = bond_contract(1, 1, 0, 30, 15.0);
+    contract.id = BondId(1);
+    contract.outstanding_face = Money(15.0);
+    contract.active = true;
+    const auto holder = OwnerId::household(HouseholdId(1));
+    const auto security = SecurityId::bond(contract.id);
+    std::vector<macro_sim::core::SecurityLot> lots{
+        {SecurityLotId(1), security, holder, 10.0, Money(10.0), true},
+        {SecurityLotId(2), security, holder, 5.0, Money(5.0), true},
+    };
+    book.replace_records(
+        std::vector{contract}, std::vector<EquityContract>{}, std::move(lots), 0U);
+
+    assert(book.active_lot_count() == 2U);
+    assert(book.consolidate().ok());
+    assert(book.active_lot_count() == 1U);
+    assert(book.inactive_lot_count() == 1U);
+    assert(book.units_held(security, holder) == 15.0);
+    assert(book.compact_inactive_lots().ok());
+    assert(book.validate(1.0e-9).ok());
+}
+
 void test_fuzzed_mutations() {
     SecurityBook book;
     std::vector<EquityId> equities;
@@ -284,17 +356,24 @@ void test_inactive_lot_compaction_preserves_positions() {
     const auto equity =
         book.create_equity(equity_contract(1, 2, 100.0), holdings);
     assert(equity.ok());
+    assert(book.active_lot_count() == 2U);
+    assert(book.inactive_lot_count() == 0U);
     const auto security = SecurityId::equity(*equity.get_if());
     assert(book.transfer_units(
                    security, OwnerId::household(HouseholdId(2)),
                    OwnerId::household(HouseholdId(3)), 40.0, Money(80.0))
                .ok());
     assert(book.lots().size() == 3U);
+    assert(book.active_lot_count() == 2U);
+    assert(book.inactive_lot_count() == 1U);
+    assert(book.inactive_lot_compaction_due());
     const auto changes_before = book.household_position_changes().size();
     assert(book.compact_inactive_lots().ok());
     assert(book.lots().size() == 2U);
-    assert(book.lots()[0].id == SecurityLotId(1));
-    assert(book.lots()[1].id == SecurityLotId(2));
+    assert(book.active_lot_count() == 2U);
+    assert(book.inactive_lot_count() == 0U);
+    assert(book.get(SecurityLotId(1)) == &book.lots()[0]);
+    assert(book.get(SecurityLotId(2)) == &book.lots()[1]);
     assert(book.units_held(security, OwnerId::household(HouseholdId(1))) ==
            60.0);
     assert(book.units_held(security, OwnerId::household(HouseholdId(2))) ==
@@ -352,6 +431,8 @@ int main() {
     test_bank_index();
     test_transfer_roundoff_clamp_preserves_units();
     test_duplicate_pair_lots_in_batch();
+    test_incremental_query_visibility_and_order();
+    test_duplicate_pair_consolidation_is_on_demand();
     test_fuzzed_mutations();
     test_inactive_lot_compaction_preserves_positions();
     test_rejections();

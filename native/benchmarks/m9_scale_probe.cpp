@@ -455,7 +455,7 @@ template <typename Advance>
         measurement.security_lots = financial->securities.lots().size();
         measurement.active_security_lots = static_cast<std::uint64_t>(std::count_if(
             financial->securities.lots().begin(), financial->securities.lots().end(),
-            [](const core::SecurityLot &lot) { return lot.active; }));
+            [](const core::SecurityLot &lot) { return lot.active(); }));
         const auto memory = financial->securities.memory_usage();
         measurement.security_contract_bytes = memory.contracts;
         measurement.security_lot_bytes = memory.lots;
@@ -468,7 +468,9 @@ template <typename Advance>
         measurement.active_beneficial_lots = static_cast<std::uint64_t>(
             std::count_if(population->beneficial_ownership.records().begin(),
                           population->beneficial_ownership.records().end(),
-                          [](const core::BeneficialLot &lot) { return lot.active; }));
+                          [](const core::BeneficialLot &lot) {
+                              return lot.is_active();
+                          }));
     }
     measurement.digest = core::state_digest(*session.root()).hex();
     return measurement;
@@ -603,7 +605,7 @@ template <typename Advance>
                      population->beneficial_ownership.lots_for_asset(asset)) {
                     const auto *lot =
                         population->beneficial_ownership.get(lot_id);
-                    if (lot != nullptr && lot->active) {
+                    if (lot != nullptr && lot->is_active()) {
                         total += lot->share;
                         ++lots;
                     }
@@ -635,7 +637,7 @@ template <typename Advance>
                          population->beneficial_ownership.lots_for_asset(asset)) {
                         const auto *lot =
                             population->beneficial_ownership.get(lot_id);
-                        if (lot == nullptr || !lot->active) {
+                        if (lot == nullptr || !lot->is_active()) {
                             continue;
                         }
                         const auto *owner =
@@ -703,7 +705,7 @@ template <typename Advance>
         measurement.security_lots += financial->securities.lots().size();
         measurement.active_security_lots += static_cast<std::uint64_t>(std::count_if(
             financial->securities.lots().begin(), financial->securities.lots().end(),
-            [](const core::SecurityLot &lot) { return lot.active; }));
+            [](const core::SecurityLot &lot) { return lot.active(); }));
         const auto memory = financial->securities.memory_usage();
         measurement.security_contract_bytes += memory.contracts;
         measurement.security_lot_bytes += memory.lots;
@@ -723,7 +725,9 @@ template <typename Advance>
         measurement.active_beneficial_lots += static_cast<std::uint64_t>(
             std::count_if(population->beneficial_ownership.records().begin(),
                           population->beneficial_ownership.records().end(),
-                          [](const core::BeneficialLot &lot) { return lot.active; }));
+                          [](const core::BeneficialLot &lot) {
+                              return lot.is_active();
+                          }));
     }
     measurement.digest = std::to_string(world.digest());
     measurement.world_memory = world.memory_usage();

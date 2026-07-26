@@ -213,6 +213,9 @@ struct M4Runtime final {
 
 class M4TickScratch final {
 public:
+    static constexpr std::uint8_t kAccountOpen = 1U;
+    static constexpr std::uint8_t kAccountAllowsNegative = 2U;
+
     M4TickScratch() = default;
     M4TickScratch(const M4TickScratch&) = delete;
     M4TickScratch& operator=(const M4TickScratch&) = delete;
@@ -272,6 +275,7 @@ public:
     std::vector<std::size_t> firm_order_;
     std::vector<double> balances_;
     std::vector<SettlementNodeId> account_nodes_;
+    std::vector<std::uint8_t> account_flags_;
     std::vector<double> reserve_balances_;
     std::vector<double> reserve_minimum_;
     std::vector<HouseholdWork> household_work_;

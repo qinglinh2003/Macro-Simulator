@@ -857,16 +857,17 @@ nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
         equities.append(std::move(item));
     }
     nb::list lots;
+    std::uint32_t security_lot_id = 1U;
     for (const auto &row : runtime->securities.lots()) {
         nb::dict item;
-        item["id"] = row.id.value();
+        item["id"] = security_lot_id++;
         item["security_kind"] = static_cast<std::uint8_t>(row.security.kind);
         item["security_id"] = static_cast<std::uint32_t>(row.security.value);
         item["holder_kind"] = static_cast<std::uint8_t>(row.holder.kind);
         item["holder_id"] = static_cast<std::uint32_t>(row.holder.value);
         item["units"] = row.units;
         item["cost_basis"] = row.cost_basis.value();
-        item["active"] = row.active;
+        item["active"] = row.active();
         lots.append(std::move(item));
     }
     nb::list firms;

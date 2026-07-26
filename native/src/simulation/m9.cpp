@@ -622,6 +622,7 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
             capacity_bytes(real.construction_firm_indices_) +
             capacity_bytes(real.household_order_) + capacity_bytes(real.firm_order_) +
             capacity_bytes(real.balances_) + capacity_bytes(real.account_nodes_) +
+            capacity_bytes(real.account_flags_) +
             capacity_bytes(real.reserve_balances_) +
             capacity_bytes(real.reserve_minimum_) +
             capacity_bytes(real.household_work_) + capacity_bytes(real.firm_work_) +
@@ -643,6 +644,8 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
                                   capacity_bytes(monetary.debt_by_account_) +
                                   capacity_bytes(
                                       monetary.reusable_loan_by_account_) +
+                                  capacity_bytes(
+                                      monetary.relationship_loan_by_account_) +
                                   capacity_bytes(monetary.exposure_by_bank_) +
                                   capacity_bytes(monetary.deposits_by_bank_) +
                                   capacity_bytes(monetary.bank_capital_live_) +

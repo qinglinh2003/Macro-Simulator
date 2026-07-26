@@ -31,7 +31,8 @@
       "name": "m1-release",
       "inherits": "m1-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "MACRO_SIM_IPO": "ON"
       }
     },
     {

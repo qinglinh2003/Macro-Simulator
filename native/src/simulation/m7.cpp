@@ -123,7 +123,7 @@ first_alive_member(const core::HouseholdMembershipBook &membership,
     PersonId selected{};
     for (const auto lot_id : ownership.lots_for_asset(asset)) {
         const auto *lot = ownership.get(lot_id);
-        if (lot == nullptr || !lot->active || lot->owner == excluded ||
+        if (lot == nullptr || !lot->is_active() || lot->owner == excluded ||
             !persons.alive(lot->owner)) {
             continue;
         }
@@ -152,7 +152,7 @@ security_from_token(std::uint64_t token) noexcept {
     for (const auto lot_id :
          securities.lots_for_holder(core::OwnerId::household(household))) {
         const auto *lot = securities.get(lot_id);
-        if (lot != nullptr && lot->active && lot->units > kLaborTolerance) {
+        if (lot != nullptr && lot->active() && lot->units > kLaborTolerance) {
             return true;
         }
     }
@@ -165,7 +165,7 @@ security_from_token(std::uint64_t token) noexcept {
     for (const auto lot_id :
          securities.lots_for_holder(core::OwnerId::household(household))) {
         const auto *lot = securities.get(lot_id);
-        if (lot == nullptr || !lot->active) {
+        if (lot == nullptr || !lot->active()) {
             continue;
         }
         if (lot->security.kind == core::SecurityKind::equity) {
@@ -204,7 +204,8 @@ security_from_token(std::uint64_t token) noexcept {
         double projected = 0.0;
         for (const auto lot_id : ownership.lots_for_asset(cash)) {
             const auto *lot = ownership.get(lot_id);
-            if (lot == nullptr || !lot->active || !persons.alive(lot->owner)) {
+            if (lot == nullptr || !lot->is_active() ||
+                !persons.alive(lot->owner)) {
                 continue;
             }
             const auto owner = lot->owner;
@@ -516,7 +517,7 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     security_buffer.clear();
     for (const auto lot_id : financial.securities_.lots_for_holder(source_owner)) {
         const auto *lot = financial.securities_.get(lot_id);
-        if (lot != nullptr && lot->active) {
+        if (lot != nullptr && lot->active()) {
             security_buffer.push_back(lot->security);
         }
     }
@@ -532,7 +533,7 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
         double cost_basis = 0.0;
         for (const auto lot_id : financial.securities_.lots_for_holder(source_owner)) {
             const auto *lot = financial.securities_.get(lot_id);
-            if (lot != nullptr && lot->active && lot->security == security) {
+            if (lot != nullptr && lot->active() && lot->security == security) {
                 cost_basis += lot->cost_basis.value();
             }
         }
@@ -702,7 +703,7 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
     const auto first_orphan_household = retired_households.size();
     for (const auto lot_id : lot_buffer) {
         const auto *lot = ownership.get(lot_id);
-        if (lot == nullptr || !lot->active) {
+        if (lot == nullptr || !lot->is_active()) {
             return Status(ErrorCode::invariant_violation,
                           "estate references an absent beneficial lot");
         }
@@ -2427,7 +2428,8 @@ class M7Extension final : public M6TickExtension {
             for (const auto lot_id :
                  runtime_.beneficial_ownership.lots_for_person(event.person)) {
                 const auto *lot = runtime_.beneficial_ownership.get(lot_id);
-                if (lot != nullptr && lot->active && lot->asset == origin_cash) {
+                if (lot != nullptr && lot->is_active() &&
+                    lot->asset == origin_cash) {
                     person_cash_lots.push_back(lot_id);
                     cash_share += lot->share;
                 }
@@ -2933,7 +2935,8 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         std::vector<HouseholdId> security_households;
         security_households.reserve(financial.root.households.alive_count());
         for (const auto &lot : financial.runtime.securities.lots()) {
-            if (!lot.active || lot.holder.kind != core::OwnerKind::household) {
+            if (!lot.active() ||
+                lot.holder.kind != core::OwnerKind::household) {
                 continue;
             }
             security_households.push_back(HouseholdId(lot.holder.value));

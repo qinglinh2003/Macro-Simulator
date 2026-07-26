@@ -113,18 +113,18 @@ struct BeneficialLot final {
     BeneficialAssetKey asset{};
     PersonId owner{};
     double share{0.0};
-    BeneficialLotId id{};
-    bool active{true};
 
     BeneficialLot() = default;
-    BeneficialLot(BeneficialLotId lot_id, BeneficialAssetKey asset_key,
-                  PersonId person, double beneficial_share,
-                  bool is_active = true) noexcept
-        : asset(asset_key), owner(person), share(beneficial_share), id(lot_id),
-          active(is_active) {}
+    BeneficialLot(BeneficialAssetKey asset_key, PersonId person,
+                  double beneficial_share) noexcept
+        : asset(asset_key), owner(person), share(beneficial_share) {}
+
+    [[nodiscard]] bool is_active() const noexcept { return share > 0.0; }
 
     bool operator==(const BeneficialLot &) const = default;
 };
+
+static_assert(sizeof(BeneficialLot) == 24U);
 
 struct BeneficialOwnershipMemoryUsage final {
     std::uint64_t lots{0};
@@ -191,10 +191,8 @@ class BeneficialOwnershipBook final {
         std::vector<AssetSlot> asset_slots;
         std::vector<std::uint32_t> canonical_cash_rows;
         std::vector<std::uint32_t> asset_row_by_lot;
-        std::vector<std::uint8_t> asset_lot_indexed;
         std::vector<std::uint32_t> asset_heads;
         std::vector<std::uint32_t> asset_next;
-        std::vector<std::uint32_t> asset_previous;
         std::vector<std::uint32_t> asset_presence_epochs;
         std::vector<std::uint32_t> person_heads{0U};
         std::vector<std::uint32_t> person_next;

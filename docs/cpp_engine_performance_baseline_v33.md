@@ -1,8 +1,9 @@
 # C++ Engine Scale Baseline V33
 
 Status: one-million-person latency target met over a validated 30-year full-play
-run; median daily latency is 0.183 seconds, P95 is 0.347 seconds, and the
-30-year peak RSS is 2.69 GiB
+run; median daily latency is 0.120 seconds, P95 is 0.181 seconds, and the
+30-year peak RSS is 2.16 GiB. A validated five-million-person three-year run
+also remains within the one-second median budget.
 
 Date: 2026-07-26
 
@@ -19,6 +20,8 @@ Second memory refinement branch: `perf/cpp-memory-history-v33`
 Final latency refinement branch: `perf/cpp-final-pass-v33`
 
 Long-horizon refinement branch: `perf/cpp-longrun-v33`
+
+Five-million-person refinement branch: `perf/cpp-5m-v33`
 
 ## 1. Purpose
 
@@ -744,6 +747,85 @@ The accepted run required model-preserving long-horizon corrections:
 The final eight-worker compatibility suite passes all 49 tests after these
 changes.
 
+### 8.7 Five-million-person refinement and acceptance
+
+The post-M9 scale pass targeted the retained-state costs that become material
+after millions of market positions have accumulated. It made the following
+model-preserving changes:
+
+- M4 projects account-open and allow-negative flags once per day. M4, M5, and
+  M6 transfers no longer repeat posting-store lookups for every transfer.
+- M5 maintains a per-account relationship-loan cache alongside the existing
+  reusable-loan cache.
+- Security holder and contract queries use incrementally maintained linked
+  ranges. Normal daily mutations no longer sort and rebuild complete query
+  indexes.
+- Inactive security positions are compacted only after at least 4,096
+  tombstones or a one-percent inactive ratio. Small daily retirements therefore
+  do not force a complete position rewrite.
+- `SecurityLot` derives its transient internal ID from its vector position and
+  derives activity from positive units, reducing retained storage from 32 to
+  24 bytes per lot. Checkpoints and Python snapshots still expose the same
+  sequential `id` and `active` fields.
+- `BeneficialLot` likewise derives its transient ID and activity, and its asset
+  chain no longer retains redundant previous-link and indexed-flag arrays.
+- Release builds enable compiler-supported interprocedural optimization.
+
+The deterministic one-million-person, 30-year gate was repeated after all of
+these changes. The direct comparison uses identical probe arguments:
+
+| Revision | Genesis | Mean day | Median day | P95 day | Maximum day | Wall time | Peak RSS | Final live heap | Known retained memory | Digest |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| Before this pass | 2.11 s | 0.197 s | 0.165 s | 0.357 s | 0.491 s | 36 min 07 s | 2.67 GiB | 2.41 GiB | 2.09 GiB | `14201922150108675077` |
+| Current | 2.19 s | 0.126 s | 0.120 s | 0.181 s | 0.381 s | 23 min 04 s | 2.16 GiB | 2.23 GiB | 1.90 GiB | `14201922150108675077` |
+
+The digest exactly matches the pre-refinement 30-year run. Relative to that
+run, mean latency is 36.2 percent lower, median latency is 27.4 percent lower,
+P95 latency is 49.2 percent lower, and peak RSS is 19.1 percent lower. The
+final world still contains 8,906,039 active security lots and 3,295,043 active
+beneficial lots.
+
+Long-horizon growth remains gradual but is lower at every sampled year:
+
+| Model year | Mean day | Mean live heap |
+| ---: | ---: | ---: |
+| 1 | 0.081 s | 1.03 GiB |
+| 5 | 0.097 s | 1.28 GiB |
+| 10 | 0.099 s | 1.37 GiB |
+| 15 | 0.123 s | 1.46 GiB |
+| 20 | 0.136 s | 1.62 GiB |
+| 25 | 0.162 s | 1.88 GiB |
+| 30 | 0.184 s | 2.23 GiB |
+
+The five-million-person acceptance uses the same full-play scenario over three
+model years:
+
+| Persons | Days | Genesis | Mean day | Median day | P95 day | Maximum day | Wall time | Peak RSS | Final live heap | Known retained memory | Digest |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| 5,000,000 | 1,095 | 40.55 s | 0.708 s | 0.733 s | 0.948 s | 1.420 s | 13 min 39 s | 4.44 GiB | 6.86 GiB | 6.10 GiB | `11557224725113052089` |
+
+The annual latency distribution is:
+
+| Model year | Mean day | Median day | P95 day | Maximum day |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 0.552 s | 0.556 s | 0.659 s | 0.974 s |
+| 2 | 0.751 s | 0.735 s | 0.950 s | 1.248 s |
+| 3 | 0.822 s | 0.783 s | 1.064 s | 1.420 s |
+
+Five million persons therefore meet the median interaction budget throughout
+the measured period. The all-years P95 is also below one second, although the
+third-year P95 and isolated maximum days exceed one second. This is a playable
+scale result, not a claim that every five-million-person day is sub-second.
+The process reported no swaps. The allocator live-heap statistic exceeds
+physical RSS for the allocator-accounting reasons described in Section 2.
+
+The final Release suite passes all 49 tests with eight workers. The native
+AddressSanitizer gate passes all 33 non-Python-binding tests with eight workers;
+macOS dynamic Python-extension tests require a separately preloaded ASan runtime
+and remain covered by the Release binding suite. Both scale runs complete final
+world validation, and their digests match the corresponding pre-refinement runs
+exactly.
+
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
@@ -762,11 +844,10 @@ seconds to 0.102 seconds and maximum latency from 0.640 seconds to 0.123 seconds
 
 The next measured order is:
 
-1. Profile the final five years at one-million-person scale, then bound live
-   security-position and contract-history growth without changing balances,
-   prices, ownership, or estate valuation.
-2. Make derived security holder and contract views incremental if the final-year
-   profile confirms that their full rebuild remains material.
+1. Profile the later years of the five-million-person run and distinguish live
+   economic state from UI-facing history before changing retention rules.
+2. Reduce the remaining M7 labor, household-transfer, bank-payout, and housing
+   scans in measured hotspot order.
 3. Compact root entity stores and remaining per-person social indexes without
    losing stable external identities.
 4. Stream detailed employment and title history into bounded UI-facing history
@@ -791,11 +872,14 @@ Each optimization must preserve:
 - C, C++, and Python binding contracts
 - sanitizer cleanliness
 
-The sole performance gate is one million persons. Each accepted optimization
-must improve or preserve genesis time, daily latency, peak RSS, and allocation
-count on that population while all required correctness gates remain green. The
-target is no more than one second per M9 day. Closed, open multicountry,
-bounded shock-active, and full-play dynamic scenarios now meet it.
+The mandatory long-horizon regression gate remains one million persons over 30
+years. Five million persons over at least three years is the scale-acceptance
+gate. Each accepted optimization must improve or preserve genesis time, daily
+latency, peak RSS, and allocation count while all required correctness gates
+remain green. The target is no more than one second median latency per M9 day.
+Closed, open multicountry, bounded shock-active, and full-play dynamic scenarios
+meet it at one million persons; the open full-play scenario also meets it at
+five million persons.
 
 ## 11. Reproduction
 
@@ -893,5 +977,21 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
   --workload full \
   --warmup-days 0 \
   --days 10950 \
+  --beneficial-ownership enabled
+```
+
+Run the five-million-person three-year scale acceptance:
+
+```bash
+build/native/m9-release/native/macro_sim_m9_scale_probe \
+  --mode m9 \
+  --persons 5000000 \
+  --economies 8 \
+  --workers 8 \
+  --world-mode open \
+  --shocks none \
+  --workload full \
+  --warmup-days 0 \
+  --days 1095 \
   --beneficial-ownership enabled
 ```

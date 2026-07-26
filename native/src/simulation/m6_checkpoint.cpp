@@ -360,16 +360,17 @@ void decode_metrics(const Json &row, M6Metrics &value) {
         }));
     }
     output["lots"] = Json::array();
+    std::uint32_t security_lot_id = 1U;
     for (const auto &row : runtime.securities.lots()) {
         output["lots"].push_back(Json::array({
-            row.id.value(),
+            security_lot_id++,
             static_cast<std::uint8_t>(row.security.kind),
             static_cast<std::uint32_t>(row.security.value),
             static_cast<std::uint8_t>(row.holder.kind),
             static_cast<std::uint32_t>(row.holder.value),
             row.units,
             row.cost_basis.value(),
-            row.active,
+            row.active(),
         }));
     }
     output["firms"] = Json::array();
@@ -471,8 +472,19 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
         if (!row.is_array() || row.size() != 8) {
             throw std::runtime_error("invalid M6 security lot");
         }
+        const auto expected_id =
+            static_cast<std::uint64_t>(lots.size()) + 1U;
+        if (row[0].get<std::uint64_t>() != expected_id) {
+            throw std::runtime_error("invalid M6 security lot identity");
+        }
+        const double units = row[5].get<double>();
+        const double cost_basis = row[6].get<double>();
+        const bool active = row[7].get<bool>();
+        if (active != (units > 0.0) || (!active && cost_basis != 0.0)) {
+            throw std::runtime_error("invalid M6 security lot activity");
+        }
         lots.push_back({
-            SecurityLotId(row[0].get<std::uint64_t>()),
+            SecurityLotId(expected_id),
             {
                 static_cast<core::SecurityKind>(row[1].get<std::uint8_t>()),
                 row[2].get<std::uint32_t>(),
@@ -481,9 +493,9 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
                 static_cast<core::OwnerKind>(row[3].get<std::uint8_t>()),
                 row[4].get<std::uint32_t>(),
             },
-            row[5].get<double>(),
-            Money(row[6].get<double>()),
-            row[7].get<bool>(),
+            units,
+            Money(cost_basis),
+            active,
         });
     }
     runtime.securities.replace_records(std::move(bonds), std::move(equities),

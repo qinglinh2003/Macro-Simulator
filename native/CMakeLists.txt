@@ -7,8 +7,21 @@ option(MACRO_SIM_BUILD_BENCHMARKS "Build native benchmark executables" ON)
 option(MACRO_SIM_BUILD_PYTHON "Build the nanobind Python extension" ON)
 option(MACRO_SIM_BUILD_TESTS "Build native unit and ABI tests" ON)
 option(MACRO_SIM_COVERAGE "Enable source coverage instrumentation" OFF)
+option(MACRO_SIM_IPO "Enable interprocedural optimization" OFF)
 option(MACRO_SIM_WARNINGS_AS_ERRORS "Treat project warnings as errors" ON)
 set(MACRO_SIM_SANITIZERS "" CACHE STRING "Comma-separated sanitizer list")
+
+if(MACRO_SIM_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT macro_sim_ipo_supported
+                        OUTPUT macro_sim_ipo_error
+                        LANGUAGES C CXX)
+    if(NOT macro_sim_ipo_supported)
+        message(FATAL_ERROR
+                "Interprocedural optimization is unavailable: ${macro_sim_ipo_error}")
+    endif()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)

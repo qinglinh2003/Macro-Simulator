@@ -592,7 +592,7 @@ void test_last_member_estate_moves_canonical_positions() {
     for (const auto &lot :
          harness.runtime.beneficial_ownership.records()) {
         assert(
-            !lot.active ||
+            !lot.is_active() ||
             lot.asset.household != source_household
         );
     }
@@ -692,7 +692,7 @@ void test_unclaimed_external_share_returns_to_asset_household() {
     for (const auto inherited_lot : inherited_lots) {
         const auto *inherited =
             harness.runtime.beneficial_ownership.get(inherited_lot);
-        assert(inherited != nullptr && inherited->active);
+        assert(inherited != nullptr && inherited->is_active());
         assert(inherited->owner == surviving_owner);
         inherited_share += inherited->share;
     }
@@ -756,7 +756,7 @@ void test_unclaimed_empty_household_escheats_canonical_positions() {
     assert(harness.root.households.get(orphan_household) == nullptr);
     for (const auto &lot :
          harness.runtime.beneficial_ownership.records()) {
-        assert(!lot.active || lot.asset.household != orphan_household);
+        assert(!lot.is_active() || lot.asset.household != orphan_household);
     }
     assert(macro_sim::simulation::validate_m7_state(
                harness.root, harness.real_runtime, harness.monetary_runtime,
@@ -839,7 +839,7 @@ void test_forced_leaving_home_creates_canonical_household() {
          harness.runtime.beneficial_ownership.lots_for_person(child)) {
         const auto *lot =
             harness.runtime.beneficial_ownership.get(lot_id);
-        if (lot != nullptr && lot->active && lot->asset == origin_cash) {
+        if (lot != nullptr && lot->is_active() && lot->asset == origin_cash) {
             child_cash_lots.push_back(lot_id);
         }
     }

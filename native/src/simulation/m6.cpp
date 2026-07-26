@@ -74,27 +74,30 @@ template <typename Range> [[nodiscard]] bool all_finite(const Range &values) noe
 [[nodiscard]] Status transfer(const core::RootState &state, M4TickScratch &scratch,
                               AccountId source, AccountId destination,
                               double amount) noexcept {
+    static_cast<void>(state);
     if (!finite(amount) || amount < 0.0) {
         return Status(ErrorCode::invalid_argument, "M6 transfer is invalid");
     }
     if (amount <= kEconomicEpsilon || source == destination) {
         return Status::success();
     }
-    const auto *source_record = state.postings.get(source);
-    const auto *destination_record = state.postings.get(destination);
-    if (source_record == nullptr || destination_record == nullptr ||
-        !source_record->open || !destination_record->open) {
-        return Status(ErrorCode::not_found, "M6 transfer account is absent");
-    }
     const auto source_index = account_index(source);
     const auto destination_index = account_index(destination);
     if (source_index >= scratch.balances_.size() ||
         destination_index >= scratch.balances_.size() ||
         source_index >= scratch.account_nodes_.size() ||
-        destination_index >= scratch.account_nodes_.size()) {
+        destination_index >= scratch.account_nodes_.size() ||
+        source_index >= scratch.account_flags_.size() ||
+        destination_index >= scratch.account_flags_.size()) {
         return Status(ErrorCode::internal_error, "M6 posting projection is stale");
     }
-    if (!source_record->allow_negative &&
+    const auto source_flags = scratch.account_flags_[source_index];
+    const auto destination_flags = scratch.account_flags_[destination_index];
+    if ((source_flags & M4TickScratch::kAccountOpen) == 0U ||
+        (destination_flags & M4TickScratch::kAccountOpen) == 0U) {
+        return Status(ErrorCode::not_found, "M6 transfer account is absent");
+    }
+    if ((source_flags & M4TickScratch::kAccountAllowsNegative) == 0U &&
         scratch.balances_[source_index] + kTolerance < amount) {
         return Status(ErrorCode::insufficient_funds,
                       "M6 transfer exceeds available funds");
@@ -261,7 +264,7 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
     double value = 0.0;
     for (const auto lot_id : book.lots_for_holder(holder)) {
         const auto *lot = book.get(lot_id);
-        if (lot == nullptr || !lot->active ||
+        if (lot == nullptr || !lot->active() ||
             lot->security.kind != core::SecurityKind::equity) {
             continue;
         }
@@ -279,7 +282,7 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
     double value = 0.0;
     for (const auto lot_id : book.lots_for_holder(holder)) {
         const auto *lot = book.get(lot_id);
-        if (lot == nullptr || !lot->active ||
+        if (lot == nullptr || !lot->active() ||
             lot->security.kind != core::SecurityKind::bond) {
             continue;
         }
@@ -460,7 +463,7 @@ void reduce_debt_views(M6TickScratch &scratch, AccountId account,
         const auto security = core::SecurityId::bond(bond.id);
         for (const auto lot_id : scratch.securities_.lots_for_security(security)) {
             const auto *lot = scratch.securities_.get(lot_id);
-            if (lot == nullptr || !lot->active) {
+            if (lot == nullptr || !lot->active()) {
                 continue;
             }
             const auto account = owner_account(state, lot->holder);
@@ -499,7 +502,7 @@ void reduce_debt_views(M6TickScratch &scratch, AccountId account,
         std::vector<SecurityLotId> stable_lots(lot_ids.begin(), lot_ids.end());
         for (const auto lot_id : stable_lots) {
             const auto *lot = scratch.securities_.get(lot_id);
-            if (lot == nullptr || !lot->active) {
+            if (lot == nullptr || !lot->active()) {
                 continue;
             }
             const auto account = owner_account(state, lot->holder);
@@ -900,7 +903,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         scratch.watch_attractiveness_.assign(bank_equities.size(), 0.0);
         for (const auto lot_id : scratch.securities_.lots_for_holder(holder)) {
             const auto *lot = scratch.securities_.get(lot_id);
-            if (lot == nullptr || !lot->active ||
+            if (lot == nullptr || !lot->active() ||
                 lot->security.kind != core::SecurityKind::equity) {
                 continue;
             }
@@ -1365,7 +1368,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                 const auto lot_ids = scratch.securities_.lots_for_security(security);
                 for (const auto lot_id : lot_ids) {
                     const auto *lot = scratch.securities_.get(lot_id);
-                    if (lot == nullptr || !lot->active ||
+                    if (lot == nullptr || !lot->active() ||
                         lot->holder.kind != core::OwnerKind::household) {
                         continue;
                     }
@@ -1991,7 +1994,7 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     scratch.working_metrics_.bank_equity_market_cap = 0.0;
     scratch.working_metrics_.active_security_lots = 0;
     for (const auto &lot : scratch.securities_.lots()) {
-        if (lot.active) {
+        if (lot.active()) {
             ++scratch.working_metrics_.active_security_lots;
         }
     }
@@ -2394,9 +2397,11 @@ class M6Extension final : public M5TickExtension {
             return finish_security_batch(status);
         }
         close_bank_security_books(state, real, scratch_.securities_, monetary);
-        status = scratch_.securities_.compact_inactive_lots();
-        if (!status.ok()) {
-            return finish_security_batch(status);
+        if (scratch_.securities_.inactive_lot_compaction_due()) {
+            status = scratch_.securities_.compact_inactive_lots();
+            if (!status.ok()) {
+                return finish_security_batch(status);
+            }
         }
         status = finish_security_batch(Status::success());
         if (!status.ok()) {
@@ -2705,7 +2710,7 @@ Status validate_m6_state_fast(const core::RootState &state,
         }
     }
     for (const auto &lot : runtime.securities.lots()) {
-        if (!lot.active) {
+        if (!lot.active()) {
             continue;
         }
         const auto account = owner_account(state, lot.holder);

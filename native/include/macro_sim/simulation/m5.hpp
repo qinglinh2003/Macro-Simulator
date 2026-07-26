@@ -182,6 +182,7 @@ class M5TickScratch final {
     std::vector<core::BankCapitalRecord> bank_capital_;
     std::vector<double> debt_by_account_;
     std::vector<LoanId> reusable_loan_by_account_;
+    std::vector<LoanId> relationship_loan_by_account_;
     std::vector<double> exposure_by_bank_;
     std::vector<double> deposits_by_bank_;
     std::vector<double> bank_capital_live_;

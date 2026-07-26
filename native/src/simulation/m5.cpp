@@ -123,6 +123,7 @@ template <typename Range> [[nodiscard]] bool all_finite(const Range &values) noe
 [[nodiscard]] Status transfer(const core::RootState &state, M4TickScratch &scratch,
                               AccountId source, AccountId destination,
                               double amount) noexcept {
+    static_cast<void>(state);
     if (!finite(amount) || amount < 0.0) {
         return Status(ErrorCode::invalid_argument,
                       "M5 transfer must be finite and nonnegative");
@@ -130,19 +131,21 @@ template <typename Range> [[nodiscard]] bool all_finite(const Range &values) noe
     if (amount <= algorithms::kEconomicEpsilon || source == destination) {
         return Status::success();
     }
-    const auto *source_record = state.postings.get(source);
-    const auto *destination_record = state.postings.get(destination);
-    if (source_record == nullptr || destination_record == nullptr ||
-        !source_record->open || !destination_record->open) {
-        return Status(ErrorCode::not_found, "M5 transfer account is absent");
-    }
     const auto source_index = account_index(source);
     const auto destination_index = account_index(destination);
     if (source_index >= scratch.balances_.size() ||
-        destination_index >= scratch.balances_.size()) {
+        destination_index >= scratch.balances_.size() ||
+        source_index >= scratch.account_flags_.size() ||
+        destination_index >= scratch.account_flags_.size()) {
         return Status(ErrorCode::internal_error, "M5 posting projection is stale");
     }
-    if (!source_record->allow_negative &&
+    const auto source_flags = scratch.account_flags_[source_index];
+    const auto destination_flags = scratch.account_flags_[destination_index];
+    if ((source_flags & M4TickScratch::kAccountOpen) == 0U ||
+        (destination_flags & M4TickScratch::kAccountOpen) == 0U) {
+        return Status(ErrorCode::not_found, "M5 transfer account is absent");
+    }
+    if ((source_flags & M4TickScratch::kAccountAllowsNegative) == 0U &&
         scratch.balances_[source_index] + kTolerance < amount) {
         return Status(ErrorCode::insufficient_funds,
                       "M5 transfer exceeds available funds");
@@ -213,19 +216,37 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
 
 [[nodiscard]] BankId relationship_bank(const core::RootState &state,
                                        const M4TickScratch &real,
-                                       const M5TickScratch &scratch,
+                                       M5TickScratch &scratch,
                                        AccountId account) noexcept {
+    const auto account_slot = account_index(account);
+    const bool cache_available =
+        account_slot < scratch.relationship_loan_by_account_.size();
+    if (cache_available) {
+        const auto indexed = scratch.relationship_loan_by_account_[account_slot];
+        if (indexed.valid() && indexed.value() <= scratch.loans_.size()) {
+            const auto &loan =
+                scratch.loans_[static_cast<std::size_t>(indexed.value() - 1U)];
+            if (loan.id == indexed && loan.active &&
+                loan.borrower_account == account &&
+                loan.principal.value() > algorithms::kEconomicEpsilon) {
+                return loan.lender;
+            }
+        }
+        scratch.relationship_loan_by_account_[account_slot] = LoanId{};
+    }
     for (const auto &loan : scratch.loans_) {
         if (loan.active && loan.borrower_account == account &&
             loan.principal.value() > algorithms::kEconomicEpsilon) {
+            if (cache_available) {
+                scratch.relationship_loan_by_account_[account_slot] = loan.id;
+            }
             return loan.lender;
         }
     }
-    const auto index = account_index(account);
-    if (index >= real.account_nodes_.size()) {
+    if (account_slot >= real.account_nodes_.size()) {
         return BankId{};
     }
-    const auto bank = bank_for_node(scratch, real.account_nodes_[index]);
+    const auto bank = bank_for_node(scratch, real.account_nodes_[account_slot]);
     return state.banks.get(bank) != nullptr ? bank : BankId{};
 }
 
@@ -400,8 +421,15 @@ void open_financial_books(const core::RootState &state, const M4TickScratch &rea
     scratch.working_metrics_.inflation_sensor = runtime.inflation_sensor;
     std::fill(scratch.reusable_loan_by_account_.begin(),
               scratch.reusable_loan_by_account_.end(), LoanId{});
+    std::fill(scratch.relationship_loan_by_account_.begin(),
+              scratch.relationship_loan_by_account_.end(), LoanId{});
     for (const auto &loan : scratch.loans_) {
         const auto slot = account_index(loan.borrower_account);
+        if (loan.active && loan.principal.value() > algorithms::kEconomicEpsilon &&
+            slot < scratch.relationship_loan_by_account_.size() &&
+            !scratch.relationship_loan_by_account_[slot].valid()) {
+            scratch.relationship_loan_by_account_[slot] = loan.id;
+        }
         if (loan.active && loan.purpose == core::LoanPurpose::general &&
             slot < scratch.reusable_loan_by_account_.size()) {
             scratch.reusable_loan_by_account_[slot] = loan.id;
@@ -1684,6 +1712,7 @@ void M5TickScratch::reserve(const core::RootState &state) {
     bank_capital_.reserve(state.banks.alive_count());
     debt_by_account_.resize(state.postings.size() + 1);
     reusable_loan_by_account_.resize(state.postings.size() + 1);
+    relationship_loan_by_account_.resize(state.postings.size() + 1);
     const auto next_bank_id =
         static_cast<std::size_t>(state.banks.allocator_state().next_id);
     exposure_by_bank_.resize(next_bank_id);
@@ -1713,6 +1742,7 @@ void M5TickScratch::synchronize_topology(const core::RootState &state,
                                          const M4TickScratch &real_economy_scratch) {
     debt_by_account_.resize(state.postings.size() + 1);
     reusable_loan_by_account_.resize(state.postings.size() + 1);
+    relationship_loan_by_account_.resize(state.postings.size() + 1);
     const auto next_bank_id =
         static_cast<std::size_t>(state.banks.allocator_state().next_id);
     exposure_by_bank_.resize(next_bank_id);
@@ -1744,6 +1774,7 @@ std::uint64_t M5TickScratch::capacity_signature() const noexcept {
         bank_capital_.capacity(),
         debt_by_account_.capacity(),
         reusable_loan_by_account_.capacity(),
+        relationship_loan_by_account_.capacity(),
         exposure_by_bank_.capacity(),
         deposits_by_bank_.capacity(),
         bank_capital_live_.capacity(),
@@ -1934,6 +1965,10 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
             account_slot < scratch.reusable_loan_by_account_.size()) {
             scratch.reusable_loan_by_account_[account_slot] = id;
         }
+        if (account_slot < scratch.relationship_loan_by_account_.size() &&
+            !scratch.relationship_loan_by_account_[account_slot].valid()) {
+            scratch.relationship_loan_by_account_[account_slot] = id;
+        }
     }
     if (quote.expected_existing_debt <= algorithms::kEconomicEpsilon) {
         const auto status = migrate_account(state, real_economy, scratch,
@@ -1944,6 +1979,10 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
                 account_slot < scratch.reusable_loan_by_account_.size() &&
                 scratch.reusable_loan_by_account_[account_slot] == id) {
                 scratch.reusable_loan_by_account_[account_slot] = LoanId{};
+            }
+            if (account_slot < scratch.relationship_loan_by_account_.size() &&
+                scratch.relationship_loan_by_account_[account_slot] == id) {
+                scratch.relationship_loan_by_account_[account_slot] = LoanId{};
             }
             return status;
         }
