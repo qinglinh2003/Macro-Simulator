@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <optional>
 #include <sstream>
@@ -565,6 +566,74 @@ encode_artifact_context(const NativePolicyArtifact &artifact,
             !spec.artifact_path.empty());
 }
 
+[[nodiscard]] bool valid_shock_authority(
+    const M11ShockAuthority &authority,
+    std::size_t economy_count) noexcept {
+    if (authority.principal.empty() ||
+        authority.principal.size() > 128U ||
+        authority.principal.find('\0') != std::string::npos ||
+        authority.maximum_schedule_ahead_ticks == 0U ||
+        authority.maximum_duration_ticks == 0U ||
+        !std::isfinite(authority.maximum_absolute_magnitude) ||
+        authority.maximum_absolute_magnitude < 0.0) {
+        return false;
+    }
+    for (const auto &seat : authority.granted_seats) {
+        if (!m11_valid_seat(seat)) {
+            return false;
+        }
+    }
+    for (const auto kind : authority.allowed_kinds) {
+        if (static_cast<std::uint8_t>(kind) >
+            static_cast<std::uint8_t>(
+                simulation::ShockKind::capital_destruction)) {
+            return false;
+        }
+    }
+    for (const auto economy : authority.allowed_economies) {
+        if (economy.value() >= economy_count) {
+            return false;
+        }
+    }
+    return !authority.allowed_kinds.empty();
+}
+
+[[nodiscard]] std::string shock_input_payload(
+    const M11ControlledShockScheduleRequest &request) {
+    const auto &shock = request.shock;
+    std::ostringstream payload;
+    payload << std::setprecision(17)
+            << "principal=" << request.principal
+            << "|actor=" << request.actor << "|seat="
+            << (request.seat.has_value() ? *request.seat : "")
+            << "|id=" << shock.id << "|kind="
+            << static_cast<unsigned>(shock.kind) << "|economy=";
+    if (shock.economy.has_value()) {
+        payload << shock.economy->value();
+    } else {
+        payload << "global";
+    }
+    payload << "|start=" << shock.start.value()
+            << "|announcement=";
+    if (shock.announcement.has_value()) {
+        payload << shock.announcement->value();
+    } else {
+        payload << "none";
+    }
+    payload << "|duration=" << shock.duration
+            << "|magnitude=" << shock.magnitude << "|shape="
+            << static_cast<unsigned>(shock.shape)
+            << "|ramp_in=" << shock.ramp_in_ticks
+            << "|ramp_out=" << shock.ramp_out_ticks
+            << "|sector=";
+    if (shock.sector.has_value()) {
+        payload << static_cast<unsigned>(*shock.sector);
+    } else {
+        payload << "none";
+    }
+    return payload.str();
+}
+
 } // namespace
 
 Result<CanonicalControllerEnvelope>
@@ -625,6 +694,30 @@ M11ControlledSession::create(EngineSession engine,
         return invalid_session("M11 run specification is invalid");
     }
     run_spec.advance_options.worker_count = run_spec.worker_count;
+    std::sort(
+        run_spec.shock_authorities.begin(),
+        run_spec.shock_authorities.end(),
+        [](const M11ShockAuthority &left,
+           const M11ShockAuthority &right) {
+            return left.principal < right.principal;
+        });
+    if (std::adjacent_find(
+            run_spec.shock_authorities.begin(),
+            run_spec.shock_authorities.end(),
+            [](const M11ShockAuthority &left,
+               const M11ShockAuthority &right) {
+                return left.principal == right.principal;
+            }) != run_spec.shock_authorities.end() ||
+        std::any_of(
+            run_spec.shock_authorities.begin(),
+            run_spec.shock_authorities.end(),
+            [&](const M11ShockAuthority &authority) {
+                return !valid_shock_authority(
+                    authority, engine.world().economy_count());
+            })) {
+        return invalid_session(
+            "M11 shock authority specification is invalid");
+    }
     auto scheduler = M11DecisionScheduler::create(
         run_spec.calendars, run_spec.triggers);
     auto coordinator =
@@ -1494,6 +1587,137 @@ Status M11ControlledSession::assign_seat(
     }
     return synchronize_state(
         "m11-seat:" + request.operation_id, std::move(next));
+}
+
+Result<M11ShockScheduleResult>
+M11ControlledSession::schedule_shock(
+    const M11ControlledShockScheduleRequest &request) {
+    if (request.operation_id.empty() ||
+        request.operation_id.size() >
+            kM10MaximumOperationIdBytes ||
+        request.operation_id.find('\0') != std::string::npos ||
+        request.principal.empty() || request.actor.empty() ||
+        (request.seat.has_value() &&
+         !m11_valid_seat(*request.seat))) {
+        return invalid_session(
+            "M11 controlled shock request is invalid");
+    }
+    const auto payload = shock_input_payload(request);
+    for (const auto &event : state_.events.events()) {
+        if (event.operation_id != request.operation_id) {
+            continue;
+        }
+        if (event.event_type != "shock_scheduled_input" ||
+            event.actor != request.actor ||
+            event.canonical_payload != payload) {
+            return Status(
+                ErrorCode::already_exists,
+                "M11 shock operation ID payload differs");
+        }
+        return M11ShockScheduleResult{
+            request.shock.id, event.boundary, event.sequence, true};
+    }
+    const auto authority = std::lower_bound(
+        run_spec_.shock_authorities.begin(),
+        run_spec_.shock_authorities.end(), request.principal,
+        [](const M11ShockAuthority &entry,
+           std::string_view principal) {
+            return entry.principal < principal;
+        });
+    if (authority == run_spec_.shock_authorities.end() ||
+        authority->principal != request.principal) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "M11 shock authority was not granted");
+    }
+    if (request.seat.has_value() &&
+        std::find(
+            authority->granted_seats.begin(),
+            authority->granted_seats.end(), *request.seat) ==
+            authority->granted_seats.end()) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "M11 shock seat authority was not granted");
+    }
+    if (std::find(
+            authority->allowed_kinds.begin(),
+            authority->allowed_kinds.end(), request.shock.kind) ==
+        authority->allowed_kinds.end()) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "M11 shock kind authority was not granted");
+    }
+    if (request.shock.economy.has_value()) {
+        if (!authority->allow_all_economies &&
+            std::find(
+                authority->allowed_economies.begin(),
+                authority->allowed_economies.end(),
+                *request.shock.economy) ==
+                authority->allowed_economies.end()) {
+            return Status(
+                ErrorCode::invalid_transaction_state,
+                "M11 shock economy authority was not granted");
+        }
+    } else if (!authority->allow_global) {
+        return Status(
+            ErrorCode::invalid_transaction_state,
+            "M11 global shock authority was not granted");
+    }
+    const auto boundary = bridge_.engine().tick();
+    const auto earliest =
+        state_.phase == M11BoundaryPhase::boundary_start
+            ? boundary
+            : Tick(boundary.value() + 1U);
+    const auto announcement =
+        request.shock.announcement.value_or(request.shock.start);
+    if (request.shock.start < earliest ||
+        announcement < earliest ||
+        request.shock.start < announcement ||
+        request.shock.start.value() - announcement.value() <
+            authority->minimum_announcement_lead_ticks ||
+        request.shock.start.value() - boundary.value() >
+            authority->maximum_schedule_ahead_ticks ||
+        request.shock.duration >
+            authority->maximum_duration_ticks ||
+        !std::isfinite(request.shock.magnitude) ||
+        std::abs(request.shock.magnitude) >
+            authority->maximum_absolute_magnitude) {
+        return invalid_session(
+            "M11 shock timing or magnitude exceeds its authority");
+    }
+
+    auto next = state_;
+    auto event = next.events.append(
+        boundary, "shock_scheduled_input", request.operation_id,
+        request.actor, payload,
+        M11EventVisibility::privileged_audit);
+    if (!event.ok()) {
+        return event.status();
+    }
+    auto envelope = seal_m11_controller_state(
+        bridge_.engine().tick(),
+        bridge_.engine().policy_generation(), next);
+    if (!envelope.ok()) {
+        return envelope.status();
+    }
+    ControllerEnvelopeTransition transition{
+        request.operation_id,
+        bridge_.controller_envelope().hash,
+        std::move(*envelope.get_if()),
+    };
+    auto receipt =
+        bridge_.schedule_shock(request.shock, transition);
+    if (!receipt.ok()) {
+        return receipt.status();
+    }
+    state_ = std::move(next);
+    auto acknowledged = bridge_.acknowledge_receipt(
+        receipt.get_if()->operation_id);
+    if (!acknowledged.ok()) {
+        return acknowledged;
+    }
+    return M11ShockScheduleResult{
+        request.shock.id, boundary, event.get_if()->sequence, false};
 }
 
 bool M11ControlledSession::has_unanswered_human_context() const

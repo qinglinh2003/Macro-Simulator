@@ -62,6 +62,38 @@ struct M11SeatAssignment final {
     bool operator==(const M11SeatAssignment &) const = default;
 };
 
+struct M11ShockAuthority final {
+    std::string principal;
+    std::vector<std::string> granted_seats;
+    std::vector<simulation::ShockKind> allowed_kinds;
+    std::vector<EconomyId> allowed_economies;
+    bool allow_all_economies{false};
+    bool allow_global{false};
+    std::uint64_t minimum_announcement_lead_ticks{0U};
+    std::uint64_t maximum_schedule_ahead_ticks{36500U};
+    std::uint64_t maximum_duration_ticks{36500U};
+    double maximum_absolute_magnitude{1.0};
+
+    bool operator==(const M11ShockAuthority &) const = default;
+};
+
+struct M11ControlledShockScheduleRequest final {
+    std::string operation_id;
+    std::string principal;
+    std::string actor;
+    std::optional<std::string> seat{};
+    simulation::ShockSpec shock{};
+};
+
+struct M11ShockScheduleResult final {
+    std::uint64_t shock_id{0U};
+    Tick accepted_at{};
+    std::uint64_t event_sequence{0U};
+    bool repeated{false};
+
+    bool operator==(const M11ShockScheduleResult &) const = default;
+};
+
 struct M11SeatRuntime final {
     M11SeatAssignment assignment;
     std::uint64_t decision_counter{0U};
@@ -74,6 +106,7 @@ struct M11ControllerRunSpec final {
     std::vector<M11TriggerSpec> triggers{m11_default_triggers()};
     M11AdjustmentCostSpec cost_spec{};
     std::vector<M11SeatAssignment> assignments;
+    std::vector<M11ShockAuthority> shock_authorities;
     bool fill_unassigned_with_null{true};
     std::uint32_t worker_count{1U};
     simulation::M9AdvanceOptions advance_options{};
@@ -196,6 +229,9 @@ class M11ControlledSession final {
                    std::string_view actor);
     [[nodiscard]] Status
     assign_seat(const M11SeatAssignmentRequest &request);
+    [[nodiscard]] Result<M11ShockScheduleResult>
+    schedule_shock(
+        const M11ControlledShockScheduleRequest &request);
     [[nodiscard]] Result<M11ControlledSession> clone() const;
 
   private:

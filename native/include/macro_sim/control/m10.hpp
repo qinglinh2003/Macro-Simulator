@@ -116,6 +116,8 @@ class EngineSession final {
     [[nodiscard]] Result<simulation::M9AdvanceResult>
     advance_ticks(std::uint64_t count,
                   const simulation::M9AdvanceOptions &options = {});
+    [[nodiscard]] Status
+    schedule_shock(const simulation::ShockSpec &shock);
     [[nodiscard]] Result<EngineSession> clone() const;
     [[nodiscard]] Result<reporting::HouseholdProbePage>
     probe_households(EconomyId economy, std::uint64_t after_id,
@@ -196,6 +198,10 @@ class HybridControlledBridge final {
     }
     [[nodiscard]] Result<ControllerUpdateReceipt>
     update_controller(const ControllerEnvelopeTransition &transition);
+    [[nodiscard]] Result<ControllerUpdateReceipt>
+    schedule_shock(
+        const simulation::ShockSpec &shock,
+        const ControllerEnvelopeTransition &transition);
     [[nodiscard]] Status acknowledge_receipt(std::string_view operation_id);
     [[nodiscard]] Status
     validate_policy_batch(const simulation::WorldPolicyBatch &batch) const;

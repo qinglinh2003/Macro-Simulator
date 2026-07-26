@@ -670,6 +670,76 @@ occupant_from_json(const Json &value) {
     return result;
 }
 
+[[nodiscard]] Json shock_authority_json(
+    const M11ShockAuthority &value) {
+    std::vector<std::uint8_t> kinds;
+    kinds.reserve(value.allowed_kinds.size());
+    for (const auto kind : value.allowed_kinds) {
+        kinds.push_back(static_cast<std::uint8_t>(kind));
+    }
+    std::vector<std::uint64_t> economies;
+    economies.reserve(value.allowed_economies.size());
+    for (const auto economy : value.allowed_economies) {
+        economies.push_back(economy.value());
+    }
+    return Json{
+        {"allow_all_economies", value.allow_all_economies},
+        {"allow_global", value.allow_global},
+        {"allowed_economies", std::move(economies)},
+        {"allowed_kinds", std::move(kinds)},
+        {"granted_seats", value.granted_seats},
+        {"maximum_absolute_magnitude",
+         value.maximum_absolute_magnitude},
+        {"maximum_duration_ticks", value.maximum_duration_ticks},
+        {"maximum_schedule_ahead_ticks",
+         value.maximum_schedule_ahead_ticks},
+        {"minimum_announcement_lead_ticks",
+         value.minimum_announcement_lead_ticks},
+        {"principal", value.principal},
+    };
+}
+
+[[nodiscard]] M11ShockAuthority
+shock_authority_from_json(const Json &value) {
+    require_object(
+        value,
+        {"allow_all_economies", "allow_global", "allowed_economies",
+         "allowed_kinds", "granted_seats",
+         "maximum_absolute_magnitude", "maximum_duration_ticks",
+         "maximum_schedule_ahead_ticks",
+         "minimum_announcement_lead_ticks", "principal"});
+    M11ShockAuthority result;
+    result.principal = value.at("principal").get<std::string>();
+    result.granted_seats =
+        value.at("granted_seats").get<std::vector<std::string>>();
+    for (const auto &entry : value.at("allowed_kinds")) {
+        result.allowed_kinds.push_back(
+            checked_enum<simulation::ShockKind>(
+                entry,
+                static_cast<std::uint8_t>(
+                    simulation::ShockKind::capital_destruction)));
+    }
+    for (const auto economy :
+         value.at("allowed_economies")
+             .get<std::vector<std::uint64_t>>()) {
+        result.allowed_economies.push_back(EconomyId(economy));
+    }
+    result.allow_all_economies =
+        value.at("allow_all_economies").get<bool>();
+    result.allow_global = value.at("allow_global").get<bool>();
+    result.minimum_announcement_lead_ticks =
+        value.at("minimum_announcement_lead_ticks")
+            .get<std::uint64_t>();
+    result.maximum_schedule_ahead_ticks =
+        value.at("maximum_schedule_ahead_ticks")
+            .get<std::uint64_t>();
+    result.maximum_duration_ticks =
+        value.at("maximum_duration_ticks").get<std::uint64_t>();
+    result.maximum_absolute_magnitude =
+        value.at("maximum_absolute_magnitude").get<double>();
+    return result;
+}
+
 [[nodiscard]] Json seat_json(const M11SeatRuntime &value) {
     const auto artifact_bytes =
         value.artifact.has_value()
@@ -871,6 +941,10 @@ release_from_json(const Json &value) {
     for (const auto &entry : state.seats) {
         seats.push_back(seat_json(entry));
     }
+    Json shock_authorities = Json::array();
+    for (const auto &entry : run_spec.shock_authorities) {
+        shock_authorities.push_back(shock_authority_json(entry));
+    }
     return Json{
         {"boundary_sequence", state.boundary_sequence},
         {"budgets", std::move(budgets)},
@@ -896,6 +970,7 @@ release_from_json(const Json &value) {
         {"releases_next_sequence", state.releases.next_sequence()},
         {"schema_version", kCheckpointSchemaVersion},
         {"seats", std::move(seats)},
+        {"shock_authorities", std::move(shock_authorities)},
         {"trigger_states", std::move(trigger_states)},
         {"triggers", std::move(triggers)},
         {"worker_count", run_spec.worker_count},
@@ -925,7 +1000,8 @@ state_from_archive(const Json &root,
          "next_decision_sequence", "opened_context_ids", "pending",
          "phase", "policy_versions", "releases",
          "releases_next_sequence", "schema_version", "seats",
-         "trigger_states", "triggers", "worker_count"});
+         "shock_authorities", "trigger_states", "triggers",
+         "worker_count"});
     if (root.at("schema_version").get<std::uint32_t>() !=
         kCheckpointSchemaVersion) {
         throw std::runtime_error("checkpoint schema differs");
@@ -947,6 +1023,49 @@ state_from_archive(const Json &root,
         root.at("maximum_events").get<std::size_t>();
     run_spec.maximum_releases =
         root.at("maximum_releases").get<std::size_t>();
+    for (const auto &entry : root.at("shock_authorities")) {
+        run_spec.shock_authorities.push_back(
+            shock_authority_from_json(entry));
+    }
+    if (!std::is_sorted(
+            run_spec.shock_authorities.begin(),
+            run_spec.shock_authorities.end(),
+            [](const M11ShockAuthority &left,
+               const M11ShockAuthority &right) {
+                return left.principal < right.principal;
+            }) ||
+        std::adjacent_find(
+            run_spec.shock_authorities.begin(),
+            run_spec.shock_authorities.end(),
+            [](const M11ShockAuthority &left,
+               const M11ShockAuthority &right) {
+                return left.principal == right.principal;
+            }) != run_spec.shock_authorities.end()) {
+        throw std::runtime_error("checkpoint shock authorities differ");
+    }
+    for (const auto &authority : run_spec.shock_authorities) {
+        if (authority.principal.empty() ||
+            authority.maximum_schedule_ahead_ticks == 0U ||
+            authority.maximum_duration_ticks == 0U ||
+            !std::isfinite(authority.maximum_absolute_magnitude) ||
+            authority.maximum_absolute_magnitude < 0.0 ||
+            authority.allowed_kinds.empty() ||
+            std::any_of(
+                authority.granted_seats.begin(),
+                authority.granted_seats.end(),
+                [](const std::string &seat) {
+                    return !m11_valid_seat(seat);
+                }) ||
+            std::any_of(
+                authority.allowed_economies.begin(),
+                authority.allowed_economies.end(),
+                [&](EconomyId economy) {
+                    return economy.value() >= world.economy_count();
+                })) {
+            throw std::runtime_error(
+                "checkpoint shock authority is invalid");
+        }
+    }
     auto scheduler = M11DecisionScheduler::create(
         run_spec.calendars, run_spec.triggers);
     auto coordinator =

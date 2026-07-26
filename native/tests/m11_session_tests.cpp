@@ -78,6 +78,20 @@ using namespace macro_sim::simulation;
     return proposal;
 }
 
+[[nodiscard]] M11ShockAuthority scenario_authority() {
+    M11ShockAuthority authority;
+    authority.principal = "scenario-authority";
+    authority.granted_seats = {"energy", "treasury"};
+    authority.allowed_kinds = {
+        ShockKind::productivity,
+        ShockKind::energy_capacity,
+    };
+    authority.allow_all_economies = true;
+    authority.allow_global = true;
+    authority.maximum_absolute_magnitude = 0.75;
+    return authority;
+}
+
 void test_null_occupants_advance_complete_boundary() {
     auto session =
         M11ControlledSession::create(engine());
@@ -332,6 +346,106 @@ void test_checkpoint_preserves_human_pause_and_embedded_rl() {
                .ok());
 }
 
+void test_controlled_shocks_are_authorized_atomic_and_idempotent() {
+    M11ControllerRunSpec spec;
+    spec.shock_authorities.push_back(scenario_authority());
+    auto session =
+        M11ControlledSession::create(engine(), std::move(spec));
+    assert(session.ok());
+    ShockSpec shock;
+    shock.id = 5501U;
+    shock.kind = ShockKind::energy_capacity;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(0U);
+    shock.duration = 2U;
+    shock.magnitude = 0.4;
+    M11ControlledShockScheduleRequest request{
+        "shock-request-5501",
+        "scenario-authority",
+        "player",
+        std::optional<std::string>("energy"),
+        shock,
+    };
+    auto accepted = session.get_if()->schedule_shock(request);
+    assert(accepted.ok());
+    assert(!accepted.get_if()->repeated);
+    assert(session.get_if()->engine().world().shocks().size() == 1U);
+    const auto digest = session.get_if()->engine().world().digest();
+    const auto event_count =
+        session.get_if()->events().next_sequence();
+    auto repeated = session.get_if()->schedule_shock(request);
+    assert(repeated.ok());
+    assert(repeated.get_if()->repeated);
+    assert(repeated.get_if()->event_sequence ==
+           accepted.get_if()->event_sequence);
+    assert(session.get_if()->engine().world().digest() == digest);
+    assert(session.get_if()->events().next_sequence() == event_count);
+
+    request.shock.magnitude = 0.5;
+    assert(session.get_if()
+               ->schedule_shock(request)
+               .status()
+               .code() == ErrorCode::already_exists);
+    request.operation_id = "unauthorized-shock";
+    request.principal = "ordinary-seat";
+    assert(!session.get_if()->schedule_shock(request).ok());
+    assert(session.get_if()->engine().world().digest() == digest);
+    assert(session.get_if()->events().next_sequence() == event_count);
+
+    assert(session.get_if()
+               ->advance_until_decision({1U, true})
+               .ok());
+    assert(session.get_if()->tick() == Tick(1U));
+    assert(session.get_if()
+               ->engine()
+               .world()
+               .last_metrics()
+               .external[0U]
+               .active_shocks > 0U);
+}
+
+void test_shock_scheduled_during_human_pause_starts_next_boundary() {
+    M11ControllerRunSpec spec;
+    spec.shock_authorities.push_back(scenario_authority());
+    M11OccupantSpec human;
+    human.kind = M11OccupantKind::human_queue;
+    human.occupant_id = "shock-pause-human";
+    spec.assignments.push_back(
+        {EconomyId(0U), "treasury", std::move(human)});
+    auto session =
+        M11ControlledSession::create(engine(), std::move(spec));
+    assert(session.ok());
+    auto paused =
+        session.get_if()->advance_until_decision({1U, true});
+    assert(paused.ok() && paused.get_if()->awaiting_human);
+    ShockSpec shock;
+    shock.id = 5502U;
+    shock.kind = ShockKind::productivity;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(0U);
+    shock.duration = 1U;
+    shock.magnitude = 0.2;
+    M11ControlledShockScheduleRequest request{
+        "shock-request-5502",
+        "scenario-authority",
+        "player",
+        std::optional<std::string>("treasury"),
+        shock,
+    };
+    assert(!session.get_if()->schedule_shock(request).ok());
+    request.shock.start = Tick(1U);
+    assert(session.get_if()->schedule_shock(request).ok());
+    assert(session.get_if()->tick() == Tick(0U));
+    auto checkpoint = save_m11_checkpoint(*session.get_if());
+    assert(checkpoint.ok());
+    auto restored = load_m11_checkpoint(*checkpoint.get_if());
+    assert(restored.ok());
+    assert(restored.get_if()->run_spec().shock_authorities ==
+           session.get_if()->run_spec().shock_authorities);
+    assert(restored.get_if()->engine().world().shocks() ==
+           session.get_if()->engine().world().shocks());
+}
+
 } // namespace
 
 int main() {
@@ -341,5 +455,7 @@ int main() {
     test_native_rl_occupant_runs_without_python();
     test_checkpoint_restores_pending_execution_exactly();
     test_checkpoint_preserves_human_pause_and_embedded_rl();
+    test_controlled_shocks_are_authorized_atomic_and_idempotent();
+    test_shock_scheduled_during_human_pause_starts_next_boundary();
     return 0;
 }

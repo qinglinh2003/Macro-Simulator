@@ -154,6 +154,11 @@ EngineSession::advance_ticks(std::uint64_t count,
     return std::move(*result.get_if());
 }
 
+Status EngineSession::schedule_shock(
+    const simulation::ShockSpec &shock) {
+    return world_.schedule_shock(shock);
+}
+
 Result<EngineSession> EngineSession::clone() const { return *this; }
 
 Result<reporting::HouseholdProbePage>
@@ -359,6 +364,75 @@ HybridControlledBridge::update_controller(
         engine_.tick(),
         false,
     };
+    envelope_ = transition.next;
+    receipts_.push_back(receipt);
+    return receipt;
+}
+
+Result<ControllerUpdateReceipt>
+HybridControlledBridge::schedule_shock(
+    const simulation::ShockSpec &shock,
+    const ControllerEnvelopeTransition &transition) {
+    auto available = require_available();
+    if (!available.ok()) {
+        return available;
+    }
+    if (!valid_operation_id(transition.operation_id)) {
+        return Status(ErrorCode::invalid_argument,
+                      "controller operation ID is invalid");
+    }
+    const auto request_hash = transition_hash(transition);
+    const auto existing =
+        std::find_if(receipts_.begin(), receipts_.end(),
+                     [&](const ControllerUpdateReceipt &receipt) {
+                         return receipt.operation_id ==
+                                transition.operation_id;
+                     });
+    if (existing != receipts_.end()) {
+        if (existing->request_hash != request_hash) {
+            return Status(ErrorCode::already_exists,
+                          "controller operation ID payload differs");
+        }
+        return *existing;
+    }
+    const auto unacknowledged =
+        std::count_if(receipts_.begin(), receipts_.end(),
+                      [](const ControllerUpdateReceipt &receipt) {
+                          return !receipt.acknowledged;
+                      });
+    if (static_cast<std::size_t>(unacknowledged) >=
+        kM10MaximumUnacknowledgedReceipts) {
+        return Status(ErrorCode::out_of_range,
+                      "controller receipt cache requires acknowledgement");
+    }
+    if (transition.expected_prior_hash != envelope_.hash) {
+        return Status(ErrorCode::stale_handle,
+                      "controller envelope prior hash is stale");
+    }
+    auto status = validate_envelope(
+        transition.next, engine_.tick(), engine_.policy_generation());
+    if (!status.ok()) {
+        return status;
+    }
+    if (transition.next.event_sequence < envelope_.event_sequence ||
+        transition.next.release_cursor < envelope_.release_cursor) {
+        return Status(ErrorCode::contract_violation,
+                      "controller envelope cursors cannot move backward");
+    }
+    auto staged = engine_;
+    status = staged.schedule_shock(shock);
+    if (!status.ok()) {
+        return status;
+    }
+    ControllerUpdateReceipt receipt{
+        transition.operation_id,
+        request_hash,
+        envelope_.hash,
+        transition.next.hash,
+        engine_.tick(),
+        false,
+    };
+    engine_ = std::move(staged);
     envelope_ = transition.next;
     receipts_.push_back(receipt);
     return receipt;
