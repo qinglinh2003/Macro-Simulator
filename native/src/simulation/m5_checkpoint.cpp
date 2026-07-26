@@ -85,6 +85,12 @@ void append_u64(std::vector<std::uint8_t>& bytes, std::uint64_t value) {
             value.income_tax_rate,
             value.income_allowance,
             value.consumption_tax_rate,
+            value.necessity_consumption_tax_rate.has_value()
+                ? Json(*value.necessity_consumption_tax_rate)
+                : Json(nullptr),
+            value.luxury_consumption_tax_rate.has_value()
+                ? Json(*value.luxury_consumption_tax_rate)
+                : Json(nullptr),
             value.wealth_tax_rate,
             value.wealth_allowance,
             value.unemployment_benefit_replacement,
@@ -105,6 +111,10 @@ void append_u64(std::vector<std::uint8_t>& bytes, std::uint64_t value) {
             value.natural_unemployment,
             value.maximum_policy_rate,
             value.inflation_sensor_lambda,
+            value.core_inflation_sensor,
+            value.fixed_basket_cpi,
+            value.logarithmic_inflation,
+            value.fiscal_uses_national_accounts_gdp,
             value.open_market_operations,
             value.reserve_target,
             value.reserve_gap_close,
@@ -127,7 +137,7 @@ void append_u64(std::vector<std::uint8_t>& bytes, std::uint64_t value) {
 }
 
 [[nodiscard]] M5PolicyState decode_policy(const Json& row) {
-    if (!row.is_array() || row.size() != 44) {
+    if (!row.is_array() || row.size() != 50) {
         throw std::runtime_error("invalid M5 policy");
     }
     M5PolicyState value;
@@ -141,6 +151,18 @@ void append_u64(std::vector<std::uint8_t>& bytes, std::uint64_t value) {
     value.income_tax_rate = row[i++].get<double>();
     value.income_allowance = row[i++].get<double>();
     value.consumption_tax_rate = row[i++].get<double>();
+    if (row[i].is_null()) {
+        value.necessity_consumption_tax_rate.reset();
+    } else {
+        value.necessity_consumption_tax_rate = row[i].get<double>();
+    }
+    ++i;
+    if (row[i].is_null()) {
+        value.luxury_consumption_tax_rate.reset();
+    } else {
+        value.luxury_consumption_tax_rate = row[i].get<double>();
+    }
+    ++i;
     value.wealth_tax_rate = row[i++].get<double>();
     value.wealth_allowance = row[i++].get<double>();
     value.unemployment_benefit_replacement = row[i++].get<double>();
@@ -165,6 +187,10 @@ void append_u64(std::vector<std::uint8_t>& bytes, std::uint64_t value) {
     value.natural_unemployment = row[i++].get<double>();
     value.maximum_policy_rate = row[i++].get<double>();
     value.inflation_sensor_lambda = row[i++].get<double>();
+    value.core_inflation_sensor = row[i++].get<bool>();
+    value.fixed_basket_cpi = row[i++].get<bool>();
+    value.logarithmic_inflation = row[i++].get<bool>();
+    value.fiscal_uses_national_accounts_gdp = row[i++].get<bool>();
     value.open_market_operations = row[i++].get<bool>();
     value.reserve_target = row[i++].get<double>();
     value.reserve_gap_close = row[i++].get<double>();
@@ -326,6 +352,8 @@ void decode_metrics(const Json& row, M5Metrics& value) {
             runtime.policy_rate,
             runtime.inflation_sensor,
             runtime.previous_price_index,
+            runtime.headline_price_index,
+            runtime.previous_headline_price_index,
             runtime.previous_unemployment,
             runtime.reserve_genesis,
             runtime.bank_fear,
@@ -430,16 +458,18 @@ void decode_state(
     runtime.policy = decode_policy(input.at("policy"));
     runtime.rules = decode_rules(input.at("rules"));
     const auto& state = input.at("runtime");
-    if (!state.is_array() || state.size() != 7) {
+    if (!state.is_array() || state.size() != 9) {
         throw std::runtime_error("invalid M5 runtime");
     }
     runtime.initial_policy_rate = state[0].get<double>();
     runtime.policy_rate = state[1].get<double>();
     runtime.inflation_sensor = state[2].get<double>();
     runtime.previous_price_index = state[3].get<double>();
-    runtime.previous_unemployment = state[4].get<double>();
-    runtime.reserve_genesis = state[5].get<double>();
-    runtime.bank_fear = state[6].get<double>();
+    runtime.headline_price_index = state[4].get<double>();
+    runtime.previous_headline_price_index = state[5].get<double>();
+    runtime.previous_unemployment = state[6].get<double>();
+    runtime.reserve_genesis = state[7].get<double>();
+    runtime.bank_fear = state[8].get<double>();
     decode_metrics(input.at("metrics"), runtime.last_metrics);
 
     for (const auto& row : input.at("banks")) {

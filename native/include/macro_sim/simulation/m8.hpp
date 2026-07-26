@@ -28,6 +28,7 @@ enum class M8FaultPoint : std::uint8_t {
 
 struct EnergyPolicyState final {
     double excise_rate{0.0};
+    double windfall_tax_rate{0.0};
     double household_subsidy_rate{0.0};
     double subsidy_deposit_threshold{0.0};
     double price_cap{0.0};
@@ -35,6 +36,7 @@ struct EnergyPolicyState final {
     double strategic_reserve_target{0.0};
     double strategic_reserve_flow_cap{0.0};
     bool state_owned_price_at_cost{false};
+    bool state_owned_first_producer{false};
     EnergyRationing rationing{EnergyRationing::market};
 
     bool operator==(const EnergyPolicyState &) const = default;
@@ -161,6 +163,7 @@ struct EnergyMetrics final {
     double industry_units{0.0};
     double industry_spending{0.0};
     double excise_paid{0.0};
+    double windfall_tax_paid{0.0};
     double subsidy_paid{0.0};
     double cap_compensation{0.0};
     double strategic_reserve_stock{0.0};
@@ -196,6 +199,8 @@ struct HousingPolicyState final {
     double land_fee_stock_elasticity{1.0};
     double transfer_tax_rate{0.0};
     double property_tax_rate{0.0};
+    bool include_housing_in_wealth_tax{false};
+    double wealth_tax_rate{0.0};
 
     bool operator==(const HousingPolicyState &) const = default;
 };
@@ -345,6 +350,7 @@ struct HousingMetrics final {
     double rent_unpaid{0.0};
     double evictions{0.0};
     double property_tax_paid{0.0};
+    double housing_wealth_tax_paid{0.0};
     double transfer_tax_paid{0.0};
     double land_fee_paid{0.0};
     double construction_output{0.0};

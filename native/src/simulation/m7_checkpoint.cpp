@@ -404,6 +404,7 @@ decode_labor(const Json &row) {
         value.beneficial_lots_transferred,
         value.inheritance_tax_share,
         value.inheritance_tax_paid,
+        value.pension_paid,
         value.beneficial_projection_error,
         value.employed_fte,
         value.employed_heads,
@@ -435,7 +436,7 @@ decode_labor(const Json &row) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 39U) {
+    if (!row.is_array() || row.size() != 40U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -453,6 +454,7 @@ void decode_metrics(const Json &row, M7Metrics &value) {
         row[index++].get<std::uint64_t>();
     value.inheritance_tax_share = row[index++].get<double>();
     value.inheritance_tax_paid = row[index++].get<double>();
+    value.pension_paid = row[index++].get<double>();
     value.beneficial_projection_error =
         row[index++].get<double>();
     value.employed_fte = row[index++].get<double>();
@@ -490,6 +492,7 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     Json output;
     output["policy"] = Json::array({
         runtime.policy.inheritance_tax_rate,
+        runtime.policy.pension_replacement,
     });
     output["rules"] = encode_rules(runtime.rules);
     output["state"] = Json::array({
@@ -585,11 +588,13 @@ void decode_metrics(const Json &row, M7Metrics &value) {
 
 void decode_runtime(const Json &input, M7Runtime &runtime) {
     const auto &policy = input.at("policy");
-    if (!policy.is_array() || policy.size() != 1U) {
+    if (!policy.is_array() || policy.size() != 2U) {
         throw std::runtime_error("invalid M7 policy");
     }
     runtime.policy.inheritance_tax_rate =
         policy[0].get<double>();
+    runtime.policy.pension_replacement =
+        policy[1].get<double>();
     runtime.rules = decode_rules(input.at("rules"));
     const auto &state = input.at("state");
     if (!state.is_array() || state.size() != 4U) {

@@ -28,6 +28,9 @@ struct M6PolicyState final {
     bool household_bankruptcy{true};
     bool bank_resolution_fund{true};
     double bank_minimum_capital{25.0};
+    std::uint32_t bankrupt_persistence{5};
+    double regulatory_capital_haircut{0.20};
+    double regulatory_inventory_haircut{0.50};
 
     bool operator==(const M6PolicyState &) const = default;
 };

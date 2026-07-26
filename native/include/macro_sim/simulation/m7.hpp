@@ -15,6 +15,7 @@ namespace macro_sim::simulation {
 
 struct M7PolicyState final {
     double inheritance_tax_rate{0.0};
+    double pension_replacement{0.0};
 
     bool operator==(const M7PolicyState &) const = default;
 };
@@ -121,6 +122,7 @@ struct M7Metrics final {
     std::uint64_t beneficial_lots_transferred{0};
     double inheritance_tax_share{0.0};
     double inheritance_tax_paid{0.0};
+    double pension_paid{0.0};
     double beneficial_projection_error{0.0};
     double employed_fte{0.0};
     double employed_heads{0.0};

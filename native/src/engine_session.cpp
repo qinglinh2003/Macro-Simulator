@@ -443,6 +443,12 @@ Status EngineSession::update_m6_policy(const simulation::M6PolicyState &policy) 
         return validated;
     }
     securities_runtime_->policy = policy;
+    securities_runtime_->rules.bankrupt_persistence =
+        policy.bankrupt_persistence;
+    securities_runtime_->rules.capital_haircut =
+        policy.regulatory_capital_haircut;
+    securities_runtime_->rules.inventory_haircut =
+        policy.regulatory_inventory_haircut;
     return Status::success();
 }
 

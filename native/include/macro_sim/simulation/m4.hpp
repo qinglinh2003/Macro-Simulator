@@ -70,6 +70,8 @@ struct M4Rules final {
     double profit_tax_rate{0.25};
     double income_tax_rate{0.20};
     double consumption_tax_rate{0.15};
+    std::optional<double> necessity_consumption_tax_rate{};
+    std::optional<double> luxury_consumption_tax_rate{};
     double wealth_tax_rate{5.479452054794521e-6};
     double government_consumption_share{0.20};
     double government_deficit_target{0.0};

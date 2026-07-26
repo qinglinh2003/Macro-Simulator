@@ -190,6 +190,22 @@
     {
       "name": "m9-benchmark",
       "inherits": "m8-benchmark"
+    },
+    {
+      "name": "m10-debug",
+      "inherits": "m9-debug"
+    },
+    {
+      "name": "m10-release",
+      "inherits": "m9-release"
+    },
+    {
+      "name": "m10-asan",
+      "inherits": "m9-asan"
+    },
+    {
+      "name": "m10-benchmark",
+      "inherits": "m9-benchmark"
     }
   ],
   "buildPresets": [
@@ -344,6 +360,22 @@
     {
       "name": "m9-benchmark",
       "configurePreset": "m9-benchmark"
+    },
+    {
+      "name": "m10-debug",
+      "configurePreset": "m10-debug"
+    },
+    {
+      "name": "m10-release",
+      "configurePreset": "m10-release"
+    },
+    {
+      "name": "m10-asan",
+      "configurePreset": "m10-asan"
+    },
+    {
+      "name": "m10-benchmark",
+      "configurePreset": "m10-benchmark"
     }
   ],
   "testPresets": [
@@ -581,6 +613,32 @@
     {
       "name": "m9-asan",
       "configurePreset": "m9-asan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m10-debug",
+      "configurePreset": "m10-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m10-release",
+      "configurePreset": "m10-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m10-asan",
+      "configurePreset": "m10-asan",
       "filter": {
         "exclude": {
           "label": "python-binding"

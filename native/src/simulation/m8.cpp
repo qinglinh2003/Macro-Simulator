@@ -612,6 +612,15 @@ class M8Extension final : public M7TickExtension {
             scratch_.tenancies_ = runtime_.tenancies;
             scratch_.builders_ = runtime_.builders;
         }
+        bool assigned_state_owned_producer = false;
+        for (auto &producer : scratch_.energy_producers_) {
+            producer.state_owned = false;
+            if (runtime_.energy_policy.state_owned_first_producer &&
+                producer.active && !assigned_state_owned_producer) {
+                producer.state_owned = true;
+                assigned_state_owned_producer = true;
+            }
+        }
         scratch_.deprivation_ = runtime_.deprivation;
         scratch_.strategic_reserve_stock_ = runtime_.strategic_reserve_stock;
         scratch_.strategic_reserve_cost_ = runtime_.strategic_reserve_cost;
@@ -1048,8 +1057,9 @@ class M8Extension final : public M7TickExtension {
         return injected_fault(options_, M8FaultPoint::before_commit);
     }
 
-    void commit(core::RootState &state, M4Runtime &, M4TickScratch &, M5Runtime &,
-                M5TickScratch &, M6Runtime &, M6TickScratch &, M7Runtime &,
+    void commit(core::RootState &state, M4Runtime &, M4TickScratch &,
+                M5Runtime &monetary, M5TickScratch &, M6Runtime &, M6TickScratch &,
+                M7Runtime &,
                 M7TickScratch &population_scratch, Tick,
                 const M7Metrics &metrics) noexcept override {
         runtime_.energy_input = input_;
@@ -1106,6 +1116,37 @@ class M8Extension final : public M7TickExtension {
         runtime_.housing_event_counter = scratch_.housing_event_counter_;
         scratch_.working_metrics_.economy = metrics;
         runtime_.last_metrics = scratch_.working_metrics_;
+        const double core_price =
+            std::max(kEconomicEpsilon,
+                     metrics.economy.economy.economy.price_index);
+        double energy_weight = 0.0;
+        if (runtime_.energy_rules.enabled) {
+            if (monetary.policy.fixed_basket_cpi) {
+                energy_weight =
+                    std::clamp(runtime_.energy_rules.household_need, 0.0, 1.0);
+            } else {
+                const double energy_spending =
+                    std::max(0.0,
+                             runtime_.last_metrics.energy.household_spending);
+                const double other_spending =
+                    std::max(
+                        0.0,
+                        metrics.economy.economy.economy.household_consumption);
+                const double total_spending = energy_spending + other_spending;
+                energy_weight =
+                    total_spending > kEconomicEpsilon
+                        ? std::clamp(energy_spending / total_spending, 0.0, 1.0)
+                        : 0.0;
+            }
+        }
+        monetary.previous_headline_price_index =
+            monetary.headline_price_index > kEconomicEpsilon
+                ? monetary.headline_price_index
+                : core_price;
+        monetary.headline_price_index =
+            (1.0 - energy_weight) * core_price +
+            energy_weight *
+                std::max(kEconomicEpsilon, runtime_.energy_price);
         committed_ = true;
     }
 
@@ -1598,8 +1639,14 @@ class M8Extension final : public M7TickExtension {
 
     [[nodiscard]] Status collect_property_tax(const core::RootState &state,
                                               M4TickScratch &real) {
-        const double rate = runtime_.housing_policy.property_tax_rate / 12.0;
-        if (rate <= kEconomicEpsilon) {
+        const double property_rate =
+            runtime_.housing_policy.property_tax_rate / kDaysPerYear;
+        const double wealth_rate =
+            runtime_.housing_policy.include_housing_in_wealth_tax
+                ? runtime_.housing_policy.wealth_tax_rate / kDaysPerYear
+                : 0.0;
+        if (property_rate <= kEconomicEpsilon &&
+            wealth_rate <= kEconomicEpsilon) {
             return Status::success();
         }
         for (const auto &dwelling : projected_properties().records()) {
@@ -1607,7 +1654,9 @@ class M8Extension final : public M7TickExtension {
                 continue;
             }
             const auto source = owner_account(state, dwelling.owner);
-            const double due = scratch_.house_price_ * rate;
+            const double property_due = scratch_.house_price_ * property_rate;
+            const double wealth_due = scratch_.house_price_ * wealth_rate;
+            const double due = property_due + wealth_due;
             const double paid =
                 std::min(due, std::max(0.0, projected_balance(real, source)));
             if (paid <= kEconomicEpsilon) {
@@ -1618,7 +1667,10 @@ class M8Extension final : public M7TickExtension {
             if (!status.ok()) {
                 return status;
             }
-            scratch_.working_metrics_.housing.property_tax_paid += paid;
+            const double property_paid = std::min(paid, property_due);
+            scratch_.working_metrics_.housing.property_tax_paid += property_paid;
+            scratch_.working_metrics_.housing.housing_wealth_tax_paid +=
+                paid - property_paid;
         }
         return Status::success();
     }
@@ -2534,6 +2586,23 @@ class M8Extension final : public M7TickExtension {
             work.revenue = offer.revenue;
             work.closing_inventory = producer.inventory;
             work.profit = work.revenue - work.wage_bill;
+            if (work.profit > kEconomicEpsilon &&
+                runtime_.energy_policy.windfall_tax_rate > kEconomicEpsilon) {
+                const double due =
+                    work.profit * runtime_.energy_policy.windfall_tax_rate;
+                const double paid = std::min(
+                    due, std::max(0.0, projected_balance(real, offer.account)));
+                if (paid > kEconomicEpsilon) {
+                    const auto status = stage_m4_transfer(
+                        state, real, offer.account,
+                        state.institutions.treasury_account, paid);
+                    if (!status.ok()) {
+                        return status;
+                    }
+                    work.profit -= paid;
+                    scratch_.working_metrics_.energy.windfall_tax_paid += paid;
+                }
+            }
             const double unfilled =
                 std::max(0.0, scratch_.working_metrics_.energy.requested_total - sold);
             const double shortage_share =
@@ -2879,6 +2948,7 @@ std::uint64_t M8TickScratch::capacity_signature() const noexcept {
 Status validate_energy_policy(const EnergyPolicyState &policy) noexcept {
     const std::array values{
         policy.excise_rate,
+        policy.windfall_tax_rate,
         policy.household_subsidy_rate,
         policy.subsidy_deposit_threshold,
         policy.price_cap,
@@ -2886,6 +2956,7 @@ Status validate_energy_policy(const EnergyPolicyState &policy) noexcept {
         policy.strategic_reserve_flow_cap,
     };
     if (!all_finite(values) || policy.excise_rate < 0.0 ||
+        policy.windfall_tax_rate < 0.0 || policy.windfall_tax_rate > 1.0 ||
         policy.household_subsidy_rate < 0.0 || policy.household_subsidy_rate > 1.0 ||
         policy.subsidy_deposit_threshold < 0.0 || policy.price_cap < 0.0 ||
         policy.strategic_reserve_target < 0.0 ||
@@ -2970,6 +3041,7 @@ Status validate_housing_policy(const HousingPolicyState &policy) noexcept {
         policy.land_fee_stock_elasticity,
         policy.transfer_tax_rate,
         policy.property_tax_rate,
+        policy.wealth_tax_rate,
     };
     if (!all_finite(values) || policy.mortgage_ltv_cap < 0.0 ||
         policy.mortgage_ltv_cap > 1.0 || policy.mortgage_dsti_cap < 0.0 ||
@@ -2981,7 +3053,8 @@ Status validate_housing_policy(const HousingPolicyState &policy) noexcept {
         policy.rental_eviction_arrears == 0 || policy.land_fee_share < 0.0 ||
         policy.land_fee_share > 1.0 || policy.land_fee_stock_elasticity < 0.0 ||
         policy.transfer_tax_rate < 0.0 || policy.transfer_tax_rate > 1.0 ||
-        policy.property_tax_rate < 0.0 || policy.property_tax_rate > 1.0) {
+        policy.property_tax_rate < 0.0 || policy.property_tax_rate > 1.0 ||
+        policy.wealth_tax_rate < 0.0 || policy.wealth_tax_rate > 1.0) {
         return Status(ErrorCode::invalid_argument, "M8 housing policy is invalid");
     }
     return Status::success();
@@ -3191,11 +3264,16 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
     auto base = std::move(*genesis.get_if());
     M8Runtime runtime;
     runtime.energy_policy = spec.energy_policy;
+    runtime.energy_policy.state_owned_first_producer =
+        spec.energy_policy.state_owned_first_producer ||
+        spec.energy_rules.state_owned_first_producer;
     runtime.energy_rules = spec.energy_rules;
     runtime.energy_input = spec.energy_input;
     runtime.energy_price = spec.energy_rules.initial_price;
     runtime.slow_energy_price = spec.energy_rules.initial_price;
     runtime.housing_policy = spec.housing_policy;
+    runtime.housing_policy.wealth_tax_rate =
+        base.monetary_runtime.policy.wealth_tax_rate;
     runtime.housing_rules = spec.housing_rules;
     runtime.housing_input = spec.housing_input;
     std::vector<GenesisFirmOpening> firm_openings;

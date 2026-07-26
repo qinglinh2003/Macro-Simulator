@@ -2576,6 +2576,8 @@ Status validate_m6_policy(const M6PolicyState &policy) noexcept {
         policy.margin_ltv,
         policy.margin_max,
         policy.bank_minimum_capital,
+        policy.regulatory_capital_haircut,
+        policy.regulatory_inventory_haircut,
     };
     if (!all_finite(values) || policy.bond_finance_fraction < 0.0 ||
         policy.bond_finance_fraction > 1.0 || policy.bond_coupon_rate < 0.0 ||
@@ -2583,7 +2585,13 @@ Status validate_m6_policy(const M6PolicyState &policy) noexcept {
         policy.household_bond_target > 1.0 || policy.bank_bond_appetite < 0.0 ||
         policy.bank_bond_appetite > 1.0 || policy.bank_bond_duration_limit < 0.0 ||
         policy.margin_ltv < 0.0 || policy.margin_ltv >= 1.0 ||
-        policy.margin_max < 1.0 || policy.bank_minimum_capital < 0.0) {
+        policy.margin_max < 1.0 || policy.bank_minimum_capital < 0.0 ||
+        policy.bankrupt_persistence == 0U ||
+        policy.bankrupt_persistence > 3650U ||
+        policy.regulatory_capital_haircut < 0.0 ||
+        policy.regulatory_capital_haircut > 1.0 ||
+        policy.regulatory_inventory_haircut < 0.0 ||
+        policy.regulatory_inventory_haircut > 1.0) {
         return Status(ErrorCode::invalid_argument, "M6 policy is invalid");
     }
     return Status::success();
@@ -2800,6 +2808,10 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     M6Runtime runtime;
     runtime.policy = spec.policy;
     runtime.rules = spec.rules;
+    runtime.rules.bankrupt_persistence = runtime.policy.bankrupt_persistence;
+    runtime.rules.capital_haircut = runtime.policy.regulatory_capital_haircut;
+    runtime.rules.inventory_haircut =
+        runtime.policy.regulatory_inventory_haircut;
     runtime.replacement_capital_price =
         spec.monetary_economy.real_economy.rules.initial_capital_price;
     runtime.firms.resize(

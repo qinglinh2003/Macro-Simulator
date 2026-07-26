@@ -168,6 +168,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.profit_tax_rate);
     writer.f64(rules.income_tax_rate);
     writer.f64(rules.consumption_tax_rate);
+    writer.u8(rules.necessity_consumption_tax_rate.has_value() ? 1U : 0U);
+    writer.f64(rules.necessity_consumption_tax_rate.value_or(0.0));
+    writer.u8(rules.luxury_consumption_tax_rate.has_value() ? 1U : 0U);
+    writer.f64(rules.luxury_consumption_tax_rate.value_or(0.0));
     writer.f64(rules.wealth_tax_rate);
     writer.f64(rules.government_consumption_share);
     writer.f64(rules.government_deficit_target);
@@ -198,6 +202,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
 
 [[nodiscard]] bool read_rules(Reader& reader, M4Rules& rules) noexcept {
     std::uint8_t job_guarantee = 0;
+    std::uint8_t necessity_tax_present = 0;
+    std::uint8_t luxury_tax_present = 0;
+    double necessity_tax = 0.0;
+    double luxury_tax = 0.0;
     const auto success = reader.f64(rules.linear_productivity)
         && reader.f64(rules.capital_productivity)
         && reader.f64(rules.total_factor_productivity)
@@ -223,6 +231,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.profit_tax_rate)
         && reader.f64(rules.income_tax_rate)
         && reader.f64(rules.consumption_tax_rate)
+        && reader.u8(necessity_tax_present)
+        && reader.f64(necessity_tax)
+        && reader.u8(luxury_tax_present)
+        && reader.f64(luxury_tax)
         && reader.f64(rules.wealth_tax_rate)
         && reader.f64(rules.government_consumption_share)
         && reader.f64(rules.government_deficit_target)
@@ -250,6 +262,12 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.initial_expected_demand)
         && reader.u32(rules.market_sample_size);
     rules.job_guarantee = job_guarantee != 0;
+    rules.necessity_consumption_tax_rate =
+        necessity_tax_present != 0U ? std::optional<double>(necessity_tax)
+                                    : std::nullopt;
+    rules.luxury_consumption_tax_rate =
+        luxury_tax_present != 0U ? std::optional<double>(luxury_tax)
+                                 : std::nullopt;
     return success && job_guarantee <= 1U;
 }
 

@@ -2216,6 +2216,37 @@ class M7Extension final : public M6TickExtension {
                 return residual_status;
             }
         }
+        if (runtime_.policy.pension_replacement > kLaborTolerance) {
+            const double wage_reference = std::max(
+                scratch_.working_metrics_.mean_hourly_wage,
+                runtime_.last_metrics.mean_hourly_wage);
+            const double pension =
+                runtime_.policy.pension_replacement * wage_reference;
+            if (pension > kLaborTolerance) {
+                for (const auto person_id : scratch_.persons_.alive_ids()) {
+                    const auto *person = scratch_.persons_.get(person_id);
+                    if (person == nullptr ||
+                        completed_age(*person, calendar_day) <
+                            static_cast<double>(runtime_.rules.retirement_age)) {
+                        continue;
+                    }
+                    const auto *household =
+                        state.households.get(person->household);
+                    if (household == nullptr) {
+                        return Status(
+                            ErrorCode::invariant_violation,
+                            "pension recipient household is absent");
+                    }
+                    const auto status = stage_m4_transfer(
+                        state, real, state.institutions.treasury_account,
+                        household->primary_account, pension);
+                    if (!status.ok()) {
+                        return status;
+                    }
+                    scratch_.working_metrics_.pension_paid += pension;
+                }
+            }
+        }
         if (extension_ != nullptr) {
             const auto extension_status = extension_->close_day(
                 state, real_runtime, real, monetary, monetary_scratch,
@@ -2585,8 +2616,12 @@ std::uint64_t M7TickScratch::capacity_signature() const noexcept {
 }
 
 Status validate_m7_policy(const M7PolicyState &policy) noexcept {
-    if (!finite(policy.inheritance_tax_rate) || policy.inheritance_tax_rate < 0.0 ||
-        policy.inheritance_tax_rate > 1.0) {
+    if (!finite(policy.inheritance_tax_rate) ||
+        !finite(policy.pension_replacement) ||
+        policy.inheritance_tax_rate < 0.0 ||
+        policy.inheritance_tax_rate > 1.0 ||
+        policy.pension_replacement < 0.0 ||
+        policy.pension_replacement > 1.5) {
         return Status(ErrorCode::invalid_argument, "M7 policy is invalid");
     }
     return Status::success();

@@ -1,5 +1,6 @@
 #include <array>
 #include <cstdint>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "macro_sim/engine_session.hpp"
+#include "macro_sim/control/m10.hpp"
 #include "macro_sim/generated/contracts.hpp"
 #include "macro_sim/rng.hpp"
 #include "macro_sim/simulation/m9.hpp"
@@ -63,6 +65,53 @@ void require_status(const macro_sim::Status &status) {
             std::string(macro_sim::error_code_name(status.code())) + ": " +
             std::string(status.message()));
     }
+}
+
+macro_sim::core::StateDigest digest_from_hex(std::string_view value) {
+    if (value.size() != 64U) {
+        throw std::runtime_error("invalid_argument: digest must contain 64 hex digits");
+    }
+    const auto nibble = [](char character) -> std::uint8_t {
+        if (character >= '0' && character <= '9') {
+            return static_cast<std::uint8_t>(character - '0');
+        }
+        if (character >= 'a' && character <= 'f') {
+            return static_cast<std::uint8_t>(character - 'a' + 10);
+        }
+        if (character >= 'A' && character <= 'F') {
+            return static_cast<std::uint8_t>(character - 'A' + 10);
+        }
+        throw std::runtime_error("invalid_argument: digest contains non-hex data");
+    };
+    macro_sim::core::StateDigest output;
+    for (std::size_t index = 0; index < output.bytes.size(); ++index) {
+        output.bytes[index] = static_cast<std::uint8_t>(
+            (nibble(value[index * 2U]) << 4U) |
+            nibble(value[index * 2U + 1U]));
+    }
+    return output;
+}
+
+nb::dict m10_metric_frame_to_python(
+    const macro_sim::reporting::MetricFrame &frame) {
+    nb::dict output;
+    output["tick"] = frame.tick.value();
+    output["economy_count"] = frame.economy_count;
+    nb::list economies;
+    const auto descriptors = macro_sim::reporting::public_metric_descriptors();
+    for (std::size_t economy = 0; economy < frame.economy_count; ++economy) {
+        nb::dict values;
+        for (std::size_t metric = 0; metric < descriptors.size(); ++metric) {
+            const auto value = frame.value(economy, metric);
+            const auto key = nb::str(descriptors[metric].stable_id.data(),
+                                     descriptors[metric].stable_id.size());
+            values[key] =
+                value.ok() ? nb::cast(*value.get_if()) : nb::none();
+        }
+        economies.append(std::move(values));
+    }
+    output["economies"] = std::move(economies);
+    return output;
 }
 
 nb::dict receipt_to_python(const macro_sim::core::TransactionReceipt &receipt) {
@@ -319,6 +368,7 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(beneficial_lots_transferred);
     MACRO_SIM_M7_METRIC(inheritance_tax_share);
     MACRO_SIM_M7_METRIC(inheritance_tax_paid);
+    MACRO_SIM_M7_METRIC(pension_paid);
     MACRO_SIM_M7_METRIC(beneficial_projection_error);
     MACRO_SIM_M7_METRIC(employed_fte);
     MACRO_SIM_M7_METRIC(employed_heads);
@@ -382,6 +432,7 @@ m8_energy_metrics_to_python(const macro_sim::simulation::EnergyMetrics &metrics)
     MACRO_SIM_M8_ENERGY_METRIC(industry_units);
     MACRO_SIM_M8_ENERGY_METRIC(industry_spending);
     MACRO_SIM_M8_ENERGY_METRIC(excise_paid);
+    MACRO_SIM_M8_ENERGY_METRIC(windfall_tax_paid);
     MACRO_SIM_M8_ENERGY_METRIC(subsidy_paid);
     MACRO_SIM_M8_ENERGY_METRIC(cap_compensation);
     MACRO_SIM_M8_ENERGY_METRIC(strategic_reserve_stock);
@@ -424,6 +475,7 @@ m8_housing_metrics_to_python(const macro_sim::simulation::HousingMetrics &metric
     MACRO_SIM_M8_HOUSING_METRIC(rent_unpaid);
     MACRO_SIM_M8_HOUSING_METRIC(evictions);
     MACRO_SIM_M8_HOUSING_METRIC(property_tax_paid);
+    MACRO_SIM_M8_HOUSING_METRIC(housing_wealth_tax_paid);
     MACRO_SIM_M8_HOUSING_METRIC(transfer_tax_paid);
     MACRO_SIM_M8_HOUSING_METRIC(land_fee_paid);
     MACRO_SIM_M8_HOUSING_METRIC(construction_output);
@@ -1056,6 +1108,8 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(profit_tax_rate);
     MACRO_SIM_BIND_M4_RULE(income_tax_rate);
     MACRO_SIM_BIND_M4_RULE(consumption_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(necessity_consumption_tax_rate);
+    MACRO_SIM_BIND_M4_RULE(luxury_consumption_tax_rate);
     MACRO_SIM_BIND_M4_RULE(wealth_tax_rate);
     MACRO_SIM_BIND_M4_RULE(government_consumption_share);
     MACRO_SIM_BIND_M4_RULE(government_deficit_target);
@@ -1151,6 +1205,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M5_POLICY(natural_unemployment);
     MACRO_SIM_BIND_M5_POLICY(maximum_policy_rate);
     MACRO_SIM_BIND_M5_POLICY(inflation_sensor_lambda);
+    MACRO_SIM_BIND_M5_POLICY(core_inflation_sensor);
+    MACRO_SIM_BIND_M5_POLICY(fixed_basket_cpi);
+    MACRO_SIM_BIND_M5_POLICY(logarithmic_inflation);
+    MACRO_SIM_BIND_M5_POLICY(fiscal_uses_national_accounts_gdp);
     MACRO_SIM_BIND_M5_POLICY(open_market_operations);
     MACRO_SIM_BIND_M5_POLICY(reserve_target);
     MACRO_SIM_BIND_M5_POLICY(reserve_gap_close);
@@ -1169,6 +1227,12 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M5_POLICY(migrate_relationships_on_failure);
     MACRO_SIM_BIND_M5_POLICY(state_resolution_backstop);
 #undef MACRO_SIM_BIND_M5_POLICY
+    module.def(
+        "_validate_m5_policy",
+        [](const macro_sim::simulation::M5PolicyState &policy) {
+            require_status(macro_sim::simulation::validate_m5_policy(policy));
+        },
+        nb::arg("policy"));
     m5_policy.def_prop_rw(
         "manual_policy_rate",
         [](const macro_sim::simulation::M5PolicyState &policy) {
@@ -1177,13 +1241,41 @@ NB_MODULE(_native, module) {
             }
             return nb::object(nb::float_(*policy.manual_policy_rate));
         },
-        [](macro_sim::simulation::M5PolicyState &policy, const nb::object &value) {
+        [](macro_sim::simulation::M5PolicyState &policy, nb::handle value) {
             if (value.is_none()) {
                 policy.manual_policy_rate.reset();
             } else {
                 policy.manual_policy_rate = nb::cast<double>(value);
             }
-        });
+        },
+        nb::for_setter(nb::arg("value").none()));
+    const auto bind_optional_rate =
+        [&m5_policy](const char *name,
+                     std::optional<double> macro_sim::simulation::M5PolicyState::*field) {
+            m5_policy.def_prop_rw(
+                name,
+                [field](const macro_sim::simulation::M5PolicyState &policy)
+                    -> nb::object {
+                    const auto &value = policy.*field;
+                    return value.has_value() ? nb::object(nb::float_(*value))
+                                             : nb::object(nb::none());
+                },
+                [field](macro_sim::simulation::M5PolicyState &policy,
+                        nb::handle value) {
+                    if (value.is_none()) {
+                        (policy.*field).reset();
+                    } else {
+                        policy.*field = nb::cast<double>(value);
+                    }
+                },
+                nb::for_setter(nb::arg("value").none()));
+        };
+    bind_optional_rate(
+        "necessity_consumption_tax_rate",
+        &macro_sim::simulation::M5PolicyState::necessity_consumption_tax_rate);
+    bind_optional_rate(
+        "luxury_consumption_tax_rate",
+        &macro_sim::simulation::M5PolicyState::luxury_consumption_tax_rate);
     auto m5_rules =
         nb::class_<macro_sim::simulation::M5Rules>(module, "M5Rules").def(nb::init<>());
 #define MACRO_SIM_BIND_M5_RULE(field)                                                  \
@@ -1244,6 +1336,9 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_POLICY(household_bankruptcy);
     MACRO_SIM_BIND_M6_POLICY(bank_resolution_fund);
     MACRO_SIM_BIND_M6_POLICY(bank_minimum_capital);
+    MACRO_SIM_BIND_M6_POLICY(bankrupt_persistence);
+    MACRO_SIM_BIND_M6_POLICY(regulatory_capital_haircut);
+    MACRO_SIM_BIND_M6_POLICY(regulatory_inventory_haircut);
 #undef MACRO_SIM_BIND_M6_POLICY
     auto m6_rules =
         nb::class_<macro_sim::simulation::M6Rules>(module, "M6Rules").def(nb::init<>());
@@ -1333,7 +1428,9 @@ NB_MODULE(_native, module) {
     nb::class_<macro_sim::simulation::M7PolicyState>(module, "M7Policy")
         .def(nb::init<>())
         .def_rw("inheritance_tax_rate",
-                &macro_sim::simulation::M7PolicyState::inheritance_tax_rate);
+                &macro_sim::simulation::M7PolicyState::inheritance_tax_rate)
+        .def_rw("pension_replacement",
+                &macro_sim::simulation::M7PolicyState::pension_replacement);
     auto m7_rules =
         nb::class_<macro_sim::simulation::M7Rules>(module, "M7Rules").def(nb::init<>());
 #define MACRO_SIM_BIND_M7_RULE(field)                                                  \
@@ -1407,6 +1504,7 @@ NB_MODULE(_native, module) {
 #define MACRO_SIM_BIND_ENERGY_POLICY(field)                                            \
     energy_policy.def_rw(#field, &macro_sim::simulation::EnergyPolicyState::field)
     MACRO_SIM_BIND_ENERGY_POLICY(excise_rate);
+    MACRO_SIM_BIND_ENERGY_POLICY(windfall_tax_rate);
     MACRO_SIM_BIND_ENERGY_POLICY(household_subsidy_rate);
     MACRO_SIM_BIND_ENERGY_POLICY(subsidy_deposit_threshold);
     MACRO_SIM_BIND_ENERGY_POLICY(price_cap);
@@ -1414,6 +1512,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_ENERGY_POLICY(strategic_reserve_target);
     MACRO_SIM_BIND_ENERGY_POLICY(strategic_reserve_flow_cap);
     MACRO_SIM_BIND_ENERGY_POLICY(state_owned_price_at_cost);
+    MACRO_SIM_BIND_ENERGY_POLICY(state_owned_first_producer);
     MACRO_SIM_BIND_ENERGY_POLICY(rationing);
 #undef MACRO_SIM_BIND_ENERGY_POLICY
     auto energy_rules =
@@ -1483,6 +1582,8 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_HOUSING_POLICY(land_fee_stock_elasticity);
     MACRO_SIM_BIND_HOUSING_POLICY(transfer_tax_rate);
     MACRO_SIM_BIND_HOUSING_POLICY(property_tax_rate);
+    MACRO_SIM_BIND_HOUSING_POLICY(include_housing_in_wealth_tax);
+    MACRO_SIM_BIND_HOUSING_POLICY(wealth_tax_rate);
 #undef MACRO_SIM_BIND_HOUSING_POLICY
     auto housing_rules =
         nb::class_<macro_sim::simulation::HousingRules>(module, "HousingRules")
@@ -1659,13 +1760,14 @@ NB_MODULE(_native, module) {
                 }
                 return nb::int_(value.peg_anchor->value());
             },
-            [](macro_sim::simulation::ExternalPolicyState &value, nb::object anchor) {
+            [](macro_sim::simulation::ExternalPolicyState &value, nb::handle anchor) {
                 value.peg_anchor =
                     anchor.is_none()
                         ? std::nullopt
                         : std::optional<macro_sim::EconomyId>(
                               macro_sim::EconomyId(nb::cast<std::uint64_t>(anchor)));
-            });
+            },
+            nb::for_setter(nb::arg("value").none()));
     auto shock_spec =
         nb::class_<macro_sim::simulation::ShockSpec>(module, "ShockSpec")
             .def(nb::init<>())
@@ -1679,13 +1781,14 @@ NB_MODULE(_native, module) {
                     }
                     return nb::int_(value.economy->value());
                 },
-                [](macro_sim::simulation::ShockSpec &value, nb::object economy) {
+                [](macro_sim::simulation::ShockSpec &value, nb::handle economy) {
                     value.economy =
                         economy.is_none()
                             ? std::nullopt
                             : std::optional<macro_sim::EconomyId>(macro_sim::EconomyId(
                                   nb::cast<std::uint64_t>(economy)));
-                })
+                },
+                nb::for_setter(nb::arg("value").none()))
             .def_prop_rw(
                 "start_tick",
                 [](const macro_sim::simulation::ShockSpec &value) {
@@ -1702,12 +1805,13 @@ NB_MODULE(_native, module) {
                     }
                     return nb::int_(value.announcement->value());
                 },
-                [](macro_sim::simulation::ShockSpec &value, nb::object tick) {
+                [](macro_sim::simulation::ShockSpec &value, nb::handle tick) {
                     value.announcement =
                         tick.is_none() ? std::nullopt
                                        : std::optional<macro_sim::Tick>(macro_sim::Tick(
                                              nb::cast<std::uint64_t>(tick)));
-                })
+                },
+                nb::for_setter(nb::arg("value").none()))
             .def_rw("duration", &macro_sim::simulation::ShockSpec::duration)
             .def_rw("magnitude", &macro_sim::simulation::ShockSpec::magnitude)
             .def_rw("shape", &macro_sim::simulation::ShockSpec::shape)
@@ -1721,13 +1825,14 @@ NB_MODULE(_native, module) {
                     }
                     return nb::cast(*value.sector);
                 },
-                [](macro_sim::simulation::ShockSpec &value, nb::object sector) {
+                [](macro_sim::simulation::ShockSpec &value, nb::handle sector) {
                     value.sector =
                         sector.is_none()
                             ? std::nullopt
                             : std::optional<macro_sim::simulation::ShockSector>(
                                   nb::cast<macro_sim::simulation::ShockSector>(sector));
-                });
+                },
+                nb::for_setter(nb::arg("value").none()));
     static_cast<void>(shock_spec);
     nb::class_<macro_sim::simulation::CrisisScenarioOptions>(module,
                                                              "CrisisScenarioOptions")
@@ -1782,6 +1887,35 @@ NB_MODULE(_native, module) {
                 &macro_sim::simulation::M9WorldSpec::external_policies)
         .def_rw("rules", &macro_sim::simulation::M9WorldSpec::rules)
         .def_rw("shocks", &macro_sim::simulation::M9WorldSpec::shocks);
+    nb::class_<macro_sim::simulation::DomesticPolicyState>(
+        module, "DomesticPolicy")
+        .def(nb::init<>())
+        .def_rw("fiscal_monetary",
+                &macro_sim::simulation::DomesticPolicyState::fiscal_monetary)
+        .def_rw("financial",
+                &macro_sim::simulation::DomesticPolicyState::financial)
+        .def_rw("population",
+                &macro_sim::simulation::DomesticPolicyState::population)
+        .def_rw("energy", &macro_sim::simulation::DomesticPolicyState::energy)
+        .def_rw("housing", &macro_sim::simulation::DomesticPolicyState::housing);
+    nb::class_<macro_sim::simulation::WorldPolicyBatch>(
+        module, "WorldPolicyBatch")
+        .def(nb::init<>())
+        .def_prop_rw(
+            "expected_tick",
+            [](const macro_sim::simulation::WorldPolicyBatch &value) {
+                return value.expected_tick.value();
+            },
+            [](macro_sim::simulation::WorldPolicyBatch &value,
+               std::uint64_t tick) {
+                value.expected_tick = macro_sim::Tick(tick);
+            })
+        .def_rw("expected_generation",
+                &macro_sim::simulation::WorldPolicyBatch::expected_generation)
+        .def_rw("domestic",
+                &macro_sim::simulation::WorldPolicyBatch::domestic)
+        .def_rw("external",
+                &macro_sim::simulation::WorldPolicyBatch::external);
     nb::class_<macro_sim::simulation::M9World>(module, "WorldSession")
         .def_static(
             "create",
@@ -1796,6 +1930,30 @@ NB_MODULE(_native, module) {
                          return world.tick().value();
                      })
         .def_prop_ro("economy_count", &macro_sim::simulation::M9World::economy_count)
+        .def_prop_ro("policy_generation",
+                     &macro_sim::simulation::M9World::policy_generation)
+        .def(
+            "domestic_policy",
+            [](const macro_sim::simulation::M9World &world,
+               std::uint64_t economy) {
+                auto result =
+                    world.domestic_policy(macro_sim::EconomyId(economy));
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("economy_id"))
+        .def(
+            "external_policies",
+            [](const macro_sim::simulation::M9World &world) {
+                return world.external_policies();
+            })
+        .def(
+            "update_policy_batch",
+            [](macro_sim::simulation::M9World &world,
+               const macro_sim::simulation::WorldPolicyBatch &batch) {
+                require_status(world.update_policy_batch(batch));
+            },
+            nb::arg("batch"))
         .def(
             "update_external_policies",
             [](macro_sim::simulation::M9World &world,
@@ -1870,6 +2028,334 @@ NB_MODULE(_native, module) {
                         encoded.size()));
                 require_status(result.status());
                 world = std::move(*result.get_if());
+            },
+            nb::arg("checkpoint"));
+
+    nb::class_<macro_sim::control::CanonicalControllerEnvelope>(
+        module, "CanonicalControllerEnvelope")
+        .def(nb::init<>())
+        .def_rw("schema_version",
+                &macro_sim::control::CanonicalControllerEnvelope::schema_version)
+        .def_prop_rw(
+            "boundary",
+            [](const macro_sim::control::CanonicalControllerEnvelope &value) {
+                return value.boundary.value();
+            },
+            [](macro_sim::control::CanonicalControllerEnvelope &value,
+               std::uint64_t boundary) {
+                value.boundary = macro_sim::Tick(boundary);
+            })
+        .def_rw("policy_generation",
+                &macro_sim::control::CanonicalControllerEnvelope::
+                    policy_generation)
+        .def_rw("event_sequence",
+                &macro_sim::control::CanonicalControllerEnvelope::event_sequence)
+        .def_rw("release_cursor",
+                &macro_sim::control::CanonicalControllerEnvelope::release_cursor)
+        .def_rw("decision_versions",
+                &macro_sim::control::CanonicalControllerEnvelope::
+                    decision_versions)
+        .def_rw("effective_versions",
+                &macro_sim::control::CanonicalControllerEnvelope::
+                    effective_versions)
+        .def_prop_rw(
+            "canonical_payload",
+            [](const macro_sim::control::CanonicalControllerEnvelope &value) {
+                return nb::bytes(value.canonical_payload.data(),
+                                 value.canonical_payload.size());
+            },
+            [](macro_sim::control::CanonicalControllerEnvelope &value,
+               const nb::bytes &payload) {
+                const auto *begin =
+                    static_cast<const std::uint8_t *>(payload.data());
+                value.canonical_payload.assign(begin, begin + payload.size());
+            })
+        .def_prop_ro(
+            "hash",
+            [](const macro_sim::control::CanonicalControllerEnvelope &value) {
+                return value.hash.hex();
+            })
+        .def("seal",
+             [](macro_sim::control::CanonicalControllerEnvelope &value) {
+                 require_status(macro_sim::control::seal_controller_envelope(
+                     value));
+                 return value.hash.hex();
+             });
+    nb::class_<macro_sim::control::ControllerEnvelopeTransition>(
+        module, "ControllerEnvelopeTransition")
+        .def(nb::init<>())
+        .def_rw("operation_id",
+                &macro_sim::control::ControllerEnvelopeTransition::operation_id)
+        .def_prop_rw(
+            "expected_prior_hash",
+            [](const macro_sim::control::ControllerEnvelopeTransition &value) {
+                return value.expected_prior_hash.hex();
+            },
+            [](macro_sim::control::ControllerEnvelopeTransition &value,
+               std::string_view digest) {
+                value.expected_prior_hash = digest_from_hex(digest);
+            })
+        .def_rw("next",
+                &macro_sim::control::ControllerEnvelopeTransition::next);
+    nb::class_<macro_sim::control::SealedControlBatch>(
+        module, "SealedControlBatch")
+        .def(nb::init<>())
+        .def_rw("operation_id",
+                &macro_sim::control::SealedControlBatch::operation_id)
+        .def_prop_rw(
+            "expected_controller_hash",
+            [](const macro_sim::control::SealedControlBatch &value) {
+                return value.expected_controller_hash.hex();
+            },
+            [](macro_sim::control::SealedControlBatch &value,
+               std::string_view digest) {
+                value.expected_controller_hash = digest_from_hex(digest);
+            })
+        .def_rw("policies",
+                &macro_sim::control::SealedControlBatch::policies)
+        .def_rw("advance_ticks",
+                &macro_sim::control::SealedControlBatch::advance_ticks)
+        .def_prop_rw(
+            "worker_count",
+            [](const macro_sim::control::SealedControlBatch &value) {
+                return value.advance_options.worker_count;
+            },
+            [](macro_sim::control::SealedControlBatch &value,
+               std::uint32_t workers) {
+                value.advance_options.worker_count = workers;
+            });
+    nb::class_<macro_sim::control::EngineSession>(
+        module, "NativeWorldEngineSession")
+        .def_static(
+            "create",
+            [](macro_sim::simulation::M9World world,
+               std::size_t history_capacity_frames) {
+                auto result = macro_sim::control::EngineSession::create(
+                    std::move(world), history_capacity_frames);
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("world"), nb::arg("history_capacity_frames") = 4096U)
+        .def_prop_ro(
+            "tick",
+            [](const macro_sim::control::EngineSession &value) {
+                return value.tick().value();
+            })
+        .def_prop_ro("policy_generation",
+                     &macro_sim::control::EngineSession::policy_generation)
+        .def("advance_ticks",
+             [](macro_sim::control::EngineSession &value,
+                std::uint64_t count, std::uint32_t worker_count) {
+                 macro_sim::simulation::M9AdvanceOptions options;
+                 options.worker_count = worker_count;
+                 auto result = [&]() {
+                     nb::gil_scoped_release release;
+                     return value.advance_ticks(count, options);
+                 }();
+                 require_status(result.status());
+                 return m9_result_to_python(*result.get_if());
+             },
+             nb::arg("count"), nb::arg("worker_count") = 1U)
+        .def("public_metrics",
+             [](const macro_sim::control::EngineSession &value) {
+                 return m10_metric_frame_to_python(
+                     value.metrics().current());
+             })
+        .def("history_page",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t first_sequence, std::size_t maximum_frames) {
+                 auto result = value.metrics().history().page(
+                     first_sequence, maximum_frames);
+                 require_status(result.status());
+                 nb::dict output;
+                 output["first_sequence"] =
+                     result.get_if()->first_sequence;
+                 output["next_sequence"] =
+                     result.get_if()->next_sequence;
+                 nb::list frames;
+                 for (const auto &frame : result.get_if()->frames) {
+                     frames.append(m10_metric_frame_to_python(frame));
+                 }
+                 output["frames"] = std::move(frames);
+                 return output;
+             },
+             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U);
+    nb::class_<macro_sim::control::PreparedBoundaryLease>(
+        module, "PreparedBoundaryLease")
+        .def_prop_ro("active",
+                     &macro_sim::control::PreparedBoundaryLease::active)
+        .def_prop_ro(
+            "preview",
+            [](const macro_sim::control::PreparedBoundaryLease &value) {
+                const auto &preview = value.preview();
+                nb::dict output;
+                output["operation_id"] = preview.operation_id;
+                output["first_tick"] = preview.first_tick.value();
+                output["next_tick"] = preview.next_tick.value();
+                output["policy_generation"] =
+                    preview.policy_generation;
+                output["engine_digest"] = preview.engine_digest;
+                output["public_metrics"] =
+                    m10_metric_frame_to_python(preview.public_metrics);
+                return output;
+            });
+    nb::class_<macro_sim::control::HybridControlledBridge>(
+        module, "HybridControlledBridge")
+        .def_static(
+            "create",
+            [](macro_sim::control::EngineSession engine,
+               macro_sim::control::CanonicalControllerEnvelope envelope) {
+                auto result =
+                    macro_sim::control::HybridControlledBridge::create(
+                        std::move(engine), std::move(envelope));
+                require_status(result.status());
+                return std::move(*result.get_if());
+            },
+            nb::arg("engine"), nb::arg("envelope"))
+        .def_prop_ro(
+            "tick",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return value.engine().tick().value();
+            })
+        .def_prop_ro(
+            "policy_generation",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return value.engine().policy_generation();
+            })
+        .def_prop_ro(
+            "economy_count",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return value.engine().world().economy_count();
+            })
+        .def(
+            "domestic_policy",
+            [](const macro_sim::control::HybridControlledBridge &value,
+               std::uint64_t economy) {
+                auto result = value.engine().world().domestic_policy(
+                    macro_sim::EconomyId(economy));
+                require_status(result.status());
+                return *result.get_if();
+            },
+            nb::arg("economy_id"))
+        .def(
+            "external_policies",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return value.engine().world().external_policies();
+            })
+        .def(
+            "native_snapshot",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return m9_snapshot_to_python(value.engine().world());
+            })
+        .def_prop_ro(
+            "controller_envelope",
+            [](const macro_sim::control::HybridControlledBridge &value) {
+                return value.controller_envelope();
+            })
+        .def("update_controller",
+             [](macro_sim::control::HybridControlledBridge &value,
+                const macro_sim::control::ControllerEnvelopeTransition
+                    &transition) {
+                 auto result = value.update_controller(transition);
+                 require_status(result.status());
+                 nb::dict output;
+                 output["operation_id"] =
+                     result.get_if()->operation_id;
+                 output["request_hash"] =
+                     result.get_if()->request_hash.hex();
+                 output["prior_hash"] =
+                     result.get_if()->prior_hash.hex();
+                 output["result_hash"] =
+                     result.get_if()->result_hash.hex();
+                 output["boundary"] =
+                     result.get_if()->boundary.value();
+                 output["acknowledged"] =
+                     result.get_if()->acknowledged;
+                 return output;
+             },
+             nb::arg("transition"))
+        .def("prepare_boundary",
+             [](macro_sim::control::HybridControlledBridge &value,
+                const macro_sim::control::SealedControlBatch &batch) {
+                 auto result = [&]() {
+                     nb::gil_scoped_release release;
+                     return value.prepare_boundary(batch);
+                 }();
+                 require_status(result.status());
+                 return std::move(*result.get_if());
+             },
+             nb::arg("batch"))
+        .def("commit_boundary",
+             [](macro_sim::control::HybridControlledBridge &value,
+                macro_sim::control::PreparedBoundaryLease &lease,
+                macro_sim::control::CanonicalControllerEnvelope next) {
+                 auto result = value.commit_boundary(std::move(lease),
+                                                     std::move(next));
+                 require_status(result.status());
+                 return m9_result_to_python(*result.get_if());
+             },
+             nb::arg("lease"), nb::arg("next"))
+        .def("abort_boundary",
+             [](macro_sim::control::HybridControlledBridge &value,
+                macro_sim::control::PreparedBoundaryLease &lease) {
+                 require_status(value.abort_boundary(std::move(lease)));
+             },
+             nb::arg("lease"))
+        .def("public_metrics",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 return m10_metric_frame_to_python(
+                     value.engine().metrics().current());
+             })
+        .def("history_page",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t first_sequence, std::size_t maximum_frames) {
+                 auto result = value.engine().metrics().history().page(
+                     first_sequence, maximum_frames);
+                 require_status(result.status());
+                 nb::dict output;
+                 output["first_sequence"] =
+                     result.get_if()->first_sequence;
+                 output["next_sequence"] =
+                     result.get_if()->next_sequence;
+                 nb::list frames;
+                 for (const auto &frame : result.get_if()->frames) {
+                     frames.append(m10_metric_frame_to_python(frame));
+                 }
+                 output["frames"] = std::move(frames);
+                 return output;
+             },
+             nb::arg("first_sequence"), nb::arg("maximum_frames") = 256U)
+        .def("checkpoint",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                const nb::bytes &objective) {
+                 const auto *data =
+                     static_cast<const std::uint8_t *>(objective.data());
+                 auto result =
+                     macro_sim::control::save_hybrid_checkpoint(
+                         value, std::span<const std::uint8_t>(
+                                    data, objective.size()));
+                 require_status(result.status());
+                 return nb::bytes(result.get_if()->data(),
+                                  result.get_if()->size());
+             },
+             nb::arg("objective_envelope"))
+        .def_static(
+            "restore_checkpoint",
+            [](const nb::bytes &checkpoint) {
+                const auto *data =
+                    static_cast<const std::uint8_t *>(checkpoint.data());
+                auto result =
+                    macro_sim::control::load_hybrid_checkpoint(
+                        std::span<const std::uint8_t>(data,
+                                                      checkpoint.size()));
+                require_status(result.status());
+                nb::dict output;
+                output["bridge"] =
+                    nb::cast(std::move(result.get_if()->bridge));
+                output["objective_envelope"] = nb::bytes(
+                    result.get_if()->objective_envelope.data(),
+                    result.get_if()->objective_envelope.size());
+                return output;
             },
             nb::arg("checkpoint"));
     nb::enum_<macro_sim::core::OwnerKind>(module, "OwnerKind")

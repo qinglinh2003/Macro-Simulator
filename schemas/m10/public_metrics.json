@@ -1,0 +1,31 @@
+{
+  "schema_version": "m10-public-metrics-v1",
+  "cadence": "every_committed_tick",
+  "scope": "one value per economy",
+  "missing_value_rule": "validity bitmap; never zero-fill unavailable values",
+  "metrics": [
+    {"id": "metric.economy.avg_wage", "unit": "currency_per_tick", "aggregation": "mean", "parity_rule": "m7.mean_hourly_wage"},
+    {"id": "metric.economy.credit_to_gdp", "unit": "share", "aggregation": "last", "parity_rule": "m5.total_loan_principal / m4.nominal_output"},
+    {"id": "metric.economy.employment", "unit": "fte", "aggregation": "mean", "parity_rule": "m7.employed_fte"},
+    {"id": "metric.economy.energy_price", "unit": "currency_per_unit", "aggregation": "mean", "parity_rule": "m8.energy.transaction_price_hold_last"},
+    {"id": "metric.economy.energy_subsidy_paid", "unit": "currency", "aggregation": "sum", "parity_rule": "m8.energy.subsidy_paid"},
+    {"id": "metric.economy.gov_debt_to_gdp", "unit": "share", "aggregation": "last", "parity_rule": "government_debt / annualized_daily_nominal_output"},
+    {"id": "metric.economy.gov_deficit_to_gdp", "unit": "share", "aggregation": "last", "parity_rule": "m4.government_deficit / m4.nominal_output"},
+    {"id": "metric.economy.income_gini", "unit": "index", "aggregation": "last", "parity_rule": "gini(live_household_income_realized)"},
+    {"id": "metric.economy.inflation", "unit": "per_tick", "aggregation": "mean", "parity_rule": "price_index / previous_price_index - 1"},
+    {"id": "metric.economy.n_bank_failures", "unit": "count", "aggregation": "sum", "parity_rule": "m5.bank_failures"},
+    {"id": "metric.economy.policy_rate", "unit": "rate_per_tick", "aggregation": "last", "parity_rule": "m5.policy_rate"},
+    {"id": "metric.economy.population_alive", "unit": "persons", "aggregation": "last", "parity_rule": "m7.population"},
+    {"id": "metric.economy.poverty_rate", "unit": "share", "aggregation": "last", "parity_rule": "share_below_half_median_household_consumption"},
+    {"id": "metric.economy.price_index", "unit": "index", "aggregation": "mean", "parity_rule": "m4.price_index"},
+    {"id": "metric.economy.real_output", "unit": "goods_units", "aggregation": "sum", "parity_rule": "m4.real_output"},
+    {"id": "metric.economy.unemployment_rate", "unit": "share", "aggregation": "mean", "parity_rule": "m7.unemployment_rate"},
+    {"id": "metric.world.current_account", "unit": "currency", "aggregation": "sum", "parity_rule": "m9.external.current_account"},
+    {"id": "metric.world.e", "unit": "local_currency_per_numeraire", "aggregation": "last", "parity_rule": "m9.external.exchange_rate"},
+    {"id": "metric.world.export_shipped_volume", "unit": "goods_units", "aggregation": "sum", "parity_rule": "m9.external.exports_volume"},
+    {"id": "metric.world.import_volume", "unit": "goods_units", "aggregation": "sum", "parity_rule": "m9.external.imports_volume"},
+    {"id": "metric.world.migrant_stock", "unit": "persons", "aggregation": "last", "parity_rule": "m9.external.migrant_stock_abroad"},
+    {"id": "metric.world.nfa", "unit": "currency", "aggregation": "last", "parity_rule": "m9.external.net_foreign_assets"},
+    {"id": "metric.world.remittances", "unit": "currency", "aggregation": "sum", "parity_rule": "m9.external.remittances_received"}
+  ]
+}

@@ -103,6 +103,9 @@ add_library(
         src/core/securities.cpp
         src/core/social_labor.cpp
         src/core/transaction.cpp
+        src/control/m10.cpp
+        src/control/m10_checkpoint.cpp
+        src/reporting/m10.cpp
         src/simulation/m4.cpp
         src/simulation/m4_checkpoint.cpp
         src/simulation/m5.cpp
@@ -598,6 +601,51 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m9_world_tests
     )
 
+    add_executable(
+        macro_sim_m10_policy_tests
+        tests/m10_policy_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m10_policy_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m10_policy_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m10_policy_tests)
+    add_test(
+        NAME macro_sim.m10_policy
+        COMMAND macro_sim_m10_policy_tests
+    )
+
+    add_executable(
+        macro_sim_m10_reporting_tests
+        tests/m10_reporting_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m10_reporting_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m10_reporting_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m10_reporting_tests)
+    add_test(
+        NAME macro_sim.m10_reporting
+        COMMAND macro_sim_m10_reporting_tests
+    )
+
+    add_executable(
+        macro_sim_m10_control_tests
+        tests/m10_control_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m10_control_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m10_control_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m10_control_tests)
+    add_test(
+        NAME macro_sim.m10_control
+        COMMAND macro_sim_m10_control_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m2_python_oracle
@@ -797,6 +845,32 @@ if(MACRO_SIM_BUILD_TESTS)
         )
         set_tests_properties(
             macro_sim.m9_semantic_panel
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m10_binding_smoke
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/binding_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+        )
+        set_tests_properties(
+            macro_sim.m10_binding_smoke
+            PROPERTIES LABELS "python-binding"
+        )
+        add_test(
+            NAME macro_sim.m10_native_facade
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/native_facade_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+        )
+        set_tests_properties(
+            macro_sim.m10_native_facade
             PROPERTIES LABELS "python-binding"
         )
     endif()

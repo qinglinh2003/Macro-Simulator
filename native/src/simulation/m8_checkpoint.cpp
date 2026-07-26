@@ -28,13 +28,15 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
 
 #define M8_ENERGY_POLICY_FIELDS(X)                                                     \
     X(excise_rate)                                                                     \
+    X(windfall_tax_rate)                                                               \
     X(household_subsidy_rate)                                                          \
     X(subsidy_deposit_threshold)                                                       \
     X(price_cap)                                                                       \
     X(price_cap_compensation)                                                          \
     X(strategic_reserve_target)                                                        \
     X(strategic_reserve_flow_cap)                                                      \
-    X(state_owned_price_at_cost)
+    X(state_owned_price_at_cost)                                                       \
+    X(state_owned_first_producer)
 
 #define M8_ENERGY_RULE_FIELDS(X)                                                       \
     X(enabled)                                                                         \
@@ -90,7 +92,9 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(land_fee_share)                                                                  \
     X(land_fee_stock_elasticity)                                                       \
     X(transfer_tax_rate)                                                               \
-    X(property_tax_rate)
+    X(property_tax_rate)                                                              \
+    X(include_housing_in_wealth_tax)                                                   \
+    X(wealth_tax_rate)
 
 #define M8_HOUSING_RULE_FIELDS(X)                                                      \
     X(enabled)                                                                         \
@@ -173,6 +177,7 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(industry_units)                                                                  \
     X(industry_spending)                                                               \
     X(excise_paid)                                                                     \
+    X(windfall_tax_paid)                                                               \
     X(subsidy_paid)                                                                    \
     X(cap_compensation)                                                                \
     X(strategic_reserve_stock)                                                         \
@@ -209,6 +214,7 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(rent_unpaid)                                                                     \
     X(evictions)                                                                       \
     X(property_tax_paid)                                                               \
+    X(housing_wealth_tax_paid)                                                        \
     X(transfer_tax_paid)                                                               \
     X(land_fee_paid)                                                                   \
     X(construction_output)                                                             \

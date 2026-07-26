@@ -351,11 +351,21 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
     const auto &policy = runtime.policy;
     if (policy.monetary_regime != MonetaryRegime::exogenous) {
         double inflation = 0.0;
-        if (runtime.previous_price_index > algorithms::kEconomicEpsilon &&
-            runtime.last_metrics.economy.price_index > algorithms::kEconomicEpsilon) {
-            inflation = runtime.last_metrics.economy.price_index /
-                            runtime.previous_price_index -
-                        1.0;
+        const double current_price =
+            policy.core_inflation_sensor ||
+                    runtime.headline_price_index <= algorithms::kEconomicEpsilon
+                ? runtime.last_metrics.economy.price_index
+                : runtime.headline_price_index;
+        const double previous_price =
+            policy.core_inflation_sensor ||
+                    runtime.previous_headline_price_index <=
+                        algorithms::kEconomicEpsilon
+                ? runtime.previous_price_index
+                : runtime.previous_headline_price_index;
+        if (previous_price > algorithms::kEconomicEpsilon &&
+            current_price > algorithms::kEconomicEpsilon) {
+            const double ratio = current_price / previous_price;
+            inflation = policy.logarithmic_inflation ? std::log(ratio) : ratio - 1.0;
         }
         runtime.inflation_sensor +=
             policy.inflation_sensor_lambda * (inflation - runtime.inflation_sensor);
@@ -396,6 +406,10 @@ void apply_fiscal_policy(M4Runtime &real, const M5Runtime &runtime) noexcept {
     real.rules.income_tax_rate = runtime.policy.income_tax_rate;
     real.rules.income_allowance = runtime.policy.income_allowance;
     real.rules.consumption_tax_rate = runtime.policy.consumption_tax_rate;
+    real.rules.necessity_consumption_tax_rate =
+        runtime.policy.necessity_consumption_tax_rate;
+    real.rules.luxury_consumption_tax_rate =
+        runtime.policy.luxury_consumption_tax_rate;
     real.rules.wealth_tax_rate = runtime.policy.wealth_tax_rate;
     real.rules.wealth_allowance = runtime.policy.wealth_allowance;
     real.rules.unemployment_benefit_replacement =
@@ -2132,9 +2146,18 @@ Status validate_m5_policy(const M5PolicyState &policy) noexcept {
         policy.bank_target_capital_ratio,
         policy.deposit_rate_floor,
     };
-    if (!all_finite(values) || static_cast<std::uint8_t>(policy.monetary_regime) > 2U ||
+    const auto optional_rate_valid = [](const std::optional<double> &value,
+                                        double maximum) {
+        return !value.has_value() ||
+               (finite(*value) && *value >= 0.0 && *value <= maximum);
+    };
+    if (!all_finite(values) ||
+        !optional_rate_valid(policy.necessity_consumption_tax_rate, 0.6) ||
+        !optional_rate_valid(policy.luxury_consumption_tax_rate, 0.8) ||
+        static_cast<std::uint8_t>(policy.monetary_regime) > 2U ||
         policy.rate_inertia < 0.0 || policy.rate_inertia > 1.0 ||
-        policy.inflation_target < 0.0 || policy.taylor_inflation < 0.0 ||
+        policy.inflation_target < -0.02 || policy.inflation_target > 0.02 ||
+        policy.taylor_inflation < 0.0 ||
         policy.taylor_unemployment < 0.0 || policy.neutral_rate < 0.0 ||
         policy.natural_unemployment < 0.0 || policy.natural_unemployment > 1.0 ||
         policy.inflation_sensor_lambda < 0.0 || policy.inflation_sensor_lambda > 1.0 ||
@@ -2147,7 +2170,7 @@ Status validate_m5_policy(const M5PolicyState &policy) noexcept {
         policy.deficit_unemployment_reference < 0.0 ||
         policy.deficit_unemployment_reference > 1.0 ||
         policy.deficit_unemployment_cap < 0.0 ||
-        policy.deficit_unemployment_cap > 1.0 ||
+        policy.deficit_unemployment_cap > 10.0 ||
         policy.government_investment_share < 0.0 ||
         policy.government_investment_share > 1.0 || policy.profit_tax_rate < 0.0 ||
         policy.profit_tax_rate > 1.0 || policy.income_tax_rate < 0.0 ||
@@ -2225,6 +2248,10 @@ Status validate_m5_state(const core::RootState &state,
     if (!validate_m5_policy(runtime.policy).ok() ||
         !finite(runtime.initial_policy_rate) || !finite(runtime.policy_rate) ||
         !finite(runtime.inflation_sensor) || !finite(runtime.previous_price_index) ||
+        !finite(runtime.headline_price_index) ||
+        !finite(runtime.previous_headline_price_index) ||
+        runtime.headline_price_index <= 0.0 ||
+        runtime.previous_headline_price_index <= 0.0 ||
         !finite(runtime.previous_unemployment) || !finite(runtime.reserve_genesis) ||
         !finite(runtime.bank_fear) || !state.interbank.validate_finite().ok() ||
         !state.central_bank_operations.validate_finite().ok() ||
@@ -2317,6 +2344,11 @@ Result<M5Initialization> build_m5_genesis(const M5SimulationSpec &spec) {
     runtime.rules = spec.rules;
     runtime.initial_policy_rate = spec.initial_policy_rate;
     runtime.policy_rate = spec.initial_policy_rate;
+    runtime.headline_price_index =
+        value.runtime.last_metrics.price_index > algorithms::kEconomicEpsilon
+            ? value.runtime.last_metrics.price_index
+            : spec.real_economy.rules.initial_price;
+    runtime.previous_headline_price_index = runtime.headline_price_index;
     runtime.reserve_genesis = value.root.reserves.reserve_stock().value();
     runtime.last_metrics.policy_rate = spec.initial_policy_rate;
     runtime.last_metrics.total_reserves = value.root.reserves.total_reserves().value();

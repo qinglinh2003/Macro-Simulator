@@ -270,6 +270,26 @@ Status validate_external_policy(const ExternalPolicyState &policy,
     return Status::success();
 }
 
+Status validate_domestic_policy(const DomesticPolicyState &policy) noexcept {
+    auto status = validate_m5_policy(policy.fiscal_monetary);
+    if (!status.ok()) {
+        return status;
+    }
+    status = validate_m6_policy(policy.financial);
+    if (!status.ok()) {
+        return status;
+    }
+    status = validate_m7_policy(policy.population);
+    if (!status.ok()) {
+        return status;
+    }
+    status = validate_energy_policy(policy.energy);
+    if (!status.ok()) {
+        return status;
+    }
+    return validate_housing_policy(policy.housing);
+}
+
 Status validate_world_rules(const WorldRules &rules) noexcept {
     if (!finite(rules.fx_adjustment) || rules.fx_adjustment < 0.0 ||
         !finite(rules.fx_friction) || rules.fx_friction < 0.0 ||
@@ -595,6 +615,23 @@ const M8Runtime *M9World::economy_runtime(EconomyId economy) const noexcept {
                : nullptr;
 }
 
+Result<DomesticPolicyState>
+M9World::domestic_policy(EconomyId economy) const {
+    if (!valid_economy(economy, economies_.size())) {
+        return Status(ErrorCode::out_of_range,
+                      "M9 domestic policy economy is out of range");
+    }
+    const auto &state =
+        economies_[static_cast<std::size_t>(economy.value())];
+    return DomesticPolicyState{
+        state.monetary.policy,
+        state.financial.policy,
+        state.population.policy,
+        state.domestic.energy_policy,
+        state.domestic.housing_policy,
+    };
+}
+
 M9MemoryUsage M9World::memory_usage() const noexcept {
     M9MemoryUsage usage;
     for (const auto &economy : economies_) {
@@ -831,8 +868,98 @@ M9World::update_external_policies(std::span<const ExternalPolicyState> policies)
             });
         }
     }
+    const bool changed = next != external_policies_;
     external_policies_ = std::move(next);
     pegs_ = std::move(next_pegs);
+    if (changed) {
+        ++policy_generation_;
+    }
+    return Status::success();
+}
+
+Status M9World::update_policy_batch(const WorldPolicyBatch &batch) {
+    if (batch.expected_tick != tick_) {
+        return Status(ErrorCode::stale_handle,
+                      "policy batch expected tick is stale");
+    }
+    if (batch.expected_generation != policy_generation_) {
+        return Status(ErrorCode::stale_handle,
+                      "policy batch generation is stale");
+    }
+    if (batch.domestic.size() != economies_.size() ||
+        batch.external.size() != economies_.size()) {
+        return Status(ErrorCode::invalid_argument,
+                      "policy batch count must match economy count");
+    }
+    auto next_domestic = batch.domestic;
+    for (auto &policy : next_domestic) {
+        policy.housing.wealth_tax_rate =
+            policy.fiscal_monetary.wealth_tax_rate;
+        auto status = validate_domestic_policy(policy);
+        if (!status.ok()) {
+            return status;
+        }
+    }
+    auto status = validate_policy_vector(batch.external);
+    if (!status.ok()) {
+        return status;
+    }
+
+    auto next_external = batch.external;
+    std::vector<PegRuntime> next_pegs;
+    next_pegs.reserve(pegs_.size());
+    for (std::size_t index = 0; index < next_external.size(); ++index) {
+        if (next_external[index].fx_regime != FxRegime::peg) {
+            continue;
+        }
+        const auto existing =
+            std::find_if(pegs_.begin(), pegs_.end(), [index](const PegRuntime &peg) {
+                return peg.pegger.value() == index;
+            });
+        if (existing != pegs_.end() &&
+            existing->anchor == *next_external[index].peg_anchor) {
+            next_pegs.push_back(*existing);
+        } else {
+            next_pegs.push_back(PegRuntime{
+                EconomyId(static_cast<std::uint64_t>(index)),
+                *next_external[index].peg_anchor,
+                rules_.initial_peg_reserves,
+                0.0,
+                rates_.log_rates[index] -
+                    rates_.log_rates[static_cast<std::size_t>(
+                        next_external[index].peg_anchor->value())],
+                true,
+            });
+        }
+    }
+
+    bool changed = next_external != external_policies_;
+    for (std::size_t index = 0; index < economies_.size(); ++index) {
+        auto &state = economies_[index];
+        const auto &policy = next_domestic[index];
+        changed = changed ||
+                  state.monetary.policy != policy.fiscal_monetary ||
+                  state.financial.policy != policy.financial ||
+                  state.population.policy != policy.population ||
+                  state.domestic.energy_policy != policy.energy ||
+                  state.domestic.housing_policy != policy.housing;
+        state.monetary.policy = policy.fiscal_monetary;
+        state.financial.policy = policy.financial;
+        state.financial.rules.bankrupt_persistence =
+            policy.financial.bankrupt_persistence;
+        state.financial.rules.capital_haircut =
+            policy.financial.regulatory_capital_haircut;
+        state.financial.rules.inventory_haircut =
+            policy.financial.regulatory_inventory_haircut;
+        state.population.policy = policy.population;
+        state.domestic.energy_policy = policy.energy;
+        state.domestic.housing_policy = policy.housing;
+    }
+    external_policies_ = std::move(next_external);
+    pegs_ = std::move(next_pegs);
+    if (changed) {
+        ++policy_generation_;
+    }
     return Status::success();
 }
 
@@ -1863,6 +1990,7 @@ std::uint64_t M9World::digest() const noexcept {
     }
     hash_mix(hash, dealer_valuation_);
     hash_mix(hash, event_counter_);
+    hash_mix(hash, policy_generation_);
     return hash;
 }
 

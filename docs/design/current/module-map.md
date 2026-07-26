@@ -26,15 +26,15 @@ milestone; this page provides the human-oriented subsystem view.
 
 ## Migration Disposition Summary
 
-Tracked runtime/client/config/script assets: **199**.
+Tracked runtime/client/config/script assets: **201**.
 
 | Action | Files |
 |---|---:|
 | `adapter` | 18 |
 | `keep` | 7 |
-| `keep_client` | 16 |
+| `keep_client` | 17 |
 | `oracle_only` | 30 |
-| `port` | 91 |
+| `port` | 92 |
 | `port_or_adapter` | 33 |
 | `wrap_native_worker` | 4 |
 
@@ -43,9 +43,9 @@ Tracked runtime/client/config/script assets: **199**.
 | `m0` | 35 |
 | `m1` | 14 |
 | `m10` | 46 |
-| `m11` | 20 |
+| `m11` | 21 |
 | `m3` | 4 |
-| `m4` | 20 |
+| `m4` | 21 |
 | `m5` | 5 |
 | `m6` | 7 |
 | `m7` | 27 |

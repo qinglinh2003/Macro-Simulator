@@ -88,6 +88,23 @@ struct ExternalPolicyState final {
     bool operator==(const ExternalPolicyState &) const = default;
 };
 
+struct DomesticPolicyState final {
+    M5PolicyState fiscal_monetary{};
+    M6PolicyState financial{};
+    M7PolicyState population{};
+    EnergyPolicyState energy{};
+    HousingPolicyState housing{};
+
+    bool operator==(const DomesticPolicyState &) const = default;
+};
+
+struct WorldPolicyBatch final {
+    Tick expected_tick{};
+    std::uint64_t expected_generation{0};
+    std::vector<DomesticPolicyState> domestic;
+    std::vector<ExternalPolicyState> external;
+};
+
 struct WorldRules final {
     bool trade{false};
     bool capital{false};
@@ -296,6 +313,11 @@ class M9World final {
     external_policies() const noexcept {
         return external_policies_;
     }
+    [[nodiscard]] std::uint64_t policy_generation() const noexcept {
+        return policy_generation_;
+    }
+    [[nodiscard]] Result<DomesticPolicyState>
+    domestic_policy(EconomyId economy) const;
     [[nodiscard]] const std::vector<PegRuntime> &pegs() const noexcept { return pegs_; }
     [[nodiscard]] const std::vector<MigrationRoute> &migration_routes() const noexcept {
         return migration_routes_;
@@ -316,6 +338,7 @@ class M9World final {
 
     [[nodiscard]] Status
     update_external_policies(std::span<const ExternalPolicyState> policies);
+    [[nodiscard]] Status update_policy_batch(const WorldPolicyBatch &batch);
     [[nodiscard]] Status schedule_shock(const ShockSpec &shock);
     [[nodiscard]] Result<M9AdvanceResult> advance(std::uint64_t count,
                                                   const M9AdvanceOptions &options = {});
@@ -387,12 +410,15 @@ class M9World final {
     std::vector<double> smoothed_real_wages_;
     double dealer_valuation_{0.0};
     std::uint64_t event_counter_{0};
+    std::uint64_t policy_generation_{0};
     M9WorldMetrics last_metrics_{};
 };
 
 [[nodiscard]] Status validate_external_policy(const ExternalPolicyState &policy,
                                               std::size_t economy_count,
                                               EconomyId owner) noexcept;
+[[nodiscard]] Status
+validate_domestic_policy(const DomesticPolicyState &policy) noexcept;
 [[nodiscard]] Status validate_world_rules(const WorldRules &rules) noexcept;
 [[nodiscard]] Status validate_shock_spec(const ShockSpec &shock,
                                          std::size_t economy_count) noexcept;

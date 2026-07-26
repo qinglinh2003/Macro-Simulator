@@ -77,6 +77,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"household_bankruptcy", value.household_bankruptcy},
         {"bank_resolution_fund", value.bank_resolution_fund},
         {"bank_minimum_capital", value.bank_minimum_capital},
+        {"bankrupt_persistence", value.bankrupt_persistence},
+        {"regulatory_capital_haircut", value.regulatory_capital_haircut},
+        {"regulatory_inventory_haircut", value.regulatory_inventory_haircut},
     };
 }
 
@@ -93,6 +96,12 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.household_bankruptcy = row.at("household_bankruptcy").get<bool>();
     value.bank_resolution_fund = row.at("bank_resolution_fund").get<bool>();
     value.bank_minimum_capital = row.at("bank_minimum_capital").get<double>();
+    value.bankrupt_persistence =
+        row.at("bankrupt_persistence").get<std::uint32_t>();
+    value.regulatory_capital_haircut =
+        row.at("regulatory_capital_haircut").get<double>();
+    value.regulatory_inventory_haircut =
+        row.at("regulatory_inventory_haircut").get<double>();
     return value;
 }
 

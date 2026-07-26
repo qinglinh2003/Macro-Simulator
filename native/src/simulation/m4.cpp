@@ -1190,7 +1190,41 @@ void commit_working_state(
     double& tax_total
 ) noexcept {
     if (runtime.vertical != M4Vertical::capital_fiscal
-        || runtime.rules.consumption_tax_rate <= 0.0) {
+        || (runtime.rules.consumption_tax_rate <= 0.0 &&
+            !runtime.rules.necessity_consumption_tax_rate.has_value() &&
+            !runtime.rules.luxury_consumption_tax_rate.has_value())) {
+        return Status::success();
+    }
+    double effective_rate = runtime.rules.consumption_tax_rate;
+    if (runtime.rules.necessity_consumption_tax_rate.has_value() ||
+        runtime.rules.luxury_consumption_tax_rate.has_value()) {
+        double necessity_sales = 0.0;
+        double luxury_sales = 0.0;
+        for (const auto dense : scratch.consumption_firm_indices_) {
+            if (dense >= scratch.firm_ids_.size() ||
+                dense >= scratch.firm_work_.size()) {
+                continue;
+            }
+            const double sales = std::max(0.0, scratch.firm_work_[dense].revenue);
+            if (scratch.firm_ids_[dense].value() % 2U == 0U) {
+                luxury_sales += sales;
+            } else {
+                necessity_sales += sales;
+            }
+        }
+        const double total_sales = necessity_sales + luxury_sales;
+        if (total_sales > algorithms::kEconomicEpsilon) {
+            effective_rate =
+                (necessity_sales *
+                     runtime.rules.necessity_consumption_tax_rate.value_or(
+                         runtime.rules.consumption_tax_rate) +
+                 luxury_sales *
+                     runtime.rules.luxury_consumption_tax_rate.value_or(
+                         runtime.rules.consumption_tax_rate)) /
+                total_sales;
+        }
+    }
+    if (effective_rate <= 0.0) {
         return Status::success();
     }
     const auto treasury = state.institutions.treasury_account;
@@ -1203,7 +1237,7 @@ void commit_working_state(
             static_cast<std::size_t>(household->primary_account.value());
         const double due =
             scratch.household_work_[index].spent
-            * runtime.rules.consumption_tax_rate;
+            * effective_rate;
         const double paid = std::min(due, scratch.balances_[account]);
         const auto status = transfer(
             state,
@@ -2290,6 +2324,14 @@ Status validate_spec(const M4SimulationSpec& spec) noexcept {
         || rules.income_tax_rate > 1.0
         || rules.consumption_tax_rate < 0.0
         || rules.consumption_tax_rate > 1.0
+        || (rules.necessity_consumption_tax_rate.has_value() &&
+            (!std::isfinite(*rules.necessity_consumption_tax_rate) ||
+             *rules.necessity_consumption_tax_rate < 0.0 ||
+             *rules.necessity_consumption_tax_rate > 0.6))
+        || (rules.luxury_consumption_tax_rate.has_value() &&
+            (!std::isfinite(*rules.luxury_consumption_tax_rate) ||
+             *rules.luxury_consumption_tax_rate < 0.0 ||
+             *rules.luxury_consumption_tax_rate > 0.8))
         || rules.wealth_tax_rate < 0.0
         || rules.wealth_tax_rate > 1.0
         || rules.government_consumption_share < 0.0

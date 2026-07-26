@@ -278,6 +278,7 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
     metadata["smoothed_wages"] = smoothed_real_wages_;
     metadata["dealer_valuation"] = dealer_valuation_;
     metadata["event_counter"] = event_counter_;
+    metadata["policy_generation"] = policy_generation_;
     metadata["announced_shocks"] = announced_shock_ids_;
     metadata["active_shocks"] = active_shock_ids_;
     metadata["realized_shocks"] = realized_shock_ids_;
@@ -429,6 +430,8 @@ Result<M9World> M9World::restore(std::span<const std::uint8_t> checkpoint) {
             metadata.at("smoothed_wages").get<std::vector<double>>();
         world.dealer_valuation_ = metadata.at("dealer_valuation").get<double>();
         world.event_counter_ = metadata.at("event_counter").get<std::uint64_t>();
+        world.policy_generation_ =
+            metadata.value("policy_generation", std::uint64_t{0});
         world.announced_shock_ids_ =
             metadata.at("announced_shocks").get<std::vector<std::uint64_t>>();
         world.active_shock_ids_ =

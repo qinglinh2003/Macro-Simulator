@@ -27,6 +27,8 @@ struct M5PolicyState final {
     double income_tax_rate{0.20};
     double income_allowance{0.0};
     double consumption_tax_rate{0.15};
+    std::optional<double> necessity_consumption_tax_rate{};
+    std::optional<double> luxury_consumption_tax_rate{};
     double wealth_tax_rate{5.479452054794521e-6};
     double wealth_allowance{0.0};
     double unemployment_benefit_replacement{0.40};
@@ -46,6 +48,10 @@ struct M5PolicyState final {
     double natural_unemployment{0.05};
     double maximum_policy_rate{0.10};
     double inflation_sensor_lambda{0.02};
+    bool core_inflation_sensor{false};
+    bool fixed_basket_cpi{false};
+    bool logarithmic_inflation{false};
+    bool fiscal_uses_national_accounts_gdp{false};
 
     bool open_market_operations{false};
     double reserve_target{0.0};
@@ -160,6 +166,8 @@ struct M5Runtime final {
     double policy_rate{0.01};
     double inflation_sensor{0.0};
     double previous_price_index{0.0};
+    double headline_price_index{0.0};
+    double previous_headline_price_index{0.0};
     double previous_unemployment{0.0};
     double reserve_genesis{0.0};
     double bank_fear{0.0};
