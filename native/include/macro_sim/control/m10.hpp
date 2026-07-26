@@ -135,6 +135,12 @@ class EngineSession final {
     [[nodiscard]] Result<reporting::DwellingProbePage>
     probe_dwellings(EconomyId economy, std::uint64_t after_id,
                     std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::EquityProbePage>
+    probe_equities(EconomyId economy, std::uint64_t after_id,
+                   std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::SecurityPositionProbePage>
+    probe_security_positions(EconomyId economy, std::uint64_t after_id,
+                             std::size_t maximum_rows) const;
     [[nodiscard]] Result<reporting::EconomyDiagnosticProbe>
     probe_economy_diagnostics(EconomyId economy) const;
     [[nodiscard]] Result<std::vector<reporting::ShockBulletinProbeRow>>
@@ -218,6 +224,12 @@ class HybridControlledBridge final {
     [[nodiscard]] Result<reporting::DwellingProbePage>
     probe_dwellings(EconomyId economy, std::uint64_t after_id,
                     std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::EquityProbePage>
+    probe_equities(EconomyId economy, std::uint64_t after_id,
+                   std::size_t maximum_rows) const;
+    [[nodiscard]] Result<reporting::SecurityPositionProbePage>
+    probe_security_positions(EconomyId economy, std::uint64_t after_id,
+                             std::size_t maximum_rows) const;
     [[nodiscard]] Result<reporting::EconomyDiagnosticProbe>
     probe_economy_diagnostics(EconomyId economy) const;
     [[nodiscard]] Result<std::vector<reporting::ShockBulletinProbeRow>>

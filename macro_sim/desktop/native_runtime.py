@@ -1,29 +1,34 @@
-"""M10 Python desktop worker backed exclusively by native economic state."""
+"""Protocol-v4 desktop worker backed exclusively by native economic state."""
 from __future__ import annotations
 
-from collections import deque
 from collections.abc import Mapping
 from datetime import date, timedelta
 from numbers import Integral
 from typing import Any
 
 from macro_sim.controllers import DEFAULT_OBSERVATION_SPEC, ReleaseService
+from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.native_observation import NativeObservationSource
+from macro_sim.controllers.protocol import CONTROLLER_SCHEMA_VERSION
 from macro_sim.core.policy_registry import (
     Bool,
     Choices,
     EconomyId,
     EconomySet,
+    IntRange,
     NullableRange,
     Range,
     REGISTRY,
+)
+from macro_sim.desktop.native_projection import (
+    DESKTOP_PROTOCOL_VERSION,
+    NativeDesktopProjection,
 )
 from macro_sim.desktop.new_game import NewGameSpec
 from macro_sim.native_backend import NativeSimulationSession
 
 
-NATIVE_DESKTOP_PROTOCOL_VERSION = 1
-_SERIES_LIMIT = 160
+NATIVE_DESKTOP_PROTOCOL_VERSION = DESKTOP_PROTOCOL_VERSION
 
 
 def _strict_positive_int(name: str, value: Any, maximum: int) -> int:
@@ -36,23 +41,40 @@ def _strict_positive_int(name: str, value: Any, maximum: int) -> int:
 
 
 def _validation_schema(validation: Any) -> dict[str, Any]:
-    if isinstance(validation, Range):
-        return {"kind": "number", "minimum": validation.lo, "maximum": validation.hi}
+    if isinstance(validation, IntRange):
+        return {
+            "value_kind": "integer",
+            "minimum": int(validation.lo),
+            "maximum": int(validation.hi),
+            "nullable": False,
+        }
     if isinstance(validation, NullableRange):
         return {
-            "kind": "nullable_number",
+            "value_kind": "number",
             "minimum": validation.lo,
             "maximum": validation.hi,
+            "nullable": True,
+        }
+    if isinstance(validation, Range):
+        return {
+            "value_kind": "number",
+            "minimum": validation.lo,
+            "maximum": validation.hi,
+            "nullable": False,
         }
     if isinstance(validation, Choices):
-        return {"kind": "choice", "values": list(validation.values)}
+        return {
+            "value_kind": "choice",
+            "choices": list(validation.values),
+            "nullable": False,
+        }
     if isinstance(validation, Bool):
-        return {"kind": "boolean"}
+        return {"value_kind": "bool", "nullable": False}
     if isinstance(validation, EconomyId):
-        return {"kind": "nullable_economy_id"}
+        return {"value_kind": "economy_id", "nullable": True}
     if isinstance(validation, EconomySet):
-        return {"kind": "economy_id_set"}
-    return {"kind": "unknown"}
+        return {"value_kind": "economy_set", "nullable": False}
+    return {"value_kind": "unknown", "nullable": False}
 
 
 class NativeSimulationRuntime:
@@ -100,8 +122,9 @@ class NativeSimulationRuntime:
         self.releases = ReleaseService(DEFAULT_OBSERVATION_SPEC)
         self._policy_draft: tuple[dict[str, Any], ...] = ()
         self._last_policy_event: dict[str, Any] | None = None
-        self._series: deque[dict[str, Any]] = deque(maxlen=_SERIES_LIMIT)
-        self._record_current_frame()
+        self.projection = NativeDesktopProjection(
+            session, normalized, self.player_economy
+        )
         return self.snapshot()
 
     @property
@@ -111,13 +134,6 @@ class NativeSimulationRuntime:
     def _run_complete(self) -> bool:
         horizon = self.spec.duration_ticks
         return horizon is not None and self.tick >= horizon
-
-    def _record_current_frame(self) -> None:
-        frame = self.session.public_metrics()
-        self._series.append({
-            "boundary": int(frame["tick"]),
-            "economies": [dict(row) for row in frame["economies"]],
-        })
 
     def stage_policy(self, actions: list[Mapping[str, Any]]) -> dict[str, Any]:
         normalized: list[dict[str, Any]] = []
@@ -154,6 +170,8 @@ class NativeSimulationRuntime:
             "status": "staged" if normalized else "cleared",
             "accepted_boundary": self.tick,
             "effective_boundary": self.tick + 1 if normalized else None,
+            "accepted_tick": self.tick,
+            "effective_tick": self.tick + 1 if normalized else None,
             "actions": list(self._policy_draft),
         }
         return self.snapshot()
@@ -165,12 +183,14 @@ class NativeSimulationRuntime:
             actions = self._policy_draft if advanced == 0 else ()
             self.session.advance(actions=actions)
             self.source.refresh()
-            self._record_current_frame()
+            self.projection.refresh()
             if actions:
                 self._last_policy_event = {
                     "status": "effective",
                     "accepted_boundary": self.tick - 1,
                     "effective_boundary": self.tick,
+                    "accepted_tick": self.tick - 1,
+                    "effective_tick": self.tick,
                     "actions": list(actions),
                 }
                 self._policy_draft = ()
@@ -179,18 +199,69 @@ class NativeSimulationRuntime:
         result["advanced_ticks"] = advanced
         return result
 
+    def _lever_schema(
+        self, name: str, current_values: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        lever = REGISTRY[name]
+        row = {
+                "name": name,
+                "current_value": current_values[name],
+                "scope": lever.scope,
+                "owner_role": lever.owner_role,
+                "decision_group": lever.decision_group,
+                "implementation_lag": lever.implementation_lag,
+                "emergency_implementation_lag":
+                    lever.emergency_implementation_lag,
+                "min_hold_ticks": lever.min_hold_ticks,
+                "emergency": lever.emergency,
+                "control_scale": lever.control_scale,
+                "max_step": getattr(lever.validation, "max_step", None),
+                "admin_weight": lever.admin_weight,
+                "cost_class": lever.cost_class,
+                "semantics": lever.semantics,
+                "requires": sorted(lever.requires),
+                "enabled_if": sorted(lever.enabled_if),
+                "shadowed_by": list(lever.shadowed_by),
+                "help_key": f"policy.{name}",
+        }
+        row.update(_validation_schema(lever.validation))
+        if isinstance(lever.validation, EconomyId):
+            row["choices"] = [
+                economy_id
+                for economy_id in range(len(self.spec.countries))
+                if economy_id != self.player_economy
+            ] + [None]
+        elif isinstance(lever.validation, EconomySet):
+            row["choices"] = [
+                economy_id
+                for economy_id in range(len(self.spec.countries))
+                if economy_id != self.player_economy
+            ]
+        return row
+
     def schema(self) -> dict[str, Any]:
+        current_values = self.session.policy_values(self.player_economy)
+        seats = {
+            seat: {
+                "schema_version": CONTROLLER_SCHEMA_VERSION,
+                "economy_id": self.player_economy,
+                "seat": seat,
+                "levers": [
+                    self._lever_schema(name, current_values)
+                    for name, lever in sorted(REGISTRY.items())
+                    if lever.owner_role == seat
+                ],
+            }
+            for seat in SEATS
+        }
         return {
             "protocol_version": NATIVE_DESKTOP_PROTOCOL_VERSION,
-            "backend": "native_m10_world",
-            "policy_count": len(REGISTRY),
-            "levers": [{
-                "id": name,
-                "scope": lever.scope,
-                "seat_id": lever.owner_role,
-                "decision_group_id": lever.decision_group,
-                "validation": _validation_schema(lever.validation),
-            } for name, lever in REGISTRY.items()],
+            "control_mode": "free_policy",
+            "seats": seats,
+            "levers": seats["treasury"]["levers"],
+            "seat": "treasury",
+            "economy_id": self.player_economy,
+            "schema_version": CONTROLLER_SCHEMA_VERSION,
         }
 
     def entity_page(
@@ -209,62 +280,104 @@ class NativeSimulationRuntime:
     def checkpoint(self) -> bytes:
         return self.session.checkpoint(b'{"client":"native_desktop_m10"}')
 
+    def _client_policy_actions(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "lever": str(action["lever"]),
+                "value": action["value"],
+            }
+            for action in self._policy_draft
+            if int(action.get("economy_id", self.player_economy))
+            == self.player_economy
+        ]
+
+    def _merged_observation(self) -> dict[str, Any]:
+        merged: dict[str, dict[str, Any]] = {}
+        metadata: dict[str, Any] = {}
+        for seat in SEATS:
+            observation = self.releases.observe(
+                self.source,
+                self.tick,
+                economy_id=self.player_economy,
+                role=seat,
+                elapsed_ticks=0,
+            ).to_dict()
+            for key, value in observation.items():
+                if key != "releases":
+                    metadata.setdefault(key, value)
+            for release in observation.get("releases", []):
+                if not isinstance(release, dict):
+                    continue
+                series_id = str(release.get("series_id", ""))
+                held = merged.get(series_id)
+                if held is None or (
+                    held.get("value") is None
+                    and release.get("value") is not None
+                ):
+                    merged[series_id] = dict(release)
+        metadata["releases"] = [
+            merged[series_id] for series_id in sorted(merged)
+        ]
+        return metadata
+
     def snapshot(self) -> dict[str, Any]:
         boundary = self.tick
-        current = self.session.public_metrics()
-        observation = self.releases.observe(
-            self.source,
-            boundary,
-            economy_id=self.player_economy,
-            role="treasury",
-            elapsed_ticks=0,
-        )
-        diagnostics = self.session.probe_economy_diagnostics(
-            self.player_economy,
-        )
+        projection = self.projection.snapshot_fields()
         start = date.fromisoformat(self.spec.start_date)
+        remaining = (
+            None if self.spec.duration_ticks is None else max(
+                0, self.spec.duration_ticks - boundary
+            )
+        )
+        draft = list(self._policy_draft)
+        client_actions = self._client_policy_actions()
+        bulletins = list(self.session.shock_bulletins(
+            self.player_economy, boundary,
+        ))
+        active_shocks = [
+            dict(item)
+            for item in bulletins
+            if str(item.get("status", "")) in {"active", "realizing"}
+        ]
         return {
             "protocol_version": NATIVE_DESKTOP_PROTOCOL_VERSION,
             "backend": "native_m10_world",
             "control_mode": "free_policy",
             "boundary": boundary,
+            "tick": boundary,
             "date": (start + timedelta(days=boundary)).isoformat(),
             "tick_reference": boundary,
+            "phase": "boundary_start",
+            "awaiting_human": False,
             "new_game": {
+                "schema_version": self.spec.schema_version,
+                "model_id": self.spec.model_id,
                 "contract_hash": self.spec.contract_hash,
+                "spec": self.spec.to_dict(),
                 "duration_ticks": self.spec.duration_ticks,
                 "run_complete": self._run_complete(),
-                "remaining_ticks": (
-                    None if self.spec.duration_ticks is None else max(
-                        0, self.spec.duration_ticks - boundary,
-                    )
-                ),
-                "player_economy_id": self.player_economy,
-                "countries": [{
-                    "economy_id": index,
-                    "code": country.code,
-                    "profile_id": country.profile,
-                } for index, country in enumerate(self.spec.countries)],
+                "remaining_ticks": remaining,
             },
-            "public_metrics": {
-                "boundary": int(current["tick"]),
-                "economies": [dict(row) for row in current["economies"]],
-            },
-            "released_observation": observation.to_dict(),
-            "series": list(self._series),
+            "observation": self._merged_observation(),
+            "last_verdict": self._last_policy_event,
+            **projection,
             "policy_values": self.session.policy_values(self.player_economy),
-            "policy_draft": list(self._policy_draft),
+            "policy_draft": draft,
             "last_policy_event": self._last_policy_event,
-            "entity_counts": {
-                key: diagnostics[key]
-                for key in (
-                    "households", "firms", "banks", "persons_alive",
-                    "jobs_active", "dwellings_active",
-                )
+            "contexts": [],
+            "pending": [],
+            "free_policy": {
+                "enabled": True,
+                "effective_tick": boundary + 1 if client_actions else None,
+                "actions": client_actions,
             },
-            "shock_bulletins": list(self.session.shock_bulletins(
-                self.player_economy, boundary,
-            )),
+            "shock_bulletins": bulletins,
+            "active_shocks": active_shocks,
+            "events": (
+                [] if self._last_policy_event is None
+                else [self._last_policy_event]
+            ),
+            "shock_events": [],
         }
 
     def handle(self, command: Mapping[str, Any]) -> dict[str, Any]:

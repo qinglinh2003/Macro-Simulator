@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 import socket
 import subprocess
 import sys
@@ -36,11 +38,44 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=47899)
     parser.add_argument("--ticks", type=int, default=550)
+    parser.add_argument(
+        "--backend",
+        choices=("native-m10", "python-oracle"),
+        default="native-m10",
+    )
+    parser.add_argument(
+        "--native-dir",
+        type=Path,
+        default=Path("build/native/m10-debug/native"),
+    )
     args = parser.parse_args()
 
+    worker_environment = os.environ.copy()
+    if args.backend == "native-m10":
+        native_dir = args.native_dir.resolve()
+        if not native_dir.is_dir():
+            raise RuntimeError(
+                f"native extension directory does not exist: {native_dir}"
+            )
+        existing_path = worker_environment.get("PYTHONPATH")
+        worker_environment["PYTHONPATH"] = (
+            str(native_dir)
+            if not existing_path
+            else f"{native_dir}{os.pathsep}{existing_path}"
+        )
     worker = subprocess.Popen(
-        [sys.executable, "-m", "macro_sim.desktop.server", "--port", str(args.port)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-m",
+            "macro_sim.desktop.server",
+            "--port",
+            str(args.port),
+            "--backend",
+            args.backend,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=worker_environment,
     )
     try:
         connection = None

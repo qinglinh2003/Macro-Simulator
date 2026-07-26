@@ -180,6 +180,28 @@ nb::dict firm_probe_to_python(
         item["demand_expected"] = row.demand_expected;
         item["previous_sales"] = row.previous_sales;
         item["previous_hires"] = row.previous_hires;
+        item["book_equity"] = row.book_equity;
+        item["earnings"] = row.earnings;
+        item["interest_arrears"] = row.interest_arrears;
+        item["eligible_collateral_value"] =
+            row.eligible_collateral_value;
+        item["borrowing_base_headroom"] =
+            row.borrowing_base_headroom;
+        item["residual_income_ema"] = row.residual_income_ema;
+        item["tobin_q_ema"] = row.tobin_q_ema;
+        item["insolvent_days"] = row.insolvent_days;
+        item["shell_days"] = row.shell_days;
+        item["sector_switch_pressure_days"] =
+            row.sector_switch_pressure_days;
+        item["defaulted"] = row.defaulted;
+        item["equity_id"] = row.equity.value();
+        item["outstanding_shares"] = row.outstanding_shares;
+        item["share_price"] = row.share_price;
+        item["last_share_price"] = row.last_share_price;
+        item["peak_share_price"] = row.peak_share_price;
+        item["fundamental_per_share"] =
+            row.fundamental_per_share;
+        item["share_trend"] = row.share_trend;
         item["active"] = row.active;
         nb::list employees;
         for (const auto person : row.employees) {
@@ -211,6 +233,14 @@ nb::dict bank_probe_to_python(
         item["leverage_appetite"] = row.leverage_appetite;
         item["loan_spread"] = row.loan_spread;
         item["deposit_spread"] = row.deposit_spread;
+        item["equity_id"] = row.equity.value();
+        item["outstanding_shares"] = row.outstanding_shares;
+        item["share_price"] = row.share_price;
+        item["last_share_price"] = row.last_share_price;
+        item["peak_share_price"] = row.peak_share_price;
+        item["fundamental_per_share"] =
+            row.fundamental_per_share;
+        item["share_trend"] = row.share_trend;
         item["alive"] = row.alive;
         item["resolved"] = row.resolved;
         rows.append(std::move(item));
@@ -238,6 +268,16 @@ nb::dict person_probe_to_python(
         item["primary_job_id"] = row.primary_job.value();
         item["secondary_job_id"] = row.secondary_job.value();
         item["efficiency"] = row.efficiency;
+        item["cash"] = row.cash;
+        item["debt"] = row.debt;
+        item["firm_equity"] = row.firm_equity;
+        item["bank_equity"] = row.bank_equity;
+        item["bonds"] = row.bonds;
+        item["gross_assets"] = row.gross_assets;
+        item["net_worth"] = row.net_worth;
+        item["allocated_income"] = row.allocated_income;
+        item["allocated_consumption"] =
+            row.allocated_consumption;
         item["participating"] = row.participating;
         item["searching"] = row.searching;
         item["alive"] = row.alive;
@@ -292,6 +332,57 @@ nb::dict dwelling_probe_to_python(
     return output;
 }
 
+nb::dict equity_probe_to_python(
+    const macro_sim::reporting::EquityProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["issuer_kind"] =
+            static_cast<std::uint8_t>(row.issuer_kind);
+        item["issuer_owner_kind"] =
+            static_cast<std::uint8_t>(row.issuer.kind);
+        item["issuer_id"] = row.issuer.value;
+        item["issuer_account_id"] = row.issuer_account.value();
+        item["currency_id"] = row.currency.value();
+        item["outstanding_shares"] = row.outstanding_shares;
+        item["price"] = row.price;
+        item["last_price"] = row.last_price;
+        item["peak_price"] = row.peak_price;
+        item["fundamental"] = row.fundamental;
+        item["trend"] = row.trend;
+        item["income_signal"] = row.income_signal;
+        item["active"] = row.active;
+        item["resolved"] = row.resolved;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
+nb::dict security_position_probe_to_python(
+    const macro_sim::reporting::SecurityPositionProbePage &page) {
+    auto output = probe_page_info_to_python(page.page);
+    nb::list rows;
+    for (const auto &row : page.rows) {
+        nb::dict item;
+        item["id"] = row.id.value();
+        item["security_kind"] =
+            static_cast<std::uint8_t>(row.security_kind);
+        item["security_id"] = row.security_id;
+        item["holder_kind"] =
+            static_cast<std::uint8_t>(row.holder_kind);
+        item["holder_id"] = row.holder_id;
+        item["units"] = row.units;
+        item["cost_basis"] = row.cost_basis;
+        item["market_value"] = row.market_value;
+        rows.append(std::move(item));
+    }
+    output["rows"] = std::move(rows);
+    return output;
+}
+
 nb::dict diagnostic_probe_to_python(
     const macro_sim::reporting::EconomyDiagnosticProbe &probe) {
     nb::dict output;
@@ -310,6 +401,9 @@ nb::dict diagnostic_probe_to_python(
     output["goods_inventory_total"] = probe.goods_inventory_total;
     output["physical_capital_total"] = probe.physical_capital_total;
     output["energy_stock_total"] = probe.energy_stock_total;
+    output["dealer_valuation"] = probe.dealer_valuation;
+    output["peg_count"] = probe.peg_count;
+    output["pegs_intact"] = probe.pegs_intact;
     return output;
 }
 
@@ -2690,6 +2784,31 @@ NB_MODULE(_native, module) {
              },
              nb::arg("economy_id"), nb::arg("after_id") = 0U,
              nb::arg("maximum_rows") = 256U)
+        .def("probe_equities",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_equities(
+                     macro_sim::EconomyId(economy), after_id,
+                     maximum_rows);
+                 require_status(result.status());
+                 return equity_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_security_positions",
+             [](const macro_sim::control::EngineSession &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_security_positions(
+                     macro_sim::EconomyId(economy), after_id,
+                     maximum_rows);
+                 require_status(result.status());
+                 return security_position_probe_to_python(
+                     *result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
         .def("probe_economy_diagnostics",
              [](const macro_sim::control::EngineSession &value,
                 std::uint64_t economy) {
@@ -2996,6 +3115,31 @@ NB_MODULE(_native, module) {
                      macro_sim::EconomyId(economy), after_id, maximum_rows);
                  require_status(result.status());
                  return dwelling_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_equities",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_equities(
+                     macro_sim::EconomyId(economy), after_id,
+                     maximum_rows);
+                 require_status(result.status());
+                 return equity_probe_to_python(*result.get_if());
+             },
+             nb::arg("economy_id"), nb::arg("after_id") = 0U,
+             nb::arg("maximum_rows") = 256U)
+        .def("probe_security_positions",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                std::uint64_t economy, std::uint64_t after_id,
+                std::size_t maximum_rows) {
+                 auto result = value.probe_security_positions(
+                     macro_sim::EconomyId(economy), after_id,
+                     maximum_rows);
+                 require_status(result.status());
+                 return security_position_probe_to_python(
+                     *result.get_if());
              },
              nb::arg("economy_id"), nb::arg("after_id") = 0U,
              nb::arg("maximum_rows") = 256U)

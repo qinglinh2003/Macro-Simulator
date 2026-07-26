@@ -89,7 +89,24 @@ def main() -> int:
     assert household_page["boundary"] == session.tick
     assert 0 < len(household_page["rows"]) <= 3
     assert household_page["rows"][0]["id"] > 0
-    assert session.probe_economy_diagnostics(0)["households"] > 0
+    person_page = session.probe_page(
+        "persons", economy_id=0, maximum_rows=3,
+    )
+    assert person_page["rows"][0]["gross_assets"] >= 0.0
+    equity_page = session.probe_page(
+        "equities", economy_id=0, maximum_rows=3,
+    )
+    assert equity_page["rows"]
+    assert equity_page["rows"][0]["price"] >= 0.0
+    position_page = session.probe_page(
+        "security_positions", economy_id=0, maximum_rows=3,
+    )
+    assert position_page["rows"]
+    assert position_page["rows"][0]["market_value"] >= 0.0
+    economy_diagnostic = session.probe_economy_diagnostics(0)
+    assert economy_diagnostic["households"] > 0
+    assert economy_diagnostic["peg_count"] == 0
+    assert economy_diagnostic["pegs_intact"]
     diagnostic = NativeDeepProbeCollector().collect(session)
     assert diagnostic.boundary == session.tick
     assert diagnostic.aggregates["households"] > 0
@@ -102,6 +119,24 @@ def main() -> int:
     session.advance()
     assert cloned.native_snapshot()["digest"] == session.native_snapshot()["digest"]
     assert cloned.history_bounds() == session.history_bounds()
+
+    sequential = NativeSimulationSession.create(
+        spec, history_capacity_frames=32,
+    )
+    batched = NativeSimulationSession.create(
+        spec, history_capacity_frames=32,
+    )
+    for _ in range(15):
+        sequential.advance()
+    batch_result = batched.advance(15)
+    assert batch_result["advanced_ticks"] == 15
+    assert batched.native_snapshot()["digest"] == (
+        sequential.native_snapshot()["digest"]
+    )
+    assert batched.history_bounds() == sequential.history_bounds()
+    assert batched.history_page(0, 32)["frames"] == (
+        sequential.history_page(0, 32)["frames"]
+    )
 
     checkpoint = session.checkpoint(b'{"objective":"native"}')
     restored, objective = NativeSimulationSession.restore(spec, checkpoint)

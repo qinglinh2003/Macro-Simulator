@@ -1,6 +1,7 @@
 extends SceneTree
 
 const MainScript := preload("res://scripts/main.gd")
+const LocaleCatalogScript := preload("res://scripts/localization.gd")
 
 
 func _init() -> void:
@@ -8,19 +9,27 @@ func _init() -> void:
 
 
 func _run() -> void:
+	LocaleCatalogScript.set_locale("zh_CN")
 	OS.set_environment("MACRO_SIM_SKIP_START_MENU", "1")
 	var game := MainScript.new()
 	root.add_child(game)
 	await process_frame
 	await process_frame
 
-	var menu_button := _button_with_text(game, "⌂  主菜单")
+	var menu_button := _button_with_text(
+		game,
+		"⌂  " + LocaleCatalogScript.text(
+			"desktop.main.fragment.d8c47e9776cf1082"))
 	assert(menu_button != null)
 	game._playing = true
 	menu_button.pressed.emit()
 	await process_frame
 	assert(not game._playing)
-	assert(game._confirm["title"] == "返回主菜单")
+	assert(
+		LocaleCatalogScript.resolve(str(game._confirm["title"]))
+		== LocaleCatalogScript.text(
+			"desktop.main.fragment.e34e61a243bec5e1")
+	)
 	game._confirm_cancel()
 	await process_frame
 	assert(game._playing)
@@ -34,7 +43,8 @@ func _run() -> void:
 	assert(game._start_menu._screen == "home")
 	assert(game._start_menu._can_continue)
 
-	var continue_button := _button_with_label(game._start_menu, "继续模拟")
+	var continue_button := _button_with_label(
+		game._start_menu, LocaleCatalogScript.text("menu.continue"))
 	assert(continue_button != null)
 	continue_button.pressed.emit()
 	await process_frame

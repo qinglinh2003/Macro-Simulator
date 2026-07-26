@@ -39,59 +39,59 @@ const ECON_COLORS := [Color("0f9d90"), Color("c17d16"), Color("2f6fd0")]
 
 # Release tiles preserve publication calendars, lag, and explicit missingness.
 const TILE_TO_GROUP := {
-	"real_output": "实体经济", "unemployment_rate": "劳动力",
-	"inflation": "价格与货币", "price_index": "价格与货币",
-	"policy_rate": "价格与货币", "gov_deficit_to_gdp": "财政",
-	"bank_reserves_total": "银行与信贷", "poverty_rate": "分配与福利",
+	"real_output": "real_economy", "unemployment_rate": "labor",
+	"inflation": "prices_money", "price_index": "prices_money",
+	"policy_rate": "prices_money", "gov_deficit_to_gdp": "fiscal",
+	"bank_reserves_total": "banking_credit", "poverty_rate": "distribution",
 }
 
 const TILE_SPEC := [
-	{"id": "real_output", "label": "实际产出 · GDP", "color": TEAL, "bad_up": false, "kind": "num"},
-	{"id": "unemployment_rate", "label": "失业率", "color": AMBER, "bad_up": true, "kind": "pp"},
-	{"id": "inflation", "label": "通胀(日率)", "color": PURPLE, "bad_up": true, "kind": "pp"},
-	{"id": "price_index", "label": "物价指数", "color": BLUE, "bad_up": true, "kind": "num"},
-	{"id": "policy_rate", "label": "政策利率", "color": TEAL, "bad_up": false, "kind": "pp"},
-	{"id": "gov_deficit_to_gdp", "label": "赤字 / GDP", "color": AMBER, "bad_up": true, "kind": "pp"},
-	{"id": "bank_reserves_total", "label": "银行准备金", "color": GREEN, "bad_up": false, "kind": "num"},
-	{"id": "poverty_rate", "label": "贫困率", "color": PURPLE, "bad_up": true, "kind": "pp"},
+	{"id": "real_output", "label": "@{desktop.main.fragment.60b6b37831c29bca} · GDP", "color": TEAL, "bad_up": false, "kind": "num"},
+	{"id": "unemployment_rate", "label": "@{desktop.main.fragment.4546b3d41818bdbf}", "color": AMBER, "bad_up": true, "kind": "pp"},
+	{"id": "inflation", "label": "@{desktop.main.fragment.b43cd47df5c0171c}(@{desktop.main.fragment.14937464feefe618})", "color": PURPLE, "bad_up": true, "kind": "pp"},
+	{"id": "price_index", "label": "@{desktop.main.fragment.89c07894f37c4102}", "color": BLUE, "bad_up": true, "kind": "num"},
+	{"id": "policy_rate", "label": "@{desktop.main.fragment.8003f5e9f9c4a87f}", "color": TEAL, "bad_up": false, "kind": "pp"},
+	{"id": "gov_deficit_to_gdp", "label": "@{desktop.main.fragment.7865b21012629320} / GDP", "color": AMBER, "bad_up": true, "kind": "pp"},
+	{"id": "bank_reserves_total", "label": "@{desktop.main.fragment.99c2ead02ebe4bae}", "color": GREEN, "bad_up": false, "kind": "num"},
+	{"id": "poverty_rate", "label": "@{desktop.main.fragment.9fa5069c139f1dfa}", "color": PURPLE, "bad_up": true, "kind": "pp"},
 ]
 
 # Each core dimension uses one authoritative released series.
 const CORE_DIMENSION_SPEC := [
-	{"id": "real_output", "dimension": "增长", "metric": "实际产出", "group": "实体经济", "color": TEAL},
-	{"id": "unemployment_rate", "dimension": "就业", "metric": "失业率", "group": "劳动力", "color": AMBER},
-	{"id": "inflation", "dimension": "物价", "metric": "通胀", "group": "价格与货币", "color": PURPLE},
-	{"id": "gov_deficit_to_gdp", "dimension": "财政", "metric": "赤字/GDP", "group": "财政", "color": BLUE},
-	{"id": "credit_to_gdp", "dimension": "金融", "metric": "信贷/GDP", "group": "银行与信贷", "color": TEAL_DK},
-	{"id": "poverty_rate", "dimension": "民生", "metric": "贫困率", "group": "分配与福利", "color": GREEN},
-	{"id": "population_alive", "dimension": "人口", "metric": "总人口", "group": "人口社会", "color": Color("b0641f")},
-	{"id": "current_account", "dimension": "外部", "metric": "经常账户", "tab": "world", "color": Color("4a6fa5")},
+	{"id": "real_output", "dimension": "@{desktop.main.fragment.e1cf00d81f03c367}", "metric": "@{desktop.main.fragment.60b6b37831c29bca}", "group": "real_economy", "color": TEAL},
+	{"id": "unemployment_rate", "dimension": "@{desktop.main.fragment.2c6e0266e1ac28a8}", "metric": "@{desktop.main.fragment.4546b3d41818bdbf}", "group": "labor", "color": AMBER},
+	{"id": "inflation", "dimension": "@{desktop.main.fragment.240e892123e10737}", "metric": "@{desktop.main.fragment.b43cd47df5c0171c}", "group": "prices_money", "color": PURPLE},
+	{"id": "gov_deficit_to_gdp", "dimension": "@{desktop.main.fragment.f69c325544a29bfe}", "metric": "@{desktop.main.fragment.7865b21012629320}/GDP", "group": "fiscal", "color": BLUE},
+	{"id": "credit_to_gdp", "dimension": "@{desktop.main.fragment.a42315e416fa2550}", "metric": "@{desktop.main.fragment.334ec29216cfefb9}/GDP", "group": "banking_credit", "color": TEAL_DK},
+	{"id": "poverty_rate", "dimension": "@{desktop.main.fragment.1af7dfd65c353cfc}", "metric": "@{desktop.main.fragment.9fa5069c139f1dfa}", "group": "distribution", "color": GREEN},
+	{"id": "population_alive", "dimension": "@{desktop.main.fragment.6909fc6ad79b398d}", "metric": "@{desktop.main.fragment.199dd150fb3a5517}", "group": "population", "color": Color("b0641f")},
+	{"id": "current_account", "dimension": "@{desktop.main.fragment.72d71f2db0b4734a}", "metric": "@{desktop.main.fragment.d5ecdc812e1a4f41}", "tab": "world", "color": Color("4a6fa5")},
 ]
 
 const SEAT_LIST := [
-	{"id": "treasury", "name": "财政部", "tag": "财政 · fiscal", "color": Color("2f6fd0")},
-	{"id": "central_bank", "name": "央行", "tag": "货币 · monetary", "color": Color("0f9d90")},
-	{"id": "regulator", "name": "监管", "tag": "审慎 · prudential", "color": Color("7a4fd0")},
-	{"id": "external_affairs", "name": "外交贸易", "tag": "对外 · external", "color": Color("c17d16")},
-	{"id": "energy", "name": "能源", "tag": "能源 · energy", "color": Color("b0641f")},
+	{"id": "treasury", "name": "@seat.treasury", "tag": "@{desktop.main.fragment.f69c325544a29bfe} · fiscal", "color": Color("2f6fd0")},
+	{"id": "central_bank", "name": "@seat.central_bank", "tag": "@{desktop.main.fragment.04ee13cd1dc5602b} · monetary", "color": Color("0f9d90")},
+	{"id": "regulator", "name": "@seat.regulator", "tag": "@{desktop.main.fragment.4715621e26b8a39a} · prudential", "color": Color("7a4fd0")},
+	{"id": "external_affairs", "name": "@seat.external", "tag": "@{desktop.main.fragment.152131b96f49234c} · external", "color": Color("c17d16")},
+	{"id": "energy", "name": "@seat.energy", "tag": "@{desktop.main.fragment.9196f0338a8d16d7} · energy", "color": Color("b0641f")},
 ]
 
 const GROUP_CN := {
-	"fiscal_stance": "财政立场", "tax_and_transfers": "税收与转移",
-	"debt_management": "债务管理", "monetary_stance": "货币立场",
-	"liquidity_operations": "流动性操作", "fx_operations": "外汇操作",
-	"macroprudential": "宏观审慎", "structural_law": "结构性法规",
-	"trade_and_migration": "贸易与移民", "energy_operations": "能源操作",
-	"energy_structure": "能源结构",
+	"fiscal_stance": "@{desktop.main.fragment.43f6933cc681c946}", "tax_and_transfers": "@{desktop.main.fragment.64663ae5bd17dd65}",
+	"debt_management": "@{desktop.main.fragment.b3800b69f28ded62}", "monetary_stance": "@{desktop.main.fragment.c377046c8e34fcb4}",
+	"liquidity_operations": "@{desktop.main.fragment.9c743e43ab9325f2}", "fx_operations": "@{desktop.main.fragment.04ab5fc4bf852a19}",
+	"macroprudential": "@{desktop.main.fragment.e3ed6c9d74e30ff1}", "structural_law": "@{desktop.main.fragment.2c11b7c8e657c355}",
+	"trade_and_migration": "@{desktop.main.fragment.a2bd9fd816a4dc32}", "energy_operations": "@{desktop.main.fragment.5a8c4b8f3da8f888}",
+	"energy_structure": "@{desktop.main.fragment.96638a61052f9d71}",
 }
 
 # Choice labels are presentation-only; submissions use Registry canonical values.
 const CHOICE_CN := {
-	"monetary_regime": {"exogenous": "外生利率", "taylor": "泰勒规则", "manual": "手动设定"},
-	"fx_regime": {"float": "浮动汇率", "peg": "联系汇率"},
+	"monetary_regime": {"exogenous": "@{desktop.main.fragment.dacb3af393ed2897}", "taylor": "@{desktop.main.fragment.172a43aad87e4827}", "manual": "@{desktop.main.fragment.f9730e04f848c894}"},
+	"fx_regime": {"float": "@{desktop.main.fragment.fdbfac58d4929d2b}", "peg": "@{desktop.main.fragment.c1ba88409c35cb7a}"},
 	"energy_rationing": {
-		"market": "市场出清", "household_first": "居民优先",
-		"industry_first": "产业优先", "proportional": "等比例配给"},
+		"market": "@{desktop.main.fragment.c45b3c0f002c4b73}", "household_first": "@{desktop.main.fragment.d119a27b537e205a}",
+		"industry_first": "@{desktop.main.fragment.63b3c64f44e37b9b}", "proportional": "@{desktop.main.fragment.45dd655e416b5bda}"},
 }
 
 const PERCENT_LEVERS := {
@@ -141,655 +141,655 @@ const DAY_LEVERS := {
 }
 
 const CAPABILITY_CN := {
-	"bank_enabled": "银行体系", "bank_realized_pnl": "银行完整损益",
-	"bonds": "国债市场", "capital_market": "资本市场",
-	"consumption_strata": "必需品 / 奢侈品分层",
-	"demographics_enabled": "人口系统",
-	"energy_enabled": "能源部门", "energy_household": "居民能源消费",
-	"government": "政府财政账户", "household_credit": "家庭信贷",
-	"housing_construction_enabled": "住房建造", "housing_enabled": "住房登记",
-	"housing_market_enabled": "住房交易市场", "interbank": "银行间市场",
-	"margin_credit": "保证金信贷", "mortgage_enabled": "住房按揭",
-	"national_accounts_metrics": "国民账户",
-	"omo": "公开市场操作", "soe_efirm": "国有能源企业",
-	"coupling": "跨境耦合", "multiple_economies": "多国世界",
-	"trade": "国际贸易", "capital": "跨境资本", "migration": "跨境迁移",
-	"cross_border_flow": "至少一种跨境流动",
+	"bank_enabled": "@{desktop.main.fragment.4b59447693d3cebe}", "bank_realized_pnl": "@{desktop.main.fragment.b88162297e2be3e7}",
+	"bonds": "@{desktop.main.fragment.f01ea47030bd2983}", "capital_market": "@{desktop.main.fragment.096a9b89a6ca0eca}",
+	"consumption_strata": "@{desktop.main.fragment.25765af2b34419ea} / @{desktop.main.fragment.b6671b3bbdddf517}",
+	"demographics_enabled": "@{desktop.main.fragment.190267f080bfe761}",
+	"energy_enabled": "@{desktop.main.fragment.ebde6905581cd63b}", "energy_household": "@{desktop.main.fragment.037fd3350ba79442}",
+	"government": "@{desktop.main.fragment.093a01f12c6ea203}", "household_credit": "@{desktop.main.fragment.aa64b9d0a0a4029d}",
+	"housing_construction_enabled": "@{desktop.main.fragment.7b6367774400949a}", "housing_enabled": "@{desktop.main.fragment.d7cee86069fb2cf8}",
+	"housing_market_enabled": "@{desktop.main.fragment.8e809b8d279a6f22}", "interbank": "@{desktop.main.fragment.e90dca7b4168c850}",
+	"margin_credit": "@{desktop.main.fragment.1331511548e9f36e}", "mortgage_enabled": "@{desktop.main.fragment.1493224181b590fa}",
+	"national_accounts_metrics": "@{desktop.main.fragment.d30755d27f549807}",
+	"omo": "@{desktop.main.fragment.095c084bd3a4346c}", "soe_efirm": "@{desktop.main.fragment.bf93a633a0e671fe}",
+	"coupling": "@{desktop.main.fragment.5116b40a812677f4}", "multiple_economies": "@{desktop.main.fragment.7cc6ed339a475601}",
+	"trade": "@{desktop.main.fragment.7a34cf2881a7bd87}", "capital": "@{desktop.main.fragment.813a545012b8a4e6}", "migration": "@{desktop.main.fragment.43a83cae58843156}",
+	"cross_border_flow": "@{desktop.main.fragment.4a7bfb07400aeec0}",
 }
 
 const EVENT_TITLES := {
-	"decision_context_opened": "政策会议召开",
-	"human_proposal_queued": "玩家提案已递交",
-	"human_proposal_collected": "玩家提案已汇总",
-	"decision_accepted_noop": "会议决定维持现状",
-	"decision_accepted_pending": "政策提案获准",
-	"decision_accepted": "政策提案获准",
-	"decision_rejected": "政策提案被否决",
-	"decision_effective": "政策正式生效",
-	"decision_cancelled": "待生效政策已撤销",
-	"emergency_trigger": "风险警报触发",
-	"seat_assignment": "政策席位完成交接",
-	"seat_assigned": "政策席位完成交接",
-	"shock_announced": "外生冲击预告",
-	"shock_started": "外生冲击开始",
-	"shock_ended": "外生冲击结束",
+	"decision_context_opened": "@{desktop.main.fragment.0aeadb5f742ebc51}",
+	"human_proposal_queued": "@{desktop.main.fragment.a6ccd9289e42652d}",
+	"human_proposal_collected": "@{desktop.main.fragment.67cdb1f823c6a64f}",
+	"decision_accepted_noop": "@{desktop.main.fragment.ecb123493231d464}",
+	"decision_accepted_pending": "@{desktop.main.fragment.3420edb1c6f54235}",
+	"decision_accepted": "@{desktop.main.fragment.3420edb1c6f54235}",
+	"decision_rejected": "@{desktop.main.fragment.eaf8c9f96858f854}",
+	"decision_effective": "@{desktop.main.fragment.2b8a37c307f6270e}",
+	"decision_cancelled": "@{desktop.main.fragment.c7abe8c5e1a76afc}",
+	"emergency_trigger": "@{desktop.main.fragment.7250fb7b695456be}",
+	"seat_assignment": "@{desktop.main.fragment.eb4b0f8ec59d44b0}",
+	"seat_assigned": "@{desktop.main.fragment.eb4b0f8ec59d44b0}",
+	"shock_announced": "@{desktop.main.fragment.317af555115af871}",
+	"shock_started": "@{desktop.main.fragment.598d4c0f87ee05c3}",
+	"shock_ended": "@{desktop.main.fragment.28b97fb09434f722}",
 }
 
 const REASON_CN := {
-	"no_change": "本届会议未调整政策",
-	"accepted": "提案通过权威校验",
-	"bank_capital_stress": "银行资本压力超过风险阈值",
-	"energy_shortage": "能源供应缺口超过风险阈值",
-	"liquidity_stress": "银行体系流动性承压",
-	"inflation_stress": "通胀偏离政策目标",
-	"unemployment_stress": "失业率触发紧急阈值",
-	"energy_stress": "能源供给触发紧急阈值",
+	"no_change": "@{desktop.main.fragment.23f5014ed7c8bbd2}",
+	"accepted": "@{desktop.main.fragment.5e56e4eea0061b1d}",
+	"bank_capital_stress": "@{desktop.main.fragment.953689e5975de1de}",
+	"energy_shortage": "@{desktop.main.fragment.efa1bf4d5df8ebd7}",
+	"liquidity_stress": "@{desktop.main.fragment.0043294fc8fc68b9}",
+	"inflation_stress": "@{desktop.main.fragment.8c56a39abc6af565}",
+	"unemployment_stress": "@{desktop.main.fragment.37dabedf3f357b96}",
+	"energy_stress": "@{desktop.main.fragment.20500c5502189d96}",
 }
 
-# 二级页:主题化拆分,每页 ≤8 个旋钮；收起态优先单屏浏览。
-# 未列入的新旋钮自动落入该席位「其他」页。
+#  Secondary pages: thematic splitting, 8 knobs per page; single-screen browsing as priority.
+#  The new knob, not included, automatically falls on the "other" page of the seat.
 const LEVER_PAGES := {
 	"treasury": [
-		{"name": "预算与赤字", "levers": ["gov_consumption_share", "gov_deficit_target",
+		{"name": "@{desktop.main.fragment.18d12f807b67b127}", "levers": ["gov_consumption_share", "gov_deficit_target",
 			"gov_investment_share", "deficit_u_cap", "deficit_u_ref",
 			"fiscal_uses_national_accounts_gdp"]},
-		{"name": "就业与保障", "levers": ["job_guarantee", "jg_wage_ratio",
+		{"name": "@{desktop.main.fragment.ac69ca1a175804a3}", "levers": ["job_guarantee", "jg_wage_ratio",
 			"jg_public_works_share", "benefit_replacement", "benefit_income_floor",
 			"pension_replacement", "housing_permits"]},
-		{"name": "核心税率", "levers": ["tax_income_rate", "tax_profit_rate",
+		{"name": "@{desktop.main.fragment.c55e81b5476016e8}", "levers": ["tax_income_rate", "tax_profit_rate",
 			"tax_consumption_rate", "tax_wealth_rate", "tax_luxury_rate",
 			"tax_necessity_rate", "tax_energy_rate", "tax_energy_windfall"]},
-		{"name": "起征与住房土地", "levers": ["income_allowance", "wealth_allowance",
+		{"name": "@{desktop.main.fragment.72bf885ef5ef4264}", "levers": ["income_allowance", "wealth_allowance",
 			"housing_in_wealth_tax", "housing_property_tax", "housing_transfer_tax",
 			"land_fee_share", "land_fee_stock_elasticity"]},
-		{"name": "补贴与工资", "levers": ["min_wage", "energy_subsidy_rate",
+		{"name": "@{desktop.main.fragment.25f1fe1a6eec04af}", "levers": ["min_wage", "energy_subsidy_rate",
 			"energy_subsidy_threshold", "energy_cap_compensation"]},
-		{"name": "债务管理", "levers": ["bond_coupon", "bond_finance_frac",
+		{"name": "@{desktop.main.fragment.b3800b69f28ded62}", "levers": ["bond_coupon", "bond_finance_frac",
 			"bond_maturity"]},
 	],
 	"central_bank": [
-		{"name": "利率规则", "levers": ["monetary_regime", "manual_policy_rate",
+		{"name": "@{desktop.main.fragment.3a1e1e12721eb47b}", "levers": ["monetary_regime", "manual_policy_rate",
 			"r_neutral", "r_max", "rate_inertia", "taylor_phi_pi", "taylor_phi_u"]},
-		{"name": "通胀目标与口径", "levers": ["inflation_target", "infl_ema_lambda",
+		{"name": "@{desktop.main.fragment.fa2fde09c7b3b528}", "levers": ["inflation_target", "infl_ema_lambda",
 			"u_natural", "cb_core_inflation", "cb_log_inflation",
 			"cb_uses_fixed_basket_cpi"]},
-		{"name": "流动性操作", "levers": ["omo", "omo_reserve_target",
+		{"name": "@{desktop.main.fragment.9c743e43ab9325f2}", "levers": ["omo", "omo_reserve_target",
 			"omo_index_deposits", "omo_drain_frac", "reserve_floor_frac", "lolr"]},
-		{"name": "外汇操作", "levers": ["fx_regime", "peg_anchor", "peg_reserve_scale",
+		{"name": "@{desktop.main.fragment.04ab5fc4bf852a19}", "levers": ["fx_regime", "peg_anchor", "peg_reserve_scale",
 			"capital_control", "external_interest_settlement_fraction"]},
 	],
 	"regulator": [
-		{"name": "银行审慎", "levers": ["bank_min_capital", "bank_target_capital_ratio",
+		{"name": "@{desktop.main.fragment.938d29783889c25b}", "levers": ["bank_min_capital", "bank_target_capital_ratio",
 			"bank_capital_constraint", "bank_leverage_cap", "bank_exposure_limit",
 			"bank_bond_duration_limit", "bank_migrate_on_failure"]},
-		{"name": "按揭与住房", "levers": ["mortgage_ltv_cap", "mortgage_dsti_cap",
+		{"name": "@{desktop.main.fragment.b9222699ba32dc3b}", "levers": ["mortgage_ltv_cap", "mortgage_dsti_cap",
 			"mortgage_risk_weight", "mortgage_stress_rate_addon",
 			"mortgage_min_capital_ratio", "mortgage_underwriting"]},
-		{"name": "信贷与杠杆", "levers": ["kappa", "hh_credit_limit",
+		{"name": "@{desktop.main.fragment.0f170be6a7805462}", "levers": ["kappa", "hh_credit_limit",
 			"firm_credit_min_dscr", "deposit_rate_floor", "margin_ltv", "margin_max",
 			"regulatory_firm_capital_haircut", "regulatory_firm_inventory_haircut"]},
-		{"name": "结构性法规", "levers": ["household_bankruptcy", "bankrupt_persist",
+		{"name": "@{desktop.main.fragment.2c11b7c8e657c355}", "levers": ["household_bankruptcy", "bankrupt_persist",
 			"bank_resolution_fund", "unified_bank_rwa", "mortgage_arrears_floor",
 			"mortgage_foreclosure_ltv", "rental_eviction_arrears"]},
 	],
 	"external_affairs": [
-		{"name": "贸易壁垒", "levers": ["tariff", "import_quota", "export_subsidy",
+		{"name": "@{desktop.main.fragment.4ecb8b11b74aa377}", "levers": ["tariff", "import_quota", "export_subsidy",
 			"sanctions_imposed_on"]},
-		{"name": "移民与汇款", "levers": ["immigration_cap", "emigration_cap",
+		{"name": "@{desktop.main.fragment.4fa8a3dd172e045d}", "levers": ["immigration_cap", "emigration_cap",
 			"guest_worker_return", "remittance_tax", "outward_remittance_tax"]},
 	],
 	"energy": [
-		{"name": "能源操作与结构", "levers": ["energy_price_cap", "energy_rationing",
+		{"name": "@{desktop.main.fragment.0202bc620c8af373}", "levers": ["energy_price_cap", "energy_rationing",
 			"spr_target_units", "spr_flow_cap", "soe_price_at_cost", "soe_efirm"]},
 	],
 }
 
 const LEVER_CN := {
-	# 债务管理
-	"bond_coupon": "国债票息率", "bond_finance_frac": "赤字债券融资比例",
-	"bond_maturity": "国债期限",
-	# 能源操作 / 结构
-	"energy_price_cap": "能源限价", "energy_rationing": "能源配给规则",
-	"soe_price_at_cost": "国有能企成本定价", "spr_flow_cap": "战略储备吞吐上限",
-	"spr_target_units": "战略储备目标规模", "soe_efirm": "能源企业国有化",
-	# 财政立场
-	"benefit_income_floor": "最低收入保障线", "benefit_replacement": "失业救济替代率",
-	"deficit_u_cap": "逆周期赤字上限", "deficit_u_ref": "赤字规则失业基准",
-	"fiscal_uses_national_accounts_gdp": "财政采用国民账户GDP口径",
-	"gov_consumption_share": "政府消费占比", "gov_deficit_target": "财政赤字目标",
-	"gov_investment_share": "公共投资占比", "housing_permits": "年度建房许可额度",
-	"jg_public_works_share": "以工代赈工程比例", "jg_wage_ratio": "就业保障工资比率",
-	"job_guarantee": "就业保障计划", "pension_replacement": "养老金替代率",
-	# 外汇操作
-	"capital_control": "资本管制强度",
-	"external_interest_settlement_fraction": "对外利息结算比例",
-	"fx_regime": "汇率制度", "peg_anchor": "联系汇率锚国",
-	"peg_reserve_scale": "联汇储备规模",
-	# 流动性操作
-	"lolr": "最后贷款人机制", "omo": "公开市场操作",
-	"omo_drain_frac": "公开市场回笼比例", "omo_index_deposits": "准备金目标盯住存款",
-	"omo_reserve_target": "准备金目标水平", "reserve_floor_frac": "法定准备金率下限",
-	# 宏观审慎
-	"bank_bond_duration_limit": "银行债券久期限额",
-	"bank_capital_constraint": "银行资本放贷约束",
-	"bank_exposure_limit": "大额风险暴露限额", "bank_leverage_cap": "银行杠杆上限",
-	"bank_migrate_on_failure": "倒闭银行存款迁移", "bank_min_capital": "银行最低资本",
-	"bank_target_capital_ratio": "银行目标资本充足率",
-	"deposit_rate_floor": "存款利率下限",
-	"firm_credit_min_dscr": "企业信贷最低偿债覆盖率",
-	"hh_credit_limit": "家庭信贷额度上限", "kappa": "信贷扩张乘数 κ",
-	"margin_ltv": "融资保证金成数", "margin_max": "融资融券规模上限",
-	"mortgage_dsti_cap": "按揭偿债收入比上限", "mortgage_ltv_cap": "按揭成数上限",
-	"mortgage_min_capital_ratio": "按揭业务最低资本比率",
-	"mortgage_risk_weight": "按揭风险权重",
-	"mortgage_stress_rate_addon": "按揭压力测试加点",
-	"mortgage_underwriting": "按揭审慎审贷",
-	"regulatory_firm_capital_haircut": "企业资本抵押折扣",
-	"regulatory_firm_inventory_haircut": "企业存货抵押折扣",
-	# 货币立场
-	"cb_core_inflation": "盯住核心通胀", "cb_log_inflation": "对数通胀口径",
-	"cb_uses_fixed_basket_cpi": "固定篮子CPI口径",
-	"infl_ema_lambda": "通胀平滑系数 λ", "inflation_target": "通胀目标",
-	"manual_policy_rate": "手动政策利率", "monetary_regime": "货币政策规则",
-	"r_max": "政策利率上限", "r_neutral": "中性利率",
-	"rate_inertia": "利率平滑惯性", "taylor_phi_pi": "泰勒规则通胀系数 φπ",
-	"taylor_phi_u": "泰勒规则失业系数 φu", "u_natural": "自然失业率参数",
-	# 结构性法规
-	"bank_resolution_fund": "银行处置基金", "bankrupt_persist": "破产记录留存",
-	"household_bankruptcy": "个人破产制度",
-	"mortgage_arrears_floor": "按揭欠款处置门槛",
-	"mortgage_foreclosure_ltv": "法拍触发成数",
-	"rental_eviction_arrears": "欠租驱逐门槛",
-	"unified_bank_rwa": "统一风险加权资产框架",
-	# 税收与转移
-	"energy_cap_compensation": "能源限价补偿", "energy_subsidy_rate": "能源补贴率",
-	"energy_subsidy_threshold": "能源补贴门槛",
-	"housing_in_wealth_tax": "住房纳入财富税", "housing_property_tax": "房产税率",
-	"housing_transfer_tax": "房产交易税率", "income_allowance": "所得税起征点",
-	"land_fee_share": "土地出让金比例", "land_fee_stock_elasticity": "土地费存量弹性",
-	"min_wage": "最低工资", "tax_consumption_rate": "消费税率",
-	"tax_energy_rate": "能源税率", "tax_energy_windfall": "能源暴利税率",
-	"tax_income_rate": "个人所得税率", "tax_luxury_rate": "奢侈品税率",
-	"tax_necessity_rate": "必需品税率", "tax_profit_rate": "企业利润税率",
-	"tax_wealth_rate": "财富税率", "wealth_allowance": "财富税起征点",
-	# 贸易与移民
-	"emigration_cap": "移出人口限额", "export_subsidy": "出口补贴率",
-	"guest_worker_return": "客工返回率", "immigration_cap": "移入人口限额",
-	"import_quota": "进口配额", "outward_remittance_tax": "汇出汇款税率",
-	"remittance_tax": "汇入汇款税率", "sanctions_imposed_on": "对外制裁名单",
-	"tariff": "进口关税税率",
+	#  Debt management
+	"bond_coupon": "@{desktop.main.fragment.a585173c1446684d}", "bond_finance_frac": "@{desktop.main.fragment.d46923ba8f73a050}",
+	"bond_maturity": "@{desktop.main.fragment.085b9abefa05b261}",
+	#  Energy Operations / Structure
+	"energy_price_cap": "@{desktop.main.fragment.92b8c1b301d4d45b}", "energy_rationing": "@{desktop.main.fragment.ac19d342b2037632}",
+	"soe_price_at_cost": "@{desktop.main.fragment.d2b9feee4224bb53}", "spr_flow_cap": "@{desktop.main.fragment.e5ba2008c5edcf36}",
+	"spr_target_units": "@{desktop.main.fragment.1c06da6a0f5635ac}", "soe_efirm": "@{desktop.main.fragment.5b620c447a3ca2c8}",
+	#  Financial position
+	"benefit_income_floor": "@{desktop.main.fragment.c585ef47657eab56}", "benefit_replacement": "@{desktop.main.fragment.c25d0a9aa000eadd}",
+	"deficit_u_cap": "@{desktop.main.fragment.5a93af53068f5132}", "deficit_u_ref": "@{desktop.main.fragment.015681164903cf80}",
+	"fiscal_uses_national_accounts_gdp": "@{desktop.main.fragment.0f807468649c122d}GDP@{desktop.main.fragment.101573f333c66203}",
+	"gov_consumption_share": "@{desktop.main.fragment.30626a99326a21db}", "gov_deficit_target": "@{desktop.main.fragment.40ce85b44bff0da9}",
+	"gov_investment_share": "@{desktop.main.fragment.a26995b981a5ba9c}", "housing_permits": "@{desktop.main.fragment.3eac66a599f28ad0}",
+	"jg_public_works_share": "@{desktop.main.fragment.b5a6fdfc541b2a45}", "jg_wage_ratio": "@{desktop.main.fragment.6ea5dda7dac4e378}",
+	"job_guarantee": "@{desktop.main.fragment.ed3ed318bad67bc6}", "pension_replacement": "@{desktop.main.fragment.a58c5e1239be71c0}",
+	#  Foreign exchange operations
+	"capital_control": "@{desktop.main.fragment.6439936fb63d4928}",
+	"external_interest_settlement_fraction": "@{desktop.main.fragment.9106c6896b992baf}",
+	"fx_regime": "@{desktop.main.fragment.531ba19ccc9f86c2}", "peg_anchor": "@{desktop.main.fragment.9dee57b657117432}",
+	"peg_reserve_scale": "@{desktop.main.fragment.3ca8697f0ebe9d99}",
+	#  Mobility Operations
+	"lolr": "@{desktop.main.fragment.ec48cc31f2b2946d}", "omo": "@{desktop.main.fragment.095c084bd3a4346c}",
+	"omo_drain_frac": "@{desktop.main.fragment.9146e11296dabc49}", "omo_index_deposits": "@{desktop.main.fragment.513f94ea8178e5c4}",
+	"omo_reserve_target": "@{desktop.main.fragment.134643526fff8c9e}", "reserve_floor_frac": "@{desktop.main.fragment.872ba02fb07bac76}",
+	#  Macroprudential
+	"bank_bond_duration_limit": "@{desktop.main.fragment.8c9f862f2285a44b}",
+	"bank_capital_constraint": "@{desktop.main.fragment.5c4138eb7f8b3943}",
+	"bank_exposure_limit": "@{desktop.main.fragment.c0f64929ed919653}", "bank_leverage_cap": "@{desktop.main.fragment.3632c6015b1d9b75}",
+	"bank_migrate_on_failure": "@{desktop.main.fragment.77c970a647ab3be1}", "bank_min_capital": "@{desktop.main.fragment.25fea0bd8895f5c0}",
+	"bank_target_capital_ratio": "@{desktop.main.fragment.71cae10e6df219df}",
+	"deposit_rate_floor": "@{desktop.main.fragment.c80c5ee75fe0662e}",
+	"firm_credit_min_dscr": "@{desktop.main.fragment.a907707577a83741}",
+	"hh_credit_limit": "@{desktop.main.fragment.8d6ef1893a66d823}", "kappa": "@{desktop.main.fragment.33ad88104e1d081a} κ",
+	"margin_ltv": "@{desktop.main.fragment.c7bec59e04d3a3f3}", "margin_max": "@{desktop.main.fragment.e185f3bcd32d6bb8}",
+	"mortgage_dsti_cap": "@{desktop.main.fragment.88a527a3b689c347}", "mortgage_ltv_cap": "@{desktop.main.fragment.19b94f60ccac8f04}",
+	"mortgage_min_capital_ratio": "@{desktop.main.fragment.629986c1a3935857}",
+	"mortgage_risk_weight": "@{desktop.main.fragment.094cbb153df3b56e}",
+	"mortgage_stress_rate_addon": "@{desktop.main.fragment.8bf2847b68fa233f}",
+	"mortgage_underwriting": "@{desktop.main.fragment.613568eee96fc801}",
+	"regulatory_firm_capital_haircut": "@{desktop.main.fragment.db3c0276e4c37296}",
+	"regulatory_firm_inventory_haircut": "@{desktop.main.fragment.911222617be8de9d}",
+	#  Currency position
+	"cb_core_inflation": "@{desktop.main.fragment.09c4de096361f261}", "cb_log_inflation": "@{desktop.main.fragment.6b4ca31e1d4ecfe3}",
+	"cb_uses_fixed_basket_cpi": "@{desktop.main.fragment.46df016563619d18}CPI@{desktop.main.fragment.101573f333c66203}",
+	"infl_ema_lambda": "@{desktop.main.fragment.ad2534f16ab98669} λ", "inflation_target": "@{desktop.main.fragment.05fa8d2ef1a743ba}",
+	"manual_policy_rate": "@{desktop.main.fragment.8ba3071d31d189ed}", "monetary_regime": "@{desktop.main.fragment.1a25cae932198f4e}",
+	"r_max": "@{desktop.main.fragment.2b61873825900a46}", "r_neutral": "@{desktop.main.fragment.564804eb66d75139}",
+	"rate_inertia": "@{desktop.main.fragment.4eb756067481d462}", "taylor_phi_pi": "@{desktop.main.fragment.43aa7defcf2e0e96} φπ",
+	"taylor_phi_u": "@{desktop.main.fragment.0dca991062a58a69} φu", "u_natural": "@{desktop.main.fragment.5031e75a219939da}",
+	#  Structural legislation
+	"bank_resolution_fund": "@{desktop.main.fragment.1fcd8407f7b0ff0d}", "bankrupt_persist": "@{desktop.main.fragment.46e0fde77d7b6412}",
+	"household_bankruptcy": "@{desktop.main.fragment.78722fbb6ccfd004}",
+	"mortgage_arrears_floor": "@{desktop.main.fragment.6b5c7b5063af3365}",
+	"mortgage_foreclosure_ltv": "@{desktop.main.fragment.aef3569565d12790}",
+	"rental_eviction_arrears": "@{desktop.main.fragment.fbcddcf835dfe81c}",
+	"unified_bank_rwa": "@{desktop.main.fragment.e26bc1b096794b2c}",
+	#  Taxes and transfers
+	"energy_cap_compensation": "@{desktop.main.fragment.0372a1d1b1c79cdb}", "energy_subsidy_rate": "@{desktop.main.fragment.c9d16bda7e51dd36}",
+	"energy_subsidy_threshold": "@{desktop.main.fragment.06a71dc74091a994}",
+	"housing_in_wealth_tax": "@{desktop.main.fragment.81ed8a53b74332c8}", "housing_property_tax": "@{desktop.main.fragment.5c03f26c6487802b}",
+	"housing_transfer_tax": "@{desktop.main.fragment.b38e4a60c6706269}", "income_allowance": "@{desktop.main.fragment.b58a3ec038b33c99}",
+	"land_fee_share": "@{desktop.main.fragment.1e5b490e71c75f4a}", "land_fee_stock_elasticity": "@{desktop.main.fragment.a2b3c706a157cc07}",
+	"min_wage": "@{desktop.main.fragment.aec33b0dadddd48c}", "tax_consumption_rate": "@{desktop.main.fragment.cc05a8a0e5b5f4a1}",
+	"tax_energy_rate": "@{desktop.main.fragment.a95569686009fdd9}", "tax_energy_windfall": "@{desktop.main.fragment.43baa8f77e6d211f}",
+	"tax_income_rate": "@{desktop.main.fragment.05f0341d936231be}", "tax_luxury_rate": "@{desktop.main.fragment.c3f9a14027528972}",
+	"tax_necessity_rate": "@{desktop.main.fragment.625c0dbb850e1b8c}", "tax_profit_rate": "@{desktop.main.fragment.e024fa20c95692f6}",
+	"tax_wealth_rate": "@{desktop.main.fragment.4448d7bbac96288e}", "wealth_allowance": "@{desktop.main.fragment.feb467cd8e186081}",
+	#  Trade and migration
+	"emigration_cap": "@{desktop.main.fragment.86c2b075736216a2}", "export_subsidy": "@{desktop.main.fragment.df4edf7edf81ac23}",
+	"guest_worker_return": "@{desktop.main.fragment.c706ad460636c4b8}", "immigration_cap": "@{desktop.main.fragment.7e47992b64f68faa}",
+	"import_quota": "@{desktop.main.fragment.195b79e5b12c1cba}", "outward_remittance_tax": "@{desktop.main.fragment.252848445f9ac018}",
+	"remittance_tax": "@{desktop.main.fragment.522e9afeb5ec245b}", "sanctions_imposed_on": "@{desktop.main.fragment.a52e6a6864cdfe8b}",
+	"tariff": "@{desktop.main.fragment.a0fe74b55dc33755}",
 }
 
-# 不能可靠地由字段名推出的核心机制。其余比例、上下限、税率和制度开关由下方
-# 规则生成定义；所有说明仍以 registry 的 read_point / semantics 为机制边界。
+#  Core mechanisms cannot be reliably launched by field names. The remaining scales, floors and floors, tax rates and system switches are below
+#  Rules generate definitions; all statements remain read point/semantics of registry as mechanism boundaries.
 const POLICY_HELP := {
 	"gov_consumption_share": {
-		"definition": "政府用于购买商品和服务的目标支出比例。",
-		"effect": "提高通常直接扩大公共需求和企业订单，同时增加财政支出；存在赤字目标时可能被该规则覆盖。"},
+		"definition": "@{desktop.main.fragment.48bc7f8dc993beb0}",
+		"effect": "@{desktop.main.fragment.a16068931eef47c4}"},
 	"gov_deficit_target": {
-		"definition": "财政规则希望维持的政府赤字相对经济规模的目标。",
-		"effect": "提高会允许更强的财政净注入，通常支撑需求与就业，但也会更快累积政府债务。"},
+		"definition": "@{desktop.main.fragment.5ceda2278a969731}",
+		"effect": "@{desktop.main.fragment.441546357b0817e6}"},
 	"deficit_u_ref": {
-		"definition": "逆周期赤字规则判断劳动力市场松弛程度时采用的失业率参照。",
-		"effect": "改变自动稳定器开始扩张或收缩的失业基准，影响财政对就业波动的敏感度。"},
+		"definition": "@{desktop.main.fragment.fce21eb53aa51522}",
+		"effect": "@{desktop.main.fragment.c0be48f48a34ffef}"},
 	"deficit_u_cap": {
-		"definition": "失业压力最多能够触发的额外逆周期赤字规模。",
-		"effect": "提高会放大衰退时的财政托底上限，但增加高失业阶段的借款与债务压力。"},
+		"definition": "@{desktop.main.fragment.6ba1b442d1cf3899}",
+		"effect": "@{desktop.main.fragment.414ffb0d0ef72489}"},
 	"benefit_replacement": {
-		"definition": "失业救济相对参考工资的支付比例。",
-		"effect": "提高可稳定失业家庭收入和消费，但增加财政支出，并可能改变求职与就业保障计划之间的选择。"},
+		"definition": "@{desktop.main.fragment.74cfda7c6d9500ea}",
+		"effect": "@{desktop.main.fragment.30ef0335779983a4}"},
 	"benefit_income_floor": {
-		"definition": "在职低收入者可获得补足时采用的最低收入保障标准。",
-		"effect": "提高可改善低收入劳动者收入与消费，同时扩大财政转移支付。"},
+		"definition": "@{desktop.main.fragment.817a18e68e04ff0c}",
+		"effect": "@{desktop.main.fragment.9c57550439f903a3}"},
 	"job_guarantee": {
-		"definition": "政府是否向未被市场吸收的劳动者提供就业保障岗位。",
-		"effect": "启用后可直接吸收失业劳动力并形成收入底线，但需要财政支出并可能与私人部门争夺劳动。"},
+		"definition": "@{desktop.main.fragment.2bae021567467bbb}",
+		"effect": "@{desktop.main.fragment.e140840e59d07b61}"},
 	"jg_wage_ratio": {
-		"definition": "就业保障岗位工资相对市场参考工资的比例。",
-		"effect": "提高会强化工资与收入底线，也会提高公共用工成本并影响私人部门招聘。"},
+		"definition": "@{desktop.main.fragment.2da99f39acf97e24}",
+		"effect": "@{desktop.main.fragment.f990a74bc1b002a8}"},
 	"bond_finance_frac": {
-		"definition": "财政赤字中通过发行国债而非其他结算方式融资的比例。",
-		"effect": "提高会增加国债供给、利息现金流和金融机构可持有的安全资产。"},
+		"definition": "@{desktop.main.fragment.b4a1b479364ed6e2}",
+		"effect": "@{desktop.main.fragment.904dd94038896d1c}"},
 	"bond_coupon": {
-		"definition": "新发行国债承诺支付的票面利率。",
-		"effect": "提高会改善新债对投资者的吸引力，但抬升政府未来利息支出；既有债券票息不会被追溯改写。"},
+		"definition": "@{desktop.main.fragment.4b7dab28b955782c}",
+		"effect": "@{desktop.main.fragment.b7b71960313e46c8}"},
 	"bond_maturity": {
-		"definition": "新发行国债从发行到到期偿还的期限。",
-		"effect": "延长期限降低短期再融资频率，但增加久期风险；只影响生效后发行的新债。"},
+		"definition": "@{desktop.main.fragment.32b43d653f0b9122}",
+		"effect": "@{desktop.main.fragment.dbe12eb0cf7a776b}"},
 	"monetary_regime": {
-		"definition": "政策利率路径采用外生利率、泰勒规则还是手动钉住。",
-		"effect": "切换会改变整个利率形成机制，并影响信贷成本、存款收益、资产估值和汇率压力。"},
+		"definition": "@{desktop.main.fragment.bfe6daa1466663f1}",
+		"effect": "@{desktop.main.fragment.ee266ea5d63141e9}"},
 	"manual_policy_rate": {
-		"definition": "手动货币制度下直接钉住的每日政策利率。",
-		"effect": "提高通常收紧融资条件并压低需求与估值；降低则相反。仅在手动制度下有效。"},
+		"definition": "@{desktop.main.fragment.1fa43d6e1e28af4e}",
+		"effect": "@{desktop.main.fragment.57190d3b0def87f4}"},
 	"inflation_target": {
-		"definition": "泰勒规则判断通胀偏离时采用的每日通胀目标。",
-		"effect": "提高目标会在同等通胀下形成更宽松的利率反应；降低目标通常使政策更偏紧。"},
+		"definition": "@{desktop.main.fragment.528a1e8fc840dd77}",
+		"effect": "@{desktop.main.fragment.b90ca4c61ea87d2e}"},
 	"taylor_phi_pi": {
-		"definition": "泰勒规则对通胀缺口的反应强度。",
-		"effect": "提高会让政策利率对通胀偏离作出更大幅度的反应。"},
+		"definition": "@{desktop.main.fragment.dd75b53a08590a48}",
+		"effect": "@{desktop.main.fragment.6bea0e019e018653}"},
 	"taylor_phi_u": {
-		"definition": "泰勒规则对失业缺口的反应强度。",
-		"effect": "提高会让政策利率更积极地回应劳动力市场偏冷或偏热。"},
+		"definition": "@{desktop.main.fragment.66f7b78898b7d252}",
+		"effect": "@{desktop.main.fragment.b12538ee06aa053d}"},
 	"rate_inertia": {
-		"definition": "当前政策利率在下一期利率决策中保留的权重。",
-		"effect": "提高会让利率路径更平滑但响应更慢；降低会加快政策调整。"},
+		"definition": "@{desktop.main.fragment.9af232e59434fff5}",
+		"effect": "@{desktop.main.fragment.91e8ffc984b359db}"},
 	"infl_ema_lambda": {
-		"definition": "通胀平滑指标赋予最新观测的权重。",
-		"effect": "提高会让央行更重视近期通胀、反应更快；降低会增强历史平滑。"},
+		"definition": "@{desktop.main.fragment.a4909f4c8358d271}",
+		"effect": "@{desktop.main.fragment.b5e715f775534ba6}"},
 	"omo": {
-		"definition": "央行是否通过公开市场操作调节银行准备金。",
-		"effect": "启用后央行可围绕准备金目标注入或回笼流动性，影响同业资金条件和银行放贷能力。"},
+		"definition": "@{desktop.main.fragment.7b424f4f6771be17}",
+		"effect": "@{desktop.main.fragment.397366b7e6fb0651}"},
 	"lolr": {
-		"definition": "央行是否向遭遇流动性压力但仍可处置的银行提供最后贷款人支持。",
-		"effect": "启用可减少流动性冲击演变为银行倒闭的风险，但会扩大央行风险暴露。"},
+		"definition": "@{desktop.main.fragment.ee3354358f0c5dcf}",
+		"effect": "@{desktop.main.fragment.b7750f9244a18190}"},
 	"reserve_floor_frac": {
-		"definition": "银行准备金相对相关负债必须维持的最低比例。",
-		"effect": "提高会增强流动性缓冲，同时占用可用于放贷和投资的资金。"},
+		"definition": "@{desktop.main.fragment.f8fcdc058c463fd3}",
+		"effect": "@{desktop.main.fragment.d41a5b9683c39662}"},
 	"fx_regime": {
-		"definition": "本国汇率采用市场浮动还是盯住锚国货币。",
-		"effect": "联系汇率降低名义汇率波动，但需要储备防守并约束国内政策空间；浮动汇率允许价格自行调整。"},
+		"definition": "@{desktop.main.fragment.14cec5a0711ffeba}",
+		"effect": "@{desktop.main.fragment.a5457e293ca412c3}"},
 	"peg_anchor": {
-		"definition": "联系汇率制度引用其货币价值的锚定经济体。",
-		"effect": "更换锚国会重配外汇储备并把本国汇率路径连接到新的参照货币。"},
+		"definition": "@{desktop.main.fragment.ae81eb5dccc4fe2d}",
+		"effect": "@{desktop.main.fragment.562af17be361ed39}"},
 	"peg_reserve_scale": {
-		"definition": "联系汇率防守机制可动用的目标储备规模。",
-		"effect": "提高通常增强抵御资本流动和汇率压力的能力，但占用更多外部资产。"},
+		"definition": "@{desktop.main.fragment.90b6082dec978110}",
+		"effect": "@{desktop.main.fragment.30ae8c392b105c77}"},
 	"capital_control": {
-		"definition": "限制跨境资本流动的强度。",
-		"effect": "提高可减缓资本外流和联汇压力，但也压低跨境融资与资本配置。"},
+		"definition": "@{desktop.main.fragment.911a5eed85d523ec}",
+		"effect": "@{desktop.main.fragment.ccc65ab5b0e52d79}"},
 	"bank_capital_constraint": {
-		"definition": "银行放贷是否受资本充足约束。",
-		"effect": "启用后资本不足的银行会收缩信贷，增强偿付韧性但可能抑制融资和投资。"},
+		"definition": "@{desktop.main.fragment.2d3767d2d299d4f9}",
+		"effect": "@{desktop.main.fragment.e818608c0fe9a645}"},
 	"bank_target_capital_ratio": {
-		"definition": "银行经营时希望维持的资本相对风险资产比例。",
-		"effect": "提高会促使银行积累更多资本并更谨慎放贷，降低破产风险但收紧信贷。"},
+		"definition": "@{desktop.main.fragment.04eb2f53ca12ddc8}",
+		"effect": "@{desktop.main.fragment.0816052f9afa2df3}"},
 	"bank_leverage_cap": {
-		"definition": "银行总资产相对资本所允许的最高倍数。",
-		"effect": "下调会收紧杠杆约束、提高韧性，但可能迫使银行缩减信贷资产。"},
+		"definition": "@{desktop.main.fragment.7df741dea26482c8}",
+		"effect": "@{desktop.main.fragment.656e0666a1e5ec06}"},
 	"mortgage_ltv_cap": {
-		"definition": "按揭贷款相对住房抵押价值所允许的最高比例。",
-		"effect": "下调要求更高首付并降低银行损失风险，但减少能够获得按揭的家庭。"},
+		"definition": "@{desktop.main.fragment.09ff29ab3a81a8bd}",
+		"effect": "@{desktop.main.fragment.1481c77a3dfe4276}"},
 	"mortgage_dsti_cap": {
-		"definition": "家庭按揭偿债额相对收入所允许的最高比例。",
-		"effect": "下调会加强偿付能力审查并降低违约风险，同时收紧住房信贷。"},
+		"definition": "@{desktop.main.fragment.7864f39b5cb71061}",
+		"effect": "@{desktop.main.fragment.afbd6541487655fe}"},
 	"energy_rationing": {
-		"definition": "能源短缺时在居民与产业之间分配有限供给的优先规则。",
-		"effect": "居民优先保护家庭消费，产业优先保护生产；只在供给不足时产生实际差异。"},
+		"definition": "@{desktop.main.fragment.cb52926cca5e0689}",
+		"effect": "@{desktop.main.fragment.d483ceb2faadd682}"},
 	"energy_price_cap": {
-		"definition": "能源市场成交价格不得超过的最高水平；零值表示关闭限价。",
-		"effect": "下调可压低用户支付价格，但可能放大短缺；配合补偿可缓解供应方损失并增加财政成本。"},
+		"definition": "@{desktop.main.fragment.9218c459e5295092}",
+		"effect": "@{desktop.main.fragment.47b99086b643f007}"},
 	"spr_target_units": {
-		"definition": "政府希望战略能源储备维持的实物库存规模。",
-		"effect": "提高增强未来短缺缓冲，但当前补库会增加需求和财政占用。"},
+		"definition": "@{desktop.main.fragment.951ad587a971b4fd}",
+		"effect": "@{desktop.main.fragment.6db51089ce0981a3}"},
 	"spr_flow_cap": {
-		"definition": "战略能源储备每日最多可买入或释放的实物量。",
-		"effect": "提高可加快危机释放或补库速度，也会放大对当日市场供需的影响。"},
+		"definition": "@{desktop.main.fragment.99dcff77905bff51}",
+		"effect": "@{desktop.main.fragment.e8c1f7f2b122d430}"},
 	"sanctions_imposed_on": {
-		"definition": "本国当前主动施加贸易制裁的经济体名单。",
-		"effect": "加入目标会切断双方贸易流；移除只撤销本国施加的那一份制裁。"},
+		"definition": "@{desktop.main.fragment.730227c83b0172b5}",
+		"effect": "@{desktop.main.fragment.bbccffcb45a01155}"},
 	"tariff": {
-		"definition": "进口商品进入本国市场时征收的从价税率。",
-		"effect": "提高通常保护国内生产并增加关税收入，但抬高进口成本并压低进口数量。"},
+		"definition": "@{desktop.main.fragment.d69c9836acbb0fc9}",
+		"effect": "@{desktop.main.fragment.b1e5dc960e133746}"},
 	"import_quota": {
-		"definition": "允许进入本国市场的进口数量上限；不设置表示没有配额。",
-		"effect": "下调会直接限制进口供给，可能保护本国产业，也可能造成价格上涨或投入短缺。"},
+		"definition": "@{desktop.main.fragment.2bacc4900759fe5b}",
+		"effect": "@{desktop.main.fragment.a2d3607eca44cb67}"},
 	"export_subsidy": {
-		"definition": "政府对出口交易给予的补贴比例；负值等价于出口税。",
-		"effect": "提高可改善出口竞争力和海外份额，但需要财政支出并可能挤压国内供给。"},
+		"definition": "@{desktop.main.fragment.cb7db3c77bdf022e}",
+		"effect": "@{desktop.main.fragment.4a80e19f2ac41a86}"},
 }
 
 
-# 指标全景：所有已启用玩家领域各有独立页签；键名与后端 records 一致。
-# fmt: pct=份额%, pt=每tick利率%, idx=指数, num=水平量
+#  Indicator panorama: each enabled panel has its own tab and stable backend keys.
+#  fmt: pct = share %, pt = interest per tick %, idx = index, num = level
 const PANEL_GROUPS := [
-	{"name": "实体经济", "color": TEAL, "items": [
-		["real_output", "实际产出", "num"], ["real_consumption", "实际消费", "num"],
-		["aggregate_capital", "资本存量", "num"], ["investment_spending", "投资支出", "num"],
-		["inventory_to_sales", "库存/销售", "idx"], ["production_realization_rate", "生产实现率", "pct"]]},
-	{"name": "国民账户", "color": Color("286f9f"), "requires": "national_accounts_metrics", "items": [
-		["gdp_nominal_expenditure_reconciled", "名义 GDP", "num"],
-		["gdp_real_expenditure_reconciled", "实际 GDP", "num"],
-		["gdp_deflator", "GDP 平减指数", "idx"],
-		["gdp_nominal_household_consumption", "居民消费", "num"],
-		["gdp_nominal_fixed_capital_formation", "资本形成", "num"],
-		["gdp_nominal_net_exports", "净出口", "num"]]},
-	{"name": "劳动力", "color": AMBER, "items": [
-		["unemployment_rate", "失业率", "pct"], ["u_natural", "自然失业率", "pct"],
-		["underemployed_share", "不充分就业", "pct"], ["vacancies_unfilled", "未填补岗位", "num"],
-		["avg_wage", "平均工资", "num"], ["wage_inflation", "工资通胀", "pt"]]},
-	{"name": "价格与货币", "color": PURPLE, "items": [
-		["price_index", "物价指数", "idx"], ["inflation", "通胀", "pt"],
-		["avg_markup", "平均加成", "idx"], ["policy_rate", "政策利率", "pt"],
-		["total_money", "广义货币", "num"], ["real_wage", "实际工资", "idx"]]},
-	{"name": "财政", "color": BLUE, "items": [
-		["gov_debt", "政府债务", "num"], ["gov_deficit", "财政赤字", "num"],
-		["tax_total", "税收总额", "num"], ["gov_spending", "政府支出", "num"],
-		["benefit_paid", "转移支付", "num"], ["gov_debt_to_gdp", "债务/GDP", "pct"]]},
-	{"name": "银行与信贷", "color": TEAL_DK, "requires": "bank_enabled", "items": [
-		["total_credit", "信贷总量", "num"], ["bank_capital", "银行资本", "num"],
-		["bank_deposit_total", "存款总额", "num"], ["writeoffs", "坏账核销", "num"],
-		["total_debt_service_ratio", "偿债比率", "pct"], ["interbank_rate", "同业利率", "pt"]]},
-	{"name": "债务与风险", "color": Color("a35454"), "requires": "bank_enabled", "items": [
-		["household_debt_total", "家庭债务", "num"],
-		["firm_debt_total", "企业债务", "num"],
-		["debt_service_to_nominal_gdp", "偿债/GDP", "pct"],
-		["household_interest_arrears_closing", "家庭利息拖欠", "num"],
-		["bank_realized_credit_losses", "银行信用损失", "num"],
-		["hh_bankruptcies", "家庭破产", "num"]]},
-	{"name": "资本市场", "color": Color("4a6fa5"), "requires": "capital_market", "items": [
-		["equity_market_cap", "股票市值", "num"], ["tobin_q_mean", "托宾 Q", "idx"],
-		["equity_wealth_share", "股权财富占比", "pct"], ["equity_turnover", "换手率", "idx"],
-		["equity_ownership_gini", "持股基尼", "idx"], ["hh_wealth_gini_incl_equity", "财富基尼(含股)", "idx"]]},
-	{"name": "住房市场", "color": Color("8a6b50"), "requires": "housing_enabled", "items": [
-		["house_price", "住房价格", "num"], ["homeowner_share", "自有住房率", "pct"],
-		["housing_pti_ratio", "房价收入比", "idx"],
-		["housing_sales_session", "本期成交", "num"],
-		["mortgage_balance_total", "按揭余额", "num"],
-		["rent_burden_ratio", "租金负担率", "pct"]]},
-	{"name": "能源", "color": Color("b0641f"), "requires": "energy_enabled", "items": [
-		["energy_price", "能源价格", "idx"], ["energy_produced", "能源产量", "num"],
-		["energy_used", "能源消耗", "num"], ["energy_stock_total", "能源库存", "num"],
-		["energy_cost_share", "能源成本占比", "pct"], ["spr_stock", "战略储备", "num"]]},
-	{"name": "外部部门", "color": Color("4a6fa5"), "items": [
-		["e", "汇率", "idx"], ["nfa", "净对外资产", "num"],
-		["current_account", "经常账户", "num"], ["import_value", "进口额", "num"],
-		["export_delivered_volume", "出口交付", "num"],
-		["remittances", "跨境汇款", "num"]]},
-	{"name": "分配与福利", "color": Color("8a5fc0"), "items": [
-		["poverty_rate", "贫困率", "pct"], ["income_gini", "收入基尼", "idx"],
-		["hh_wealth_gini", "财富基尼", "idx"], ["wage_p90_p10_ratio", "工资 P90/P10", "idx"],
-		["welfare_log", "对数福利", "idx"], ["savings_rate", "储蓄率", "pct"]]},
-	{"name": "人口社会", "color": Color("2a8a68"), "requires": "demographics_enabled", "items": [
-		["population_alive", "总人口", "num"],
-		["net_population_growth_rate_annualized", "人口自然增长率", "pct"],
-		["birth_rate_per_1000_annualized", "粗出生率", "per_thousand"],
-		["death_rate_per_1000_annualized", "粗死亡率", "per_thousand"],
-		["dependency_ratio", "总抚养比", "pct"],
-		["avg_household_size", "户均规模", "idx"]]},
-	{"name": "企业生态", "color": Color("3e7d68"), "items": [
-		["firm_count_c", "消费品企业", "num"], ["births", "企业进入", "num"],
-		["deaths", "企业退出", "num"], ["n_firms_producing", "生产中企业", "num"],
-		["sector_switches", "产业切换", "num"],
-		["firm_size_top_share_output", "头部产出份额", "pct"]]},
+	{"id": "real_economy", "name": "@{desktop.main.fragment.c613e26dcc4db0b5}", "color": TEAL, "items": [
+		["real_output", "@{desktop.main.fragment.60b6b37831c29bca}", "num"], ["real_consumption", "@{desktop.main.fragment.b63690d28deb0cc0}", "num"],
+		["aggregate_capital", "@{desktop.main.fragment.b1b03d6d50c8bdca}", "num"], ["investment_spending", "@{desktop.main.fragment.96d919bb8ec23e4b}", "num"],
+		["inventory_to_sales", "@{desktop.main.fragment.780c5fd5b10533dc}/@{desktop.main.fragment.f04b061471b1fd16}", "idx"], ["production_realization_rate", "@{desktop.main.fragment.b1bde29ead0af532}", "pct"]]},
+	{"id": "national_accounts", "name": "@{desktop.main.fragment.d30755d27f549807}", "color": Color("286f9f"), "requires": "national_accounts_metrics", "items": [
+		["gdp_nominal_expenditure_reconciled", "@{desktop.main.fragment.71fc907cfb4dc132} GDP", "num"],
+		["gdp_real_expenditure_reconciled", "@{desktop.main.fragment.e0ae9a3c77ae781d} GDP", "num"],
+		["gdp_deflator", "GDP @{desktop.main.fragment.6a1991b82e40df7c}", "idx"],
+		["gdp_nominal_household_consumption", "@{desktop.main.fragment.be9cf924408bfa1b}", "num"],
+		["gdp_nominal_fixed_capital_formation", "@{desktop.main.fragment.029f64457da1d722}", "num"],
+		["gdp_nominal_net_exports", "@{desktop.main.fragment.eafb25a38df7c7c2}", "num"]]},
+	{"id": "labor", "name": "@{desktop.main.fragment.d00091cb2bfe9634}", "color": AMBER, "items": [
+		["unemployment_rate", "@{desktop.main.fragment.4546b3d41818bdbf}", "pct"], ["u_natural", "@{desktop.main.fragment.1bf04babaee154dd}", "pct"],
+		["underemployed_share", "@{desktop.main.fragment.dc93fdfa229b506d}", "pct"], ["vacancies_unfilled", "@{desktop.main.fragment.c9fc9d8969a7dc71}", "num"],
+		["avg_wage", "@{desktop.main.fragment.fdc477056b2d48f6}", "num"], ["wage_inflation", "@{desktop.main.fragment.4b3c17787792a6d9}", "pt"]]},
+	{"id": "prices_money", "name": "@{desktop.main.fragment.aab5501bd82dde20}", "color": PURPLE, "items": [
+		["price_index", "@{desktop.main.fragment.89c07894f37c4102}", "idx"], ["inflation", "@{desktop.main.fragment.b43cd47df5c0171c}", "pt"],
+		["avg_markup", "@{desktop.main.fragment.ba19e19b3ae33520}", "idx"], ["policy_rate", "@{desktop.main.fragment.8003f5e9f9c4a87f}", "pt"],
+		["total_money", "@{desktop.main.fragment.9eca76ff263a36df}", "num"], ["real_wage", "@{desktop.main.fragment.f0106af3d7386760}", "idx"]]},
+	{"id": "fiscal", "name": "@{desktop.main.fragment.f69c325544a29bfe}", "color": BLUE, "items": [
+		["gov_debt", "@{desktop.main.fragment.8d6b59cfe9288ceb}", "num"], ["gov_deficit", "@{desktop.main.fragment.2d7e730563828a09}", "num"],
+		["tax_total", "@{desktop.main.fragment.f46704f13dceb5a9}", "num"], ["gov_spending", "@{desktop.main.fragment.5f7952230dcd9aff}", "num"],
+		["benefit_paid", "@{desktop.main.fragment.c4151305b64340f1}", "num"], ["gov_debt_to_gdp", "@{desktop.main.fragment.095b45ce7df514df}/GDP", "pct"]]},
+	{"id": "banking_credit", "name": "@{desktop.main.fragment.76dd27e0821ca6ca}", "color": TEAL_DK, "requires": "bank_enabled", "items": [
+		["total_credit", "@{desktop.main.fragment.0bc383f544bd026d}", "num"], ["bank_capital", "@{desktop.main.fragment.fe9d8708034723b5}", "num"],
+		["bank_deposit_total", "@{desktop.main.fragment.03acf7cb5656ee50}", "num"], ["writeoffs", "@{desktop.main.fragment.8570c6a44500ff6b}", "num"],
+		["total_debt_service_ratio", "@{desktop.main.fragment.11efcd8dc599ab71}", "pct"], ["interbank_rate", "@{desktop.main.fragment.46e9053149aff7d2}", "pt"]]},
+	{"id": "debt_risk", "name": "@{desktop.main.fragment.40d3247a91c1eebd}", "color": Color("a35454"), "requires": "bank_enabled", "items": [
+		["household_debt_total", "@{desktop.main.fragment.d2cef874cd4f31ad}", "num"],
+		["firm_debt_total", "@{desktop.main.fragment.e011facc0e2e08e2}", "num"],
+		["debt_service_to_nominal_gdp", "@{desktop.main.fragment.041d6a395228b3a4}/GDP", "pct"],
+		["household_interest_arrears_closing", "@{desktop.main.fragment.4371e83ba7df1016}", "num"],
+		["bank_realized_credit_losses", "@{desktop.main.fragment.5bc962af39069036}", "num"],
+		["hh_bankruptcies", "@{desktop.main.fragment.8063e9732b41f137}", "num"]]},
+	{"id": "capital_markets", "name": "@{desktop.main.fragment.096a9b89a6ca0eca}", "color": Color("4a6fa5"), "requires": "capital_market", "items": [
+		["equity_market_cap", "@{desktop.main.fragment.c962533795791797}", "num"], ["tobin_q_mean", "@{desktop.main.fragment.262b4d2f27d039c7} Q", "idx"],
+		["equity_wealth_share", "@{desktop.main.fragment.3ff371748c070975}", "pct"], ["equity_turnover", "@{desktop.main.fragment.a071a060fcb264ca}", "idx"],
+		["equity_ownership_gini", "@{desktop.main.fragment.2e4d457612d85ab9}", "idx"], ["hh_wealth_gini_incl_equity", "@{desktop.main.fragment.6ab21b6833e66390}(@{desktop.main.fragment.08b6efe66850a3e0})", "idx"]]},
+	{"id": "housing", "name": "@{desktop.main.fragment.ad67719270cad19a}", "color": Color("8a6b50"), "requires": "housing_enabled", "items": [
+		["house_price", "@{desktop.main.fragment.be473d3e46321147}", "num"], ["homeowner_share", "@{desktop.main.fragment.b2bde5d2fcc6341d}", "pct"],
+		["housing_pti_ratio", "@{desktop.main.fragment.781f9eb2349a4802}", "idx"],
+		["housing_sales_session", "@{desktop.main.fragment.93ce2badb17869b2}", "num"],
+		["mortgage_balance_total", "@{desktop.main.fragment.a26affc6332b8144}", "num"],
+		["rent_burden_ratio", "@{desktop.main.fragment.da5096f21c424799}", "pct"]]},
+	{"id": "energy", "name": "@{desktop.main.fragment.9196f0338a8d16d7}", "color": Color("b0641f"), "requires": "energy_enabled", "items": [
+		["energy_price", "@{desktop.main.fragment.264c2c4114eaf977}", "idx"], ["energy_produced", "@{desktop.main.fragment.bab27e15724aac06}", "num"],
+		["energy_used", "@{desktop.main.fragment.ea104c0a78b8d079}", "num"], ["energy_stock_total", "@{desktop.main.fragment.90149fcf1ea58d3f}", "num"],
+		["energy_cost_share", "@{desktop.main.fragment.77e8df2db61c3f46}", "pct"], ["spr_stock", "@{desktop.main.fragment.ba246184da7bbff6}", "num"]]},
+	{"id": "external", "name": "@{desktop.main.fragment.76ac1d5fea76f908}", "color": Color("4a6fa5"), "items": [
+		["e", "@{desktop.main.fragment.57ef2c45ef260ee3}", "idx"], ["nfa", "@{desktop.main.fragment.2a34b4aa4ee8731a}", "num"],
+		["current_account", "@{desktop.main.fragment.d5ecdc812e1a4f41}", "num"], ["import_value", "@{desktop.main.fragment.1ada65455c2895ba}", "num"],
+		["export_delivered_volume", "@{desktop.main.fragment.4db5da905824b9bb}", "num"],
+		["remittances", "@{desktop.main.fragment.82bd68e0e3dd55cd}", "num"]]},
+	{"id": "distribution", "name": "@{desktop.main.fragment.f7ff5bef360fe23d}", "color": Color("8a5fc0"), "items": [
+		["poverty_rate", "@{desktop.main.fragment.9fa5069c139f1dfa}", "pct"], ["income_gini", "@{desktop.main.fragment.bc82cfb1bfbb4494}", "idx"],
+		["hh_wealth_gini", "@{desktop.main.fragment.6ab21b6833e66390}", "idx"], ["wage_p90_p10_ratio", "@{desktop.main.fragment.11547412b4531891} P90/P10", "idx"],
+		["welfare_log", "@{desktop.main.fragment.3ec8e057df1ade4c}", "idx"], ["savings_rate", "@{desktop.main.fragment.c5286ed8e20619de}", "pct"]]},
+	{"id": "population", "name": "@{desktop.main.fragment.ebe5e93cd30676d0}", "color": Color("2a8a68"), "requires": "demographics_enabled", "items": [
+		["population_alive", "@{desktop.main.fragment.199dd150fb3a5517}", "num"],
+		["net_population_growth_rate_annualized", "@{desktop.main.fragment.b23ecdce954573d5}", "pct"],
+		["birth_rate_per_1000_annualized", "@{desktop.main.fragment.f2dd829db4c69625}", "per_thousand"],
+		["death_rate_per_1000_annualized", "@{desktop.main.fragment.9ba99193e3c4aa80}", "per_thousand"],
+		["dependency_ratio", "@{desktop.main.fragment.23dca1a6ef086b98}", "pct"],
+		["avg_household_size", "@{desktop.main.fragment.0c6323e800178262}", "idx"]]},
+	{"id": "firms", "name": "@{desktop.main.fragment.069f12042138ce76}", "color": Color("3e7d68"), "items": [
+		["firm_count_c", "@{desktop.main.fragment.4fe95cbc41c25b8c}", "num"], ["births", "@{desktop.main.fragment.9bc8563025adf19f}", "num"],
+		["deaths", "@{desktop.main.fragment.f7983f7143cd8b68}", "num"], ["n_firms_producing", "@{desktop.main.fragment.a28f4707c5b72df7}", "num"],
+		["sector_switches", "@{desktop.main.fragment.e0f3622a02bcec85}", "num"],
+		["firm_size_top_share_output", "@{desktop.main.fragment.7646de8d4bac93e9}", "pct"]]},
 ]
 
-# 每个指标页签使用独立的信息架构。标量历史来自 records，人口、劳动和企业截面
-# 来自 desktop runtime 的只读微观聚合；行业名称严格对应模型中的真实部门。
+#  Each indicator page is signed using a separate information structure. The target history comes from the records, demographics, labor, and business.
+#  Read-only entity snapshots from the desktop runtime; sector IDs match the model.
 const PANEL_DESCRIPTIONS := {
-	"实体经济": "需求、供给与资本形成的同步状态",
-	"国民账户": "支出法总量、行业产出与三种核算口径的一致性",
-	"劳动力": "就业松弛、岗位缺口与工资脉冲",
-	"价格与货币": "价格压力、货币立场与购买力",
-	"财政": "收支流量、债务存量与财政空间",
-	"银行与信贷": "信用扩张、银行缓冲与偿付压力",
-	"债务与风险": "家庭与企业杠杆、拖欠、破产和信用损失",
-	"资本市场": "市场规模、估值活跃度与所有权分布",
-	"住房市场": "住房存量、交易、按揭、租赁与建设供给",
-	"能源": "供需平衡、价格成本与安全库存",
-	"外部部门": "汇率、贸易、跨境资产、迁移与汇款",
-	"分配与福利": "贫困、储蓄、福利与不平等结构",
-	"人口社会": "人口结构、家庭形成、自然变动与代际负担",
-	"企业生态": "企业进入退出、经营覆盖、集中度与产业切换",
+	"real_economy": "@{desktop.main.fragment.19ab13eb1f1e51a0}",
+	"national_accounts": "@{desktop.main.fragment.5ac8078fcffdc3ce}",
+	"labor": "@{desktop.main.fragment.05c5d48eb4da883f}",
+	"prices_money": "@{desktop.main.fragment.486e70f82abcef3f}",
+	"fiscal": "@{desktop.main.fragment.ebbd948ee03f3299}",
+	"banking_credit": "@{desktop.main.fragment.e1f912ef288c5be0}",
+	"debt_risk": "@{desktop.main.fragment.469a0e24beb56c4a}",
+	"capital_markets": "@{desktop.main.fragment.720ee7bb75f7d1b7}",
+	"housing": "@{desktop.main.fragment.ac613566f7a913af}",
+	"energy": "@{desktop.main.fragment.8d84ffc395ed3991}",
+	"external": "@{desktop.main.fragment.b4449b680b7741d9}",
+	"distribution": "@{desktop.main.fragment.19848d193c6c8cc6}",
+	"population": "@{desktop.main.fragment.6051a5bdf29503cf}",
+	"firms": "@{desktop.main.fragment.da0860ff268e3047}",
 }
 
 const PANEL_CHARTS := {
-	"实体经济": [
-		{"type": "sector_matrix", "title": "SECTORS · 部门生产图谱", "note": "产出 · 销售 · 就业",
+	"real_economy": [
+		{"type": "sector_matrix", "title": "SECTORS · @{desktop.main.fragment.56683915e8a0a26c}", "note": "@{desktop.main.fragment.4c97f9db086dc1b9} · @{desktop.main.fragment.f04b061471b1fd16} · @{desktop.main.fragment.2c6e0266e1ac28a8}",
 			"items": []},
-		{"type": "line", "title": "DEMAND · 产出与消费", "note": "实际量",
-			"items": [["real_output", "实际产出", "num", TEAL],
-				["real_consumption", "实际消费", "num", BLUE]]},
-		{"type": "line", "title": "CAPITAL · 资本形成", "note": "期初指数=100", "indexed": true,
-			"items": [["aggregate_capital", "资本存量", "num", BLUE],
-				["investment_spending", "投资支出", "num", AMBER],
-				["real_output", "实际产出", "num", TEAL]]},
+		{"type": "line", "title": "DEMAND · @{desktop.main.fragment.ab0c82cfd3d88d04}", "note": "@{desktop.main.fragment.ff25493f1cf64344}",
+			"items": [["real_output", "@{desktop.main.fragment.60b6b37831c29bca}", "num", TEAL],
+				["real_consumption", "@{desktop.main.fragment.b63690d28deb0cc0}", "num", BLUE]]},
+		{"type": "line", "title": "CAPITAL · @{desktop.main.fragment.029f64457da1d722}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["aggregate_capital", "@{desktop.main.fragment.b1b03d6d50c8bdca}", "num", BLUE],
+				["investment_spending", "@{desktop.main.fragment.96d919bb8ec23e4b}", "num", AMBER],
+				["real_output", "@{desktop.main.fragment.60b6b37831c29bca}", "num", TEAL]]},
 	],
-	"国民账户": [
-		{"type": "line", "title": "GDP · 名义与实际总量", "note": "期初指数=100", "indexed": true,
-			"items": [["gdp_nominal_expenditure_reconciled", "名义 GDP", "num", BLUE],
-				["gdp_real_expenditure_reconciled", "实际 GDP", "num", TEAL],
-				["gdp_deflator", "平减指数", "idx", PURPLE]]},
-		{"type": "columns", "title": "EXPENDITURE · 支出法构成", "note": "C + I + G + NX",
-			"items": [["gdp_nominal_household_consumption", "居民消费 C", "num", TEAL],
-				["gdp_nominal_fixed_capital_formation", "资本形成 I", "num", BLUE],
-				["gdp_nominal_government_consumption", "政府消费 G", "num", PURPLE],
-				["gdp_nominal_net_exports", "净出口 NX", "num", AMBER]]},
-		{"type": "columns", "title": "SECTORS · 行业总产出", "note": "当期名义总产出",
-			"items": [["gdp_nominal_gross_output_c", "消费品", "num", TEAL],
-				["gdp_nominal_gross_output_k", "资本品", "num", BLUE],
-				["gdp_nominal_gross_output_e", "能源", "num", AMBER],
-				["gdp_nominal_gross_output_housing", "住房建设", "num", Color("8a6b50")]]},
-		{"type": "line", "title": "RECONCILIATION · 核算质量", "note": "三种核算口径原始差额占比",
-			"items": [["gdp_nominal_three_approach_raw_spread_share", "原始差额率", "pct", RED]]},
-		{"type": "line", "title": "APPROACHES · 三种 GDP 口径", "note": "名义值 · 支出法 / 收入法 / 生产法",
-			"items": [["gdp_nominal_expenditure_reconciled", "支出法", "num", BLUE],
-				["gdp_nominal_income_reconciled", "收入法", "num", PURPLE],
-				["gdp_nominal_production", "生产法", "num", TEAL]]},
-		{"type": "columns", "title": "INCOME · 收入法构成", "note": "雇员报酬、营业盈余与产品税净额",
-			"items": [["gdp_nominal_compensation_of_employees", "雇员报酬", "num", BLUE],
-				["gdp_nominal_accrued_gross_operating_surplus", "营业盈余", "num", TEAL],
-				["gdp_nominal_net_product_taxes_observed", "产品税净额", "num", AMBER]]},
-		{"type": "columns", "title": "CAPITAL FORMATION · 资本形成明细", "note": "私人、公共、住宅与机器设备",
-			"items": [["gdp_nominal_private_fixed_capital_formation", "私人投资", "num", TEAL],
-				["gdp_nominal_public_fixed_capital_formation", "公共投资", "num", BLUE],
-				["gdp_nominal_residential_fixed_capital_formation", "住宅投资", "num", Color("8a6b50")],
-				["gdp_nominal_machinery_fixed_capital_formation", "机器设备", "num", PURPLE]]},
-		{"type": "line", "title": "TRADE & INVENTORY · 外贸与库存", "note": "名义流量",
-			"items": [["gdp_nominal_exports", "出口", "num", TEAL],
-				["gdp_nominal_imports", "进口", "num", BLUE],
-				["gdp_nominal_inventory_change", "存货变动", "num", AMBER]]},
-		{"type": "line", "title": "REAL EXPENDITURE · 实际支出构成", "note": "剔除价格变化后的 C / I / G / NX",
-			"items": [["gdp_real_household_consumption", "居民消费 C", "num", TEAL],
-				["gdp_real_fixed_capital_formation", "资本形成 I", "num", BLUE],
-				["gdp_real_government_consumption", "政府消费 G", "num", PURPLE],
-				["gdp_real_net_exports", "净出口 NX", "num", AMBER]]},
-		{"type": "line", "title": "TRADE VOLUME · 实际进出口", "note": "以共同基期价格计量",
-			"items": [["gdp_real_exports", "实际出口", "num", TEAL],
-				["gdp_real_imports", "实际进口", "num", BLUE]]},
+	"national_accounts": [
+		{"type": "line", "title": "GDP · @{desktop.main.fragment.fa3ee80d798867f8}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["gdp_nominal_expenditure_reconciled", "@{desktop.main.fragment.71fc907cfb4dc132} GDP", "num", BLUE],
+				["gdp_real_expenditure_reconciled", "@{desktop.main.fragment.e0ae9a3c77ae781d} GDP", "num", TEAL],
+				["gdp_deflator", "@{desktop.main.fragment.6a1991b82e40df7c}", "idx", PURPLE]]},
+		{"type": "columns", "title": "EXPENDITURE · @{desktop.main.fragment.d95caf0153ffc78f}", "note": "C + I + G + NX",
+			"items": [["gdp_nominal_household_consumption", "@{desktop.main.fragment.be9cf924408bfa1b} C", "num", TEAL],
+				["gdp_nominal_fixed_capital_formation", "@{desktop.main.fragment.029f64457da1d722} I", "num", BLUE],
+				["gdp_nominal_government_consumption", "@{desktop.main.fragment.223be31de4a3a161} G", "num", PURPLE],
+				["gdp_nominal_net_exports", "@{desktop.main.fragment.eafb25a38df7c7c2} NX", "num", AMBER]]},
+		{"type": "columns", "title": "SECTORS · @{desktop.main.fragment.734c0dcefd410ff4}", "note": "@{desktop.main.fragment.5f323c212f3930de}",
+			"items": [["gdp_nominal_gross_output_c", "@{desktop.main.fragment.07c009c26ed383df}", "num", TEAL],
+				["gdp_nominal_gross_output_k", "@{desktop.main.fragment.8716cf5fc5d5181c}", "num", BLUE],
+				["gdp_nominal_gross_output_e", "@{desktop.main.fragment.9196f0338a8d16d7}", "num", AMBER],
+				["gdp_nominal_gross_output_housing", "@{desktop.main.fragment.9a57f79d5b8f28da}", "num", Color("8a6b50")]]},
+		{"type": "line", "title": "RECONCILIATION · @{desktop.main.fragment.340d771303952d57}", "note": "@{desktop.main.fragment.f3e5e34056fa953a}",
+			"items": [["gdp_nominal_three_approach_raw_spread_share", "@{desktop.main.fragment.abb675e95e02d072}", "pct", RED]]},
+		{"type": "line", "title": "APPROACHES · @{desktop.main.fragment.9a5d31af1fe16f07} GDP @{desktop.main.fragment.101573f333c66203}", "note": "@{desktop.main.fragment.484407aacafcf6ea} · @{desktop.main.fragment.69ce9992bfd9510f} / @{desktop.main.fragment.6b182e92b05656d9} / @{desktop.main.fragment.19ff165b5fa4a497}",
+			"items": [["gdp_nominal_expenditure_reconciled", "@{desktop.main.fragment.69ce9992bfd9510f}", "num", BLUE],
+				["gdp_nominal_income_reconciled", "@{desktop.main.fragment.6b182e92b05656d9}", "num", PURPLE],
+				["gdp_nominal_production", "@{desktop.main.fragment.19ff165b5fa4a497}", "num", TEAL]]},
+		{"type": "columns", "title": "INCOME · @{desktop.main.fragment.dc35e50bbdd3713f}", "note": "@{desktop.main.fragment.e6cb82b1fcb3bbfc}",
+			"items": [["gdp_nominal_compensation_of_employees", "@{desktop.main.fragment.c346fcbc225a2a69}", "num", BLUE],
+				["gdp_nominal_accrued_gross_operating_surplus", "@{desktop.main.fragment.979be5701df82ce9}", "num", TEAL],
+				["gdp_nominal_net_product_taxes_observed", "@{desktop.main.fragment.7aa3db8ea047016f}", "num", AMBER]]},
+		{"type": "columns", "title": "CAPITAL FORMATION · @{desktop.main.fragment.217d1d7ca669ea70}", "note": "@{desktop.main.fragment.36d2a0a5d613697b}",
+			"items": [["gdp_nominal_private_fixed_capital_formation", "@{desktop.main.fragment.cdcb6f7c678c81ac}", "num", TEAL],
+				["gdp_nominal_public_fixed_capital_formation", "@{desktop.main.fragment.47c7231355664b7b}", "num", BLUE],
+				["gdp_nominal_residential_fixed_capital_formation", "@{desktop.main.fragment.6f2f0fbb2164a120}", "num", Color("8a6b50")],
+				["gdp_nominal_machinery_fixed_capital_formation", "@{desktop.main.fragment.59ec719b85282a64}", "num", PURPLE]]},
+		{"type": "line", "title": "TRADE & INVENTORY · @{desktop.main.fragment.d22e652f8ca2490f}", "note": "@{desktop.main.fragment.37fc4ba17aae4e81}",
+			"items": [["gdp_nominal_exports", "@{desktop.main.fragment.7016090059bdfab9}", "num", TEAL],
+				["gdp_nominal_imports", "@{desktop.main.fragment.514e5df21b748fda}", "num", BLUE],
+				["gdp_nominal_inventory_change", "@{desktop.main.fragment.517358111e3e9d52}", "num", AMBER]]},
+		{"type": "line", "title": "REAL EXPENDITURE · @{desktop.main.fragment.800d580fc6c9207b}", "note": "@{desktop.main.fragment.287fca5208feaa56} C / I / G / NX",
+			"items": [["gdp_real_household_consumption", "@{desktop.main.fragment.be9cf924408bfa1b} C", "num", TEAL],
+				["gdp_real_fixed_capital_formation", "@{desktop.main.fragment.029f64457da1d722} I", "num", BLUE],
+				["gdp_real_government_consumption", "@{desktop.main.fragment.223be31de4a3a161} G", "num", PURPLE],
+				["gdp_real_net_exports", "@{desktop.main.fragment.eafb25a38df7c7c2} NX", "num", AMBER]]},
+		{"type": "line", "title": "TRADE VOLUME · @{desktop.main.fragment.c5a16f371681b925}", "note": "@{desktop.main.fragment.ab37c414ec9a8d61}",
+			"items": [["gdp_real_exports", "@{desktop.main.fragment.f40004d6f60d7d71}", "num", TEAL],
+				["gdp_real_imports", "@{desktop.main.fragment.2579b48ed1b464f6}", "num", BLUE]]},
 	],
-	"劳动力": [
-		{"type": "employment_sectors", "title": "SECTORS · 部门就业结构", "note": "主业+第二职业 FTE"},
-		{"type": "labor_flows", "title": "FLOWS · 劳动力状态与流转", "note": "本次推进的实名账本流量"},
-		{"type": "age_participation", "title": "LFPR · 分年龄劳动参与率", "note": "参与率与就业率 · 劳龄口径 18–64"},
+	"labor": [
+		{"type": "employment_sectors", "title": "SECTORS · @{desktop.main.fragment.26ffdab120ffd9cc}", "note": "@{desktop.main.fragment.6f268293effa1817}+@{desktop.main.fragment.f4f2215f9f6f1312} FTE"},
+		{"type": "labor_flows", "title": "FLOWS · @{desktop.main.fragment.0adcf6385611efe5}", "note": "@{desktop.main.fragment.73ec58443ed15263}"},
+		{"type": "age_participation", "title": "LFPR · @{desktop.main.fragment.3d27a0e314776ffa}", "note": "@{desktop.main.fragment.af1f1fc6f61258c9} · @{desktop.main.fragment.d27dcbef56e42308} 18–64"},
 	],
-	"价格与货币": [
-		{"type": "line", "title": "RATES · 价格与利率脉冲", "note": "每日变化率",
-			"items": [["inflation", "通胀", "pt", PURPLE],
-				["policy_rate", "政策利率", "pt", TEAL],
-				["wage_inflation", "工资通胀", "pt", AMBER]]},
-		{"type": "line", "title": "PURCHASING POWER · 购买力", "note": "期初指数=100", "indexed": true,
-			"items": [["price_index", "物价指数", "idx", BLUE],
-				["real_wage", "实际工资", "idx", TEAL],
-				["avg_markup", "平均加成", "idx", PURPLE]]},
-		{"type": "columns", "title": "STANCE · 当前利率组合", "note": "名义变化率",
-			"items": [["inflation", "通胀", "pt", PURPLE],
-				["policy_rate", "政策利率", "pt", TEAL],
-				["wage_inflation", "工资通胀", "pt", AMBER]]},
+	"prices_money": [
+		{"type": "line", "title": "RATES · @{desktop.main.fragment.f7fae8c95c113488}", "note": "@{desktop.main.fragment.3b79b6780fb98266}",
+			"items": [["inflation", "@{desktop.main.fragment.b43cd47df5c0171c}", "pt", PURPLE],
+				["policy_rate", "@{desktop.main.fragment.8003f5e9f9c4a87f}", "pt", TEAL],
+				["wage_inflation", "@{desktop.main.fragment.4b3c17787792a6d9}", "pt", AMBER]]},
+		{"type": "line", "title": "PURCHASING POWER · @{desktop.main.fragment.34fd0abe3a421640}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["price_index", "@{desktop.main.fragment.89c07894f37c4102}", "idx", BLUE],
+				["real_wage", "@{desktop.main.fragment.f0106af3d7386760}", "idx", TEAL],
+				["avg_markup", "@{desktop.main.fragment.ba19e19b3ae33520}", "idx", PURPLE]]},
+		{"type": "columns", "title": "STANCE · @{desktop.main.fragment.41819d902ee9503e}", "note": "@{desktop.main.fragment.910c3e2401a48566}",
+			"items": [["inflation", "@{desktop.main.fragment.b43cd47df5c0171c}", "pt", PURPLE],
+				["policy_rate", "@{desktop.main.fragment.8003f5e9f9c4a87f}", "pt", TEAL],
+				["wage_inflation", "@{desktop.main.fragment.4b3c17787792a6d9}", "pt", AMBER]]},
 	],
-	"财政": [
-		{"type": "fiscal_flow", "title": "BUDGET MAP · 财政资金地图", "note": "收入来源与支出去向"},
-		{"type": "line", "title": "DEBT · 债务轨迹", "note": "期初指数=100", "indexed": true,
-			"items": [["gov_debt", "政府债务", "num", BLUE],
-				["gov_debt_to_gdp", "债务/GDP", "pct", AMBER]]},
-		{"type": "columns", "title": "BUDGET · 本期预算截面", "note": "收支规模",
-			"items": [["tax_total", "税收", "num", TEAL],
-				["gov_spending", "支出", "num", BLUE],
-				["benefit_paid", "转移", "num", PURPLE],
-				["gov_deficit", "赤字", "num", AMBER]]},
+	"fiscal": [
+		{"type": "fiscal_flow", "title": "BUDGET MAP · @{desktop.main.fragment.13f77cede622f7f0}", "note": "@{desktop.main.fragment.14d8f71e5d5fde02}"},
+		{"type": "line", "title": "DEBT · @{desktop.main.fragment.57a846a1c87ca9a3}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["gov_debt", "@{desktop.main.fragment.8d6b59cfe9288ceb}", "num", BLUE],
+				["gov_debt_to_gdp", "@{desktop.main.fragment.095b45ce7df514df}/GDP", "pct", AMBER]]},
+		{"type": "columns", "title": "BUDGET · @{desktop.main.fragment.d8f464c2d30f134e}", "note": "@{desktop.main.fragment.600c022e64747c44}",
+			"items": [["tax_total", "@{desktop.main.fragment.653e331c54b9563e}", "num", TEAL],
+				["gov_spending", "@{desktop.main.fragment.e679096865859f36}", "num", BLUE],
+				["benefit_paid", "@{desktop.main.fragment.ae7c4c83caeb18a5}", "num", PURPLE],
+				["gov_deficit", "@{desktop.main.fragment.7865b21012629320}", "num", AMBER]]},
 	],
-	"银行与信贷": [
-		{"type": "bank_balance", "title": "BALANCE SHEET · 银行资产负债", "note": "信贷资产 · 存款负债 · 资本缓冲"},
-		{"type": "line", "title": "STRESS · 偿付与资金价格", "note": "压力指标",
-			"items": [["total_debt_service_ratio", "偿债比率", "pct", AMBER],
-				["interbank_rate", "同业利率", "pt", PURPLE],
-				["writeoffs", "坏账核销", "num", RED]]},
-		{"type": "columns", "title": "CREDIT MIX · 信贷去向", "note": "当前贷款存量",
-			"items": [["firm_debt_total", "企业", "num", TEAL],
-				["household_debt_total_observed", "居民", "num", BLUE],
-				["new_loans_total", "本期新增", "num", GREEN],
-				["bank_realized_credit_losses", "信用损失", "num", RED]]},
-		{"type": "columns", "title": "SYSTEM · 银行体系结构", "note": "机构、同业交易与传染损失",
-			"items": [["banks_alive", "存续银行", "num", TEAL],
-				["bank_births", "新设", "num", GREEN],
-				["bank_deaths", "退出", "num", AMBER],
-				["n_bank_failures", "失败", "num", RED],
-				["interbank_volume", "同业成交", "num", BLUE],
-				["interbank_contagion_loss", "传染损失", "num", PURPLE]]},
+	"banking_credit": [
+		{"type": "bank_balance", "title": "BALANCE SHEET · @{desktop.main.fragment.27bd9f30488410e8}", "note": "@{desktop.main.fragment.a8076a5ef01d06eb} · @{desktop.main.fragment.568f506a5c1d51e3} · @{desktop.main.fragment.baadb5544e4943ac}"},
+		{"type": "line", "title": "STRESS · @{desktop.main.fragment.242d40b5790eac52}", "note": "@{desktop.main.fragment.0527fff25394cf12}",
+			"items": [["total_debt_service_ratio", "@{desktop.main.fragment.11efcd8dc599ab71}", "pct", AMBER],
+				["interbank_rate", "@{desktop.main.fragment.46e9053149aff7d2}", "pt", PURPLE],
+				["writeoffs", "@{desktop.main.fragment.8570c6a44500ff6b}", "num", RED]]},
+		{"type": "columns", "title": "CREDIT MIX · @{desktop.main.fragment.d348bec71ebaec09}", "note": "@{desktop.main.fragment.236e7e8fbc52f5f2}",
+			"items": [["firm_debt_total", "@{desktop.main.fragment.409d0719010a46ee}", "num", TEAL],
+				["household_debt_total_observed", "@{desktop.main.fragment.22aed2fc142d29f0}", "num", BLUE],
+				["new_loans_total", "@{desktop.main.fragment.f56a21f92c51af70}", "num", GREEN],
+				["bank_realized_credit_losses", "@{desktop.main.fragment.1dcd23337a1a0440}", "num", RED]]},
+		{"type": "columns", "title": "SYSTEM · @{desktop.main.fragment.7d125a25384f8b70}", "note": "@{desktop.main.fragment.14c900d46c623a10}",
+			"items": [["banks_alive", "@{desktop.main.fragment.6ebfefd41ab773a3}", "num", TEAL],
+				["bank_births", "@{desktop.main.fragment.ba92ba26ea9364b4}", "num", GREEN],
+				["bank_deaths", "@{desktop.main.fragment.498e1d59b4d787ee}", "num", AMBER],
+				["n_bank_failures", "@{desktop.main.fragment.28384d7afd2e4fa6}", "num", RED],
+				["interbank_volume", "@{desktop.main.fragment.fa97e5a35b98c592}", "num", BLUE],
+				["interbank_contagion_loss", "@{desktop.main.fragment.171a142aed27428d}", "num", PURPLE]]},
 	],
-	"债务与风险": [
-		{"type": "line", "title": "LEVERAGE · 债务存量", "note": "家庭与企业",
-			"items": [["household_debt_total", "家庭债务", "num", BLUE],
-				["firm_debt_total", "企业债务", "num", TEAL]]},
-		{"type": "line", "title": "SERVICE · 偿债与拖欠", "note": "当期压力",
-			"items": [["household_contractual_debt_service_due", "合同应偿", "num", BLUE],
-				["household_debt_service_reserved", "已预留偿债", "num", GREEN],
-				["household_interest_arrears_closing", "期末拖欠", "num", RED],
-				["bank_realized_credit_losses", "银行损失", "num", AMBER]]},
-		{"type": "bars", "title": "CONCENTRATION · 债务集中度", "note": "Gini 与前10%份额",
-			"items": [["household_debt_gini", "家庭债务 Gini", "idx", BLUE],
-				["household_debt_top10_share", "家庭前10%", "pct", PURPLE],
-				["firm_debt_gini", "企业债务 Gini", "idx", TEAL],
-				["firm_debt_top10_share", "企业前10%", "pct", AMBER]]},
-		{"type": "columns", "title": "DISTRESS · 风险事件", "note": "新增信贷、破产与偿债率",
-			"items": [["new_loans", "新增贷款", "num", GREEN],
-				["hh_bankruptcies", "家庭破产", "num", RED],
-				["debt_service_to_nominal_gdp", "偿债/GDP", "pct", AMBER],
-				["total_debt_service_to_nominal_gdp", "总偿债/GDP", "pct", PURPLE]]},
-		{"type": "line", "title": "ARREARS LEDGER · 家庭利息拖欠账", "note": "期初、核销、商品预留与期末存量",
-			"items": [["household_interest_arrears_opening", "期初拖欠", "num", AMBER],
-				["household_interest_arrears_extinguished", "已消除", "num", GREEN],
-				["household_interest_arrears_in_goods_reservation", "商品预留", "num", BLUE],
-				["household_interest_arrears_closing", "期末拖欠", "num", RED],
-				["household_interest_arrears_stock_flow_residual", "账流差额", "num", PURPLE]]},
+	"debt_risk": [
+		{"type": "line", "title": "LEVERAGE · @{desktop.main.fragment.e38b8ddfc30f08f2}", "note": "@{desktop.main.fragment.9fa47bdcf5cd1adc}",
+			"items": [["household_debt_total", "@{desktop.main.fragment.d2cef874cd4f31ad}", "num", BLUE],
+				["firm_debt_total", "@{desktop.main.fragment.e011facc0e2e08e2}", "num", TEAL]]},
+		{"type": "line", "title": "SERVICE · @{desktop.main.fragment.b7c861c177e00379}", "note": "@{desktop.main.fragment.abc939e2ca913882}",
+			"items": [["household_contractual_debt_service_due", "@{desktop.main.fragment.fa871132ba185e37}", "num", BLUE],
+				["household_debt_service_reserved", "@{desktop.main.fragment.4a0204a109e960f9}", "num", GREEN],
+				["household_interest_arrears_closing", "@{desktop.main.fragment.734552749b99fbad}", "num", RED],
+				["bank_realized_credit_losses", "@{desktop.main.fragment.ba26d799bd4f7004}", "num", AMBER]]},
+		{"type": "bars", "title": "CONCENTRATION · @{desktop.main.fragment.23f435a95808071c}", "note": "Gini @{desktop.main.fragment.749e9657ca6cafb1}10%@{desktop.main.fragment.a81ca4bf0f3d9803}",
+			"items": [["household_debt_gini", "@{desktop.main.fragment.d2cef874cd4f31ad} Gini", "idx", BLUE],
+				["household_debt_top10_share", "@{desktop.main.fragment.a27dc251eadd7423}10%", "pct", PURPLE],
+				["firm_debt_gini", "@{desktop.main.fragment.e011facc0e2e08e2} Gini", "idx", TEAL],
+				["firm_debt_top10_share", "@{desktop.main.fragment.2b9870412a5a0a08}10%", "pct", AMBER]]},
+		{"type": "columns", "title": "DISTRESS · @{desktop.main.fragment.dcdec027dcdab463}", "note": "@{desktop.main.fragment.f3d18b09d9d6b53c}",
+			"items": [["new_loans", "@{desktop.main.fragment.49607c540f0456c4}", "num", GREEN],
+				["hh_bankruptcies", "@{desktop.main.fragment.8063e9732b41f137}", "num", RED],
+				["debt_service_to_nominal_gdp", "@{desktop.main.fragment.041d6a395228b3a4}/GDP", "pct", AMBER],
+				["total_debt_service_to_nominal_gdp", "@{desktop.main.fragment.c417610326355e77}/GDP", "pct", PURPLE]]},
+		{"type": "line", "title": "ARREARS LEDGER · @{desktop.main.fragment.d8179e21e8e72929}", "note": "@{desktop.main.fragment.141d799724f2713d}",
+			"items": [["household_interest_arrears_opening", "@{desktop.main.fragment.ef419d680060beee}", "num", AMBER],
+				["household_interest_arrears_extinguished", "@{desktop.main.fragment.6904831f716678f7}", "num", GREEN],
+				["household_interest_arrears_in_goods_reservation", "@{desktop.main.fragment.fda24ddca3af8794}", "num", BLUE],
+				["household_interest_arrears_closing", "@{desktop.main.fragment.734552749b99fbad}", "num", RED],
+				["household_interest_arrears_stock_flow_residual", "@{desktop.main.fragment.cc9890fbcb181918}", "num", PURPLE]]},
 	],
-	"资本市场": [
-		{"type": "firm_bubbles", "title": "VALUATION MAP · 企业估值分布", "note": "横轴 Q · 纵轴投资 · 气泡=市值"},
-		{"type": "line", "title": "VALUATION · 估值与交易", "note": "指数",
-			"items": [["tobin_q_mean", "托宾 Q", "idx", TEAL],
-				["tobin_q_dispersion", "Q 离散度", "idx", PURPLE],
-				["equity_turnover", "换手率", "idx", AMBER]]},
-		{"type": "bars", "title": "OWNERSHIP · 所有权分布", "note": "份额 / Gini",
-			"items": [["equity_wealth_share", "股权财富占比", "pct", TEAL],
-				["equity_ownership_gini", "持股基尼", "idx", PURPLE],
-				["hh_wealth_gini_incl_equity", "财富基尼", "idx", BLUE]]},
+	"capital_markets": [
+		{"type": "firm_bubbles", "title": "VALUATION MAP · @{desktop.main.fragment.a90828d709ed8ba5}", "note": "@{desktop.main.fragment.b22bf69bcd81f36f} Q · @{desktop.main.fragment.63338b74fc190a9a} · @{desktop.main.fragment.b4b35dae92ac2997}=@{desktop.main.fragment.7dc0b3b746b81556}"},
+		{"type": "line", "title": "VALUATION · @{desktop.main.fragment.170e26bacb3d5bc3}", "note": "@{desktop.main.fragment.754cd05217e9a89c}",
+			"items": [["tobin_q_mean", "@{desktop.main.fragment.262b4d2f27d039c7} Q", "idx", TEAL],
+				["tobin_q_dispersion", "Q @{desktop.main.fragment.948ba2504cb08ba8}", "idx", PURPLE],
+				["equity_turnover", "@{desktop.main.fragment.a071a060fcb264ca}", "idx", AMBER]]},
+		{"type": "bars", "title": "OWNERSHIP · @{desktop.main.fragment.07dba4f6b3912e92}", "note": "@{desktop.main.fragment.a81ca4bf0f3d9803} / Gini",
+			"items": [["equity_wealth_share", "@{desktop.main.fragment.3ff371748c070975}", "pct", TEAL],
+				["equity_ownership_gini", "@{desktop.main.fragment.2e4d457612d85ab9}", "idx", PURPLE],
+				["hh_wealth_gini_incl_equity", "@{desktop.main.fragment.6ab21b6833e66390}", "idx", BLUE]]},
 	],
-	"住房市场": [
-		{"type": "line", "title": "PRICE · 房价、租金与负担", "note": "期初指数=100", "indexed": true,
-			"items": [["house_price", "住房价格", "num", Color("8a6b50")],
-				["rent_level", "租金水平", "num", TEAL],
-				["housing_pti_ratio", "房价收入比", "idx", AMBER],
-				["rent_burden_ratio", "租金负担", "pct", PURPLE]]},
-		{"type": "columns", "title": "LIQUIDITY · 交易流动性", "note": "挂牌、成交与在市时间",
-			"items": [["housing_listings", "挂牌", "num", BLUE],
-				["housing_sales_session", "本期成交", "num", GREEN],
-				["housing_tom", "平均在市期", "num", AMBER],
-				["housing_forced_share", "强制出售", "pct", RED]]},
-		{"type": "columns", "title": "MORTGAGE · 按揭与处置", "note": "存量、发放与法拍",
-			"items": [["mortgage_count", "按揭笔数", "num", BLUE],
-				["mortgage_balance_total", "按揭余额", "num", TEAL],
-				["mortgage_originated_tick", "本期发放", "num", GREEN],
-				["foreclosures_total", "累计法拍", "num", RED]]},
-		{"type": "bars", "title": "TENURE · 居住与租赁结构", "note": "自有、租赁、空置与房东",
-			"items": [["homeowner_share", "自有住房率", "pct", TEAL],
-				["tenant_share", "租户占比", "pct", BLUE],
-				["rental_vacancies", "出租空置", "num", AMBER],
-				["landlord_count", "房东家庭", "num", PURPLE]]},
-		{"type": "columns", "title": "SUPPLY · 住房建设供给", "note": "竣工、在建、库存与许可",
-			"items": [["dwellings_built_total", "累计竣工", "num", GREEN],
-				["builder_wip_units", "在建工程", "num", BLUE],
-				["builder_inventory_units", "待售库存", "num", AMBER],
-				["permits_used_year", "年度许可使用", "num", PURPLE],
-				["builder_employment", "建造就业", "num", TEAL]]},
+	"housing": [
+		{"type": "line", "title": "PRICE · @{desktop.main.fragment.650fb49c749dccc7}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["house_price", "@{desktop.main.fragment.be473d3e46321147}", "num", Color("8a6b50")],
+				["rent_level", "@{desktop.main.fragment.b790048a0e59a14b}", "num", TEAL],
+				["housing_pti_ratio", "@{desktop.main.fragment.781f9eb2349a4802}", "idx", AMBER],
+				["rent_burden_ratio", "@{desktop.main.fragment.d21d3161521657c3}", "pct", PURPLE]]},
+		{"type": "columns", "title": "LIQUIDITY · @{desktop.main.fragment.5bfd929ac658c574}", "note": "@{desktop.main.fragment.d5e9133e94b8d01a}",
+			"items": [["housing_listings", "@{desktop.main.fragment.5be5e24a05937b55}", "num", BLUE],
+				["housing_sales_session", "@{desktop.main.fragment.93ce2badb17869b2}", "num", GREEN],
+				["housing_tom", "@{desktop.main.fragment.f4afb04435d463c6}", "num", AMBER],
+				["housing_forced_share", "@{desktop.main.fragment.afa139cd755cd23b}", "pct", RED]]},
+		{"type": "columns", "title": "MORTGAGE · @{desktop.main.fragment.1c75aae141ab0632}", "note": "@{desktop.main.fragment.692c7fb911adba8b}",
+			"items": [["mortgage_count", "@{desktop.main.fragment.3c6a7acecf4451a4}", "num", BLUE],
+				["mortgage_balance_total", "@{desktop.main.fragment.a26affc6332b8144}", "num", TEAL],
+				["mortgage_originated_tick", "@{desktop.main.fragment.4fc00e8dc86f24fe}", "num", GREEN],
+				["foreclosures_total", "@{desktop.main.fragment.52fa2429d1a05e4f}", "num", RED]]},
+		{"type": "bars", "title": "TENURE · @{desktop.main.fragment.51c9bc955d509b23}", "note": "@{desktop.main.fragment.44154c82a927f813}",
+			"items": [["homeowner_share", "@{desktop.main.fragment.b2bde5d2fcc6341d}", "pct", TEAL],
+				["tenant_share", "@{desktop.main.fragment.c3bd4c05350df5f0}", "pct", BLUE],
+				["rental_vacancies", "@{desktop.main.fragment.e63722e589416df0}", "num", AMBER],
+				["landlord_count", "@{desktop.main.fragment.8221b923742482b6}", "num", PURPLE]]},
+		{"type": "columns", "title": "SUPPLY · @{desktop.main.fragment.5967b400dce3b5fc}", "note": "@{desktop.main.fragment.1aac84093147af25}",
+			"items": [["dwellings_built_total", "@{desktop.main.fragment.01d8309fd2e6aa82}", "num", GREEN],
+				["builder_wip_units", "@{desktop.main.fragment.ac099cd82fd7a4dd}", "num", BLUE],
+				["builder_inventory_units", "@{desktop.main.fragment.50b26f1e5bac07be}", "num", AMBER],
+				["permits_used_year", "@{desktop.main.fragment.a8ddb3bc89cb92bf}", "num", PURPLE],
+				["builder_employment", "@{desktop.main.fragment.adc30fd39693c010}", "num", TEAL]]},
 	],
-	"能源": [
-		{"type": "energy_flow", "title": "FLOW · 能源平衡", "note": "生产 → 销售/使用 → 库存"},
-		{"type": "line", "title": "COST · 价格与成本", "note": "期初指数=100", "indexed": true,
-			"items": [["energy_price", "能源价格", "idx", Color("b0641f")],
-				["energy_cost_share", "能源成本占比", "pct", RED],
-				["e_capacity_utilization", "产能利用率", "pct", TEAL]]},
-		{"type": "columns", "title": "SECURITY · 供给与库存", "note": "能源实物量",
-			"items": [["energy_produced", "产量", "num", GREEN],
-				["energy_used", "消耗", "num", AMBER],
-				["energy_stock_total", "商业库存", "num", BLUE],
-				["spr_stock", "战略储备", "num", PURPLE]]},
+	"energy": [
+		{"type": "energy_flow", "title": "FLOW · @{desktop.main.fragment.db9d551eec15c4ff}", "note": "@{desktop.main.fragment.76ab7d3b41f2326d} → @{desktop.main.fragment.f04b061471b1fd16}/@{desktop.main.fragment.cdfd0b34e4918648} → @{desktop.main.fragment.780c5fd5b10533dc}"},
+		{"type": "line", "title": "COST · @{desktop.main.fragment.26e8fdddbbac4acd}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["energy_price", "@{desktop.main.fragment.264c2c4114eaf977}", "idx", Color("b0641f")],
+				["energy_cost_share", "@{desktop.main.fragment.77e8df2db61c3f46}", "pct", RED],
+				["e_capacity_utilization", "@{desktop.main.fragment.20761c8ad29f5f78}", "pct", TEAL]]},
+		{"type": "columns", "title": "SECURITY · @{desktop.main.fragment.cdbd84f35de4ad86}", "note": "@{desktop.main.fragment.4bc054cd9f1422fc}",
+			"items": [["energy_produced", "@{desktop.main.fragment.ad7e8b52525b699b}", "num", GREEN],
+				["energy_used", "@{desktop.main.fragment.0214e71438a47cd0}", "num", AMBER],
+				["energy_stock_total", "@{desktop.main.fragment.b5d09817d3f6de41}", "num", BLUE],
+				["spr_stock", "@{desktop.main.fragment.ba246184da7bbff6}", "num", PURPLE]]},
 	],
-	"外部部门": [
-		{"type": "line", "title": "TRADE · 进口与出口", "note": "交易与交付规模",
-			"items": [["import_value", "进口额", "num", BLUE],
-				["export_delivered_volume", "出口交付", "num", TEAL]]},
-		{"type": "line", "title": "BALANCE · 经常账户与净资产", "note": "本国口径",
-			"items": [["current_account", "经常账户", "num", AMBER],
-				["nfa", "净对外资产", "num", PURPLE]]},
-		{"type": "line", "title": "FX · 汇率轨迹", "note": "本币/共同计价单位 · 期初=100", "indexed": true,
-			"items": [["e", "汇率", "idx", Color("4a6fa5")]]},
-		{"type": "columns", "title": "MOBILITY · 人口与汇款", "note": "跨境人口存量与资金流",
-			"items": [["migrant_stock", "移民存量", "num", TEAL],
-				["remittances", "跨境汇款", "num", BLUE],
-				["tariff_rev", "关税收入", "num", AMBER]]},
+	"external": [
+		{"type": "line", "title": "TRADE · @{desktop.main.fragment.9a50012849bdbedd}", "note": "@{desktop.main.fragment.178d628572b9b176}",
+			"items": [["import_value", "@{desktop.main.fragment.1ada65455c2895ba}", "num", BLUE],
+				["export_delivered_volume", "@{desktop.main.fragment.4db5da905824b9bb}", "num", TEAL]]},
+		{"type": "line", "title": "BALANCE · @{desktop.main.fragment.95e89b0cb919a37e}", "note": "@{desktop.main.fragment.fc791da83e1b0a3e}",
+			"items": [["current_account", "@{desktop.main.fragment.d5ecdc812e1a4f41}", "num", AMBER],
+				["nfa", "@{desktop.main.fragment.2a34b4aa4ee8731a}", "num", PURPLE]]},
+		{"type": "line", "title": "FX · @{desktop.main.fragment.ce2c631e2aa40c82}", "note": "@{desktop.main.fragment.499646ba8cbdeaac}/@{desktop.main.fragment.e060731f1876c318} · @{desktop.main.fragment.11929e9141d1541d}=100", "indexed": true,
+			"items": [["e", "@{desktop.main.fragment.57ef2c45ef260ee3}", "idx", Color("4a6fa5")]]},
+		{"type": "columns", "title": "MOBILITY · @{desktop.main.fragment.a397915ef9858b76}", "note": "@{desktop.main.fragment.a72de3cb6980daf4}",
+			"items": [["migrant_stock", "@{desktop.main.fragment.04ebb06f0c2cfcab}", "num", TEAL],
+				["remittances", "@{desktop.main.fragment.82bd68e0e3dd55cd}", "num", BLUE],
+				["tariff_rev", "@{desktop.main.fragment.897c0b9c6be037ca}", "num", AMBER]]},
 	],
-	"分配与福利": [
-		{"type": "lorenz", "title": "LORENZ · 收入与正净财富分布", "note": "越贴近对角线越均等"},
-		{"type": "line", "title": "WELFARE · 福利与工资分位", "note": "期初指数=100", "indexed": true,
-			"items": [["welfare_log", "对数福利", "idx", GREEN],
-				["wage_p90_p10_ratio", "工资 P90/P10", "idx", AMBER],
-				["bottom10_consumption", "底部10%消费", "num", BLUE]]},
-		{"type": "deciles", "title": "DECILES · 十分位资源份额", "note": "收入与消费各组占比"},
+	"distribution": [
+		{"type": "lorenz", "title": "LORENZ · @{desktop.main.fragment.9f890afd9118957a}", "note": "@{desktop.main.fragment.b84006c8530d9d6d}"},
+		{"type": "line", "title": "WELFARE · @{desktop.main.fragment.6309658265c64df2}", "note": "@{desktop.main.fragment.86f2998dca14febd}=100", "indexed": true,
+			"items": [["welfare_log", "@{desktop.main.fragment.3ec8e057df1ade4c}", "idx", GREEN],
+				["wage_p90_p10_ratio", "@{desktop.main.fragment.11547412b4531891} P90/P10", "idx", AMBER],
+				["bottom10_consumption", "@{desktop.main.fragment.3f049887991b880c}10%@{desktop.main.fragment.80716311485ac4f9}", "num", BLUE]]},
+		{"type": "deciles", "title": "DECILES · @{desktop.main.fragment.d576045df3ccfbc8}", "note": "@{desktop.main.fragment.808859bb14950fd4}"},
 	],
-	"人口社会": [
-		{"type": "pyramid", "title": "AGE · 人口金字塔", "note": "男左女右 · 当前存活人口"},
-		{"type": "line", "title": "DEMOGRAPHY · 人口自然变动", "note": "每日事件",
-			"items": [["births_tick", "出生", "num", TEAL],
-				["deaths_tick", "死亡", "num", RED],
-				["marriages_tick", "结婚", "num", BLUE],
-				["divorces_tick", "离婚", "num", AMBER]]},
-		{"type": "columns", "title": "DEPENDENCY · 年龄与抚养结构", "note": "人数与抚养比",
-			"items": [["child_population", "儿童", "num", BLUE],
-				["working_age_population", "劳龄人口", "num", TEAL],
-				["elder_population", "老年人口", "num", PURPLE],
-				["dependency_ratio", "总抚养比", "pct", AMBER]]},
-		{"type": "line", "title": "RATES · 人口率", "note": "年化自然增长与每千人粗率",
-			"items": [["net_population_growth_rate_annualized", "自然增长率", "pct", GREEN],
-				["birth_rate_per_1000_annualized", "粗出生率", "per_thousand", TEAL],
-				["death_rate_per_1000_annualized", "粗死亡率", "per_thousand", RED]]},
-		{"type": "bars", "title": "GENERATIONS · 代际人口结构", "note": "儿童、成年人和老年人口占比",
-			"items": [["child_share", "儿童", "pct", BLUE],
-				["adult_share", "成年人", "pct", TEAL],
-				["elder_share", "老年人", "pct", PURPLE]]},
-		{"type": "columns", "title": "CONSUMPTION · 代际消费中位数", "note": "按个人年龄组统计",
-			"items": [["child_median_consumption", "儿童", "num", BLUE],
-				["adult_median_consumption", "成年人", "num", TEAL],
-				["elder_median_consumption", "老年人", "num", PURPLE]]},
+	"population": [
+		{"type": "pyramid", "title": "AGE · @{desktop.main.fragment.09e6d0c410d19e23}", "note": "@{desktop.main.fragment.4cf5a5e165a12a7d} · @{desktop.main.fragment.86b7de3883114c91}"},
+		{"type": "line", "title": "DEMOGRAPHY · @{desktop.main.fragment.2d75d06c3a9eae54}", "note": "@{desktop.main.fragment.bc7ad4598ad4f5f9}",
+			"items": [["births_tick", "@{desktop.main.fragment.7e3781ea90e9583f}", "num", TEAL],
+				["deaths_tick", "@{desktop.main.fragment.82d3130fa58281ea}", "num", RED],
+				["marriages_tick", "@{desktop.main.fragment.ed7486a07a29fff1}", "num", BLUE],
+				["divorces_tick", "@{desktop.main.fragment.93619bc860a58a44}", "num", AMBER]]},
+		{"type": "columns", "title": "DEPENDENCY · @{desktop.main.fragment.39221a8a5eee0200}", "note": "@{desktop.main.fragment.f2720a242b54a62e}",
+			"items": [["child_population", "@{desktop.main.fragment.5246f67f9da53c66}", "num", BLUE],
+				["working_age_population", "@{desktop.main.fragment.31ec003979b97e3a}", "num", TEAL],
+				["elder_population", "@{desktop.main.fragment.2e977476095271e4}", "num", PURPLE],
+				["dependency_ratio", "@{desktop.main.fragment.23dca1a6ef086b98}", "pct", AMBER]]},
+		{"type": "line", "title": "RATES · @{desktop.main.fragment.105b422e4d1cf07e}", "note": "@{desktop.main.fragment.b1957f97daf9eb4c}",
+			"items": [["net_population_growth_rate_annualized", "@{desktop.main.fragment.706834beaa8804e6}", "pct", GREEN],
+				["birth_rate_per_1000_annualized", "@{desktop.main.fragment.f2dd829db4c69625}", "per_thousand", TEAL],
+				["death_rate_per_1000_annualized", "@{desktop.main.fragment.9ba99193e3c4aa80}", "per_thousand", RED]]},
+		{"type": "bars", "title": "GENERATIONS · @{desktop.main.fragment.c88d055d85727e88}", "note": "@{desktop.main.fragment.f2e5b469194e698b}",
+			"items": [["child_share", "@{desktop.main.fragment.5246f67f9da53c66}", "pct", BLUE],
+				["adult_share", "@{desktop.main.fragment.5558934a5a01277d}", "pct", TEAL],
+				["elder_share", "@{desktop.main.fragment.e7118dbe67b3bdab}", "pct", PURPLE]]},
+		{"type": "columns", "title": "CONSUMPTION · @{desktop.main.fragment.4813e6543b235b00}", "note": "@{desktop.main.fragment.4a793e834b02f883}",
+			"items": [["child_median_consumption", "@{desktop.main.fragment.5246f67f9da53c66}", "num", BLUE],
+				["adult_median_consumption", "@{desktop.main.fragment.5558934a5a01277d}", "num", TEAL],
+				["elder_median_consumption", "@{desktop.main.fragment.e7118dbe67b3bdab}", "num", PURPLE]]},
 	],
-	"企业生态": [
-		{"type": "sector_matrix", "title": "SECTORS · 企业部门生态", "note": "企业数 · 产销 · 用工"},
-		{"type": "line", "title": "DEMOGRAPHY · 企业进入退出", "note": "当期企业事件与存量",
-			"items": [["firm_count_c", "消费品企业", "num", TEAL],
-				["births", "企业进入", "num", GREEN],
-				["deaths", "企业退出", "num", RED]]},
-		{"type": "columns", "title": "ACTIVITY · 经营覆盖", "note": "生产、销售与融资",
-			"items": [["n_firms_producing", "生产中", "num", TEAL],
-				["n_firms_selling", "销售中", "num", BLUE],
-				["n_firms_borrowing", "借款企业", "num", AMBER],
-				["sector_switches", "产业切换", "num", PURPLE]]},
-		{"type": "bars", "title": "CONCENTRATION · 企业规模结构", "note": "产出集中度与 Pareto 斜率",
-			"items": [["firm_size_gini_output", "规模 Gini", "idx", PURPLE],
-				["firm_size_top_share_output", "头部产出份额", "pct", AMBER],
-				["firm_size_pareto_slope", "Pareto 斜率", "idx", BLUE],
-				["sector_switch_capital", "切换重置资本", "num", RED]]},
+	"firms": [
+		{"type": "sector_matrix", "title": "SECTORS · @{desktop.main.fragment.f57935012ee94136}", "note": "@{desktop.main.fragment.2d9801c466a2f699} · @{desktop.main.fragment.7085566cb9242aca} · @{desktop.main.fragment.59d94bccf0d498e3}"},
+		{"type": "line", "title": "DEMOGRAPHY · @{desktop.main.fragment.983dd9e4a834ed1e}", "note": "@{desktop.main.fragment.04c164cd851ed432}",
+			"items": [["firm_count_c", "@{desktop.main.fragment.4fe95cbc41c25b8c}", "num", TEAL],
+				["births", "@{desktop.main.fragment.9bc8563025adf19f}", "num", GREEN],
+				["deaths", "@{desktop.main.fragment.f7983f7143cd8b68}", "num", RED]]},
+		{"type": "columns", "title": "ACTIVITY · @{desktop.main.fragment.8e0e026b1d83ef81}", "note": "@{desktop.main.fragment.77e69321da9da085}",
+			"items": [["n_firms_producing", "@{desktop.main.fragment.efc42eb363bcca9a}", "num", TEAL],
+				["n_firms_selling", "@{desktop.main.fragment.0d5d67283894ad64}", "num", BLUE],
+				["n_firms_borrowing", "@{desktop.main.fragment.c92d44297f50187c}", "num", AMBER],
+				["sector_switches", "@{desktop.main.fragment.e0f3622a02bcec85}", "num", PURPLE]]},
+		{"type": "bars", "title": "CONCENTRATION · @{desktop.main.fragment.c5d7ef899ce51618}", "note": "@{desktop.main.fragment.3e31215e5ffe8f69} Pareto @{desktop.main.fragment.989c3ad6e54fb7e2}",
+			"items": [["firm_size_gini_output", "@{desktop.main.fragment.3dbf2e1f70fed8ba} Gini", "idx", PURPLE],
+				["firm_size_top_share_output", "@{desktop.main.fragment.7646de8d4bac93e9}", "pct", AMBER],
+				["firm_size_pareto_slope", "Pareto @{desktop.main.fragment.989c3ad6e54fb7e2}", "idx", BLUE],
+				["sector_switch_capital", "@{desktop.main.fragment.9ff43644152df958}", "num", RED]]},
 	],
 }
 
 const WORLD_COMPARE := [
-	["real_output", "实际产出", "num"], ["unemployment_rate", "失业率", "pct"],
-	["inflation", "通胀", "pt"], ["price_index", "物价指数", "idx"],
-	["avg_wage", "平均工资", "num"], ["policy_rate", "政策利率", "pt"],
+	["real_output", "@{desktop.main.fragment.60b6b37831c29bca}", "num"], ["unemployment_rate", "@{desktop.main.fragment.4546b3d41818bdbf}", "pct"],
+	["inflation", "@{desktop.main.fragment.b43cd47df5c0171c}", "pt"], ["price_index", "@{desktop.main.fragment.89c07894f37c4102}", "idx"],
+	["avg_wage", "@{desktop.main.fragment.fdc477056b2d48f6}", "num"], ["policy_rate", "@{desktop.main.fragment.8003f5e9f9c4a87f}", "pt"],
 ]
 
 const RANK_METRICS := [
-	["score", "综合", "score", false],
-	["real_output", "GDP", "num", false], ["unemployment_rate", "失业率", "pct", true],
-	["inflation", "通胀", "pt", true], ["avg_wage", "工资", "num", false],
+	["score", "@{desktop.main.fragment.4a0d4edef9c7bfdd}", "score", false],
+	["real_output", "GDP", "num", false], ["unemployment_rate", "@{desktop.main.fragment.4546b3d41818bdbf}", "pct", true],
+	["inflation", "@{desktop.main.fragment.b43cd47df5c0171c}", "pt", true], ["avg_wage", "@{desktop.main.fragment.11547412b4531891}", "num", false],
 ]
 
 var _client
@@ -800,13 +800,13 @@ var _schemas: Dictionary = {}          # seat -> schema dict
 var _lever_info: Dictionary = {}       # lever -> lever dict (all seats merged)
 var _lever_group: Dictionary = {}      # lever -> decision_group
 var _active_seat := "treasury"
-var _active_group := ""                # 二级主题页名(空=该席位第一页)
-var _expanded_lever := ""              # 手风琴:当前展开的旋钮
+var _active_group := ""                #  Second thematic page title (empty = first page of the seat)
+var _expanded_lever := ""              #  accordion: currently expanding knob
 var _search := ""
-var _policy_scope := "meeting"         # meeting | all；闭会时自动显示全部
-var _edits: Dictionary = {}            # lever -> 本地编辑值(未入篮)
+var _policy_scope := "meeting"         #  meeting all; automatically showing all at close of session
+var _edits: Dictionary = {}            #  lever-> Local Editor Value (not in basket)
 var _cart: Array = []                  # [{lever, from, to, value, group}]
-var _perm_cache: Dictionary = {}       # lever -> last permitted action(会议闭合时展示用)
+var _perm_cache: Dictionary = {}       #  Last - > displayed action (for closed sessions)
 var _release_hist: Dictionary = {}     # sid -> [{v, at}]
 var _playing := false
 var _speed := 5
@@ -814,17 +814,17 @@ var _mode := "interactive"
 var _control_mode := "controller"
 var _tab := "focus"
 var _rank_by := "score"
-var _score_country := 0               # 世界视图国家表现雷达当前选中经济体
-var _goto_panel_group := ""            # 指标全景当前独立页签；核心卡片点击可直达
-var _household_selected := -1         # 家庭页当前选中的 demographic household id
-var _person_selected := -1            # 企业深链定位到的家庭成员 id
-var _household_search := ""           # 家庭号 / 成员号筛选
+var _score_country := 0               #  World View National Performance Radar Current Selected Economy Body
+var _goto_panel_group := ""            #  Indicator Panorama Current Independent Page Signing; core card hits directly
+var _household_selected := -1         #  Current selected family page
+var _person_selected := -1            #  Family members located in a deep enterprise chain id
+var _household_search := ""           #  Family number / Member number filter
 var _household_sort := "net_worth"    # net_worth | members | debt
-var _firm_selected := ""              # 企业页当前选中的 firm id
-var _firm_search := ""                # 企业号 / 部门 / 员工号筛选
+var _firm_selected := ""              #  Current selected business page
+var _firm_search := ""                #  Enterprise / Department / employee sift Select
 var _firm_sort := "revenue"           # revenue | earnings | assets
-var _stock_selected := ""             # 股市主图当前证券；空=综合指数
-var _stock_search := ""               # 行情表代码 / 板块筛选
+var _stock_selected := ""             #  Stock market master chart current securities; empty = composite index
+var _stock_search := ""               #  Line Sheet Code / Board Filter
 var _stock_filter := "all"             # all | company | bank
 var _stock_sort := "market_cap"        # market_cap | change
 var _event_filter := "important"       # important | all | mine
@@ -843,7 +843,7 @@ var _n: Dictionary = {}
 var _last_tab := ""
 var _last_seat := ""
 var _last_page := ""
-var _last_release_at: Dictionary = {}   # sid -> released_at(磁贴闪光判定)
+var _last_release_at: Dictionary = {}   #  Sid - > restored at
 var _crisis_was_visible := false
 var _scroll_mem: Dictionary = {}        # key -> scroll_vertical
 var _start_menu: Control
@@ -866,7 +866,7 @@ func _ready() -> void:
 	add_child(_client)
 	_client.connected.connect(_on_connected)
 	_client.disconnected.connect(func() -> void:
-		_set_text("conn", "已断开 · 重连中"))
+		_set_text("conn", "@{desktop.main.fragment.1f0ac6953e0411c0} · @{desktop.main.fragment.ab7e3afbecbdafbe}"))
 	_client.response_received.connect(_on_response)
 	_client.request_failed.connect(_on_request_failed)
 	var timer := Timer.new()
@@ -920,7 +920,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_play()
 		KEY_RIGHT, KEY_PERIOD:
 			if _awaiting() and not _free_policy_enabled():
-				_show_hint("本届会议未闭合:请「提交提案」或「本次不动」。")
+				_show_hint("@{desktop.main.fragment.e864ee0d87b36635}:@{desktop.main.fragment.4b259599fea7f435}")
 				_render()
 			else:
 				_send({"command": "advance", "ticks": 1})
@@ -958,9 +958,9 @@ func _request_return_to_main_menu() -> void:
 	var was_playing := _playing
 	_playing = false
 	_confirm = {
-		"title": "返回主菜单",
-		"body": "当前模拟将暂停。返回主菜单后，可以选择“继续模拟”回到当前世界，也可以配置并启动一个新世界。",
-		"note": "返回主菜单不会重置当前世界；只有启动新模拟时，当前世界才会被替换。",
+		"title": "@{desktop.main.fragment.e34e61a243bec5e1}",
+		"body": "@{desktop.main.fragment.de760ef20490995d}",
+		"note": "@{desktop.main.fragment.916a18b7846abb04}",
 		"on_cancel": func() -> void: _playing = was_playing,
 		"on_yes": _return_to_main_menu,
 	}
@@ -987,7 +987,7 @@ func _on_start_menu_launch(config: Dictionary) -> void:
 	_send({"command": "new_game", "spec": draft})
 
 
-# ================= 通信 =================
+#  Synchronization helper.
 func _send(command: Dictionary) -> void:
 	_outbox.append(command)
 	_pump()
@@ -1001,7 +1001,7 @@ func _pump() -> void:
 
 
 func _on_connected() -> void:
-	_set_text("conn", "引擎在线")
+	_set_text("conn", "@{desktop.main.fragment.94090d9c9a2ca568}")
 	_send({"command": "hello"})
 	_send({"command": "get_schema"})
 
@@ -1119,7 +1119,16 @@ func _capture(path: String) -> void:
 	# Dynamic panels rebuild with queue_free; wait long enough for two layout passes
 	# so automated captures reflect the settled UI rather than an empty interim frame.
 	await get_tree().create_timer(0.8).timeout
-	var image := get_viewport().get_texture().get_image()
+	var texture := get_viewport().get_texture()
+	if texture == null:
+		push_error("Automated capture requires a rendering backend.")
+		get_tree().quit(2)
+		return
+	var image := texture.get_image()
+	if image == null:
+		push_error("Automated capture could not read the viewport texture.")
+		get_tree().quit(2)
+		return
 	image.save_png(path)
 	get_tree().quit(0)
 
@@ -1136,7 +1145,7 @@ func _on_play_tick() -> void:
 	_send({"command": "advance", "ticks": _speed})
 
 
-# ================= 数据 =================
+#  Synchronization helper.
 func _index_schema() -> void:
 	_lever_info.clear()
 	_lever_group.clear()
@@ -1180,7 +1189,7 @@ func _start_menu_policy_schemas() -> Dictionary:
 
 
 func _seat_pages(seat: String) -> Array:
-	## 主题页定义 + 该席位未收录旋钮兜底成「其他」页;返回 [{name, levers:[lever dict]}]
+	##  Build theme pages and append ungrouped levers to the final page.
 	var by_name: Dictionary = {}
 	for lever: Dictionary in _schemas.get(seat, {}).get("levers", []):
 		by_name[str(lever.get("name"))] = lever
@@ -1199,14 +1208,14 @@ func _seat_pages(seat: String) -> Array:
 		if not used.has(lname):
 			leftover.append(by_name[lname])
 	if not leftover.is_empty():
-		out.append({"name": "其他", "levers": leftover})
+		out.append({"name": "@{desktop.main.fragment.d2909f1647e7c891}", "levers": leftover})
 	return out
 
 
 func _seat_groups(seat: String) -> Dictionary:
 	var out: Dictionary = {}
 	for lever: Dictionary in _schemas.get(seat, {}).get("levers", []):
-		var g := str(lever.get("decision_group", "其他"))
+		var g := str(lever.get("decision_group", "@{desktop.main.fragment.d2909f1647e7c891}"))
 		if not out.has(g):
 			out[g] = []
 		out[g].append(lever)
@@ -1314,22 +1323,56 @@ func _choice_text(lever_name: String, value: Variant) -> String:
 	return str(labels.get(str(value), str(value)))
 
 
+func _domain_text(domain: String, value_id: String, fallback := "") -> String:
+	var safe_fallback := fallback
+	if safe_fallback.is_empty():
+		safe_fallback = value_id.replace("_", " ").capitalize()
+	return LocaleCatalogScript.text(
+		"domain.%s.%s" % [domain, value_id], safe_fallback)
+
+
+func _row_domain_text(
+		row: Dictionary,
+		domain: String,
+		id_field: String,
+		legacy_field: String,
+		fallback_id: String) -> String:
+	var value_id := str(row.get(id_field, row.get(legacy_field, fallback_id)))
+	return _domain_text(domain, value_id)
+
+
+func _sector_text(row: Dictionary) -> String:
+	return _row_domain_text(row, "sector", "sector_id", "sector", "unknown")
+
+
+func _condition_text(row: Dictionary) -> String:
+	return _row_domain_text(
+		row, "condition", "condition_id", "condition", "unknown")
+
+
+func _panel_group_name(group_id: String) -> String:
+	for group: Dictionary in PANEL_GROUPS:
+		if str(group.get("id", "")) == group_id:
+			return LocaleCatalogScript.resolve(str(group.get("name", group_id)))
+	return group_id
+
+
 func _permission_reason(reason_code: String) -> String:
 	if reason_code.begins_with("missing_capability:"):
 		var capability := reason_code.trim_prefix("missing_capability:")
-		return "需要先在开局结构中启用“%s”" % str(CAPABILITY_CN.get(capability, capability))
+		return "@{desktop.main.fragment.ceec702b8e211824}%s”" % str(CAPABILITY_CN.get(capability, capability))
 	if reason_code.begins_with("missing_world_capability:"):
 		var capability := reason_code.trim_prefix("missing_world_capability:")
-		return "当前世界未启用“%s”" % str(CAPABILITY_CN.get(capability, capability))
+		return "@{desktop.main.fragment.57f5f4990c6d6098}%s”" % str(CAPABILITY_CN.get(capability, capability))
 	if reason_code.begins_with("disabled_prerequisite:"):
 		var prerequisite := reason_code.trim_prefix("disabled_prerequisite:")
-		return "需先启用政策“%s”" % _cn(prerequisite)
+		return "@{desktop.main.fragment.d8b96c90a864f591}%s”" % _cn(prerequisite)
 	return {
-		"pending_conflict": "该政策已有等待生效的决定",
-		"minimum_hold": "仍在最短持有期 / 冷却期内",
-		"admin_capacity_exceeded": "本决策窗口的行政容量不足",
-		"joint_constraint:peg_unavailable": "当前没有合法的联系汇率锚国，或已有其他挂钩国",
-		"joint_constraint:no_valid_peg_anchor": "当前没有可用的浮动汇率锚国",
+		"pending_conflict": "@{desktop.main.fragment.93e4c72a5d75be63}",
+		"minimum_hold": "@{desktop.main.fragment.bf11f06e60b7bf5f} / @{desktop.main.fragment.9cf1671304bdf004}",
+		"admin_capacity_exceeded": "@{desktop.main.fragment.76db622d3552f2af}",
+		"joint_constraint:peg_unavailable": "@{desktop.main.fragment.2e173fb06567aafd}",
+		"joint_constraint:no_valid_peg_anchor": "@{desktop.main.fragment.e6e8cbeca1195a9c}",
 	}.get(reason_code, reason_code.replace("_", " "))
 
 
@@ -1380,10 +1423,10 @@ func _stage_lever_edit(lever: Dictionary, value: Variant) -> void:
 		lever.get("effective_semantics", "")))
 	if semantics.contains("transition"):
 		_confirm = {
-			"title": "制度迁移确认",
-			"body": "将「%s」调整为“%s”会切换制度分支，并按较高成本计费。是否保留为本次草稿？" % [
+			"title": "@{desktop.main.fragment.e04581fb23040b7a}",
+			"body": "@{desktop.main.fragment.2676b2e92c3452ff}%s@{desktop.main.fragment.262098faceaa38b6}%s@{desktop.main.fragment.9a4f9eb9e97abdff}" % [
 				_cn(lever_name), _lever_value_text(lever, value)],
-			"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
+			"note": "@{desktop.main.fragment.40d46f4142faec44} · @{desktop.main.fragment.b1c27820fec23edb} · @{desktop.main.fragment.da348369158b4e9e} %d @{desktop.main.fragment.cccf58ef16e9afe4}" % int(lever.get("implementation_lag", 0)),
 			"on_yes": func() -> void:
 				_set_policy_edit(lever, value),
 		}
@@ -1405,7 +1448,7 @@ func _focus_lever(lever_name: String) -> void:
 	_expanded_lever = lever_name
 	_search = ""
 	(_n["search"] as LineEdit).text = ""
-	# 从提案篮返回编辑时，确保该项不被“仅本会议题”过滤掉。
+	#  Keep an edited proposal visible when returning from the proposal basket.
 	if _context_for_group(str(info.get("decision_group", ""))).is_empty():
 		_policy_scope = "all"
 	_render()
@@ -1414,8 +1457,8 @@ func _focus_lever(lever_name: String) -> void:
 func _country_name(i: int) -> String:
 	var countries: Array = _world().get("countries", [])
 	if i >= 0 and i < countries.size():
-		return str((countries[i] as Dictionary).get("name", "经济体%d" % i))
-	return "经济体%d" % i
+		return str((countries[i] as Dictionary).get("name", "@{desktop.main.fragment.875f07b0b3723010}%d" % i))
+	return "@{desktop.main.fragment.875f07b0b3723010}%d" % i
 
 
 func _seat_name(seat: String) -> String:
@@ -1433,18 +1476,18 @@ func _event_group(event: Dictionary) -> String:
 		var parts := context_id.split(":")
 		if parts.size() > 3:
 			group = parts[3]
-	return str(GROUP_CN.get(group, "紧急处置" if group == "emergency" else group))
+	return str(GROUP_CN.get(group, "@{desktop.main.fragment.68057913cfe371f2}" if group == "emergency" else group))
 
 
 func _event_title(event_type: String) -> String:
 	if EVENT_TITLES.has(event_type):
 		return str(EVENT_TITLES[event_type])
 	if event_type.begins_with("shock_"):
-		return "外生冲击动态"
+		return "@{desktop.main.fragment.e692be404f47b00a}"
 	if event_type.begins_with("decision_"):
-		return "政策裁决更新"
+		return "@{desktop.main.fragment.e45bac3986af7081}"
 	if event_type.begins_with("policy_") or event_type.contains("transaction"):
-		return "政策执行更新"
+		return "@{desktop.main.fragment.342fe609c72c09d8}"
 	return event_type.replace("_", " ").capitalize()
 
 
@@ -1482,7 +1525,7 @@ func _event_is_important(event_type: String) -> bool:
 		or event_type.contains("committed")
 
 
-# ================= 主题/样式 =================
+#  Synchronization helper.
 func _build_theme() -> void:
 	var t := Theme.new()
 	t.default_font = _sans
@@ -1497,7 +1540,7 @@ func _build_theme() -> void:
 	t.set_stylebox("disabled", "Button", _sb(Color("eef1f5"), LINE, 8, 7))
 	t.set_color("font_disabled_color", "Button", Color("849098"))
 	t.set_stylebox("panel", "PanelContainer", _sb(PANEL, LINE, 13, 12, 10))
-	# Godot 默认 Tooltip 偏小且透明度低；统一为适合财经信息的高对比浮层。
+	#  Godot default tooltip is small and less transparent; uniform as a high-comparison float suitable for financial information.
 	var tooltip_style := _sb(Color("142a38"), Color("3a5260"), 10, 12, 8)
 	t.set_stylebox("panel", "TooltipPanel", tooltip_style)
 	t.set_font("font", "TooltipLabel", _sans)
@@ -1590,7 +1633,7 @@ func _fade_in(node: Control) -> void:
 
 
 func _keep_scroll(key: String, scroll: ScrollContainer) -> void:
-	## 重建前调用:记录;重建后 restore(延迟一帧生效)
+	##  Pre-reconstruction call: records; post-reconstruction restore (delayed entry into force of one frame)
 	_scroll_mem[key] = scroll.scroll_vertical
 
 
@@ -1616,7 +1659,8 @@ func _fmt_val(kind: String, v: float) -> String:
 		"pct":
 			return "%.1f%%" % (v * 100.0)
 		"pt":
-			return "%.2f%%/日" % (v * 100.0)
+			return LocaleCatalogScript.format(
+				"desktop.format.rate_per_day", v * 100.0)
 		"per_thousand":
 			return "%.2f‰" % v
 		"idx":
@@ -1637,7 +1681,8 @@ func _fmt_series(sid: String, v: float) -> String:
 				"credit_to_gdp", "poverty_rate":
 			return "%.1f%%" % (v * 100.0)
 		"inflation", "policy_rate":
-			return "%.2f%%/日" % (v * 100.0)
+			return LocaleCatalogScript.format(
+				"desktop.format.rate_per_day", v * 100.0)
 		"price_index":
 			return "%.3f" % v
 		_:
@@ -1647,12 +1692,13 @@ func _fmt_series(sid: String, v: float) -> String:
 func _cal_str(t: int) -> String:
 	var year_day := t % 365
 	var quarter := mini(year_day / 91, 3)
-	return "第 %d 年 · 第 %d 季 · 第 %d 天" % [
-		t / 365 + 1, quarter + 1, year_day - quarter * 91 + 1]
+	return LocaleCatalogScript.format("desktop.calendar.full", [
+		t / 365 + 1, quarter + 1, year_day - quarter * 91 + 1])
 
 
 func _cal_short(t: int) -> String:
-	return "第 %d 年 · 第 %d 日" % [t / 365 + 1, t % 365 + 1]
+	return LocaleCatalogScript.format(
+		"desktop.calendar.short", [t / 365 + 1, t % 365 + 1])
 
 
 func _cal_value(value: Variant) -> String:
@@ -1661,10 +1707,10 @@ func _cal_value(value: Variant) -> String:
 		return _cal_short(int(value))
 	if raw.is_valid_int():
 		return _cal_short(raw.to_int())
-	return "日期待定"
+	return "@{desktop.main.fragment.da41b98e395499be}"
 
 
-# ================= 布局 =================
+#  Synchronization helper.
 func _build_ui() -> void:
 	var bgr := ColorRect.new()
 	bgr.color = GROUND
@@ -1716,9 +1762,9 @@ func _build_ui() -> void:
 	st.add_theme_constant_override("separation", 10)
 	st.alignment = BoxContainer.ALIGNMENT_CENTER
 	st.add_child(_dot(TEAL, 11.0))
-	st.add_child(_lbl("宏观指挥室", 26, INK))
+	st.add_child(_lbl("@{desktop.main.fragment.73169097f403db72}", 26, INK))
 	sv.add_child(st)
-	var sub := _lbl("MACRO COMMAND · 三国耦合世界", 12, Color("68788b"), true)
+	var sub := _lbl("MACRO COMMAND · @{desktop.main.fragment.2483b7077faefe1a}", 12, Color("68788b"), true)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sv.add_child(sub)
 	var spin := _Spinner.new()
@@ -1728,7 +1774,7 @@ func _build_ui() -> void:
 	sv.add_child(spin)
 	var stw := create_tween().set_loops()
 	stw.tween_property(spin, "rotation", TAU, 1.1).from(0.0)
-	var sload := _lbl("连接引擎中 · 创世三国经济体…", 12, INK2)
+	var sload := _lbl("@{desktop.main.fragment.2af295a5eea998b4} · @{desktop.main.fragment.9dd6ecef8da54cee}", 12, INK2)
 	sload.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sv.add_child(sload)
 
@@ -1740,8 +1786,8 @@ func _build_header(shell: VBoxContainer) -> void:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
 	hp.add_child(h)
-	var menu_button := _btn("⌂  主菜单", _request_return_to_main_menu)
-	menu_button.tooltip_text = "暂停当前模拟并返回主菜单"
+	var menu_button := _btn("⌂  @{desktop.main.fragment.d8c47e9776cf1082}", _request_return_to_main_menu)
+	menu_button.tooltip_text = "@{desktop.main.fragment.a917151f6055da74}"
 	menu_button.custom_minimum_size = Vector2(90, 0)
 	_n["main_menu"] = menu_button
 	h.add_child(menu_button)
@@ -1750,7 +1796,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	tbox.add_theme_constant_override("separation", 9)
 	h.add_child(tbox)
 	tbox.add_child(_dot(TEAL, 9.0))
-	tbox.add_child(_lbl("宏观指挥室", 17, INK))
+	tbox.add_child(_lbl("@{desktop.main.fragment.73169097f403db72}", 17, INK))
 	tbox.add_child(_lbl("MACRO COMMAND", 11, Color("68788b"), true))
 	var op := PanelContainer.new()
 	op.add_theme_stylebox_override("panel", _sb(TEAL_BG, TEAL_BD, 20, 5))
@@ -1764,7 +1810,7 @@ func _build_header(shell: VBoxContainer) -> void:
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	breath.tween_property(live_dot, "modulate:a", 1.0, 0.9)\
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	var conn := _lbl("连接中…", 12, TEAL)
+	var conn := _lbl("@{desktop.main.fragment.ee9ebe523d4205f8}", 12, TEAL)
 	_n["conn"] = conn
 	online.add_child(conn)
 	h.add_child(op)
@@ -1792,7 +1838,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	wtw.tween_property(wdot, "modulate:a", 0.3, 0.55).set_trans(Tween.TRANS_SINE)
 	wtw.tween_property(wdot, "modulate:a", 1.0, 0.55).set_trans(Tween.TRANS_SINE)
 	wbx.add_child(wdot)
-	wbx.add_child(_lbl("等待决策", 12, AMBER))
+	wbx.add_child(_lbl("@{desktop.main.fragment.eddd69f83ff60cfe}", 12, AMBER))
 	_n["awaitchip"] = waitp
 	h.add_child(waitp)
 	h.add_child(_spacer_h())
@@ -1802,14 +1848,14 @@ func _build_header(shell: VBoxContainer) -> void:
 	var modes := HBoxContainer.new()
 	modes.add_theme_constant_override("separation", 2)
 	modes_wrap.add_child(modes)
-	for m: Array in [["interactive", "交互"], ["realtime", "实时"]]:
+	for m: Array in [["interactive", "@{desktop.main.fragment.99f1b08f6464952c}"], ["realtime", "@{desktop.main.fragment.c69ec2ffb0db8ca4}"]]:
 		var mb := Button.new()
 		mb.text = m[1]
-		mb.tooltip_text = "运行模式\n交互：会议开始时暂停，等待你决策\n实时：自动通过非紧急会议；紧急会议仍会暂停"
+		mb.tooltip_text = "@{desktop.main.fragment.87ed126f7bd1121e}\n@{desktop.main.fragment.66bba32fb837bee4}\n@{desktop.main.fragment.4c643d2e18d8f950}"
 		var mid: String = m[0]
 		mb.pressed.connect(func() -> void:
 			if mid == "realtime" and _mode != "realtime":
-				_show_hint("实时模式:播放中将自动通过非紧急会议(待生效政策不受影响);紧急会议仍会暂停。")
+				_show_hint("@{desktop.main.fragment.00dbe842b551e866}:@{desktop.main.fragment.cf6f6acf36f45320}(@{desktop.main.fragment.a3d7d03ea4a571bd});@{desktop.main.fragment.349c7af1f9137215}")
 			_mode = mid
 			_render())
 		_n["mode_" + mid] = mb
@@ -1821,16 +1867,16 @@ func _build_header(shell: VBoxContainer) -> void:
 	var tp := HBoxContainer.new()
 	tp.add_theme_constant_override("separation", 4)
 	transport.add_child(tp)
-	var stepb := _btn("步进", func() -> void:
+	var stepb := _btn("@{desktop.main.fragment.18a29569240cf047}", func() -> void:
 		if _awaiting() and not _free_policy_enabled():
-			_show_hint("本届会议未闭合,推进被暂停:请「提交提案」或「本次不动」;紧急会议在红色面板里处置。切到「实时」模式可自动通过非紧急会议。")
+			_show_hint("@{desktop.main.fragment.e864ee0d87b36635},@{desktop.main.fragment.3c1f0ce319b70d38}:@{desktop.main.fragment.6bc9059a94e3eb32};@{desktop.main.fragment.bc551cf3a4703042}")
 			_render()
 		else:
 			_send({"command": "advance", "ticks": 1}))
-	stepb.tooltip_text = "单日步进\n将模拟时间推进 1 天\n快捷键：→"
+	stepb.tooltip_text = "@{desktop.main.fragment.967615a6c5a8f47c}\n@{desktop.main.fragment.820e5d75acc363e6} 1 @{desktop.main.fragment.49da61ceeea2f271}\n@{desktop.main.fragment.d27c41a46f649ee3}"
 	tp.add_child(stepb)
-	var play := _btn("▶  播放", _toggle_play, true)
-	play.tooltip_text = "播放 / 暂停模拟\n快捷键：空格"
+	var play := _btn("▶  @{desktop.main.fragment.c3396195e91ccdd8}", _toggle_play, true)
+	play.tooltip_text = "@{desktop.main.fragment.c3396195e91ccdd8} / @{desktop.main.fragment.631f743a6244c4f5}\n@{desktop.main.fragment.f6671bd389bc80fe}"
 	play.custom_minimum_size = Vector2(96, 0)
 	_n["play"] = play
 	tp.add_child(play)
@@ -1839,7 +1885,7 @@ func _build_header(shell: VBoxContainer) -> void:
 		sbn.text = "%d×" % s
 		sbn.add_theme_font_override("font", _mono)
 		sbn.add_theme_font_size_override("font_size", 12)
-		sbn.tooltip_text = "模拟速度：%d 倍\n快捷键：%d" % [s, SPEEDS.find(s) + 1]
+		sbn.tooltip_text = "@{desktop.main.fragment.b8a29fa7b314c3ea}%d @{desktop.main.fragment.16729fb40af5af9b}\n@{desktop.main.fragment.10b775695af17455}%d" % [s, SPEEDS.find(s) + 1]
 		var chosen := s
 		sbn.pressed.connect(func() -> void:
 			_speed = chosen
@@ -1853,7 +1899,7 @@ func _toggle_play() -> void:
 	_playing = not _playing
 	if _playing and _awaiting() and _mode != "realtime" \
 			and not _free_policy_enabled():
-		_show_hint("播放已就绪,但本届会议未闭合:先「提交提案」或「本次不动」,或切「实时」模式自动通过。")
+		_show_hint("@{desktop.main.fragment.ac0b38470539c75c},@{desktop.main.fragment.cbe267255ddd4d4c}:@{desktop.main.fragment.3b596b973430b48c},@{desktop.main.fragment.b0f2ab3c31ffd8b3}")
 	_render()
 
 
@@ -1863,7 +1909,7 @@ func _build_main(shell: VBoxContainer) -> void:
 	main.add_theme_constant_override("separation", 10)
 	shell.add_child(main)
 	var wbp := PanelContainer.new()
-	# 政策编辑是主玩法，给中文名称、状态和精确输入留出稳定宽度。
+	#  The policy editor is the main game, leaving a stable width for Chinese names, status and precise input.
 	wbp.custom_minimum_size = Vector2(440, 0)
 	wbp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
 	main.add_child(wbp)
@@ -1895,7 +1941,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	head.add_theme_constant_override("separation", 7)
 	hp.add_child(head)
 	var title_row := HBoxContainer.new()
-	title_row.add_child(_lbl("POLICY DESK · 政策工作台", 10, INK3, true))
+	title_row.add_child(_lbl("POLICY DESK · @{desktop.main.fragment.1445d3624f03880e}", 10, INK3, true))
 	title_row.add_child(_spacer_h())
 	var seat_brief := _lbl("", 9, INK3, true)
 	_n["seat_brief"] = seat_brief
@@ -1946,8 +1992,8 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	_n["search"] = search
 	search_row.add_child(search)
 	var scope := Button.new()
-	scope.text = "本会议题"
-	scope.tooltip_text = "政策浏览范围\n在“本会议题”和当前席位的“全部政策”之间切换"
+	scope.text = "@{desktop.main.fragment.fe8af2657e540cbd}"
+	scope.tooltip_text = "@{desktop.main.fragment.a7d8f1624cd08199}\n@{desktop.main.fragment.7f98f9c6a3409542}"
 	scope.add_theme_font_size_override("font_size", 11)
 	scope.pressed.connect(func() -> void:
 		_policy_scope = "all" if _policy_scope == "meeting" else "meeting"
@@ -1984,10 +2030,10 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	cart.add_child(vslot)
 	var crow := HBoxContainer.new()
 	crow.add_theme_constant_override("separation", 8)
-	var cart_title := _lbl("提案篮", 10, INK3, true)
+	var cart_title := _lbl("@{desktop.main.fragment.788dc700d8faa6eb}", 10, INK3, true)
 	_n["cart_title"] = cart_title
 	crow.add_child(cart_title)
-	var ccount := _lbl("0 项", 11, Color("647585"))
+	var ccount := _lbl("0 @{desktop.main.fragment.49ccde43a1549791}", 11, Color("647585"))
 	_n["cart_count"] = ccount
 	crow.add_child(ccount)
 	crow.add_child(_spacer_h())
@@ -2001,11 +2047,11 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	cart.add_child(citems)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
-	var submit := _btn("提交提案", _submit_cart, true)
+	var submit := _btn("@{desktop.main.fragment.bed494cc5491181a}", _submit_cart, true)
 	submit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_n["submit"] = submit
 	actions.add_child(submit)
-	var pass_b := _btn("本次不动", _submit_pass)
+	var pass_b := _btn("@{desktop.main.fragment.1966f4dfc00757e5}", _submit_pass)
 	_n["pass"] = pass_b
 	actions.add_child(pass_b)
 	cart.add_child(actions)
@@ -2019,9 +2065,9 @@ func _build_center(center: VBoxContainer) -> void:
 	var segh := HBoxContainer.new()
 	segh.add_theme_constant_override("separation", 2)
 	seg.add_child(segh)
-	for t: Array in [["focus", "宏观焦点"], ["households", "家庭"], ["firms", "企业"],
-			["stocks", "股市"],
-			["panels", "指标全景"], ["world", "世界视图"]]:
+	for t: Array in [["focus", "@{desktop.main.fragment.d7a0d892505502a2}"], ["households", "@{desktop.main.fragment.a70a77c75b1dc74f}"], ["firms", "@{desktop.main.fragment.409d0719010a46ee}"],
+			["stocks", "@{desktop.main.fragment.b6f19996399ce673}"],
+			["panels", "@{desktop.main.fragment.6ec65d0d0d3d72e1}"], ["world", "@{desktop.main.fragment.036bf7c22dc51057}"]]:
 		var b := Button.new()
 		b.text = t[1]
 		var tid: String = t[0]
@@ -2032,7 +2078,7 @@ func _build_center(center: VBoxContainer) -> void:
 		segh.add_child(b)
 	tabs.add_child(seg)
 	tabs.add_child(_spacer_h())
-	var tabnote := _lbl("X 轴 = 发布时间(非参考期)", 10, INK3, true)
+	var tabnote := _lbl("X @{desktop.main.fragment.3a3bdd4b3c4f458e} = @{desktop.main.fragment.e8ff4d335dee5d55}(@{desktop.main.fragment.369421adfa2cd18a})", 10, INK3, true)
 	_n["tabnote"] = tabnote
 	tabs.add_child(tabnote)
 	center.add_child(tabs)
@@ -2053,12 +2099,12 @@ func _build_timeline(tl: VBoxContainer) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	hp.add_child(head)
-	head.add_child(_lbl("EVENTS · 时间线", 10, INK3, true))
+	head.add_child(_lbl("EVENTS · @{desktop.main.fragment.f1241a97b0821a99}", 10, INK3, true))
 	head.add_child(_spacer_h())
 	var filter := Button.new()
-	filter.text = "重点事件"
+	filter.text = "@{desktop.main.fragment.f3f75c13a660d243}"
 	filter.add_theme_font_size_override("font_size", 11)
-	filter.tooltip_text = "时间线筛选\n依次切换：重点事件 / 全部记录 / 我的操作"
+	filter.tooltip_text = "@{desktop.main.fragment.c25f3537a70b2d91}\n@{desktop.main.fragment.bf4f7b0a7eae4b75} / @{desktop.main.fragment.e4257920848098bb} / @{desktop.main.fragment.375eb6ab5a1dfc56}"
 	filter.pressed.connect(func() -> void:
 		match _event_filter:
 			"important": _event_filter = "all"
@@ -2102,11 +2148,11 @@ func _build_overlays() -> void:
 	chead.add_theme_constant_override("separation", 12)
 	chp.add_child(chead)
 	chead.add_child(_dot(RED, 10))
-	var ct := _lbl("紧急会议", 16, Color("7a2418"))
+	var ct := _lbl("@{desktop.main.fragment.f8ce4c400c738850}", 16, Color("7a2418"))
 	_n["crisis_title"] = ct
 	chead.add_child(ct)
 	chead.add_child(_spacer_h())
-	chead.add_child(_btn("离开横幅", func() -> void:
+	chead.add_child(_btn("@{desktop.main.fragment.11f808026b8acefb}", func() -> void:
 		_demo_crisis = false
 		_crisis_dismissed = str(_emergency_context().get("context_id", ""))
 		_render()))
@@ -2120,7 +2166,7 @@ func _build_overlays() -> void:
 	var snapcol := VBoxContainer.new()
 	snapcol.custom_minimum_size = Vector2(420, 0)
 	snapcol.add_theme_constant_override("separation", 8)
-	snapcol.add_child(_lbl("相关公报快照", 10, Color("9a6a5e"), true))
+	snapcol.add_child(_lbl("@{desktop.main.fragment.0373c11cfe446b07}", 10, Color("9a6a5e"), true))
 	_n["crisis_snap"] = snapcol
 	cbody.add_child(snapcol)
 	var levcol := VBoxContainer.new()
@@ -2128,12 +2174,12 @@ func _build_overlays() -> void:
 	levcol.add_theme_constant_override("separation", 9)
 	var lh := HBoxContainer.new()
 	lh.add_theme_constant_override("separation", 8)
-	lh.add_child(_lbl("紧急白名单杠杆", 10, Color("9a6a5e"), true))
-	lh.add_child(_chip("溢价适用", Color("a0691f"), Color(0, 0, 0, 0), AMBER_BD, 10))
+	lh.add_child(_lbl("@{desktop.main.fragment.bc7f5e5a2fbf6239}", 10, Color("9a6a5e"), true))
+	lh.add_child(_chip("@{desktop.main.fragment.2f662f44baea6c40}", Color("a0691f"), Color(0, 0, 0, 0), AMBER_BD, 10))
 	levcol.add_child(lh)
 	_n["crisis_levers"] = levcol
 	cbody.add_child(levcol)
-	var trig := _btn("▲ 模拟紧急会议", func() -> void:
+	var trig := _btn("▲ @{desktop.main.fragment.bd7ddfac990b705e}", func() -> void:
 		_demo_crisis = true
 		_render())
 	_n["crisis_trigger"] = trig
@@ -2166,7 +2212,7 @@ func _build_overlays() -> void:
 	head_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head_copy.add_theme_constant_override("separation", 3)
 	modal_head.add_child(head_copy)
-	var eyebrow := _lbl("POLICY INTELLIGENCE · 政策决策档案", 9, Color("748496"), true)
+	var eyebrow := _lbl("POLICY INTELLIGENCE · @{desktop.main.fragment.4e0a158ede9ac602}", 9, Color("748496"), true)
 	_n["modal_eyebrow"] = eyebrow
 	head_copy.add_child(eyebrow)
 	var mtitle := _lbl("", 15, INK)
@@ -2216,10 +2262,10 @@ func _build_overlays() -> void:
 	mrow.add_theme_constant_override("separation", 9)
 	mrow.alignment = BoxContainer.ALIGNMENT_END
 	_n["modal_actions"] = mrow
-	var modal_cancel := _btn("取消", _confirm_cancel)
+	var modal_cancel := _btn("@{desktop.main.fragment.2cd0f3be8738a86c}", _confirm_cancel)
 	_n["modal_cancel"] = modal_cancel
 	mrow.add_child(modal_cancel)
-	var modal_confirm := _btn("确认", _confirm_yes, true)
+	var modal_confirm := _btn("@{desktop.main.fragment.36f33adaf0942634}", _confirm_yes, true)
 	_n["modal_confirm"] = modal_confirm
 	mrow.add_child(modal_confirm)
 	mv.add_child(mrow)
@@ -2241,7 +2287,7 @@ func _confirm_cancel() -> void:
 	_render()
 
 
-# ================= 渲染 =================
+#  Synchronization helper.
 func _render() -> void:
 	var t := int(_snapshot.get("tick", 0))
 	_set_text("cal", _cal_str(t))
@@ -2254,7 +2300,7 @@ func _render() -> void:
 	(_n["modes_wrap"] as Control).visible = not free_policy
 	(_n["crisis_trigger"] as Control).visible = not free_policy
 	var playb := _n["play"] as Button
-	playb.text = "⏸  暂停" if _playing else "▶  播放"
+	playb.text = "⏸  @{desktop.main.fragment.8d12fc0d4eb26021}" if _playing else "▶  @{desktop.main.fragment.c3396195e91ccdd8}"
 	if _playing:
 		playb.add_theme_stylebox_override("normal", _sb(TEAL, Color("0c8579"), 8, 7))
 		playb.add_theme_color_override("font_color", Color.WHITE)
@@ -2286,16 +2332,16 @@ func _render() -> void:
 			tb.add_theme_stylebox_override("normal", _sb(Color(1, 1, 1, 0), Color(0, 0, 0, 0), 18, 7))
 			tb.add_theme_color_override("font_color", Color("586a7b"))
 	_set_text("tabnote", {
-		"focus": "基于已发布公报的跨指标判断",
-		"households": "微观家庭 · 成员、资产负债与消费",
-		"firms": "微观企业 · 经营、账表、员工与股权",
-		"stocks": "每日收盘行情 · 企业股与银行股",
-		"panels": "经济运行 · 多维指标与结构分解",
-		"world": "多国耦合 · 贸易 / 资本 / 移民",
+		"focus": "@{desktop.main.fragment.a6ff5a6d73255807}",
+		"households": "@{desktop.main.fragment.e459b9ef649fba5a} · @{desktop.main.fragment.19afc3114ec3cd82}",
+		"firms": "@{desktop.main.fragment.5eb46fdbe9cbc02e} · @{desktop.main.fragment.00a6570bb25bae5b}",
+		"stocks": "@{desktop.main.fragment.d43d3298be5af7a1} · @{desktop.main.fragment.3fc2012bf90922c0}",
+		"panels": "@{desktop.main.fragment.a12d6b20a0cecdb9} · @{desktop.main.fragment.a45bd34388926c09}",
+		"world": "@{desktop.main.fragment.80b1e81fc794712c} · @{desktop.main.fragment.26a59f85b3eb5fc4} / @{desktop.main.fragment.59831fc48b368a54} / @{desktop.main.fragment.8948bde020cb3af2}",
 	}.get(_tab, ""))
 	(_n["filter"] as Button).text = {
-		"important": "重点事件", "all": "全部记录", "mine": "我的操作",
-	}.get(_event_filter, "重点事件")
+		"important": "@{desktop.main.fragment.f3f75c13a660d243}", "all": "@{desktop.main.fragment.e4257920848098bb}", "mine": "@{desktop.main.fragment.375eb6ab5a1dfc56}",
+	}.get(_event_filter, "@{desktop.main.fragment.f3f75c13a660d243}")
 	_render_tiles()
 	_render_workbench()
 	_render_center()
@@ -2326,7 +2372,7 @@ func _render() -> void:
 		(_n["modal_eyebrow"] as Control).visible = read_only
 		(_n["modal_top_close"] as Control).visible = read_only
 		(_n["modal_actions"] as Control).visible = not read_only
-		(_n["modal_cancel"] as Button).text = "取消"
+		(_n["modal_cancel"] as Button).text = "@{desktop.main.fragment.2cd0f3be8738a86c}"
 		(_n["modal_confirm"] as Button).visible = not read_only
 		_set_text("modal_title", str(_confirm.get("title", "")))
 		_set_text("modal_body", str(_confirm.get("body", "")))
@@ -2336,6 +2382,33 @@ func _render() -> void:
 		if read_only:
 			_render_policy_brief(
 				_confirm.get("lever", {}), _confirm.get("current"))
+	_localize_tree(self)
+
+
+func _localize_tree(node: Node) -> void:
+	if node is Label:
+		(node as Label).text = LocaleCatalogScript.resolve((node as Label).text)
+	elif node is RichTextLabel:
+		(node as RichTextLabel).text = LocaleCatalogScript.resolve(
+			(node as RichTextLabel).text)
+	elif node is Button:
+		(node as Button).text = LocaleCatalogScript.resolve((node as Button).text)
+	elif node is LineEdit:
+		(node as LineEdit).placeholder_text = LocaleCatalogScript.resolve(
+			(node as LineEdit).placeholder_text)
+	elif node is TextEdit:
+		(node as TextEdit).placeholder_text = LocaleCatalogScript.resolve(
+			(node as TextEdit).placeholder_text)
+	if node is Control:
+		(node as Control).tooltip_text = LocaleCatalogScript.resolve(
+			(node as Control).tooltip_text)
+	if node is OptionButton:
+		var selector := node as OptionButton
+		for index in selector.item_count:
+			selector.set_item_text(
+				index, LocaleCatalogScript.resolve(selector.get_item_text(index)))
+	for child in node.get_children():
+		_localize_tree(child)
 
 
 func _render_tiles() -> void:
@@ -2357,7 +2430,8 @@ func _render_tiles() -> void:
 		tile.mouse_exited.connect(func() -> void:
 			tile.add_theme_stylebox_override("panel", trest))
 		tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		tile.tooltip_text = "查看指标详情\n打开「指标全景 · %s」" % str(TILE_TO_GROUP.get(sid, ""))
+		tile.tooltip_text = "@{desktop.main.fragment.b2e3ffb8c796691f}\n@{desktop.main.fragment.69b22e58d0b124bd} · %s」" % _panel_group_name(
+			str(TILE_TO_GROUP.get(sid, "")))
 		tile.gui_input.connect(func(event: InputEvent) -> void:
 			if event is InputEventMouseButton \
 					and (event as InputEventMouseButton).pressed \
@@ -2421,14 +2495,14 @@ func _render_tiles() -> void:
 			chart.values = vals
 			v.add_child(chart)
 			var ref_end := int(rel.get("reference_end_tick", t))
-			var rline := _lbl("%s发布 · %d日前" % [
+			var rline := _lbl("%s@{desktop.main.fragment.b61f333b91b21f79} · %d@{desktop.main.fragment.503ecc0ed6fca314}" % [
 				_cal_short(int(rel.get("released_at_tick", 0))), t - ref_end], 9, INK3, true)
 			rline.clip_text = true
 			v.add_child(rline)
 		else:
 			var wait_row := HBoxContainer.new()
 			wait_row.add_theme_constant_override("separation", 6)
-			wait_row.add_child(_chip("待发布", Color("849098"), Color("f2f5f9"),
+			wait_row.add_child(_chip("@{desktop.main.fragment.07901db4aad361d9}", Color("849098"), Color("f2f5f9"),
 				Color("e0e6ee"), 10))
 			v.add_child(wait_row)
 			v.add_child(_lbl("— —", 17, Color("c3ccd6"), true))
@@ -2439,7 +2513,7 @@ func _render_tiles() -> void:
 		row.add_child(tile)
 
 
-# ================= 工作台 =================
+#  Synchronization helper.
 func _render_workbench() -> void:
 	var lv := _n["levers"] as VBoxContainer
 	var lscroll := lv.get_parent() as ScrollContainer
@@ -2508,13 +2582,13 @@ func _render_workbench() -> void:
 		_set_text("meeting",
 			LocaleCatalogScript.format("desktop.free.header", active_name))
 	elif not open:
-		_set_text("meeting", "%s · 政策窗口关闭 · 可浏览现行制度" % active_name)
+		_set_text("meeting", "%s · @{desktop.main.fragment.58ef70be957cea2d} · @{desktop.main.fragment.b3e8eb037c4c3bba}" % active_name)
 	elif active_contexts.is_empty():
-		_set_text("meeting", "%s · 本届联席会议无待决议题" % active_name)
+		_set_text("meeting", "%s · @{desktop.main.fragment.50fc365b776171f7}" % active_name)
 	else:
-		var status := "🚨 紧急授权" if emg else "● 例会授权"
-		var cap := "" if cap_text.is_empty() else " · 容量 " + cap_text
-		_set_text("meeting", "%s · %s %d 窗口 / %d 项可调%s" % [
+		var status := "🚨 @{desktop.main.fragment.7ac9f30d469518a3}" if emg else "● @{desktop.main.fragment.227d598dd9387039}"
+		var cap := "" if cap_text.is_empty() else " · @{desktop.main.fragment.d8272b3c5f197b58} " + cap_text
+		_set_text("meeting", "%s · %s %d @{desktop.main.fragment.9efe01f647d67d91} / %d @{desktop.main.fragment.c94913ca0622e9ea}%s" % [
 			active_name, status, active_contexts.size(), active_allowed, cap])
 	var meetl := _n["meeting"] as Label
 	meetl.add_theme_color_override("font_color", TEAL_DK if free_policy else (
@@ -2539,7 +2613,7 @@ func _render_workbench() -> void:
 						pending_by[str((act as Dictionary).get("lever", ""))] = {
 							"value": (act as Dictionary).get("value"),
 							"effective_tick": decision.get("effective_tick", "?")}
-	# 二级页签:主题页(每页 ≤8；搜索时隐藏)
+	#  Secondary Page Signing: Themes Pages (≤8 per page; hidden during search)
 	var gflow := _n["group_chips"] as HFlowContainer
 	for c in gflow.get_children():
 		c.queue_free()
@@ -2550,7 +2624,7 @@ func _render_workbench() -> void:
 		_policy_scope = "all"
 	scope.visible = not searching and not free_policy
 	scope.disabled = not active_open
-	scope.text = "本会议题" if _policy_scope == "meeting" and active_open else "全部政策"
+	scope.text = "@{desktop.main.fragment.fe8af2657e540cbd}" if _policy_scope == "meeting" and active_open else "@{desktop.main.fragment.aa62abe9efa2901e}"
 	if _policy_scope == "meeting" and active_open:
 		scope.add_theme_stylebox_override("normal", _sb(AMBER_BG, AMBER_BD, 8, 6))
 		scope.add_theme_color_override("font_color", Color("8a6114"))
@@ -2614,7 +2688,7 @@ func _render_workbench() -> void:
 				_expanded_lever = ""
 				_render())
 			gflow.add_child(b)
-	# 旋钮列表:搜索=跨席位;否则=当前主题页(单屏);手风琴展开
+	#  Cylinder List: Search = cross-seat; otherwise = current theme page (one screen); accordion development
 	var rows: Array = []   # [{lever, seat}]
 	if searching:
 		var needle := _search.to_lower()
@@ -2637,7 +2711,7 @@ func _render_workbench() -> void:
 	if searching:
 		var sh := MarginContainer.new()
 		sh.add_theme_constant_override("margin_left", 12)
-		sh.add_child(_lbl("搜索「%s」· %d 项(全部席位)" % [_search, rows.size()],
+		sh.add_child(_lbl("@{desktop.main.fragment.d94aa4bc1ba2a23c}%s」· %d @{desktop.main.fragment.49ccde43a1549791}(@{desktop.main.fragment.e864e4811f1ca72c})" % [_search, rows.size()],
 			10, INK3, true))
 		lv.add_child(sh)
 	if rows.is_empty():
@@ -2647,8 +2721,8 @@ func _render_workbench() -> void:
 		empty.add_theme_constant_override("margin_top", 8)
 		var empty_panel := PanelContainer.new()
 		empty_panel.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 9, 10))
-		var empty_text := "没有匹配的政策。" if searching \
-			else "本主题不在当前会议授权范围；切换为“全部政策”可浏览。"
+		var empty_text := "@{desktop.main.fragment.92e72040bc2431ce}" if searching \
+			else "@{desktop.main.fragment.aa3b8a95534f1738}"
 		var empty_label := _lbl(empty_text, 11, INK3)
 		empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty_panel.add_child(empty_label)
@@ -2677,11 +2751,11 @@ func _render_workbench() -> void:
 		var gv := VBoxContainer.new()
 		gv.add_theme_constant_override("separation", 5)
 		gp.add_child(gv)
-		gv.add_child(_lbl("上手指引", 11, Color("1c4a8f")))
-		for tip in ["▶ 播放(空格)推进模拟,遇到会议自动暂停",
-				"会议开启时:点旋钮行展开 → 调整 → 加入提案 → 提交",
-				"嫌打断多?切「实时」模式自动通过非紧急会议",
-				"点顶部磁贴直达指标全景;世界视图看三国关系"]:
+		gv.add_child(_lbl("@{desktop.main.fragment.43d4c4981dfbfba6}", 11, Color("1c4a8f")))
+		for tip in ["▶ @{desktop.main.fragment.c3396195e91ccdd8}(@{desktop.main.fragment.bfa4a6e0fe42ac28})@{desktop.main.fragment.d7113f03689a10a4},@{desktop.main.fragment.d918dc1679308091}",
+				"@{desktop.main.fragment.c0112ef0a6076953}:@{desktop.main.fragment.25506417c44bbfa8} → @{desktop.main.fragment.f65c42a2540befe5} → @{desktop.main.fragment.ea53dafb2b03ec3e} → @{desktop.main.fragment.08a85f4ab4bab9ca}",
+				"@{desktop.main.fragment.3e77fe0645075379}?@{desktop.main.fragment.b46d89eb3c1a0aac}",
+				"@{desktop.main.fragment.402004f8d4e7318a};@{desktop.main.fragment.751f8369f49c9fcd}"]:
 			gv.add_child(_lbl("· " + str(tip), 10, Color("3f5d8a")))
 		guide.add_child(gp)
 		lv.add_child(guide)
@@ -2706,9 +2780,9 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
 	head.add_child(_dot(Color("58c8b9"), 7))
-	head.add_child(_lbl("EXECUTIVE BRIEF · 执政简报", 10, Color("9db8c8"), true))
+	head.add_child(_lbl("EXECUTIVE BRIEF · @{desktop.main.fragment.8125d217bd797ad9}", 10, Color("9db8c8"), true))
 	head.add_child(_spacer_h())
-	head.add_child(_lbl("政策窗口已关闭", 10, Color("68d2c2")))
+	head.add_child(_lbl("@{desktop.main.fragment.7fdf29cf09f90953}", 10, Color("68d2c2")))
 	col.add_child(head)
 	var releases: Array = _snapshot.get("observation", {}).get("releases", [])
 	var released := 0
@@ -2721,9 +2795,9 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override("separation", 6)
 	for item: Array in [
-		["公报", "%d/%d" % [released, releases.size()]],
-		["待实施", str(pending.size())],
-		["当前风险", str(risks)],
+		["@{desktop.main.fragment.1d6571193d7a584e}", "%d/%d" % [released, releases.size()]],
+		["@{desktop.main.fragment.2b868142a6f667a5}", str(pending.size())],
+		["@{desktop.main.fragment.88a8fa0ea83e9561}", str(risks)],
 	]:
 		var stat := PanelContainer.new()
 		stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2736,10 +2810,10 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 		stats.add_child(stat)
 	col.add_child(stats)
 	if pending.is_empty():
-		col.add_child(_lbl("暂无等待实施的政策。推进时间以等待下一轮公报与会议。",
+		col.add_child(_lbl("@{desktop.main.fragment.50f9f61416dda499}",
 			10, Color("b4c5cf")))
 	else:
-		col.add_child(_lbl("即将实施", 9, Color("8ca5b5"), true))
+		col.add_child(_lbl("@{desktop.main.fragment.503a406b6681761a}", 9, Color("8ca5b5"), true))
 		for raw in pending.slice(0, 3):
 			var p: Dictionary = raw
 			var decision: Dictionary = p.get("decision", {})
@@ -2754,11 +2828,11 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 				col.add_child(row)
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 7)
-	var jump := _btn("快进至下一决策", _advance_to_next_decision, true)
+	var jump := _btn("@{desktop.main.fragment.7d83f69d94ae7dcd}", _advance_to_next_decision, true)
 	jump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	jump.tooltip_text = "快进至下一次决策\n最多推进 100 天；遇到会议立即暂停\n不会越过决策边界 · 快捷键：N"
+	jump.tooltip_text = "@{desktop.main.fragment.ecc6c552f474e6a0}\n@{desktop.main.fragment.e710cfccd80e3d6f} 100 @{desktop.main.fragment.15a4a25be6a61d1c}\n@{desktop.main.fragment.8fe60bd7ce74d003} · @{desktop.main.fragment.10b775695af17455}N"
 	actions.add_child(jump)
-	var focus := _btn("查看宏观", func() -> void:
+	var focus := _btn("@{desktop.main.fragment.a669946c97b805d2}", func() -> void:
 		_tab = "focus"
 		_render())
 	focus.add_theme_stylebox_override("normal", _sb(
@@ -2775,9 +2849,9 @@ func _advance_to_next_decision() -> void:
 		_send({"command": "advance", "ticks": 30})
 		return
 	if _awaiting():
-		_show_hint("已有政策会议等待处理，模拟保持暂停。")
+		_show_hint("@{desktop.main.fragment.38a86edae74dc71a}")
 		return
-	_show_hint("正在快进；遇到下一次政策会议将自动暂停（最多推进 100 天）。")
+	_show_hint("@{desktop.main.fragment.8b3653792875febd} 100 @{desktop.main.fragment.c343c78f974e59cd}")
 	_send({"command": "advance", "ticks": 100})
 
 
@@ -2786,66 +2860,66 @@ func _lever_kind_description(lever: Dictionary) -> String:
 	var nullable := bool(lever.get("nullable", false))
 	match kind:
 		"bool":
-			return "启用 / 停用型制度开关"
+			return "@{desktop.main.fragment.f4f0ead1116b5b62} / @{desktop.main.fragment.712296747c88b676}"
 		"choice":
 			var options: Array = []
 			for option in lever.get("choices", []):
 				options.append(_choice_text(str(lever.get("name", "")), option))
-			return "制度选项（%s）" % "、".join(options)
+			return "@{desktop.main.fragment.a8fb30e4820f09ad}%s）" % "、".join(options)
 		"economy_id":
-			return "国家参照选择"
+			return "@{desktop.main.fragment.b19d1f40d310808d}"
 		"economy_set":
-			return "国家名单选择"
+			return "@{desktop.main.fragment.88dd8d3f31e644d5}"
 		"integer":
-			return "整数政策参数，范围 %s – %s" % [
+			return "@{desktop.main.fragment.4b8e09e0abf9ba42} %s – %s" % [
 				_lever_value_text(lever, lever.get("minimum", 0)),
 				_lever_value_text(lever, lever.get("maximum", 0))]
 		_:
-			var range_text := "连续政策参数，范围 %s – %s" % [
+			var range_text := "@{desktop.main.fragment.4f9064f4e0eef26a} %s – %s" % [
 				_lever_value_text(lever, lever.get("minimum", 0.0)),
 				_lever_value_text(lever, lever.get("maximum", 0.0))]
-			return range_text + ("，也可不设置" if nullable else "")
+			return range_text + ("@{desktop.main.fragment.077099468884b194}" if nullable else "")
 
 
 func _lever_channel_text(lever: Dictionary) -> String:
 	var read_point := str(lever.get("read_point", "")).to_lower()
 	var group := str(lever.get("decision_group", ""))
 	if read_point.contains("energy"):
-		return "能源定价、供给分配、补贴或战略储备"
+		return "@{desktop.main.fragment.465f7e67671ed6fb}"
 	if read_point.contains("mortgage") or read_point.contains("housing"):
-		return "住房融资、交易、建设、违约与处置"
+		return "@{desktop.main.fragment.bdf05925a2d9e76d}"
 	if read_point.contains("central_bank"):
-		return "政策利率、准备金和银行流动性"
+		return "@{desktop.main.fragment.53cb66eb5ee67ad8}"
 	if read_point.contains("banking") or read_point.contains("credit"):
-		return "银行授信能力、借款约束和资产负债表风险"
+		return "@{desktop.main.fragment.170ee7ecd2ffef3d}"
 	if read_point.contains("securities"):
-		return "国债发行、持有、定价和利息现金流"
+		return "@{desktop.main.fragment.631e7bdf8ac0751e}"
 	if read_point.contains("trade"):
-		return "进出口价格、数量、企业份额和关税收入"
+		return "@{desktop.main.fragment.f3bf02be1457ce4e}"
 	if read_point.contains("migration"):
-		return "人口跨境流动、劳动力供给和汇款"
+		return "@{desktop.main.fragment.52ad6c253dccc303}"
 	if read_point.contains("world") or read_point.contains("capital") \
 			or read_point.contains("fx"):
-		return "汇率、跨境资本、外汇储备和国际收支"
+		return "@{desktop.main.fragment.185e5dba53f3ae81}"
 	if read_point.contains("settlement"):
-		return "居民、企业与政府结算以及税后可支配资源"
+		return "@{desktop.main.fragment.8268463d1dd50521}"
 	if read_point.contains("goods") or read_point.contains("planning"):
-		return "商品需求、生产计划、价格和财政收支"
+		return "@{desktop.main.fragment.7b6afca6f183a8e6}"
 	if read_point.contains("reporting"):
-		return "政策规则采用的统计口径和决策信号"
+		return "@{desktop.main.fragment.88cdfedcb38a63f4}"
 	return {
-		"fiscal_stance": "政府支出、总需求、就业与赤字债务",
-		"tax_and_transfers": "税后收入、消费成本、分配与财政收入",
-		"debt_management": "国债融资、期限结构和偿债成本",
-		"monetary_stance": "政策利率反应、融资成本与资产估值",
-		"liquidity_operations": "银行准备金、流动性与支付稳定",
-		"macroprudential": "信贷供给、杠杆、抵押品与违约风险",
-		"structural_law": "破产、处置与金融合同的制度边界",
-		"trade_and_migration": "贸易、人口流动和跨境收入",
-		"fx_operations": "汇率、资本流动和外汇储备",
-		"energy_operations": "能源价格、供给和战略储备",
-		"energy_structure": "能源部门产权和长期供给结构",
-	}.get(group, "相关部门的预算约束与行为规则")
+		"fiscal_stance": "@{desktop.main.fragment.d37adcd3d4049d7b}",
+		"tax_and_transfers": "@{desktop.main.fragment.c826597498921634}",
+		"debt_management": "@{desktop.main.fragment.fc58ff5fa4e1c6e8}",
+		"monetary_stance": "@{desktop.main.fragment.70b7b14a617b9bb2}",
+		"liquidity_operations": "@{desktop.main.fragment.d7520ac35a86e514}",
+		"macroprudential": "@{desktop.main.fragment.a88db9709a253142}",
+		"structural_law": "@{desktop.main.fragment.c47ce83565f7f1b2}",
+		"trade_and_migration": "@{desktop.main.fragment.fe58146812ec118e}",
+		"fx_operations": "@{desktop.main.fragment.7adcb41dcbb35202}",
+		"energy_operations": "@{desktop.main.fragment.f32c36a75cc2be88}",
+		"energy_structure": "@{desktop.main.fragment.d90c070e461b898d}",
+	}.get(group, "@{desktop.main.fragment.88f8134cd5088f7b}")
 
 
 func _lever_meaning_text(lever: Dictionary) -> String:
@@ -2855,23 +2929,23 @@ func _lever_meaning_text(lever: Dictionary) -> String:
 	var help: Dictionary = POLICY_HELP.get(name, {})
 	var definition := str(player_help.get("meaning", help.get("definition", "")))
 	if definition.is_empty():
-		if name.begins_with("tax_") or label.ends_with("税率"):
-			definition = "“%s”规定相关计税基数向政府缴纳的比例。" % label
-		elif name.contains("allowance") or label.ends_with("起征点"):
-			definition = "“%s”规定低于该水平时不计入相应税基的免征额度。" % label
-		elif name.contains("cap") or name.contains("limit") or label.ends_with("上限"):
-			definition = "“%s”规定相关数量、比例或风险暴露不得超过的最高边界。" % label
-		elif name.contains("floor") or name.begins_with("min_") or label.ends_with("下限"):
-			definition = "“%s”规定相关价格、收入或资本必须达到的最低边界。" % label
+		if name.begins_with("tax_") or label.ends_with("@{desktop.main.fragment.9401d14fdcb4e892}"):
+			definition = "“%s@{desktop.main.fragment.6e1742fefa82026f}" % label
+		elif name.contains("allowance") or label.ends_with("@{desktop.main.fragment.0fa1371672e99f5a}"):
+			definition = "“%s@{desktop.main.fragment.ca6a26a4f26cb584}" % label
+		elif name.contains("cap") or name.contains("limit") or label.ends_with("@{desktop.main.fragment.8e7ddbeee310a5a5}"):
+			definition = "“%s@{desktop.main.fragment.b3c742b651a24dbf}" % label
+		elif name.contains("floor") or name.begins_with("min_") or label.ends_with("@{desktop.main.fragment.2c3f8d6ce49a60fa}"):
+			definition = "“%s@{desktop.main.fragment.06ea117d90b53c5e}" % label
 		elif name.ends_with("_share") or name.ends_with("_frac") \
 				or name.ends_with("_ratio") or name.ends_with("_ltv"):
-			definition = "“%s”规定相关政策量相对其基数的比例。" % label
+			definition = "“%s@{desktop.main.fragment.09e3b0b1011f28fc}" % label
 		elif str(lever.get("value_kind", "")) == "bool":
-			definition = "“%s”决定模型是否启用这一制度或操作机制。" % label
+			definition = "“%s@{desktop.main.fragment.c5bd883c30881df9}" % label
 		elif str(lever.get("value_kind", "")) == "choice":
-			definition = "“%s”决定模型采用哪一种制度运行规则。" % label
+			definition = "“%s@{desktop.main.fragment.373bfa9b136eeeb3}" % label
 		else:
-			definition = "“%s”是模型中直接控制%s的政策参数。" % [
+			definition = "“%s@{desktop.main.fragment.d885bedf8044258e}%s@{desktop.main.fragment.296aeb395e00a42d}" % [
 				label, _lever_channel_text(lever)]
 	return definition
 
@@ -2884,23 +2958,23 @@ func _lever_effect_text(lever: Dictionary) -> String:
 	var effect := str(player_help.get("mechanics", help.get("effect", "")))
 	if not effect.is_empty():
 		return effect
-	if name.begins_with("tax_") or label.ends_with("税率"):
-		return "提高通常增加财政收入，同时降低相关主体的税后收入、回报或需求；降低则方向相反。"
+	if name.begins_with("tax_") or label.ends_with("@{desktop.main.fragment.9401d14fdcb4e892}"):
+		return "@{desktop.main.fragment.e77fc0b5e5657dba}"
 	if name.contains("subsidy") or name.contains("benefit") \
 			or name.contains("pension"):
-		return "提高通常增加受益方可支配资源并支撑需求，同时扩大财政成本。"
-	if name.contains("allowance") or label.ends_with("起征点"):
-		return "提高会缩小税基、增加纳税方税后资源并减少财政收入；降低则方向相反。"
+		return "@{desktop.main.fragment.ce668b23c08463da}"
+	if name.contains("allowance") or label.ends_with("@{desktop.main.fragment.0fa1371672e99f5a}"):
+		return "@{desktop.main.fragment.c581d92ef6f49afe}"
 	if name.contains("haircut") or name.contains("risk_weight"):
-		return "提高会降低抵押品或资产的监管认可价值、增加资本占用，通常使信贷更审慎。"
-	if name.contains("cap") or name.contains("limit") or label.ends_with("上限"):
-		return "下调代表收紧上限，通常降低相关风险或规模，同时限制交易、融资或供给；上调则放宽约束。"
-	if name.contains("floor") or name.begins_with("min_") or label.ends_with("下限"):
-		return "提高代表抬高最低要求，强化保护或审慎标准，同时增加达标成本并可能减少可获得性。"
+		return "@{desktop.main.fragment.4979001f7c4a2a42}"
+	if name.contains("cap") or name.contains("limit") or label.ends_with("@{desktop.main.fragment.8e7ddbeee310a5a5}"):
+		return "@{desktop.main.fragment.bc6b4023aeb8d933}"
+	if name.contains("floor") or name.begins_with("min_") or label.ends_with("@{desktop.main.fragment.2c3f8d6ce49a60fa}"):
+		return "@{desktop.main.fragment.ece96b1668174c4c}"
 	if str(lever.get("value_kind", "")) == "bool":
-		return "启用后模型会执行%s机制；停用则绕过该机制。最终宏观影响取决于当时经济状态。" % \
+		return "@{desktop.main.fragment.bd105468d9296cc1}%s@{desktop.main.fragment.818a1e82f06a0935}" % \
 			_lever_channel_text(lever)
-	return "调整会先改变%s中的约束或决策，再经交易、结算和资产负债表传导；方向与幅度取决于当时经济状态。" % \
+	return "@{desktop.main.fragment.25c7272706f546f3}%s@{desktop.main.fragment.a4f51a6025cdaaae}" % \
 		_lever_channel_text(lever)
 
 
@@ -2909,7 +2983,7 @@ func _lever_tradeoffs_text(lever: Dictionary) -> String:
 	var text := str(player_help.get("tradeoffs", ""))
 	if not text.is_empty():
 		return text
-	return "这项政策没有脱离情景的唯一最优值。调整前应同时比较目标改善、财政或金融成本，以及对其他部门的间接影响。"
+	return "@{desktop.main.fragment.5f8967522cc77b1a}"
 
 
 func _lever_watch_text(lever: Dictionary) -> String:
@@ -2917,11 +2991,11 @@ func _lever_watch_text(lever: Dictionary) -> String:
 	var text := str(player_help.get("watch", ""))
 	if not text.is_empty():
 		return text
-	return "实际产出、就业、物价、财政与金融稳定"
+	return "@{desktop.main.fragment.8b13fd9c72b17bbb}"
 
 
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
-	return "%s  ·  当前 %s\n\n经济学定义\n%s\n\n经济传导\n%s\n\n政策权衡\n%s\n\n点击打开完整政策简报" % [
+	return "%s  ·  @{desktop.main.fragment.cb62ebd689ee8f20} %s\n\n@{desktop.main.fragment.1157213b813000e2}\n%s\n\n@{desktop.main.fragment.245ab851face3d9b}\n%s\n\n@{desktop.main.fragment.48ca9369c9040c19}\n%s\n\n@{desktop.main.fragment.83f2cdb2592b380c}" % [
 		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
 		_tooltip_wrap(_lever_meaning_text(lever)),
 		_tooltip_wrap(_lever_effect_text(lever)),
@@ -2929,7 +3003,7 @@ func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
 
 
 func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
-	# Godot 的默认 tooltip 不会自动换行；优先在中文标点后断行，并给长句设置硬上限。
+	#  Godot 's default tooltip does not automatically break lines; priority is given to breaking lines after the Chinese tab and setting a hard limit for long sentences.
 	var result := ""
 	var column := 0
 	for index in text.length():
@@ -2950,7 +3024,7 @@ func _lever_timing_text(lever: Dictionary) -> String:
 	if _free_policy_enabled():
 		return LocaleCatalogScript.text("desktop.free.timing")
 	var lag := int(lever.get("implementation_lag", 0))
-	return "即时生效" if lag <= 0 else "通过后 %d 天生效" % lag
+	return "@{desktop.main.fragment.79f5c00849e70543}" if lag <= 0 else "@{desktop.main.fragment.da348369158b4e9e} %d @{desktop.main.fragment.cccf58ef16e9afe4}" % lag
 
 
 func _lever_adjustment_text(lever: Dictionary) -> String:
@@ -2959,20 +3033,20 @@ func _lever_adjustment_text(lever: Dictionary) -> String:
 	var hold := int(lever.get("min_hold_ticks", 0))
 	var scale: Variant = lever.get("control_scale")
 	var max_step: Variant = lever.get("max_step")
-	var adjustment := "无固定数值档位"
+	var adjustment := "@{desktop.main.fragment.a57b6fdc0251f83e}"
 	if scale != null:
-		adjustment = "建议单档 %s" % _lever_value_text(lever, scale)
+		adjustment = "@{desktop.main.fragment.a39a1c5b04add294} %s" % _lever_value_text(lever, scale)
 	if max_step != null:
-		adjustment += "；单次最多变动 %s" % _lever_value_text(lever, max_step)
-	return "%s；调整后至少保持 %d 天" % [adjustment, hold]
+		adjustment += "@{desktop.main.fragment.5e922c3dbec4fc86} %s" % _lever_value_text(lever, max_step)
+	return "%s@{desktop.main.fragment.f5da2b74cea86c2e} %d @{desktop.main.fragment.49da61ceeea2f271}" % [adjustment, hold]
 
 
 func _lever_semantics_text(lever: Dictionary) -> String:
 	return str({
-		"immediate": "生效后从下一自然日的相关计算开始使用新值",
-		"new-contracts-only": "只影响生效后新签合同，既有存量合同不会被追溯改写",
-		"state-transition": "属于制度迁移，生效时会执行一次状态与账本衔接",
-	}.get(str(lever.get("semantics", "immediate")), "按注册表规定的生效语义执行"))
+		"immediate": "@{desktop.main.fragment.06002c47bdb5d9e8}",
+		"new-contracts-only": "@{desktop.main.fragment.8409f518637c751a}",
+		"state-transition": "@{desktop.main.fragment.7dca615266ac9e51}",
+	}.get(str(lever.get("semantics", "immediate")), "@{desktop.main.fragment.5cbbdf0381a8a3d5}"))
 
 
 func _lever_conditions_text(lever: Dictionary) -> String:
@@ -2980,8 +3054,8 @@ func _lever_conditions_text(lever: Dictionary) -> String:
 	for capability in lever.get("requires", []):
 		requirements.append(str(CAPABILITY_CN.get(str(capability), capability)))
 	for prerequisite in lever.get("enabled_if", []):
-		requirements.append("政策“%s”已启用" % _cn(str(prerequisite)))
-	return "无额外前置条件" if requirements.is_empty() else "需要：%s" % "、".join(requirements)
+		requirements.append("@{desktop.main.fragment.2200d80940b75c1f}%s@{desktop.main.fragment.f510117cd7d7be44}" % _cn(str(prerequisite)))
+	return "@{desktop.main.fragment.33f852615de926b1}" if requirements.is_empty() else "@{desktop.main.fragment.97c27cdca015aa89}%s" % "、".join(requirements)
 
 
 func _lever_boundary_text(lever: Dictionary) -> String:
@@ -2990,23 +3064,23 @@ func _lever_boundary_text(lever: Dictionary) -> String:
 		var token := str(raw_shadow)
 		var base: String = token.split(">")[0].split("=")[0]
 		if token == "ZLB/r_max clamp":
-			shadowed.append("零利率下限或政策利率上限")
+			shadowed.append("@{desktop.main.fragment.3aff3b853288ac70}")
 		else:
 			shadowed.append(_cn(base) if LEVER_CN.has(base) else token)
 	if not shadowed.is_empty():
-		return "可能被“%s”等优先规则覆盖；覆盖期间即使改变数值，也可能暂时看不到结果。" % "、".join(shadowed)
+		return "@{desktop.main.fragment.3eb61c394d7d9bf9}%s@{desktop.main.fragment.bab739f820ea9fca}" % "、".join(shadowed)
 	if not str(lever.get("state_notes", "")).is_empty():
-		return "这项政策具有情景或状态条件，只有相关市场、合同或危机实际出现时，效果才会进入数据。"
-	return "没有登记会直接遮蔽该政策的上层规则；最终幅度仍取决于当时的家庭、企业和金融状态。"
+		return "@{desktop.main.fragment.4b46fe24c96fd40f}"
+	return "@{desktop.main.fragment.90d45325b9dab96d}"
 
 
 func _lever_cost_text(lever: Dictionary) -> String:
 	if _free_policy_enabled():
 		return LocaleCatalogScript.text("desktop.free.cost")
 	var cost_cn: String = {
-		"regime_switch": "制度切换", "major": "重大调整",
-		"ordinary": "常规调整", "operational": "日常操作",
-	}.get(str(lever.get("cost_class", "ordinary")), "常规调整")
+		"regime_switch": "@{desktop.main.fragment.3090b183dc295243}", "major": "@{desktop.main.fragment.bb7d02f0cceecd83}",
+		"ordinary": "@{desktop.main.fragment.d55cc2145168659e}", "operational": "@{desktop.main.fragment.d088a57270bb2245}",
+	}.get(str(lever.get("cost_class", "ordinary")), "@{desktop.main.fragment.d55cc2145168659e}")
 	return "%.1f · %s" % [float(lever.get("admin_weight", 0.0)), cost_cn]
 
 
@@ -3056,7 +3130,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 		content.remove_child(child)
 		child.queue_free()
 	if not lever_raw is Dictionary or (lever_raw as Dictionary).is_empty():
-		content.add_child(_brief_text("政策资料暂不可用。", 12, INK3))
+		content.add_child(_brief_text("@{desktop.main.fragment.41cd94251cb3d6eb}", 12, INK3))
 		return
 	var lever: Dictionary = lever_raw
 	var seat_color := _seat_color(str(lever.get("owner_role", "")))
@@ -3070,7 +3144,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var current_col := VBoxContainer.new()
 	current_col.custom_minimum_size.x = 185
 	current_col.add_theme_constant_override("separation", 5)
-	current_col.add_child(_lbl("CURRENT POLICY · 当前生效", 9, Color("6d8092"), true))
+	current_col.add_child(_lbl("CURRENT POLICY · @{desktop.main.fragment.f6814fea9925bef5}", 9, Color("6d8092"), true))
 	current_col.add_child(_lbl(_lever_value_text(lever, current), 23,
 		seat_color.darkened(0.05), true))
 	var seat_chip := _chip(
@@ -3086,7 +3160,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var meaning_col := VBoxContainer.new()
 	meaning_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	meaning_col.add_theme_constant_override("separation", 5)
-	meaning_col.add_child(_lbl("ECONOMIC DEFINITION · 经济学定义", 9, Color("6d8092"), true))
+	meaning_col.add_child(_lbl("ECONOMIC DEFINITION · @{desktop.main.fragment.1157213b813000e2}", 9, Color("6d8092"), true))
 	meaning_col.add_child(_brief_text(_lever_meaning_text(lever), 13, Color("263b4d"), true))
 	hero_row.add_child(meaning_col)
 	content.add_child(hero)
@@ -3094,9 +3168,9 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	# The economic transmission and policy trade-off follow the definition.
 	var decision_row := HBoxContainer.new()
 	decision_row.add_theme_constant_override("separation", 12)
-	decision_row.add_child(_brief_panel("ECONOMIC TRANSMISSION · 经济传导", _lever_effect_text(lever),
+	decision_row.add_child(_brief_panel("ECONOMIC TRANSMISSION · @{desktop.main.fragment.245ab851face3d9b}", _lever_effect_text(lever),
 		Color("386b9d"), Color.WHITE))
-	decision_row.add_child(_brief_panel("POLICY TRADE-OFF · 政策权衡", _lever_tradeoffs_text(lever),
+	decision_row.add_child(_brief_panel("POLICY TRADE-OFF · @{desktop.main.fragment.48ca9369c9040c19}", _lever_tradeoffs_text(lever),
 		Color("9b6e2c"), Color.WHITE))
 	content.add_child(decision_row)
 
@@ -3105,7 +3179,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	var watch_col := VBoxContainer.new()
 	watch_col.add_theme_constant_override("separation", 7)
 	watch_panel.add_child(watch_col)
-	watch_col.add_child(_lbl("MONITOR · 建议观察", 9, Color("4a6f70"), true))
+	watch_col.add_child(_lbl("MONITOR · @{desktop.main.fragment.bb505e6a0774debf}", 9, Color("4a6f70"), true))
 	var watch_flow := HFlowContainer.new()
 	watch_flow.add_theme_constant_override("h_separation", 6)
 	watch_flow.add_theme_constant_override("v_separation", 6)
@@ -3120,7 +3194,7 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	rule_heading.add_theme_constant_override("separation", 8)
 	rule_heading.add_child(_lbl(
 		"@desktop.free.execution_heading" if _free_policy_enabled()
-		else "GAME RULES · 游戏规则（非政策定义）", 10, INK3, true))
+		else "GAME RULES · @{desktop.main.fragment.ad4ff9ec3d88e93d}", 10, INK3, true))
 	rule_heading.add_child(_hrule())
 	content.add_child(rule_heading)
 	var rules := GridContainer.new()
@@ -3128,22 +3202,22 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	rules.add_theme_constant_override("h_separation", 8)
 	rules.add_theme_constant_override("v_separation", 8)
 	var rule_accent := Color("536b7e")
-	rules.add_child(_brief_rule_card("可选范围", _lever_kind_description(lever), rule_accent))
-	rules.add_child(_brief_rule_card("实施时间", _lever_timing_text(lever), rule_accent))
-	rules.add_child(_brief_rule_card("调整节奏", _lever_adjustment_text(lever), rule_accent))
+	rules.add_child(_brief_rule_card("@{desktop.main.fragment.a164227bb693e47f}", _lever_kind_description(lever), rule_accent))
+	rules.add_child(_brief_rule_card("@{desktop.main.fragment.dc971e40a1ff0cf6}", _lever_timing_text(lever), rule_accent))
+	rules.add_child(_brief_rule_card("@{desktop.main.fragment.c817de8105cc4ede}", _lever_adjustment_text(lever), rule_accent))
 	rules.add_child(_brief_rule_card(
-		"@desktop.free.constraint_heading" if _free_policy_enabled() else "行政成本",
+		"@desktop.free.constraint_heading" if _free_policy_enabled() else "@{desktop.main.fragment.4e2f4f352727d794}",
 		_lever_cost_text(lever), rule_accent))
 	content.add_child(rules)
 
 	var execution := HBoxContainer.new()
 	execution.add_theme_constant_override("separation", 12)
-	execution.add_child(_brief_panel("生效方式", _lever_semantics_text(lever),
+	execution.add_child(_brief_panel("@{desktop.main.fragment.ec0ce66a5204a180}", _lever_semantics_text(lever),
 		Color("58708a"), Color.WHITE))
-	execution.add_child(_brief_panel("前置条件", _lever_conditions_text(lever),
+	execution.add_child(_brief_panel("@{desktop.main.fragment.03c2827b3f016d3d}", _lever_conditions_text(lever),
 		Color("58708a"), Color.WHITE))
 	content.add_child(execution)
-	content.add_child(_brief_panel("条件与例外", _lever_boundary_text(lever),
+	content.add_child(_brief_panel("@{desktop.main.fragment.f8a9796756e209f0}", _lever_boundary_text(lever),
 		Color("9a6b10"), Color("fffaf0")))
 
 	if _free_policy_enabled():
@@ -3151,21 +3225,21 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 			LocaleCatalogScript.text("desktop.free.brief_footer"),
 			10, INK3))
 	else:
-		var emergency_text := "可在紧急会议中使用，紧急实施滞后为 %s。" % (
-			"即时" if lever.get("emergency_implementation_lag") == null
-			else "%d 天" % int(lever.get("emergency_implementation_lag", 0))) \
-			if bool(lever.get("emergency", false)) else "不在紧急政策白名单，只能通过常规会议调整。"
-		content.add_child(_brief_text("权限 · %s · %s\n%s" % [
+		var emergency_text := "@{desktop.main.fragment.149114eaab866e7b} %s。" % (
+			"@{desktop.main.fragment.2da85532337f2387}" if lever.get("emergency_implementation_lag") == null
+			else "%d @{desktop.main.fragment.49da61ceeea2f271}" % int(lever.get("emergency_implementation_lag", 0))) \
+			if bool(lever.get("emergency", false)) else "@{desktop.main.fragment.061a5a02f5c7eeec}"
+		content.add_child(_brief_text("@{desktop.main.fragment.978cbca6265d1af2} · %s · %s\n%s" % [
 			_seat_name(str(lever.get("owner_role", ""))),
 			str(GROUP_CN.get(str(lever.get("decision_group", "")),
-				lever.get("decision_group", "政策"))), emergency_text], 10, INK3))
+				lever.get("decision_group", "@{desktop.main.fragment.6993cb35989038ca}"))), emergency_text], 10, INK3))
 
 
 func _show_lever_info(lever: Dictionary, current: Variant) -> void:
 	_confirm = {
 		"title": _cn(str(lever.get("name", ""))),
 		"body": "",
-		"note": "经济学说明用于解释政策含义、传导与权衡，不代表结果承诺；实际效果取决于当时的经济环境。",
+		"note": "@{desktop.main.fragment.fef28fad0600db26}",
 		"lever": lever,
 		"current": current,
 		"read_only": true,
@@ -3191,7 +3265,7 @@ func _lever_info_button(lever: Dictionary, current: Variant) -> Button:
 
 func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		pending_by: Dictionary, show_seat: bool) -> Control:
-	## 收起态同时交代现值、草稿/队列目标和可操作状态；点击进入精确编辑。
+	##  The present value, the draft/queue target and the operational status of the collection; click into the exact editing.
 	var name := str(lever.get("name"))
 	var perm: Dictionary = permitted.get(name, {})
 	var cart_entry := _cart_entry(name)
@@ -3269,25 +3343,25 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var status_text := ""
 	var status_color := INK3
 	if cart_stale:
-		status_text = "草稿有改动 · 待更新"
+		status_text = "@{desktop.main.fragment.358dce5dde4247a0} · @{desktop.main.fragment.f591f3067a342198}"
 		status_color = AMBER
 	elif in_cart:
 		status_text = LocaleCatalogScript.text("desktop.free.status_queued") \
-			if _free_policy_enabled() else "已加入提案篮"
+			if _free_policy_enabled() else "@{desktop.main.fragment.1bd538423c2b7202}"
 		status_color = TEAL_DK
 	elif edited:
-		status_text = "未入篮草稿"
+		status_text = "@{desktop.main.fragment.3a013c5308141367}"
 		status_color = BLUE
 	elif pending:
-		status_text = "待生效 · %s" % _cal_value(
+		status_text = "@{desktop.main.fragment.211daec74a20bd9b} · %s" % _cal_value(
 			(pending_by[name] as Dictionary).get("effective_tick", "?"))
 		status_color = AMBER
 	elif allowed:
 		status_text = LocaleCatalogScript.text("desktop.free.status_adjustable") \
-			if _free_policy_enabled() else "本会可调整"
+			if _free_policy_enabled() else "@{desktop.main.fragment.b7ae526ec0a29f6a}"
 		status_color = GREEN
 	else:
-		status_text = "查看制度"
+		status_text = "@{desktop.main.fragment.0b2d7cb5d3d6694c}"
 	var status_bg := Color("f1f4f7")
 	var status_border := Color("dce3ea")
 	if cart_stale or pending:
@@ -3370,32 +3444,32 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	tr.add_child(en)
 	if not _free_policy_enabled():
 		var cost_class := str(lever.get("cost_class", "ordinary"))
-		var cost_cn: String = {"regime_switch": "高", "major": "高",
-			"ordinary": "中", "operational": "低"}.get(cost_class, "中")
-		var cost_fg: Color = AMBER if cost_cn == "高" \
-			else (Color("3f6db2") if cost_cn == "中" else INK2)
-		tr.add_child(_chip("成本 %.1f · %s" % [
+		var cost_cn: String = {"regime_switch": "@{desktop.main.fragment.b1c27820fec23edb}", "major": "@{desktop.main.fragment.b1c27820fec23edb}",
+			"ordinary": "@{desktop.main.fragment.a567bdaa11367f26}", "operational": "@{desktop.main.fragment.aa9e366f68d3d097}"}.get(cost_class, "@{desktop.main.fragment.a567bdaa11367f26}")
+		var cost_fg: Color = AMBER if cost_cn == "@{desktop.main.fragment.b1c27820fec23edb}" \
+			else (Color("3f6db2") if cost_cn == "@{desktop.main.fragment.a567bdaa11367f26}" else INK2)
+		tr.add_child(_chip("@{desktop.main.fragment.639de58eb608d490} %.1f · %s" % [
 			float(lever.get("admin_weight", 1.0)), cost_cn],
 			cost_fg, Color(0, 0, 0, 0),
-			AMBER_BD if cost_cn == "高" else LINE2, 10))
+			AMBER_BD if cost_cn == "@{desktop.main.fragment.b1c27820fec23edb}" else LINE2, 10))
 	v.add_child(tr)
 	var state := PanelContainer.new()
 	state.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 8, 7))
 	var state_row := HBoxContainer.new()
 	state_row.add_theme_constant_override("separation", 7)
 	state.add_child(state_row)
-	state_row.add_child(_lbl("当前", 9, INK3, true))
+	state_row.add_child(_lbl("@{desktop.main.fragment.cb62ebd689ee8f20}", 9, INK3, true))
 	state_row.add_child(_lbl(_lever_value_text(lever, base_v), 12, INK2, true))
 	if edited:
 		state_row.add_child(_lbl("→", 11, TEAL))
-		state_row.add_child(_lbl("草稿", 9, TEAL, true))
+		state_row.add_child(_lbl("@{desktop.main.fragment.2a2fd29bd27a6eb9}", 9, TEAL, true))
 		state_row.add_child(_lbl(_lever_value_text(lever, draft_v), 12,
 			AMBER if cart_stale else TEAL_DK, true))
 	state_row.add_child(_spacer_h())
 	if cart_stale:
-		state_row.add_child(_lbl("提案篮尚未同步", 9, AMBER))
+		state_row.add_child(_lbl("@{desktop.main.fragment.709e1c69f478b92b}", 9, AMBER))
 	elif in_cart:
-		state_row.add_child(_lbl("已在提案篮", 9, TEAL_DK))
+		state_row.add_child(_lbl("@{desktop.main.fragment.47f94c663a6584be}", 9, TEAL_DK))
 	v.add_child(state)
 	if allowed:
 		v.add_child(_lever_control(lever, perm, base_v))
@@ -3403,7 +3477,7 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		if not companion.is_empty():
 			var note_panel := PanelContainer.new()
 			note_panel.add_theme_stylebox_override("panel", _sb(BLUE_BG, BLUE_BD, 7, 7))
-			var note := _lbl("联动 · " + companion, 10, Color("315d96"))
+			var note := _lbl("@{desktop.main.fragment.6f24351d9f52af86} · " + companion, 10, Color("315d96"))
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			note_panel.add_child(note)
 			v.add_child(note_panel)
@@ -3413,14 +3487,14 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		var lr := HBoxContainer.new()
 		lr.add_theme_constant_override("separation", 9)
 		lockp.add_child(lr)
-		lr.add_child(_chip("锁定", Color("647585"), Color(0, 0, 0, 0), LINE2, 10))
+		lr.add_child(_chip("@{desktop.main.fragment.ff9872a023e3a8aa}", Color("647585"), Color(0, 0, 0, 0), LINE2, 10))
 		var reason := str(perm.get("reason_code", ""))
 		if emg and not bool(lever.get("emergency", false)):
-			reason = "不在紧急白名单"
+			reason = "@{desktop.main.fragment.538aa5d497c5ad7e}"
 		elif not open:
-			reason = "当前 " + _lever_value_text(lever, base_v) + " · 会议未开"
+			reason = "@{desktop.main.fragment.cb62ebd689ee8f20} " + _lever_value_text(lever, base_v) + " · @{desktop.main.fragment.ecb92a184724d4bf}"
 		elif reason.is_empty() or reason == "<null>":
-			reason = "当前 " + _lever_value_text(lever, base_v) + " · 本会议不可动"
+			reason = "@{desktop.main.fragment.cb62ebd689ee8f20} " + _lever_value_text(lever, base_v) + " · @{desktop.main.fragment.de90517707d9287a}"
 		else:
 			reason = _permission_reason(reason)
 		var rl := _lbl(reason, 11, Color("586a7b"))
@@ -3437,12 +3511,12 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	else:
 		var lag := int(lever.get("implementation_lag", 0))
 		meta.add_child(_lbl(
-			"通过后 %d 天生效" % lag if lag > 0 else "即时生效", 10,
+			"@{desktop.main.fragment.da348369158b4e9e} %d @{desktop.main.fragment.cccf58ef16e9afe4}" % lag if lag > 0 else "@{desktop.main.fragment.79f5c00849e70543}", 10,
 			Color("68788b"), true))
-		meta.add_child(_lbl("冷却 %d 天" % int(
+		meta.add_child(_lbl("@{desktop.main.fragment.6cac16b39789379a} %d @{desktop.main.fragment.49da61ceeea2f271}" % int(
 			lever.get("min_hold_ticks", 0)), 10, Color("68788b"), true))
 		if bool(lever.get("emergency", false)):
-			meta.add_child(_lbl("紧急✓", 10, AMBER, true))
+			meta.add_child(_lbl("@{desktop.main.fragment.009038a63d875104}", 10, AMBER, true))
 	v.add_child(meta)
 	var pend: Variant = pending_by.get(name)
 	if pend is Dictionary:
@@ -3452,12 +3526,12 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		pr.add_theme_constant_override("separation", 8)
 		pp.add_child(pr)
 		pr.add_child(_lbl(
-			"@desktop.free.queue_title" if _free_policy_enabled() else "待生效队列",
+			"@desktop.free.queue_title" if _free_policy_enabled() else "@{desktop.main.fragment.1be538253bf451de}",
 			10, TEAL, true))
 		pr.add_child(_lbl(_lever_value_text(lever, (pend as Dictionary).get("value")),
 			11, TEAL_DK, true))
 		pr.add_child(_spacer_h())
-		pr.add_child(_lbl("%s生效" % _cal_value(
+		pr.add_child(_lbl("%s@{desktop.main.fragment.c997444643299f36}" % _cal_value(
 			(pend as Dictionary).get("effective_tick", "?")),
 			11, Color("2a9184")))
 		v.add_child(pp)
@@ -3465,27 +3539,27 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		var addrow := HBoxContainer.new()
 		addrow.add_theme_constant_override("separation", 9)
 		if not changed:
-			addrow.add_child(_lbl("草稿与当前值相同，不会产生政策动作", 10, INK3))
+			addrow.add_child(_lbl("@{desktop.main.fragment.77d0b5c253e19434}", 10, INK3))
 		elif allowed and (not in_cart or cart_stale):
 			var add_label := (
 				LocaleCatalogScript.text("desktop.free.update")
 				if cart_stale else LocaleCatalogScript.text("desktop.free.add")
 			) if _free_policy_enabled() else (
-				"更新提案篮" if cart_stale else "加入提案 ＋")
+				"@{desktop.main.fragment.02ab3cf32e801598}" if cart_stale else "@{desktop.main.fragment.ea53dafb2b03ec3e} ＋")
 			var add := _btn(add_label, func() -> void:
 				_add_to_cart(lever, base_v), true)
 			addrow.add_child(add)
 			var effective_tick := int(_snapshot.get("tick", 0)) + (
 				1 if _free_policy_enabled() else maxi(
 					int(lever.get("implementation_lag", 0)), 1))
-			addrow.add_child(_lbl("预计 %s 生效" % _cal_short(
+			addrow.add_child(_lbl("@{desktop.main.fragment.535c45e2209695ea} %s @{desktop.main.fragment.c997444643299f36}" % _cal_short(
 				effective_tick), 10, INK3, true))
 		elif in_cart:
-			addrow.add_child(_lbl("✓ 草稿与提案篮一致", 11, TEAL_DK))
+			addrow.add_child(_lbl("✓ @{desktop.main.fragment.02a9ee7c3b12f8e0}", 11, TEAL_DK))
 		else:
-			addrow.add_child(_lbl("当前窗口不可提交此草稿", 10, AMBER))
+			addrow.add_child(_lbl("@{desktop.main.fragment.7060c2e2b2ad970e}", 10, AMBER))
 		addrow.add_child(_spacer_h())
-		var reset := _btn("移出并撤销" if in_cart else "恢复当前值", func() -> void:
+		var reset := _btn("@{desktop.main.fragment.ca762c08e695b97a}" if in_cart else "@{desktop.main.fragment.8e68cfde3335b62a}", func() -> void:
 			_reset_lever_draft(name))
 		reset.add_theme_font_size_override("font_size", 10)
 		addrow.add_child(reset)
@@ -3495,14 +3569,14 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 
 func _lever_value_text(lever: Dictionary, v: Variant) -> String:
 	if v == null:
-		return "未设置"
+		return "@{desktop.main.fragment.2f5f1d6fbfb061ed}"
 	if v is bool:
-		return "启用" if v else "停用"
+		return "@{desktop.main.fragment.f4f0ead1116b5b62}" if v else "@{desktop.main.fragment.4e6fd0e28c55860b}"
 	if v is String:
 		return _choice_text(str(lever.get("name", "")), v)
 	if v is Array:
 		if (v as Array).is_empty():
-			return "无制裁对象"
+			return "@{desktop.main.fragment.0ab6dbe8254ee4b2}"
 		var parts: Array = []
 		for e in v:
 			parts.append(_country_name(int(e)))
@@ -3518,9 +3592,9 @@ func _lever_value_text(lever: Dictionary, v: Variant) -> String:
 	if MULTIPLIER_LEVERS.has(name):
 		return "%.2f×" % f
 	if DAY_LEVERS.has(name):
-		return "%d 天" % roundi(f)
+		return "%d @{desktop.main.fragment.49da61ceeea2f271}" % roundi(f)
 	if name == "housing_permits":
-		return "%d 套/年" % roundi(f)
+		return "%d @{desktop.main.fragment.82839948fc37f173}/@{desktop.main.fragment.62ef900a8f5d5bff}" % roundi(f)
 	var scale := absf(float(lever.get("control_scale", 1.0)))
 	if scale >= 1.0:
 		return "%d" % roundi(f)
@@ -3541,14 +3615,14 @@ func _lever_companion_note(lever_name: String, draft_value: Variant) -> String:
 	match lever_name:
 		"monetary_regime":
 			if str(draft_value) == "manual":
-				return "切换为手动设定时，必须把“手动政策利率”作为同批动作加入提案。"
+				return "@{desktop.main.fragment.210df1723a5b7ec3}"
 		"manual_policy_rate":
-			return "该值只在“货币政策规则 = 手动设定”时生效；切换制度时必须同批提交。"
+			return "@{desktop.main.fragment.1be652f41742f8fc} = @{desktop.main.fragment.faf0f41e52321f76}"
 		"fx_regime":
 			if str(draft_value) == "peg":
-				return "启用联系汇率时，必须在同批提案中选择一个浮动汇率锚国。"
+				return "@{desktop.main.fragment.013c44c6c45b9f88}"
 		"peg_anchor":
-			return "锚国只在联系汇率制度下生效；锚国无需同意，但不能形成链式或循环挂钩。"
+			return "@{desktop.main.fragment.ff3733a772303c4b}"
 	return ""
 
 
@@ -3556,7 +3630,7 @@ func _commit_numeric_input(lever: Dictionary, text: String, is_int: bool,
 		minimum: float, maximum: float) -> void:
 	var cleaned := text.strip_edges()
 	if not cleaned.is_valid_float():
-		_show_hint("请输入有效数字；百分比仍按模型值填写，例如 3% 输入 0.03。")
+		_show_hint("@{desktop.main.fragment.9b47ff78ff66de10} 3% @{desktop.main.fragment.2087c777c06fefe5} 0.03。")
 		return
 	var value := clampf(cleaned.to_float(), minimum, maximum)
 	_set_policy_edit(lever, roundi(value) if is_int else value)
@@ -3592,16 +3666,16 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		brow.add_theme_constant_override("separation", 9)
 		var sw := CheckButton.new()
 		sw.button_pressed = cur == true
-		sw.text = "启用" if cur == true else "停用"
+		sw.text = "@{desktop.main.fragment.f4f0ead1116b5b62}" if cur == true else "@{desktop.main.fragment.4e6fd0e28c55860b}"
 		var st := str(lever.get("semantics",
 			lever.get("effective_semantics", ""))).contains("transition")
 		sw.toggled.connect(func(pressed: bool) -> void:
 			_stage_lever_edit(lever, pressed))
 		brow.add_child(sw)
 		if st:
-			brow.add_child(_chip("状态迁移", Color("9a7a2e"), Color(0, 0, 0, 0), AMBER_BD, 10))
+			brow.add_child(_chip("@{desktop.main.fragment.a3407877e497ee2d}", Color("9a7a2e"), Color(0, 0, 0, 0), AMBER_BD, 10))
 		return brow
-	# 数值（含可空）：步进适合探索，直接输入负责精确操作。
+	#  Values (including empty): Step is suitable for exploration and enter directly for precision.
 	var wrap := VBoxContainer.new()
 	wrap.add_theme_constant_override("separation", 6)
 	var nullable := bool(perm.get("nullable", lever.get("nullable", false)))
@@ -3642,7 +3716,7 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 			vrow.add_child(_lbl("▲" if delta > 0 else "▼", 11,
 				GREEN if delta > 0 else RED))
 	midv.add_child(vrow)
-	var range_text := "单档 %s · 本次 %s – %s" % [
+	var range_text := "@{desktop.main.fragment.6fd7d22b7b5f051e} %s · @{desktop.main.fragment.049bc88d2bf11492} %s – %s" % [
 		_lever_value_text(lever, scale), _lever_value_text(lever, lo2),
 		_lever_value_text(lever, hi2)]
 	midv.add_child(_lbl(range_text, 9, INK3, true))
@@ -3671,8 +3745,8 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		var input := LineEdit.new()
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		input.text = _lever_raw_value_text(lever, cur)
-		input.placeholder_text = "输入模型值"
-		input.tooltip_text = "精确输入模型原始值\n例如：3% 请输入 0.03"
+		input.placeholder_text = "@{desktop.main.fragment.b83026a4d929fb37}"
+		input.tooltip_text = "@{desktop.main.fragment.9b6328b156a3eda7}\n@{desktop.main.fragment.2eeeceff78bfedeb}3% @{desktop.main.fragment.60120ff05f5c62b9} 0.03"
 		input.add_theme_font_override("font", _mono)
 		input.add_theme_font_size_override("font_size", 11)
 		input.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 7, 6))
@@ -3680,12 +3754,12 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		input.text_submitted.connect(func(text: String) -> void:
 			_commit_numeric_input(lever, text, is_int, lo2, hi2))
 		direct.add_child(input)
-		var apply := _btn("应用数值", func() -> void:
+		var apply := _btn("@{desktop.main.fragment.e83ac7975d285b2e}", func() -> void:
 			_commit_numeric_input(lever, input.text, is_int, lo2, hi2))
-		apply.tooltip_text = "应用输入值\n若超出本次允许范围，将自动调整到最近边界"
+		apply.tooltip_text = "@{desktop.main.fragment.161b6e0c65686598}\n@{desktop.main.fragment.d113838bdbc7c9dd}"
 		direct.add_child(apply)
 		wrap.add_child(direct)
-		wrap.add_child(_lbl("模型值 %s · 制度全域 %s – %s" % [
+		wrap.add_child(_lbl("@{desktop.main.fragment.4b666fe3e1b99945} %s · @{desktop.main.fragment.fedab312d817edf3} %s – %s" % [
 			_lever_raw_value_text(lever, cur), _lever_raw_value_text(lever, lo),
 			_lever_raw_value_text(lever, hi)], 9, INK3, true))
 	if nullable:
@@ -3694,15 +3768,15 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		var nb := Button.new()
 		nb.add_theme_font_size_override("font_size", 11)
 		if cur == null:
-			nb.text = "设置数值"
+			nb.text = "@{desktop.main.fragment.cc14fa9eb31a437b}"
 			nb.pressed.connect(func() -> void:
 				_set_policy_edit(lever, lo))
 		else:
-			nb.text = "取消该限制"
+			nb.text = "@{desktop.main.fragment.b91ee99c241f7afd}"
 			nb.pressed.connect(func() -> void:
 				_set_policy_edit(lever, null))
 		nrow.add_child(nb)
-		nrow.add_child(_lbl("未设置 = 不启用该上限或限制", 10, INK3))
+		nrow.add_child(_lbl("@{desktop.main.fragment.2f5f1d6fbfb061ed} = @{desktop.main.fragment.3240bf1b9d8bd477}", 10, INK3))
 		wrap.add_child(nrow)
 	return wrap
 
@@ -3727,7 +3801,7 @@ func _economy_set_control(name: String, cur: Variant) -> Control:
 		r.add_child(_lbl(_country_name(i), 12, Color("7a2418") if on else INK_BODY))
 		r.add_child(_spacer_h())
 		var cb := Button.new()
-		cb.text = "解除制裁" if on else "施加制裁"
+		cb.text = "@{desktop.main.fragment.d5dba4d0099fea49}" if on else "@{desktop.main.fragment.816ccd6acc7c1848}"
 		cb.add_theme_font_size_override("font_size", 11)
 		var target := i
 		cb.pressed.connect(func() -> void:
@@ -3740,7 +3814,7 @@ func _economy_set_control(name: String, cur: Variant) -> Control:
 			_set_policy_edit(_lever_info.get(name, {}), next))
 		r.add_child(cb)
 		wrap.add_child(row)
-	wrap.add_child(_lbl("OR 语义:任一方向制裁即断流(对方亦可制裁我)", 10, INK3))
+	wrap.add_child(_lbl("OR @{desktop.main.fragment.becb5df9dbcbfe12}:@{desktop.main.fragment.f7516d377d702735}(@{desktop.main.fragment.d1201225f541f361})", 10, INK3))
 	return wrap
 
 
@@ -3750,7 +3824,7 @@ func _economy_id_control(name: String, cur: Variant, choices: Array) -> Control:
 	var opts: Array = choices if not choices.is_empty() else [1, 2, null]
 	for opt in opts:
 		var b := Button.new()
-		b.text = "不设" if opt == null else _country_name(int(opt))
+		b.text = "@{desktop.main.fragment.03b6f87d3f3f5f29}" if opt == null else _country_name(int(opt))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var same := (cur == null and opt == null) or \
 			(cur != null and opt != null and int(cur) == int(opt))
@@ -3799,8 +3873,8 @@ func _render_cart(open: bool) -> void:
 	for c in items.get_children():
 		c.queue_free()
 	var free_policy := _free_policy_enabled()
-	_set_text("cart_title", "@desktop.free.queue_title" if free_policy else "提案篮")
-	_set_text("cart_count", "%d 项" % _cart.size())
+	_set_text("cart_title", "@desktop.free.queue_title" if free_policy else "@{desktop.main.fragment.788dc700d8faa6eb}")
+	_set_text("cart_count", "%d @{desktop.main.fragment.49ccde43a1549791}" % _cart.size())
 	var admin_total := 0.0
 	for cart_item: Dictionary in _cart:
 		var info: Dictionary = _lever_info.get(str(cart_item.get("lever")), {})
@@ -3808,12 +3882,12 @@ func _render_cart(open: bool) -> void:
 	_set_text("cart_cost", (
 		"" if _cart.is_empty() else LocaleCatalogScript.text("desktop.free.next_day")
 	) if free_policy else (
-		"" if _cart.is_empty() else "行政容量 %.1f" % admin_total))
+		"" if _cart.is_empty() else "@{desktop.main.fragment.1fb9f23e95936512} %.1f" % admin_total))
 	if _cart.is_empty():
 		items.add_child(_lbl(
 			"@desktop.free.empty"
 			if free_policy else
-			"尚无动作。展开旋钮形成草稿，再加入提案篮统一裁决。",
+			"@{desktop.main.fragment.4bbfdd102a0e912e}",
 			11, Color("7a8593")))
 	for c: Dictionary in _cart:
 		var key := str(c["lever"])
@@ -3827,12 +3901,12 @@ func _render_cart(open: bool) -> void:
 		r.add_child(_lbl(_cn(str(c["lever"])), 12, Color("23323f")))
 		r.add_child(_spacer_h())
 		if stale:
-			r.add_child(_lbl("有新草稿", 9, AMBER))
+			r.add_child(_lbl("@{desktop.main.fragment.1a53e1bf07e33fd4}", 9, AMBER))
 		r.add_child(_lbl(str(c["from"]), 11, Color("586a7b"), true))
 		r.add_child(_lbl("→", 11, TEAL))
 		r.add_child(_lbl(str(c["to"]), 11, TEAL_DK, true))
 		var edit := Button.new()
-		edit.text = "编辑"
+		edit.text = "@{desktop.main.fragment.051836569928a9f9}"
 		edit.flat = true
 		edit.add_theme_font_size_override("font_size", 10)
 		edit.pressed.connect(func() -> void:
@@ -3851,12 +3925,12 @@ func _render_cart(open: bool) -> void:
 		if not _cart.is_empty() else
 		LocaleCatalogScript.text("desktop.free.advance")
 	) if free_policy else (
-		"提交提案(%d)" % _cart.size()
-		if not _cart.is_empty() else "提交提案")
+		"@{desktop.main.fragment.bed494cc5491181a}(%d)" % _cart.size()
+		if not _cart.is_empty() else "@{desktop.main.fragment.bed494cc5491181a}")
 	subb.disabled = not open or _cart.is_empty()
 	var pass_button := _n["pass"] as Button
 	pass_button.text = LocaleCatalogScript.text("desktop.free.clear") \
-		if free_policy else "本次不动"
+		if free_policy else "@{desktop.main.fragment.1966f4dfc00757e5}"
 	pass_button.disabled = not open or (free_policy and _cart.is_empty())
 
 
@@ -3900,12 +3974,12 @@ func _show_verdict(v: Dictionary) -> void:
 		"staged": LocaleCatalogScript.text("desktop.free.verdict_staged"),
 		"effective": LocaleCatalogScript.text("desktop.free.verdict_effective"),
 		"cleared": LocaleCatalogScript.text("desktop.free.verdict_cleared"),
-		"accepted_pending": "提案获准 · 等待实施",
-		"accepted_effective": "提案获准 · 已经生效",
-		"accepted_noop": "会议完成 · 维持现状",
-		"accepted": "政策提案获准",
-		"rejected": "政策提案未通过",
-		"cancelled": "待实施政策已撤销",
+		"accepted_pending": "@{desktop.main.fragment.5086395efca32968} · @{desktop.main.fragment.16f658a708c19d5d}",
+		"accepted_effective": "@{desktop.main.fragment.5086395efca32968} · @{desktop.main.fragment.d537d79bda2cbe31}",
+		"accepted_noop": "@{desktop.main.fragment.219de38dec04f366} · @{desktop.main.fragment.ccc7db219beb1b65}",
+		"accepted": "@{desktop.main.fragment.3420edb1c6f54235}",
+		"rejected": "@{desktop.main.fragment.91a2cc776c3e7abe}",
+		"cancelled": "@{desktop.main.fragment.20867bd9171988f8}",
 	}.get(status, status.replace("_", " "))
 	var vp := PanelContainer.new()
 	vp.add_theme_stylebox_override("panel", _sb(
@@ -3924,11 +3998,11 @@ func _show_verdict(v: Dictionary) -> void:
 		sub = str(REASON_CN.get(reason, reason.replace("_", " ")))
 	if v.get("effective_tick") != null:
 		var et := int(v.get("effective_tick"))
-		sub += ("" if sub.is_empty() else " · ") + "%s 生效" % _cal_str(et)
+		sub += ("" if sub.is_empty() else " · ") + "%s @{desktop.main.fragment.c997444643299f36}" % _cal_str(et)
 	var cost := float(v.get("adjustment_cost", 0.0))
 	var admin := float(v.get("reserved_admin_cost", 0.0))
 	if cost > 0.0 or admin > 0.0:
-		sub += ("" if sub.is_empty() else " · ") + "调整成本 %.2f / 行政容量 %.2f" % [cost, admin]
+		sub += ("" if sub.is_empty() else " · ") + "@{desktop.main.fragment.a9b6ed2a4fe759b2} %.2f / @{desktop.main.fragment.1fb9f23e95936512} %.2f" % [cost, admin]
 	if not sub.is_empty():
 		var sl := _lbl(sub, 11, Color("526475"))
 		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3954,7 +4028,7 @@ func _submit_cart() -> void:
 			"desktop.free.queued_hint", _cart.size()))
 		_send({"command": "advance", "ticks": 1})
 		return
-	_show_hint("已递交 %d 项动作,闭合本届会议,裁决将在边界返回…" % _cart.size())
+	_show_hint("@{desktop.main.fragment.1035301822dc0bca} %d @{desktop.main.fragment.7a1b24ce9ff18c46},@{desktop.main.fragment.ced0f218babe28f7},@{desktop.main.fragment.c37e7cec46810691}" % _cart.size())
 	var by_group: Dictionary = {}
 	for c: Dictionary in _cart:
 		var g := str(c["group"])
@@ -3984,7 +4058,7 @@ func _submit_pass() -> void:
 	_edits.clear()
 
 
-# ================= 中央区 =================
+#  Synchronization helper.
 func _render_center() -> void:
 	var body := _n["center_body"] as VBoxContainer
 	for c in body.get_children():
@@ -4004,10 +4078,27 @@ func _render_center() -> void:
 			_render_focus_tab(body)
 
 
-func _open_firm(firm_id: String) -> void:
-	if firm_id.is_empty():
+func _canonical_entity_id(value: Variant) -> String:
+	if value is int:
+		return str(int(value))
+	if value is float and is_equal_approx(float(value), roundf(float(value))):
+		return str(int(roundf(float(value))))
+	return str(value)
+
+
+func _firm_display_id(firm: Dictionary) -> String:
+	var symbol := str(firm.get("symbol", ""))
+	if not symbol.is_empty():
+		return symbol
+	var firm_id := _canonical_entity_id(firm.get("firm_id", ""))
+	return "F%04d" % int(firm_id) if firm_id.is_valid_int() else firm_id
+
+
+func _open_firm(firm_id: Variant) -> void:
+	var canonical_id := _canonical_entity_id(firm_id)
+	if canonical_id.is_empty():
 		return
-	_firm_selected = firm_id
+	_firm_selected = canonical_id
 	_firm_search = ""
 	_tab = "firms"
 	_scroll_mem.erase("center:firms:detail")
@@ -4074,13 +4165,13 @@ func _render_households_tab(body: VBoxContainer) -> void:
 	var all_items: Array = payload.get("items", [])
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 7)
-	top.add_child(_household_summary_card("HOUSEHOLDS · 家庭",
-		str(int(summary.get("household_count", 0))), TEAL, "户"))
-	top.add_child(_household_summary_card("POPULATION · 成员",
-		str(int(summary.get("population", 0))), BLUE, "人"))
-	top.add_child(_household_summary_card("ASSETS · 总资产",
+	top.add_child(_household_summary_card("HOUSEHOLDS · @{desktop.main.fragment.a70a77c75b1dc74f}",
+		str(int(summary.get("household_count", 0))), TEAL, "@{desktop.main.fragment.e79bc08ca05db2c5}"))
+	top.add_child(_household_summary_card("POPULATION · @{desktop.main.fragment.6e6d6ddbb7c1a453}",
+		str(int(summary.get("population", 0))), BLUE, "@{desktop.main.fragment.50f5d65d57290f75}"))
+	top.add_child(_household_summary_card("ASSETS · @{desktop.main.fragment.cce7e7779e0b03eb}",
 		_fmt_val("num", float(summary.get("total_assets", 0.0))), PURPLE))
-	top.add_child(_household_summary_card("DEBT · 总负债",
+	top.add_child(_household_summary_card("DEBT · @{desktop.main.fragment.defbe45aeb8fe825}",
 		_fmt_val("num", float(summary.get("total_debt", 0.0))), AMBER))
 	body.add_child(top)
 
@@ -4089,13 +4180,13 @@ func _render_households_tab(body: VBoxContainer) -> void:
 	var tools := HBoxContainer.new()
 	tools.add_theme_constant_override("separation", 6)
 	toolbar.add_child(tools)
-	tools.add_child(_lbl("家庭微观档案", 11, INK))
-	tools.add_child(_chip("MICRODATA · 家庭账册", Color("5a36a8"),
+	tools.add_child(_lbl("@{desktop.main.fragment.ad667e9d4d328745}", 11, INK))
+	tools.add_child(_chip("MICRODATA · @{desktop.main.fragment.ed66a2d79e1451a0}", Color("5a36a8"),
 		Color("f3effc"), Color("d8ccf0"), 8))
 	tools.add_child(_spacer_h())
 	var search := LineEdit.new()
 	search.custom_minimum_size.x = 155
-	search.placeholder_text = "家庭号 / 成员ID · 回车"
+	search.placeholder_text = "@{desktop.main.fragment.a975674660df1cac} / @{desktop.main.fragment.6e6d6ddbb7c1a453}ID · @{desktop.main.fragment.fa6686e96460ad32}"
 	search.text = _household_search
 	search.add_theme_font_size_override("font_size", 9)
 	search.add_theme_color_override("font_color", INK2)
@@ -4107,7 +4198,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 		_household_search = value
 		_render())
 	tools.add_child(search)
-	for sort_spec: Array in [["net_worth", "净资产"], ["members", "成员"], ["debt", "负债"]]:
+	for sort_spec: Array in [["net_worth", "@{desktop.main.fragment.be2f841884cb268c}"], ["members", "@{desktop.main.fragment.6e6d6ddbb7c1a453}"], ["debt", "@{desktop.main.fragment.2a5946bee7716fae}"]]:
 		var sort_id := str(sort_spec[0])
 		var sort_button := Button.new()
 		sort_button.text = str(sort_spec[1])
@@ -4135,7 +4226,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 		var empty := PanelContainer.new()
 		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 18))
-		empty.add_child(_lbl("没有匹配的家庭。清空搜索词后重试。", 11, INK3))
+		empty.add_child(_lbl("@{desktop.main.fragment.02b896a6e57c3b4b}", 11, INK3))
 		body.add_child(empty)
 		return
 	var selected_found := false
@@ -4183,7 +4274,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 		var entry := Button.new()
 		entry.custom_minimum_size = Vector2(188, 54)
 		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		entry.text = "家庭 #%03d  ·  %d 人\n总资产 %s  ·  负债 %s" % [
+		entry.text = "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d  ·  %d @{desktop.main.fragment.50f5d65d57290f75}\n@{desktop.main.fragment.cce7e7779e0b03eb} %s  ·  @{desktop.main.fragment.2a5946bee7716fae} %s" % [
 			household_id, int(item.get("member_count", 0)),
 			_fmt_val("num", float((item.get("assets", {}) as Dictionary).get("total", 0.0))),
 			_fmt_val("num", float(item.get("debt", 0.0)))]
@@ -4192,7 +4283,7 @@ func _render_households_tab(body: VBoxContainer) -> void:
 			Color("eef5ff") if active else Color.WHITE,
 			BLUE_BD if active else Color("dfe6ee"), 9, 7, 3 if active else 0))
 		entry.add_theme_color_override("font_color", Color("1f4f91") if active else INK2)
-		entry.tooltip_text = "查看家庭 #%03d 的成员与资产负债" % household_id
+		entry.tooltip_text = "@{desktop.main.fragment.40e7d4ff17b61ddb} #%03d @{desktop.main.fragment.a436c03f4c4f9dcf}" % household_id
 		entry.pressed.connect(func() -> void:
 			_household_selected = household_id
 			_person_selected = -1
@@ -4225,24 +4316,24 @@ func _render_household_detail(parent: VBoxContainer, household: Dictionary,
 	header.add_child(header_col)
 	var title := HBoxContainer.new()
 	title.add_child(_dot(TEAL, 8))
-	title.add_child(_lbl("家庭 #%03d" % household_id, 15, INK))
+	title.add_child(_lbl("@{desktop.main.fragment.a70a77c75b1dc74f} #%03d" % household_id, 15, INK))
 	if bool(household.get("is_public_guardian", false)):
-		title.add_child(_chip("公共监护家庭", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
-	title.add_child(_chip("%d 位成员" % int(household.get("member_count", 0)),
+		title.add_child(_chip("@{desktop.main.fragment.c3bae215e4e3c22e}", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
+	title.add_child(_chip("%d @{desktop.main.fragment.2b1b34438e7bef46}" % int(household.get("member_count", 0)),
 		TEAL_DK, TEAL_BG, TEAL_BD, 8))
 	title.add_child(_spacer_h())
-	title.add_child(_lbl("截至 %s" % as_of_date, 8, INK3, true))
+	title.add_child(_lbl("@{desktop.main.fragment.2df59604068d1179} %s" % as_of_date, 8, INK3, true))
 	header_col.add_child(title)
 	var asset: Dictionary = household.get("assets", {})
 	var metrics := HBoxContainer.new()
 	metrics.add_theme_constant_override("separation", 6)
-	metrics.add_child(_household_summary_card("总资产",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.cce7e7779e0b03eb}",
 		_fmt_val("num", float(asset.get("total", 0.0))), TEAL))
-	metrics.add_child(_household_summary_card("负债",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.2a5946bee7716fae}",
 		_fmt_val("num", float(household.get("debt", 0.0))), AMBER))
-	metrics.add_child(_household_summary_card("净资产",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.be2f841884cb268c}",
 		_fmt_val("num", float(household.get("net_worth", 0.0))), PURPLE))
-	metrics.add_child(_household_summary_card("本期消费",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.2206a38da9b66c95}",
 		_fmt_val("num", float(household.get("consumption", 0.0))), BLUE))
 	header_col.add_child(metrics)
 	var allocation := _HouseholdAssetBar.new()
@@ -4253,7 +4344,7 @@ func _render_household_detail(parent: VBoxContainer, household: Dictionary,
 	parent.add_child(header)
 
 	var member_head := HBoxContainer.new()
-	member_head.add_child(_lbl("MEMBERS · 成员档案", 9, INK3, true))
+	member_head.add_child(_lbl("MEMBERS · @{desktop.main.fragment.ee653d17be237793}", 9, INK3, true))
 	var members: Array = household.get("members", []).duplicate()
 	var target_present := false
 	for member: Dictionary in members:
@@ -4261,10 +4352,10 @@ func _render_household_detail(parent: VBoxContainer, household: Dictionary,
 			target_present = true
 			break
 	if target_present:
-		member_head.add_child(_chip("已定位 P%03d" % _person_selected,
+		member_head.add_child(_chip("@{desktop.main.fragment.47ed180be4d6f265} P%03d" % _person_selected,
 			Color("285ca8"), BLUE_BG, BLUE_BD, 7))
 	member_head.add_child(_spacer_h())
-	member_head.add_child(_lbl("个人资产不含家庭层登记的住房产权", 8, INK3))
+	member_head.add_child(_lbl("@{desktop.main.fragment.8b75b585e8e109ae}", 8, INK3))
 	parent.add_child(member_head)
 	if target_present:
 		members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -4288,35 +4379,44 @@ func _household_member_card(member: Dictionary, focused: bool = false) -> Contro
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	card.add_child(col)
-	var sex := str(member.get("sex", ""))
-	var sex_text := "女" if sex == "F" else "男" if sex == "M" else "未知"
-	var sex_color := Color("c17b16") if sex == "F" else Color("3274d9")
+	var sex_id := str(member.get(
+		"sex_id",
+		"female" if str(member.get("sex", "")) == "F"
+		else "male" if str(member.get("sex", "")) == "M"
+		else "unknown"))
+	var sex_text := _domain_text("sex", sex_id)
+	var sex_color := Color("c17b16") if sex_id == "female" else Color("3274d9")
 	var identity := HBoxContainer.new()
 	identity.add_theme_constant_override("separation", 6)
 	identity.add_child(_dot(sex_color, 8))
-	identity.add_child(_lbl("成员 P%03d" % int(member.get("person_id", 0)), 12, INK, true))
-	identity.add_child(_chip("%s · %d 岁" % [sex_text, int(member.get("age", 0))],
+	identity.add_child(_lbl("@{desktop.main.fragment.6e6d6ddbb7c1a453} P%03d" % int(member.get("person_id", 0)), 12, INK, true))
+	identity.add_child(_chip("%s · %d @{desktop.main.fragment.43e84a7a98a4fc35}" % [sex_text, int(member.get("age", 0))],
 		sex_color.darkened(0.18), Color(sex_color.r, sex_color.g, sex_color.b, 0.09),
 		Color(sex_color.r, sex_color.g, sex_color.b, 0.32), 8))
-	identity.add_child(_chip(str(member.get("relationship", "成员")),
+	identity.add_child(_chip(_row_domain_text(
+		member, "relationship", "relationship_id", "relationship", "member"),
 		TEAL_DK, TEAL_BG, TEAL_BD, 8))
 	if focused:
-		identity.add_child(_chip("当前员工", Color("285ca8"), BLUE_BG, BLUE_BD, 8))
+		identity.add_child(_chip("@{desktop.main.fragment.48fdfedb9384a927}", Color("285ca8"), BLUE_BG, BLUE_BD, 8))
 	identity.add_child(_spacer_h())
-	identity.add_child(_chip(str(member.get("labor_status", "")),
+	identity.add_child(_chip(_row_domain_text(
+		member, "labor_state", "labor_status_id", "labor_status", "unknown"),
 		INK2, PANEL2, LINE2, 8))
 	col.add_child(identity)
 	var links: Array[String] = []
 	if member.get("mother_id") != null:
-		links.append("母 P%03d" % int(member.get("mother_id")))
+		links.append("@{desktop.main.fragment.1a3205c3a91ea555} P%03d" % int(member.get("mother_id")))
 	if member.get("father_id") != null:
-		links.append("父 P%03d" % int(member.get("father_id")))
+		links.append("@{desktop.main.fragment.ca4c64d9ae27fa4a} P%03d" % int(member.get("father_id")))
 	if member.get("partner_id") != null:
-		links.append("伴侣 P%03d" % int(member.get("partner_id")))
+		links.append("@{desktop.main.fragment.7c4bbd93aa6e2e18} P%03d" % int(member.get("partner_id")))
 	if member.get("guardian_id") != null:
-		links.append("监护 P%03d" % int(member.get("guardian_id")))
-	var demographic := "出生 %s · %s" % [
-		str(member.get("birth_date", "—")), str(member.get("marital_status", "—"))]
+		links.append("@{desktop.main.fragment.10dde3dd123a4243} P%03d" % int(member.get("guardian_id")))
+	var demographic := "@{desktop.main.fragment.7e3781ea90e9583f} %s · %s" % [
+		str(member.get("birth_date", "—")),
+		_row_domain_text(
+			member, "marital_status", "marital_status_id",
+			"marital_status", "unknown")]
 	if not links.is_empty():
 		demographic += " · " + " / ".join(links)
 	col.add_child(_lbl(demographic, 8, INK3, true))
@@ -4324,22 +4424,22 @@ func _household_member_card(member: Dictionary, focused: bool = false) -> Contro
 	var assets: Dictionary = member.get("assets", {})
 	var finance := HBoxContainer.new()
 	finance.add_theme_constant_override("separation", 5)
-	finance.add_child(_household_summary_card("个人资产",
+	finance.add_child(_household_summary_card("@{desktop.main.fragment.9ec10ddf5fc84f39}",
 		_fmt_val("num", float(assets.get("total", 0.0))), TEAL))
-	finance.add_child(_household_summary_card("个人负债",
+	finance.add_child(_household_summary_card("@{desktop.main.fragment.b01b38c4ad1087c8}",
 		_fmt_val("num", float(member.get("debt", 0.0))), AMBER))
-	finance.add_child(_household_summary_card("个人净资产",
+	finance.add_child(_household_summary_card("@{desktop.main.fragment.43bfdd9c9c47d5c1}",
 		_fmt_val("num", float(member.get("net_worth", 0.0))), PURPLE))
-	finance.add_child(_household_summary_card("本期消费",
+	finance.add_child(_household_summary_card("@{desktop.main.fragment.2206a38da9b66c95}",
 		_fmt_val("num", float(member.get("consumption", 0.0))), BLUE))
 	col.add_child(finance)
-	col.add_child(_lbl("资产构成  现金 %s · 企业股权 %s · 银行股权 %s · 债券 %s" % [
+	col.add_child(_lbl("@{desktop.main.fragment.190f51d6d2301b94}  @{desktop.main.fragment.118f18e6840546c1} %s · @{desktop.main.fragment.22e64656444bc55f} %s · @{desktop.main.fragment.20646c88cdfdcf6b} %s · @{desktop.main.fragment.9dc4139eaedd31c5} %s" % [
 		_fmt_val("num", float(assets.get("cash", 0.0))),
 		_fmt_val("num", float(assets.get("firm_equity", 0.0))),
 		_fmt_val("num", float(assets.get("bank_equity", 0.0))),
 		_fmt_val("num", float(assets.get("bonds", 0.0)))], 8, INK2, true))
 	var income: Dictionary = member.get("income", {})
-	var work_text := "收入  劳动 %s · 资本 %s · 转移 %s" % [
+	var work_text := "@{desktop.main.fragment.117d8f914d8e21a1}  @{desktop.main.fragment.e82f854c8903d9f7} %s · @{desktop.main.fragment.59831fc48b368a54} %s · @{desktop.main.fragment.ae7c4c83caeb18a5} %s" % [
 		_fmt_val("num", float(income.get("labor", 0.0))),
 		_fmt_val("num", float(income.get("capital", 0.0))),
 		_fmt_val("num", float(income.get("transfer", 0.0)))]
@@ -4352,19 +4452,22 @@ func _household_member_card(member: Dictionary, focused: bool = false) -> Contro
 		var employment_links := HFlowContainer.new()
 		employment_links.add_theme_constant_override("h_separation", 5)
 		employment_links.add_theme_constant_override("v_separation", 4)
-		employment_links.add_child(_lbl("劳动合同", 8, INK3, true))
+		employment_links.add_child(_lbl("@{desktop.main.fragment.a88316fab089cc26}", 8, INK3, true))
 		for employment: Dictionary in employers:
-			var firm_id := str(employment.get("firm_id", ""))
+			var firm_id := _canonical_entity_id(employment.get("firm_id", ""))
 			var link := Button.new()
 			link.text = "%s ↗  %s · %s/%s · %.2f FTE" % [
-				firm_id, str(employment.get("sector", "企业")),
-				str(employment.get("contract", "合同")), str(employment.get("status", "在岗")),
+				firm_id, _sector_text(employment),
+				_row_domain_text(
+					employment, "contract", "contract_id", "contract", "unknown"),
+				_row_domain_text(
+					employment, "employment_status", "status_id", "status", "active"),
 				float(employment.get("hours", 0.0))]
 			link.add_theme_font_size_override("font_size", 8)
 			link.add_theme_color_override("font_color", Color("285ca8"))
 			link.add_theme_stylebox_override("normal", _sb(Color("eef5ff"), Color("c9dcf5"), 7, 4))
 			link.add_theme_stylebox_override("hover", _sb(Color("e2eeff"), BLUE_BD, 7, 4, 2))
-			link.tooltip_text = "打开 %s 企业详情" % firm_id
+			link.tooltip_text = "@{desktop.main.fragment.c771248e511fbf93} %s @{desktop.main.fragment.f174790c7949fe48}" % firm_id
 			link.pressed.connect(func() -> void:
 				_open_firm(firm_id))
 			employment_links.add_child(link)
@@ -4374,8 +4477,14 @@ func _household_member_card(member: Dictionary, focused: bool = false) -> Contro
 
 func _firm_number(value: Variant, kind: String = "num") -> String:
 	if value == null:
-		return "不适用"
+		return "@{desktop.main.fragment.2746d995801b1cc8}"
 	return _fmt_val(kind, float(value))
+
+
+func _optional_number(value: Variant, fallback := 0.0) -> float:
+	if value == null or not (value is int or value is float):
+		return fallback
+	return float(value)
 
 
 func _firm_sector_color(sector_code: String) -> Color:
@@ -4385,26 +4494,37 @@ func _firm_sector_color(sector_code: String) -> Color:
 		"consumption": BLUE,
 		"capital": Color("4a6fa5"),
 		"energy": Color("b56b0b"),
+		"housing": Color("8a6b50"),
 		"bank": Color("7a54b3"),
+		"banking": Color("7a54b3"),
 	}.get(sector_code, INK3)
 
 
 func _firm_sort_value(item: Dictionary) -> float:
 	match _firm_sort:
 		"earnings":
-			return float((item.get("operations", {}) as Dictionary).get("earnings", 0.0))
+			return _optional_number(
+				(item.get("operations", {}) as Dictionary).get("earnings"))
 		"assets":
-			return float((item.get("balance_sheet", {}) as Dictionary).get("gross_assets", 0.0))
+			return _optional_number(
+				(item.get("balance_sheet", {}) as Dictionary).get("gross_assets"))
 		_:
-			return float((item.get("operations", {}) as Dictionary).get("revenue", 0.0))
+			return _optional_number(
+				(item.get("operations", {}) as Dictionary).get("revenue"))
 
 
 func _firm_matches(item: Dictionary) -> bool:
 	var query := _firm_search.strip_edges().to_lower()
 	if query.is_empty():
 		return true
-	for text in [item.get("firm_id", ""), item.get("sector", ""),
-			item.get("condition", "")]:
+	for text in [
+		item.get("firm_id", ""),
+		_firm_display_id(item),
+		item.get("sector_id", item.get("sector", "")),
+			_sector_text(item),
+			item.get("condition_id", item.get("condition", "")),
+			_condition_text(item),
+	]:
 		if str(text).to_lower().contains(query):
 			return true
 	var labor: Dictionary = item.get("labor", {})
@@ -4453,13 +4573,13 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 	var all_items: Array = payload.get("items", [])
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 7)
-	top.add_child(_household_summary_card("FIRMS · 企业",
-		str(int(summary.get("firm_count", 0))), TEAL, "家"))
-	top.add_child(_household_summary_card("EMPLOYMENT · 在岗",
+	top.add_child(_household_summary_card("FIRMS · @{desktop.main.fragment.409d0719010a46ee}",
+		str(int(summary.get("firm_count", 0))), TEAL, "@{desktop.main.fragment.c8ae97be80f3867c}"))
+	top.add_child(_household_summary_card("EMPLOYMENT · @{desktop.main.fragment.1d5c46b3a1725a35}",
 		"%.1f" % float(summary.get("employment_fte", 0.0)), BLUE, "FTE"))
-	top.add_child(_household_summary_card("REVENUE · 总营收",
+	top.add_child(_household_summary_card("REVENUE · @{desktop.main.fragment.0cd72d69cc8bc116}",
 		_fmt_val("num", float(summary.get("total_revenue", 0.0))), PURPLE))
-	top.add_child(_household_summary_card("EARNINGS · 总利润",
+	top.add_child(_household_summary_card("EARNINGS · @{desktop.main.fragment.d401d3b11b80d307}",
 		_fmt_val("num", float(summary.get("total_earnings", 0.0))), AMBER))
 	body.add_child(top)
 
@@ -4468,13 +4588,13 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 	var tools := HBoxContainer.new()
 	tools.add_theme_constant_override("separation", 6)
 	toolbar.add_child(tools)
-	tools.add_child(_lbl("企业微观档案", 11, INK))
-	tools.add_child(_chip("LIVE BOOKS · 实时账表", Color("285ca8"),
+	tools.add_child(_lbl("@{desktop.main.fragment.49c6520ca010dad7}", 11, INK))
+	tools.add_child(_chip("LIVE BOOKS · @{desktop.main.fragment.cd7ccd9c05c642a7}", Color("285ca8"),
 		Color("eef5ff"), Color("c9dcf5"), 8))
 	tools.add_child(_spacer_h())
 	var search := LineEdit.new()
 	search.custom_minimum_size.x = 145
-	search.placeholder_text = "企业 / 部门 / 员工ID · 回车"
+	search.placeholder_text = "@{desktop.main.fragment.409d0719010a46ee} / @{desktop.main.fragment.f128cdf1dae21223} / @{desktop.main.fragment.a1f5d5fcbdc4d510}ID · @{desktop.main.fragment.fa6686e96460ad32}"
 	search.text = _firm_search
 	search.add_theme_font_size_override("font_size", 9)
 	search.add_theme_color_override("font_color", INK2)
@@ -4486,7 +4606,7 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 		_firm_search = value
 		_render())
 	tools.add_child(search)
-	for sort_spec: Array in [["revenue", "营收"], ["earnings", "利润"], ["assets", "资产"]]:
+	for sort_spec: Array in [["revenue", "@{desktop.main.fragment.c5678fcca666b891}"], ["earnings", "@{desktop.main.fragment.86df9b5b13baec22}"], ["assets", "@{desktop.main.fragment.5f45bb826b168fde}"]]:
 		var sort_id := str(sort_spec[0])
 		var sort_button := Button.new()
 		sort_button.text = str(sort_spec[1])
@@ -4514,16 +4634,17 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 		var empty := PanelContainer.new()
 		empty.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		empty.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 12, 18))
-		empty.add_child(_lbl("没有匹配的企业。清空搜索词后重试。", 11, INK3))
+		empty.add_child(_lbl("@{desktop.main.fragment.8057cc6b5612788c}", 11, INK3))
 		body.add_child(empty)
 		return
 	var selected_found := false
 	for item: Dictionary in items:
-		if str(item.get("firm_id", "")) == _firm_selected:
+		if _canonical_entity_id(item.get("firm_id", "")) == _firm_selected:
 			selected_found = true
 			break
 	if not selected_found:
-		_firm_selected = str((items[0] as Dictionary).get("firm_id", ""))
+		_firm_selected = _canonical_entity_id(
+			(items[0] as Dictionary).get("firm_id", ""))
 
 	var main := HBoxContainer.new()
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -4555,7 +4676,8 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 	list_scroll.add_child(list_items)
 	var selected: Dictionary = items[0]
 	for item: Dictionary in items:
-		var firm_id := str(item.get("firm_id", ""))
+		var firm_id := _canonical_entity_id(item.get("firm_id", ""))
+		var firm_display_id := _firm_display_id(item)
 		var active := firm_id == _firm_selected
 		if active:
 			selected = item
@@ -4564,17 +4686,17 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 		var entry := Button.new()
 		entry.custom_minimum_size = Vector2(188, 57)
 		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		entry.text = "%s  ·  %s\n营收 %s  ·  利润 %s  ·  %.1f FTE" % [
-			firm_id, str(item.get("sector", "企业")),
-			_fmt_val("num", float(operations.get("revenue", 0.0))),
-			_fmt_val("num", float(operations.get("earnings", 0.0))),
+		entry.text = "%s  ·  %s\n@{desktop.main.fragment.c5678fcca666b891} %s  ·  @{desktop.main.fragment.86df9b5b13baec22} %s  ·  %.1f FTE" % [
+			firm_display_id, _sector_text(item),
+			_firm_number(operations.get("revenue")),
+			_firm_number(operations.get("earnings")),
 			float(labor.get("employment_fte", 0.0))]
 		entry.add_theme_font_size_override("font_size", 8)
 		entry.add_theme_stylebox_override("normal", _sb(
 			Color("eef5ff") if active else Color.WHITE,
 			BLUE_BD if active else Color("dfe6ee"), 9, 7, 3 if active else 0))
 		entry.add_theme_color_override("font_color", Color("1f4f91") if active else INK2)
-		entry.tooltip_text = "查看 %s 的经营、财务、员工与所有权档案" % firm_id
+		entry.tooltip_text = "@{desktop.main.fragment.db8db0530432bd15} %s @{desktop.main.fragment.9eebf5bc000570d2}" % firm_display_id
 		entry.pressed.connect(func() -> void:
 			_firm_selected = firm_id
 			_render())
@@ -4606,9 +4728,13 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 	var parameters: Dictionary = firm.get("parameters", {})
 	var signals: Dictionary = firm.get("signals", {})
 	var bank: Dictionary = firm.get("bank", {})
-	var sector_color := _firm_sector_color(str(firm.get("sector_code", "")))
-	var condition := str(firm.get("condition", "正常经营"))
-	var condition_color := GREEN if condition == "正常经营" else RED
+	var sector_id := str(firm.get(
+		"sector_id", firm.get("sector_code", firm.get("sector", "unknown"))))
+	var sector_color := _firm_sector_color(sector_id)
+	var condition_id := str(firm.get(
+		"condition_id", firm.get("condition", "unknown")))
+	var condition := _condition_text(firm)
+	var condition_color := GREEN if condition_id in ["operating", "trading"] else RED
 
 	var header := PanelContainer.new()
 	header.add_theme_stylebox_override("panel", _sb(Color("f9fbfd"), Color("dce5ee"), 11, 9, 4))
@@ -4617,200 +4743,201 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 	header.add_child(header_col)
 	var title := HBoxContainer.new()
 	title.add_child(_dot(sector_color, 8))
-	title.add_child(_lbl(str(firm.get("firm_id", "企业")), 15, INK, true))
-	title.add_child(_chip(str(firm.get("sector", "企业")),
+	title.add_child(_lbl(_firm_display_id(firm), 15, INK, true))
+	title.add_child(_chip(_sector_text(firm),
 		sector_color.darkened(0.15), Color(sector_color.r, sector_color.g, sector_color.b, 0.09),
 		Color(sector_color.r, sector_color.g, sector_color.b, 0.30), 8))
 	if bool(firm.get("state_owned", false)):
-		title.add_child(_chip("国有企业", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
+		title.add_child(_chip("@{desktop.main.fragment.7abe5186f9e43a4f}", Color("9a6812"), AMBER_BG, AMBER_BD, 8))
 	title.add_child(_chip(condition, condition_color.darkened(0.12),
 		Color(condition_color.r, condition_color.g, condition_color.b, 0.09),
 		Color(condition_color.r, condition_color.g, condition_color.b, 0.28), 8))
 	title.add_child(_spacer_h())
-	title.add_child(_lbl("截至 %s" % as_of_date, 8, INK3, true))
+	title.add_child(_lbl("@{desktop.main.fragment.2df59604068d1179} %s" % as_of_date, 8, INK3, true))
 	header_col.add_child(title)
 	var metrics := HBoxContainer.new()
 	metrics.add_theme_constant_override("separation", 6)
-	metrics.add_child(_household_summary_card("本期营收",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.64cde6f0e91e6075}",
 		_firm_number(operations.get("revenue")), TEAL))
-	metrics.add_child(_household_summary_card("本期利润",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.38c8b7cc8eb104d8}",
 		_firm_number(operations.get("earnings")), AMBER))
-	metrics.add_child(_household_summary_card("总资产",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.cce7e7779e0b03eb}",
 		_firm_number(book.get("gross_assets")), PURPLE))
-	metrics.add_child(_household_summary_card("债务本金",
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.5b7fff09607b842c}",
 		_firm_number(book.get("debt")), BLUE))
 	header_col.add_child(metrics)
-	var bank_text := "往来银行 %s · 贷款利率 %s" % [
-		str(bank.get("bank_id", "无")), _firm_number(bank.get("loan_rate"), "pt")]
-	var identity_text := "技术 %s · 产品 %s · %s · %s" % [
+	var bank_text := "@{desktop.main.fragment.96244265daad22c3} %s · @{desktop.main.fragment.2478189c98835384} %s" % [
+		str(bank.get("bank_id", "@{desktop.main.fragment.484d55613910eb8c}")), _firm_number(bank.get("loan_rate"), "pt")]
+	var identity_text := "@{desktop.main.fragment.4aa1a3c6743f7d8e} %s · @{desktop.main.fragment.aea82737cc01867d} %s · %s · %s" % [
 		str(firm.get("technology", "—")), str(firm.get("sells", "—")),
-		"实施投资" if bool(firm.get("invests", false)) else "不实施投资",
-		"独立上市" if bool(equity.get("enabled", false)) else "未发行独立股份"]
+		"@{desktop.main.fragment.8f7a04462c1a9ca1}" if bool(firm.get("invests", false)) else "@{desktop.main.fragment.cfe9174e514ae6e4}",
+		"@{desktop.main.fragment.5bf5a63f1a877c6d}" if bool(equity.get("enabled", false)) else "@{desktop.main.fragment.fb08d8804ef10514}"]
 	header_col.add_child(_lbl(identity_text + "   |   " + bank_text, 8, INK3, true))
 	parent.add_child(header)
 
-	_firm_section_head(parent, "OPERATIONS · 经营与生产", "计划 → 生产 → 销售 → 库存")
+	_firm_section_head(parent, "OPERATIONS · @{desktop.main.fragment.728d2ec69c3d5351}", "@{desktop.main.fragment.0f6b1949b093e352} → @{desktop.main.fragment.76ab7d3b41f2326d} → @{desktop.main.fragment.f04b061471b1fd16} → @{desktop.main.fragment.780c5fd5b10533dc}")
 	var operating_metrics := HBoxContainer.new()
 	operating_metrics.add_theme_constant_override("separation", 5)
 	for spec: Array in [
-		["需求预期", operations.get("demand_expected"), TEAL],
-		["计划产量", operations.get("production_target"), BLUE],
-		["实际产量", operations.get("produced"), PURPLE],
-		["销量", operations.get("sales"), AMBER],
+		["@{desktop.main.fragment.e3683d8bf1807c73}", operations.get("demand_expected"), TEAL],
+		["@{desktop.main.fragment.a7a232bc82286590}", operations.get("production_target"), BLUE],
+		["@{desktop.main.fragment.a98c596e050c6caf}", operations.get("produced"), PURPLE],
+		["@{desktop.main.fragment.7c348c349ca33032}", operations.get("sales"), AMBER],
 	]:
 		operating_metrics.add_child(_household_summary_card(
 			str(spec[0]), _firm_number(spec[1]), spec[2]))
 	parent.add_child(operating_metrics)
 	var operating_panels := HBoxContainer.new()
 	operating_panels.add_theme_constant_override("separation", 7)
-	operating_panels.add_child(_firm_data_panel("PRICE & MARGIN · 价格成本", [
-		["售价", _firm_number(operations.get("price"))],
-		["发布工资", _firm_number(operations.get("wage"))],
-		["加成率", _firm_number(operations.get("markup"), "pct")],
-		["工资总额", _firm_number(operations.get("wagebill"))],
-		["资本服务单位成本", _firm_number(operations.get("pricing_capital_unit_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
-		["资本服务成本", _firm_number(operations.get("pricing_capital_service_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
-		["资本服务率", _firm_number(operations.get("pricing_capital_service_rate"), "pct") if bool(operations.get("capital_service_pricing_enabled", false)) else "不适用"],
-		["目标库存", _firm_number(operations.get("target_inventory"))],
-		["库存实物量", _firm_number(operations.get("inventory"))],
-		["受抑需求", _firm_number(operations.get("rationed_demand"))],
+	operating_panels.add_child(_firm_data_panel("PRICE & MARGIN · @{desktop.main.fragment.ad404ac387ebabc1}", [
+		["@{desktop.main.fragment.4ea47b184e0109b9}", _firm_number(operations.get("price"))],
+		["@{desktop.main.fragment.c6c5ff02c8fd0341}", _firm_number(operations.get("wage"))],
+		["@{desktop.main.fragment.7bcb26c545e304ac}", _firm_number(operations.get("markup"), "pct")],
+		["@{desktop.main.fragment.41a463a21ac72cef}", _firm_number(operations.get("wagebill"))],
+		["@{desktop.main.fragment.d1d87bb4f796870c}", _firm_number(operations.get("pricing_capital_unit_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.350a9e802ab66c2f}", _firm_number(operations.get("pricing_capital_service_cost")) if bool(operations.get("capital_service_pricing_enabled", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.3bf9b5f7a4e449b6}", _firm_number(operations.get("pricing_capital_service_rate"), "pct") if bool(operations.get("capital_service_pricing_enabled", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.0d06b51c2fc0f7a2}", _firm_number(operations.get("target_inventory"))],
+		["@{desktop.main.fragment.e8e79d02cc0e44a6}", _firm_number(operations.get("inventory"))],
+		["@{desktop.main.fragment.603465f2eb1bdce0}", _firm_number(operations.get("rationed_demand"))],
 	]))
-	operating_panels.add_child(_firm_data_panel("REALIZATION · 执行效率", [
-		["生产实现率", _firm_number(operations.get("production_realization"), "pct")],
-		["产销率", _firm_number(operations.get("sales_realization"), "pct")],
-		["名义劳动需求", _firm_number(labor.get("labor_demand_notional"))],
-		["有效劳动需求", _firm_number(labor.get("labor_demand_effective"))],
-		["劳动效率单位", _firm_number(labor.get("efficiency_units"))],
-		["未填岗位", _firm_number(labor.get("vacancies"))],
-		["岗位空缺持续", "%d 天" % int(labor.get("vacancy_age", 0))],
-		["在岗人数", str(int(labor.get("active_heads", 0)))],
-		["在岗 FTE", "%.2f" % float(labor.get("employment_fte", 0.0))],
+	operating_panels.add_child(_firm_data_panel("REALIZATION · @{desktop.main.fragment.97e728f608e78366}", [
+		["@{desktop.main.fragment.b1bde29ead0af532}", _firm_number(operations.get("production_realization"), "pct")],
+		["@{desktop.main.fragment.1fa87836d750f23d}", _firm_number(operations.get("sales_realization"), "pct")],
+		["@{desktop.main.fragment.a3cdad2d23e23c83}", _firm_number(labor.get("labor_demand_notional"))],
+		["@{desktop.main.fragment.f0756220064f45e0}", _firm_number(labor.get("labor_demand_effective"))],
+		["@{desktop.main.fragment.7c5bdffca729b39c}", _firm_number(labor.get("efficiency_units"))],
+		["@{desktop.main.fragment.8e33aaf8bffffe00}", _firm_number(labor.get("vacancies"))],
+		["@{desktop.main.fragment.5df82226ae52ef7d}", "%d @{desktop.main.fragment.49da61ceeea2f271}" % int(labor.get("vacancy_age", 0))],
+		["@{desktop.main.fragment.bb8651b67f248073}", str(int(labor.get("active_heads", 0)))],
+		["@{desktop.main.fragment.1d5c46b3a1725a35} FTE", "%.2f" % float(labor.get("employment_fte", 0.0))],
 	]))
 	parent.add_child(operating_panels)
 
-	_firm_section_head(parent, "INCOME STATEMENT · 本期损益",
-		"完整损益表" if bool(pnl.get("full_statement", false)) else "兼容口径 · legacy profit")
+	_firm_section_head(parent, "INCOME STATEMENT · @{desktop.main.fragment.e9de5a8191ae4ed4}",
+		"@{desktop.main.fragment.f1916d5a7b4c4091}" if bool(pnl.get("full_statement", false)) else "@{desktop.main.fragment.6f8c90caea8fe61e} · legacy profit")
 	var pnl_panels := HBoxContainer.new()
 	pnl_panels.add_theme_constant_override("separation", 7)
-	pnl_panels.add_child(_firm_data_panel("OPERATING · 营业损益", [
-		["营业收入", _firm_number(pnl.get("revenue")), TEAL],
-		["期初未结收入", _firm_number(pnl.get("revenue_carry_opening"))],
-		["期末未结收入", _firm_number(pnl.get("revenue_carry"))],
-		["中间投入", _firm_number(pnl.get("intermediate_inputs"))],
-		["职工薪酬", _firm_number(pnl.get("compensation"))],
+	pnl_panels.add_child(_firm_data_panel("OPERATING · @{desktop.main.fragment.9fa734fd308d24ff}", [
+		["@{desktop.main.fragment.071f96c56f57b206}", _firm_number(pnl.get("revenue")), TEAL],
+		["@{desktop.main.fragment.c50a45c58d0f0cee}", _firm_number(pnl.get("revenue_carry_opening"))],
+		["@{desktop.main.fragment.2418384af4e161e1}", _firm_number(pnl.get("revenue_carry"))],
+		["@{desktop.main.fragment.ec224a16f56eab00}", _firm_number(pnl.get("intermediate_inputs"))],
+		["@{desktop.main.fragment.485210992a616033}", _firm_number(pnl.get("compensation"))],
 		["EBITDA", _firm_number(pnl.get("ebitda")), PURPLE],
-		["资本计价", _firm_number(pnl.get("capital_price"))],
-		["折旧", _firm_number(pnl.get("depreciation"))],
+		["@{desktop.main.fragment.318a62c940f464eb}", _firm_number(pnl.get("capital_price"))],
+		["@{desktop.main.fragment.7367bcbf15189952}", _firm_number(pnl.get("depreciation"))],
 		["EBIT", _firm_number(pnl.get("ebit")), PURPLE],
-		["税前利润", _firm_number(pnl.get("pre_tax_income")), AMBER],
+		["@{desktop.main.fragment.cc0b56deb49b74eb}", _firm_number(pnl.get("pre_tax_income")), AMBER],
 	]))
-	pnl_panels.add_child(_firm_data_panel("FINANCING · 利息税费与分配", [
-		["应计利息", _firm_number(pnl.get("interest_accrued"))],
-		["到期利息", _firm_number(pnl.get("interest_due"))],
-		["实付利息", _firm_number(pnl.get("interest_paid"))],
-		["利息缺口", _firm_number(pnl.get("interest_shortfall")), RED],
-		["期初利息欠款", _firm_number(pnl.get("interest_arrears_opening"))],
-		["期末利息欠款", _firm_number(pnl.get("interest_arrears")), RED],
-		["利润税", _firm_number(pnl.get("profit_tax"))],
-		["暴利税", _firm_number(pnl.get("windfall_tax"))],
-		["净利润", _firm_number(pnl.get("net_income")), AMBER],
-		["股息", _firm_number(pnl.get("dividends"))],
-		["留存收益", _firm_number(pnl.get("retained_earnings"))],
+	pnl_panels.add_child(_firm_data_panel("FINANCING · @{desktop.main.fragment.dff4462c3b421652}", [
+		["@{desktop.main.fragment.aabfcbca00157bd0}", _firm_number(pnl.get("interest_accrued"))],
+		["@{desktop.main.fragment.522fba731ad97ddd}", _firm_number(pnl.get("interest_due"))],
+		["@{desktop.main.fragment.1799dfe556a75fa8}", _firm_number(pnl.get("interest_paid"))],
+		["@{desktop.main.fragment.2d00a2f975515f8e}", _firm_number(pnl.get("interest_shortfall")), RED],
+		["@{desktop.main.fragment.a735518c54f41828}", _firm_number(pnl.get("interest_arrears_opening"))],
+		["@{desktop.main.fragment.a5c9b693c9445bd7}", _firm_number(pnl.get("interest_arrears")), RED],
+		["@{desktop.main.fragment.b52675c6688e33b4}", _firm_number(pnl.get("profit_tax"))],
+		["@{desktop.main.fragment.d3b8be64a0d78358}", _firm_number(pnl.get("windfall_tax"))],
+		["@{desktop.main.fragment.766b90a3050e76d1}", _firm_number(pnl.get("net_income")), AMBER],
+		["@{desktop.main.fragment.22d78417d1660071}", _firm_number(pnl.get("dividends"))],
+		["@{desktop.main.fragment.ab103640e4ae4829}", _firm_number(pnl.get("retained_earnings"))],
 	]))
 	parent.add_child(pnl_panels)
 
-	_firm_section_head(parent, "BALANCE SHEET · 资产负债表", "重置成本计价 · 利息欠款单列")
+	_firm_section_head(parent, "BALANCE SHEET · @{desktop.main.fragment.1aaf5d8c339cc79b}", "@{desktop.main.fragment.e1854bd27f6140be} · @{desktop.main.fragment.32f912c4d1359f4e}")
 	var book_panels := HBoxContainer.new()
 	book_panels.add_theme_constant_override("separation", 7)
-	book_panels.add_child(_firm_data_panel("ASSETS · 资产", [
-		["现金", _firm_number(book.get("cash")), TEAL],
-		["生产资本", _firm_number(book.get("capital_value"))],
-		["产成品库存", _firm_number(book.get("output_inventory_value"))],
-		["在产品", _firm_number(book.get("work_in_progress_value"))],
-		["投入品库存", _firm_number(book.get("input_inventory_value"))],
-		["总资产", _firm_number(book.get("gross_assets")), PURPLE],
+	book_panels.add_child(_firm_data_panel("ASSETS · @{desktop.main.fragment.5f45bb826b168fde}", [
+		["@{desktop.main.fragment.118f18e6840546c1}", _firm_number(book.get("cash")), TEAL],
+		["@{desktop.main.fragment.0f302c8533c5d143}", _firm_number(book.get("capital_value"))],
+		["@{desktop.main.fragment.e2401afaf2fec118}", _firm_number(book.get("output_inventory_value"))],
+		["@{desktop.main.fragment.20682482079102af}", _firm_number(book.get("work_in_progress_value"))],
+		["@{desktop.main.fragment.0d6b4b7817e8ed69}", _firm_number(book.get("input_inventory_value"))],
+		["@{desktop.main.fragment.cce7e7779e0b03eb}", _firm_number(book.get("gross_assets")), PURPLE],
 	]))
-	book_panels.add_child(_firm_data_panel("LIABILITIES & CREDIT · 融资", [
-		["债务本金", _firm_number(book.get("debt")), BLUE],
-		["利息欠款", _firm_number(book.get("interest_arrears")), RED],
-		["账面权益", _firm_number(book.get("book_equity")), PURPLE],
-		["合格抵押品", _firm_number(book.get("eligible_collateral_value"))],
-		["借款基础", _firm_number(book.get("borrowing_base_proxy"))],
-		["新增借款空间", _firm_number(book.get("borrowing_base_headroom")), TEAL],
-		["资本折扣", _firm_number(book.get("capital_haircut"), "pct")],
-		["库存折扣", _firm_number(book.get("inventory_haircut"), "pct")],
+	book_panels.add_child(_firm_data_panel("LIABILITIES & CREDIT · @{desktop.main.fragment.bac9adc1df9582bf}", [
+		["@{desktop.main.fragment.5b7fff09607b842c}", _firm_number(book.get("debt")), BLUE],
+		["@{desktop.main.fragment.0cd8835322b75655}", _firm_number(book.get("interest_arrears")), RED],
+		["@{desktop.main.fragment.91c0d0c18821c431}", _firm_number(book.get("book_equity")), PURPLE],
+		["@{desktop.main.fragment.2a880b968579099c}", _firm_number(book.get("eligible_collateral_value"))],
+		["@{desktop.main.fragment.c3a198b0f7f53676}", _firm_number(book.get("borrowing_base_proxy"))],
+		["@{desktop.main.fragment.06696065e8b93c8f}", _firm_number(book.get("borrowing_base_headroom")), TEAL],
+		["@{desktop.main.fragment.cbd4465331d4a053}", _firm_number(book.get("capital_haircut"), "pct")],
+		["@{desktop.main.fragment.4461ec6c6adbd0f4}", _firm_number(book.get("inventory_haircut"), "pct")],
 	]))
 	parent.add_child(book_panels)
-	parent.add_child(_firm_data_panel("VALUATION DETAIL · 实物量与计价依据", [
-		["资本实物量", _firm_number(book.get("capital_units"))],
-		["资本单位重置价", _firm_number(book.get("capital_unit_price"))],
-		["产成品实物量", _firm_number(book.get("output_inventory_units"))],
-		["产成品单位计价", _firm_number(book.get("output_inventory_unit_price"))],
-		["在产品实物量", _firm_number(book.get("work_in_progress_units"))],
-		["投入品实物量", _firm_number(book.get("input_inventory_units"))],
-	], "资产重估只改变观察与授信依据，不创造现金"))
+	parent.add_child(_firm_data_panel("VALUATION DETAIL · @{desktop.main.fragment.2890260adb7af5fc}", [
+		["@{desktop.main.fragment.dba470f82ed56428}", _firm_number(book.get("capital_units"))],
+		["@{desktop.main.fragment.3a14efdd342906b0}", _firm_number(book.get("capital_unit_price"))],
+		["@{desktop.main.fragment.aa1a48221d7a2f1f}", _firm_number(book.get("output_inventory_units"))],
+		["@{desktop.main.fragment.a6e7baf53a18bd19}", _firm_number(book.get("output_inventory_unit_price"))],
+		["@{desktop.main.fragment.4d46f27ebc324b8c}", _firm_number(book.get("work_in_progress_units"))],
+		["@{desktop.main.fragment.0175915995cd3e01}", _firm_number(book.get("input_inventory_units"))],
+	], "@{desktop.main.fragment.10a80ff2ef6536ee}"))
 
-	_firm_section_head(parent, "CAPITAL & ENERGY · 资本形成与能源投入")
+	_firm_section_head(parent, "CAPITAL & ENERGY · @{desktop.main.fragment.298a82054f4333d0}")
 	var capital_panels := HBoxContainer.new()
 	capital_panels.add_theme_constant_override("separation", 7)
-	capital_panels.add_child(_firm_data_panel("CAPITAL · 生产资本", [
-		["资本实物量", _firm_number(capital.get("units"))],
-		["上期资本", _firm_number(capital.get("previous_units"))],
-		["投资目标", _firm_number(capital.get("investment_target")) if bool(firm.get("invests", false)) else "不适用"],
-		["实际投资", _firm_number(capital.get("investment")) if bool(firm.get("invests", false)) else "不适用"],
-		["资本单位重置价", _firm_number(book.get("capital_unit_price"))],
-		["折旧率", _firm_number(capital.get("depreciation_rate"), "pct") if bool(firm.get("invests", false)) else "不适用"],
-		["产能上限", _firm_number(capital.get("capacity")) if str(firm.get("sector_code", "")) == "energy" else "不适用"],
+	capital_panels.add_child(_firm_data_panel("CAPITAL · @{desktop.main.fragment.0f302c8533c5d143}", [
+		["@{desktop.main.fragment.dba470f82ed56428}", _firm_number(capital.get("units"))],
+		["@{desktop.main.fragment.24e6130455bd30ec}", _firm_number(capital.get("previous_units"))],
+		["@{desktop.main.fragment.acbbbe6ae7081918}", _firm_number(capital.get("investment_target")) if bool(firm.get("invests", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.81f6c5c209a6df49}", _firm_number(capital.get("investment")) if bool(firm.get("invests", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.3a14efdd342906b0}", _firm_number(book.get("capital_unit_price"))],
+		["@{desktop.main.fragment.c3651a9d267f05f9}", _firm_number(capital.get("depreciation_rate"), "pct") if bool(firm.get("invests", false)) else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.216b769329454cc7}", _firm_number(capital.get("capacity")) if str(firm.get("sector_code", "")) == "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
 	]))
-	capital_panels.add_child(_firm_data_panel("ENERGY INPUT · 能源投入", [
-		["投入库存", _firm_number(capital.get("energy_input_stock")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
-		["投入库存账面成本", _firm_number(capital.get("energy_input_stock_cost")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
-		["库存平均成本", _firm_number(capital.get("energy_input_average_cost")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
-		["本期购入", _firm_number(capital.get("energy_bought")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
-		["本期消耗", _firm_number(capital.get("energy_used")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
-		["能源成本", _firm_number(capital.get("energy_cost_used")) if str(firm.get("sector_code", "")) != "energy" else "不适用"],
+	capital_panels.add_child(_firm_data_panel("ENERGY INPUT · @{desktop.main.fragment.333a81b9da7feff0}", [
+		["@{desktop.main.fragment.74a281ff68b56ada}", _firm_number(capital.get("energy_input_stock")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.4fd24f52729ab2b1}", _firm_number(capital.get("energy_input_stock_cost")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.a1fa98b21ff6d725}", _firm_number(capital.get("energy_input_average_cost")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.3d6e09387320b0f9}", _firm_number(capital.get("energy_bought")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.8e5125d4af08e3fc}", _firm_number(capital.get("energy_used")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
+		["@{desktop.main.fragment.91d87b06b80472ea}", _firm_number(capital.get("energy_cost_used")) if str(firm.get("sector_code", "")) != "energy" else "@{desktop.main.fragment.2746d995801b1cc8}"],
 	]))
 	parent.add_child(capital_panels)
 
-	_firm_section_head(parent, "WORKFORCE · 员工与劳动合同",
-		"%d 份合同 · %.2f FTE" % [int(labor.get("contract_count", 0)), float(labor.get("employment_fte", 0.0))])
+	_firm_section_head(parent, "WORKFORCE · @{desktop.main.fragment.1d223584d993a49d}",
+		"%d @{desktop.main.fragment.33e4a7c51e662103} · %.2f FTE" % [int(labor.get("contract_count", 0)), float(labor.get("employment_fte", 0.0))])
 	parent.add_child(_firm_workforce_panel(labor.get("employees", [])))
 
-	_firm_section_head(parent, "EQUITY & OWNERSHIP · 股权与所有权",
-		"逐人持仓 · 不与家庭账户重复")
+	_firm_section_head(parent, "EQUITY & OWNERSHIP · @{desktop.main.fragment.c30ef26f876eea36}",
+		"@{desktop.main.fragment.5e1d15ae7877b5c5} · @{desktop.main.fragment.71013b918d5c459f}")
 	parent.add_child(_firm_equity_panel(equity))
 
-	_firm_section_head(parent, "MODEL STATE · 行为、技术参数与退出信号", "只读结构参数与状态信号")
+	_firm_section_head(parent, "MODEL STATE · @{desktop.main.fragment.9bab1c1eecf1d218}", "@{desktop.main.fragment.37cc615063967c90}")
 	var parameter_panels := HBoxContainer.new()
 	parameter_panels.add_theme_constant_override("separation", 7)
-	parameter_panels.add_child(_firm_data_panel("BEHAVIOR · 行为参数", [
-		["需求调整 λd", _firm_number(parameters.get("demand_adjustment"))],
-		["目标库存率 φ", _firm_number(parameters.get("inventory_target_ratio"))],
-		["加成调整 η", _firm_number(parameters.get("markup_adjustment"))],
-		["加成下限", _firm_number(parameters.get("markup_min"), "pct")],
-		["加成上限", _firm_number(parameters.get("markup_max"), "pct")],
-		["工资调整 ω", _firm_number(parameters.get("wage_adjustment"))],
-		["股息支付率 ρ", _firm_number(parameters.get("dividend_payout_ratio"), "pct")],
-		["协调成本斜率", _firm_number(parameters.get("coordination_cost_slope"))],
+	parameter_panels.add_child(_firm_data_panel("BEHAVIOR · @{desktop.main.fragment.8644d815ac16b1af}", [
+		["@{desktop.main.fragment.48b3379895aaff95} λd", _firm_number(parameters.get("demand_adjustment"))],
+		["@{desktop.main.fragment.aed83664d1629b0a} φ", _firm_number(parameters.get("inventory_target_ratio"))],
+		["@{desktop.main.fragment.20594db239b71bc3} η", _firm_number(parameters.get("markup_adjustment"))],
+		["@{desktop.main.fragment.9f67b0cfc23d90d8}", _firm_number(parameters.get("markup_min"), "pct")],
+		["@{desktop.main.fragment.38b32010d1d6f612}", _firm_number(parameters.get("markup_max"), "pct")],
+		["@{desktop.main.fragment.9745314511c2cf9f} ω", _firm_number(parameters.get("wage_adjustment"))],
+		["@{desktop.main.fragment.df6d2bd469a88b08} ρ", _firm_number(parameters.get("dividend_payout_ratio"), "pct")],
+		["@{desktop.main.fragment.84acc6a7f702923e}", _firm_number(parameters.get("coordination_cost_slope"))],
 	]))
-	parameter_panels.add_child(_firm_data_panel("TECH & SIGNALS · 技术与信号", [
-		["劳动生产率 a", _firm_number(parameters.get("labor_productivity"))],
-		["全要素生产率 A", _firm_number(parameters.get("tfp"))],
-		["资本份额 α", _firm_number(parameters.get("capital_share"), "pct")],
-		["目标资本产出比 v", _firm_number(parameters.get("capital_output_target"))],
-		["投资调整 λI", _firm_number(parameters.get("investment_adjustment"))],
-		["能源强度", _firm_number(parameters.get("energy_intensity"))],
-		["产能系数 κ", _firm_number(parameters.get("capacity_kappa"))],
-		["上期销量", _firm_number(signals.get("previous_sales"))],
-		["上期用工", _firm_number(signals.get("previous_hiring"))],
-		["上期有效劳动需求", _firm_number(signals.get("previous_effective_labor_demand"))],
-		["上期目标库存", _firm_number(signals.get("previous_target_inventory"))],
-		["上期受抑需求", _firm_number(signals.get("previous_rationed_demand"))],
-		["部门转换压力", "%d 天" % int(signals.get("sector_switch_pressure", 0))],
-		["股息支付缺口", _firm_number(signals.get("dividend_shortfall"))],
-		["闲置 / 资不抵债 / 低规模", "%d / %d / %d 天" % [
-			int(signals.get("idle_ticks", 0)), int(signals.get("insolvent_ticks", 0)),
-			int(signals.get("subscale_ticks", 0))], RED if condition != "正常经营" else INK],
+	parameter_panels.add_child(_firm_data_panel("TECH & SIGNALS · @{desktop.main.fragment.9fcf39be6bfe11ab}", [
+		["@{desktop.main.fragment.94e7a17c7762184c} a", _firm_number(parameters.get("labor_productivity"))],
+		["@{desktop.main.fragment.ca50fa2d89be18c0} A", _firm_number(parameters.get("tfp"))],
+		["@{desktop.main.fragment.2b1d7bafa3f0ea6b} α", _firm_number(parameters.get("capital_share"), "pct")],
+		["@{desktop.main.fragment.c7ed8c1d97950c31} v", _firm_number(parameters.get("capital_output_target"))],
+		["@{desktop.main.fragment.82d5d087f8766ffc} λI", _firm_number(parameters.get("investment_adjustment"))],
+		["@{desktop.main.fragment.bcb4ce27872b0a8f}", _firm_number(parameters.get("energy_intensity"))],
+		["@{desktop.main.fragment.b4ebd01146aa5850} κ", _firm_number(parameters.get("capacity_kappa"))],
+		["@{desktop.main.fragment.a4b37109e521203d}", _firm_number(signals.get("previous_sales"))],
+		["@{desktop.main.fragment.aa9d10a173169e4d}", _firm_number(signals.get("previous_hiring"))],
+		["@{desktop.main.fragment.81d7c25e0bfcd5a3}", _firm_number(signals.get("previous_effective_labor_demand"))],
+		["@{desktop.main.fragment.972bff3759c3cba7}", _firm_number(signals.get("previous_target_inventory"))],
+		["@{desktop.main.fragment.f28901dc4184faca}", _firm_number(signals.get("previous_rationed_demand"))],
+		["@{desktop.main.fragment.8254bf9ba0967355}", "%d @{desktop.main.fragment.49da61ceeea2f271}" % int(signals.get("sector_switch_pressure", 0))],
+		["@{desktop.main.fragment.a108341fd957bd97}", _firm_number(signals.get("dividend_shortfall"))],
+			["@{desktop.main.fragment.223968d251413035} / @{desktop.main.fragment.6c179e80e534963c} / @{desktop.main.fragment.8ae5a1586ac58227}", "%d / %d / %d @{desktop.main.fragment.49da61ceeea2f271}" % [
+				int(signals.get("idle_ticks", 0)), int(signals.get("insolvent_ticks", 0)),
+				int(signals.get("subscale_ticks", 0))],
+				RED if condition_id != "operating" else INK],
 	]))
 	parent.add_child(parameter_panels)
 
@@ -4822,44 +4949,59 @@ func _firm_workforce_panel(employees: Array) -> Control:
 	col.add_theme_constant_override("separation", 5)
 	panel.add_child(col)
 	if employees.is_empty():
-		col.add_child(_lbl("当前没有劳动合同。", 9, INK3))
+		col.add_child(_lbl("@{desktop.main.fragment.a1cf643b1b134052}", 9, INK3))
 		return panel
 	for i in employees.size():
 		var employee: Dictionary = employees[i]
 		if i > 0:
 			col.add_child(_hrule())
-		var sex := str(employee.get("sex", ""))
-		var sex_text := "女" if sex == "F" else "男" if sex == "M" else "—"
+		var sex_id := str(employee.get(
+			"sex_id",
+			"female" if str(employee.get("sex", "")) == "F"
+			else "male" if str(employee.get("sex", "")) == "M"
+			else "unknown"))
+		var sex_text := _domain_text("sex", sex_id)
 		var person_id := int(employee.get("person_id", -1))
-		var age_text := "—" if employee.get("age") == null else "%d 岁" % int(employee.get("age"))
-		var household_text := "—" if employee.get("household_id") == null else "家庭 #%03d" % int(employee.get("household_id"))
+		var age_text := "—" if employee.get("age") == null else "%d @{desktop.main.fragment.43e84a7a98a4fc35}" % int(employee.get("age"))
+		var household_text := "—" if employee.get("household_id") == null else "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d" % int(employee.get("household_id"))
 		var row := HBoxContainer.new()
 		row.add_child(_lbl("P%03d · %s · %s" % [person_id, sex_text, age_text], 9, INK, true))
-		row.add_child(_chip(str(employee.get("contract", "合同")), INK2, PANEL2, LINE2, 7))
-		if str(employee.get("status", "在岗")) != "在岗":
-			row.add_child(_chip(str(employee.get("status")), RED, RED_BG, RED_BD, 7))
+		row.add_child(_chip(_row_domain_text(
+			employee, "contract", "contract_id", "contract", "unknown"),
+			INK2, PANEL2, LINE2, 7))
+		var employment_status_id := str(employee.get(
+			"status_id", employee.get("status", "active")))
+		if employment_status_id != "active":
+			row.add_child(_chip(_domain_text(
+				"employment_status", employment_status_id),
+				RED, RED_BG, RED_BD, 7))
 		row.add_child(_spacer_h())
 		row.add_child(_lbl("%.2f FTE" % float(employee.get("hours", 0.0)), 9, TEAL, true))
 		var employee_household: Variant = employee.get("household_id")
 		var person_link := Button.new()
-		person_link.text = "员工档案 ↗"
+		person_link.text = "@{desktop.main.fragment.f60282c6d68918d5} ↗"
 		person_link.disabled = employee_household == null
 		person_link.add_theme_font_size_override("font_size", 8)
 		person_link.add_theme_color_override("font_color", Color("285ca8"))
 		person_link.add_theme_stylebox_override("normal", _sb(Color("eef5ff"), Color("c9dcf5"), 7, 4))
 		person_link.add_theme_stylebox_override("hover", _sb(Color("e2eeff"), BLUE_BD, 7, 4, 2))
-		person_link.tooltip_text = "打开 P%03d 的家庭成员档案" % person_id
+		person_link.tooltip_text = "@{desktop.main.fragment.c771248e511fbf93} P%03d @{desktop.main.fragment.e142aa841b836ab7}" % person_id
 		person_link.pressed.connect(func() -> void:
 			_open_person(person_id, employee_household))
 		row.add_child(person_link)
 		col.add_child(row)
-		col.add_child(_lbl("%s · 入职 %s · 合同 %.2f FTE · 锁定工资 %s · 实付工资率 %s · 效率 %.2f · 本期薪酬 %s" % [
-			household_text, str(employee.get("hire_date", "—")),
+		var hire_text := str(employee.get("hire_date", ""))
+		if hire_text.is_empty() and employee.get("hire_day") != null:
+			hire_text = _cal_short(int(employee.get("hire_day")))
+		if hire_text.is_empty():
+			hire_text = "—"
+		col.add_child(_lbl("%s · @{desktop.main.fragment.db69901a9202d20f} %s · @{desktop.main.fragment.06c891807ee3feec} %.2f FTE · @{desktop.main.fragment.e11646a02c1553f6} %s · @{desktop.main.fragment.b5ad66754cde276d} %s · @{desktop.main.fragment.2810c1ae78fdf74e} %.2f · @{desktop.main.fragment.fc792be83b1c575e} %s" % [
+			household_text, hire_text,
 			float(employee.get("contract_hours", 0.0)), _firm_number(employee.get("locked_wage")),
 			_firm_number(employee.get("paid_wage")), float(employee.get("efficiency", 1.0)),
 			_firm_number(employee.get("compensation"))], 8, INK3, true))
 		if employee.get("suspended_since_tick") != null:
-			col.add_child(_lbl("停薪留职自 %s · 停薪前工资 %s · 合同仍保留召回权" % [
+			col.add_child(_lbl("@{desktop.main.fragment.422db1ea9e3b0b29} %s · @{desktop.main.fragment.802a6e8a29d4b7ed} %s · @{desktop.main.fragment.d657d37417081d24}" % [
 				_cal_short(int(employee.get("suspended_since_tick"))),
 				_firm_number(employee.get("suspension_wage"))], 8, RED, true))
 	return panel
@@ -4872,16 +5014,16 @@ func _firm_equity_panel(equity: Dictionary) -> Control:
 	col.add_theme_constant_override("separation", 5)
 	panel.add_child(col)
 	if not bool(equity.get("enabled", false)):
-		col.add_child(_lbl("该企业未发行独立交易股份；股价、市值、Q 与股东名单不适用。", 9, INK3))
+		col.add_child(_lbl("@{desktop.main.fragment.f01f6eee9d3297d8}Q @{desktop.main.fragment.fab604ac9f830cca}", 9, INK3))
 		return panel
 	var metrics := HBoxContainer.new()
 	metrics.add_theme_constant_override("separation", 5)
-	metrics.add_child(_household_summary_card("股价", _firm_number(equity.get("share_price")), BLUE))
-	metrics.add_child(_household_summary_card("总市值", _firm_number(equity.get("market_cap")), TEAL))
-	metrics.add_child(_household_summary_card("托宾 Q", _firm_number(equity.get("tobin_q"), "idx"), PURPLE))
-	metrics.add_child(_household_summary_card("基本面/股", _firm_number(equity.get("fundamental_per_share")), AMBER))
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.8cfec2d97162292d}", _firm_number(equity.get("share_price")), BLUE))
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.443f68162261153e}", _firm_number(equity.get("market_cap")), TEAL))
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.262b4d2f27d039c7} Q", _firm_number(equity.get("tobin_q"), "idx"), PURPLE))
+	metrics.add_child(_household_summary_card("@{desktop.main.fragment.95531b1576d29a5b}/@{desktop.main.fragment.2294d4828398494a}", _firm_number(equity.get("fundamental_per_share")), AMBER))
 	col.add_child(metrics)
-	col.add_child(_lbl("流通股 %s · 上期股价 %s · 趋势 %s · 平滑 Q %s · 吸引力 %s · 剩余收益 EMA %s" % [
+	col.add_child(_lbl("@{desktop.main.fragment.adb05a0ce851e772} %s · @{desktop.main.fragment.04d9bd6f93637454} %s · @{desktop.main.fragment.9b59e637c83810ab} %s · @{desktop.main.fragment.b3275d61c8f82f90} Q %s · @{desktop.main.fragment.26cf61f1176e547f} %s · @{desktop.main.fragment.579b73a4a9cd6a29} EMA %s" % [
 		_firm_number(equity.get("shares_outstanding")),
 		_firm_number(equity.get("last_share_price")),
 		_firm_number(equity.get("share_trend"), "idx"),
@@ -4890,21 +5032,32 @@ func _firm_equity_panel(equity: Dictionary) -> Control:
 		_firm_number(equity.get("residual_income_ema"))], 8, INK3, true))
 	var holders: Array = equity.get("shareholders", [])
 	var holder_head := HBoxContainer.new()
-	holder_head.add_child(_lbl("SHAREHOLDERS · 全部逐人股东", 8, INK3, true))
+	holder_head.add_child(_lbl("SHAREHOLDERS · @{desktop.main.fragment.e063878252f1e8b5}", 8, INK3, true))
 	holder_head.add_child(_spacer_h())
-	holder_head.add_child(_lbl("%d 人 · 已观察 %s" % [
+	holder_head.add_child(_lbl("%d @{desktop.main.fragment.50f5d65d57290f75} · @{desktop.main.fragment.1932dbcadd1440e5} %s" % [
 		int(equity.get("shareholder_count", 0)),
 		_firm_number(equity.get("ownership_coverage"), "pct")], 8, INK3))
 	col.add_child(holder_head)
 	if holders.is_empty():
-		col.add_child(_lbl("当前未观察到个人股权索取权。", 8, INK3))
+		col.add_child(_lbl("@{desktop.main.fragment.672a37c72db23807}", 8, INK3))
 		return panel
 	for holder: Dictionary in holders:
 		var row := HBoxContainer.new()
-		var household_text := "—" if holder.get("household_id") == null else "家庭 #%03d" % int(holder.get("household_id"))
-		row.add_child(_lbl("P%03d · %s" % [int(holder.get("person_id", -1)), household_text], 8, INK2, true))
+		var holder_kind_id := str(holder.get("holder_kind_id", "person"))
+		var holder_text := ""
+		if holder_kind_id == "household":
+			holder_text = "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d" % int(
+				holder.get("holder_id", holder.get("household_id", -1)))
+		else:
+			var household_text := (
+				"—" if holder.get("household_id") == null
+				else "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d" % int(
+					holder.get("household_id")))
+			holder_text = "P%03d · %s" % [
+				int(holder.get("person_id", -1)), household_text]
+		row.add_child(_lbl(holder_text, 8, INK2, true))
 		row.add_child(_spacer_h())
-		row.add_child(_lbl("%s 股 · %s · 市值 %s" % [
+		row.add_child(_lbl("%s @{desktop.main.fragment.2294d4828398494a} · %s · @{desktop.main.fragment.7dc0b3b746b81556} %s" % [
 			_firm_number(holder.get("shares")),
 			_firm_number(holder.get("ownership"), "pct"),
 			_firm_number(holder.get("market_value"))], 8, INK, true))
@@ -4976,16 +5129,16 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	top.add_theme_constant_override("separation", 7)
 	top.add_child(_stock_summary_card("AURELIA ALL-SHARE",
 		"%.2f" % float(summary.get("index_level", 1000.0)),
-		_stock_delta_color(index_change), _stock_delta_text(index_change), "链式市值加权指数"))
-	top.add_child(_stock_summary_card("MARKET CAP · 总市值",
+		_stock_delta_color(index_change), _stock_delta_text(index_change), "@{desktop.main.fragment.881bd789d73af261}"))
+	top.add_child(_stock_summary_card("MARKET CAP · @{desktop.main.fragment.443f68162261153e}",
 		_fmt_val("num", float(summary.get("market_cap", 0.0))), PURPLE, "",
-		"%d 只证券" % int(summary.get("listed_count", 0))))
-	top.add_child(_stock_summary_card("TURNOVER · 换手率",
+		"%d @{desktop.main.fragment.72dda437ee3cf19c}" % int(summary.get("listed_count", 0))))
+	top.add_child(_stock_summary_card("TURNOVER · @{desktop.main.fragment.a071a060fcb264ca}",
 		_fmt_val("pct", float(summary.get("turnover", 0.0))), BLUE, "",
-		"企业股与银行股市值加权"))
-	top.add_child(_stock_summary_card("BREADTH · 市场宽度",
+		"@{desktop.main.fragment.36aa5fc5c1cf6c87}"))
+	top.add_child(_stock_summary_card("BREADTH · @{desktop.main.fragment.415ca79bb06313d8}",
 		"%d ↑  %d ↓" % [int(summary.get("advances", 0)), int(summary.get("declines", 0))],
-		TEAL, "", "%d 平" % int(summary.get("unchanged", 0))))
+		TEAL, "", "%d @{desktop.main.fragment.2527ecf9122b145b}" % int(summary.get("unchanged", 0))))
 	body.add_child(top)
 
 	var toolbar := PanelContainer.new()
@@ -4998,7 +5151,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	tools.add_child(_spacer_h())
 	var search := LineEdit.new()
 	search.custom_minimum_size.x = 112
-	search.placeholder_text = "代码 / 板块 · 回车"
+	search.placeholder_text = "@{desktop.main.fragment.e6f04ffbaa424001} / @{desktop.main.fragment.37e7edd15ff69fbc} · @{desktop.main.fragment.fa6686e96460ad32}"
 	search.text = _stock_search
 	search.add_theme_font_size_override("font_size", 8)
 	search.add_theme_color_override("font_color", INK2)
@@ -5009,7 +5162,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 		_stock_search = value
 		_render())
 	tools.add_child(search)
-	for filter_spec: Array in [["all", "全部"], ["company", "企业股"], ["bank", "银行股"]]:
+	for filter_spec: Array in [["all", "@{desktop.main.fragment.5c55a67935af8f45}"], ["company", "@{desktop.main.fragment.78b4f9789537cff0}"], ["bank", "@{desktop.main.fragment.a6e9ec707b3a6c96}"]]:
 		var filter_id := str(filter_spec[0])
 		var filter_button := Button.new()
 		filter_button.text = str(filter_spec[1])
@@ -5021,7 +5174,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 			_stock_filter = filter_id
 			_render())
 		tools.add_child(filter_button)
-	for sort_spec: Array in [["market_cap", "市值"], ["change", "涨跌"]]:
+	for sort_spec: Array in [["market_cap", "@{desktop.main.fragment.7dc0b3b746b81556}"], ["change", "@{desktop.main.fragment.4a825a8623a729e2}"]]:
 		var sort_id := str(sort_spec[0])
 		var sort_button := Button.new()
 		sort_button.text = str(sort_spec[1])
@@ -5050,15 +5203,17 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	var chart_title := str(payload.get("index_name", "AURELIA ALL-SHARE")) if selected.is_empty() else str(selected.get("symbol", ""))
 	chart_head.add_child(_lbl(chart_title, 12, INK, true))
 	if not selected.is_empty():
-		var selected_color := _firm_sector_color(str(selected.get("sector_code", "")))
-		chart_head.add_child(_chip(str(selected.get("sector", "证券")),
+		var selected_sector_id := str(selected.get(
+			"sector_id", selected.get("sector_code", "unknown")))
+		var selected_color := _firm_sector_color(selected_sector_id)
+		chart_head.add_child(_chip(_sector_text(selected),
 			selected_color.darkened(0.15),
 			Color(selected_color.r, selected_color.g, selected_color.b, 0.09),
 			Color(selected_color.r, selected_color.g, selected_color.b, 0.28), 7))
 	chart_head.add_child(_spacer_h())
 	if not selected.is_empty():
 		var index_button := Button.new()
-		index_button.text = "返回综合指数"
+		index_button.text = "@{desktop.main.fragment.5db5f3ae9751b3d6}"
 		index_button.add_theme_font_size_override("font_size", 8)
 		index_button.pressed.connect(func() -> void:
 			_stock_selected = ""
@@ -5066,11 +5221,12 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 		chart_head.add_child(index_button)
 		if bool(selected.get("can_open_firm", false)):
 			var firm_button := Button.new()
-			firm_button.text = "企业详情 ↗"
+			firm_button.text = "@{desktop.main.fragment.f174790c7949fe48} ↗"
 			firm_button.add_theme_font_size_override("font_size", 8)
-			var selected_symbol := str(selected.get("symbol", ""))
+			var selected_issuer_id: Variant = selected.get(
+				"issuer_id", selected.get("symbol", ""))
 			firm_button.pressed.connect(func() -> void:
-				_open_firm(selected_symbol))
+				_open_firm(selected_issuer_id))
 			chart_head.add_child(firm_button)
 	chart_col.add_child(chart_head)
 	var chart_change := index_change if selected.is_empty() else float(selected.get("change", 0.0))
@@ -5079,7 +5235,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	quote_line.add_child(_lbl("%.3f" % chart_value, 19, _stock_delta_color(chart_change), true))
 	quote_line.add_child(_lbl(_stock_delta_text(chart_change), 9, _stock_delta_color(chart_change), true))
 	quote_line.add_child(_spacer_h())
-	quote_line.add_child(_lbl("截至 %s" % str(payload.get("as_of_date", "")),
+	quote_line.add_child(_lbl("@{desktop.main.fragment.2df59604068d1179} %s" % str(payload.get("as_of_date", "")),
 		8, INK3, true))
 	chart_col.add_child(quote_line)
 	var chart_values: Array = []
@@ -5097,13 +5253,13 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	chart.custom_minimum_size = Vector2(0, 130)
 	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	chart_col.add_child(chart)
-	var chart_note := "总市值 %s · 企业股 %s · 银行股 %s" % [
+	var chart_note := "@{desktop.main.fragment.443f68162261153e} %s · @{desktop.main.fragment.78b4f9789537cff0} %s · @{desktop.main.fragment.a6e9ec707b3a6c96} %s" % [
 		_fmt_val("num", float(summary.get("market_cap", 0.0))),
 		_fmt_val("num", float(summary.get("corporate_market_cap", 0.0))),
 		_fmt_val("num", float(summary.get("bank_market_cap", 0.0)))]
 	if not selected.is_empty():
 		var valuation: Variant = selected.get("tobin_q") if selected.get("tobin_q") != null else selected.get("price_to_book")
-		chart_note = "窗口 %s – %s · 市值 %s · Q/PB %s · 基本面溢价 %s" % [
+		chart_note = "@{desktop.main.fragment.9efe01f647d67d91} %s – %s · @{desktop.main.fragment.7dc0b3b746b81556} %s · Q/PB %s · @{desktop.main.fragment.c63fcd5ca035e9e5} %s" % [
 			_firm_number(selected.get("window_low")), _firm_number(selected.get("window_high")),
 			_firm_number(selected.get("market_cap")), _firm_number(valuation, "idx"),
 			_firm_number(selected.get("fundamental_gap"), "pct")]
@@ -5132,21 +5288,21 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	breadth.custom_minimum_size = Vector2(0, 34)
 	pulse.add_child(breadth)
 	pulse.add_child(_hrule())
-	pulse.add_child(_lbl("SECTORS · 板块表现", 8, INK3, true))
+	pulse.add_child(_lbl("SECTORS · @{desktop.main.fragment.625d2024ec712328}", 8, INK3, true))
 	for sector: Dictionary in payload.get("sectors", []):
 		var sector_row := HBoxContainer.new()
 		var sector_change := float(sector.get("change", 0.0))
 		sector_row.add_child(_dot(_stock_delta_color(sector_change), 6))
-		sector_row.add_child(_lbl(str(sector.get("label", "")), 8, INK2))
+		sector_row.add_child(_lbl(_sector_text(sector), 8, INK2))
 		sector_row.add_child(_spacer_h())
 		sector_row.add_child(_lbl(_stock_delta_text(sector_change), 8,
 			_stock_delta_color(sector_change), true))
 		pulse.add_child(sector_row)
 	pulse.add_child(_hrule())
 	for metric_spec: Array in [
-		["企业平均 Q", _firm_number(summary.get("q_mean"), "idx")],
-		["企业股权集中度", _firm_number(summary.get("ownership_gini"), "idx")],
-		["企业股权/家庭财富", _firm_number(summary.get("equity_wealth_share"), "pct")],
+		["@{desktop.main.fragment.eb8030ff262018d3} Q", _firm_number(summary.get("q_mean"), "idx")],
+		["@{desktop.main.fragment.d9d82bbc6edcaf71}", _firm_number(summary.get("ownership_gini"), "idx")],
+		["@{desktop.main.fragment.22e64656444bc55f}/@{desktop.main.fragment.0192798883e6f270}", _firm_number(summary.get("equity_wealth_share"), "pct")],
 	]:
 		var metric_row := HBoxContainer.new()
 		metric_row.add_child(_lbl(str(metric_spec[0]), 8, INK3))
@@ -5160,8 +5316,11 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	for listing: Dictionary in listings:
 		if _stock_filter != "all" and str(listing.get("instrument_type", "")) != _stock_filter:
 			continue
-		if not query.is_empty() and not str(listing.get("symbol", "")).to_lower().contains(query) \
-				and not str(listing.get("sector", "")).to_lower().contains(query):
+		if not query.is_empty() \
+				and not str(listing.get("symbol", "")).to_lower().contains(query) \
+				and not str(listing.get(
+					"sector_id", listing.get("sector", ""))).to_lower().contains(query) \
+				and not _sector_text(listing).to_lower().contains(query):
 			continue
 		visible_listings.append(listing)
 	visible_listings.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -5177,19 +5336,19 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	quote_col.add_theme_constant_override("separation", 4)
 	quote_shell.add_child(quote_col)
 	var quote_head := HBoxContainer.new()
-	quote_head.add_child(_lbl("SECURITIES · 每日收盘行情", 9, INK, true))
+	quote_head.add_child(_lbl("SECURITIES · @{desktop.main.fragment.d43d3298be5af7a1}", 9, INK, true))
 	quote_head.add_child(_spacer_h())
-	quote_head.add_child(_lbl("%d / %d · 点击代码切换主图" % [visible_listings.size(), listings.size()], 8, INK3))
+	quote_head.add_child(_lbl("%d / %d · @{desktop.main.fragment.144cda2838b5f44f}" % [visible_listings.size(), listings.size()], 8, INK3))
 	quote_col.add_child(quote_head)
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 4)
-	columns.add_child(_stock_table_cell("代码", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT))
-	columns.add_child(_stock_table_cell("板块", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT, false))
-	columns.add_child(_stock_table_cell("最新", 58, INK3))
-	columns.add_child(_stock_table_cell("涨跌", 60, INK3))
-	columns.add_child(_stock_table_cell("总市值", 67, INK3))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.e6f04ffbaa424001}", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.37e7edd15ff69fbc}", 66, INK3, HORIZONTAL_ALIGNMENT_LEFT, false))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.569af1a47dbdf053}", 58, INK3))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.4a825a8623a729e2}", 60, INK3))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.443f68162261153e}", 67, INK3))
 	columns.add_child(_stock_table_cell("Q / PB", 52, INK3))
-	columns.add_child(_stock_table_cell("基本面差", 60, INK3))
+	columns.add_child(_stock_table_cell("@{desktop.main.fragment.26cba1cc99083b9a}", 60, INK3))
 	quote_col.add_child(columns)
 	var quote_scroll := ScrollContainer.new()
 	quote_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -5203,7 +5362,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 	rows.add_theme_constant_override("separation", 2)
 	quote_scroll.add_child(rows)
 	if visible_listings.is_empty():
-		rows.add_child(_lbl("没有匹配的上市证券。", 9, INK3))
+		rows.add_child(_lbl("@{desktop.main.fragment.caa0ebc7c538da3c}", 9, INK3))
 	for listing: Dictionary in visible_listings:
 		var symbol := str(listing.get("symbol", ""))
 		var active := symbol == _stock_selected
@@ -5227,7 +5386,7 @@ func _render_stock_market_tab(body: VBoxContainer) -> void:
 			_stock_selected = selected_symbol
 			_render())
 		row.add_child(symbol_button)
-		row.add_child(_stock_table_cell(str(listing.get("sector", "")), 66, INK2,
+		row.add_child(_stock_table_cell(_sector_text(listing), 66, INK2,
 			HORIZONTAL_ALIGNMENT_LEFT, false))
 		row.add_child(_stock_table_cell(_firm_number(listing.get("price")), 58, INK))
 		var change := float(listing.get("change", 0.0))
@@ -5251,12 +5410,12 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 8)
 	header.add_child(_lbl("MACRO BRIEF", 10, INK3, true))
-	header.add_child(_lbl("决策简报", 14, INK))
+	header.add_child(_lbl("@{desktop.main.fragment.0cdad50ddeb96889}", 14, INK))
 	header.add_child(_spacer_h())
-	header.add_child(_chip("公报覆盖 %d / 8" % int(brief["coverage"]),
+	header.add_child(_chip("@{desktop.main.fragment.697bb3775eddb106} %d / 8" % int(brief["coverage"]),
 		TEAL_DK, TEAL_BG, TEAL_BD, 9))
 	if int(brief["risk_count"]) > 0:
-		header.add_child(_chip("风险事件 %d" % int(brief["risk_count"]),
+		header.add_child(_chip("@{desktop.main.fragment.dcdec027dcdab463} %d" % int(brief["risk_count"]),
 		RED, RED_BG, RED_BD, 9))
 	fv.add_child(header)
 	var content := HBoxContainer.new()
@@ -5270,10 +5429,10 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	map_col.add_theme_constant_override("separation", 4)
 	map_shell.add_child(map_col)
 	var map_head := HBoxContainer.new()
-	map_head.add_child(_lbl("经济相位", 11, INK_BODY))
-	map_head.add_child(_lbl("增长动能 × 价格压力", 9, INK3, true))
+	map_head.add_child(_lbl("@{desktop.main.fragment.894eb82897e90894}", 11, INK_BODY))
+	map_head.add_child(_lbl("@{desktop.main.fragment.5bd3b5af44a16b17} × @{desktop.main.fragment.20ea8f201a36f7bb}", 9, INK3, true))
 	map_head.add_child(_spacer_h())
-	map_head.add_child(_lbl("基于已发布公报", 9, INK3))
+	map_head.add_child(_lbl("@{desktop.main.fragment.e3aac624596cf440}", 9, INK3))
 	map_col.add_child(map_head)
 	var phase_map := _MacroPhaseMap.new()
 	phase_map.custom_minimum_size = Vector2(0, 184)
@@ -5289,16 +5448,16 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 	judgement.custom_minimum_size.x = 238
 	judgement.add_theme_constant_override("separation", 7)
 	content.add_child(judgement)
-	judgement.add_child(_lbl("本期判断", 9, INK3, true))
+	judgement.add_child(_lbl("@{desktop.main.fragment.10a7574969435ab6}", 9, INK3, true))
 	var phase_label := _lbl(str(brief["phase"]), 19, brief["tone"])
 	judgement.add_child(phase_label)
 	var summary := _lbl(str(brief["summary"]), 10, INK2)
 	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	judgement.add_child(summary)
-	judgement.add_child(_brief_signal("政策张力", str(brief["tension"]),
+	judgement.add_child(_brief_signal("@{desktop.main.fragment.55ab66cb19c98aa6}", str(brief["tension"]),
 		brief["tone"]))
-	judgement.add_child(_brief_signal("政策传导", str(brief["transmission"]), BLUE))
-	judgement.add_child(_brief_signal("数据可信度", str(brief["data_quality"]),
+	judgement.add_child(_brief_signal("@{desktop.main.fragment.a52b929279f57fa8}", str(brief["transmission"]), BLUE))
+	judgement.add_child(_brief_signal("@{desktop.main.fragment.ec386822fda050bb}", str(brief["data_quality"]),
 		TEAL_DK if int(brief["coverage"]) >= 6 else AMBER))
 	body.add_child(fp)
 	var sp := PanelContainer.new()
@@ -5311,7 +5470,7 @@ func _render_focus_tab(body: VBoxContainer) -> void:
 
 
 func _macro_brief() -> Dictionary:
-	## 只综合已发布公报与公开政策状态；不读取未发布数据来判断经济相位。
+	##  Only a combination of published bulletins and open policy status; no unpublished data are read to judge economics.
 	var releases := _releases_by_id()
 	var now := int(_snapshot.get("tick", 0))
 	var coverage := 0
@@ -5347,67 +5506,67 @@ func _macro_brief() -> Dictionary:
 			if target_perm.get("current_value") != null:
 				target = float(target_perm.get("current_value"))
 		y_value = clampf((inflation - target) / maxf(absf(target), 0.005), -1.0, 1.0)
-	var phase := "初始观察期"
-	var summary := "正在建立首轮公报基线；原始指标与趋势见下方八维卡片。"
-	var tension := "至少需要两期产出公报，才能形成跨指标判断"
+	var phase := "@{desktop.main.fragment.25f6cdf3722d33b8}"
+	var summary := "@{desktop.main.fragment.84cf4955e0190f8d}"
+	var tension := "@{desktop.main.fragment.476acb20e22ba0e5}"
 	var tone: Color = INK2
 	if phase_ready:
 		if x_value < -0.18 and y_value > 0.18:
-			phase = "滞胀压力"
-			summary = "增长动能转弱，同时价格压力高于政策参照。"
-			tension = "稳增长与稳物价相互牵制，避免单目标过度反应"
+			phase = "@{desktop.main.fragment.43b666feeeb6487c}"
+			summary = "@{desktop.main.fragment.94fe0a2628b9b099}"
+			tension = "@{desktop.main.fragment.229c33d4c5754514}"
 			tone = RED
 		elif x_value > 0.18 and y_value > 0.18:
-			phase = "需求偏热"
-			summary = "增长与价格压力同步走强，顺周期风险正在上升。"
-			tension = "关注需求扩张是否继续推高价格压力"
+			phase = "@{desktop.main.fragment.e8080680ffdb93b6}"
+			summary = "@{desktop.main.fragment.6e41791bb639107d}"
+			tension = "@{desktop.main.fragment.e2e1e13877a45f55}"
 			tone = AMBER
 		elif x_value < -0.18 and y_value < -0.18:
-			phase = "需求偏弱"
-			summary = "增长动能和价格压力同时偏弱，经济处于收缩象限。"
-			tension = "稳需求优先级上升，同时保留政策缓冲"
+			phase = "@{desktop.main.fragment.8ee04f36861892b7}"
+			summary = "@{desktop.main.fragment.b097f62c9071787f}"
+			tension = "@{desktop.main.fragment.08069470df5a84ab}"
 			tone = BLUE
 		elif x_value > 0.18 and y_value < -0.18:
-			phase = "低压扩张"
-			summary = "增长动能为正，同时价格压力低于政策参照。"
-			tension = "保护扩张动能，并监测低价格压力是否持续"
+			phase = "@{desktop.main.fragment.fea642af5f0c14ef}"
+			summary = "@{desktop.main.fragment.c7bbb4c0fdb6d4fa}"
+			tension = "@{desktop.main.fragment.0e4117212d5efdd4}"
 			tone = TEAL
 		elif x_value > 0.18:
-			phase = "温和扩张"
-			summary = "增长动能为正，价格压力仍接近政策参照。"
-			tension = "维持政策连续性，监测扩张是否向过热迁移"
+			phase = "@{desktop.main.fragment.7dd1811580892144}"
+			summary = "@{desktop.main.fragment.d6f5c59075950c0f}"
+			tension = "@{desktop.main.fragment.b17d51b68097346f}"
 			tone = TEAL
 		elif x_value < -0.18:
-			phase = "增长承压"
-			summary = "增长动能转弱，但价格压力尚未形成显著约束。"
-			tension = "评估需求支持，同时避免过早消耗政策空间"
+			phase = "@{desktop.main.fragment.3986d09f96a9a77c}"
+			summary = "@{desktop.main.fragment.8085916f54b6e4f9}"
+			tension = "@{desktop.main.fragment.14605e0cba8d121e}"
 			tone = BLUE
 		elif y_value > 0.18:
-			phase = "价格偏高"
-			summary = "增长接近中枢，价格压力高于政策参照。"
-			tension = "稳价优先级上升，关注紧缩对增长的滞后影响"
+			phase = "@{desktop.main.fragment.19639ef7cffdbb23}"
+			summary = "@{desktop.main.fragment.1c47dbe288f3d070}"
+			tension = "@{desktop.main.fragment.6a820e3750a75d55}"
 			tone = AMBER
 		elif y_value < -0.18:
-			phase = "价格偏低"
-			summary = "增长接近中枢，价格压力低于政策参照。"
-			tension = "关注低价格压力是否演变为需求不足"
+			phase = "@{desktop.main.fragment.4292d7909760d523}"
+			summary = "@{desktop.main.fragment.3d55ddf9c6e0d618}"
+			tension = "@{desktop.main.fragment.7ae4c3788c5ea83c}"
 			tone = BLUE
 		else:
-			phase = "接近平衡"
-			summary = "增长动能与价格压力均未显著偏离中枢。"
-			tension = "当前没有单一目标占据绝对优先级"
+			phase = "@{desktop.main.fragment.03859372e29bb4fa}"
+			summary = "@{desktop.main.fragment.c28f9989e90ecc68}"
+			tension = "@{desktop.main.fragment.30ea8c0bcc4f1fbe}"
 			tone = GREEN
 	var pending_count := (_snapshot.get("pending", []) as Array).size()
-	var transmission := "暂无政策等待实施"
+	var transmission := "@{desktop.main.fragment.b6ee3baba5ccc4f1}"
 	if _awaiting():
-		transmission = "%d 个会议窗口等待决策" % _contexts().size()
+		transmission = "%d @{desktop.main.fragment.3936297f58ce52f3}" % _contexts().size()
 	elif pending_count > 0:
-		transmission = "%d 项已通过政策等待生效" % pending_count
-	var data_quality := "尚无核心公报发布"
+		transmission = "%d @{desktop.main.fragment.b60ebe48c5737db0}" % pending_count
+	var data_quality := "@{desktop.main.fragment.aa8baaafe914c574}"
 	if coverage > 0:
-		data_quality = "%d/8 已发布 · 最大滞后 %d 天" % [coverage, max_lag]
+		data_quality = "%d/8 @{desktop.main.fragment.d334724d6b2fa32e} · @{desktop.main.fragment.8e77e42cf0a2023b} %d @{desktop.main.fragment.49da61ceeea2f271}" % [coverage, max_lag]
 		if latest_release >= 0:
-			data_quality += " · 截止 %s" % _cal_short(latest_release)
+			data_quality += " · @{desktop.main.fragment.fb37c61898d5a2c7} %s" % _cal_short(latest_release)
 	var risk_count := (_snapshot.get("active_shocks", []) as Array).size() \
 		+ (_snapshot.get("shock_bulletins", []) as Array).size()
 	return {
@@ -5441,9 +5600,9 @@ func _brief_signal(title: String, text: String, color: Color) -> Control:
 func _append_core_dimensions(parent: VBoxContainer) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 8)
-	head.add_child(_lbl("CORE 8 · 八维核心指标", 10, INK3, true))
+	head.add_child(_lbl("CORE 8 · @{desktop.main.fragment.f5cf7610c9234aa0}", 10, INK3, true))
 	head.add_child(_spacer_h())
-	head.add_child(_lbl("增长 · 就业 · 物价 · 财政 · 金融 · 民生 · 人口 · 外部",
+	head.add_child(_lbl("@{desktop.main.fragment.e1cf00d81f03c367} · @{desktop.main.fragment.2c6e0266e1ac28a8} · @{desktop.main.fragment.240e892123e10737} · @{desktop.main.fragment.f69c325544a29bfe} · @{desktop.main.fragment.a42315e416fa2550} · @{desktop.main.fragment.1af7dfd65c353cfc} · @{desktop.main.fragment.6909fc6ad79b398d} · @{desktop.main.fragment.72d71f2db0b4734a}",
 		8, Color("8a97a5")))
 	parent.add_child(head)
 	var releases := _releases_by_id()
@@ -5479,8 +5638,8 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 		card.add_theme_stylebox_override("panel", hover))
 	card.mouse_exited.connect(func() -> void:
 		card.add_theme_stylebox_override("panel", rest))
-	card.tooltip_text = "查看维度详情\n打开%s" % ("世界视图" if target_tab == "world" \
-		else "「%s」指标全景" % target_group)
+	card.tooltip_text = "@{desktop.main.fragment.4344b9c932cd2a58}\n@{desktop.main.fragment.c771248e511fbf93}%s" % ("@{desktop.main.fragment.036bf7c22dc51057}" if target_tab == "world" \
+		else "「%s@{desktop.main.fragment.bb12a8574625dbe1}" % target_group)
 	card.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton \
 				and (event as InputEventMouseButton).pressed \
@@ -5500,8 +5659,8 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 	var rel: Dictionary = releases.get(sid, {})
 	var hist: Array = _release_hist.get(sid, [])
 	if rel.is_empty() or rel.get("value") == null:
-		col.add_child(_lbl("尚未发布", 18, Color("a2adb8"), true))
-		col.add_child(_lbl("等待首期公报", 9, INK3))
+		col.add_child(_lbl("@{desktop.main.fragment.98d5200f51face49}", 18, Color("a2adb8"), true))
+		col.add_child(_lbl("@{desktop.main.fragment.7d3700550a037943}", 9, INK3))
 		return card
 	var value_row := HBoxContainer.new()
 	value_row.add_theme_constant_override("separation", 5)
@@ -5523,7 +5682,7 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 	var released_at := int(rel.get("released_at_tick", now))
 	var reference_at := int(rel.get("reference_end_tick", released_at))
 	var lag := maxi(0, now - reference_at)
-	var source_label := _lbl("%s发布 · 滞后 %d 日" % [_cal_short(released_at), lag],
+	var source_label := _lbl("%s@{desktop.main.fragment.b61f333b91b21f79} · @{desktop.main.fragment.d7718e74c3af68c2} %d @{desktop.main.fragment.85217f7aff778414}" % [_cal_short(released_at), lag],
 		9, INK3, true)
 	source_label.clip_text = true
 	col.add_child(source_label)
@@ -5533,7 +5692,7 @@ func _core_dimension_card(spec: Dictionary, releases: Dictionary, now: int) -> C
 func _release_movement(sid: String, previous: float, current: float) -> String:
 	var delta := current - previous
 	if absf(delta) <= 1e-12:
-		return "持平"
+		return "@{desktop.main.fragment.a9105fc058c4896a}"
 	var arrow := "▲" if delta > 0.0 else "▼"
 	if sid in ["unemployment_rate", "inflation", "gov_deficit_to_gdp",
 			"gov_debt_to_gdp", "credit_to_gdp", "poverty_rate"]:
@@ -5555,9 +5714,9 @@ func _open_core_dimension(target_tab: String, group: String) -> void:
 func _render_panels_tab(body: VBoxContainer) -> void:
 	var valid_groups: Array = []
 	for grp: Dictionary in PANEL_GROUPS:
-		valid_groups.append(str(grp["name"]))
+		valid_groups.append(str(grp["id"]))
 	if _goto_panel_group.is_empty() or _goto_panel_group not in valid_groups:
-		_goto_panel_group = str(PANEL_GROUPS[0]["name"])
+		_goto_panel_group = str(PANEL_GROUPS[0]["id"])
 	var nav_shell := PanelContainer.new()
 	nav_shell.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 11, 6))
 	body.add_child(nav_shell)
@@ -5567,9 +5726,10 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	nav_shell.add_child(nav)
 	var active_group: Dictionary = PANEL_GROUPS[0]
 	for grp: Dictionary in PANEL_GROUPS:
+		var group_id := str(grp["id"])
 		var group_name := str(grp["name"])
 		var group_color: Color = grp["color"]
-		var active := group_name == _goto_panel_group
+		var active := group_id == _goto_panel_group
 		if active:
 			active_group = grp
 		var tab := Button.new()
@@ -5582,7 +5742,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 		tab.add_theme_color_override("font_color",
 			group_color.darkened(0.18) if active else INK2)
 		tab.pressed.connect(func() -> void:
-			_goto_panel_group = group_name
+			_goto_panel_group = group_id
 			_scroll_mem["center:panels"] = 0
 			_render())
 		nav.add_child(tab)
@@ -5598,6 +5758,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	col.add_theme_constant_override("separation", 10)
 	scroll.add_child(col)
 	var group_color: Color = active_group["color"]
+	var group_id := str(active_group["id"])
 	var group_name := str(active_group["name"])
 	var header := PanelContainer.new()
 	var header_style := _sb(PANEL,
@@ -5611,10 +5772,10 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	var heading := VBoxContainer.new()
 	heading.add_theme_constant_override("separation", 1)
 	heading.add_child(_lbl(group_name, 15, INK))
-	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_name, "")), 10, INK2))
+	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_id, "")), 10, INK2))
 	header_row.add_child(heading)
 	header_row.add_child(_spacer_h())
-	header_row.add_child(_chip("ECONOMY · 结构与趋势", group_color.darkened(0.18),
+	header_row.add_child(_chip("ECONOMY · @{desktop.main.fragment.25fea06069b1ff3d}", group_color.darkened(0.18),
 		Color(group_color.r, group_color.g, group_color.b, 0.08),
 		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
 	col.add_child(header)
@@ -5625,7 +5786,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 		disabled.add_theme_stylebox_override("panel", _sb(
 			Color("f6f8fa"), Color("d8e0e8"), 11, 16))
 		var disabled_text := _lbl(
-			"该经济体未启用「%s」能力，因此本页没有可解释的运行指标。" %
+			"@{desktop.main.fragment.df3fb562e88d7212}%s@{desktop.main.fragment.333886bd93369c11}" %
 			str(CAPABILITY_CN.get(requirement, requirement)), 11, INK2)
 		disabled_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		disabled.add_child(disabled_text)
@@ -5635,7 +5796,7 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	var latest: Dictionary = _snapshot.get("metrics", {})
 	var details: Dictionary = _snapshot.get("panel_details", {})
 	_render_panel_kpis(col, active_group, latest, series)
-	var charts: Array = PANEL_CHARTS.get(group_name, [])
+	var charts: Array = PANEL_CHARTS.get(group_id, [])
 	if charts.size() == 1:
 		col.add_child(_panel_chart(charts[0], latest, series, group_color, details))
 	elif charts.size() >= 2:
@@ -5715,7 +5876,7 @@ func _panel_kpi_card(item: Array, latest: Dictionary,
 		for raw in values:
 			low = minf(low, float(raw))
 			high = maxf(high, float(raw))
-		card.tooltip_text = "%s · %s\n当前：%s\n窗口区间：%s — %s" % [
+		card.tooltip_text = "%s · %s\n@{desktop.main.fragment.66064880566620cf}%s\n@{desktop.main.fragment.f389cad7abd3c941}%s — %s" % [
 			label, key, _fmt_val(kind, current),
 			_fmt_val(kind, low), _fmt_val(kind, high)]
 	return card
@@ -5724,7 +5885,7 @@ func _panel_kpi_card(item: Array, latest: Dictionary,
 func _panel_delta(kind: String, previous: float, current: float) -> String:
 	var delta := current - previous
 	if absf(delta) <= 1e-12:
-		return "— 持平"
+		return "— @{desktop.main.fragment.a9105fc058c4896a}"
 	var arrow := "▲" if delta > 0.0 else "▼"
 	if kind in ["pct", "pt"]:
 		return "%s %.2fpp" % [arrow, absf(delta) * 100.0]
@@ -5740,6 +5901,24 @@ func _panel_values(series: Array, key: String) -> Array:
 	for point: Dictionary in series:
 		values.append(float(point.get(key, 0.0)))
 	return values
+
+
+func _labeled_rows(rows: Array, domain: String, id_field: String) -> Array:
+	var labeled: Array = []
+	for raw_row: Variant in rows:
+		if not raw_row is Dictionary:
+			continue
+		var row := (raw_row as Dictionary).duplicate(true)
+		if row.has(id_field):
+			row["label"] = _domain_text(domain, str(row[id_field]))
+		elif row.has("label"):
+			row["label"] = LocaleCatalogScript.resolve(str(row["label"]))
+		else:
+			row["label"] = _domain_text(domain, "unknown")
+		if not row.has("firms") and row.has("firm_count"):
+			row["firms"] = row["firm_count"]
+		labeled.append(row)
+	return labeled
 
 
 func _panel_chart(spec: Dictionary, latest: Dictionary,
@@ -5765,7 +5944,10 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 		var kind := str(item[2])
 		var color: Color = item[3] if item.size() > 3 else fallback_color
 		data.append({
-			"key": key, "label": str(item[1]), "kind": kind, "color": color,
+			"key": key,
+			"label": LocaleCatalogScript.resolve(str(item[1])),
+			"kind": kind,
+			"color": color,
 			"values": _panel_values(series, key),
 			"value": float(latest.get(key, 0.0)),
 			"text": _fmt_val(kind, float(latest.get(key, 0.0))),
@@ -5773,7 +5955,10 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 	var chart_height := 166.0 if panel.custom_minimum_size.y > 200.0 else 145.0
 	if chart_type == "employment_sectors":
 		var sectors := _PanelCompositionChart.new()
-		sectors.data = (details.get("labor", {}) as Dictionary).get("employment_sectors", [])
+		sectors.data = _labeled_rows(
+			(details.get("labor", {}) as Dictionary).get(
+				"employment_sectors", []),
+			"sector", "sector_id")
 		sectors.font = _sans
 		sectors.colors = [TEAL, BLUE, GREEN, PURPLE, AMBER, Color("64748b")]
 		sectors.custom_minimum_size = Vector2(0, chart_height)
@@ -5781,26 +5966,35 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 	elif chart_type == "labor_flows":
 		var labor := _PanelLaborFlowChart.new()
 		var labor_details: Dictionary = details.get("labor", {})
-		labor.states = labor_details.get("states", [])
-		labor.flows = labor_details.get("flows", [])
+		labor.states = _labeled_rows(
+			labor_details.get("states", []), "labor_state", "state_id")
+		labor.flows = _labeled_rows(
+			labor_details.get("flows", []), "labor_flow", "flow_id")
 		labor.font = _sans
 		labor.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(labor)
 	elif chart_type == "age_participation":
 		var age_chart := _PanelAgeParticipationChart.new()
-		age_chart.data = (details.get("labor", {}) as Dictionary).get("participation_by_age", [])
+		age_chart.data = _labeled_rows(
+			(details.get("labor", {}) as Dictionary).get(
+				"participation_by_age", []),
+			"age_group", "label_id")
 		age_chart.font = _sans
 		age_chart.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(age_chart)
 	elif chart_type == "pyramid":
 		var pyramid := _PanelPyramidChart.new()
-		pyramid.data = (details.get("population", {}) as Dictionary).get("pyramid", [])
+		pyramid.data = _labeled_rows(
+			(details.get("population", {}) as Dictionary).get("pyramid", []),
+			"age_group", "label_id")
 		pyramid.font = _sans
 		pyramid.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(pyramid)
 	elif chart_type == "sector_matrix":
 		var sector_chart := _PanelSectorMatrixChart.new()
-		sector_chart.data = (details.get("real_economy", {}) as Dictionary).get("sectors", [])
+		sector_chart.data = _labeled_rows(
+			(details.get("real_economy", {}) as Dictionary).get("sectors", []),
+			"sector", "sector_id")
 		sector_chart.font = _sans
 		sector_chart.custom_minimum_size = Vector2(0, chart_height)
 		col.add_child(sector_chart)
@@ -5905,16 +6099,16 @@ func _world_value_at(point: Dictionary, key: String, country_index: int) -> floa
 
 func _country_scorecard(world: Dictionary, country_index: int,
 		history_index := -1) -> Dictionary:
-	## 固定“均衡发展”合同：结果变量、目标偏离与自身趋势；政策工具不计分。
+	##  Fixed “balanced development” contracts: outcome variables, target deviations and trends; policy instruments do not count.
 	var history: Array = world.get("history", [])
 	if history.is_empty():
-		return {"overall": 0.0, "grade": "数据不足", "dimensions": []}
+		return {"overall": 0.0, "grade": "@{desktop.main.fragment.22e2dceb6a845f5e}", "dimensions": []}
 	var index := history.size() - 1 if history_index < 0 else clampi(
 		history_index, 0, history.size() - 1)
 	var point: Dictionary = history[index]
 	var economy := _world_economy_at(history, index, country_index)
 	if economy.is_empty():
-		return {"overall": 0.0, "grade": "数据不足", "dimensions": []}
+		return {"overall": 0.0, "grade": "@{desktop.main.fragment.22e2dceb6a845f5e}", "dimensions": []}
 	var baseline_index := maxi(0, index - 30)
 	var baseline := _world_economy_at(history, baseline_index, country_index)
 	var output := float(economy.get("real_output", 0.0))
@@ -5981,20 +6175,20 @@ func _country_scorecard(world: Dictionary, country_index: int,
 		energy_stock / energy_used / 30.0 * 100.0, 0.0, 100.0)
 	var resilience := 0.50 * external + 0.25 * supply_score + 0.25 * stock_score
 	var dimensions: Array = [
-		{"label": "繁荣增长", "score": prosperity,
-			"detail": "近 30 日产出 %+.1f%% · 实际工资 %+.1f%%" % [output_growth * 100.0, wage_growth * 100.0]},
-		{"label": "充分就业", "score": employment,
-			"detail": "失业 %.1f%% · 不充分就业 %.1f%%" % [unemployment * 100.0, underemployment * 100.0]},
-		{"label": "价格稳定", "score": price_stability,
-			"detail": "日通胀 %.2f%% · 目标 %.2f%%" % [float(economy.get("inflation", 0.0)) * 100.0, inflation_target * 100.0]},
-		{"label": "财政韧性", "score": fiscal,
-			"detail": "债务/GDP %.1f%% · 赤字/GDP %.1f%%" % [float(economy.get("gov_debt_to_gdp", 0.0)) * 100.0, deficit_ratio * 100.0]},
-		{"label": "金融稳定", "score": financial,
-			"detail": "资本/信贷 %.1f%% · 偿债 %.1f%%" % [maxf(capital, 0.0) / maxf(credit, 1.0) * 100.0, debt_service * 100.0]},
-		{"label": "民生分配", "score": welfare,
-			"detail": "贫困 %.1f%% · 收入 Gini %.3f" % [poverty * 100.0, income_gini]},
-		{"label": "外部能源", "score": resilience,
-			"detail": "经常账户/产出 %+.1f%% · 能源覆盖 %.1f×" % [ca_ratio * 100.0, energy_produced / maxf(energy_used, 0.000001)]},
+		{"label": "@{desktop.main.fragment.9e595590da50f012}", "score": prosperity,
+			"detail": "@{desktop.main.fragment.03aeb7c768b4cb8e} 30 @{desktop.main.fragment.2270c5fa0874a4d3} %+.1f%% · @{desktop.main.fragment.f0106af3d7386760} %+.1f%%" % [output_growth * 100.0, wage_growth * 100.0]},
+		{"label": "@{desktop.main.fragment.63e76e239ef28c5d}", "score": employment,
+			"detail": "@{desktop.main.fragment.9fa4c944be11cd8d} %.1f%% · @{desktop.main.fragment.dc93fdfa229b506d} %.1f%%" % [unemployment * 100.0, underemployment * 100.0]},
+		{"label": "@{desktop.main.fragment.ca01c0c6352d168a}", "score": price_stability,
+			"detail": "@{desktop.main.fragment.8e2831ed21f269bf} %.2f%% · @{desktop.main.fragment.57060c88a36bf3d0} %.2f%%" % [float(economy.get("inflation", 0.0)) * 100.0, inflation_target * 100.0]},
+		{"label": "@{desktop.main.fragment.e235731852b87b21}", "score": fiscal,
+			"detail": "@{desktop.main.fragment.095b45ce7df514df}/GDP %.1f%% · @{desktop.main.fragment.7865b21012629320}/GDP %.1f%%" % [float(economy.get("gov_debt_to_gdp", 0.0)) * 100.0, deficit_ratio * 100.0]},
+		{"label": "@{desktop.main.fragment.2e0030609682f222}", "score": financial,
+			"detail": "@{desktop.main.fragment.59831fc48b368a54}/@{desktop.main.fragment.334ec29216cfefb9} %.1f%% · @{desktop.main.fragment.041d6a395228b3a4} %.1f%%" % [maxf(capital, 0.0) / maxf(credit, 1.0) * 100.0, debt_service * 100.0]},
+		{"label": "@{desktop.main.fragment.8653391f9199aaf2}", "score": welfare,
+			"detail": "@{desktop.main.fragment.47786c3fc872cc69} %.1f%% · @{desktop.main.fragment.117d8f914d8e21a1} Gini %.3f" % [poverty * 100.0, income_gini]},
+		{"label": "@{desktop.main.fragment.a04b020b47b31a6e}", "score": resilience,
+			"detail": "@{desktop.main.fragment.d5ecdc812e1a4f41}/@{desktop.main.fragment.4c97f9db086dc1b9} %+.1f%% · @{desktop.main.fragment.31da51891f3b1115} %.1f×" % [ca_ratio * 100.0, energy_produced / maxf(energy_used, 0.000001)]},
 	]
 	var weights := [0.18, 0.14, 0.14, 0.14, 0.14, 0.14, 0.12]
 	var overall := 0.0
@@ -6003,15 +6197,15 @@ func _country_scorecard(world: Dictionary, country_index: int,
 			float((dimensions[dimension_index] as Dictionary)["score"]), 0.0, 100.0)
 		overall += float((dimensions[dimension_index] as Dictionary)["score"]) \
 			* float(weights[dimension_index])
-	var grade := "危机"
+	var grade := "@{desktop.main.fragment.67a532217bd0252c}"
 	if overall >= 80.0:
-		grade = "卓越"
+		grade = "@{desktop.main.fragment.5102bbdbe111177a}"
 	elif overall >= 65.0:
-		grade = "稳健"
+		grade = "@{desktop.main.fragment.752a14b3f6a7f3e9}"
 	elif overall >= 50.0:
-		grade = "承压"
+		grade = "@{desktop.main.fragment.062a4aa494000648}"
 	elif overall >= 35.0:
-		grade = "脆弱"
+		grade = "@{desktop.main.fragment.34dd51fd4277cc9d}"
 	return {"overall": overall, "grade": grade, "dimensions": dimensions}
 
 
@@ -6053,10 +6247,10 @@ func _country_scorecard_panel(world: Dictionary) -> Control:
 	panel.add_child(col)
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 8)
-	header.add_child(_lbl("NATIONAL SCORECARD · 国家表现", 10, INK3, true))
+	header.add_child(_lbl("NATIONAL SCORECARD · @{desktop.main.fragment.5ba2cbbd8718da04}", 10, INK3, true))
 	header.add_child(_lbl(_country_name(_score_country), 13, INK))
 	header.add_child(_spacer_h())
-	header.add_child(_chip("均衡发展 · 固定权重", INK2, PANEL3, LINE2, 9))
+	header.add_child(_chip("@{desktop.main.fragment.2e46561da998c486} · @{desktop.main.fragment.b860d7f0446b3423}", INK2, PANEL3, LINE2, 9))
 	col.add_child(header)
 	var content := HBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
@@ -6090,7 +6284,7 @@ func _country_scorecard_panel(world: Dictionary) -> Control:
 	side.add_theme_constant_override("separation", 6)
 	content.add_child(side)
 	var total_row := HBoxContainer.new()
-	total_row.add_child(_lbl("综合表现", 10, INK3, true))
+	total_row.add_child(_lbl("@{desktop.main.fragment.3b564729a5e8e0c7}", 10, INK3, true))
 	total_row.add_child(_spacer_h())
 	var overall := float(scorecard.get("overall", 0.0))
 	var score_color: Color = GREEN if overall >= 65.0 else (AMBER if overall >= 45.0 else RED)
@@ -6101,11 +6295,11 @@ func _country_scorecard_panel(world: Dictionary) -> Control:
 	var prior := _country_scorecard(world, _score_country, prior_index)
 	var change := overall - float(prior.get("overall", overall))
 	var grade_row := HBoxContainer.new()
-	grade_row.add_child(_chip(str(scorecard.get("grade", "数据不足")), score_color,
+	grade_row.add_child(_chip(str(scorecard.get("grade", "@{desktop.main.fragment.22e2dceb6a845f5e}")), score_color,
 		Color(score_color.r, score_color.g, score_color.b, 0.09),
 		Color(score_color.r, score_color.g, score_color.b, 0.35), 9))
 	grade_row.add_child(_spacer_h())
-	grade_row.add_child(_lbl("近 30 日 %+.1f" % change, 9,
+	grade_row.add_child(_lbl("@{desktop.main.fragment.03aeb7c768b4cb8e} 30 @{desktop.main.fragment.85217f7aff778414} %+.1f" % change, 9,
 		GREEN if change > 0.0 else (RED if change < 0.0 else INK3), true))
 	side.add_child(grade_row)
 	for dimension: Dictionary in dimensions:
@@ -6116,17 +6310,17 @@ func _country_scorecard_panel(world: Dictionary) -> Control:
 			return float(a.get("score", 0.0)) > float(b.get("score", 0.0)))
 		var insight := PanelContainer.new()
 		insight.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 8, 6))
-		var insight_label := _lbl("强项 · %s    短板 · %s" % [
+		var insight_label := _lbl("@{desktop.main.fragment.c2157628600afccc} · %s    @{desktop.main.fragment.9112d07e75535d19} · %s" % [
 			str((ordered[0] as Dictionary).get("label", "")),
 			str((ordered[-1] as Dictionary).get("label", ""))], 9, INK2)
 		insight.add_child(insight_label)
 		side.add_child(insight)
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 10)
-	footer.add_child(_lbl("实线 · 当前国家", 9, ECON_COLORS[_score_country % 3]))
-	footer.add_child(_lbl("虚线 · 三国均值", 9, INK3))
+	footer.add_child(_lbl("@{desktop.main.fragment.cada027120f11896} · @{desktop.main.fragment.12ca862720842c7a}", 9, ECON_COLORS[_score_country % 3]))
+	footer.add_child(_lbl("@{desktop.main.fragment.3978a356f89e996e} · @{desktop.main.fragment.b3ae061812b83877}", 9, INK3))
 	footer.add_child(_spacer_h())
-	footer.add_child(_lbl("结果变量评分 · 政策工具不计分 · 目标偏离双向扣分",
+	footer.add_child(_lbl("@{desktop.main.fragment.a8a61b72d47f42bc} · @{desktop.main.fragment.2913fa293cb473bd} · @{desktop.main.fragment.544dd9946df2adf5}",
 		9, INK3))
 	col.add_child(footer)
 	return panel
@@ -6141,8 +6335,8 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		ep.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var ev := VBoxContainer.new()
 		ep.add_child(ev)
-		ev.add_child(_lbl("世界视图 · 三国耦合", 14, INK))
-		ev.add_child(_lbl("推进模拟以积累世界数据(贸易/资本/移民已耦合)。", 12, INK2))
+		ev.add_child(_lbl("@{desktop.main.fragment.036bf7c22dc51057} · @{desktop.main.fragment.8ee919ab874db1bf}", 14, INK))
+		ev.add_child(_lbl("@{desktop.main.fragment.b3ca9f149e3c4691}(@{desktop.main.fragment.26a59f85b3eb5fc4}/@{desktop.main.fragment.59831fc48b368a54}/@{desktop.main.fragment.0062878de0557b90})。", 12, INK2))
 		body.add_child(ep)
 		return
 	var scroll := ScrollContainer.new()
@@ -6156,7 +6350,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", 10)
 	scroll.add_child(col)
-	# --- 经济体卡片行 ---
+	#  --- Economy Card Line---
 	var cards := HBoxContainer.new()
 	cards.add_theme_constant_override("separation", 9)
 	_score_country = clampi(_score_country, 0, maxi(0, econs.size() - 1))
@@ -6175,7 +6369,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 			ECON_COLORS[i % 3], 12, 11, 13)
 		card.add_theme_stylebox_override("panel", wrest)
 		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		card.tooltip_text = "选择%s，查看七维国家表现评分" % _country_name(i)
+		card.tooltip_text = "@{desktop.main.fragment.c11330b85234f9c0}%s@{desktop.main.fragment.fc5795d29214d7b7}" % _country_name(i)
 		card.mouse_entered.connect(func() -> void:
 			card.add_theme_stylebox_override("panel", whover))
 		card.mouse_exited.connect(func() -> void:
@@ -6195,7 +6389,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		hr.add_child(_flag(i))
 		hr.add_child(_lbl(_country_name(i), 13, INK))
 		if mine:
-			hr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
+			hr.add_child(_chip("@{desktop.main.fragment.b70bb4acc0484cf0}", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
 		hr.add_child(_spacer_h())
 		var country_score := _country_scorecard(world, i)
 		var overall := float(country_score.get("overall", 0.0))
@@ -6207,9 +6401,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		cv.add_child(hr)
 		var rows: Array = [
 			["GDP", _fmt_val("num", float(e.get("real_output", 0.0)))],
-			["失业", _fmt_val("pct", float(e.get("unemployment_rate", 0.0)))],
-			["通胀", _fmt_val("pt", float(e.get("inflation", 0.0)))],
-			["汇率 e", "%.4f" % _fx_at(latest, i)],
+			["@{desktop.main.fragment.9fa4c944be11cd8d}", _fmt_val("pct", float(e.get("unemployment_rate", 0.0)))],
+			["@{desktop.main.fragment.b43cd47df5c0171c}", _fmt_val("pt", float(e.get("inflation", 0.0)))],
+			["@{desktop.main.fragment.57ef2c45ef260ee3} e", "%.4f" % _fx_at(latest, i)],
 		]
 		for rr: Array in rows:
 			var r2 := HBoxContainer.new()
@@ -6231,14 +6425,14 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		cards.add_child(card)
 	col.add_child(cards)
 	col.add_child(_country_scorecard_panel(world))
-	# --- 排名 ---
+	#  --- Ranking--
 	var rp := PanelContainer.new()
 	var rv := VBoxContainer.new()
 	rv.add_theme_constant_override("separation", 7)
 	rp.add_child(rv)
 	var rh := HBoxContainer.new()
 	rh.add_theme_constant_override("separation", 8)
-	rh.add_child(_lbl("RANK · 多国排名", 10, INK3, true))
+	rh.add_child(_lbl("RANK · @{desktop.main.fragment.16e42d1344f38ecc}", 10, INK3, true))
 	rh.add_child(_spacer_h())
 	for rm: Array in RANK_METRICS:
 		var b := Button.new()
@@ -6297,7 +6491,7 @@ func _render_world_tab(body: VBoxContainer) -> void:
 		rr.add_child(_lbl(rank_text, 12, ECON_COLORS[i % 3], true))
 		rv.add_child(rr)
 	col.add_child(rp)
-	# --- 国际关系:贸易 / 金融 / 移民 ---
+	#  --- International relations: trade / finance / migration —
 	var whist: Array = world.get("history", [])
 	var rel := PanelContainer.new()
 	var relv := VBoxContainer.new()
@@ -6305,9 +6499,9 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	rel.add_child(relv)
 	var relh := HBoxContainer.new()
 	relh.add_theme_constant_override("separation", 8)
-	relh.add_child(_lbl("RELATIONS · 贸易 / 金融 / 移民", 10, INK3, true))
+	relh.add_child(_lbl("RELATIONS · @{desktop.main.fragment.26a59f85b3eb5fc4} / @{desktop.main.fragment.a42315e416fa2550} / @{desktop.main.fragment.8948bde020cb3af2}", 10, INK3, true))
 	relh.add_child(_spacer_h())
-	relh.add_child(_lbl("经由结算枢纽(FX dealer)的通道量", 9, INK3))
+	relh.add_child(_lbl("@{desktop.main.fragment.348a6d388a4cd4da}(FX dealer)@{desktop.main.fragment.4a8d9f3dac306909}", 9, INK3))
 	relv.add_child(relh)
 	var relrow := HBoxContainer.new()
 	relrow.add_theme_constant_override("separation", 10)
@@ -6330,28 +6524,28 @@ func _render_world_tab(body: VBoxContainer) -> void:
 	bars.custom_minimum_size = Vector2(248, 0)
 	bars.add_theme_constant_override("separation", 7)
 	relrow.add_child(bars)
-	_bar_block(bars, "汇率 e(numéraire)", _num_list(latest.get("e", [])), "%.4f", false)
-	_bar_block(bars, "净外国资产 NFA", _num_list(latest.get("nfa", [])), "%.1f", true)
-	_bar_block(bars, "经常账户（近 30 日累计）", _ca_sum(whist), "%.1f", true)
-	_bar_block(bars, "海外移民存量", _num_list(latest.get("migrant_stock", [])), "%.2f", false)
-	_bar_block(bars, "汇款流入", _num_list(latest.get("remittances", [])), "%.3f", false)
+	_bar_block(bars, "@{desktop.main.fragment.57ef2c45ef260ee3} e(numéraire)", _num_list(latest.get("e", [])), "%.4f", false)
+	_bar_block(bars, "@{desktop.main.fragment.0473fc54c7daa4ca} NFA", _num_list(latest.get("nfa", [])), "%.1f", true)
+	_bar_block(bars, "@{desktop.main.fragment.187c5d25114d44ba} 30 @{desktop.main.fragment.85f3344ea237b508}", _ca_sum(whist), "%.1f", true)
+	_bar_block(bars, "@{desktop.main.fragment.736a80ece54a0d2e}", _num_list(latest.get("migrant_stock", [])), "%.2f", false)
+	_bar_block(bars, "@{desktop.main.fragment.4d547295c20b7c8d}", _num_list(latest.get("remittances", [])), "%.3f", false)
 	var foot := HBoxContainer.new()
 	foot.add_theme_constant_override("separation", 10)
-	foot.add_child(_lbl("FX 做市商估值 %.2f" % float(latest.get("dealer_valuation", 0.0)),
+	foot.add_child(_lbl("FX @{desktop.main.fragment.0a228373feeb0e8d} %.2f" % float(latest.get("dealer_valuation", 0.0)),
 		10, INK3, true))
 	foot.add_child(_lbl("·", 10, LINE2))
-	foot.add_child(_lbl("联系汇率 " + ("完好" if bool(latest.get("peg_intact", true))
-		else "已破防"), 10, INK3))
+	foot.add_child(_lbl("@{desktop.main.fragment.c1ba88409c35cb7a} " + ("@{desktop.main.fragment.955d487fd519f6e6}" if bool(latest.get("peg_intact", true))
+		else "@{desktop.main.fragment.3a0bbe4fff215251}"), 10, INK3))
 	relv.add_child(foot)
 	col.add_child(rel)
-	# --- 对比小图 ---
+	#  --- Small comparative figures ---
 	var cmp := PanelContainer.new()
 	var cmpv := VBoxContainer.new()
 	cmpv.add_theme_constant_override("separation", 8)
 	cmp.add_child(cmpv)
 	var ch := HBoxContainer.new()
 	ch.add_theme_constant_override("separation", 10)
-	ch.add_child(_lbl("COMPARE · 多国对比", 10, INK3, true))
+	ch.add_child(_lbl("COMPARE · @{desktop.main.fragment.84a68297118edc17}", 10, INK3, true))
 	ch.add_child(_spacer_h())
 	for i in econs.size():
 		var li := HBoxContainer.new()
@@ -6463,7 +6657,7 @@ func _bar_block(parent: VBoxContainer, title: String, vals: Array,
 	parent.add_child(p)
 
 
-# ================= 时间线 =================
+#  Synchronization helper.
 func _render_events() -> void:
 	var box := _n["events"] as VBoxContainer
 	var escroll := box.get_parent() as ScrollContainer
@@ -6495,7 +6689,7 @@ func _render_events() -> void:
 		ptw.tween_property(pulse_dot, "modulate:a", 1.0, 0.6)\
 			.set_trans(Tween.TRANS_SINE)
 		br.add_child(pulse_dot)
-		br.add_child(_lbl("冲击预告", 10, Color("cc5a44")))
+		br.add_child(_lbl("@{desktop.main.fragment.9fe09a4c585bd333}", 10, Color("cc5a44")))
 		br.add_child(_spacer_h())
 		br.add_child(_lbl(_cal_value((bulletin as Dictionary).get("start_tick", "?")),
 			10, Color("9a6a5e"), true))
@@ -6523,7 +6717,7 @@ func _render_events() -> void:
 		if _event_filter == "important" and not _event_is_important(etype):
 			continue
 		if _event_filter == "important":
-			# 同一边界、同一触发器常向多个席位各发一次；默认视图合并为一条。
+			#  The same boundary, the same trigger, is often sent to multiple seats; the default view is merged into one.
 			var dedupe := "%s|%s|%s" % [
 				str(ev.get("boundary_tick", ev.get("tick", "?"))),
 				etype, str(ev.get("reason", ev.get("shock_id", "")))]
@@ -6534,8 +6728,8 @@ func _render_events() -> void:
 	if visible_events.is_empty():
 		var empty := PanelContainer.new()
 		empty.add_theme_stylebox_override("panel", _sb(PANEL3, Color("e6ebf1"), 9, 10))
-		var empty_text := "暂无重点事件" if _event_filter == "important" else "当前筛选下没有记录"
-		empty.add_child(_lbl(empty_text + "\n模拟推进后，危机、政策裁决和生效记录会出现在这里。",
+		var empty_text := "@{desktop.main.fragment.94f86851262e5a2f}" if _event_filter == "important" else "@{desktop.main.fragment.c766ec492fb8034d}"
+		empty.add_child(_lbl(empty_text + "\n@{desktop.main.fragment.da613f0aa48efc64}",
 			11, Color("7b8996")))
 		inner.add_child(empty)
 	var last_time_label := ""
@@ -6596,10 +6790,10 @@ func _render_events() -> void:
 		var trr := HBoxContainer.new()
 		trr.add_theme_constant_override("separation", 7)
 		var title := _lbl(_event_title(etype), 11, color)
-		title.tooltip_text = "事件协议标识\n" + etype
+		title.tooltip_text = "@{desktop.main.fragment.eeb38fe8a7328345}\n" + etype
 		trr.add_child(title)
 		if mine:
-			trr.add_child(_chip("我", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
+			trr.add_child(_chip("@{desktop.main.fragment.b70bb4acc0484cf0}", TEAL, Color(0, 0, 0, 0), TEAL_BD, 9))
 		trr.add_child(_spacer_h())
 		col.add_child(trr)
 		var detail := _event_detail(ev, etype)
@@ -6612,7 +6806,7 @@ func _render_events() -> void:
 	_restore_scroll("events", escroll)
 
 
-# ================= 危机遮罩 =================
+#  Synchronization helper.
 func _render_crisis() -> void:
 	if _free_policy_enabled():
 		(_n["crisis"] as Control).visible = false
@@ -6633,7 +6827,7 @@ func _render_crisis() -> void:
 	var ctx := _emergency_context()
 	var trig := str(ctx.get("emergency_trigger",
 		"manual_demo" if _demo_crisis else "—"))
-	_set_text("crisis_title", "紧急会议 · 触发器:%s" % trig)
+	_set_text("crisis_title", "@{desktop.main.fragment.f8ce4c400c738850} · @{desktop.main.fragment.35a4e49d34672cb1}:%s" % trig)
 	var snapcol := _n["crisis_snap"] as VBoxContainer
 	for c in snapcol.get_children():
 		if c is PanelContainer:
@@ -6653,7 +6847,7 @@ func _render_crisis() -> void:
 		rr.add_child(_lbl(label, 12, Color("7a3327")))
 		rr.add_child(_spacer_h())
 		rr.add_child(_lbl(_fmt_series(sid, float(rel.get("value")))
-			if rel.get("value") != null else "暂无", 15, RED, true))
+			if rel.get("value") != null else "@{desktop.main.fragment.b336a174cd1fad05}", 15, RED, true))
 		snapcol.add_child(rp)
 	var levcol := _n["crisis_levers"] as VBoxContainer
 	for c in levcol.get_children():
@@ -6678,19 +6872,19 @@ func _render_crisis() -> void:
 			var lvv := VBoxContainer.new()
 			lvv.add_theme_constant_override("separation", 6)
 			lp.add_child(lvv)
-			lvv.add_child(_lbl(_cn(name) + "(紧急)", 12, Color("6b2317")))
+			lvv.add_child(_lbl(_cn(name) + "(@{desktop.main.fragment.0efa477b24b1f3c7})", 12, Color("6b2317")))
 			lvv.add_child(_lever_control(lever, perm, base_v))
 			levcol.add_child(lp)
 	if _demo_crisis:
-		levcol.add_child(_lbl("演示模式:真实紧急会议由 TriggerSpec 在边界打开(v26)。",
+		levcol.add_child(_lbl("@{desktop.main.fragment.05f5cdc5ee4a0f7e}:@{desktop.main.fragment.a6cb7867205f5dca} TriggerSpec @{desktop.main.fragment.222c6aff7dbd231c}(v26)。",
 			10, Color("9a6a5e")))
-	var submit := _btn("提交紧急处置", func() -> void:
+	var submit := _btn("@{desktop.main.fragment.2415d3072d249473}", func() -> void:
 		if _demo_crisis:
 			_demo_crisis = false
 			_render()
 			return
-		# 危机面板无「加入提案」步骤:把白名单杠杆的编辑值直接装篮提交;
-		# 无编辑时等价「本次不动」,保证玩家总能走出紧急会议。
+		#  The crisis panel does not have the "add to the proposal" step: submit the editorial value of the white list leverage directly to the basket.
+		#  No editing is the equivalent of "not moving this time" to ensure that players always get out of emergency meetings.
 		for lname: String in _edits.keys():
 			var linfo: Dictionary = _lever_info.get(lname, {})
 			if bool(linfo.get("emergency", false)):
@@ -6704,9 +6898,9 @@ func _render_crisis() -> void:
 	levcol.add_child(submit)
 
 
-# ================= 绘图控件 =================
+#  Synchronization helper.
 class _StockMarketChart extends Control:
-	## 模型只提供每日成交价，因此这里绘制真实收盘序列，不合成 OHLC/K 线。
+	##  The model only provides a daily bargain, so the real collection sequence is drawn here and does not synthesize the OHLC/K line.
 	var values: Array = []
 	var line_color := Color("0f9d90")
 	var font: Font
@@ -6721,7 +6915,7 @@ class _StockMarketChart extends Control:
 				Color("e5ebf1"), 1.0)
 		if values.is_empty():
 			draw_string(font, Vector2(plot.position.x, plot.get_center().y + 4.0),
-				"等待首个收盘行情", HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9,
+				LocaleCatalogScript.resolve(str("@{desktop.main.fragment.ad47923c0b883880}")), HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9,
 				Color("8794a2"))
 			return
 		var low := float(values[0])
@@ -6751,11 +6945,11 @@ class _StockMarketChart extends Control:
 		draw_circle(points[-1], 4.2, Color.WHITE)
 		draw_circle(points[-1], 2.8, line_color)
 		draw_string(font, Vector2(plot.end.x + 7.0, plot.position.y + 5.0),
-			"%.3f" % high, HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
+			LocaleCatalogScript.resolve(str("%.3f" % high)), HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
 		draw_string(font, Vector2(plot.end.x + 7.0, plot.end.y + 3.0),
-			"%.3f" % low, HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
+			LocaleCatalogScript.resolve(str("%.3f" % low)), HORIZONTAL_ALIGNMENT_LEFT, 50.0, 8, Color("8794a2"))
 		draw_string(font, Vector2(plot.position.x, size.y - 2.0),
-			"%d 个每日收盘点" % values.size(), HORIZONTAL_ALIGNMENT_LEFT,
+			LocaleCatalogScript.resolve(str("%d @{desktop.main.fragment.f6ee2eb155f0496d}" % values.size())), HORIZONTAL_ALIGNMENT_LEFT,
 			plot.size.x, 8, Color("8794a2"))
 
 
@@ -6768,7 +6962,7 @@ class _StockBreadthChart extends Control:
 	func _draw() -> void:
 		var total := advances + unchanged + declines
 		if total <= 0:
-			draw_string(font, Vector2(0, 19), "等待行情",
+			draw_string(font, Vector2(0, 19), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.51e6f8e083bedbf6}")),
 				HORIZONTAL_ALIGNMENT_CENTER, size.x, 9, Color("8794a2"))
 			return
 		var bar := Rect2(Vector2(0, 4), Vector2(size.x, 11))
@@ -6784,11 +6978,11 @@ class _StockBreadthChart extends Control:
 				draw_rect(Rect2(Vector2(cursor, bar.position.y),
 					Vector2(segment_width, bar.size.y)), spec[1])
 			cursor += segment_width
-		draw_string(font, Vector2(0, 31), "上涨", HORIZONTAL_ALIGNMENT_LEFT,
+		draw_string(font, Vector2(0, 31), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.5304a679d7a0df04}")), HORIZONTAL_ALIGNMENT_LEFT,
 			50, 8, Color("20a566"))
-		draw_string(font, Vector2(0, 31), "平盘", HORIZONTAL_ALIGNMENT_CENTER,
+		draw_string(font, Vector2(0, 31), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.80baca0a82ecfe42}")), HORIZONTAL_ALIGNMENT_CENTER,
 			size.x, 8, Color("7c8997"))
-		draw_string(font, Vector2(size.x - 50, 31), "下跌", HORIZONTAL_ALIGNMENT_RIGHT,
+		draw_string(font, Vector2(size.x - 50, 31), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.7bede945da28916a}")), HORIZONTAL_ALIGNMENT_RIGHT,
 			50, 8, Color("d64b38"))
 
 
@@ -6877,11 +7071,11 @@ class _HouseholdAssetBar extends Control:
 	var values: Dictionary = {}
 	var font: Font
 	var parts := [
-		["cash", "现金", Color("16a394")],
-		["firm_equity", "企业股权", Color("3274d9")],
-		["bank_equity", "银行股权", Color("7950c7")],
-		["bonds", "债券", Color("c78318")],
-		["housing", "住房", Color("7a8b9b")],
+		["cash", "@{desktop.main.fragment.118f18e6840546c1}", Color("16a394")],
+		["firm_equity", "@{desktop.main.fragment.22e64656444bc55f}", Color("3274d9")],
+		["bank_equity", "@{desktop.main.fragment.20646c88cdfdcf6b}", Color("7950c7")],
+		["bonds", "@{desktop.main.fragment.9dc4139eaedd31c5}", Color("c78318")],
+		["housing", "@{desktop.main.fragment.65024b83e8cb8448}", Color("7a8b9b")],
 	]
 
 	func _draw() -> void:
@@ -6891,7 +7085,7 @@ class _HouseholdAssetBar extends Control:
 		var bar := Rect2(2, 3, size.x - 4, 13)
 		draw_rect(bar, Color("e9eef4"))
 		if total <= 1e-9:
-			draw_string(font, Vector2(0, 38), "暂无正资产",
+			draw_string(font, Vector2(0, 38), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.47106d28424871b6}")),
 				HORIZONTAL_ALIGNMENT_CENTER, size.x, 8, Color("849098"))
 			return
 		var cursor := bar.position.x
@@ -6906,8 +7100,8 @@ class _HouseholdAssetBar extends Control:
 			var value := maxf(0.0, float(values.get(str(part[0]), 0.0)))
 			var x := index * cell_width
 			draw_rect(Rect2(x + 2, 27, 6, 6), part[2])
-			draw_string(font, Vector2(x + 11, 34), "%s %.0f%%" % [
-				str(part[1]), value / total * 100.0],
+			draw_string(font, Vector2(x + 11, 34), LocaleCatalogScript.resolve(str("%s %.0f%%" % [
+				str(part[1]), value / total * 100.0])),
 				HORIZONTAL_ALIGNMENT_LEFT, cell_width - 10, 7, Color("5e6f81"))
 
 
@@ -6921,7 +7115,7 @@ class _PanelCompositionChart extends Control:
 		for item: Dictionary in data:
 			total += maxf(0.0, float(item.get("value", 0.0)))
 		if total <= 1e-9:
-			draw_string(font, Vector2(0, size.y * 0.52), "尚无就业记录",
+			draw_string(font, Vector2(0, size.y * 0.52), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.c604aff38c595627}")),
 				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
 			return
 		var bar := Rect2(2, 12, size.x - 4, 24)
@@ -6943,10 +7137,10 @@ class _PanelCompositionChart extends Control:
 			var y := 58.0 + row * 23.0
 			var color: Color = colors[index % colors.size()] if not colors.is_empty() else Color.GRAY
 			draw_rect(Rect2(x, y - 8, 8, 8), color)
-			draw_string(font, Vector2(x + 14, y), str(item.get("label", "")),
+			draw_string(font, Vector2(x + 14, y), LocaleCatalogScript.resolve(str(str(item.get("label", "")))),
 				HORIZONTAL_ALIGNMENT_LEFT, cell_width - 66, 9, Color("506172"))
 			var share := maxf(0.0, float(item.get("value", 0.0))) / total
-			draw_string(font, Vector2(x, y), "%.1f%%" % (share * 100.0),
+			draw_string(font, Vector2(x, y), LocaleCatalogScript.resolve(str("%.1f%%" % (share * 100.0))),
 				HORIZONTAL_ALIGNMENT_RIGHT, cell_width - 8, 9, color)
 
 
@@ -6973,8 +7167,8 @@ class _PanelLaborFlowChart extends Control:
 			var state: Dictionary = states[index]
 			var x := 2.0 + index * size.x / maxf(1.0, states.size())
 			var share := maxf(0.0, float(state.get("value", 0.0))) / maxf(1.0, state_total)
-			draw_string(font, Vector2(x, 43), "%s %.0f%%" % [
-				str(state.get("label", "")), share * 100.0],
+			draw_string(font, Vector2(x, 43), LocaleCatalogScript.resolve(str("%s %.0f%%" % [
+				str(state.get("label", "")), share * 100.0])),
 				HORIZONTAL_ALIGNMENT_LEFT, size.x / maxf(1.0, states.size()) - 3, 8,
 				colors[index % colors.size()])
 		var max_flow := 1.0
@@ -6988,12 +7182,12 @@ class _PanelLaborFlowChart extends Control:
 			var x := 2.0 + column * (size.x / 2.0 + 3.0)
 			var y := 59.0 + row * 26.0
 			var value := float(item.get("value", 0.0))
-			draw_string(font, Vector2(x, y + 9), str(item.get("label", "")),
+			draw_string(font, Vector2(x, y + 9), LocaleCatalogScript.resolve(str(str(item.get("label", "")))),
 				HORIZONTAL_ALIGNMENT_LEFT, 68, 8, Color("5e6f81"))
 			draw_rect(Rect2(x + 70, y + 2, maxf(8.0, cell_width - 96.0), 7), Color("edf1f6"))
 			draw_rect(Rect2(x + 70, y + 2,
 				maxf(8.0, cell_width - 96.0) * value / max_flow, 7), Color("2f72d6"))
-			draw_string(font, Vector2(x, y + 9), "%.0f" % value,
+			draw_string(font, Vector2(x, y + 9), LocaleCatalogScript.resolve(str("%.0f" % value)),
 				HORIZONTAL_ALIGNMENT_RIGHT, cell_width, 8, Color("2a3948"))
 
 
@@ -7008,7 +7202,7 @@ class _PanelAgeParticipationChart extends Control:
 		for grid in 3:
 			var y := plot.end.y - plot.size.y * float(grid) / 2.0
 			draw_line(Vector2(plot.position.x, y), Vector2(plot.end.x, y), Color("e5ebf1"))
-			draw_string(font, Vector2(0, y + 3), "%d%%" % (grid * 50),
+			draw_string(font, Vector2(0, y + 3), LocaleCatalogScript.resolve(str("%d%%" % (grid * 50))),
 				HORIZONTAL_ALIGNMENT_RIGHT, 24, 7, Color("849098"))
 		var slot := plot.size.x / float(data.size())
 		for index in data.size():
@@ -7021,15 +7215,15 @@ class _PanelAgeParticipationChart extends Control:
 			var e_height := plot.size.y * employment
 			draw_rect(Rect2(center - bar_width - 2, plot.end.y - p_height, bar_width, p_height), Color("16a394"))
 			draw_rect(Rect2(center + 2, plot.end.y - e_height, bar_width, e_height), Color("3274d9"))
-			draw_string(font, Vector2(center - slot / 2.0, plot.end.y + 15), str(item.get("label", "")),
+			draw_string(font, Vector2(center - slot / 2.0, plot.end.y + 15), LocaleCatalogScript.resolve(str(str(item.get("label", "")))),
 				HORIZONTAL_ALIGNMENT_CENTER, slot, 8, Color("5e6f81"))
 			draw_string(font, Vector2(center - slot / 2.0, plot.end.y - p_height - 4),
-				"%.0f%%" % (participation * 100.0), HORIZONTAL_ALIGNMENT_CENTER, slot, 7, Color("087f74"))
+				LocaleCatalogScript.resolve(str("%.0f%%" % (participation * 100.0))), HORIZONTAL_ALIGNMENT_CENTER, slot, 7, Color("087f74"))
 		draw_rect(Rect2(plot.position.x, 4, 8, 8), Color("16a394"))
-		draw_string(font, Vector2(plot.position.x + 12, 12), "劳动参与率",
+		draw_string(font, Vector2(plot.position.x + 12, 12), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.e48413edc017608c}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 70, 8, Color("5e6f81"))
 		draw_rect(Rect2(plot.position.x + 82, 4, 8, 8), Color("3274d9"))
-		draw_string(font, Vector2(plot.position.x + 94, 12), "就业率",
+		draw_string(font, Vector2(plot.position.x + 94, 12), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.f1a55c785cd3afce}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 60, 8, Color("5e6f81"))
 
 
@@ -7057,15 +7251,15 @@ class _PanelPyramidChart extends Control:
 			var female_width := half_width * female / max_count
 			draw_rect(Rect2(center - label_width / 2.0 - male_width, y + 2, male_width, row_height - 5), Color("3274d9"))
 			draw_rect(Rect2(center + label_width / 2.0, y + 2, female_width, row_height - 5), Color("c78318"))
-			draw_string(font, Vector2(center - label_width / 2.0, y + row_height - 7), str(item.get("label", "")),
+			draw_string(font, Vector2(center - label_width / 2.0, y + row_height - 7), LocaleCatalogScript.resolve(str(str(item.get("label", "")))),
 				HORIZONTAL_ALIGNMENT_CENTER, label_width, 8, Color("5e6f81"))
-			draw_string(font, Vector2(2, y + row_height - 7), "%.0f" % male,
+			draw_string(font, Vector2(2, y + row_height - 7), LocaleCatalogScript.resolve(str("%.0f" % male)),
 				HORIZONTAL_ALIGNMENT_RIGHT, center - label_width / 2.0 - 8, 7, Color("3274d9"))
-			draw_string(font, Vector2(center + label_width / 2.0 + 5, y + row_height - 7), "%.0f" % female,
+			draw_string(font, Vector2(center + label_width / 2.0 + 5, y + row_height - 7), LocaleCatalogScript.resolve(str("%.0f" % female)),
 				HORIZONTAL_ALIGNMENT_LEFT, half_width, 7, Color("c78318"))
-		draw_string(font, Vector2(2, size.y - 1), "男  ◀",
+		draw_string(font, Vector2(2, size.y - 1), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.4e79758a99006223}  ◀")),
 			HORIZONTAL_ALIGNMENT_RIGHT, center - 22, 8, Color("3274d9"))
-		draw_string(font, Vector2(center + 22, size.y - 1), "▶  女",
+		draw_string(font, Vector2(center + 22, size.y - 1), LocaleCatalogScript.resolve(str("▶  @{desktop.main.fragment.0ab4610b9257c298}")),
 			HORIZONTAL_ALIGNMENT_LEFT, center - 24, 8, Color("c78318"))
 
 
@@ -7087,14 +7281,14 @@ class _PanelSectorMatrixChart extends Control:
 		var metric_width := (size.x - name_width - 8.0) / 3.0
 		for column in 3:
 			draw_string(font, Vector2(name_width + column * metric_width, 11),
-				str(["产出", "销售", "就业FTE"][column]),
+				LocaleCatalogScript.resolve(str(str(["@{desktop.main.fragment.4c97f9db086dc1b9}", "@{desktop.main.fragment.f04b061471b1fd16}", "@{desktop.main.fragment.2c6e0266e1ac28a8}FTE"][column]))),
 				HORIZONTAL_ALIGNMENT_CENTER, metric_width, 8, Color("849098"))
 		var row_height := (size.y - 22.0) / float(data.size())
 		for row in data.size():
 			var item: Dictionary = data[row]
 			var y := 22.0 + row * row_height
-			draw_string(font, Vector2(2, y + 11), "%s · %d家" % [
-				str(item.get("label", "")), int(item.get("firms", 0))],
+			draw_string(font, Vector2(2, y + 11), LocaleCatalogScript.resolve(str("%s · %d@{desktop.main.fragment.c8ae97be80f3867c}" % [
+				str(item.get("label", "")), int(item.get("firms", 0))])),
 				HORIZONTAL_ALIGNMENT_LEFT, name_width - 4, 8, Color("506172"))
 			var values := [float(item.get("produced", 0.0)), float(item.get("sales", 0.0)), float(item.get("employment", 0.0))]
 			var maxima := [max_produced, max_sales, max_employment]
@@ -7129,12 +7323,12 @@ class _PanelLorenzChart extends Control:
 		_curve(income, plot, Color("7950c7"))
 		_curve(wealth, plot, Color("3274d9"))
 		draw_rect(Rect2(plot.position.x, 2, 8, 8), Color("7950c7"))
-		draw_string(font, Vector2(plot.position.x + 12, 10), "个人收入",
+		draw_string(font, Vector2(plot.position.x + 12, 10), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.74b1cd2121521fcf}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 58, 8, Color("5e6f81"))
 		draw_rect(Rect2(plot.position.x + 76, 2, 8, 8), Color("3274d9"))
-		draw_string(font, Vector2(plot.position.x + 88, 10), "个人正净财富",
+		draw_string(font, Vector2(plot.position.x + 88, 10), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.a015979455bc147e}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 90, 8, Color("5e6f81"))
-		draw_string(font, Vector2(plot.position.x, size.y - 1), "人口累计份额 →",
+		draw_string(font, Vector2(plot.position.x, size.y - 1), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.0b5a6fe96ecedd01} →")),
 			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
 
 
@@ -7158,13 +7352,13 @@ class _PanelDecileChart extends Control:
 			var center := plot.position.x + slot * (index + 0.5)
 			draw_rect(Rect2(center - width - 1, plot.end.y - income_h, width, income_h), Color("7950c7"))
 			draw_rect(Rect2(center + 1, plot.end.y - consumption_h, width, consumption_h), Color("16a394"))
-			draw_string(font, Vector2(plot.position.x + slot * index, plot.end.y + 14), "D%d" % (index + 1),
+			draw_string(font, Vector2(plot.position.x + slot * index, plot.end.y + 14), LocaleCatalogScript.resolve(str("D%d" % (index + 1))),
 				HORIZONTAL_ALIGNMENT_CENTER, slot, 7, Color("6f7d89"))
 		draw_rect(Rect2(plot.position.x, 3, 8, 8), Color("7950c7"))
-		draw_string(font, Vector2(plot.position.x + 12, 11), "收入份额",
+		draw_string(font, Vector2(plot.position.x + 12, 11), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.869784698f2c9523}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 55, 8, Color("5e6f81"))
 		draw_rect(Rect2(plot.position.x + 72, 3, 8, 8), Color("16a394"))
-		draw_string(font, Vector2(plot.position.x + 84, 11), "消费份额",
+		draw_string(font, Vector2(plot.position.x + 84, 11), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.f46a5765185637cb}")),
 			HORIZONTAL_ALIGNMENT_LEFT, 55, 8, Color("5e6f81"))
 
 
@@ -7174,7 +7368,7 @@ class _PanelBubbleChart extends Control:
 
 	func _draw() -> void:
 		if data.is_empty():
-			draw_string(font, Vector2(0, size.y * 0.52), "尚无逐企业估值记录",
+			draw_string(font, Vector2(0, size.y * 0.52), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.07616b07cc485e4b}")),
 				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
 			return
 		var q_max := 1.0
@@ -7199,7 +7393,7 @@ class _PanelBubbleChart extends Control:
 			var radius := 3.0 + 8.0 * sqrt(cap / cap_max)
 			draw_circle(point, radius, Color(0.18, 0.45, 0.85, 0.28))
 			draw_arc(point, radius, 0, TAU, 20, Color("3274d9"), 1.0)
-		draw_string(font, Vector2(plot.position.x, size.y - 1), "托宾 Q →",
+		draw_string(font, Vector2(plot.position.x, size.y - 1), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.262b4d2f27d039c7} Q →")),
 			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
 
 
@@ -7210,9 +7404,9 @@ class _PanelEnergyFlowChart extends Control:
 	func _node(rect: Rect2, title: String, value: float, color: Color) -> void:
 		draw_rect(rect, Color(color.r, color.g, color.b, 0.10))
 		draw_rect(rect, color, false, 1.0)
-		draw_string(font, rect.position + Vector2(0, 17), title,
+		draw_string(font, rect.position + Vector2(0, 17), LocaleCatalogScript.resolve(str(title)),
 			HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 8, Color("5e6f81"))
-		draw_string(font, rect.position + Vector2(0, 36), "%.1f" % value,
+		draw_string(font, rect.position + Vector2(0, 36), LocaleCatalogScript.resolve(str("%.1f" % value)),
 			HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 12, color)
 
 	func _draw() -> void:
@@ -7222,20 +7416,20 @@ class _PanelEnergyFlowChart extends Control:
 		var left := Rect2(3, y, node_w, node_h)
 		var center := Rect2((size.x - node_w) / 2.0, y, node_w, node_h)
 		var right := Rect2(size.x - node_w - 3, y, node_w, node_h)
-		_node(left, "生产", float(values.get("energy_produced", 0.0)), Color("21a179"))
-		_node(center, "市场销售", float(values.get("energy_sold", 0.0)), Color("3274d9"))
-		_node(right, "生产使用", float(values.get("energy_used", 0.0)), Color("c78318"))
+		_node(left, "@{desktop.main.fragment.76ab7d3b41f2326d}", float(values.get("energy_produced", 0.0)), Color("21a179"))
+		_node(center, "@{desktop.main.fragment.f6b3e938eedcddbb}", float(values.get("energy_sold", 0.0)), Color("3274d9"))
+		_node(right, "@{desktop.main.fragment.5b026b70ce28ec94}", float(values.get("energy_used", 0.0)), Color("c78318"))
 		draw_line(Vector2(left.end.x + 4, y + node_h / 2), Vector2(center.position.x - 4, y + node_h / 2), Color("9cabb9"), 2.0)
 		draw_line(Vector2(center.end.x + 4, y + node_h / 2), Vector2(right.position.x - 4, y + node_h / 2), Color("9cabb9"), 2.0)
 		var stock := float(values.get("energy_stock_total", 0.0))
 		var reserve := float(values.get("spr_stock", 0.0))
 		var coverage := float(values.get("energy_coverage_mean", 0.0))
-		draw_string(font, Vector2(3, 103), "商业+部门库存  %.1f" % stock,
+		draw_string(font, Vector2(3, 103), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.b1c05328552e878a}+@{desktop.main.fragment.225c96cb80b6490f}  %.1f" % stock)),
 			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.44, 9, Color("506172"))
-		draw_string(font, Vector2(size.x * 0.44, 103), "战略储备  %.1f" % reserve,
+		draw_string(font, Vector2(size.x * 0.44, 103), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.ba246184da7bbff6}  %.1f" % reserve)),
 			HORIZONTAL_ALIGNMENT_LEFT, size.x * 0.30, 9, Color("7950c7"))
-		draw_string(font, Vector2(3, 125), "库存覆盖 %.1f 天 · 未满足需求 %.1f" % [
-			coverage, float(values.get("energy_unfilled", 0.0))],
+		draw_string(font, Vector2(3, 125), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.54e84ad6189abdab} %.1f @{desktop.main.fragment.49da61ceeea2f271} · @{desktop.main.fragment.3fd7877cd3c8238d} %.1f" % [
+			coverage, float(values.get("energy_unfilled", 0.0))])),
 			HORIZONTAL_ALIGNMENT_LEFT, size.x - 6, 8, Color("849098"))
 
 
@@ -7253,16 +7447,16 @@ class _PanelFiscalFlowChart extends Control:
 
 	func _draw() -> void:
 		var revenues := [
-			{"label": "所得", "value": float(values.get("tax_income", 0.0)), "color": Color("16a394")},
-			{"label": "消费", "value": float(values.get("tax_consumption", 0.0)), "color": Color("3274d9")},
-			{"label": "企业", "value": float(values.get("tax_profit", 0.0)), "color": Color("7950c7")},
-			{"label": "其他", "value": maxf(0.0, float(values.get("fiscal_revenue_total", 0.0)) - float(values.get("tax_income", 0.0)) - float(values.get("tax_consumption", 0.0)) - float(values.get("tax_profit", 0.0))), "color": Color("7a8b9b")},
+			{"label": "@{desktop.main.fragment.7787b9a545c5de4c}", "value": float(values.get("tax_income", 0.0)), "color": Color("16a394")},
+			{"label": "@{desktop.main.fragment.80716311485ac4f9}", "value": float(values.get("tax_consumption", 0.0)), "color": Color("3274d9")},
+			{"label": "@{desktop.main.fragment.409d0719010a46ee}", "value": float(values.get("tax_profit", 0.0)), "color": Color("7950c7")},
+			{"label": "@{desktop.main.fragment.d2909f1647e7c891}", "value": maxf(0.0, float(values.get("fiscal_revenue_total", 0.0)) - float(values.get("tax_income", 0.0)) - float(values.get("tax_consumption", 0.0)) - float(values.get("tax_profit", 0.0))), "color": Color("7a8b9b")},
 		]
 		var spending := [
-			{"label": "政府消费", "value": float(values.get("gov_consumption", 0.0)), "color": Color("3274d9")},
-			{"label": "转移", "value": float(values.get("benefit_paid", 0.0)), "color": Color("7950c7")},
-			{"label": "公共投资", "value": float(values.get("public_investment", 0.0)), "color": Color("16a394")},
-			{"label": "其他", "value": maxf(0.0, float(values.get("augmented_gov_spending", 0.0)) - float(values.get("gov_consumption", 0.0)) - float(values.get("benefit_paid", 0.0)) - float(values.get("public_investment", 0.0))), "color": Color("c78318")},
+			{"label": "@{desktop.main.fragment.223be31de4a3a161}", "value": float(values.get("gov_consumption", 0.0)), "color": Color("3274d9")},
+			{"label": "@{desktop.main.fragment.ae7c4c83caeb18a5}", "value": float(values.get("benefit_paid", 0.0)), "color": Color("7950c7")},
+			{"label": "@{desktop.main.fragment.47c7231355664b7b}", "value": float(values.get("public_investment", 0.0)), "color": Color("16a394")},
+			{"label": "@{desktop.main.fragment.d2909f1647e7c891}", "value": maxf(0.0, float(values.get("augmented_gov_spending", 0.0)) - float(values.get("gov_consumption", 0.0)) - float(values.get("benefit_paid", 0.0)) - float(values.get("public_investment", 0.0))), "color": Color("c78318")},
 		]
 		var revenue_total := maxf(0.0, float(values.get("fiscal_revenue_total", 0.0)))
 		var spending_total := maxf(0.0, float(values.get("augmented_gov_spending", 0.0)))
@@ -7274,11 +7468,11 @@ class _PanelFiscalFlowChart extends Control:
 		var spend_rect := Rect2(size.x * 0.70 - bar_w / 2, base_y - max_h * spending_total / max_total, bar_w, max_h * spending_total / max_total)
 		_draw_stack(rev_rect, revenues, maxf(revenue_total, 1e-9))
 		_draw_stack(spend_rect, spending, maxf(spending_total, 1e-9))
-		draw_string(font, Vector2(0, 11), "收入 %.1f" % revenue_total,
+		draw_string(font, Vector2(0, 11), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.117d8f914d8e21a1} %.1f" % revenue_total)),
 			HORIZONTAL_ALIGNMENT_CENTER, size.x * 0.46, 9, Color("087f74"))
-		draw_string(font, Vector2(size.x * 0.5, 11), "支出 %.1f" % spending_total,
+		draw_string(font, Vector2(size.x * 0.5, 11), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.e679096865859f36} %.1f" % spending_total)),
 			HORIZONTAL_ALIGNMENT_CENTER, size.x * 0.46, 9, Color("2f72d6"))
-		draw_string(font, Vector2(0, size.y - 5), "赤字为正 = 净注入  %.1f" % float(values.get("gov_deficit", 0.0)),
+		draw_string(font, Vector2(0, size.y - 5), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.44b6a26cdf8bb924} = @{desktop.main.fragment.c0896daadb215d4b}  %.1f" % float(values.get("gov_deficit", 0.0)))),
 			HORIZONTAL_ALIGNMENT_CENTER, size.x, 8, Color("849098"))
 
 
@@ -7287,13 +7481,13 @@ class _PanelBankBalanceChart extends Control:
 	var font: Font
 
 	func _bar(y: float, label: String, value: float, maximum: float, color: Color) -> void:
-		draw_string(font, Vector2(2, y + 10), label,
+		draw_string(font, Vector2(2, y + 10), LocaleCatalogScript.resolve(str(label)),
 			HORIZONTAL_ALIGNMENT_LEFT, 76, 8, Color("5e6f81"))
 		var x := 80.0
 		var width := maxf(20.0, size.x - 145.0)
 		draw_rect(Rect2(x, y + 2, width, 9), Color("edf1f6"))
 		draw_rect(Rect2(x, y + 2, width * maxf(0.0, value) / maximum, 9), color)
-		draw_string(font, Vector2(x + width + 5, y + 10), "%.1f" % value,
+		draw_string(font, Vector2(x + width + 5, y + 10), LocaleCatalogScript.resolve(str("%.1f" % value)),
 			HORIZONTAL_ALIGNMENT_RIGHT, 56, 8, color)
 
 	func _draw() -> void:
@@ -7301,12 +7495,12 @@ class _PanelBankBalanceChart extends Control:
 		var deposits := float(values.get("bank_deposit_total", 0.0))
 		var capital := float(values.get("bank_capital", 0.0))
 		var maximum := maxf(1.0, maxf(credit, maxf(deposits, capital)))
-		_bar(15, "信贷资产", credit, maximum, Color("16a394"))
-		_bar(48, "存款负债", deposits, maximum, Color("3274d9"))
-		_bar(81, "资本缓冲", capital, maximum, Color("21a166"))
+		_bar(15, "@{desktop.main.fragment.a8076a5ef01d06eb}", credit, maximum, Color("16a394"))
+		_bar(48, "@{desktop.main.fragment.568f506a5c1d51e3}", deposits, maximum, Color("3274d9"))
+		_bar(81, "@{desktop.main.fragment.baadb5544e4943ac}", capital, maximum, Color("21a166"))
 		var capital_ratio := capital / maxf(credit, 1e-9)
-		draw_string(font, Vector2(2, 129), "资本/信贷 %.1f%% · 本期核销 %.1f" % [
-			capital_ratio * 100.0, float(values.get("writeoffs", 0.0))],
+		draw_string(font, Vector2(2, 129), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.59831fc48b368a54}/@{desktop.main.fragment.334ec29216cfefb9} %.1f%% · @{desktop.main.fragment.122041156a7d5677} %.1f" % [
+			capital_ratio * 100.0, float(values.get("writeoffs", 0.0))])),
 			HORIZONTAL_ALIGNMENT_LEFT, size.x - 4, 8, Color("849098"))
 
 
@@ -7337,7 +7531,7 @@ class _PanelLineChart extends Control:
 			var color: Color = item.get("color", Color.GRAY)
 			draw_circle(Vector2(legend_x + 3.0, 10.0), 3.0, color)
 			var legend := "%s %s" % [str(item.get("label", "")), str(item.get("text", ""))]
-			draw_string(font, Vector2(legend_x + 10.0, 14.0), legend,
+			draw_string(font, Vector2(legend_x + 10.0, 14.0), LocaleCatalogScript.resolve(str(legend)),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color("5e6f81"))
 			legend_x += font.get_string_size(legend,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x + 24.0
@@ -7357,7 +7551,7 @@ class _PanelLineChart extends Control:
 				high = maxf(high, float(value))
 		if low == INF:
 			draw_string(font, Vector2(plot.position.x, plot.get_center().y),
-				"推进模拟以积累每日历史",
+				LocaleCatalogScript.resolve(str("@{desktop.main.fragment.69e50cb4b72735d4}")),
 				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 10, Color("849098"))
 			return
 		if is_equal_approx(low, high):
@@ -7384,7 +7578,7 @@ class _PanelLineChart extends Control:
 				draw_polyline(points, color, 1.8, true)
 			draw_circle(points[-1], 3.0, color)
 		draw_string(font, Vector2(plot.position.x, size.y - 1),
-			"最近 %d 日" % int((data[0] as Dictionary).get("values", []).size()) if not data.is_empty() else "",
+			LocaleCatalogScript.resolve(str("@{desktop.main.fragment.997a5e6e513f2a90} %d @{desktop.main.fragment.85217f7aff778414}" % int((data[0] as Dictionary).get("values", []).size()) if not data.is_empty() else "")),
 			HORIZONTAL_ALIGNMENT_RIGHT, plot.size.x, 8, Color("849098"))
 
 
@@ -7404,7 +7598,7 @@ class _PanelBarChart extends Control:
 			var y := row_height * float(item_index)
 			var value := float(item.get("value", 0.0))
 			var color: Color = RED if value < 0.0 else item.get("color", Color.GRAY)
-			draw_string(font, Vector2(2, y + 13), str(item.get("label", "")),
+			draw_string(font, Vector2(2, y + 13), LocaleCatalogScript.resolve(str(str(item.get("label", "")))),
 				HORIZONTAL_ALIGNMENT_LEFT, 84, 9, Color("5e6f81"))
 			var bar_x := 88.0
 			var bar_width := maxf(10.0, size.x - bar_x - 64.0)
@@ -7413,7 +7607,7 @@ class _PanelBarChart extends Control:
 			draw_rect(Rect2(bar_x, bar_y,
 				bar_width * absf(value) / max_value, 8), color)
 			draw_string(font, Vector2(bar_x + bar_width + 6.0, y + 14),
-				str(item.get("text", "")), HORIZONTAL_ALIGNMENT_RIGHT, 56, 9,
+				LocaleCatalogScript.resolve(str(str(item.get("text", "")))), HORIZONTAL_ALIGNMENT_RIGHT, 56, 9,
 				Color("2a3948"))
 
 
@@ -7451,9 +7645,9 @@ class _PanelColumnChart extends Control:
 				Color(color.r, color.g, color.b, 0.82))
 			var text_y := maxf(10.0, top - 4.0)
 			draw_string(font, Vector2(plot.position.x + slot_width * float(item_index), text_y),
-				str(item.get("text", "")), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8, color)
+				LocaleCatalogScript.resolve(str(str(item.get("text", "")))), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8, color)
 			draw_string(font, Vector2(plot.position.x + slot_width * float(item_index), size.y - 7),
-				str(item.get("label", "")), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8,
+				LocaleCatalogScript.resolve(str(str(item.get("label", "")))), HORIZONTAL_ALIGNMENT_CENTER, slot_width, 8,
 				Color("5e6f81"))
 
 
@@ -7461,7 +7655,7 @@ class _MacroPhaseMap extends Control:
 	var has_phase := false
 	var x_value := 0.0
 	var y_value := 0.0
-	var phase := "初始观察期"
+	var phase := "@{desktop.main.fragment.25f6cdf3722d33b8}"
 	var point_color := Color("5e6f81")
 	var font: Font
 
@@ -7469,7 +7663,7 @@ class _MacroPhaseMap extends Control:
 		var plot := Rect2(Vector2(34, 15), size - Vector2(46, 43))
 		var half := plot.size / 2.0
 		var center := plot.get_center()
-		# 四象限仅承担“关系解释”，不重复绘制原始指标序列。
+		#  The quadrant is limited to a “relationship interpretation” and does not duplicate the original indicator series.
 		draw_rect(Rect2(plot.position, half), Color(0.824, 0.29, 0.204, 0.045))
 		draw_rect(Rect2(Vector2(center.x, plot.position.y), half),
 			Color(0.757, 0.49, 0.086, 0.045))
@@ -7481,18 +7675,18 @@ class _MacroPhaseMap extends Control:
 			Color("cbd6e1"), 1.0)
 		draw_line(Vector2(plot.position.x, center.y), Vector2(plot.end.x, center.y),
 			Color("cbd6e1"), 1.0)
-		draw_string(font, plot.position + Vector2(7, 14), "滞胀压力",
+		draw_string(font, plot.position + Vector2(7, 14), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.43b666feeeb6487c}")),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("ad6658"))
-		draw_string(font, Vector2(center.x + 7, plot.position.y + 14), "需求偏热",
+		draw_string(font, Vector2(center.x + 7, plot.position.y + 14), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.e8080680ffdb93b6}")),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("a8782e"))
-		draw_string(font, Vector2(plot.position.x + 7, plot.end.y - 7), "需求偏弱",
+		draw_string(font, Vector2(plot.position.x + 7, plot.end.y - 7), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.8ee04f36861892b7}")),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("5878a8"))
-		draw_string(font, Vector2(center.x + 7, plot.end.y - 7), "低压扩张",
+		draw_string(font, Vector2(center.x + 7, plot.end.y - 7), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.fea642af5f0c14ef}")),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("408c82"))
 		draw_string(font, Vector2(plot.position.x, size.y - 7),
-			"收缩  ←        增长动能        →  扩张",
+			LocaleCatalogScript.resolve(str("@{desktop.main.fragment.c9c62e7bc3d850f1}  ←        @{desktop.main.fragment.5bd3b5af44a16b17}        →  @{desktop.main.fragment.58d9feb27a837c35}")),
 			HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9, Color("71808f"))
-		draw_string(font, Vector2(plot.position.x, 10), "价格压力 ↑",
+		draw_string(font, Vector2(plot.position.x, 10), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.20ea8f201a36f7bb} ↑")),
 			HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 9, Color("71808f"))
 		if has_phase:
 			var point := Vector2(
@@ -7513,11 +7707,11 @@ class _MacroPhaseMap extends Control:
 			draw_rect(Rect2(label_x, label_y, label_width, 21), Color(1, 1, 1, 0.94))
 			draw_rect(Rect2(label_x, label_y, label_width, 21),
 				Color(point_color.r, point_color.g, point_color.b, 0.35), false, 1.0)
-			draw_string(font, Vector2(label_x + 7, label_y + 14), phase,
+			draw_string(font, Vector2(label_x + 7, label_y + 14), LocaleCatalogScript.resolve(str(phase)),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, point_color)
 		else:
 			draw_string(font, Vector2(plot.position.x, center.y + 4),
-				"等待第二期产出与通胀公报",
+				LocaleCatalogScript.resolve(str("@{desktop.main.fragment.b73549f042ce86f7}")),
 				HORIZONTAL_ALIGNMENT_CENTER, plot.size.x, 11, Color("71808f"))
 
 
@@ -7555,7 +7749,7 @@ class _CountryRadar extends Control:
 
 	func _draw() -> void:
 		if labels.size() < 3:
-			draw_string(font, Vector2(0, size.y / 2.0), "等待国家评分数据",
+			draw_string(font, Vector2(0, size.y / 2.0), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.f5174a6a7f63da74}")),
 				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
 			return
 		var center := Vector2(size.x / 2.0, size.y / 2.0 + 4.0)
@@ -7572,7 +7766,7 @@ class _CountryRadar extends Control:
 			draw_line(center, outer, Color("e2e8ef"), 1.0)
 			var label_pos := center + Vector2(cos(angle), sin(angle)) * (radius + 20.0)
 			draw_string(font, Vector2(label_pos.x - 38.0, label_pos.y + 3.0),
-				str(labels[index]), HORIZONTAL_ALIGNMENT_CENTER, 76.0, 9, Color("5e6f81"))
+				LocaleCatalogScript.resolve(str(str(labels[index]))), HORIZONTAL_ALIGNMENT_CENTER, 76.0, 9, Color("5e6f81"))
 		if comparison.size() == labels.size():
 			var peer_points := _points(comparison, center, radius)
 			for index in peer_points.size():
@@ -7589,8 +7783,8 @@ class _CountryRadar extends Control:
 
 
 class _RelationsMap extends Control:
-	## 三国关系图:节点三角布局 + 中心结算枢纽;
-	## 实线=出口流(→枢纽),虚线=进口流(枢纽→),紫点=移民,琥珀点=汇款。
+	##  Trinational relationship chart: Node Triangular Layout + Centre Clearing Hub;
+	##  Real = export flows (hubs), nodes = import flows (hubs), purple = immigrants, Amber = remittances.
 	var names: Array = []
 	var colors: Array = []
 	var exports: Array = []
@@ -7619,7 +7813,7 @@ class _RelationsMap extends Control:
 			node_pos.append(center + Vector2(cos(angle), sin(angle)) * radius)
 		draw_circle(center, 17.0, Color("edf1f6"))
 		draw_arc(center, 17.0, 0, TAU, 32, Color("cdd7e2"), 1.2, true)
-		draw_string(font, center + Vector2(-11, 4), "枢纽",
+		draw_string(font, center + Vector2(-11, 4), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.bc0d2e59923c651b}")),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("68788b"))
 		for i in n:
 			var p: Vector2 = node_pos[i]
@@ -7663,14 +7857,14 @@ class _RelationsMap extends Control:
 			var label := str(names[i])
 			var off := Vector2(-float(label.length()) * 5.5, 30.0) \
 				if p.y > center.y else Vector2(-float(label.length()) * 5.5, -22.0)
-			draw_string(font, p + off, label,
+			draw_string(font, p + off, LocaleCatalogScript.resolve(str(label)),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("2a3948"))
 		var ly := size.y - 10.0
 		draw_line(Vector2(8, ly), Vector2(26, ly), Color(0.122, 0.616, 0.388, 0.9), 2.5, true)
-		draw_string(font, Vector2(30, ly + 4), "出口", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
+		draw_string(font, Vector2(30, ly + 4), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.7016090059bdfab9}")), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
 		draw_line(Vector2(64, ly), Vector2(82, ly), Color(0.184, 0.435, 0.816, 0.7), 1.5, true)
-		draw_string(font, Vector2(86, ly + 4), "进口", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
+		draw_string(font, Vector2(86, ly + 4), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.514e5df21b748fda}")), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
 		draw_circle(Vector2(126, ly), 3.0, Color(0.478, 0.31, 0.816, 0.7))
-		draw_string(font, Vector2(133, ly + 4), "移民", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
+		draw_string(font, Vector2(133, ly + 4), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.8948bde020cb3af2}")), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
 		draw_circle(Vector2(172, ly), 3.0, Color(0.757, 0.49, 0.086, 0.7))
-		draw_string(font, Vector2(179, ly + 4), "汇款", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))
+		draw_string(font, Vector2(179, ly + 4), LocaleCatalogScript.resolve(str("@{desktop.main.fragment.bfe16f1bdae540f8}")), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("68788b"))

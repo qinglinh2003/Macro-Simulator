@@ -816,6 +816,9 @@ class NativeSimulationSession:
             "persons": self.bridge.probe_persons,
             "jobs": self.bridge.probe_jobs,
             "dwellings": self.bridge.probe_dwellings,
+            "equities": self.bridge.probe_equities,
+            "security_positions":
+                self.bridge.probe_security_positions,
         }
         try:
             method = methods[kind]
@@ -1101,9 +1104,16 @@ class NativeSimulationSession:
         self,
         *,
         actions: Iterable[Mapping[str, Any]] = (),
+        advance_ticks: int = 1,
         fault_point: str = "none",
     ) -> NativePreparedBoundary:
-        """Prepare one economic day while keeping the public composite unchanged."""
+        """Prepare one atomic native batch while keeping the public state unchanged."""
+        if (
+            isinstance(advance_ticks, bool)
+            or not isinstance(advance_ticks, int)
+            or advance_ticks < 1
+        ):
+            raise ValueError("advance_ticks must be a positive integer")
         native = _load_native()
         fault_points = {
             "none": native.M10FaultPoint.NONE,
@@ -1132,7 +1142,7 @@ class NativeSimulationSession:
         sealed.operation_id = operation_id
         sealed.expected_controller_hash = previous.hash
         sealed.policies = policies
-        sealed.advance_ticks = 1
+        sealed.advance_ticks = advance_ticks
         sealed.worker_count = self.worker_count
         sealed.fault_point = native_fault
         lease = self.bridge.prepare_boundary(sealed)
@@ -1190,41 +1200,37 @@ class NativeSimulationSession:
         """Commit one or more native day boundaries atomically, action first."""
         if isinstance(ticks, bool) or not isinstance(ticks, int) or ticks < 1:
             raise ValueError("ticks must be a positive integer")
-        result: dict[str, Any] = {}
-        pending_actions = tuple(actions)
-        for offset in range(ticks):
-            prepared = self.prepare_boundary(
-                actions=pending_actions if offset == 0 else (),
+        prepared = self.prepare_boundary(
+            actions=tuple(actions), advance_ticks=ticks,
+        )
+        try:
+            previous = prepared.previous_envelope
+            # The authoritative Python controller envelope is republished
+            # after the completed boundary.  The economic commit must not
+            # invent controller/release sequence positions that the final
+            # neutral state could then be unable to decrease.
+            payload = json.dumps(
+                {
+                    "actions": prepared.canonical_actions,
+                    "operation_id": prepared.operation_id,
+                    "phase": "boundary_start",
+                    "schema_version": 1,
+                    "tick": int(prepared.lease.preview["next_tick"]),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            return self.commit_prepared_boundary(
+                prepared,
+                payload=payload,
+                event_sequence=int(previous.event_sequence),
+                release_cursor=int(previous.release_cursor),
+                decision_versions=list(previous.decision_versions),
+                effective_versions=list(previous.effective_versions),
             )
-            try:
-                previous = prepared.previous_envelope
-                # The authoritative Python controller envelope is republished
-                # after the completed boundary.  The economic commit must not
-                # invent controller/release sequence positions that the final
-                # neutral state could then be unable to decrease.
-                payload = json.dumps(
-                    {
-                        "actions": prepared.canonical_actions,
-                        "operation_id": prepared.operation_id,
-                        "phase": "boundary_start",
-                        "schema_version": 1,
-                        "tick": int(prepared.lease.preview["next_tick"]),
-                    },
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-                result = self.commit_prepared_boundary(
-                    prepared,
-                    payload=payload,
-                    event_sequence=int(previous.event_sequence),
-                    release_cursor=int(previous.release_cursor),
-                    decision_versions=list(previous.decision_versions),
-                    effective_versions=list(previous.effective_versions),
-                )
-            except Exception:
-                self.abort_prepared_boundary(prepared)
-                raise
-        return result
+        except Exception:
+            self.abort_prepared_boundary(prepared)
+            raise
 
     def checkpoint(
         self, objective_envelope: bytes = b"{}", *,

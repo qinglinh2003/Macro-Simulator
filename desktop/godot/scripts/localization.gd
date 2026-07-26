@@ -5,6 +5,7 @@ const DEFAULT_LOCALE := "zh_CN"
 const SUPPORTED_LOCALES := ["en", "zh_CN"]
 const RESOURCE_PATTERN := "res://i18n/%s.json"
 const KEY_PREFIX := "@"
+const INLINE_KEY_PREFIX := "@{"
 
 static var _locale := ""
 static var _strings: Dictionary = {}
@@ -16,9 +17,7 @@ static func locale() -> String:
 
 
 static func set_locale(requested: String) -> void:
-	var normalized: String = (
-		requested if requested in SUPPORTED_LOCALES else DEFAULT_LOCALE
-	)
+	var normalized := normalize_locale(requested)
 	if normalized == _locale and not _strings.is_empty():
 		return
 	var path: String = RESOURCE_PATTERN % normalized
@@ -32,6 +31,12 @@ static func set_locale(requested: String) -> void:
 	_strings = payload
 
 
+static func normalize_locale(requested: String) -> String:
+	if requested == "zh-CN":
+		return "zh_CN"
+	return requested if requested in SUPPORTED_LOCALES else DEFAULT_LOCALE
+
+
 static func text(key: String, fallback := "") -> String:
 	_ensure_loaded()
 	if _strings.has(key):
@@ -40,17 +45,33 @@ static func text(key: String, fallback := "") -> String:
 
 
 static func resolve(value: String) -> String:
-	if value.begins_with(KEY_PREFIX):
+	if value.begins_with(KEY_PREFIX) and not value.begins_with(INLINE_KEY_PREFIX):
 		return text(value.substr(KEY_PREFIX.length()))
-	return value
+	var resolved := value
+	var offset := 0
+	while true:
+		var start := resolved.find(INLINE_KEY_PREFIX, offset)
+		if start < 0:
+			break
+		var finish := resolved.find("}", start + INLINE_KEY_PREFIX.length())
+		if finish < 0:
+			break
+		var key := resolved.substr(
+			start + INLINE_KEY_PREFIX.length(),
+			finish - start - INLINE_KEY_PREFIX.length())
+		var token := resolved.substr(start, finish - start + 1)
+		var replacement := text(key, token)
+		resolved = resolved.substr(0, start) + replacement + resolved.substr(finish + 1)
+		offset = start + replacement.length()
+	return resolved
 
 
 static func format(key: String, values: Variant, fallback := "") -> String:
-	return text(key, fallback) % values
+	return resolve(text(key, fallback) % values)
 
 
 static func _ensure_loaded() -> void:
 	if not _locale.is_empty() and not _strings.is_empty():
 		return
 	var requested := OS.get_environment("MACRO_SIM_LOCALE")
-	set_locale(requested if requested in SUPPORTED_LOCALES else DEFAULT_LOCALE)
+	set_locale(requested)

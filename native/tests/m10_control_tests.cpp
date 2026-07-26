@@ -196,6 +196,80 @@ void test_commit_swaps_complete_engine_and_envelope() {
     assert(session.engine().metrics().history().size() == 2U);
 }
 
+void test_multi_tick_batch_preserves_daily_history_and_dynamics() {
+    auto sequential = bridge();
+    auto batched = bridge();
+
+    for (std::uint64_t day = 0; day < 5U; ++day) {
+        SealedControlBatch one{
+            "sequential-" + std::to_string(day),
+            sequential.controller_envelope().hash,
+            policy_batch(sequential.engine()),
+            1U,
+            {},
+        };
+        auto lease = sequential.prepare_boundary(one);
+        assert(lease.ok());
+        auto next = sequential.controller_envelope();
+        next.boundary = lease.get_if()->preview().next_tick;
+        next.policy_generation = lease.get_if()->preview().policy_generation;
+        ++next.event_sequence;
+        assert(seal_controller_envelope(next).ok());
+        assert(sequential.commit_boundary(
+            std::move(*lease.get_if()), std::move(next)).ok());
+    }
+
+    SealedControlBatch five{
+        "batched-five",
+        batched.controller_envelope().hash,
+        policy_batch(batched.engine()),
+        5U,
+        {},
+    };
+    auto lease = batched.prepare_boundary(five);
+    assert(lease.ok());
+    assert(lease.get_if()->preview().first_tick == Tick(0U));
+    assert(lease.get_if()->preview().next_tick == Tick(5U));
+    auto next = batched.controller_envelope();
+    next.boundary = lease.get_if()->preview().next_tick;
+    next.policy_generation = lease.get_if()->preview().policy_generation;
+    ++next.event_sequence;
+    assert(seal_controller_envelope(next).ok());
+    const auto result = batched.commit_boundary(
+        std::move(*lease.get_if()), std::move(next));
+    assert(result.ok());
+    assert(result.get_if()->first_tick == Tick(0U));
+    assert(result.get_if()->next_tick == Tick(5U));
+    assert(result.get_if()->advanced_ticks == 5U);
+    assert(
+        batched.engine().world().digest() ==
+        sequential.engine().world().digest()
+    );
+    assert(
+        batched.engine().metrics().history().next_sequence() ==
+        sequential.engine().metrics().history().next_sequence()
+    );
+    const auto batched_frames =
+        batched.engine().metrics().history().page(0U, 8U);
+    const auto sequential_frames =
+        sequential.engine().metrics().history().page(0U, 8U);
+    assert(batched_frames.ok());
+    assert(sequential_frames.ok());
+    assert(
+        batched_frames.get_if()->frames.size() ==
+        sequential_frames.get_if()->frames.size()
+    );
+    for (std::size_t index = 0;
+         index < batched_frames.get_if()->frames.size(); ++index) {
+        const auto &left = batched_frames.get_if()->frames[index];
+        const auto &right = sequential_frames.get_if()->frames[index];
+        assert(left.tick == right.tick);
+        assert(left.economy_count == right.economy_count);
+        assert(left.values == right.values);
+        assert(left.valid == right.valid);
+    }
+}
+
 void test_invalid_next_envelope_keeps_prepared_lease_abortable() {
     auto session = bridge();
     SealedControlBatch batch{
@@ -347,6 +421,7 @@ int main() {
     test_prepare_blocks_queries_and_abort_exposes_old_composite();
     test_policy_validation_is_non_mutating_and_respects_query_lock();
     test_commit_swaps_complete_engine_and_envelope();
+    test_multi_tick_batch_preserves_daily_history_and_dynamics();
     test_invalid_next_envelope_keeps_prepared_lease_abortable();
     test_hybrid_checkpoint_split_run_is_exact();
     test_checkpoint_rejects_prepared_and_corrupt_state();

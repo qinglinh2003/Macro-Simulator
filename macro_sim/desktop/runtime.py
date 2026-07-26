@@ -108,7 +108,7 @@ WORLD_METRIC_NAMES = (
     "spr_stock",
 )
 
-# Rich economic and structural series kept for the player economy's 指标全景 panels.
+# Rich economic and structural series used by the player economy overview.
 # Grouping/labels live in the client; the runtime just serializes the keys.
 # Every key is verified present in the current playable preset's records.
 PANEL_METRIC_NAMES = (
@@ -1017,70 +1017,76 @@ class SimulationRuntime:
         accounts = getattr(econ, "labor_accounts", None)
         jg_fte = _finite_number(getattr(accounts, "job_guarantee", 0.0))
         labor_states = [
-            {"label": "就业 E", "value": employed_heads},
-            {"label": "求职/保障 U·JG", "value": searching_or_guaranteed},
-            {"label": "非劳动力 N", "value": nonsearch_heads},
+            {"state_id": "employed", "value": employed_heads},
+            {"state_id": "searching_or_guaranteed", "value": searching_or_guaranteed},
+            {"state_id": "not_in_labor_force", "value": nonsearch_heads},
         ]
 
         firm_sector: dict[str, str] = {}
         for firm in getattr(econ, "c_firms", ()):
             sector = str(getattr(firm, "consumption_sector", ""))
             firm_sector[str(firm.id)] = (
-                "必需消费" if sector == "necessity" else
-                "可选消费" if sector == "luxury" else "消费品"
+                "necessity" if sector == "necessity" else
+                "luxury" if sector == "luxury" else "consumption"
             )
         for firm in getattr(econ, "k_firms", ()):
-            firm_sector[str(firm.id)] = "资本品"
+            firm_sector[str(firm.id)] = "capital"
         for firm in getattr(econ, "e_firms", ()):
-            firm_sector[str(firm.id)] = "能源"
+            firm_sector[str(firm.id)] = "energy"
         for firm in getattr(econ, "firms", ()):
             if str(getattr(firm, "sells", "")) == "housing":
-                firm_sector[str(firm.id)] = "住房建设"
+                firm_sector[str(firm.id)] = "housing"
         sector_order = (
-            "必需消费", "可选消费", "消费品", "资本品", "能源", "住房建设"
+            "necessity", "luxury", "consumption", "capital", "energy", "housing"
         )
-        sector_hours = {label: 0.0 for label in sector_order}
+        sector_hours = {sector_id: 0.0 for sector_id in sector_order}
         if lm is not None:
             for job in list(active_primary.values()) + list(active_secondary.values()):
-                label = firm_sector.get(str(job.firm_id), "消费品")
-                sector_hours[label] = sector_hours.get(label, 0.0) + _finite_number(
+                sector_id = firm_sector.get(str(job.firm_id), "consumption")
+                sector_hours[sector_id] = sector_hours.get(
+                    sector_id, 0.0
+                ) + _finite_number(
                     getattr(job, "hours", 1.0), 1.0
                 )
         else:
             for firm in getattr(econ, "firms", ()):
-                label = firm_sector.get(str(firm.id), "消费品")
-                sector_hours[label] = sector_hours.get(label, 0.0) + _finite_number(
+                sector_id = firm_sector.get(str(firm.id), "consumption")
+                sector_hours[sector_id] = sector_hours.get(
+                    sector_id, 0.0
+                ) + _finite_number(
                     getattr(firm, "hired", 0.0)
                 )
         employment_sectors = [
-            {"label": label, "value": sector_hours[label]}
-            for label in sector_order if sector_hours[label] > 1e-9
+            {"sector_id": sector_id, "value": sector_hours[sector_id]}
+            for sector_id in sector_order if sector_hours[sector_id] > 1e-9
         ]
         if jg_fte > 1e-9:
-            employment_sectors.append({"label": "就业保障", "value": jg_fte})
+            employment_sectors.append(
+                {"sector_id": "job_guarantee", "value": jg_fte}
+            )
 
         flow = self._labor_flow_delta
         labor_flows = [
-            {"label": "新招聘", "value": flow.get("labor_hires_total", 0.0)},
-            {"label": "召回", "value": flow.get("labor_recalls_total", 0.0)},
-            {"label": "岗位转换", "value": flow.get("labor_ladder_moves_total", 0.0)},
-            {"label": "主动离职", "value": flow.get("labor_churn_seps_total", 0.0)},
-            {"label": "裁员/破产", "value": (
+            {"flow_id": "hires", "value": flow.get("labor_hires_total", 0.0)},
+            {"flow_id": "recalls", "value": flow.get("labor_recalls_total", 0.0)},
+            {"flow_id": "job_changes", "value": flow.get("labor_ladder_moves_total", 0.0)},
+            {"flow_id": "voluntary_separations", "value": flow.get("labor_churn_seps_total", 0.0)},
+            {"flow_id": "layoffs_or_bankruptcy", "value": (
                 flow.get("labor_layoff_seps_total", 0.0)
                 + flow.get("labor_bankruptcy_seps_total", 0.0)
                 + flow.get("labor_suspensions_total", 0.0)
             )},
-            {"label": "退出劳动力", "value": flow.get("labor_welfare_quits_total", 0.0)},
+            {"flow_id": "labor_force_exits", "value": flow.get("labor_welfare_quits_total", 0.0)},
         ]
 
         sector_rows = []
-        for label, firms in (
-            ("必需消费", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "necessity"]),
-            ("可选消费", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "luxury"]),
-            ("消费品", [f for f in getattr(econ, "c_firms", ()) if not getattr(f, "consumption_sector", "")]),
-            ("资本品", list(getattr(econ, "k_firms", ()))),
-            ("能源", list(getattr(econ, "e_firms", ()))),
-            ("住房建设", [
+        for sector_id, firms in (
+            ("necessity", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "necessity"]),
+            ("luxury", [f for f in getattr(econ, "c_firms", ()) if getattr(f, "consumption_sector", "") == "luxury"]),
+            ("consumption", [f for f in getattr(econ, "c_firms", ()) if not getattr(f, "consumption_sector", "")]),
+            ("capital", list(getattr(econ, "k_firms", ()))),
+            ("energy", list(getattr(econ, "e_firms", ()))),
+            ("housing", [
                 f for f in getattr(econ, "firms", ())
                 if str(getattr(f, "sells", "")) == "housing"
             ]),
@@ -1088,12 +1094,12 @@ class SimulationRuntime:
             if not firms:
                 continue
             sector_rows.append({
-                "label": label,
+                "sector_id": sector_id,
                 "firms": len(firms),
                 "produced": sum(_finite_number(getattr(firm, "produced", 0.0)) for firm in firms),
                 "sales": sum(_finite_number(getattr(firm, "sales", 0.0)) for firm in firms),
                 "inventory": sum(_finite_number(getattr(firm, "inventory", 0.0)) for firm in firms),
-                "employment": sector_hours.get(label, 0.0),
+                "employment": sector_hours.get(sector_id, 0.0),
             })
 
         capital_firms = []
@@ -1175,32 +1181,28 @@ class SimulationRuntime:
             firm_id = str(firm.id)
             consumption_sector = str(getattr(firm, "consumption_sector", ""))
             if firm_id in e_ids:
-                sector = "能源"
-                sector_code = "energy"
+                sector_id = "energy"
             elif firm_id in k_ids:
-                sector = "资本品"
-                sector_code = "capital"
+                sector_id = "capital"
             elif str(getattr(firm, "sells", "")) == "housing":
-                sector = "住房建设"
-                sector_code = "housing"
+                sector_id = "housing"
             elif consumption_sector == "necessity":
-                sector = "必需消费"
-                sector_code = "necessity"
+                sector_id = "necessity"
             elif consumption_sector == "luxury":
-                sector = "可选消费"
-                sector_code = "luxury"
+                sector_id = "luxury"
             else:
-                sector = "消费品"
-                sector_code = "consumption"
+                sector_id = "consumption"
 
             employees: list[dict[str, Any]] = []
-            for contract_type, jobs in (("主业", primary_jobs), ("第二职业", second_jobs)):
+            for contract_id, jobs in (
+                ("primary", primary_jobs), ("secondary", second_jobs)
+            ):
                 for person_id_raw, job in jobs.items():
                     if str(getattr(job, "firm_id", "")) != firm_id:
                         continue
                     person_id = int(person_id_raw)
                     person = people_by_id.get(person_id)
-                    is_suspended = contract_type == "主业" and person_id in suspended
+                    is_suspended = contract_id == "primary" and person_id in suspended
                     suspension = suspensions.get(person_id) if is_suspended else None
                     hours = max(0.0, _finite_number(getattr(job, "hours", 1.0), 1.0))
                     efficiency = (
@@ -1220,8 +1222,10 @@ class SimulationRuntime:
                             int(person.household_id)
                             if person is not None and person.household_id is not None else None
                         ),
-                        "contract": contract_type,
-                        "status": "停薪留职" if is_suspended else "在岗",
+                        "contract_id": contract_id,
+                        "contract": contract_id,
+                        "status_id": "suspended" if is_suspended else "active",
+                        "status": "suspended" if is_suspended else "active",
                         "suspended_since_tick": (
                             int(getattr(suspension, "since_tick", 0))
                             if suspension is not None else None
@@ -1238,9 +1242,13 @@ class SimulationRuntime:
                         "efficiency": efficiency,
                         "compensation": 0.0 if is_suspended else paid_wage * hours,
                     })
-            employees.sort(key=lambda row: (row["status"] != "在岗", row["person_id"]))
+            employees.sort(
+                key=lambda row: (row["status_id"] != "active", row["person_id"])
+            )
             active_ids = {
-                int(row["person_id"]) for row in employees if row["status"] == "在岗"
+                int(row["person_id"])
+                for row in employees
+                if row["status_id"] == "active"
             }
             employment_fte = sum(float(row["hours"]) for row in employees)
 
@@ -1343,19 +1351,21 @@ class SimulationRuntime:
             insolvent_ticks = int(getattr(firm, "insolvent_ticks", 0))
             subscale_ticks = int(getattr(firm, "subscale_ticks", 0))
             if insolvent_ticks > 0:
-                condition = "偿付风险"
+                condition_id = "solvency_risk"
             elif idle_ticks > 0:
-                condition = "闲置观察"
+                condition_id = "idle_watch"
             elif subscale_ticks > 0:
-                condition = "规模预警"
+                condition_id = "subscale_warning"
             else:
-                condition = "正常经营"
+                condition_id = "operating"
 
             items.append({
                 "firm_id": firm_id,
-                "sector": sector,
-                "sector_code": sector_code,
-                "condition": condition,
+                "sector_id": sector_id,
+                "sector": sector_id,
+                "sector_code": sector_id,
+                "condition_id": condition_id,
+                "condition": condition_id,
                 "state_owned": bool(getattr(firm, "state_owned", False)),
                 "sells": str(getattr(firm, "sells", "")),
                 "technology": str(getattr(firm, "tech", "")),
@@ -1490,8 +1500,8 @@ class SimulationRuntime:
 
         sector_counts: dict[str, int] = {}
         for item in items:
-            label = str(item["sector"])
-            sector_counts[label] = sector_counts.get(label, 0) + 1
+            sector_id = str(item["sector_id"])
+            sector_counts[sector_id] = sector_counts.get(sector_id, 0) + 1
         return {
             "as_of_date": str(getattr(state, "current_date", "")),
             "summary": {
@@ -1501,7 +1511,7 @@ class SimulationRuntime:
                 "active_heads": len({
                     int(row["person_id"])
                     for item in items for row in item["labor"]["employees"]
-                    if row["status"] == "在岗"
+                    if row["status_id"] == "active"
                 }),
                 "total_revenue": sum(float(item["operations"]["revenue"]) for item in items),
                 "total_earnings": sum(float(item["operations"]["earnings"]) for item in items),
@@ -1529,9 +1539,11 @@ class SimulationRuntime:
             listings.append({
                 "symbol": str(firm.get("firm_id", "")),
                 "instrument_type": "company",
-                "sector": str(firm.get("sector", "消费品")),
-                "sector_code": str(firm.get("sector_code", "consumption")),
-                "condition": str(firm.get("condition", "正常经营")),
+                "sector_id": str(firm.get("sector_id", "consumption")),
+                "sector": str(firm.get("sector_id", "consumption")),
+                "sector_code": str(firm.get("sector_id", "consumption")),
+                "condition_id": str(firm.get("condition_id", "operating")),
+                "condition": str(firm.get("condition_id", "operating")),
                 "price": price,
                 "previous_price": previous_price,
                 "change": price / previous_price - 1.0 if previous_price > 0.0 else 0.0,
@@ -1604,9 +1616,11 @@ class SimulationRuntime:
                 listings.append({
                     "symbol": str(bank.id),
                     "instrument_type": "bank",
-                    "sector": "银行",
-                    "sector_code": "bank",
-                    "condition": "正常交易" if bool(bank.alive) else "退市",
+                    "sector_id": "banking",
+                    "sector": "banking",
+                    "sector_code": "banking",
+                    "condition_id": "trading" if bool(bank.alive) else "delisted",
+                    "condition": "trading" if bool(bank.alive) else "delisted",
                     "price": price,
                     "previous_price": previous_price,
                     "change": price / previous_price - 1.0 if previous_price > 0.0 else 0.0,
@@ -1773,13 +1787,13 @@ class SimulationRuntime:
         for firm in getattr(econ, "c_firms", ()):
             subsector = str(getattr(firm, "consumption_sector", ""))
             firm_sector[str(firm.id)] = (
-                "必需消费" if subsector == "necessity" else
-                "可选消费" if subsector == "luxury" else "消费品"
+                "necessity" if subsector == "necessity" else
+                "luxury" if subsector == "luxury" else "consumption"
             )
         for firm in getattr(econ, "k_firms", ()):
-            firm_sector[str(firm.id)] = "资本品"
+            firm_sector[str(firm.id)] = "capital"
         for firm in getattr(econ, "e_firms", ()):
-            firm_sector[str(firm.id)] = "能源"
+            firm_sector[str(firm.id)] = "energy"
 
         household_agents = {str(household.id): household for household in econ.households}
         public_guardian_id = getattr(state, "public_guardian_household_id", None)
@@ -1846,32 +1860,35 @@ class SimulationRuntime:
                 ]
                 guardian_id = getattr(person, "guardian_id", None)
                 if household_id == public_guardian_id and int(person.age) < 18:
-                    relationship = "公共监护"
+                    relationship_id = "public_guardianship"
                 elif guardian_id is not None and int(guardian_id) in member_ids:
-                    relationship = "被监护人"
+                    relationship_id = "ward"
                 elif any(parent_id in member_ids for parent_id in parent_ids):
-                    relationship = "子女"
+                    relationship_id = "child"
                 elif partner_id is not None and int(partner_id) in member_ids:
-                    relationship = "伴侣"
+                    relationship_id = "partner"
                 elif int(person.age) < 18:
-                    relationship = "未成年成员"
+                    relationship_id = "minor_member"
                 else:
-                    relationship = "成年成员"
+                    relationship_id = "adult_member"
 
                 employers: list[dict[str, Any]] = []
-                for contract_name, contract_jobs in (
-                    ("主业", primary_jobs), ("第二职业", second_jobs)
+                for contract_id, contract_jobs in (
+                    ("primary", primary_jobs), ("secondary", second_jobs)
                 ):
                     contract_job = contract_jobs.get(person_id)
                     if contract_job is None:
                         continue
                     employer_id = str(contract_job.firm_id)
-                    is_suspended = contract_name == "主业" and person_id in suspended
+                    is_suspended = contract_id == "primary" and person_id in suspended
                     employers.append({
                         "firm_id": employer_id,
-                        "sector": firm_sector.get(employer_id, "企业"),
-                        "contract": contract_name,
-                        "status": "停薪留职" if is_suspended else "在岗",
+                        "sector_id": firm_sector.get(employer_id, "unknown"),
+                        "sector": firm_sector.get(employer_id, "unknown"),
+                        "contract_id": contract_id,
+                        "contract": contract_id,
+                        "status_id": "suspended" if is_suspended else "active",
+                        "status": "suspended" if is_suspended else "active",
                         "hours": (
                             0.0 if is_suspended else
                             _finite_number(getattr(contract_job, "hours", 1.0), 1.0)
@@ -1883,22 +1900,22 @@ class SimulationRuntime:
                         "hire_date": str(getattr(contract_job, "hire_date", "")),
                     })
                 active_employers = [
-                    item for item in employers if item["status"] == "在岗"
+                    item for item in employers if item["status_id"] == "active"
                 ]
                 if active_employers:
-                    labor_status = "就业"
+                    labor_status_id = "employed"
                     employer = active_employers[0]
                 elif int(person.age) < 18:
-                    labor_status = "未成年"
+                    labor_status_id = "minor"
                     employer = None
                 elif int(person.age) > 64:
-                    labor_status = "退休年龄"
+                    labor_status_id = "retirement_age"
                     employer = None
                 elif person_id in nonsearch:
-                    labor_status = "非劳动力"
+                    labor_status_id = "not_in_labor_force"
                     employer = None
                 else:
-                    labor_status = "求职/就业保障"
+                    labor_status_id = "searching_or_guaranteed"
                     employer = None
 
                 member_rows.append({
@@ -1906,13 +1923,20 @@ class SimulationRuntime:
                     "age": int(person.age),
                     "sex": str(person.sex),
                     "birth_date": str(person.birth_date),
-                    "relationship": relationship,
-                    "marital_status": "有伴侣" if partner_id is not None else "无伴侣",
+                    "relationship_id": relationship_id,
+                    "relationship": relationship_id,
+                    "marital_status_id": (
+                        "partnered" if partner_id is not None else "unpartnered"
+                    ),
+                    "marital_status": (
+                        "partnered" if partner_id is not None else "unpartnered"
+                    ),
                     "partner_id": int(partner_id) if partner_id is not None else None,
                     "mother_id": int(person.mother_id) if person.mother_id is not None else None,
                     "father_id": int(person.father_id) if person.father_id is not None else None,
                     "guardian_id": int(guardian_id) if guardian_id is not None else None,
-                    "labor_status": labor_status,
+                    "labor_status_id": labor_status_id,
+                    "labor_status": labor_status_id,
                     "employer": employer,
                     "employers": employers,
                     "assets": {

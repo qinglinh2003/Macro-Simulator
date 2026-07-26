@@ -3,6 +3,7 @@ set -euo pipefail
 
 prototype_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 prototype_port="${MACRO_SIM_PORT:-47821}"
+native_dir="${MACRO_SIM_NATIVE_DIR:-$prototype_root/build/native/m10-debug/native}"
 worker_log="$(mktemp -t macro-simulator-worker.XXXXXX.log)"
 
 cleanup() {
@@ -15,7 +16,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 cd "$prototype_root"
-uv run python -m macro_sim.desktop.server --port "$prototype_port" >"$worker_log" 2>&1 &
+if [[ ! -d "$native_dir" ]]; then
+    echo "Native desktop backend is not built: $native_dir" >&2
+    echo "Build it with: cmake --build --preset m10-debug -j 8" >&2
+    exit 1
+fi
+PYTHONPATH="$native_dir${PYTHONPATH:+:$PYTHONPATH}" \
+    uv run python -m macro_sim.desktop.server \
+    --backend native-m10 --port "$prototype_port" >"$worker_log" 2>&1 &
 worker_pid=$!
 
 for _ in {1..150}; do

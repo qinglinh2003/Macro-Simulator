@@ -14,12 +14,12 @@ at boundary 3.  This convention matches ``world.t``: the next tick not yet run.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, MutableSequence
+from collections.abc import Iterator, Mapping, MutableSequence, Sequence
 from dataclasses import dataclass, field
 import json
 import math
 from numbers import Integral, Real
-from typing import Any, ClassVar, Mapping, Sequence, overload
+from typing import Any, ClassVar, overload
 
 from .chunk_store import ChunkChainIndex, get_chunk, put_chunk
 from .protocol import immutable_json_value
@@ -887,6 +887,55 @@ class ReleaseService:
         return True, value
 
     @staticmethod
+    def _records_by_tick(
+        records: Sequence[Mapping[str, Any]],
+        reference_start: int,
+        reference_end: int,
+    ) -> dict[int, Mapping[str, Any]]:
+        """Select a completed range without rescanning an ordered history.
+
+        Native and standard Python economic records are append-only and use
+        their zero-based tick as the sequence index.  Validate that fast path
+        before using it, then retain the legacy sparse/out-of-order scan for
+        custom research engines.
+        """
+        expected_count = reference_end - reference_start + 1
+        if (
+            reference_start >= 0
+            and reference_end < len(records)
+            and expected_count > 0
+        ):
+            ordered: dict[int, Mapping[str, Any]] = {}
+            for tick in range(reference_start, reference_end + 1):
+                record = records[tick]
+                if not isinstance(record, Mapping):
+                    ordered = {}
+                    break
+                raw_tick = record.get("t", tick)
+                if (
+                    isinstance(raw_tick, bool)
+                    or not isinstance(raw_tick, Integral)
+                    or int(raw_tick) != tick
+                ):
+                    ordered = {}
+                    break
+                ordered[tick] = record
+            if len(ordered) == expected_count:
+                return ordered
+
+        by_tick: dict[int, Mapping[str, Any]] = {}
+        for index, record in enumerate(records):
+            if not isinstance(record, Mapping):
+                continue
+            raw_tick = record.get("t", index)
+            if isinstance(raw_tick, bool) or not isinstance(raw_tick, Integral):
+                continue
+            tick = int(raw_tick)
+            if reference_start <= tick <= reference_end:
+                by_tick[tick] = record
+        return by_tick
+
+    @staticmethod
     def _select_economy(value: Any, economy_id: int) -> tuple[bool, Any]:
         if isinstance(value, Mapping):
             if economy_id in value:
@@ -957,18 +1006,11 @@ class ReleaseService:
                 reason = "source_unavailable"
                 values = []
             else:
-                by_tick: dict[int, Mapping[str, Any]] = {}
-                for index, record in enumerate(records):
-                    if not isinstance(record, Mapping):
-                        continue
-                    raw_tick = record.get("t", index)
-                    if isinstance(raw_tick, bool) or not isinstance(raw_tick, Integral):
-                        continue
-                    tick = int(raw_tick)
-                    # The explicit range is the anti-lookahead gate even if the
-                    # supplied engine has already simulated far beyond this boundary.
-                    if reference_start <= tick <= reference_end:
-                        by_tick[tick] = record
+                # The explicit range is the anti-lookahead gate even if the
+                # supplied engine has already simulated beyond this boundary.
+                by_tick = self._records_by_tick(
+                    records, reference_start, reference_end,
+                )
                 expected = list(range(reference_start, reference_end + 1))
                 if any(tick not in by_tick for tick in expected):
                     reason = "no_completed_data"

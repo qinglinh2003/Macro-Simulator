@@ -99,15 +99,18 @@ struct PreparedBoundaryLease::Impl final {
     BoundaryPreview preview;
     simulation::M9World staged_world;
     simulation::M9AdvanceResult advance_result;
+    std::vector<reporting::MetricFrame> metric_frames;
 
     Impl(std::shared_ptr<HybridControlledBridge::BoundaryAuthority> authority_value,
          std::uint64_t generation_value, BoundaryPreview preview_value,
          simulation::M9World world_value,
-         simulation::M9AdvanceResult advance_result_value)
+         simulation::M9AdvanceResult advance_result_value,
+         std::vector<reporting::MetricFrame> metric_frames_value)
         : authority(std::move(authority_value)), generation(generation_value),
           preview(std::move(preview_value)),
           staged_world(std::move(world_value)),
-          advance_result(std::move(advance_result_value)) {}
+          advance_result(std::move(advance_result_value)),
+          metric_frames(std::move(metric_frames_value)) {}
 
     void release() noexcept {
         if (authority != nullptr && authority->generation == generation) {
@@ -187,6 +190,21 @@ Result<reporting::DwellingProbePage>
 EngineSession::probe_dwellings(EconomyId economy, std::uint64_t after_id,
                                std::size_t maximum_rows) const {
     return reporting::probe_dwellings(world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::EquityProbePage>
+EngineSession::probe_equities(EconomyId economy, std::uint64_t after_id,
+                              std::size_t maximum_rows) const {
+    return reporting::probe_equities(
+        world_, economy, after_id, maximum_rows);
+}
+
+Result<reporting::SecurityPositionProbePage>
+EngineSession::probe_security_positions(
+    EconomyId economy, std::uint64_t after_id,
+    std::size_t maximum_rows) const {
+    return reporting::probe_security_positions(
+        world_, economy, after_id, maximum_rows);
 }
 
 Result<reporting::EconomyDiagnosticProbe>
@@ -401,18 +419,29 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
     if (batch.fault_point == M10FaultPoint::prepare_after_policy) {
         return injected_fault();
     }
-    auto advanced = staged.advance(batch.advance_ticks, batch.advance_options);
-    if (!advanced.ok()) {
-        return advanced.status();
+    const auto first_tick = staged.tick();
+    simulation::M9AdvanceResult advanced{};
+    std::vector<reporting::MetricFrame> metric_frames;
+    metric_frames.reserve(static_cast<std::size_t>(batch.advance_ticks));
+    auto previous_frame = engine_.metrics_.current();
+    for (std::uint64_t offset = 0; offset < batch.advance_ticks; ++offset) {
+        auto one_day = staged.advance(1U, batch.advance_options);
+        if (!one_day.ok()) {
+            return one_day.status();
+        }
+        advanced = std::move(*one_day.get_if());
+        auto frame = reporting::build_metric_frame(staged, &previous_frame);
+        if (!frame.ok()) {
+            return frame.status();
+        }
+        metric_frames.push_back(std::move(*frame.get_if()));
+        previous_frame = metric_frames.back();
     }
+    advanced.first_tick = first_tick;
+    advanced.advanced_ticks = batch.advance_ticks;
     staged.compact_rebuildable_capacity();
     if (batch.fault_point == M10FaultPoint::prepare_after_advance) {
         return injected_fault();
-    }
-    auto frame = reporting::build_metric_frame(
-        staged, &engine_.metrics_.current());
-    if (!frame.ok()) {
-        return frame.status();
     }
     if (batch.fault_point == M10FaultPoint::prepare_after_metrics) {
         return injected_fault();
@@ -427,12 +456,12 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
         staged.policy_generation(),
         staged.digest(),
         batch.fault_point,
-        std::move(*frame.get_if()),
+        metric_frames.back(),
     };
     auto impl = std::make_unique<PreparedBoundaryLease::Impl>(
         authority_, authority_->generation, std::move(preview),
         std::move(staged),
-        std::move(*advanced.get_if()));
+        std::move(advanced), std::move(metric_frames));
     return PreparedBoundaryLease(std::move(impl));
 }
 
@@ -459,10 +488,21 @@ HybridControlledBridge::commit_boundary(PreparedBoundaryLease &&lease,
         return injected_fault();
     }
 
-    auto history_status =
-        engine_.metrics_.commit(lease.impl_->preview.public_metrics);
-    if (!history_status.ok()) {
-        return history_status;
+    if (lease.impl_->metric_frames.size() == 1U) {
+        auto history_status =
+            engine_.metrics_.commit(lease.impl_->metric_frames.front());
+        if (!history_status.ok()) {
+            return history_status;
+        }
+    } else {
+        auto staged_metrics = engine_.metrics_;
+        for (const auto &frame : lease.impl_->metric_frames) {
+            auto history_status = staged_metrics.commit(frame);
+            if (!history_status.ok()) {
+                return history_status;
+            }
+        }
+        engine_.metrics_ = std::move(staged_metrics);
     }
     engine_.world_ = std::move(lease.impl_->staged_world);
     envelope_ = std::move(next);
@@ -554,6 +594,29 @@ HybridControlledBridge::probe_dwellings(EconomyId economy,
     return available.ok()
                ? engine_.probe_dwellings(economy, after_id, maximum_rows)
                : Result<reporting::DwellingProbePage>(available);
+}
+
+Result<reporting::EquityProbePage>
+HybridControlledBridge::probe_equities(EconomyId economy,
+                                       std::uint64_t after_id,
+                                       std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_equities(
+                     economy, after_id, maximum_rows)
+               : Result<reporting::EquityProbePage>(available);
+}
+
+Result<reporting::SecurityPositionProbePage>
+HybridControlledBridge::probe_security_positions(
+    EconomyId economy, std::uint64_t after_id,
+    std::size_t maximum_rows) const {
+    auto available = require_available();
+    return available.ok()
+               ? engine_.probe_security_positions(
+                     economy, after_id, maximum_rows)
+               : Result<reporting::SecurityPositionProbePage>(
+                     available);
 }
 
 Result<reporting::EconomyDiagnosticProbe>

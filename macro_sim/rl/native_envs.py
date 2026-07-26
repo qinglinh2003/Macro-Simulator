@@ -117,9 +117,9 @@ class NativeFiscalStabilizationEnv:
             worker_count=worker_count,
             history_capacity_frames=self.config.horizon_ticks + 2,
         )
-        self._genesis_checkpoint = self._session.checkpoint(
-            self._objective_envelope()
-        )
+        # Episode reset is a native composite clone, not a serialize/parse
+        # round-trip. Structured checkpoints remain the durable save format.
+        self._genesis_session = self._session.clone()
         self._ready = False
         self.context: DecisionContext | None = None
         self._pending: _PendingFiscalAction | None = None
@@ -370,13 +370,7 @@ class NativeFiscalStabilizationEnv:
                 raise ValueError(
                     "reseed by constructing the seed-specific native environment"
                 )
-        self._session, objective = NativeSimulationSession.restore(
-            self._session.spec,
-            self._genesis_checkpoint,
-            worker_count=self.worker_count,
-        )
-        if objective != self._objective_envelope():
-            raise RuntimeError("native fiscal objective checkpoint drifted")
+        self._session = self._genesis_session.clone()
         self._pending = None
         self._policy_version = 0
         self._last_effective_tick = None
@@ -479,6 +473,7 @@ class NativeFiscalStabilizationEnv:
         )
         evaluations = []
         while self._session.tick < target:
+            opening_boundary = self._session.tick
             actions: tuple[dict[str, Any], ...] = ()
             pending = self._pending
             if pending is not None and pending.effective_tick == self._session.tick:
@@ -487,7 +482,17 @@ class NativeFiscalStabilizationEnv:
                     "lever": "gov_deficit_target",
                     "value": pending.value,
                 },)
-            self._session.advance(actions=actions)
+            if (
+                pending is not None
+                and pending.effective_tick > opening_boundary
+            ):
+                next_boundary = min(target, pending.effective_tick)
+            else:
+                next_boundary = target
+            self._session.advance(
+                ticks=next_boundary - opening_boundary,
+                actions=actions,
+            )
             self.source.refresh()
             if actions:
                 assert pending is not None
@@ -497,7 +502,12 @@ class NativeFiscalStabilizationEnv:
                 decision["reason_code"] = "effective"
                 decision["status"] = "effective"
                 self._pending = None
-            evaluations.append(self._evaluate_boundary(self._session.tick))
+            evaluations.extend(
+                self._evaluate_boundary(boundary)
+                for boundary in range(
+                    opening_boundary + 1, self._session.tick + 1,
+                )
+            )
 
         elapsed = target - previous.boundary_tick
         if elapsed <= 0:

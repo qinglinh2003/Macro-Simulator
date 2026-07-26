@@ -1495,6 +1495,8 @@ def build_probes_inventory() -> dict[str, Any]:
 
 
 def _module_owner(path: str) -> str:
+    if path == "macro_sim/desktop/native_projection.py":
+        return "m10"
     if path.startswith("desktop/godot"):
         return "m11"
     if path.startswith(("configs/", "scripts/")):

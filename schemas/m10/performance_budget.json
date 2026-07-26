@@ -6,5 +6,62 @@
   "maximum_desktop_60_day_batch_ms": 750,
   "maximum_clone_reset_ms_100k": 250,
   "minimum_native_to_python_speedup_full_feature": 10.0,
+  "clone_reset": {
+    "banks": 8,
+    "builders": 25,
+    "firms_c": 600,
+    "firms_e": 25,
+    "firms_k": 100,
+    "maximum_p95_ns": 250000000,
+    "population": 100000,
+    "repetitions": 20,
+    "requested_households": 50000,
+    "seed": 1015
+  },
+  "p1": {
+    "banks": 8,
+    "builders": 25,
+    "firms": 750,
+    "firms_c": 600,
+    "firms_e": 25,
+    "firms_k": 100,
+    "matched_python_median_ns_per_day": 686936020,
+    "maximum_native_to_python_ratio": 0.1,
+    "maximum_p95_ns": 75000000,
+    "measured_days": 365,
+    "population": 10000,
+    "requested_households": 5000,
+    "seed": 1011,
+    "warmup_days": 5
+  },
+  "p2": {
+    "banks": 8,
+    "builders": 25,
+    "expected_households": 5000,
+    "firms": 750,
+    "firms_c": 600,
+    "firms_e": 25,
+    "firms_k": 100,
+    "historical_python_median_ns_per_day": 253000000,
+    "maximum_p95_ns": 25000000,
+    "measured_days": 365,
+    "population": 12500,
+    "requested_households": 5000,
+    "seed": 1012,
+    "warmup_days": 5
+  },
+  "p3": {
+    "batch_days": 60,
+    "maximum_batch_plus_snapshot_p95_ns": 750000000,
+    "maximum_snapshot_p95_ns": 100000000,
+    "repetitions": 20,
+    "seed": 1013
+  },
+  "p5": {
+    "environment_count": 8,
+    "horizon_days": 730,
+    "minimum_engine_days_per_second": 3200.0,
+    "seed": 1014
+  },
   "ten_year_memory_growth_bytes": 67108864
 }

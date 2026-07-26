@@ -48,6 +48,120 @@ debt_by_owner(const core::RootState &root, core::OwnerKind kind,
     return output;
 }
 
+[[nodiscard]] const simulation::FirmLifecycleRecord *
+firm_lifecycle(const simulation::M6Runtime &runtime, FirmId firm) noexcept {
+    const auto index = static_cast<std::size_t>(firm.value());
+    return index < runtime.firms.size() && runtime.firms[index].firm == firm
+               ? &runtime.firms[index]
+               : nullptr;
+}
+
+[[nodiscard]] const core::EquityContract *
+issuer_equity(const core::SecurityBook &securities,
+              core::OwnerId issuer) noexcept {
+    for (const auto security : securities.securities_for_issuer(issuer)) {
+        if (security.kind != core::SecurityKind::equity) {
+            continue;
+        }
+        const auto *contract =
+            securities.get(EquityId(security.value));
+        if (contract != nullptr && contract->active) {
+            return contract;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] double security_market_value(
+    const core::SecurityBook &securities,
+    const core::SecurityLot &lot) noexcept {
+    if (lot.security.kind == core::SecurityKind::equity) {
+        const auto *contract =
+            securities.get(EquityId(lot.security.value));
+        return contract == nullptr || !contract->active
+                   ? 0.0
+                   : lot.units * contract->price.value();
+    }
+    const auto *contract = securities.get(BondId(lot.security.value));
+    return contract == nullptr || !contract->active ? 0.0 : lot.units;
+}
+
+void fill_person_assets(PersonProbeRow &row, const core::RootState &root,
+                        const simulation::M6Runtime &financial,
+                        const simulation::M7Runtime &population) {
+    const auto &ownership = population.beneficial_ownership;
+    double allocation_share = 0.0;
+    for (const auto lot_id : ownership.lots_for_person(row.id)) {
+        const auto *beneficial = ownership.get(lot_id);
+        if (beneficial == nullptr || !beneficial->is_active()) {
+            continue;
+        }
+        const auto household = beneficial->asset.household;
+        const auto *household_component = root.households.get(household);
+        if (household_component == nullptr) {
+            continue;
+        }
+        const double share = beneficial->share;
+        switch (beneficial->asset.kind) {
+        case core::BeneficialAssetKind::household_cash:
+            row.cash += share * std::max(
+                0.0, account_balance(
+                         root, household_component->primary_account));
+            allocation_share += share;
+            break;
+        case core::BeneficialAssetKind::household_debt: {
+            const auto *loan =
+                root.loans.get(LoanId(beneficial->asset.value));
+            if (loan != nullptr && loan->active) {
+                row.debt += share * std::max(
+                    0.0, loan->principal.value());
+            }
+            break;
+        }
+        case core::BeneficialAssetKind::security_position: {
+            const auto holder = core::OwnerId::household(household);
+            for (const auto position_id :
+                 financial.securities.lots_for_holder(holder)) {
+                const auto *position =
+                    financial.securities.get(position_id);
+                if (position == nullptr || !position->active()) {
+                    continue;
+                }
+                const double value =
+                    share * security_market_value(
+                                financial.securities, *position);
+                if (position->security.kind == core::SecurityKind::bond) {
+                    row.bonds += value;
+                    continue;
+                }
+                const auto *contract = financial.securities.get(
+                    EquityId(position->security.value));
+                if (contract != nullptr &&
+                    contract->issuer_kind ==
+                        core::EquityIssuerKind::bank) {
+                    row.bank_equity += value;
+                } else {
+                    row.firm_equity += value;
+                }
+            }
+            break;
+        }
+        case core::BeneficialAssetKind::generic_position:
+            break;
+        }
+    }
+    if (const auto *household = root.households.get(row.household);
+        household != nullptr) {
+        row.allocated_income =
+            allocation_share * household->income_realized;
+        row.allocated_consumption =
+            allocation_share * household->spent;
+    }
+    row.gross_assets =
+        row.cash + row.firm_equity + row.bank_equity + row.bonds;
+    row.net_worth = row.gross_assets - row.debt;
+}
+
 template <typename Row>
 void finish_page(ProbePageInfo &page, std::vector<Row> &rows,
                  std::size_t maximum_rows) {
@@ -196,6 +310,44 @@ probe_firms(const simulation::M9World &world, EconomyId economy,
             row.demand_expected = firm.demand_expected;
             row.previous_sales = firm.sales_previous;
             row.previous_hires = firm.hired_previous;
+            if (financial != nullptr) {
+                if (const auto *lifecycle =
+                        firm_lifecycle(*financial, id);
+                    lifecycle != nullptr) {
+                    row.book_equity = lifecycle->statement.book_equity;
+                    row.earnings = lifecycle->statement.earnings;
+                    row.interest_arrears =
+                        lifecycle->statement.interest_arrears;
+                    row.eligible_collateral_value =
+                        lifecycle->statement.eligible_collateral_value;
+                    row.borrowing_base_headroom =
+                        lifecycle->statement.borrowing_base_headroom;
+                    row.residual_income_ema =
+                        lifecycle->residual_income_ema;
+                    row.tobin_q_ema = lifecycle->tobin_q_ema;
+                    row.insolvent_days = lifecycle->insolvent_days;
+                    row.shell_days = lifecycle->shell_days;
+                    row.sector_switch_pressure_days =
+                        lifecycle->switch_pressure_days;
+                    row.defaulted = lifecycle->defaulted;
+                }
+                if (const auto *equity = issuer_equity(
+                        financial->securities,
+                        core::OwnerId::firm(id));
+                    equity != nullptr) {
+                    row.equity = equity->id;
+                    row.outstanding_shares =
+                        equity->outstanding_shares;
+                    row.share_price = equity->price.value();
+                    row.last_share_price =
+                        equity->last_price.value();
+                    row.peak_share_price =
+                        equity->peak_price.value();
+                    row.fundamental_per_share =
+                        equity->fundamental.value();
+                    row.share_trend = equity->trend;
+                }
+            }
             row.active =
                 id.value() >= active.size() || active[id.value()] != 0U;
             if (population != nullptr) {
@@ -222,6 +374,7 @@ probe_banks(const simulation::M9World &world, EconomyId economy,
         return status;
     }
     const auto &root = *world.economy_root(economy);
+    const auto *financial = world.economy_financial_runtime(economy);
     std::vector<double> principal(root.banks.slot_count() + 1U, 0.0);
     for (const auto &loan : root.loans.records()) {
         if (loan.active && loan.lender.value() < principal.size()) {
@@ -260,6 +413,24 @@ probe_banks(const simulation::M9World &world, EconomyId economy,
             row.leverage_appetite = bank.leverage_appetite;
             row.loan_spread = bank.loan_spread;
             row.deposit_spread = bank.deposit_spread;
+            if (financial != nullptr) {
+                if (const auto *equity = issuer_equity(
+                        financial->securities,
+                        core::OwnerId::bank(id));
+                    equity != nullptr) {
+                    row.equity = equity->id;
+                    row.outstanding_shares =
+                        equity->outstanding_shares;
+                    row.share_price = equity->price.value();
+                    row.last_share_price =
+                        equity->last_price.value();
+                    row.peak_share_price =
+                        equity->peak_price.value();
+                    row.fundamental_per_share =
+                        equity->fundamental.value();
+                    row.share_trend = equity->trend;
+                }
+            }
             row.alive = bank.alive;
             output.rows.push_back(std::move(row));
         });
@@ -275,6 +446,8 @@ probe_persons(const simulation::M9World &world, EconomyId economy,
         return status;
     }
     const auto *population = world.economy_population_runtime(economy);
+    const auto *financial = world.economy_financial_runtime(economy);
+    const auto *root = world.economy_root(economy);
     if (population == nullptr) {
         return Status(ErrorCode::invalid_handle,
                       "person probe requires the native population module");
@@ -306,6 +479,9 @@ probe_persons(const simulation::M9World &world, EconomyId economy,
         row.primary_job = population->employment.primary_job(person.id);
         row.secondary_job = population->employment.secondary_job(person.id);
         row.efficiency = person.efficiency;
+        if (financial != nullptr && root != nullptr) {
+            fill_person_assets(row, *root, *financial, *population);
+        }
         row.participating = person.participating;
         row.searching = person.searching;
         row.alive = person.alive;
@@ -395,6 +571,103 @@ probe_dwellings(const simulation::M9World &world, EconomyId economy,
     return output;
 }
 
+Result<EquityProbePage>
+probe_equities(const simulation::M9World &world, EconomyId economy,
+               std::uint64_t after_id, std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *financial = world.economy_financial_runtime(economy);
+    if (financial == nullptr) {
+        return Status(ErrorCode::invalid_handle,
+                      "equity probe requires the native financial module");
+    }
+    EquityProbePage output;
+    std::uint64_t active_count = 0U;
+    for (const auto &equity : financial->securities.equities()) {
+        if (equity.active) {
+            ++active_count;
+        }
+    }
+    output.page = {
+        world.tick(), economy, after_id, active_count, false};
+    output.rows.reserve(maximum_rows + 1U);
+    for (const auto &equity : financial->securities.equities()) {
+        if (!equity.active || equity.id.value() <= after_id) {
+            continue;
+        }
+        output.rows.push_back(EquityProbeRow{
+            equity.id,
+            equity.issuer_kind,
+            equity.issuer,
+            equity.issuer_account,
+            equity.currency,
+            equity.outstanding_shares,
+            equity.price.value(),
+            equity.last_price.value(),
+            equity.peak_price.value(),
+            equity.fundamental.value(),
+            equity.trend,
+            equity.income_signal,
+            equity.active,
+            equity.resolved,
+        });
+        if (output.rows.size() > maximum_rows) {
+            break;
+        }
+    }
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
+Result<SecurityPositionProbePage>
+probe_security_positions(const simulation::M9World &world,
+                         EconomyId economy, std::uint64_t after_id,
+                         std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *financial = world.economy_financial_runtime(economy);
+    if (financial == nullptr) {
+        return Status(
+            ErrorCode::invalid_handle,
+            "security-position probe requires the native financial module");
+    }
+    SecurityPositionProbePage output;
+    output.page = {
+        world.tick(), economy, after_id,
+        static_cast<std::uint64_t>(
+            financial->securities.active_lot_count()),
+        false};
+    output.rows.reserve(maximum_rows + 1U);
+    const auto &positions = financial->securities.lots();
+    for (std::size_t index = 0U; index < positions.size(); ++index) {
+        const auto id = SecurityLotId(
+            static_cast<std::uint32_t>(index + 1U));
+        const auto &position = positions[index];
+        if (!position.active() || id.value() <= after_id) {
+            continue;
+        }
+        output.rows.push_back(SecurityPositionProbeRow{
+            id,
+            position.security.kind,
+            position.security.value,
+            position.holder.kind,
+            position.holder.value,
+            position.units,
+            position.cost_basis.value(),
+            security_market_value(financial->securities, position),
+        });
+        if (output.rows.size() > maximum_rows) {
+            break;
+        }
+    }
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
 Result<EconomyDiagnosticProbe>
 probe_economy_diagnostics(const simulation::M9World &world,
                           EconomyId economy) {
@@ -409,6 +682,11 @@ probe_economy_diagnostics(const simulation::M9World &world,
     output.boundary = world.tick();
     output.economy = economy;
     output.digest = world.digest();
+    output.dealer_valuation = world.last_metrics().dealer_valuation;
+    output.peg_count = world.pegs().size();
+    output.pegs_intact = std::all_of(
+        world.pegs().begin(), world.pegs().end(),
+        [](const simulation::PegRuntime &peg) { return peg.intact; });
     output.households = root.households.alive_count();
     output.firms = root.firms.alive_count();
     output.banks = root.banks.alive_count();

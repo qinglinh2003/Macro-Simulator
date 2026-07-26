@@ -1,5 +1,5 @@
 {
-  "schema_version": "m10-typed-probes-v1",
+  "schema_version": "m10-typed-probes-v2",
   "access": "privileged_diagnostic",
   "snapshot_epoch": "committed_boundary",
   "maximum_page_rows": 1024,
@@ -13,17 +13,17 @@
     {
       "id": "probe.firms",
       "key": "firm_id",
-      "fields": ["sector", "account_id", "cash", "debt", "goods_inventory", "physical_capital", "productivity", "total_factor_productivity", "posted_price", "posted_wage", "markup", "demand_expected", "previous_sales", "previous_hires", "active", "employee_ids"]
+      "fields": ["sector", "account_id", "cash", "debt", "goods_inventory", "physical_capital", "productivity", "total_factor_productivity", "posted_price", "posted_wage", "markup", "demand_expected", "previous_sales", "previous_hires", "book_equity", "earnings", "interest_arrears", "eligible_collateral_value", "borrowing_base_headroom", "residual_income_ema", "tobin_q_ema", "insolvent_days", "shell_days", "sector_switch_pressure_days", "defaulted", "equity_id", "outstanding_shares", "share_price", "last_share_price", "peak_share_price", "fundamental_per_share", "share_trend", "active", "employee_ids"]
     },
     {
       "id": "probe.banks",
       "key": "bank_id",
-      "fields": ["cash_account_id", "reserve_node_id", "cash", "reserves", "loan_principal", "opening_capital", "closing_capital", "deposit_interest_arrears", "leverage_appetite", "loan_spread", "deposit_spread", "alive", "resolved"]
+      "fields": ["cash_account_id", "reserve_node_id", "cash", "reserves", "loan_principal", "opening_capital", "closing_capital", "deposit_interest_arrears", "leverage_appetite", "loan_spread", "deposit_spread", "equity_id", "outstanding_shares", "share_price", "last_share_price", "peak_share_price", "fundamental_per_share", "share_trend", "alive", "resolved"]
     },
     {
       "id": "probe.persons",
       "key": "person_id",
-      "fields": ["sex", "birth_day", "death_day", "age_days", "mother_id", "father_id", "partner_id", "guardian_id", "household_id", "primary_job_id", "secondary_job_id", "efficiency", "participating", "searching", "alive"]
+      "fields": ["sex", "birth_day", "death_day", "age_days", "mother_id", "father_id", "partner_id", "guardian_id", "household_id", "primary_job_id", "secondary_job_id", "efficiency", "cash", "debt", "firm_equity", "bank_equity", "bonds", "gross_assets", "net_worth", "allocated_income", "allocated_consumption", "participating", "searching", "alive"]
     },
     {
       "id": "probe.jobs",
@@ -36,9 +36,19 @@
       "fields": ["owner_kind", "owner_id", "occupant_household_id", "collateral_loan_id", "floor_area", "quality", "location", "age_days", "active"]
     },
     {
+      "id": "probe.equities",
+      "key": "equity_id",
+      "fields": ["issuer_kind", "issuer_owner_kind", "issuer_id", "issuer_account_id", "currency_id", "outstanding_shares", "price", "last_price", "peak_price", "fundamental", "trend", "income_signal", "active", "resolved"]
+    },
+    {
+      "id": "probe.security_positions",
+      "key": "security_lot_id",
+      "fields": ["security_kind", "security_id", "holder_kind", "holder_id", "units", "cost_basis", "market_value"]
+    },
+    {
       "id": "probe.economy.deep",
       "key": "economy_id",
-      "fields": ["digest", "households", "firms", "banks", "persons_alive", "jobs_active", "dwellings_active", "account_balance_total", "loan_principal_total", "reserve_total", "goods_inventory_total", "physical_capital_total", "energy_stock_total"]
+      "fields": ["digest", "households", "firms", "banks", "persons_alive", "jobs_active", "dwellings_active", "account_balance_total", "loan_principal_total", "reserve_total", "goods_inventory_total", "physical_capital_total", "energy_stock_total", "dealer_valuation", "peg_count", "pegs_intact"]
     },
     {
       "id": "probe.shock.bulletins",

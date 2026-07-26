@@ -1777,7 +1777,7 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         probability *=
             std::max(0.0, 1.0 - static_cast<double>(alive) /
                                     (2.0 * static_cast<double>(std::max<std::uint64_t>(
-                                               1, state.banks.alive_count()))));
+                                               1, monetary_runtime.rules.bank_count))));
     } else if (alive == 0 && runtime.policy.bank_resolution_fund) {
         probability = std::min(1.0, 5.0 * runtime.rules.bank_entry_beta);
     }

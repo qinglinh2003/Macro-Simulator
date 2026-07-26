@@ -262,16 +262,31 @@ void test_typed_probes_are_stable_and_paged() {
 
     auto firms = probe_firms(world, EconomyId(0U), 0U, 8U);
     auto banks = probe_banks(world, EconomyId(0U), 0U, 8U);
+    auto equities = probe_equities(world, EconomyId(0U), 0U, 8U);
+    auto positions =
+        probe_security_positions(world, EconomyId(0U), 0U, 8U);
     auto diagnostic = probe_economy_diagnostics(world, EconomyId(0U));
     assert(firms.ok());
     assert(banks.ok());
+    assert(equities.ok());
+    assert(positions.ok());
     assert(diagnostic.ok());
     assert(firms.get_if()->page.total_rows >= 4U);
     assert(banks.get_if()->page.total_rows == 2U);
+    assert(equities.get_if()->page.total_rows > 0U);
+    assert(equities.get_if()->rows.front().price >= 0.0);
+    assert(positions.get_if()->page.total_rows > 0U);
+    assert(positions.get_if()->rows.front().market_value >= 0.0);
+    assert(persons.get_if()->rows.front().gross_assets >= 0.0);
+    assert(persons.get_if()->rows.front().net_worth ==
+           persons.get_if()->rows.front().gross_assets -
+               persons.get_if()->rows.front().debt);
     assert(diagnostic.get_if()->households ==
            first.get_if()->page.total_rows);
     assert(diagnostic.get_if()->persons_alive == 24U);
     assert(diagnostic.get_if()->account_balance_total > 0.0);
+    assert(diagnostic.get_if()->peg_count == 0U);
+    assert(diagnostic.get_if()->pegs_intact);
     assert(!probe_households(world, EconomyId(1U), 0U, 1U).ok());
     assert(!probe_households(world, EconomyId(0U), 0U, 0U).ok());
 }

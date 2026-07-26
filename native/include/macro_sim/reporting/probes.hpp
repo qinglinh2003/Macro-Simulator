@@ -55,6 +55,24 @@ struct FirmProbeRow final {
     double demand_expected{0.0};
     double previous_sales{0.0};
     double previous_hires{0.0};
+    double book_equity{0.0};
+    double earnings{0.0};
+    double interest_arrears{0.0};
+    double eligible_collateral_value{0.0};
+    double borrowing_base_headroom{0.0};
+    double residual_income_ema{0.0};
+    double tobin_q_ema{0.0};
+    std::uint32_t insolvent_days{0};
+    std::uint32_t shell_days{0};
+    std::uint32_t sector_switch_pressure_days{0};
+    bool defaulted{false};
+    EquityId equity{};
+    double outstanding_shares{0.0};
+    double share_price{0.0};
+    double last_share_price{0.0};
+    double peak_share_price{0.0};
+    double fundamental_per_share{0.0};
+    double share_trend{0.0};
     bool active{true};
     std::vector<PersonId> employees;
 };
@@ -77,6 +95,13 @@ struct BankProbeRow final {
     double leverage_appetite{0.0};
     double loan_spread{0.0};
     double deposit_spread{0.0};
+    EquityId equity{};
+    double outstanding_shares{0.0};
+    double share_price{0.0};
+    double last_share_price{0.0};
+    double peak_share_price{0.0};
+    double fundamental_per_share{0.0};
+    double share_trend{0.0};
     bool alive{true};
     bool resolved{false};
 };
@@ -100,6 +125,15 @@ struct PersonProbeRow final {
     JobId primary_job{};
     JobId secondary_job{};
     double efficiency{0.0};
+    double cash{0.0};
+    double debt{0.0};
+    double firm_equity{0.0};
+    double bank_equity{0.0};
+    double bonds{0.0};
+    double gross_assets{0.0};
+    double net_worth{0.0};
+    double allocated_income{0.0};
+    double allocated_consumption{0.0};
     bool participating{false};
     bool searching{false};
     bool alive{false};
@@ -146,6 +180,44 @@ struct DwellingProbePage final {
     std::vector<DwellingProbeRow> rows;
 };
 
+struct EquityProbeRow final {
+    EquityId id{};
+    core::EquityIssuerKind issuer_kind{core::EquityIssuerKind::firm};
+    core::OwnerId issuer{};
+    AccountId issuer_account{};
+    CurrencyId currency{};
+    double outstanding_shares{0.0};
+    double price{0.0};
+    double last_price{0.0};
+    double peak_price{0.0};
+    double fundamental{0.0};
+    double trend{0.0};
+    double income_signal{0.0};
+    bool active{false};
+    bool resolved{false};
+};
+
+struct EquityProbePage final {
+    ProbePageInfo page{};
+    std::vector<EquityProbeRow> rows;
+};
+
+struct SecurityPositionProbeRow final {
+    SecurityLotId id{};
+    core::SecurityKind security_kind{core::SecurityKind::bond};
+    std::uint32_t security_id{0};
+    core::OwnerKind holder_kind{core::OwnerKind::institution};
+    std::uint32_t holder_id{0};
+    double units{0.0};
+    double cost_basis{0.0};
+    double market_value{0.0};
+};
+
+struct SecurityPositionProbePage final {
+    ProbePageInfo page{};
+    std::vector<SecurityPositionProbeRow> rows;
+};
+
 struct EconomyDiagnosticProbe final {
     Tick boundary{};
     EconomyId economy{};
@@ -162,6 +234,9 @@ struct EconomyDiagnosticProbe final {
     double goods_inventory_total{0.0};
     double physical_capital_total{0.0};
     double energy_stock_total{0.0};
+    double dealer_valuation{0.0};
+    std::uint64_t peg_count{0};
+    bool pegs_intact{true};
 };
 
 enum class ShockBulletinStatus : std::uint8_t {
@@ -202,6 +277,13 @@ probe_jobs(const simulation::M9World &world, EconomyId economy,
 [[nodiscard]] Result<DwellingProbePage>
 probe_dwellings(const simulation::M9World &world, EconomyId economy,
                 std::uint64_t after_id, std::size_t maximum_rows);
+[[nodiscard]] Result<EquityProbePage>
+probe_equities(const simulation::M9World &world, EconomyId economy,
+               std::uint64_t after_id, std::size_t maximum_rows);
+[[nodiscard]] Result<SecurityPositionProbePage>
+probe_security_positions(const simulation::M9World &world,
+                         EconomyId economy, std::uint64_t after_id,
+                         std::size_t maximum_rows);
 [[nodiscard]] Result<EconomyDiagnosticProbe>
 probe_economy_diagnostics(const simulation::M9World &world,
                           EconomyId economy);

@@ -10,23 +10,24 @@ func _init() -> void:
 func _run() -> void:
 	var groups: Array = MainScript.PANEL_GROUPS
 	var charts: Dictionary = MainScript.PANEL_CHARTS
-	var names: Dictionary = {}
+	var ids: Dictionary = {}
 	for group: Dictionary in groups:
-		var group_name := str(group["name"])
-		assert(not names.has(group_name), "duplicate panel group: %s" % group_name)
-		names[group_name] = true
+		var group_id := str(group["id"])
+		assert(not ids.has(group_id), "duplicate panel group: %s" % group_id)
+		ids[group_id] = true
 		assert((group.get("items", []) as Array).size() == 6,
-			"%s must expose six headline indicators" % group_name)
-		assert(charts.has(group_name), "%s has no chart definition" % group_name)
-		assert((charts[group_name] as Array).size() >= 3,
-			"%s needs at least three structural views" % group_name)
+			"%s must expose six headline indicators" % group_id)
+		assert(charts.has(group_id), "%s has no chart definition" % group_id)
+		assert((charts[group_id] as Array).size() >= 3,
+			"%s needs at least three structural views" % group_id)
 
-	for required_name: String in [
-		"国民账户", "债务与风险", "住房市场", "外部部门", "人口社会", "企业生态",
+	for required_id: String in [
+		"national_accounts", "debt_risk", "housing", "external",
+		"population", "firms",
 	]:
-		assert(names.has(required_name), "missing player-facing domain: %s" % required_name)
+		assert(ids.has(required_id), "missing player-facing domain: %s" % required_id)
 
-	var population_keys := _chart_metric_keys(charts["人口社会"])
+	var population_keys := _chart_metric_keys(charts["population"])
 	assert(population_keys.has("births_tick"))
 	assert(population_keys.has("deaths_tick"))
 	assert(not population_keys.has("births"),
@@ -34,7 +35,7 @@ func _run() -> void:
 	assert(not population_keys.has("deaths"),
 		"firm exit must not be presented as a human death")
 
-	var enterprise_keys := _chart_metric_keys(charts["企业生态"])
+	var enterprise_keys := _chart_metric_keys(charts["firms"])
 	assert(enterprise_keys.has("births"))
 	assert(enterprise_keys.has("deaths"))
 	assert(not enterprise_keys.has("births_tick"))

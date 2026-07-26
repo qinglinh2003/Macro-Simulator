@@ -1,4 +1,4 @@
-; Godot 4 desktop prototype. The Python process remains authoritative.
+; Godot 4 desktop client. The loopback worker owns authoritative simulation state.
 config_version=5
 
 [application]
