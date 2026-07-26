@@ -107,6 +107,7 @@ add_library(
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
         src/control/m11_artifact.cpp
+        src/control/m11_kernel.cpp
         src/control/m11_policy.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
@@ -685,6 +686,35 @@ if(MACRO_SIM_BUILD_TESTS)
         NAME macro_sim.m11_policy_contract
         COMMAND macro_sim_m11_policy_contract_tests
     )
+
+    add_executable(
+        macro_sim_m11_kernel_tests
+        tests/m11_kernel_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_kernel_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_kernel_tests)
+    macro_sim_enable_runtime_assertions(macro_sim_m11_kernel_tests)
+    add_test(
+        NAME macro_sim.m11_kernel
+        COMMAND macro_sim_m11_kernel_tests
+    )
+    if(TARGET _native)
+        add_test(
+            NAME macro_sim.m11_kernel_golden
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m11/kernel_golden.py"
+                --native-exe
+                "$<TARGET_FILE:macro_sim_m11_kernel_tests>"
+        )
+        set_tests_properties(
+            macro_sim.m11_kernel_golden
+            PROPERTIES LABELS "m11;python-binding"
+        )
+    endif()
 
     if(TARGET _native)
         add_test(
