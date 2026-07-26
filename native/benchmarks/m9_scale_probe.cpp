@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -550,14 +551,27 @@ template <typename Advance>
     Status advance_status;
     M9AdvanceOptions advance_options;
     advance_options.worker_count = static_cast<std::uint32_t>(options.workers);
+    const bool validate_each_day =
+        std::getenv("MACRO_SIM_SCALE_VALIDATE_EACH_DAY") != nullptr;
     const auto advanced = measure_days(
         options,
-        [&world, &advance_status, &advance_options]() {
+        [&world, &advance_status, &advance_options, validate_each_day]() {
             const auto result = world.advance(1U, advance_options);
             if (!result.ok()) {
                 advance_status = result.status();
+                return false;
             }
-            return result.ok();
+            if (validate_each_day) {
+                const auto validation = world.validate();
+                if (!validation.ok()) {
+                    advance_status = validation;
+                    std::cerr << "M9 scale probe daily validation failed at day "
+                              << world.tick().value() << ": "
+                              << validation.message() << '\n';
+                    return false;
+                }
+            }
+            return true;
         },
         measurement);
     if (!advanced) {
@@ -570,6 +584,109 @@ template <typename Advance>
     if (!validation.ok()) {
         std::cerr << "M9 scale probe final validation failed: " << validation.message()
                   << '\n';
+        for (std::uint64_t index = 0U; index < options.economies; ++index) {
+            const auto economy = EconomyId(index);
+            const auto *population = world.economy_population_runtime(economy);
+            if (population == nullptr || !population->rules.beneficial_ownership) {
+                continue;
+            }
+            std::vector<core::BeneficialAssetKey> assets;
+            population->beneficial_ownership.active_assets(assets);
+            double worst_error = 0.0;
+            core::BeneficialAssetKey worst_asset;
+            double worst_total = 0.0;
+            std::uint64_t worst_lots = 0U;
+            for (const auto asset : assets) {
+                double total = 0.0;
+                std::uint64_t lots = 0U;
+                for (const auto lot_id :
+                     population->beneficial_ownership.lots_for_asset(asset)) {
+                    const auto *lot =
+                        population->beneficial_ownership.get(lot_id);
+                    if (lot != nullptr && lot->active) {
+                        total += lot->share;
+                        ++lots;
+                    }
+                }
+                const double error = std::abs(total - 1.0);
+                if (error > worst_error) {
+                    worst_error = error;
+                    worst_asset = asset;
+                    worst_total = total;
+                    worst_lots = lots;
+                }
+                if (error > 1.0e-8) {
+                    std::cerr << "M9 beneficial asset detail: economy="
+                              << economy.value()
+                              << " day=" << population->current_calendar_day
+                              << " kind="
+                              << static_cast<std::uint32_t>(asset.kind)
+                              << " household=" << asset.household.value()
+                              << " value=" << asset.value
+                              << " total=" << total << '\n';
+                    for (const auto member :
+                         population->membership.members(asset.household)) {
+                        const auto *person = population->persons.get(member);
+                        std::cerr << "  member=" << member.value()
+                                  << " alive="
+                                  << (person != nullptr && person->alive) << '\n';
+                    }
+                    for (const auto lot_id :
+                         population->beneficial_ownership.lots_for_asset(asset)) {
+                        const auto *lot =
+                            population->beneficial_ownership.get(lot_id);
+                        if (lot == nullptr || !lot->active) {
+                            continue;
+                        }
+                        const auto *owner =
+                            population->persons.get(lot->owner);
+                        std::cerr << "  lot=" << lot_id.value()
+                                  << " owner=" << lot->owner.value()
+                                  << " share=" << lot->share
+                                  << " owner_alive="
+                                  << (owner != nullptr && owner->alive)
+                                  << " owner_household="
+                                  << (owner == nullptr
+                                          ? 0U
+                                          : owner->household.value())
+                                  << '\n';
+                    }
+                    for (const auto &estate : population->estates) {
+                        if (estate.settled_day ==
+                            population->current_calendar_day) {
+                            std::cerr
+                                << "  estate_deceased="
+                                << estate.deceased.value()
+                                << " heir=" << estate.heir.value()
+                                << " household=" << estate.household.value()
+                                << " destination="
+                                << estate.destination_household.value()
+                                << " public=" << estate.public_residual << '\n';
+                        }
+                    }
+                    for (const auto &leaving : population->leaving_home) {
+                        if (leaving.day == population->current_calendar_day) {
+                            std::cerr << "  leaving_person="
+                                      << leaving.person.value()
+                                      << " origin=" << leaving.origin.value()
+                                      << " destination="
+                                      << leaving.destination.value() << '\n';
+                        }
+                    }
+                }
+            }
+            if (worst_error > 0.0) {
+                std::cerr << "M9 beneficial projection diagnostic: economy="
+                          << economy.value()
+                          << " kind="
+                          << static_cast<std::uint32_t>(worst_asset.kind)
+                          << " household=" << worst_asset.household.value()
+                          << " value=" << worst_asset.value
+                          << " total=" << worst_total
+                          << " lots=" << worst_lots
+                          << " error=" << worst_error << '\n';
+            }
+        }
         std::abort();
     }
     measurement.households = 0U;

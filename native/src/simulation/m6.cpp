@@ -378,6 +378,62 @@ void rebuild_debt_views(const core::RootState &state, const M5TickScratch &monet
     }
 }
 
+[[nodiscard]] Status
+rebuild_margin_loan_index(const core::RootState &state,
+                          const M5TickScratch &monetary,
+                          M6TickScratch &scratch) {
+    if (scratch.margin_loans_.size() >=
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        return Status(ErrorCode::out_of_range,
+                      "M6 margin loan index exceeds storage range");
+    }
+    scratch.margin_loan_heads_.assign(state.postings.size() + 1U, 0U);
+    scratch.margin_loan_tails_.assign(state.postings.size() + 1U, 0U);
+    scratch.margin_loan_next_.assign(scratch.margin_loans_.size(), 0U);
+    for (std::size_t ordinal = 0U; ordinal < scratch.margin_loans_.size();
+         ++ordinal) {
+        const auto loan_id = scratch.margin_loans_[ordinal];
+        if (!loan_id.valid() || loan_id.value() > monetary.loans_.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 margin loan index references an absent loan");
+        }
+        const auto &loan =
+            monetary.loans_[static_cast<std::size_t>(loan_id.value() - 1U)];
+        if (loan.id != loan_id || loan.purpose != core::LoanPurpose::margin) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 margin loan index references an invalid loan");
+        }
+        const auto account = account_index(loan.borrower_account);
+        if (account >= scratch.margin_loan_heads_.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 margin loan account is absent");
+        }
+        const auto encoded = static_cast<std::uint32_t>(ordinal + 1U);
+        const auto tail = scratch.margin_loan_tails_[account];
+        if (tail == 0U) {
+            scratch.margin_loan_heads_[account] = encoded;
+        } else {
+            scratch.margin_loan_next_[
+                static_cast<std::size_t>(tail - 1U)] = encoded;
+        }
+        scratch.margin_loan_tails_[account] = encoded;
+    }
+    return Status::success();
+}
+
+void reduce_debt_views(M6TickScratch &scratch, AccountId account,
+                       double principal, bool margin) noexcept {
+    const auto index = account_index(account);
+    if (index < scratch.debt_by_account_.size()) {
+        scratch.debt_by_account_[index] =
+            std::max(0.0, scratch.debt_by_account_[index] - principal);
+    }
+    if (margin && index < scratch.margin_by_account_.size()) {
+        scratch.margin_by_account_[index] =
+            std::max(0.0, scratch.margin_by_account_[index] - principal);
+    }
+}
+
 [[nodiscard]] Status run_bond_open(const core::RootState &state, M4TickScratch &real,
                                    M5TickScratch &monetary, M6TickScratch &scratch,
                                    Tick tick) {
@@ -416,7 +472,8 @@ void rebuild_debt_views(const core::RootState &state, const M5TickScratch &monet
             if (coupon > kEconomicEpsilon) {
                 status = transfer(state, real, treasury, account, coupon);
                 if (!status.ok()) {
-                    return status;
+                    return Status(status.code(),
+                                  "M6 bond coupon exceeds Treasury cash");
                 }
                 if (lot->holder.kind == core::OwnerKind::bank) {
                     const auto bank = BankId(lot->holder.value);
@@ -448,7 +505,8 @@ void rebuild_debt_views(const core::RootState &state, const M5TickScratch &monet
             const auto account = owner_account(state, lot->holder);
             status = transfer(state, real, treasury, account, lot->units);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M6 bond redemption exceeds Treasury cash");
             }
             scratch.working_metrics_.bond_redemption += lot->units;
         }
@@ -654,7 +712,16 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
     if (granted <= kEconomicEpsilon) {
         return 0.0;
     }
-    const auto id = LoanId(static_cast<std::uint64_t>(monetary.loans_.size()) + 1);
+    if (scratch.margin_loans_.size() >=
+            static_cast<std::size_t>(
+                std::numeric_limits<std::uint32_t>::max()) ||
+        monetary.loans_.size() ==
+            static_cast<std::size_t>(
+                std::numeric_limits<std::uint64_t>::max())) {
+        return 0.0;
+    }
+    const auto id =
+        LoanId(static_cast<std::uint64_t>(monetary.loans_.size()) + 1U);
     monetary.loans_.push_back({
         id,
         bank,
@@ -665,11 +732,24 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         core::LoanTerms{
             Rate(monetary_runtime.policy_rate),
             tick,
-            Tick(tick.value() + 10 * 365),
+            Tick(tick.value() + 10U * 365U),
         },
         true,
+        core::LoanPurpose::margin,
     });
     scratch.margin_loans_.push_back(id);
+    scratch.margin_loan_next_.push_back(0U);
+    const auto encoded =
+        static_cast<std::uint32_t>(scratch.margin_loans_.size());
+    const auto previous_tail =
+        scratch.margin_loan_tails_[account_position];
+    if (previous_tail == 0U) {
+        scratch.margin_loan_heads_[account_position] = encoded;
+    } else {
+        scratch.margin_loan_next_[
+            static_cast<std::size_t>(previous_tail - 1U)] = encoded;
+    }
+    scratch.margin_loan_tails_[account_position] = encoded;
     real.balances_[account_position] += granted;
     scratch.debt_by_account_[account_position] += granted;
     scratch.margin_by_account_[account_position] += granted;
@@ -775,6 +855,14 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
             delta = delta > 0.0 ? delta * scale : std::max(delta, -current);
             if (std::abs(delta) > kEconomicEpsilon) {
                 scratch.orders_.push_back({equity_id, household_id, delta, ordinal++});
+                if (delta > 0.0) {
+                    const auto account =
+                        account_index(household.primary_account);
+                    if (account < scratch.equity_buy_commitments_.size()) {
+                        scratch.equity_buy_commitments_[account] +=
+                            delta * equity->price.value();
+                    }
+                }
             }
         }
     });
@@ -864,8 +952,14 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                 buy_cash += delta * equity->price.value();
             }
         }
+        const auto account = account_index(household.primary_account);
+        const double committed =
+            account < scratch.equity_buy_commitments_.size()
+                ? scratch.equity_buy_commitments_[account]
+                : deposits;
+        const double available = std::max(0.0, deposits - committed);
         const double scale =
-            buy_cash > kEconomicEpsilon ? std::min(1.0, deposits / buy_cash) : 1.0;
+            buy_cash > kEconomicEpsilon ? std::min(1.0, available / buy_cash) : 1.0;
         for (std::size_t index = 0; index < bank_equities.size(); ++index) {
             const auto equity_id = bank_equities[index];
             const auto *equity = scratch.securities_.get(equity_id);
@@ -880,6 +974,11 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             delta = delta > 0.0 ? delta * scale : std::max(delta, -current);
             if (std::abs(delta) > kEconomicEpsilon) {
                 scratch.orders_.push_back({equity_id, household_id, delta, ordinal++});
+                if (delta > 0.0 &&
+                    account < scratch.equity_buy_commitments_.size()) {
+                    scratch.equity_buy_commitments_[account] +=
+                        delta * equity->price.value();
+                }
             }
         }
     });
@@ -1018,7 +1117,8 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             status = transfer(state, real, household->primary_account, clearing,
                               buyer.quantity * price);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M6 equity purchase exceeds household cash");
             }
         }
         for (const auto &seller : scratch.sellers_) {
@@ -1026,14 +1126,16 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             status = transfer(state, real, clearing, household->primary_account,
                               seller.quantity * price);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M6 equity sale exceeds clearing cash");
             }
         }
         if (primary_executed > kEconomicEpsilon) {
             status = transfer(state, real, clearing, contract->issuer_account,
                               primary_executed * price);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M6 primary issuance exceeds clearing cash");
             }
             scratch.working_metrics_.primary_equity_raised += primary_executed * price;
             if (bank_capital != nullptr) {
@@ -1052,6 +1154,11 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             while (remaining > kEconomicEpsilon &&
                    buyer_index < scratch.buyers_.size()) {
                 auto &buyer = scratch.buyers_[buyer_index];
+                if (buyer.quantity <= kEconomicEpsilon) {
+                    buyer.quantity = 0.0;
+                    ++buyer_index;
+                    continue;
+                }
                 const double take = std::min(remaining, buyer.quantity);
                 status = scratch.securities_.transfer_units(
                     core::SecurityId::equity(equity_id),
@@ -1072,6 +1179,11 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         while (issue_remaining > kEconomicEpsilon &&
                buyer_index < scratch.buyers_.size()) {
             auto &buyer = scratch.buyers_[buyer_index];
+            if (buyer.quantity <= kEconomicEpsilon) {
+                buyer.quantity = 0.0;
+                ++buyer_index;
+                continue;
+            }
             const double take = std::min(issue_remaining, buyer.quantity);
             status = scratch.securities_.issue_equity_units(
                 equity_id, core::OwnerId::household(buyer.household), take,
@@ -1134,18 +1246,25 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         double call = std::max(0.0, margin - runtime.policy.margin_ltv * equity);
         double available = projected_balance(real, account);
         double repayment = std::min(call, available);
-        for (const auto loan_id : scratch.margin_loans_) {
-            if (repayment <= kEconomicEpsilon || loan_id.value() == 0 ||
-                loan_id.value() > monetary.loans_.size()) {
-                continue;
-            }
+        auto encoded = scratch.margin_loan_heads_[account_index(account)];
+        while (repayment > kEconomicEpsilon && encoded != 0U) {
+            const auto ordinal = static_cast<std::size_t>(encoded - 1U);
+            const auto loan_id = scratch.margin_loans_[ordinal];
+            encoded = scratch.margin_loan_next_[ordinal];
             auto &loan = monetary.loans_[static_cast<std::size_t>(loan_id.value() - 1)];
             if (!loan.active || loan.borrower_account != account) {
                 continue;
             }
-            const double paid = std::min(repayment, loan.principal.value());
-            loan.principal = Money(loan.principal.value() - paid);
-            loan.active = loan.principal.value() > kEconomicEpsilon;
+            const double opening_principal = loan.principal.value();
+            const double paid = std::min(repayment, opening_principal);
+            const double remaining_principal = opening_principal - paid;
+            loan.principal = Money(remaining_principal);
+            loan.active = remaining_principal > kEconomicEpsilon;
+            reduce_debt_views(
+                scratch, account,
+                opening_principal -
+                    (loan.active ? remaining_principal : 0.0),
+                true);
             real.balances_[account_index(account)] -= paid;
             repayment -= paid;
             call -= paid;
@@ -1153,7 +1272,6 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             scratch.working_metrics_.margin_repaid += paid;
             monetary.working_metrics_.principal_repaid += paid;
         }
-        rebuild_debt_views(state, monetary, scratch);
         const double remaining_margin = outstanding_margin(scratch, account);
         if (!runtime.policy.household_bankruptcy ||
             remaining_margin <= kEconomicEpsilon ||
@@ -1161,17 +1279,19 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             return;
         }
         double cash = projected_balance(real, account);
-        for (const auto loan_id : scratch.margin_loans_) {
-            if (loan_id.value() == 0 || loan_id.value() > monetary.loans_.size()) {
-                continue;
-            }
+        encoded = scratch.margin_loan_heads_[account_index(account)];
+        while (encoded != 0U) {
+            const auto ordinal = static_cast<std::size_t>(encoded - 1U);
+            const auto loan_id = scratch.margin_loans_[ordinal];
+            encoded = scratch.margin_loan_next_[ordinal];
             auto &loan = monetary.loans_[static_cast<std::size_t>(loan_id.value() - 1)];
             if (!loan.active || loan.borrower_account != account) {
                 continue;
             }
-            const double paid = std::min(cash, loan.principal.value());
+            const double opening_principal = loan.principal.value();
+            const double paid = std::min(cash, opening_principal);
             if (paid > 0.0) {
-                loan.principal = Money(loan.principal.value() - paid);
+                loan.principal = Money(opening_principal - paid);
                 real.balances_[account_index(account)] -= paid;
                 cash -= paid;
                 scratch.working_metrics_.margin_repaid += paid;
@@ -1192,10 +1312,10 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                 loan.principal = Money(0.0);
             }
             loan.active = false;
+            reduce_debt_views(scratch, account, opening_principal, true);
         }
         ++scratch.working_metrics_.household_bankruptcies;
     });
-    rebuild_debt_views(state, monetary, scratch);
     return Status::success();
 }
 
@@ -1254,7 +1374,9 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                     const auto status =
                         transfer(state, real, account, recipient, amount);
                     if (!status.ok()) {
-                        return status;
+                        return Status(
+                            status.code(),
+                            "M6 firm liquidation distribution exceeds firm cash");
                     }
                 }
             }
@@ -1271,7 +1393,8 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             const auto status =
                 transfer(state, real, account, bank_component->cash_account, cash);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M6 firm resolution exceeds residual cash");
             }
             auto *pnl = pnl_for(monetary, bank);
             if (pnl != nullptr) {
@@ -1841,7 +1964,8 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         }
         status = transfer(state, real, demands[index].account, treasury, amount);
         if (!status.ok()) {
-            return status;
+            return Status(status.code(),
+                          "M6 bond subscription exceeds investor cash");
         }
         status = scratch.securities_.transfer_units(
             core::SecurityId::bond(bond_id), clearing_owner, demands[index].holder,
@@ -2157,6 +2281,10 @@ class M6Extension final : public M5TickExtension {
             scratch_.firms_ = runtime_.firms;
             scratch_.margin_loans_ = runtime_.margin_loans;
         }
+        auto status = rebuild_margin_loan_index(state, monetary, scratch_);
+        if (!status.ok()) {
+            return status;
+        }
         scratch_.securities_.clear_household_position_changes();
         scratch_.orders_.clear();
         scratch_.firm_exits_.clear();
@@ -2166,7 +2294,7 @@ class M6Extension final : public M5TickExtension {
         lifecycle_counter_ = runtime_.lifecycle_rng_counter;
         security_counter_ = runtime_.security_rng_counter;
         open_bank_security_books(state, scratch_.securities_, monetary);
-        auto status = run_bond_open(state, real, monetary, scratch_, tick);
+        status = run_bond_open(state, real, monetary, scratch_, tick);
         if (!status.ok() || extension_ == nullptr) {
             return status;
         }
@@ -2212,6 +2340,7 @@ class M6Extension final : public M5TickExtension {
             return status;
         }
         scratch_.orders_.clear();
+        scratch_.equity_buy_commitments_.assign(real.balances_.size(), 0.0);
         std::uint64_t ordinal = 0;
         if (runtime_.rules.firm_equity) {
             generate_firm_equity_orders(state, real, monetary_runtime, monetary,
@@ -2582,8 +2711,21 @@ Status validate_m6_state_fast(const core::RootState &state,
         const auto account = owner_account(state, lot.holder);
         const auto *posting = state.postings.get(account);
         if (!account.valid() || posting == nullptr || !posting->open) {
-            return Status(ErrorCode::invariant_violation,
-                          "M6 security holder reference is invalid");
+            switch (lot.holder.kind) {
+            case core::OwnerKind::household:
+                return Status(ErrorCode::invariant_violation,
+                              "M6 household security holder reference is invalid");
+            case core::OwnerKind::firm:
+                return Status(ErrorCode::invariant_violation,
+                              "M6 firm security holder reference is invalid");
+            case core::OwnerKind::bank:
+                return Status(ErrorCode::invariant_violation,
+                              "M6 bank security holder reference is invalid");
+            default:
+                return Status(
+                    ErrorCode::invariant_violation,
+                    "M6 institutional security holder reference is invalid");
+            }
         }
     }
     bool firms_valid = true;
@@ -2868,7 +3010,12 @@ void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runti
         std::max<std::size_t>(runtime.rules.watchlist_size, state.banks.alive_count());
     watch_current_.reserve(observation_width);
     watch_attractiveness_.reserve(observation_width);
+    equity_buy_commitments_.resize(state.postings.size() + 1);
     margin_loans_.reserve(runtime.margin_loans.size() + state.households.alive_count());
+    margin_loan_heads_.resize(state.postings.size() + 1U);
+    margin_loan_tails_.resize(state.postings.size() + 1U);
+    margin_loan_next_.reserve(runtime.margin_loans.size() +
+                              state.households.alive_count());
     debt_by_account_.resize(state.postings.size() + 1);
     margin_by_account_.resize(state.postings.size() + 1);
     firm_return_.resize(
@@ -2891,7 +3038,11 @@ std::uint64_t M6TickScratch::capacity_signature() const noexcept {
         bond_demands_.capacity(),
         watch_current_.capacity(),
         watch_attractiveness_.capacity(),
+        equity_buy_commitments_.capacity(),
         margin_loans_.capacity(),
+        margin_loan_heads_.capacity(),
+        margin_loan_tails_.capacity(),
+        margin_loan_next_.capacity(),
         debt_by_account_.capacity(),
         margin_by_account_.capacity(),
         firm_return_.capacity(),

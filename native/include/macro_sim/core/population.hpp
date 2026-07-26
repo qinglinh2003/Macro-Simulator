@@ -192,13 +192,14 @@ class BeneficialOwnershipBook final {
         std::vector<std::uint32_t> canonical_cash_rows;
         std::vector<std::uint32_t> asset_row_by_lot;
         std::vector<std::uint8_t> asset_lot_indexed;
+        std::vector<std::uint32_t> asset_heads;
+        std::vector<std::uint32_t> asset_next;
+        std::vector<std::uint32_t> asset_previous;
         std::vector<std::uint32_t> asset_presence_epochs;
         std::vector<std::uint32_t> person_heads{0U};
         std::vector<std::uint32_t> person_next;
         mutable std::vector<BeneficialLotId> person_query;
-        mutable std::vector<std::size_t> asset_offsets;
-        mutable std::vector<BeneficialLotId> lots_by_asset_flat;
-        mutable bool asset_lot_index_dirty{true};
+        mutable std::vector<BeneficialLotId> asset_query;
         std::uint32_t asset_presence_epoch{0U};
         BeneficialAssetKind refreshed_asset_kind{
             BeneficialAssetKind::generic_position};
@@ -212,7 +213,9 @@ class BeneficialOwnershipBook final {
     void ensure_person_links(PersonId person);
     void append_person_lot(BeneficialLotId lot, PersonId person);
     [[nodiscard]] Status unlink_person_lot(BeneficialLotId lot, PersonId person);
-    void rebuild_asset_lot_index() const;
+    void append_asset_lot(BeneficialLotId lot, std::size_t asset_row);
+    [[nodiscard]] Status unlink_asset_lot(BeneficialLotId lot,
+                                          std::size_t asset_row);
     [[nodiscard]] static std::size_t asset_hash(BeneficialAssetKey asset) noexcept;
     [[nodiscard]] static std::uint32_t
     asset_fingerprint(std::size_t hash) noexcept;

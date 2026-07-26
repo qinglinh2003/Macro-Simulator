@@ -116,6 +116,24 @@ first_alive_member(const core::HouseholdMembershipBook &membership,
     return selected;
 }
 
+[[nodiscard]] PersonId first_alive_beneficial_owner(
+    const core::BeneficialOwnershipBook &ownership,
+    const core::PersonStore &persons, core::BeneficialAssetKey asset,
+    PersonId excluded) {
+    PersonId selected{};
+    for (const auto lot_id : ownership.lots_for_asset(asset)) {
+        const auto *lot = ownership.get(lot_id);
+        if (lot == nullptr || !lot->active || lot->owner == excluded ||
+            !persons.alive(lot->owner)) {
+            continue;
+        }
+        if (!selected.valid() || lot->owner < selected) {
+            selected = lot->owner;
+        }
+    }
+    return selected;
+}
+
 [[nodiscard]] double
 beneficial_projection_error(const core::BeneficialOwnershipBook &ownership) {
     return ownership.maximum_projection_error();
@@ -224,10 +242,11 @@ security_from_token(std::uint64_t token) noexcept {
 
 [[nodiscard]] const core::LoanRecord *
 find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
-    const auto found =
-        std::find_if(loans.begin(), loans.end(),
-                     [id](const core::LoanRecord &loan) { return loan.id == id; });
-    return found == loans.end() ? nullptr : &*found;
+    if (!id.valid() || id.value() > loans.size()) {
+        return nullptr;
+    }
+    const auto &loan = loans[static_cast<std::size_t>(id.value() - 1U)];
+    return loan.id == id ? &loan : nullptr;
 }
 
 [[nodiscard]] bool canonical_claim_exists(const core::RootState &state,
@@ -517,7 +536,7 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
                 cost_basis += lot->cost_basis.value();
             }
         }
-        if (units <= kLaborTolerance) {
+        if (units <= 0.0) {
             continue;
         }
         status = financial.securities_.transfer_units(
@@ -557,6 +576,10 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
         }
     }
     if (destination_household.valid()) {
+        if (destination_household == source_household) {
+            return Status(ErrorCode::invariant_violation,
+                          "estate destination aliases source household");
+        }
         const core::BeneficialAssetKey source_portfolio{
             core::BeneficialAssetKind::security_position,
             source_household,
@@ -586,9 +609,13 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
              core::HouseholdMembershipBook &membership,
              core::BeneficialOwnershipBook &ownership, core::EmploymentBook &employment,
              core::RelationshipBook &relationships, core::LaborAccounts &labor_accounts,
-             std::vector<EstateRecord> &estates, std::uint64_t &next_event_id,
+             std::vector<EstateRecord> &estates,
+             std::vector<HouseholdId> &retired_households,
+             std::uint64_t &next_event_id,
              PersonId deceased, std::int32_t day, const M7PolicyState &policy,
              const M7Rules &rules, M7Metrics &metrics,
+             std::vector<std::uint32_t> &guardian_heads,
+             std::vector<std::uint32_t> &guardian_next,
              std::vector<BeneficialLotId> &lot_buffer,
              std::vector<core::SecurityId> &security_buffer) {
     auto *record = persons.get(deceased);
@@ -608,9 +635,25 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
     if (was_partnered) {
         ++metrics.widowhoods;
     }
-    for (const auto person_id : persons.alive_ids()) {
+    auto encoded_ward =
+        deceased.value() < guardian_heads.size()
+            ? guardian_heads[static_cast<std::size_t>(deceased.value())]
+            : 0U;
+    if (deceased.value() < guardian_heads.size()) {
+        guardian_heads[static_cast<std::size_t>(deceased.value())] = 0U;
+    }
+    while (encoded_ward != 0U) {
+        const auto person_id = PersonId(encoded_ward);
+        const auto person_index = static_cast<std::size_t>(encoded_ward);
+        const auto next_ward =
+            person_index < guardian_next.size() ? guardian_next[person_index] : 0U;
+        if (person_index < guardian_next.size()) {
+            guardian_next[person_index] = 0U;
+        }
         auto *dependent = persons.get(person_id);
-        if (dependent->guardian != deceased) {
+        if (dependent == nullptr || !dependent->alive ||
+            dependent->guardian != deceased) {
+            encoded_ward = next_ward;
             continue;
         }
         PersonId replacement{};
@@ -635,6 +678,15 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
             }
         }
         dependent->guardian = replacement;
+        if (replacement.valid() && replacement.value() < guardian_heads.size() &&
+            person_index < guardian_next.size()) {
+            const auto replacement_index =
+                static_cast<std::size_t>(replacement.value());
+            guardian_next[person_index] = guardian_heads[replacement_index];
+            guardian_heads[replacement_index] =
+                static_cast<std::uint32_t>(person_id.value());
+        }
+        encoded_ward = next_ward;
     }
     const auto deceased_claims = ownership.lots_for_person(deceased);
     lot_buffer.assign(deceased_claims.begin(), deceased_claims.end());
@@ -647,6 +699,7 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
     estate.opened_day = day;
     estate.settled_day = day;
     estate.settled = true;
+    const auto first_orphan_household = retired_households.size();
     for (const auto lot_id : lot_buffer) {
         const auto *lot = ownership.get(lot_id);
         if (lot == nullptr || !lot->active) {
@@ -662,12 +715,50 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
         } else {
             estate.gross_value += value;
         }
-        const auto status = heir.valid() ? ownership.transfer(lot_id, heir, lot->share)
-                                         : ownership.retire(lot_id);
+        PersonId beneficiary = heir;
+        if (!beneficiary.valid()) {
+            beneficiary = first_alive_beneficial_owner(
+                ownership, persons, lot->asset, deceased);
+        }
+        if (!beneficiary.valid() &&
+            lot->asset.kind != core::BeneficialAssetKind::household_cash) {
+            const core::BeneficialAssetKey cash{
+                core::BeneficialAssetKind::household_cash,
+                lot->asset.household,
+                lot->asset.household.value(),
+            };
+            beneficiary = first_alive_beneficial_owner(
+                ownership, persons, cash, deceased);
+        }
+        if (!beneficiary.valid()) {
+            beneficiary = first_alive_member(
+                membership, persons, lot->asset.household, deceased);
+        }
+        if (!beneficiary.valid() && lot->asset.household != household &&
+            membership.members(lot->asset.household).empty() &&
+            state.households.get(lot->asset.household) != nullptr &&
+            std::find(retired_households.begin(), retired_households.end(),
+                      lot->asset.household) == retired_households.end()) {
+            retired_households.push_back(lot->asset.household);
+        }
+        const auto status =
+            beneficiary.valid()
+                ? ownership.transfer(lot_id, beneficiary, lot->share)
+                : ownership.retire(lot_id);
         if (!status.ok()) {
             return status;
         }
         ++estate.transferred_lots;
+    }
+    for (auto index = first_orphan_household;
+         index < retired_households.size(); ++index) {
+        const auto orphan = retired_households[index];
+        const auto residual_status = transfer_household_residual(
+            state, real, monetary, financial, ownership, orphan, HouseholdId{},
+            security_buffer);
+        if (!residual_status.ok()) {
+            return residual_status;
+        }
     }
     estate.tax_share = estate.gross_share * policy.inheritance_tax_rate;
     const auto *source_household = state.households.get(household);
@@ -1052,6 +1143,24 @@ class M7Extension final : public M6TickExtension {
         scratch_.opening_alive_.assign(scratch_.persons_.alive_ids().begin(),
                                        scratch_.persons_.alive_ids().end());
         std::sort(scratch_.opening_alive_.begin(), scratch_.opening_alive_.end());
+        const auto person_capacity =
+            static_cast<std::size_t>(scratch_.persons_.next_id());
+        scratch_.guardian_heads_.assign(person_capacity, 0U);
+        scratch_.guardian_next_.assign(person_capacity, 0U);
+        for (const auto person_id : scratch_.opening_alive_) {
+            const auto *person = scratch_.persons_.get(person_id);
+            if (person == nullptr || !scratch_.persons_.alive(person->guardian)) {
+                continue;
+            }
+            const auto person_index =
+                static_cast<std::size_t>(person_id.value());
+            const auto guardian_index =
+                static_cast<std::size_t>(person->guardian.value());
+            scratch_.guardian_next_[person_index] =
+                scratch_.guardian_heads_[guardian_index];
+            scratch_.guardian_heads_[guardian_index] =
+                static_cast<std::uint32_t>(person_id.value());
+        }
         scratch_.retired_households_.clear();
         scratch_.external_leave_home_multiplier_ = 1.0;
         scratch_.external_fertility_multiplier_ = 1.0;
@@ -1094,8 +1203,11 @@ class M7Extension final : public M6TickExtension {
                     scratch_.membership_, scratch_.beneficial_ownership_,
                     scratch_.employment_, scratch_.relationships_,
                     scratch_.labor_accounts_, scratch_.estates_,
+                    scratch_.retired_households_,
                     scratch_.next_event_id_, person_id, calendar_day, runtime_.policy,
-                    runtime_.rules, scratch_.working_metrics_, scratch_.deceased_lots_,
+                    runtime_.rules, scratch_.working_metrics_,
+                    scratch_.guardian_heads_, scratch_.guardian_next_,
+                    scratch_.deceased_lots_,
                     scratch_.estate_securities_);
                 if (!status.ok()) {
                     return status;
@@ -1677,6 +1789,102 @@ class M7Extension final : public M6TickExtension {
              ++firm_index) {
             const auto firm_id = real.firm_ids_[firm_index];
             const auto *firm = state.firms.get(firm_id);
+            if (firm == nullptr) {
+                return Status(ErrorCode::invariant_violation,
+                              "payroll firm reference is absent");
+            }
+            const auto account_index =
+                static_cast<std::size_t>(firm->primary_account.value());
+            if (account_index >= real.balances_.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "payroll account projection is stale");
+            }
+            const double budget = std::max(0.0, real.balances_[account_index]);
+            double payroll = 0.0;
+            for (const auto job_id : scratch_.employment_.roster(firm_id)) {
+                const auto *job = scratch_.employment_.get(job_id);
+                if (job == nullptr || !job->active || job->suspended) {
+                    continue;
+                }
+                const auto *person = scratch_.persons_.get(job->person);
+                if (person == nullptr || !person->alive) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "payroll job references an absent person");
+                }
+                payroll += job->hours * job->wage * person->efficiency;
+            }
+            if (payroll <= budget + kLaborTolerance) {
+                continue;
+            }
+            scratch_.roster_buffer_.assign(
+                scratch_.employment_.roster(firm_id).begin(),
+                scratch_.employment_.roster(firm_id).end());
+            std::sort(scratch_.roster_buffer_.begin(),
+                      scratch_.roster_buffer_.end(), [&](JobId left, JobId right) {
+                          const auto *left_job = scratch_.employment_.get(left);
+                          const auto *right_job = scratch_.employment_.get(right);
+                          if (left_job->hire_day != right_job->hire_day) {
+                              return left_job->hire_day > right_job->hire_day;
+                          }
+                          return left > right;
+                      });
+            for (const auto job_id : scratch_.roster_buffer_) {
+                if (payroll <= budget + kLaborTolerance) {
+                    break;
+                }
+                const auto *job = scratch_.employment_.get(job_id);
+                if (job == nullptr || !job->active || job->suspended) {
+                    continue;
+                }
+                const auto *person = scratch_.persons_.get(job->person);
+                if (person == nullptr || !person->alive) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "payroll job references an absent person");
+                }
+                const double hourly_cost = job->wage * person->efficiency;
+                const double job_cost = job->hours * hourly_cost;
+                const double excess = std::max(0.0, payroll - budget);
+                if (runtime_.rules.fractional_hours &&
+                    hourly_cost > kLaborTolerance &&
+                    job_cost > excess + kLaborTolerance) {
+                    const double new_hours =
+                        std::max(0.0, job->hours - excess / hourly_cost);
+                    if (new_hours > kLaborTolerance) {
+                        const auto status =
+                            set_job_hours(scratch_.employment_, job_id, new_hours,
+                                          scratch_.labor_accounts_);
+                        if (!status.ok()) {
+                            return status;
+                        }
+                        payroll -= job_cost - new_hours * hourly_cost;
+                        continue;
+                    }
+                }
+                Status status;
+                if (runtime_.rules.suspensions && !job->secondary) {
+                    status = suspend_job(scratch_.employment_, job_id, calendar_day,
+                                         scratch_.labor_accounts_);
+                } else {
+                    status =
+                        separate_job(scratch_.employment_, job_id, calendar_day,
+                                     core::SeparationKind::cash_layoff,
+                                     scratch_.labor_accounts_);
+                }
+                if (!status.ok()) {
+                    return status;
+                }
+                payroll -= job_cost;
+            }
+            if (payroll > budget + kLaborTolerance) {
+                return Status(ErrorCode::invariant_violation,
+                              "payroll budget enforcement failed");
+            }
+        }
+
+        for (std::size_t firm_index = 0; firm_index < real.firm_ids_.size();
+             ++firm_index) {
+            const auto firm_id = real.firm_ids_[firm_index];
+            const auto *firm = state.firms.get(firm_id);
             auto &work = real.firm_work_[firm_index];
             for (const auto job_id : scratch_.employment_.roster(firm_id)) {
                 const auto *job = scratch_.employment_.get(job_id);
@@ -1694,7 +1902,8 @@ class M7Extension final : public M6TickExtension {
                     stage_m4_transfer(state, real, firm->primary_account,
                                       household->primary_account, pay);
                 if (!transfer_status.ok()) {
-                    return transfer_status;
+                    return Status(ErrorCode::insufficient_funds,
+                                  "M7 payroll transfer exceeds available money");
                 }
                 const auto household_index =
                     scratch_.household_work_index_[static_cast<std::size_t>(
@@ -1989,16 +2198,18 @@ class M7Extension final : public M6TickExtension {
         for (const auto household : scratch_.retired_households_) {
             const auto found =
                 std::find_if(scratch_.estates_.rbegin(), scratch_.estates_.rend(),
-                             [household](const EstateRecord &estate) {
-                                 return estate.household == household && estate.settled;
+                             [household, calendar_day](const EstateRecord &estate) {
+                                 return estate.household == household &&
+                                        estate.settled &&
+                                        estate.settled_day == calendar_day;
                              });
-            if (found == scratch_.estates_.rend()) {
-                return Status(ErrorCode::invariant_violation,
-                              "retired household estate is absent");
-            }
+            const auto destination =
+                found == scratch_.estates_.rend()
+                    ? HouseholdId{}
+                    : found->destination_household;
             const auto residual_status = transfer_household_residual(
                 state, real, monetary_scratch, financial,
-                scratch_.beneficial_ownership_, household, found->destination_household,
+                scratch_.beneficial_ownership_, household, destination,
                 scratch_.estate_securities_);
             if (!residual_status.ok()) {
                 return residual_status;
@@ -2123,6 +2334,9 @@ class M7Extension final : public M6TickExtension {
         runtime_.labor_accounts = scratch_.labor_accounts_;
         runtime_.next_event_id = scratch_.next_event_id_;
         runtime_.population_rng_counter = scratch_.population_rng_counter_;
+        const auto calendar_day =
+            runtime_.start_calendar_day +
+            static_cast<std::int32_t>(tick.value()) + 1;
         for (const auto household : scratch_.retired_households_) {
             const auto *component = state.households.get(household);
             if (component == nullptr) {
@@ -2130,14 +2344,14 @@ class M7Extension final : public M6TickExtension {
             }
             const auto estate =
                 std::find_if(runtime_.estates.rbegin(), runtime_.estates.rend(),
-                             [household](const EstateRecord &record) {
-                                 return record.household == household && record.settled;
+                             [household, calendar_day](const EstateRecord &record) {
+                                 return record.household == household &&
+                                        record.settled &&
+                                        record.settled_day == calendar_day;
                              });
-            if (estate == runtime_.estates.rend()) {
-                std::terminate();
-            }
             const auto destination =
-                estate->destination_household.valid()
+                estate != runtime_.estates.rend() &&
+                        estate->destination_household.valid()
                     ? core::OwnerId::household(estate->destination_household)
                     : core::OwnerId::institutional(core::OwnerKind::treasury);
             const auto ownership_status = state.ownership.rekey_owner(
@@ -2189,14 +2403,14 @@ class M7Extension final : public M6TickExtension {
                 std::terminate();
             }
             const auto account = state.postings.create_account(
-                {
-                    core::AccountKind::deposit,
-                    state.economy,
-                    core::OwnerId::household(event.destination),
-                    state.currency,
-                    origin_settlement_node,
-                },
-                Money(0.0));
+                    {
+                        core::AccountKind::deposit,
+                        state.economy,
+                        core::OwnerId::household(event.destination),
+                        state.currency,
+                        origin_settlement_node,
+                    },
+                    Money(0.0));
             if (!account.ok()) {
                 std::terminate();
             }
@@ -2220,7 +2434,7 @@ class M7Extension final : public M6TickExtension {
             }
             const auto family_owner = first_alive_member(
                 runtime_.membership, runtime_.persons, event.origin, event.person);
-            if (!family_owner.valid() || cash_share <= kLaborTolerance) {
+            if (!person_cash_lots.empty() && !family_owner.valid()) {
                 std::terminate();
             }
             for (const auto lot_id : person_cash_lots) {
@@ -2244,10 +2458,12 @@ class M7Extension final : public M6TickExtension {
             const double cash = std::max(0.0, origin_balance * cash_share);
             if (cash > kLaborTolerance) {
                 core::SettlementTransaction transaction(state);
-                if (!transaction
-                         .transfer(origin_account_id, *account.get_if(), Money(cash))
-                         .ok() ||
-                    !transaction.commit().ok()) {
+                const auto transfer_status = transaction.transfer(
+                    origin_account_id, *account.get_if(), Money(cash));
+                if (!transfer_status.ok()) {
+                    std::terminate();
+                }
+                if (!transaction.commit_locally_validated().ok()) {
                     std::terminate();
                 }
             }
@@ -2258,8 +2474,10 @@ class M7Extension final : public M6TickExtension {
             }
             person->household = event.destination;
 
-            const auto origin_index = static_cast<std::size_t>(event.origin.value());
-            if (financial_runtime.watchlist_rows.size() <= event.destination.value()) {
+            const auto origin_index =
+                static_cast<std::size_t>(event.origin.value());
+            if (financial_runtime.watchlist_rows.size() <=
+                event.destination.value()) {
                 financial_runtime.watchlist_rows.resize(
                     static_cast<std::size_t>(event.destination.value() + 1U));
             }
@@ -2267,16 +2485,35 @@ class M7Extension final : public M6TickExtension {
                 financial_runtime.watchlist_rows[static_cast<std::size_t>(
                     event.destination.value())];
             destination_row.household = event.destination;
+            const auto destination_offset =
+                financial_runtime.watchlist_equities.size();
+            if (destination_offset > std::numeric_limits<std::uint32_t>::max()) {
+                std::terminate();
+            }
             destination_row.offset =
-                static_cast<std::uint32_t>(financial_runtime.watchlist_equities.size());
+                static_cast<std::uint32_t>(destination_offset);
             if (origin_index < financial_runtime.watchlist_rows.size()) {
-                const auto &origin_row = financial_runtime.watchlist_rows[origin_index];
+                const auto origin_row =
+                    financial_runtime.watchlist_rows[origin_index];
                 destination_row.count = origin_row.count;
-                for (std::uint32_t offset = 0; offset < origin_row.count; ++offset) {
-                    financial_runtime.watchlist_equities.push_back(
-                        financial_runtime.watchlist_equities[static_cast<std::size_t>(
-                            origin_row.offset + offset)]);
+                const auto source_offset =
+                    static_cast<std::size_t>(origin_row.offset);
+                const auto source_count =
+                    static_cast<std::size_t>(origin_row.count);
+                if (source_offset > financial_runtime.watchlist_equities.size() ||
+                    source_count >
+                        financial_runtime.watchlist_equities.size() -
+                            source_offset) {
+                    std::terminate();
                 }
+                const std::vector<EquityId> inherited_watchlist(
+                    financial_runtime.watchlist_equities.begin() +
+                        static_cast<std::ptrdiff_t>(source_offset),
+                    financial_runtime.watchlist_equities.begin() +
+                        static_cast<std::ptrdiff_t>(source_offset + source_count));
+                financial_runtime.watchlist_equities.insert(
+                    financial_runtime.watchlist_equities.end(),
+                    inherited_watchlist.begin(), inherited_watchlist.end());
             }
         }
         scratch_.working_metrics_.economy = metrics;
@@ -2304,6 +2541,10 @@ class M7Extension final : public M6TickExtension {
 
 void M7TickScratch::reserve(const M7Runtime &runtime) {
     opening_alive_.reserve(runtime.persons.alive_count());
+    guardian_heads_.reserve(
+        static_cast<std::size_t>(runtime.persons.next_id()));
+    guardian_next_.reserve(
+        static_cast<std::size_t>(runtime.persons.next_id()));
     deceased_lots_.reserve(8);
     estate_securities_.reserve(16);
     estates_.reserve(runtime.estates.size() + 8U);
@@ -2322,6 +2563,8 @@ void M7TickScratch::reserve(const M7Runtime &runtime) {
 
 std::uint64_t M7TickScratch::capacity_signature() const noexcept {
     return static_cast<std::uint64_t>(opening_alive_.capacity()) ^
+           (static_cast<std::uint64_t>(guardian_heads_.capacity()) << 2U) ^
+           (static_cast<std::uint64_t>(guardian_next_.capacity()) << 6U) ^
            (static_cast<std::uint64_t>(deceased_lots_.capacity()) << 16U) ^
            (static_cast<std::uint64_t>(estates_.capacity()) << 32U) ^
            (static_cast<std::uint64_t>(labor_candidates_.capacity()) << 8U) ^

@@ -128,6 +128,12 @@ struct LoanTerms final {
     bool operator==(const LoanTerms &) const = default;
 };
 
+enum class LoanPurpose : std::uint8_t {
+    general = 0,
+    mortgage = 1,
+    margin = 2,
+};
+
 struct LoanRecord final {
     LoanId id{};
     BankId lender{};
@@ -137,6 +143,7 @@ struct LoanRecord final {
     double roundoff_drift{0.0};
     LoanTerms terms{};
     bool active{true};
+    LoanPurpose purpose{LoanPurpose::general};
 
     bool operator==(const LoanRecord &) const = default;
 };

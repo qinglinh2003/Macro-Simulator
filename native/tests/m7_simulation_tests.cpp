@@ -393,6 +393,27 @@ void test_persistent_labor_and_death_separation() {
     );
 }
 
+void test_payroll_budget_uses_worker_efficiency() {
+    auto harness = build();
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(harness.runtime.employment.active_count() > 0U);
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        harness.runtime.persons.get(person_id)->efficiency = 1'000.0;
+    }
+    result = advance(harness, 1);
+    if (!result.ok()) {
+        std::cerr << "M7 efficiency-weighted payroll failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    assert(
+        macro_sim::simulation::validate_m7_state(
+            harness.root, harness.real_runtime, harness.monetary_runtime,
+            harness.financial_runtime, harness.runtime, harness.tick)
+            .ok());
+}
+
 void test_relationship_household_lifecycle() {
     auto spec = base_spec();
     spec.population.start_calendar_day = 29;
@@ -497,6 +518,27 @@ void test_last_member_estate_moves_canonical_positions() {
     const auto source_account =
         harness.root.households.get(source_household)
             ->primary_account;
+    const auto source_owner =
+        macro_sim::core::OwnerId::household(source_household);
+    constexpr double dust_units = 5.0e-9;
+    bool dust_position_created = false;
+    for (const auto &equity :
+         harness.financial_runtime.securities.equities()) {
+        const auto security =
+            macro_sim::core::SecurityId::equity(equity.id);
+        if (harness.financial_runtime.securities.units_held(
+                security, source_owner) != 0.0) {
+            continue;
+        }
+        assert(harness.financial_runtime.securities
+                   .issue_equity_units(
+                       equity.id, source_owner, dust_units,
+                       macro_sim::Money(dust_units))
+                   .ok());
+        dust_position_created = true;
+        break;
+    }
+    assert(dust_position_created);
     const auto opening_households =
         harness.root.households.alive_count();
     M7AdvanceOptions options;
@@ -523,8 +565,6 @@ void test_last_member_estate_moves_canonical_positions() {
         destination_household
     );
     assert(estate.tax_paid > 0.0);
-    const auto source_owner =
-        macro_sim::core::OwnerId::household(source_household);
     for (const auto &security :
          harness.financial_runtime.securities.bonds()) {
         assert(
@@ -595,6 +635,135 @@ void test_public_residual_estate_has_no_unrelated_heir() {
     assert(harness.root.households.alive_count() == 0U);
 }
 
+void test_unclaimed_external_share_returns_to_asset_household() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 3;
+    spec.population.target_household_size = 1.0;
+    spec.rules.marriage = false;
+    spec.rules.divorce = false;
+    spec.rules.leaving_home = false;
+    spec.financial_economy.monetary_economy.rules.household_credit = false;
+    auto harness = build(spec);
+
+    const auto deceased = PersonId(1);
+    const auto surviving_owner = PersonId(2);
+    const auto surviving_household =
+        harness.runtime.persons.get(surviving_owner)->household;
+    const auto occupied_household =
+        harness.runtime.persons.get(PersonId(3))->household;
+    const macro_sim::core::BeneficialAssetKey cash{
+        macro_sim::core::BeneficialAssetKind::household_cash,
+        surviving_household,
+        surviving_household.value(),
+    };
+    const auto cash_lots =
+        harness.runtime.beneficial_ownership.lots_for_asset(cash);
+    assert(cash_lots.size() == 1U);
+    const auto lot_id = cash_lots.front();
+    const auto *lot = harness.runtime.beneficial_ownership.get(lot_id);
+    assert(lot != nullptr && lot->owner == surviving_owner);
+    assert(harness.runtime.beneficial_ownership
+               .transfer(lot_id, deceased, lot->share * 0.5)
+               .ok());
+    assert(harness.runtime.membership
+               .move(surviving_owner, occupied_household)
+               .ok());
+    harness.runtime.persons.get(surviving_owner)->household =
+        occupied_household;
+    assert(harness.runtime.membership.members(surviving_household).empty());
+
+    auto *deceased_record = harness.runtime.persons.get(deceased);
+    deceased_record->mother = PersonId{};
+    deceased_record->father = PersonId{};
+    deceased_record->guardian = PersonId{};
+    deceased_record->partner = PersonId{};
+    M7AdvanceOptions options;
+    options.force_death = deceased;
+    const auto result = advance(harness, 1, options);
+    if (!result.ok()) {
+        std::cerr << "M7 unclaimed external share return failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+
+    const auto inherited_lots =
+        harness.runtime.beneficial_ownership.lots_for_asset(cash);
+    double inherited_share = 0.0;
+    for (const auto inherited_lot : inherited_lots) {
+        const auto *inherited =
+            harness.runtime.beneficial_ownership.get(inherited_lot);
+        assert(inherited != nullptr && inherited->active);
+        assert(inherited->owner == surviving_owner);
+        inherited_share += inherited->share;
+    }
+    assert(std::abs(inherited_share - 1.0) < 1.0e-12);
+    assert(macro_sim::simulation::validate_m7_state(
+               harness.root, harness.real_runtime, harness.monetary_runtime,
+               harness.financial_runtime, harness.runtime, harness.tick)
+               .ok());
+}
+
+void test_unclaimed_empty_household_escheats_canonical_positions() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 3;
+    spec.population.target_household_size = 1.0;
+    spec.rules.marriage = false;
+    spec.rules.divorce = false;
+    spec.rules.leaving_home = false;
+    spec.financial_economy.monetary_economy.rules.household_credit = false;
+    auto harness = build(spec);
+
+    const auto first = PersonId(1);
+    const auto deceased = PersonId(2);
+    const auto occupied = PersonId(3);
+    const auto first_household =
+        harness.runtime.persons.get(first)->household;
+    const auto orphan_household =
+        harness.runtime.persons.get(deceased)->household;
+    const auto occupied_household =
+        harness.runtime.persons.get(occupied)->household;
+    assert(harness.runtime.membership.move(first, occupied_household).ok());
+    harness.runtime.persons.get(first)->household = occupied_household;
+    assert(harness.runtime.membership.move(deceased, first_household).ok());
+    harness.runtime.persons.get(deceased)->household = first_household;
+    assert(harness.runtime.membership.members(orphan_household).empty());
+    macro_sim::simulation::EstateRecord stale_estate;
+    stale_estate.event =
+        macro_sim::EventId(harness.runtime.next_event_id++);
+    stale_estate.household = orphan_household;
+    stale_estate.destination_household = orphan_household;
+    stale_estate.opened_day =
+        harness.runtime.current_calendar_day - 1;
+    stale_estate.settled_day =
+        harness.runtime.current_calendar_day - 1;
+    stale_estate.settled = true;
+    harness.runtime.estates.push_back(stale_estate);
+
+    auto *deceased_record = harness.runtime.persons.get(deceased);
+    deceased_record->mother = PersonId{};
+    deceased_record->father = PersonId{};
+    deceased_record->guardian = PersonId{};
+    deceased_record->partner = PersonId{};
+    M7AdvanceOptions options;
+    options.force_death = deceased;
+    const auto result = advance(harness, 1, options);
+    if (!result.ok()) {
+        std::cerr << "M7 empty-household escheat failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+
+    assert(harness.root.households.get(orphan_household) == nullptr);
+    for (const auto &lot :
+         harness.runtime.beneficial_ownership.records()) {
+        assert(!lot.active || lot.asset.household != orphan_household);
+    }
+    assert(macro_sim::simulation::validate_m7_state(
+               harness.root, harness.real_runtime, harness.monetary_runtime,
+               harness.financial_runtime, harness.runtime, harness.tick)
+               .ok());
+}
+
 void test_forced_leaving_home_creates_canonical_household() {
     auto spec = base_spec();
     spec.rules.marriage = false;
@@ -660,8 +829,35 @@ void test_forced_leaving_home_creates_canonical_household() {
             .ok()
     );
     const auto origin = child_record->household;
+    const macro_sim::core::BeneficialAssetKey origin_cash{
+        macro_sim::core::BeneficialAssetKind::household_cash,
+        origin,
+        origin.value(),
+    };
+    std::vector<macro_sim::BeneficialLotId> child_cash_lots;
+    for (const auto lot_id :
+         harness.runtime.beneficial_ownership.lots_for_person(child)) {
+        const auto *lot =
+            harness.runtime.beneficial_ownership.get(lot_id);
+        if (lot != nullptr && lot->active && lot->asset == origin_cash) {
+            child_cash_lots.push_back(lot_id);
+        }
+    }
+    assert(!child_cash_lots.empty());
+    for (const auto lot_id : child_cash_lots) {
+        const auto *lot =
+            harness.runtime.beneficial_ownership.get(lot_id);
+        assert(harness.runtime.beneficial_ownership
+                   .transfer(lot_id, parent, lot->share)
+                   .ok());
+    }
     const auto opening_households =
         harness.root.households.alive_count();
+    auto compact_watchlists =
+        decltype(harness.financial_runtime.watchlist_equities)(
+            harness.financial_runtime.watchlist_equities.begin(),
+            harness.financial_runtime.watchlist_equities.end());
+    harness.financial_runtime.watchlist_equities.swap(compact_watchlists);
     M7AdvanceOptions options;
     options.force_leave_home = child;
     const auto result = advance(harness, 1, options);
@@ -940,9 +1136,12 @@ int main() {
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();
     test_persistent_labor_and_death_separation();
+    test_payroll_budget_uses_worker_efficiency();
     test_relationship_household_lifecycle();
     test_last_member_estate_moves_canonical_positions();
     test_public_residual_estate_has_no_unrelated_heir();
+    test_unclaimed_external_share_returns_to_asset_household();
+    test_unclaimed_empty_household_escheats_canonical_positions();
     test_forced_leaving_home_creates_canonical_household();
     test_family_transfer_uses_kin_and_conserves_cash();
     test_job_ladder_survives_firm_lifecycle();

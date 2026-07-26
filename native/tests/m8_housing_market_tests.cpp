@@ -169,6 +169,144 @@ void test_mortgage_origination_is_canonical_and_collateralized() {
     assert(result.get_if()->metrics.housing.mortgage_principal_originated > 0.0);
 }
 
+void test_mortgage_follows_heir_when_borrower_household_retires() {
+    auto spec = market_spec(true, false);
+    spec.domestic_economy.population.target_household_size = 1.0;
+    auto harness = build(spec);
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(!harness.runtime.mortgages.empty());
+    const auto original = harness.runtime.mortgages.front();
+    const auto members =
+        harness.population_runtime.membership.members(original.borrower);
+    assert(members.size() == 1U);
+    const auto deceased = members.front();
+    macro_sim::PersonId heir{};
+    for (const auto candidate : harness.population_runtime.persons.alive_ids()) {
+        const auto *record = harness.population_runtime.persons.get(candidate);
+        if (candidate != deceased && record->household != original.borrower) {
+            heir = candidate;
+            break;
+        }
+    }
+    assert(heir.valid());
+    auto *deceased_record =
+        harness.population_runtime.persons.get(deceased);
+    deceased_record->mother = heir;
+    deceased_record->father = macro_sim::PersonId{};
+    assert(harness.population_runtime.relationships
+               .register_birth(harness.population_runtime.persons, deceased)
+               .ok());
+    const auto heir_household =
+        harness.population_runtime.persons.get(heir)->household;
+    harness.runtime.housing_rules.market_interval_days = 30U;
+    M8AdvanceOptions options;
+    options.base.force_death = deceased;
+    result = advance_m8_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch,
+        harness.monetary_runtime, harness.monetary_scratch,
+        harness.financial_runtime, harness.financial_scratch,
+        harness.population_runtime, harness.population_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1U, options);
+    if (!result.ok()) {
+        std::cerr << "mortgage estate transfer failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    const auto &inherited = harness.runtime.mortgages.front();
+    assert(inherited.active);
+    assert(inherited.borrower == heir_household);
+    const auto *dwelling =
+        harness.runtime.properties.get(inherited.collateral);
+    assert(dwelling != nullptr);
+    assert(dwelling->owner ==
+           macro_sim::core::OwnerId::household(heir_household));
+    const auto &loan =
+        harness.root.loans
+            .records()[static_cast<std::size_t>(inherited.loan.value() - 1U)];
+    assert(loan.active);
+    assert(loan.borrower ==
+           macro_sim::core::OwnerId::household(heir_household));
+    assert(validate_m8_state(harness.root, harness.real_runtime,
+                             harness.monetary_runtime,
+                             harness.financial_runtime,
+                             harness.population_runtime, harness.runtime,
+                             harness.tick)
+               .ok());
+}
+
+void test_mortgaged_resale_discharge_precedes_new_collateral() {
+    auto harness = build(market_spec(true, false));
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(!harness.runtime.mortgages.empty());
+    const auto original = harness.runtime.mortgages.front();
+    const auto *original_dwelling =
+        harness.runtime.properties.get(original.collateral);
+    assert(original_dwelling != nullptr);
+    assert(original_dwelling->owner ==
+           macro_sim::core::OwnerId::household(original.borrower));
+
+    macro_sim::HouseholdId buyer{};
+    harness.root.households.for_each_alive(
+        [&](macro_sim::HouseholdId candidate,
+            const macro_sim::core::HouseholdComponent &) {
+            if (!buyer.valid() && candidate != original.borrower) {
+                const auto occupied =
+                    harness.runtime.properties.dwelling_for_occupant(candidate);
+                const auto *record = harness.runtime.properties.get(occupied);
+                if (record != nullptr && occupied != original.collateral &&
+                    !record->collateral.valid() &&
+                    record->owner ==
+                        macro_sim::core::OwnerId::household(candidate)) {
+                    assert(harness.runtime.properties
+                               .set_occupant(occupied, candidate,
+                                             macro_sim::HouseholdId{})
+                               .ok());
+                    assert(harness.runtime.properties
+                               .destroy(
+                                   occupied,
+                                   macro_sim::core::OwnerId::household(candidate),
+                                   harness.tick)
+                               .ok());
+                    buyer = candidate;
+                }
+            }
+        });
+    assert(buyer.valid());
+    for (auto &listing : harness.runtime.housing_listings) {
+        listing.active = false;
+    }
+    harness.runtime.housing_listings.push_back({
+        original.collateral,
+        macro_sim::core::OwnerId::household(original.borrower),
+        original.purchase_price,
+        harness.tick,
+        false,
+        true,
+    });
+
+    result = advance(harness, 1);
+    if (!result.ok()) {
+        std::cerr << "mortgaged resale failed: " << result.status().message()
+                  << "\n";
+    }
+    assert(result.ok());
+    const auto &repaid =
+        harness.root.loans
+            .records()[static_cast<std::size_t>(original.loan.value() - 1U)];
+    assert(!repaid.active);
+    assert(repaid.principal.value() == 0.0);
+    assert(!harness.runtime.mortgages.front().active);
+    const auto *sold = harness.runtime.properties.get(original.collateral);
+    assert(sold != nullptr);
+    assert(sold->owner == macro_sim::core::OwnerId::household(buyer));
+    assert(sold->collateral != original.loan);
+    assert(harness.runtime.properties.dwelling_for_collateral(original.loan) ==
+           macro_sim::DwellingId{});
+    assert(harness.runtime.properties.validate().ok());
+}
+
 void test_rent_moves_cash_without_minting_money() {
     auto value = market_spec(false, true);
     value.housing_rules.market_interval_days = 30;
@@ -225,6 +363,74 @@ void test_price_shock_forecloses_into_bank_title() {
     assert(harness.monetary_runtime.last_metrics.realized_credit_losses > loss_before);
 }
 
+void test_homeless_owner_does_not_buy_own_listing() {
+    auto spec = market_spec(false, false);
+    spec.housing_rules.ask_floor_annual_wage_share = 0.0;
+    spec.housing_rules.buyer_search_count = 1U;
+    auto harness = build(spec);
+
+    macro_sim::HouseholdId owner{};
+    macro_sim::DwellingId dwelling{};
+    for (const auto &candidate : harness.runtime.properties.records()) {
+        if (candidate.active &&
+            candidate.owner.kind == macro_sim::core::OwnerKind::household &&
+            candidate.occupant ==
+                macro_sim::HouseholdId(candidate.owner.value)) {
+            owner = macro_sim::HouseholdId(candidate.owner.value);
+            dwelling = candidate.id;
+            break;
+        }
+    }
+    assert(owner.valid());
+    assert(dwelling.valid());
+    assert(harness.runtime.properties
+               .set_occupant(dwelling, owner, macro_sim::HouseholdId{})
+               .ok());
+    harness.root.households.for_each_alive(
+        [&](macro_sim::HouseholdId household,
+            const macro_sim::core::HouseholdComponent &) {
+            if (household == owner ||
+                harness.runtime.properties.dwelling_for_occupant(household)
+                    .valid()) {
+                return;
+            }
+            for (const auto &candidate : harness.runtime.properties.records()) {
+                if (!candidate.active || candidate.id == dwelling ||
+                    candidate.occupant.valid()) {
+                    continue;
+                }
+                assert(harness.runtime.properties
+                           .set_occupant(candidate.id, macro_sim::HouseholdId{},
+                                         household)
+                           .ok());
+                return;
+            }
+            assert(false);
+        });
+    for (auto &listing : harness.runtime.housing_listings) {
+        listing.active = false;
+    }
+    harness.runtime.housing_listings.push_back({
+        dwelling,
+        macro_sim::core::OwnerId::household(owner),
+        1.0e-6,
+        harness.tick,
+        false,
+        true,
+    });
+
+    const auto result = advance(harness, 1);
+    if (!result.ok()) {
+        std::cerr << "self-owned listing exclusion failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    const auto *record = harness.runtime.properties.get(dwelling);
+    assert(record != nullptr);
+    assert(record->owner == macro_sim::core::OwnerId::household(owner));
+    assert(harness.runtime.properties.validate().ok());
+}
+
 void test_failed_market_tick_is_atomic() {
     auto harness = build(market_spec(false, false));
     const auto root = base_checkpoint(harness);
@@ -249,8 +455,11 @@ void test_failed_market_tick_is_atomic() {
 int main() {
     test_cash_resale_moves_money_title_and_occupancy();
     test_mortgage_origination_is_canonical_and_collateralized();
+    test_mortgage_follows_heir_when_borrower_household_retires();
+    test_mortgaged_resale_discharge_precedes_new_collateral();
     test_rent_moves_cash_without_minting_money();
     test_price_shock_forecloses_into_bank_title();
+    test_homeless_owner_does_not_buy_own_listing();
     test_failed_market_tick_is_atomic();
     return 0;
 }

@@ -172,6 +172,7 @@ void append_root(DigestWriter& writer, const RootState& state) {
         writer.u64(loan.terms.originated_tick.value());
         writer.u64(loan.terms.maturity_tick.value());
         writer.boolean(loan.active);
+        writer.u8(static_cast<std::uint8_t>(loan.purpose));
     }
 
     writer.u64(static_cast<std::uint64_t>(state.ownership.records().size()));

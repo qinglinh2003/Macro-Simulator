@@ -11,6 +11,16 @@ constexpr std::size_t kMissingAccountRow = std::numeric_limits<std::size_t>::max
 constexpr std::size_t kDeletedAccountSlot =
     std::numeric_limits<std::size_t>::max();
 
+[[nodiscard]] constexpr bool valid_loan_purpose(LoanPurpose purpose) noexcept {
+    switch (purpose) {
+    case LoanPurpose::general:
+    case LoanPurpose::mortgage:
+    case LoanPurpose::margin:
+        return true;
+    }
+    return false;
+}
+
 struct RoundedAdd final {
     double value{0.0};
     double error{0.0};
@@ -466,7 +476,8 @@ const std::vector<LoanRecord> &LoanBook::records() const noexcept { return loans
 Status LoanBook::validate_finite() const noexcept {
     for (const auto &loan : loans_) {
         if (!std::isfinite(loan.principal.value()) ||
-            !std::isfinite(loan.roundoff_drift) || loan.principal.value() < 0.0) {
+            !std::isfinite(loan.roundoff_drift) || loan.principal.value() < 0.0 ||
+            !valid_loan_purpose(loan.purpose)) {
             return Status(ErrorCode::invariant_violation, "invalid loan");
         }
     }

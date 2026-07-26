@@ -1218,7 +1218,8 @@ class M8Extension final : public M7TickExtension {
                 const auto status = mutable_properties().transfer_title(
                     dwelling, source, destination, tick);
                 if (!status.ok()) {
-                    return status;
+                    return Status(status.code(),
+                                  "M8 builder exit title transfer failed");
                 }
             }
             for (auto &listing : scratch_.housing_listings_) {
@@ -1286,33 +1287,68 @@ class M8Extension final : public M7TickExtension {
                          household) != population.retired_households_.end();
     }
 
-    [[nodiscard]] Status settle_retired_housing(const core::RootState &state,
-                                                const M7TickScratch &population,
-                                                Tick tick) {
+    [[nodiscard]] Status settle_retired_housing(
+        const core::RootState &state, M4TickScratch &real,
+        M5TickScratch &monetary, const M7Runtime &population_runtime,
+        const M7TickScratch &population, Tick tick) {
+        const auto calendar_day =
+            population_runtime.start_calendar_day +
+            static_cast<std::int32_t>(tick.value()) + 1;
         for (const auto household : population.retired_households_) {
             const auto estate =
                 std::find_if(population.estates_.rbegin(), population.estates_.rend(),
-                             [household](const EstateRecord &record) {
-                                 return record.household == household && record.settled;
+                             [household, calendar_day](const EstateRecord &record) {
+                                 return record.household == household &&
+                                        record.settled &&
+                                        record.settled_day == calendar_day;
                              });
-            if (estate == population.estates_.rend()) {
-                return Status(ErrorCode::invariant_violation,
-                              "M8 retired housing estate is absent");
-            }
+            const auto destination_household =
+                estate == population.estates_.rend()
+                    ? HouseholdId{}
+                    : estate->destination_household;
             const auto source = core::OwnerId::household(household);
             const auto destination =
-                estate->destination_household.valid()
-                    ? core::OwnerId::household(estate->destination_household)
+                destination_household.valid()
+                    ? core::OwnerId::household(destination_household)
                     : core::OwnerId::institutional(core::OwnerKind::treasury);
             std::vector<DwellingId> holdings(
                 projected_properties().dwellings_for_owner(source).begin(),
                 projected_properties().dwellings_for_owner(source).end());
             for (const auto dwelling : holdings) {
                 auto &properties = mutable_properties();
-                const auto status =
-                    properties.transfer_title(dwelling, source, destination, tick);
+                auto resolved_destination = destination;
+                const auto mortgage = std::find_if(
+                    scratch_.mortgages_.begin(), scratch_.mortgages_.end(),
+                    [household, dwelling](const MortgageRecord &record) {
+                        return record.active && record.borrower == household &&
+                               record.collateral == dwelling;
+                    });
+                if (mortgage != scratch_.mortgages_.end()) {
+                    if (destination_household.valid()) {
+                        mortgage->borrower = destination_household;
+                    } else {
+                        auto status = stage_m5_loan_writeoff(
+                            state, real, monetary, mortgage->loan, tick);
+                        if (!status.ok()) {
+                            return status;
+                        }
+                        status =
+                            properties.clear_collateral(dwelling, mortgage->loan);
+                        if (!status.ok()) {
+                            return status;
+                        }
+                        resolved_destination =
+                            core::OwnerId::bank(mortgage->lender);
+                        mortgage->active = false;
+                        mortgage->foreclosed = true;
+                        ++scratch_.working_metrics_.housing.foreclosures;
+                    }
+                }
+                const auto status = properties.transfer_title(
+                    dwelling, source, resolved_destination, tick);
                 if (!status.ok()) {
-                    return status;
+                    return Status(status.code(),
+                                  "M8 estate title transfer failed");
                 }
                 const auto *record = properties.get(dwelling);
                 if (record != nullptr && record->occupant == household) {
@@ -1340,8 +1376,8 @@ class M8Extension final : public M7TickExtension {
                     tenancy.active = false;
                     tenancy.ended_tick = tick;
                 } else if (tenancy.landlord == household) {
-                    if (estate->destination_household.valid()) {
-                        tenancy.landlord = estate->destination_household;
+                    if (destination_household.valid()) {
+                        tenancy.landlord = destination_household;
                     } else {
                         tenancy.active = false;
                         tenancy.ended_tick = tick;
@@ -1361,7 +1397,13 @@ class M8Extension final : public M7TickExtension {
                 if (!listing.active || listing.seller != source) {
                     continue;
                 }
-                listing.seller = destination;
+                const auto *dwelling =
+                    projected_properties().get(listing.dwelling);
+                if (dwelling == nullptr || !dwelling->active) {
+                    listing.active = false;
+                } else {
+                    listing.seller = dwelling->owner;
+                }
             }
         }
         (void)state;
@@ -1487,7 +1529,8 @@ class M8Extension final : public M7TickExtension {
                 properties.transfer_title(mortgage.collateral, previous_owner,
                                           core::OwnerId::bank(mortgage.lender), tick);
             if (!status.ok()) {
-                return status;
+                return Status(status.code(),
+                              "M8 foreclosure title transfer failed");
             }
             mortgage.active = false;
             mortgage.foreclosed = true;
@@ -1701,6 +1744,10 @@ class M8Extension final : public M7TickExtension {
             dwelling->owner != listing.seller) {
             return Status(ErrorCode::stale_handle, "M8 housing listing became stale");
         }
+        if (listing.seller == core::OwnerId::household(buyer)) {
+            return Status(ErrorCode::stale_handle,
+                          "M8 buyer already owns the listed dwelling");
+        }
         const double price = listing.asking_price;
         const double tax = price * runtime_.housing_policy.transfer_tax_rate;
         const double income = std::max(
@@ -1711,6 +1758,45 @@ class M8Extension final : public M7TickExtension {
             std::max(0.0, projected_balance(real, household->primary_account));
         const double cash_available = std::max(0.0, liquid - buffer);
         const double total = price + tax;
+        const auto seller_account = owner_account(state, listing.seller);
+        if (!seller_account.valid()) {
+            return Status(ErrorCode::not_found,
+                          "M8 housing seller account is absent");
+        }
+        const auto seller_collateral = dwelling->collateral;
+        double seller_payoff = 0.0;
+        MortgageRecord *seller_mortgage = nullptr;
+        if (seller_collateral.valid()) {
+            if (seller_collateral.value() > monetary_scratch.loans_.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 housing seller mortgage is absent");
+            }
+            const auto &loan = monetary_scratch.loans_[static_cast<std::size_t>(
+                seller_collateral.value() - 1U)];
+            if (loan.id != seller_collateral || !loan.active ||
+                loan.borrower_account != seller_account ||
+                loan.principal.value() <= kEconomicEpsilon) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 housing seller mortgage is stale");
+            }
+            seller_payoff = loan.principal.value();
+            const auto found = std::find_if(
+                scratch_.mortgages_.begin(), scratch_.mortgages_.end(),
+                [seller_collateral, &listing](const MortgageRecord &mortgage) {
+                    return mortgage.active && mortgage.loan == seller_collateral &&
+                           mortgage.collateral == listing.dwelling;
+                });
+            if (found == scratch_.mortgages_.end()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 housing seller mortgage record is absent");
+            }
+            seller_mortgage = &*found;
+            if (projected_balance(real, seller_account) + price + kTolerance <
+                seller_payoff) {
+                return Status(ErrorCode::insufficient_funds,
+                              "M8 housing sale cannot discharge seller mortgage");
+            }
+        }
         LoanId mortgage_loan{};
         double mortgage_principal = 0.0;
         BankId mortgage_bank{};
@@ -1745,17 +1831,14 @@ class M8Extension final : public M7TickExtension {
                               "M8 mortgage DSTI is binding");
             }
             const auto loan = stage_m5_credit(state, real, monetary, monetary_scratch,
-                                              *quote.get_if(), tick);
+                                              *quote.get_if(), tick,
+                                              core::LoanPurpose::mortgage);
             if (!loan.ok()) {
                 return loan.status();
             }
             mortgage_loan = *loan.get_if();
             mortgage_principal = quote.get_if()->principal.value();
             mortgage_bank = quote.get_if()->lender;
-        }
-        const auto seller_account = owner_account(state, listing.seller);
-        if (!seller_account.valid()) {
-            return Status(ErrorCode::not_found, "M8 housing seller account is absent");
         }
         auto status = stage_m4_transfer(state, real, household->primary_account,
                                         seller_account, price);
@@ -1771,6 +1854,25 @@ class M8Extension final : public M7TickExtension {
             scratch_.working_metrics_.housing.transfer_tax_paid += tax;
         }
         auto &properties = mutable_properties();
+        if (seller_collateral.valid()) {
+            status = stage_m5_loan_repayment(
+                state, real, monetary_scratch, seller_collateral, seller_account,
+                Money(seller_payoff));
+            if (!status.ok()) {
+                return status;
+            }
+            status = properties.clear_collateral(listing.dwelling,
+                                                 seller_collateral);
+            if (!status.ok()) {
+                return status;
+            }
+            seller_mortgage->active = false;
+            scratch_.working_metrics_.housing.mortgage_principal_outstanding =
+                std::max(
+                    0.0,
+                    scratch_.working_metrics_.housing.mortgage_principal_outstanding -
+                        seller_payoff);
+        }
         if (dwelling->occupant.valid()) {
             status = properties.set_occupant(listing.dwelling, dwelling->occupant,
                                              HouseholdId{});
@@ -1781,7 +1883,8 @@ class M8Extension final : public M7TickExtension {
         status = properties.transfer_title(listing.dwelling, listing.seller,
                                            core::OwnerId::household(buyer), tick);
         if (!status.ok()) {
-            return status;
+            return Status(status.code(),
+                          "M8 housing sale title transfer failed");
         }
         status = properties.set_occupant(listing.dwelling, HouseholdId{}, buyer);
         if (!status.ok()) {
@@ -1878,6 +1981,7 @@ class M8Extension final : public M7TickExtension {
             for (const auto index : active) {
                 auto &listing = scratch_.housing_listings_[index];
                 if (!listing.active ||
+                    listing.seller == core::OwnerId::household(buyer) ||
                     ++searched > runtime_.housing_rules.buyer_search_count) {
                     continue;
                 }
@@ -2086,7 +2190,9 @@ class M8Extension final : public M7TickExtension {
                                            M5TickScratch &monetary_scratch,
                                            M7Runtime &population_runtime,
                                            const M7TickScratch &population, Tick tick) {
-        auto status = settle_retired_housing(state, population, tick);
+        auto status =
+            settle_retired_housing(state, real, monetary_scratch,
+                                   population_runtime, population, tick);
         if (!status.ok()) {
             return status;
         }
@@ -3389,8 +3495,7 @@ advance_m8_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
                                                    nullptr, nullptr, nullptr, false);
     }
     if (!state_status.ok()) {
-        return Status(ErrorCode::invariant_violation,
-                      "M8 cannot advance an invalid state");
+        return state_status;
     }
     M8Extension extension(runtime, scratch, options);
     auto result = advance_m7_ticks_extended(

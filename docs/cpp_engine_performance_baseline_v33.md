@@ -1,7 +1,8 @@
 # C++ Engine Scale Baseline V33
 
-Status: one-million-person latency target met; normal-play peak RSS reduced below
-0.95 GiB and full-play P95 latency reduced to approximately 0.10 seconds
+Status: one-million-person latency target met over a validated 30-year full-play
+run; median daily latency is 0.183 seconds, P95 is 0.347 seconds, and the
+30-year peak RSS is 2.69 GiB
 
 Date: 2026-07-26
 
@@ -16,6 +17,8 @@ Memory refinement branch: `perf/cpp-memory-v33`
 Second memory refinement branch: `perf/cpp-memory-history-v33`
 
 Final latency refinement branch: `perf/cpp-final-pass-v33`
+
+Long-horizon refinement branch: `perf/cpp-longrun-v33`
 
 ## 1. Purpose
 
@@ -674,6 +677,73 @@ state. The reported categories explain approximately 1.01 GB of the final
 The complete native and Python compatibility suite passes with eight workers:
 49 of 49 tests in 14.63 seconds.
 
+### 8.6 Thirty-year full-play acceptance
+
+Short portfolio-cycle gates did not establish whether append-only history,
+lifecycle activity, or live market positions would make daily latency diverge
+over decades. The long-horizon gate therefore uses the exact production-scale
+configuration:
+
+- 1,000,000 opening persons distributed across eight economies
+- eight domestic workers
+- open trade, capital, and migration
+- no exogenous shock
+- the `full` workload
+- beneficial ownership and estates enabled
+- 10,950 measured days, equal to 30 model years
+- a complete world validation after the final day
+
+The first complete accepted run used the optimized `-O3 -DNDEBUG` build:
+
+| Genesis | Median day | P95 day | Maximum day | Wall time | Peak RSS | Final live heap | Known retained memory | Digest |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| 2.12 s | 0.183 s | 0.347 s | 0.458 s | 37 min 30 s | 2.69 GiB | 2.40 GiB | 2.09 GiB | `14201922150108675077` |
+
+Every measured day remains below the one-second interaction budget. The final
+world contains 462,422 households, 46,306 firms, 358 banks, 8,906,039 active
+security lots, 3,817,362 beneficial lots of which 3,295,043 are active,
+1,295,498 employment records, and 1,207,101 active jobs.
+
+Daily latency is bounded but not stationary. The annual means show a gradual
+increase as live state grows:
+
+| Model year | Mean day | Mean live heap |
+| ---: | ---: | ---: |
+| 1 | 0.112 s | 1.11 GiB |
+| 5 | 0.135 s | 1.38 GiB |
+| 10 | 0.157 s | 1.50 GiB |
+| 15 | 0.180 s | 1.60 GiB |
+| 20 | 0.212 s | 1.77 GiB |
+| 25 | 0.279 s | 2.03 GiB |
+| 30 | 0.348 s | 2.39 GiB |
+
+This result rejects the earlier superlinear failure mode but does not claim
+constant latency independent of retained world size. The year-30 mean is about
+3.1 times the year-1 mean while mean live heap is about 2.2 times larger. The
+remaining work is to bound live position and history growth and to make derived
+security views incremental where profiling proves that worthwhile.
+
+The accepted run required model-preserving long-horizon corrections:
+
+- Beneficial asset queries now use an incrementally maintained per-asset lot
+  chain. Death, estate, and household-rekey operations no longer rebuild the
+  complete beneficial reverse index for each affected asset. Individually
+  retired lot history remains queryable.
+- Margin repayment updates account debt projections in place. It no longer
+  clears and rebuilds the complete debt table after each affected household.
+- Margin loans have a per-account chronological chain. Repayment still follows
+  original creation order, but finding one household's contracts no longer scans
+  every historical margin loan.
+- Empty household estates, mortgage inheritance, no-heir escheat, zero-cash
+  leaving-home events, and same-day estate selection have explicit lifecycle
+  handling and regression coverage.
+- A homeless household that already owns an empty listed dwelling cannot buy
+  its own listing. The listing is excluded without consuming a search slot,
+  preventing a same-owner title transfer.
+
+The final eight-worker compatibility suite passes all 49 tests after these
+changes.
+
 ## 9. Optimization order
 
 Completed work includes quadratic genesis removal, compact ownership indexes,
@@ -692,13 +762,18 @@ seconds to 0.102 seconds and maximum latency from 0.640 seconds to 0.123 seconds
 
 The next measured order is:
 
-1. Compact root entity stores and remaining per-person social indexes without
+1. Profile the final five years at one-million-person scale, then bound live
+   security-position and contract-history growth without changing balances,
+   prices, ownership, or estate valuation.
+2. Make derived security holder and contract views incremental if the final-year
+   profile confirms that their full rebuild remains material.
+3. Compact root entity stores and remaining per-person social indexes without
    losing stable external identities.
-2. Stream detailed employment and title history into bounded UI-facing history
+4. Stream detailed employment and title history into bounded UI-facing history
    rings when that gameplay surface is implemented.
-3. Replace copied rollback staging with chunked copy-on-write storage or mutation
+5. Replace copied rollback staging with chunked copy-on-write storage or mutation
    journals where strong rollback is required.
-4. Extend deterministic parallelism inside a single large country only after
+6. Extend deterministic parallelism inside a single large country only after
    phase read/write sets and memory-bandwidth limits are measured.
 
 Country-level parallelism is now active because economies have disjoint domestic
@@ -804,3 +879,19 @@ build/native/m9-release/native/macro_sim_m9_scale_probe \
 
 Use `--shocks active` in the same command for the bounded demand-shock
 acceptance.
+
+Run the 30-year full-play acceptance:
+
+```bash
+build/native/m9-release/native/macro_sim_m9_scale_probe \
+  --mode m9 \
+  --persons 1000000 \
+  --economies 8 \
+  --workers 8 \
+  --world-mode open \
+  --shocks none \
+  --workload full \
+  --warmup-days 0 \
+  --days 10950 \
+  --beneficial-ownership enabled
+```

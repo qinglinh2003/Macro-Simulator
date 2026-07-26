@@ -205,6 +205,8 @@ class M7TickScratch final {
     std::vector<LeavingHomeRecord> leaving_home_;
     std::vector<LeavingHomeRecord> pending_leaving_home_;
     std::vector<PersonId> opening_alive_;
+    std::vector<std::uint32_t> guardian_heads_;
+    std::vector<std::uint32_t> guardian_next_;
     std::vector<BeneficialLotId> deceased_lots_;
     std::vector<core::BeneficialAssetKey> beneficial_assets_;
     std::vector<core::SecurityId> estate_securities_;

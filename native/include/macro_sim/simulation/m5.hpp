@@ -181,6 +181,7 @@ class M5TickScratch final {
     std::vector<core::BankPnlRecord> bank_pnl_;
     std::vector<core::BankCapitalRecord> bank_capital_;
     std::vector<double> debt_by_account_;
+    std::vector<LoanId> reusable_loan_by_account_;
     std::vector<double> exposure_by_bank_;
     std::vector<double> deposits_by_bank_;
     std::vector<double> bank_capital_live_;
@@ -217,7 +218,12 @@ quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
                                              M4TickScratch &real_economy,
                                              const M5Runtime &runtime,
                                              M5TickScratch &scratch,
-                                             const M5CreditQuote &quote, Tick tick);
+                                             const M5CreditQuote &quote, Tick tick,
+                                             core::LoanPurpose purpose =
+                                                 core::LoanPurpose::general);
+[[nodiscard]] Status stage_m5_loan_repayment(
+    const core::RootState &state, M4TickScratch &real_economy,
+    M5TickScratch &scratch, LoanId loan, AccountId payer, Money amount) noexcept;
 [[nodiscard]] Status stage_m5_loan_writeoff(const core::RootState &state,
                                             M4TickScratch &real_economy,
                                             M5TickScratch &scratch, LoanId loan,

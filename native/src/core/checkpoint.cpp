@@ -1010,6 +1010,7 @@ public:
             writer.u64(loan.terms.originated_tick.value());
             writer.u64(loan.terms.maturity_tick.value());
             writer.boolean(loan.active);
+            writer.u8(static_cast<std::uint8_t>(loan.purpose));
         }
 
         writer.u64(state.ownership.lots_.size());
@@ -1404,12 +1405,16 @@ Result<RootState> CheckpointCodec::decode_state(
         const auto originated = reader.u64();
         const auto maturity = reader.u64();
         const auto active = reader.boolean();
+        const auto purpose = reader.u8();
         if (!id.ok() || !lender.ok() || !borrower.ok() || !account.ok()
             || !principal.ok() || !drift.ok() || !rate.ok()
-            || !originated.ok() || !maturity.ok() || !active.ok()) {
+            || !originated.ok() || !maturity.ok() || !active.ok() ||
+            !purpose.ok()) {
             return corrupt("loan record is truncated");
         }
-        if (id.get_if()->value() != index + 1) {
+        if (id.get_if()->value() != index + 1 ||
+            *purpose.get_if() >
+                static_cast<std::uint8_t>(LoanPurpose::margin)) {
             return corrupt("loan IDs are not sequential");
         }
         state.loans.loans_.push_back(
@@ -1426,6 +1431,7 @@ Result<RootState> CheckpointCodec::decode_state(
                     Tick(*maturity.get_if()),
                 },
                 *active.get_if(),
+                static_cast<LoanPurpose>(*purpose.get_if()),
             }
         );
     }

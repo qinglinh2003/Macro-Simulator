@@ -253,7 +253,11 @@ class M6TickScratch final {
     std::vector<M6BondDemand> bond_demands_;
     std::vector<double> watch_current_;
     std::vector<double> watch_attractiveness_;
+    std::vector<double> equity_buy_commitments_;
     std::vector<LoanId> margin_loans_;
+    std::vector<std::uint32_t> margin_loan_heads_;
+    std::vector<std::uint32_t> margin_loan_tails_;
+    std::vector<std::uint32_t> margin_loan_next_;
     std::vector<double> debt_by_account_;
     std::vector<double> margin_by_account_;
     std::vector<double> firm_return_;

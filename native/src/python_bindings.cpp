@@ -109,6 +109,7 @@ nb::dict snapshot_to_python(const macro_sim::core::RootState &state) {
         item["borrower_account"] = loan.borrower_account.value();
         item["principal"] = loan.principal.value();
         item["active"] = loan.active;
+        item["purpose"] = static_cast<std::uint8_t>(loan.purpose);
         loans.append(std::move(item));
     }
     nb::dict counters;

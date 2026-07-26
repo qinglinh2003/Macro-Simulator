@@ -11,7 +11,7 @@
 
 namespace macro_sim::core {
 
-inline constexpr std::uint32_t kM2CheckpointSchemaVersion = 2;
+inline constexpr std::uint32_t kM2CheckpointSchemaVersion = 3;
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
 
 struct CheckpointLimits final {

@@ -525,10 +525,25 @@ SecurityBook::create_equity(EquityContract contract,
 Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
                                     OwnerId destination, double units,
                                     Money destination_cost_basis) {
-    if (!validate_security(security).ok() || !source.valid() || !destination.valid() ||
-        source == destination || !std::isfinite(units) || units <= kMinimumUnits ||
-        !finite_nonnegative(destination_cost_basis.value())) {
-        return Status(ErrorCode::invalid_argument, "invalid security transfer");
+    if (!validate_security(security).ok()) {
+        return Status(ErrorCode::invalid_argument,
+                      "security transfer contract is inactive");
+    }
+    if (!source.valid() || !destination.valid()) {
+        return Status(ErrorCode::invalid_argument,
+                      "security transfer owner is invalid");
+    }
+    if (source == destination) {
+        return Status(ErrorCode::invalid_argument,
+                      "security transfer owners are identical");
+    }
+    if (!std::isfinite(units) || units <= kMinimumUnits) {
+        return Status(ErrorCode::invalid_argument,
+                      "security transfer units are invalid");
+    }
+    if (!finite_nonnegative(destination_cost_basis.value())) {
+        return Status(ErrorCode::invalid_argument,
+                      "security transfer cost basis is invalid");
     }
     const double held = units_held(security, source);
     constexpr double transfer_tolerance = 1.0e-9;

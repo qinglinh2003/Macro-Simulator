@@ -641,6 +641,8 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
                                   capacity_bytes(monetary.bank_pnl_) +
                                   capacity_bytes(monetary.bank_capital_) +
                                   capacity_bytes(monetary.debt_by_account_) +
+                                  capacity_bytes(
+                                      monetary.reusable_loan_by_account_) +
                                   capacity_bytes(monetary.exposure_by_bank_) +
                                   capacity_bytes(monetary.deposits_by_bank_) +
                                   capacity_bytes(monetary.bank_capital_live_) +
@@ -671,7 +673,11 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
             capacity_bytes(financial_scratch.bond_demands_) +
             capacity_bytes(financial_scratch.watch_current_) +
             capacity_bytes(financial_scratch.watch_attractiveness_) +
+            capacity_bytes(financial_scratch.equity_buy_commitments_) +
             capacity_bytes(financial_scratch.margin_loans_) +
+            capacity_bytes(financial_scratch.margin_loan_heads_) +
+            capacity_bytes(financial_scratch.margin_loan_tails_) +
+            capacity_bytes(financial_scratch.margin_loan_next_) +
             capacity_bytes(financial_scratch.debt_by_account_) +
             capacity_bytes(financial_scratch.margin_by_account_) +
             capacity_bytes(financial_scratch.firm_return_) +
@@ -694,6 +700,8 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
         usage.social_labor += employment_bytes + relationship_bytes;
         usage.population_scratch +=
             capacity_bytes(economy.population_scratch.opening_alive_) +
+            capacity_bytes(economy.population_scratch.guardian_heads_) +
+            capacity_bytes(economy.population_scratch.guardian_next_) +
             capacity_bytes(economy.population_scratch.deceased_lots_) +
             capacity_bytes(economy.population_scratch.beneficial_assets_) +
             capacity_bytes(economy.population_scratch.estate_securities_) +

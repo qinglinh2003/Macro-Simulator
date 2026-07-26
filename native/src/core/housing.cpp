@@ -96,9 +96,17 @@ Status PropertyRegistry::transfer_title(DwellingId dwelling, OwnerId expected_ow
     if (record == nullptr || !record->active) {
         return Status(ErrorCode::not_found, "dwelling is not active");
     }
-    if (!expected_owner.valid() || !next_owner.valid() ||
-        expected_owner == next_owner) {
-        return Status(ErrorCode::invalid_argument, "invalid title transfer");
+    if (!expected_owner.valid()) {
+        return Status(ErrorCode::invalid_argument,
+                      "title transfer source is invalid");
+    }
+    if (!next_owner.valid()) {
+        return Status(ErrorCode::invalid_argument,
+                      "title transfer destination is invalid");
+    }
+    if (expected_owner == next_owner) {
+        return Status(ErrorCode::invalid_argument,
+                      "title transfer source equals destination");
     }
     if (record->owner != expected_owner) {
         return Status(ErrorCode::stale_handle, "stale dwelling title");
