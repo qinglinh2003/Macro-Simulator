@@ -1,0 +1,94 @@
+{
+  "architecture": "arm64",
+  "captured_at_utc": "2026-07-26T21:53:43.183794+00:00",
+  "commit": "65b9734707e72c3a44d40c725613afc009e9c84f",
+  "failures": [],
+  "native_dir": "/Users/qinglinh/workspace/macro-simulator-cpp-m10/build/native/m10-release/native",
+  "platform": "darwin",
+  "results": {
+    "clone_reset": {
+      "gate_seconds": 0.16957583295879886,
+      "maximum_ns": 2554625,
+      "median_ns": 1447958,
+      "minimum_ns": 1435125,
+      "native_known_bytes_per_clone": 68661393,
+      "p95_ns": 1687541,
+      "p99_ns": 2554625,
+      "population": 99961,
+      "sample_count": 20,
+      "strategy": "deep_copy_native_composite"
+    },
+    "p0": {
+      "gate_seconds": 0.19205029198201373,
+      "native_to_python_ratio": 0.0002330536097063056,
+      "p0_median_ns": 296875,
+      "p0_p95_ns": 310792,
+      "scaling_ratio": 2.02703,
+      "schema_version": "m4-performance-gate-result-v1",
+      "status": "passed"
+    },
+    "p1": {
+      "gate_seconds": 1.2131748339743353,
+      "maximum_ns": 3607750,
+      "median_ns": 2789667,
+      "minimum_ns": 2111750,
+      "native_to_python_median_ratio": 0.004061028856806781,
+      "p95_ns": 3025250,
+      "p99_ns": 3370250,
+      "reference_entities": {
+        "banks": 8,
+        "firms": 750,
+        "households": 4000,
+        "persons_alive": 10000
+      },
+      "sample_count": 365
+    },
+    "p2": {
+      "gate_seconds": 1.269629292015452,
+      "maximum_ns": 4375333,
+      "median_ns": 3414542,
+      "minimum_ns": 2658333,
+      "native_to_historical_median_ratio": 0.013496213438735178,
+      "p95_ns": 3843209,
+      "p99_ns": 4164000,
+      "reference_entities": {
+        "banks": 8,
+        "firms": 750,
+        "households": 5000,
+        "persons_alive": 12500
+      },
+      "sample_count": 365
+    },
+    "p3": {
+      "batch_plus_snapshot": {
+        "maximum_ns": 109611583,
+        "median_ns": 101944938,
+        "minimum_ns": 99309833,
+        "p95_ns": 108592292,
+        "p99_ns": 109611583,
+        "sample_count": 20
+      },
+      "gate_seconds": 2.144128041982185,
+      "snapshot": {
+        "maximum_ns": 1186167,
+        "median_ns": 1130146,
+        "minimum_ns": 941958,
+        "p95_ns": 1161458,
+        "p99_ns": 1186167,
+        "sample_count": 20
+      }
+    },
+    "p5": {
+      "decision_steps": 392,
+      "elapsed_seconds": 0.8568672079709359,
+      "engine_days": 5840,
+      "engine_days_per_second": 6815.525142838805,
+      "environment_count": 8,
+      "gate_seconds": 1.23654070898192
+    }
+  },
+  "schema_version": "m10-performance-gate-result-v1",
+  "status": "passed",
+  "system": "Darwin",
+  "working_tree_dirty": false
+}
