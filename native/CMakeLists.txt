@@ -107,6 +107,7 @@ add_library(
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
         src/control/m11_artifact.cpp
+        src/control/m11_policy.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -666,6 +667,23 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_artifact
         COMMAND macro_sim_m11_artifact_tests
+    )
+
+    add_executable(
+        macro_sim_m11_policy_contract_tests
+        tests/m11_policy_contract_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_policy_contract_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_policy_contract_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_policy_contract_tests
+    )
+    add_test(
+        NAME macro_sim.m11_policy_contract
+        COMMAND macro_sim_m11_policy_contract_tests
     )
 
     if(TARGET _native)

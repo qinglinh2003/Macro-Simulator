@@ -349,7 +349,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     _L("mortgage_arrears_floor", Range(0.0, 100.0), requires=frozenset({"mortgage_enabled"}),
        read_point="housing/mortgage.py::_sync_policy (foreclosure law)"),
     # -- housing fiscal --
-    _L("housing_permits", Range(0.0, 1.0e5), requires=frozenset({"housing_construction_enabled"}),
+    _L("housing_permits", IntRange(0, 100_000), requires=frozenset({"housing_construction_enabled"}),
        read_point="housing/construction.py::permit quota"),
     _L("housing_transfer_tax", Range(0.0, 0.3), requires=frozenset({"housing_market_enabled"}),
        read_point="housing/market.py::stamp duty",

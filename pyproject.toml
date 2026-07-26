@@ -68,6 +68,8 @@ sdist.include = [
     "/schemas/m7/**",
     "/schemas/m8/**",
     "/schemas/m9/**",
+    "/schemas/m10/**",
+    "/schemas/m11/**",
     "/tools/m1/**",
     "/tools/m2/**",
     "/tools/m3/**",
@@ -77,6 +79,8 @@ sdist.include = [
     "/tools/m7/**",
     "/tools/m8/**",
     "/tools/m9/**",
+    "/tools/m10/**",
+    "/tools/m11/**",
 ]
 sdist.exclude = [
     "/.venv/**",
