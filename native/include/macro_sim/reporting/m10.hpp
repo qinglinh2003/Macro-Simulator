@@ -17,6 +17,35 @@ namespace macro_sim::reporting {
 // ``real_output`` source; access control belongs to the release layer rather
 // than to a duplicate economic measurement.
 inline constexpr std::size_t kM10PublicMetricCount = 41U;
+inline constexpr std::size_t kM10NativeSourceMetricCount =
+    0U
+#define MACRO_SIM_M4_SOURCE(field, unit) +1U
+#define MACRO_SIM_M5_SOURCE(field, unit) +1U
+#define MACRO_SIM_M6_SOURCE(field, unit) +1U
+#define MACRO_SIM_M7_SOURCE(field, unit) +1U
+#define MACRO_SIM_M8_ENERGY_SOURCE(field, unit) +1U
+#define MACRO_SIM_M8_HOUSING_SOURCE(field, unit) +1U
+#define MACRO_SIM_M9_COUNTRY_SOURCE(field, unit) +1U
+#define MACRO_SIM_M9_WORLD_SOURCE(field, unit) +1U
+#include "macro_sim/reporting/m10_metric_sources.inc"
+#undef MACRO_SIM_M4_SOURCE
+#undef MACRO_SIM_M5_SOURCE
+#undef MACRO_SIM_M6_SOURCE
+#undef MACRO_SIM_M7_SOURCE
+#undef MACRO_SIM_M8_ENERGY_SOURCE
+#undef MACRO_SIM_M8_HOUSING_SOURCE
+#undef MACRO_SIM_M9_COUNTRY_SOURCE
+#undef MACRO_SIM_M9_WORLD_SOURCE
+    ;
+inline constexpr std::size_t kM10NationalAccountMetricCount =
+    0U
+#define MACRO_SIM_NATIONAL_ACCOUNT(field, unit) +1U
+#include "macro_sim/reporting/m10_national_accounts.inc"
+#undef MACRO_SIM_NATIONAL_ACCOUNT
+    ;
+inline constexpr std::size_t kM10MetricCount =
+    kM10PublicMetricCount + kM10NativeSourceMetricCount +
+    kM10NationalAccountMetricCount;
 
 enum class MetricTier : std::uint8_t {
     causal = 0,
@@ -127,11 +156,14 @@ class MetricPipeline final {
 };
 
 [[nodiscard]] std::span<const MetricDescriptor> public_metric_descriptors() noexcept;
+[[nodiscard]] std::span<const MetricDescriptor> metric_descriptors() noexcept;
 [[nodiscard]] Result<std::size_t>
 public_metric_index(std::string_view stable_id) noexcept;
+[[nodiscard]] Result<std::size_t>
+metric_index(std::string_view stable_id) noexcept;
 [[nodiscard]] Result<MetricFrame>
-build_public_metric_frame(const simulation::M9World &world,
-                          const MetricFrame *previous = nullptr);
+build_metric_frame(const simulation::M9World &world,
+                   const MetricFrame *previous = nullptr);
 
 } // namespace macro_sim::reporting
 

@@ -50,9 +50,20 @@ using namespace macro_sim::reporting;
     return *result.get_if();
 }
 
+[[nodiscard]] std::size_t maintained_metric(std::string_view stable_id) {
+    auto result = metric_index(stable_id);
+    assert(result.ok());
+    return *result.get_if();
+}
+
 void test_descriptors_are_stable_and_complete() {
-    const auto descriptors = public_metric_descriptors();
-    assert(descriptors.size() == kM10PublicMetricCount);
+    const auto public_descriptors = public_metric_descriptors();
+    assert(public_descriptors.size() == kM10PublicMetricCount);
+    const auto descriptors = metric_descriptors();
+    assert(descriptors.size() == kM10MetricCount);
+    assert(kM10NativeSourceMetricCount == 200U);
+    assert(kM10NationalAccountMetricCount == 59U);
+    assert(kM10MetricCount == 300U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());
@@ -68,11 +79,11 @@ void test_descriptors_are_stable_and_complete() {
 void test_frame_matches_native_sources() {
     auto world = build_world();
     assert(world.advance(1U).ok());
-    auto frame = build_public_metric_frame(world);
+    auto frame = build_metric_frame(world);
     assert(frame.ok());
     assert(frame.get_if()->tick == world.tick());
     assert(frame.get_if()->economy_count == 1U);
-    assert(frame.get_if()->values.size() == kM10PublicMetricCount);
+    assert(frame.get_if()->values.size() == kM10MetricCount);
     const auto output = frame.get_if()->value(0U, 14U);
     const auto price = frame.get_if()->value(0U, 13U);
     assert(output.ok());
@@ -90,6 +101,48 @@ void test_frame_matches_native_sources() {
     assert(frame.get_if()
                ->value(0U, metric("metric.world.reserves_by_economy"))
                .ok());
+    assert(*frame.get_if()
+                ->value(
+                    0U,
+                    maintained_metric("metric.source.m4.real_output"))
+                .get_if() == real.real_output);
+    assert(*frame.get_if()
+                ->value(
+                    0U,
+                    maintained_metric(
+                        "metric.source.m8.energy.production"))
+                .get_if() == world.last_metrics().domestic[0].energy.production);
+    const double nominal_gdp = *frame.get_if()
+        ->value(
+            0U,
+            maintained_metric("metric.economy.na.nominal_gdp"))
+        .get_if();
+    assert(nominal_gdp == *frame.get_if()
+        ->value(
+            0U,
+            maintained_metric("metric.economy.na.production_nominal"))
+        .get_if());
+    assert(nominal_gdp == *frame.get_if()
+        ->value(
+            0U,
+            maintained_metric(
+                "metric.economy.na.expenditure_reconciled_nominal"))
+        .get_if());
+    assert(nominal_gdp == *frame.get_if()
+        ->value(
+            0U,
+            maintained_metric(
+                "metric.economy.na.income_reconciled_nominal"))
+        .get_if());
+    assert(*frame.get_if()
+        ->value(
+            0U,
+            maintained_metric(
+                "metric.economy.na.production_reconciliation_residual"))
+        .get_if() == 0.0);
+    for (std::size_t index = 0; index < kM10MetricCount; ++index) {
+        assert(frame.get_if()->value(0U, index).ok());
+    }
 }
 
 void test_history_is_bounded_and_cursor_checked() {
@@ -139,7 +192,7 @@ void test_shock_metrics_respect_announcement_boundary() {
     shock.magnitude = 0.2;
     assert(world.schedule_shock(shock).ok());
 
-    auto opening = build_public_metric_frame(world);
+    auto opening = build_metric_frame(world);
     assert(opening.ok());
     assert(*opening.get_if()
                 ->value(0U, metric("metric.shock.announced_count"))
@@ -164,7 +217,7 @@ void test_shock_metrics_respect_announcement_boundary() {
     assert(opening_bulletins.get_if()->front().intensity == 0.0);
 
     assert(world.advance(5U).ok());
-    auto active = build_public_metric_frame(world, opening.get_if());
+    auto active = build_metric_frame(world, opening.get_if());
     assert(active.ok());
     assert(*active.get_if()
                 ->value(0U, metric("metric.shock.active_count"))

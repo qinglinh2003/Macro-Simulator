@@ -1,0 +1,2712 @@
+{
+  "counts": {
+    "national_accounts": 59,
+    "native_stage_sources": 200,
+    "public_sources": 41,
+    "total": 300
+  },
+  "metrics": [
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.avg_wage",
+      "parity_rule": "m7.mean_hourly_wage",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.credit_to_gdp",
+      "parity_rule": "m5.total_loan_principal / m4.nominal_output",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.employment",
+      "parity_rule": "m7.employed_fte",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.energy_price",
+      "parity_rule": "m8.energy.transaction_price_hold_last",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency_per_unit"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.economy.energy_subsidy_paid",
+      "parity_rule": "m8.energy.subsidy_paid",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.gov_debt_to_gdp",
+      "parity_rule": "government_debt / annualized_daily_nominal_output",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.gov_deficit_to_gdp",
+      "parity_rule": "m4.government_deficit / m4.nominal_output",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.income_gini",
+      "parity_rule": "gini(live_household_income_realized)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "index"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.inflation",
+      "parity_rule": "price_index / previous_price_index - 1",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.economy.n_bank_failures",
+      "parity_rule": "m5.bank_failures",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "banks"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.policy_rate",
+      "parity_rule": "m5.policy_rate",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.population_alive",
+      "parity_rule": "m7.population",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.poverty_rate",
+      "parity_rule": "share_below_half_median_household_consumption",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.price_index",
+      "parity_rule": "m4.price_index",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "index"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.economy.real_output",
+      "parity_rule": "m4.real_output",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "goods_units"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 1,
+      "id": "metric.economy.unemployment_rate",
+      "parity_rule": "m7.unemployment_rate",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.world.current_account",
+      "parity_rule": "m9.external.current_account",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.world.e",
+      "parity_rule": "m9.external.exchange_rate",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "local_currency_per_numeraire"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.world.export_shipped_volume",
+      "parity_rule": "m9.external.exports_volume",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "goods_units"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.world.import_volume",
+      "parity_rule": "m9.external.imports_volume",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "goods_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.world.migrant_stock",
+      "parity_rule": "m9.external.migrant_stock_abroad",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.world.nfa",
+      "parity_rule": "m9.external.net_foreign_assets",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.world.remittances",
+      "parity_rule": "m9.external.remittances_received",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.bank_reserves_total",
+      "parity_rule": "m5.total_reserves",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.reserve_floor_breach_share",
+      "parity_rule": "share(alive_bank_reserves < reserve_floor_fraction * deposits)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.near_failure_bank_count",
+      "parity_rule": "count(0 <= closing_bank_capital < m6.bank_minimum_capital)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "banks"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.energy_stock_total",
+      "parity_rule": "m8.producer_inventory + m8.downstream_stock + m8.strategic_reserve",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "energy_units"
+    },
+    {
+      "aggregation": "sum",
+      "cadence_ticks": 1,
+      "id": "metric.economy.energy_unfilled",
+      "parity_rule": "m8.energy.unfilled",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "energy_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.world.reserves_by_economy",
+      "parity_rule": "m9.peg.reserves for pegger; zero for floating economy",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "anchor_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.announced_count",
+      "parity_rule": "count(disclosed shocks relevant to economy)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "events"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.active_count",
+      "parity_rule": "count(disclosed shocks active at boundary)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "events"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.max_severity",
+      "parity_rule": "max(disclosed active magnitude * intensity)",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.time_to_next",
+      "parity_rule": "min(max(0, start - boundary)) over disclosed shocks",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "ticks"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.productivity",
+      "parity_rule": "max disclosed productivity shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.labor_availability",
+      "parity_rule": "max disclosed labor-availability shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.energy_capacity",
+      "parity_rule": "max disclosed energy-capacity shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.household_demand",
+      "parity_rule": "max disclosed household-demand shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.import_capacity",
+      "parity_rule": "max disclosed import-capacity shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.export_capacity",
+      "parity_rule": "max disclosed export-capacity shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.credit_supply",
+      "parity_rule": "max disclosed credit-supply shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.capital_destruction",
+      "parity_rule": "max disclosed capital-destruction shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.real_output",
+      "parity_rule": "simulation::M4Metrics::real_output",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.nominal_output",
+      "parity_rule": "simulation::M4Metrics::nominal_output",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.price_index",
+      "parity_rule": "simulation::M4Metrics::price_index",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.unemployment_rate",
+      "parity_rule": "simulation::M4Metrics::unemployment_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.total_money",
+      "parity_rule": "simulation::M4Metrics::total_money",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.conservation_drift",
+      "parity_rule": "simulation::M4Metrics::conservation_drift",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.aggregate_capital",
+      "parity_rule": "simulation::M4Metrics::aggregate_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.household_consumption",
+      "parity_rule": "simulation::M4Metrics::household_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.wages_paid",
+      "parity_rule": "simulation::M4Metrics::wages_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.firm_profit",
+      "parity_rule": "simulation::M4Metrics::firm_profit",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tax_total",
+      "parity_rule": "simulation::M4Metrics::tax_total",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.government_spending",
+      "parity_rule": "simulation::M4Metrics::government_spending",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.government_deficit",
+      "parity_rule": "simulation::M4Metrics::government_deficit",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.public_capital",
+      "parity_rule": "simulation::M4Metrics::public_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.gross_output_nominal",
+      "parity_rule": "simulation::M4Metrics::gross_output_nominal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.consumption_output_nominal",
+      "parity_rule": "simulation::M4Metrics::consumption_output_nominal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.capital_output_nominal",
+      "parity_rule": "simulation::M4Metrics::capital_output_nominal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.consumption_output_real",
+      "parity_rule": "simulation::M4Metrics::consumption_output_real",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.capital_output_real",
+      "parity_rule": "simulation::M4Metrics::capital_output_real",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.inventory_change_nominal",
+      "parity_rule": "simulation::M4Metrics::inventory_change_nominal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.inventory_change_real",
+      "parity_rule": "simulation::M4Metrics::inventory_change_real",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.fixed_capital_formation_nominal",
+      "parity_rule": "simulation::M4Metrics::fixed_capital_formation_nominal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.fixed_capital_formation_real",
+      "parity_rule": "simulation::M4Metrics::fixed_capital_formation_real",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.government_consumption",
+      "parity_rule": "simulation::M4Metrics::government_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.public_fixed_capital_formation",
+      "parity_rule": "simulation::M4Metrics::public_fixed_capital_formation",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.transfer_payments",
+      "parity_rule": "simulation::M4Metrics::transfer_payments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.policy_rate",
+      "parity_rule": "simulation::M5Metrics::policy_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.inflation_sensor",
+      "parity_rule": "simulation::M5Metrics::inflation_sensor",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.new_credit",
+      "parity_rule": "simulation::M5Metrics::new_credit",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.principal_repaid",
+      "parity_rule": "simulation::M5Metrics::principal_repaid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.loan_interest_paid",
+      "parity_rule": "simulation::M5Metrics::loan_interest_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_paid",
+      "parity_rule": "simulation::M5Metrics::household_interest_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.deposit_interest_paid",
+      "parity_rule": "simulation::M5Metrics::deposit_interest_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.total_loan_principal",
+      "parity_rule": "simulation::M5Metrics::total_loan_principal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.total_bank_capital",
+      "parity_rule": "simulation::M5Metrics::total_bank_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.total_reserves",
+      "parity_rule": "simulation::M5Metrics::total_reserves",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.reserve_stock",
+      "parity_rule": "simulation::M5Metrics::reserve_stock",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.omo_flow",
+      "parity_rule": "simulation::M5Metrics::omo_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.lolr_advances",
+      "parity_rule": "simulation::M5Metrics::lolr_advances",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.interbank_volume",
+      "parity_rule": "simulation::M5Metrics::interbank_volume",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.interbank_rate",
+      "parity_rule": "simulation::M5Metrics::interbank_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.run_flight_volume",
+      "parity_rule": "simulation::M5Metrics::run_flight_volume",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.resolution_cost",
+      "parity_rule": "simulation::M5Metrics::resolution_cost",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.realized_credit_losses",
+      "parity_rule": "simulation::M5Metrics::realized_credit_losses",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.alive_banks",
+      "parity_rule": "simulation::M5Metrics::alive_banks",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "banks"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.bank_failures",
+      "parity_rule": "simulation::M5Metrics::bank_failures",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "banks_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_outstanding_face",
+      "parity_rule": "simulation::M6Metrics::bond_outstanding_face",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_market_value",
+      "parity_rule": "simulation::M6Metrics::bond_market_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_issuance",
+      "parity_rule": "simulation::M6Metrics::bond_issuance",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_redemption",
+      "parity_rule": "simulation::M6Metrics::bond_redemption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_coupon_paid",
+      "parity_rule": "simulation::M6Metrics::bond_coupon_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_equity_market_cap",
+      "parity_rule": "simulation::M6Metrics::firm_equity_market_cap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_equity_market_cap",
+      "parity_rule": "simulation::M6Metrics::bank_equity_market_cap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.equity_turnover",
+      "parity_rule": "simulation::M6Metrics::equity_turnover",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.primary_equity_raised",
+      "parity_rule": "simulation::M6Metrics::primary_equity_raised",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_principal",
+      "parity_rule": "simulation::M6Metrics::margin_principal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_originated",
+      "parity_rule": "simulation::M6Metrics::margin_originated",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_repaid",
+      "parity_rule": "simulation::M6Metrics::margin_repaid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_writeoffs",
+      "parity_rule": "simulation::M6Metrics::margin_writeoffs",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.total_firm_book_equity",
+      "parity_rule": "simulation::M6Metrics::total_firm_book_equity",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.clearing_residual",
+      "parity_rule": "simulation::M6Metrics::clearing_residual",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.sector_retool_capital",
+      "parity_rule": "simulation::M6Metrics::sector_retool_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.active_security_lots",
+      "parity_rule": "simulation::M6Metrics::active_security_lots",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "lots"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_bankruptcies",
+      "parity_rule": "simulation::M6Metrics::household_bankruptcies",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_births",
+      "parity_rule": "simulation::M6Metrics::firm_births",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_exits",
+      "parity_rule": "simulation::M6Metrics::firm_exits",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_defaults",
+      "parity_rule": "simulation::M6Metrics::firm_defaults",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.sector_switches",
+      "parity_rule": "simulation::M6Metrics::sector_switches",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_births",
+      "parity_rule": "simulation::M6Metrics::bank_births",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "banks_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_equity_resolutions",
+      "parity_rule": "simulation::M6Metrics::bank_equity_resolutions",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "banks_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.population",
+      "parity_rule": "simulation::M7Metrics::population",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.births",
+      "parity_rule": "simulation::M7Metrics::births",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.deaths",
+      "parity_rule": "simulation::M7Metrics::deaths",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.households_with_members",
+      "parity_rule": "simulation::M7Metrics::households_with_members",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_household_size",
+      "parity_rule": "simulation::M7Metrics::mean_household_size",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_household"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.working_age_share",
+      "parity_rule": "simulation::M7Metrics::working_age_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.dependency_ratio",
+      "parity_rule": "simulation::M7Metrics::dependency_ratio",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.participation_rate",
+      "parity_rule": "simulation::M7Metrics::participation_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.estates_settled",
+      "parity_rule": "simulation::M7Metrics::estates_settled",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "estates_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.beneficial_lots_transferred",
+      "parity_rule": "simulation::M7Metrics::beneficial_lots_transferred",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "lots_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.inheritance_tax_share",
+      "parity_rule": "simulation::M7Metrics::inheritance_tax_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.inheritance_tax_paid",
+      "parity_rule": "simulation::M7Metrics::inheritance_tax_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.pension_paid",
+      "parity_rule": "simulation::M7Metrics::pension_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.beneficial_projection_error",
+      "parity_rule": "simulation::M7Metrics::beneficial_projection_error",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.employed_fte",
+      "parity_rule": "simulation::M7Metrics::employed_fte",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.employed_heads",
+      "parity_rule": "simulation::M7Metrics::employed_heads",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.unemployment",
+      "parity_rule": "simulation::M7Metrics::unemployment",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.unemployment_rate",
+      "parity_rule": "simulation::M7Metrics::unemployment_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.suspended",
+      "parity_rule": "simulation::M7Metrics::suspended",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.job_guarantee",
+      "parity_rule": "simulation::M7Metrics::job_guarantee",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.out_of_labor_force",
+      "parity_rule": "simulation::M7Metrics::out_of_labor_force",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.labor_supply",
+      "parity_rule": "simulation::M7Metrics::labor_supply",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.vacancies",
+      "parity_rule": "simulation::M7Metrics::vacancies",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.underemployed_heads",
+      "parity_rule": "simulation::M7Metrics::underemployed_heads",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.underemployment_hours",
+      "parity_rule": "simulation::M7Metrics::underemployment_hours",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "hours_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.suspended_memo",
+      "parity_rule": "simulation::M7Metrics::suspended_memo",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.second_job_heads",
+      "parity_rule": "simulation::M7Metrics::second_job_heads",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.second_job_hours",
+      "parity_rule": "simulation::M7Metrics::second_job_hours",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "hours_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.nonsearching",
+      "parity_rule": "simulation::M7Metrics::nonsearching",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.job_to_job_moves",
+      "parity_rule": "simulation::M7Metrics::job_to_job_moves",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_hourly_wage",
+      "parity_rule": "simulation::M7Metrics::mean_hourly_wage",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_hour"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.family_transfer_total",
+      "parity_rule": "simulation::M7Metrics::family_transfer_total",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.family_transfer_recipients",
+      "parity_rule": "simulation::M7Metrics::family_transfer_recipients",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.family_exposed_households",
+      "parity_rule": "simulation::M7Metrics::family_exposed_households",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.hires",
+      "parity_rule": "simulation::M7Metrics::hires",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.separations",
+      "parity_rule": "simulation::M7Metrics::separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.marriages",
+      "parity_rule": "simulation::M7Metrics::marriages",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.divorces",
+      "parity_rule": "simulation::M7Metrics::divorces",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.widowhoods",
+      "parity_rule": "simulation::M7Metrics::widowhoods",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.leaving_home_events",
+      "parity_rule": "simulation::M7Metrics::leaving_home_events",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.production",
+      "parity_rule": "simulation::EnergyMetrics::production",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.capacity",
+      "parity_rule": "simulation::EnergyMetrics::capacity",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.utilization",
+      "parity_rule": "simulation::EnergyMetrics::utilization",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.opening_supply",
+      "parity_rule": "simulation::EnergyMetrics::opening_supply",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.requested_total",
+      "parity_rule": "simulation::EnergyMetrics::requested_total",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.requested_households",
+      "parity_rule": "simulation::EnergyMetrics::requested_households",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.requested_industry",
+      "parity_rule": "simulation::EnergyMetrics::requested_industry",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.requested_public",
+      "parity_rule": "simulation::EnergyMetrics::requested_public",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.sold",
+      "parity_rule": "simulation::EnergyMetrics::sold",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.unfilled",
+      "parity_rule": "simulation::EnergyMetrics::unfilled",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.transaction_price",
+      "parity_rule": "simulation::EnergyMetrics::transaction_price",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_energy_unit"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.household_units",
+      "parity_rule": "simulation::EnergyMetrics::household_units",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.household_spending",
+      "parity_rule": "simulation::EnergyMetrics::household_spending",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.industry_units",
+      "parity_rule": "simulation::EnergyMetrics::industry_units",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.industry_spending",
+      "parity_rule": "simulation::EnergyMetrics::industry_spending",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.excise_paid",
+      "parity_rule": "simulation::EnergyMetrics::excise_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.windfall_tax_paid",
+      "parity_rule": "simulation::EnergyMetrics::windfall_tax_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.subsidy_paid",
+      "parity_rule": "simulation::EnergyMetrics::subsidy_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.cap_compensation",
+      "parity_rule": "simulation::EnergyMetrics::cap_compensation",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.strategic_reserve_stock",
+      "parity_rule": "simulation::EnergyMetrics::strategic_reserve_stock",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.strategic_reserve_flow",
+      "parity_rule": "simulation::EnergyMetrics::strategic_reserve_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.strategic_reserve_purchase_paid",
+      "parity_rule": "simulation::EnergyMetrics::strategic_reserve_purchase_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.strategic_reserve_sale_revenue",
+      "parity_rule": "simulation::EnergyMetrics::strategic_reserve_sale_revenue",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.fuel_poverty_share",
+      "parity_rule": "simulation::EnergyMetrics::fuel_poverty_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.fuel_poverty_mortality_multiplier",
+      "parity_rule": "simulation::EnergyMetrics::fuel_poverty_mortality_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_below_100_share",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_below_100_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_below_60_share",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_below_60_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_below_30_share",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_below_30_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_destitute_share",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_destitute_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_acute_stock",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_acute_stock",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "person_days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_chronic_stock",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_chronic_stock",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "person_days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_max_spell_days",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_max_spell_days",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.deprivation_boundary",
+      "parity_rule": "simulation::EnergyMetrics::deprivation_boundary",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "boolean"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.house_price",
+      "parity_rule": "simulation::HousingMetrics::house_price",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_dwelling"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.rent_level",
+      "parity_rule": "simulation::HousingMetrics::rent_level",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_stock",
+      "parity_rule": "simulation::HousingMetrics::housing_stock",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.homeownership_share",
+      "parity_rule": "simulation::HousingMetrics::homeownership_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.vacancy_share",
+      "parity_rule": "simulation::HousingMetrics::vacancy_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.active_listings",
+      "parity_rule": "simulation::HousingMetrics::active_listings",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.forced_listing_share",
+      "parity_rule": "simulation::HousingMetrics::forced_listing_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.session_sales",
+      "parity_rule": "simulation::HousingMetrics::session_sales",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.session_volume",
+      "parity_rule": "simulation::HousingMetrics::session_volume",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mean_time_on_market_days",
+      "parity_rule": "simulation::HousingMetrics::mean_time_on_market_days",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_originations",
+      "parity_rule": "simulation::HousingMetrics::mortgage_originations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "loans_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_principal_originated",
+      "parity_rule": "simulation::HousingMetrics::mortgage_principal_originated",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_principal_outstanding",
+      "parity_rule": "simulation::HousingMetrics::mortgage_principal_outstanding",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.foreclosures",
+      "parity_rule": "simulation::HousingMetrics::foreclosures",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.rent_paid",
+      "parity_rule": "simulation::HousingMetrics::rent_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.rent_unpaid",
+      "parity_rule": "simulation::HousingMetrics::rent_unpaid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.evictions",
+      "parity_rule": "simulation::HousingMetrics::evictions",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.property_tax_paid",
+      "parity_rule": "simulation::HousingMetrics::property_tax_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_wealth_tax_paid",
+      "parity_rule": "simulation::HousingMetrics::housing_wealth_tax_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.transfer_tax_paid",
+      "parity_rule": "simulation::HousingMetrics::transfer_tax_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.land_fee_paid",
+      "parity_rule": "simulation::HousingMetrics::land_fee_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.construction_output",
+      "parity_rule": "simulation::HousingMetrics::construction_output",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.dwellings_completed",
+      "parity_rule": "simulation::HousingMetrics::dwellings_completed",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.permits_used",
+      "parity_rule": "simulation::HousingMetrics::permits_used",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "permits_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.price_to_income_ratio",
+      "parity_rule": "simulation::HousingMetrics::price_to_income_ratio",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.rent_burden_ratio",
+      "parity_rule": "simulation::HousingMetrics::rent_burden_ratio",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.leave_home_multiplier",
+      "parity_rule": "simulation::HousingMetrics::leave_home_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.fertility_multiplier",
+      "parity_rule": "simulation::HousingMetrics::fertility_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.exchange_rate",
+      "parity_rule": "simulation::CountryExternalMetrics::exchange_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "local_currency_per_numeraire"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.imports_value",
+      "parity_rule": "simulation::CountryExternalMetrics::imports_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.imports_volume",
+      "parity_rule": "simulation::CountryExternalMetrics::imports_volume",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.exports_value",
+      "parity_rule": "simulation::CountryExternalMetrics::exports_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.exports_volume",
+      "parity_rule": "simulation::CountryExternalMetrics::exports_volume",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.iceberg_loss",
+      "parity_rule": "simulation::CountryExternalMetrics::iceberg_loss",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.tariff_revenue",
+      "parity_rule": "simulation::CountryExternalMetrics::tariff_revenue",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.export_subsidy_cost",
+      "parity_rule": "simulation::CountryExternalMetrics::export_subsidy_cost",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.current_account",
+      "parity_rule": "simulation::CountryExternalMetrics::current_account",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.capital_flow",
+      "parity_rule": "simulation::CountryExternalMetrics::capital_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.net_foreign_assets",
+      "parity_rule": "simulation::CountryExternalMetrics::net_foreign_assets",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.factor_income_accrued",
+      "parity_rule": "simulation::CountryExternalMetrics::factor_income_accrued",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.factor_income_cash",
+      "parity_rule": "simulation::CountryExternalMetrics::factor_income_cash",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.factor_income_arrears",
+      "parity_rule": "simulation::CountryExternalMetrics::factor_income_arrears",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.peg_reserves",
+      "parity_rule": "simulation::CountryExternalMetrics::peg_reserves",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "anchor_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.migrant_stock_abroad",
+      "parity_rule": "simulation::CountryExternalMetrics::migrant_stock_abroad",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.migrant_stock_hosted",
+      "parity_rule": "simulation::CountryExternalMetrics::migrant_stock_hosted",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.remittances_received",
+      "parity_rule": "simulation::CountryExternalMetrics::remittances_received",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.remittances_sent",
+      "parity_rule": "simulation::CountryExternalMetrics::remittances_sent",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.remittance_tax_revenue",
+      "parity_rule": "simulation::CountryExternalMetrics::remittance_tax_revenue",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.capital_destroyed",
+      "parity_rule": "simulation::CountryExternalMetrics::capital_destroyed",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.active_shocks",
+      "parity_rule": "simulation::CountryExternalMetrics::active_shocks",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.dealer_flow",
+      "parity_rule": "simulation::M9WorldMetrics::dealer_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "numeraire_currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.dealer_spread_revenue",
+      "parity_rule": "simulation::M9WorldMetrics::dealer_spread_revenue",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "numeraire_currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.dealer_valuation",
+      "parity_rule": "simulation::M9WorldMetrics::dealer_valuation",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "numeraire_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.world_nfa",
+      "parity_rule": "simulation::M9WorldMetrics::world_nfa",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "numeraire_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.trade_routes",
+      "parity_rule": "simulation::M9WorldMetrics::trade_routes",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "routes"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.migration_routes",
+      "parity_rule": "simulation::M9WorldMetrics::migration_routes",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "routes"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.world.shock_events",
+      "parity_rule": "simulation::M9WorldMetrics::shock_events",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.enabled",
+      "parity_rule": "native_national_accounts::enabled",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "boolean"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.nominal_gdp",
+      "parity_rule": "native_national_accounts::nominal_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.real_gdp",
+      "parity_rule": "native_national_accounts::real_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.nominal_gdp_per_capita",
+      "parity_rule": "native_national_accounts::nominal_gdp_per_capita",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_person_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.real_gdp_per_capita",
+      "parity_rule": "native_national_accounts::real_gdp_per_capita",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_person_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gdp_deflator",
+      "parity_rule": "native_national_accounts::gdp_deflator",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_nominal",
+      "parity_rule": "native_national_accounts::gross_output_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_real",
+      "parity_rule": "native_national_accounts::gross_output_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_consumption_nominal",
+      "parity_rule": "native_national_accounts::gross_output_consumption_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_capital_nominal",
+      "parity_rule": "native_national_accounts::gross_output_capital_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_energy_nominal",
+      "parity_rule": "native_national_accounts::gross_output_energy_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gross_output_housing_nominal",
+      "parity_rule": "native_national_accounts::gross_output_housing_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.intermediate_energy_nominal",
+      "parity_rule": "native_national_accounts::intermediate_energy_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.intermediate_energy_real",
+      "parity_rule": "native_national_accounts::intermediate_energy_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.production_nominal",
+      "parity_rule": "native_national_accounts::production_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.production_real",
+      "parity_rule": "native_national_accounts::production_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.household_consumption_nominal",
+      "parity_rule": "native_national_accounts::household_consumption_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.household_consumption_goods_nominal",
+      "parity_rule": "native_national_accounts::household_consumption_goods_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.household_consumption_energy_nominal",
+      "parity_rule": "native_national_accounts::household_consumption_energy_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.government_consumption_nominal",
+      "parity_rule": "native_national_accounts::government_consumption_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.fixed_capital_formation_nominal",
+      "parity_rule": "native_national_accounts::fixed_capital_formation_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.machinery_fixed_capital_formation_nominal",
+      "parity_rule": "native_national_accounts::machinery_fixed_capital_formation_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.residential_fixed_capital_formation_nominal",
+      "parity_rule": "native_national_accounts::residential_fixed_capital_formation_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.private_fixed_capital_formation_nominal",
+      "parity_rule": "native_national_accounts::private_fixed_capital_formation_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.public_fixed_capital_formation_nominal",
+      "parity_rule": "native_national_accounts::public_fixed_capital_formation_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.inventory_change_nominal",
+      "parity_rule": "native_national_accounts::inventory_change_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.inventory_change_real",
+      "parity_rule": "native_national_accounts::inventory_change_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.exports_nominal",
+      "parity_rule": "native_national_accounts::exports_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.imports_nominal",
+      "parity_rule": "native_national_accounts::imports_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.net_exports_nominal",
+      "parity_rule": "native_national_accounts::net_exports_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.exports_real",
+      "parity_rule": "native_national_accounts::exports_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.imports_real",
+      "parity_rule": "native_national_accounts::imports_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.net_exports_real",
+      "parity_rule": "native_national_accounts::net_exports_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_observed_nominal",
+      "parity_rule": "native_national_accounts::expenditure_observed_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_residual_nominal",
+      "parity_rule": "native_national_accounts::expenditure_residual_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_residual_share",
+      "parity_rule": "native_national_accounts::expenditure_residual_share",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_reconciled_nominal",
+      "parity_rule": "native_national_accounts::expenditure_reconciled_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_observed_real",
+      "parity_rule": "native_national_accounts::expenditure_observed_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_residual_real",
+      "parity_rule": "native_national_accounts::expenditure_residual_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.expenditure_reconciled_real",
+      "parity_rule": "native_national_accounts::expenditure_reconciled_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.compensation_employees_nominal",
+      "parity_rule": "native_national_accounts::compensation_employees_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.cash_operating_surplus_nominal",
+      "parity_rule": "native_national_accounts::cash_operating_surplus_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.income_observed_nominal",
+      "parity_rule": "native_national_accounts::income_observed_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.income_residual_nominal",
+      "parity_rule": "native_national_accounts::income_residual_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.income_residual_share",
+      "parity_rule": "native_national_accounts::income_residual_share",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.income_reconciled_nominal",
+      "parity_rule": "native_national_accounts::income_reconciled_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.production_reconciliation_residual",
+      "parity_rule": "native_national_accounts::production_reconciliation_residual",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.three_approach_raw_spread",
+      "parity_rule": "native_national_accounts::three_approach_raw_spread",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.three_approach_raw_spread_share",
+      "parity_rule": "native_national_accounts::three_approach_raw_spread_share",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.transfers_excluded",
+      "parity_rule": "native_national_accounts::transfers_excluded",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.price_basis_basic",
+      "parity_rule": "native_national_accounts::price_basis_basic",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "boolean"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.scope_excludes_imputed_housing",
+      "parity_rule": "native_national_accounts::scope_excludes_imputed_housing",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "boolean"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.scope_excludes_unpriced_financial",
+      "parity_rule": "native_national_accounts::scope_excludes_unpriced_financial",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "boolean"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.annualized_nominal_gdp",
+      "parity_rule": "native_national_accounts::annualized_nominal_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_year"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.credit_to_annualized_gdp",
+      "parity_rule": "native_national_accounts::credit_to_annualized_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gov_deficit_to_nominal_gdp",
+      "parity_rule": "native_national_accounts::gov_deficit_to_nominal_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.gov_debt_to_annualized_gdp",
+      "parity_rule": "native_national_accounts::gov_debt_to_annualized_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.debt_service_to_nominal_gdp",
+      "parity_rule": "native_national_accounts::debt_service_to_nominal_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.total_debt_service_to_nominal_gdp",
+      "parity_rule": "native_national_accounts::total_debt_service_to_nominal_gdp",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "share"
+    }
+  ],
+  "schema_version": "m10-maintained-metrics-v1",
+  "snapshot_epoch": "committed_boundary"
+}

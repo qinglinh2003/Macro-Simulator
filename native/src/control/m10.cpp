@@ -388,7 +388,7 @@ HybridControlledBridge::prepare_boundary(const SealedControlBatch &batch) {
     if (batch.fault_point == M10FaultPoint::prepare_after_advance) {
         return injected_fault();
     }
-    auto frame = reporting::build_public_metric_frame(
+    auto frame = reporting::build_metric_frame(
         staged, &engine_.metrics_.current());
     if (!frame.ok()) {
         return frame.status();

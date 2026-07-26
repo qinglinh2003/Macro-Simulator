@@ -64,6 +64,33 @@ def validate_contracts() -> None:
                 f"native source {expected_id!r}"
             )
 
+    maintained = json.loads(
+        (ROOT / "schemas/m10/maintained_metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if maintained["schema_version"] != "m10-maintained-metrics-v1":
+        raise AssertionError("M10 maintained metric contract changed")
+    if maintained["counts"] != {
+        "national_accounts": 59,
+        "native_stage_sources": 200,
+        "public_sources": 41,
+        "total": 300,
+    }:
+        raise AssertionError("M10 maintained metric coverage is incomplete")
+    maintained_ids = [item["id"] for item in maintained["metrics"]]
+    if len(maintained_ids) != len(set(maintained_ids)):
+        raise AssertionError("M10 maintained metric IDs are not unique")
+    for item in maintained["metrics"]:
+        if (
+            not item["unit"]
+            or not item["parity_rule"]
+            or item["cadence_ticks"] <= 0
+        ):
+            raise AssertionError(
+                f"M10 metric {item['id']!r} lacks required metadata"
+            )
+
     probes = json.loads(
         (ROOT / "schemas/m10/typed_probes.json").read_text(
             encoding="utf-8"
@@ -88,6 +115,7 @@ def validate_contracts() -> None:
         "docs/cpp_engine_m10_execution_plan_v34.md",
         "schemas/m10/performance_budget.json",
         "schemas/m10/public_metrics.json",
+        "schemas/m10/maintained_metrics.json",
         "schemas/m10/typed_probes.json",
         "macro_sim/native_backend.py",
         "macro_sim/controllers/native_observation.py",
@@ -95,8 +123,11 @@ def validate_contracts() -> None:
         "macro_sim/diagnostics/native_probes.py",
         "macro_sim/rl/native_envs.py",
         "native/include/macro_sim/reporting/probes.hpp",
+        "native/include/macro_sim/reporting/m10_metric_sources.inc",
+        "native/include/macro_sim/reporting/m10_national_accounts.inc",
         "native/src/reporting/probes.cpp",
         "tools/m10/check.py",
+        "tools/m10/metric_contract.py",
         "tools/m10/native_facade_smoke.py",
         "tools/m10/native_controller_smoke.py",
         "tools/m10/native_desktop_smoke.py",
@@ -118,6 +149,7 @@ def main() -> int:
     parser.add_argument("--preset", default="m10-debug")
     arguments = parser.parse_args()
     run([sys.executable, "tools/m9/check.py", "--skip-build"])
+    run([sys.executable, "tools/m10/metric_contract.py", "--check"])
     validate_contracts()
     if not arguments.skip_build:
         run(["cmake", "--preset", arguments.preset])

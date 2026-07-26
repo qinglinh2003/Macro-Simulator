@@ -135,6 +135,18 @@ struct M4Metrics final {
     double government_spending{0.0};
     double government_deficit{0.0};
     double public_capital{0.0};
+    double gross_output_nominal{0.0};
+    double consumption_output_nominal{0.0};
+    double capital_output_nominal{0.0};
+    double consumption_output_real{0.0};
+    double capital_output_real{0.0};
+    double inventory_change_nominal{0.0};
+    double inventory_change_real{0.0};
+    double fixed_capital_formation_nominal{0.0};
+    double fixed_capital_formation_real{0.0};
+    double government_consumption{0.0};
+    double public_fixed_capital_formation{0.0};
+    double transfer_payments{0.0};
 
     bool operator==(const M4Metrics&) const = default;
 };

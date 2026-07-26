@@ -93,12 +93,13 @@ macro_sim::core::StateDigest digest_from_hex(std::string_view value) {
 }
 
 nb::dict m10_metric_frame_to_python(
-    const macro_sim::reporting::MetricFrame &frame) {
+    const macro_sim::reporting::MetricFrame &frame,
+    std::span<const macro_sim::reporting::MetricDescriptor> descriptors =
+        macro_sim::reporting::public_metric_descriptors()) {
     nb::dict output;
     output["tick"] = frame.tick.value();
     output["economy_count"] = frame.economy_count;
     nb::list economies;
-    const auto descriptors = macro_sim::reporting::public_metric_descriptors();
     for (std::size_t economy = 0; economy < frame.economy_count; ++economy) {
         nb::dict values;
         for (std::size_t metric = 0; metric < descriptors.size(); ++metric) {
@@ -112,6 +113,12 @@ nb::dict m10_metric_frame_to_python(
     }
     output["economies"] = std::move(economies);
     return output;
+}
+
+nb::dict m10_maintained_metric_frame_to_python(
+    const macro_sim::reporting::MetricFrame &frame) {
+    return m10_metric_frame_to_python(
+        frame, macro_sim::reporting::metric_descriptors());
 }
 
 nb::dict probe_page_info_to_python(
@@ -456,6 +463,22 @@ nb::dict m4_metrics_to_python(const macro_sim::simulation::M4Metrics &metrics) {
     output["government_spending"] = metrics.government_spending;
     output["government_deficit"] = metrics.government_deficit;
     output["public_capital"] = metrics.public_capital;
+    output["gross_output_nominal"] = metrics.gross_output_nominal;
+    output["consumption_output_nominal"] =
+        metrics.consumption_output_nominal;
+    output["capital_output_nominal"] = metrics.capital_output_nominal;
+    output["consumption_output_real"] = metrics.consumption_output_real;
+    output["capital_output_real"] = metrics.capital_output_real;
+    output["inventory_change_nominal"] = metrics.inventory_change_nominal;
+    output["inventory_change_real"] = metrics.inventory_change_real;
+    output["fixed_capital_formation_nominal"] =
+        metrics.fixed_capital_formation_nominal;
+    output["fixed_capital_formation_real"] =
+        metrics.fixed_capital_formation_real;
+    output["government_consumption"] = metrics.government_consumption;
+    output["public_fixed_capital_formation"] =
+        metrics.public_fixed_capital_formation;
+    output["transfer_payments"] = metrics.transfer_payments;
     return output;
 }
 
@@ -2439,6 +2462,11 @@ NB_MODULE(_native, module) {
                  return m10_metric_frame_to_python(
                      value.metrics().current());
              })
+        .def("maintained_metrics",
+             [](const macro_sim::control::EngineSession &value) {
+                 return m10_maintained_metric_frame_to_python(
+                     value.metrics().current());
+             })
         .def("history_page",
              [](const macro_sim::control::EngineSession &value,
                 std::uint64_t first_sequence, std::size_t maximum_frames) {
@@ -2703,6 +2731,12 @@ NB_MODULE(_native, module) {
              [](const macro_sim::control::HybridControlledBridge &value) {
                  require_status(value.query_status());
                  return m10_metric_frame_to_python(
+                     value.engine().metrics().current());
+             })
+        .def("maintained_metrics",
+             [](const macro_sim::control::HybridControlledBridge &value) {
+                 require_status(value.query_status());
+                 return m10_maintained_metric_frame_to_python(
                      value.engine().metrics().current());
              })
         .def("history_page",

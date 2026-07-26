@@ -13,7 +13,7 @@ namespace {
 
 using simulation::M8Metrics;
 
-constexpr std::array<MetricDescriptor, kM10PublicMetricCount> kDescriptors{{
+constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
     {"metric.economy.avg_wage", "currency_per_tick", 1U, MetricTier::causal,
      MetricAggregation::mean, "m7.mean_hourly_wage"},
     {"metric.economy.credit_to_gdp", "share", 1U, MetricTier::analytic,
@@ -110,6 +110,45 @@ constexpr std::array<MetricDescriptor, kM10PublicMetricCount> kDescriptors{{
     {"metric.shock.severity.capital_destruction", "fraction", 1U,
      MetricTier::release, MetricAggregation::last,
      "max disclosed capital-destruction shock severity"},
+#define MACRO_SIM_M4_SOURCE(field, unit)                                  \
+    {"metric.source.m4." #field, unit, 1U, MetricTier::analytic,          \
+     MetricAggregation::last, "simulation::M4Metrics::" #field},
+#define MACRO_SIM_M5_SOURCE(field, unit)                                  \
+    {"metric.source.m5." #field, unit, 1U, MetricTier::analytic,          \
+     MetricAggregation::last, "simulation::M5Metrics::" #field},
+#define MACRO_SIM_M6_SOURCE(field, unit)                                  \
+    {"metric.source.m6." #field, unit, 1U, MetricTier::analytic,          \
+     MetricAggregation::last, "simulation::M6Metrics::" #field},
+#define MACRO_SIM_M7_SOURCE(field, unit)                                  \
+    {"metric.source.m7." #field, unit, 1U, MetricTier::analytic,          \
+     MetricAggregation::last, "simulation::M7Metrics::" #field},
+#define MACRO_SIM_M8_ENERGY_SOURCE(field, unit)                           \
+    {"metric.source.m8.energy." #field, unit, 1U, MetricTier::analytic,   \
+     MetricAggregation::last, "simulation::EnergyMetrics::" #field},
+#define MACRO_SIM_M8_HOUSING_SOURCE(field, unit)                          \
+    {"metric.source.m8.housing." #field, unit, 1U, MetricTier::analytic,  \
+     MetricAggregation::last, "simulation::HousingMetrics::" #field},
+#define MACRO_SIM_M9_COUNTRY_SOURCE(field, unit)                          \
+    {"metric.source.m9.country." #field, unit, 1U, MetricTier::analytic,  \
+     MetricAggregation::last,                                            \
+     "simulation::CountryExternalMetrics::" #field},
+#define MACRO_SIM_M9_WORLD_SOURCE(field, unit)                            \
+    {"metric.source.m9.world." #field, unit, 1U, MetricTier::analytic,    \
+     MetricAggregation::last, "simulation::M9WorldMetrics::" #field},
+#include "macro_sim/reporting/m10_metric_sources.inc"
+#undef MACRO_SIM_M4_SOURCE
+#undef MACRO_SIM_M5_SOURCE
+#undef MACRO_SIM_M6_SOURCE
+#undef MACRO_SIM_M7_SOURCE
+#undef MACRO_SIM_M8_ENERGY_SOURCE
+#undef MACRO_SIM_M8_HOUSING_SOURCE
+#undef MACRO_SIM_M9_COUNTRY_SOURCE
+#undef MACRO_SIM_M9_WORLD_SOURCE
+#define MACRO_SIM_NATIONAL_ACCOUNT(field, unit)                           \
+    {"metric.economy.na." #field, unit, 1U, MetricTier::analytic,         \
+     MetricAggregation::last, "native_national_accounts::" #field},
+#include "macro_sim/reporting/m10_national_accounts.inc"
+#undef MACRO_SIM_NATIONAL_ACCOUNT
 }};
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
@@ -219,7 +258,7 @@ constexpr std::array<MetricDescriptor, kM10PublicMetricCount> kDescriptors{{
 
 void set(MetricFrame &frame, std::size_t economy, std::size_t metric,
          double value) {
-    const std::size_t offset = economy * kM10PublicMetricCount + metric;
+    const std::size_t offset = economy * kM10MetricCount + metric;
     frame.values[offset] = value;
     frame.valid[offset] = finite(value) ? 1U : 0U;
 }
@@ -232,18 +271,193 @@ void set(MetricFrame &frame, std::size_t economy, std::size_t metric,
     return metrics.economy.economy.economy;
 }
 
+[[nodiscard]] const simulation::M6Metrics &m6(const M8Metrics &metrics) noexcept {
+    return metrics.economy.economy;
+}
+
 [[nodiscard]] const simulation::M7Metrics &m7(const M8Metrics &metrics) noexcept {
     return metrics.economy;
+}
+
+struct NativeNationalAccounts final {
+#define MACRO_SIM_NATIONAL_ACCOUNT(field, unit) double field{0.0};
+#include "macro_sim/reporting/m10_national_accounts.inc"
+#undef MACRO_SIM_NATIONAL_ACCOUNT
+};
+
+[[nodiscard]] double safe_ratio(double numerator, double denominator) noexcept {
+    return std::abs(denominator) > 1.0e-12
+               ? numerator / denominator
+               : 0.0;
+}
+
+[[nodiscard]] NativeNationalAccounts build_national_accounts(
+    const simulation::M8Metrics &domestic,
+    const simulation::CountryExternalMetrics &external,
+    double government_debt) noexcept {
+    const auto &real = m4(domestic);
+    const auto &monetary = m5(domestic);
+    const auto &population = m7(domestic);
+    const auto &energy = domestic.energy;
+    const auto &housing = domestic.housing;
+    NativeNationalAccounts accounts;
+    accounts.enabled = 1.0;
+
+    const double energy_output_nominal =
+        energy.production * energy.transaction_price;
+    const double housing_output_nominal =
+        housing.construction_output * housing.house_price;
+    accounts.gross_output_consumption_nominal =
+        real.consumption_output_nominal;
+    accounts.gross_output_capital_nominal =
+        real.capital_output_nominal;
+    accounts.gross_output_energy_nominal = energy_output_nominal;
+    accounts.gross_output_housing_nominal = housing_output_nominal;
+    accounts.gross_output_nominal =
+        real.gross_output_nominal + energy_output_nominal +
+        housing_output_nominal;
+    accounts.gross_output_real =
+        real.consumption_output_real + real.capital_output_real +
+        energy.production + housing.construction_output;
+    accounts.intermediate_energy_nominal = energy.industry_spending;
+    accounts.intermediate_energy_real = energy.industry_units;
+    accounts.production_nominal =
+        accounts.gross_output_nominal -
+        accounts.intermediate_energy_nominal;
+    accounts.production_real =
+        accounts.gross_output_real - accounts.intermediate_energy_real;
+    accounts.nominal_gdp = accounts.production_nominal;
+    accounts.real_gdp = accounts.production_real;
+    accounts.nominal_gdp_per_capita = safe_ratio(
+        accounts.nominal_gdp, static_cast<double>(population.population));
+    accounts.real_gdp_per_capita = safe_ratio(
+        accounts.real_gdp, static_cast<double>(population.population));
+    accounts.gdp_deflator =
+        safe_ratio(accounts.nominal_gdp, accounts.real_gdp);
+
+    accounts.household_consumption_goods_nominal =
+        real.household_consumption;
+    accounts.household_consumption_energy_nominal =
+        energy.household_spending;
+    accounts.household_consumption_nominal =
+        accounts.household_consumption_goods_nominal +
+        accounts.household_consumption_energy_nominal;
+    accounts.government_consumption_nominal =
+        real.government_consumption;
+    accounts.machinery_fixed_capital_formation_nominal =
+        real.fixed_capital_formation_nominal;
+    accounts.residential_fixed_capital_formation_nominal =
+        housing_output_nominal;
+    accounts.fixed_capital_formation_nominal =
+        accounts.machinery_fixed_capital_formation_nominal +
+        accounts.residential_fixed_capital_formation_nominal;
+    accounts.public_fixed_capital_formation_nominal =
+        real.public_fixed_capital_formation;
+    accounts.private_fixed_capital_formation_nominal =
+        accounts.fixed_capital_formation_nominal -
+        accounts.public_fixed_capital_formation_nominal;
+    accounts.inventory_change_nominal =
+        real.inventory_change_nominal +
+        energy.strategic_reserve_flow * energy.transaction_price;
+    accounts.inventory_change_real =
+        real.inventory_change_real + energy.strategic_reserve_flow;
+    accounts.exports_nominal = external.exports_value;
+    accounts.imports_nominal = external.imports_value;
+    accounts.net_exports_nominal =
+        accounts.exports_nominal - accounts.imports_nominal;
+    accounts.exports_real = external.exports_volume;
+    accounts.imports_real = external.imports_volume;
+    accounts.net_exports_real =
+        accounts.exports_real - accounts.imports_real;
+
+    accounts.expenditure_observed_nominal =
+        accounts.household_consumption_nominal +
+        accounts.government_consumption_nominal +
+        accounts.fixed_capital_formation_nominal +
+        accounts.inventory_change_nominal +
+        accounts.net_exports_nominal;
+    accounts.expenditure_residual_nominal =
+        accounts.nominal_gdp - accounts.expenditure_observed_nominal;
+    accounts.expenditure_residual_share = safe_ratio(
+        std::abs(accounts.expenditure_residual_nominal),
+        std::abs(accounts.nominal_gdp));
+    accounts.expenditure_reconciled_nominal =
+        accounts.expenditure_observed_nominal +
+        accounts.expenditure_residual_nominal;
+
+    const double household_consumption_real =
+        safe_ratio(
+            accounts.household_consumption_goods_nominal,
+            real.price_index) +
+        energy.household_units;
+    const double government_consumption_real =
+        safe_ratio(accounts.government_consumption_nominal,
+                   real.price_index);
+    const double fixed_capital_formation_real =
+        real.fixed_capital_formation_real +
+        housing.construction_output;
+    accounts.expenditure_observed_real =
+        household_consumption_real + government_consumption_real +
+        fixed_capital_formation_real + accounts.inventory_change_real +
+        accounts.net_exports_real;
+    accounts.expenditure_residual_real =
+        accounts.real_gdp - accounts.expenditure_observed_real;
+    accounts.expenditure_reconciled_real =
+        accounts.expenditure_observed_real +
+        accounts.expenditure_residual_real;
+
+    accounts.compensation_employees_nominal = real.wages_paid;
+    accounts.cash_operating_surplus_nominal = real.firm_profit;
+    accounts.income_observed_nominal =
+        accounts.compensation_employees_nominal +
+        accounts.cash_operating_surplus_nominal;
+    accounts.income_residual_nominal =
+        accounts.nominal_gdp - accounts.income_observed_nominal;
+    accounts.income_residual_share = safe_ratio(
+        std::abs(accounts.income_residual_nominal),
+        std::abs(accounts.nominal_gdp));
+    accounts.income_reconciled_nominal =
+        accounts.income_observed_nominal +
+        accounts.income_residual_nominal;
+    accounts.production_reconciliation_residual = 0.0;
+    const double approach_max = std::max(
+        {accounts.nominal_gdp, accounts.expenditure_observed_nominal,
+         accounts.income_observed_nominal});
+    const double approach_min = std::min(
+        {accounts.nominal_gdp, accounts.expenditure_observed_nominal,
+         accounts.income_observed_nominal});
+    accounts.three_approach_raw_spread = approach_max - approach_min;
+    accounts.three_approach_raw_spread_share = safe_ratio(
+        accounts.three_approach_raw_spread,
+        std::abs(accounts.nominal_gdp));
+    accounts.transfers_excluded = real.transfer_payments;
+    accounts.price_basis_basic = 1.0;
+    accounts.scope_excludes_imputed_housing = 1.0;
+    accounts.scope_excludes_unpriced_financial = 1.0;
+    accounts.annualized_nominal_gdp = 365.0 * accounts.nominal_gdp;
+    accounts.credit_to_annualized_gdp = safe_ratio(
+        monetary.total_loan_principal, accounts.annualized_nominal_gdp);
+    accounts.gov_deficit_to_nominal_gdp = safe_ratio(
+        real.government_deficit, accounts.nominal_gdp);
+    accounts.gov_debt_to_annualized_gdp = safe_ratio(
+        government_debt, accounts.annualized_nominal_gdp);
+    accounts.debt_service_to_nominal_gdp = safe_ratio(
+        monetary.household_interest_paid + monetary.principal_repaid,
+        accounts.nominal_gdp);
+    accounts.total_debt_service_to_nominal_gdp = safe_ratio(
+        monetary.loan_interest_paid + monetary.principal_repaid,
+        accounts.nominal_gdp);
+    return accounts;
 }
 
 } // namespace
 
 Result<double> MetricFrame::value(std::size_t economy,
                                   std::size_t metric) const noexcept {
-    if (economy >= economy_count || metric >= kM10PublicMetricCount) {
+    if (economy >= economy_count || metric >= kM10MetricCount) {
         return Status(ErrorCode::out_of_range, "metric frame index is out of range");
     }
-    const std::size_t offset = economy * kM10PublicMetricCount + metric;
+    const std::size_t offset = economy * kM10MetricCount + metric;
     if (offset >= valid.size() || offset >= values.size() || valid[offset] == 0U) {
         return Status(ErrorCode::not_found, "metric frame value is unavailable");
     }
@@ -344,11 +558,11 @@ std::uint64_t MetricHistory::retained_bytes() const noexcept {
 
 MetricPipeline::MetricPipeline(std::size_t economy_count,
                                std::size_t history_capacity_frames)
-    : history_(economy_count, kM10PublicMetricCount, history_capacity_frames) {}
+    : history_(economy_count, kM10MetricCount, history_capacity_frames) {}
 
 Status MetricPipeline::capture(const simulation::M9World &world) {
     const MetricFrame *previous = captured_ ? &current_ : nullptr;
-    auto built = build_public_metric_frame(world, previous);
+    auto built = build_metric_frame(world, previous);
     if (!built.ok()) {
         return built.status();
     }
@@ -383,27 +597,47 @@ Result<MetricPipeline> MetricPipeline::restore(MetricHistory history) {
 }
 
 std::span<const MetricDescriptor> public_metric_descriptors() noexcept {
+    return {kDescriptors.data(), kM10PublicMetricCount};
+}
+
+std::span<const MetricDescriptor> metric_descriptors() noexcept {
     return kDescriptors;
 }
 
 Result<std::size_t>
 public_metric_index(std::string_view stable_id) noexcept {
+    const auto descriptors = public_metric_descriptors();
     const auto found = std::find_if(
-        kDescriptors.begin(), kDescriptors.end(),
+        descriptors.begin(), descriptors.end(),
         [stable_id](const MetricDescriptor &descriptor) {
             return descriptor.stable_id == stable_id;
         });
-    if (found == kDescriptors.end()) {
+    if (found == descriptors.end()) {
         return Status(ErrorCode::not_found,
                       "public metric stable ID is unknown");
     }
     return static_cast<std::size_t>(
-        std::distance(kDescriptors.begin(), found));
+        std::distance(descriptors.begin(), found));
+}
+
+Result<std::size_t> metric_index(std::string_view stable_id) noexcept {
+    const auto descriptors = metric_descriptors();
+    const auto found = std::find_if(
+        descriptors.begin(), descriptors.end(),
+        [stable_id](const MetricDescriptor &descriptor) {
+            return descriptor.stable_id == stable_id;
+        });
+    if (found == descriptors.end()) {
+        return Status(ErrorCode::not_found,
+                      "metric stable ID is unknown");
+    }
+    return static_cast<std::size_t>(
+        std::distance(descriptors.begin(), found));
 }
 
 Result<MetricFrame>
-build_public_metric_frame(const simulation::M9World &world,
-                          const MetricFrame *previous) {
+build_metric_frame(const simulation::M9World &world,
+                   const MetricFrame *previous) {
     const auto &metrics = world.last_metrics();
     if (metrics.domestic.size() != world.economy_count() ||
         metrics.external.size() != world.economy_count()) {
@@ -418,7 +652,7 @@ build_public_metric_frame(const simulation::M9World &world,
     MetricFrame frame;
     frame.tick = world.tick();
     frame.economy_count = world.economy_count();
-    frame.values.assign(frame.economy_count * kM10PublicMetricCount,
+    frame.values.assign(frame.economy_count * kM10MetricCount,
                         std::numeric_limits<double>::quiet_NaN());
     frame.valid.assign(frame.values.size(), 0U);
 
@@ -427,6 +661,7 @@ build_public_metric_frame(const simulation::M9World &world,
         const auto &external = metrics.external[economy];
         const auto &real = m4(domestic);
         const auto &monetary = m5(domestic);
+        const auto &securities = m6(domestic);
         const auto &population = m7(domestic);
         const auto *root = world.economy_root(
             EconomyId(static_cast<std::uint64_t>(economy)));
@@ -625,6 +860,56 @@ build_public_metric_frame(const simulation::M9World &world,
                 : static_cast<double>(time_to_next));
         for (std::size_t kind = 0U; kind < kind_severity.size(); ++kind) {
             set(frame, economy, 33U + kind, kind_severity[kind]);
+        }
+
+        std::size_t source_metric = kM10PublicMetricCount;
+#define MACRO_SIM_M4_SOURCE(field, unit)                                  \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(real.field));
+#define MACRO_SIM_M5_SOURCE(field, unit)                                  \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(monetary.field));
+#define MACRO_SIM_M6_SOURCE(field, unit)                                  \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(securities.field));
+#define MACRO_SIM_M7_SOURCE(field, unit)                                  \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(population.field));
+#define MACRO_SIM_M8_ENERGY_SOURCE(field, unit)                           \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(domestic.energy.field));
+#define MACRO_SIM_M8_HOUSING_SOURCE(field, unit)                          \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(domestic.housing.field));
+#define MACRO_SIM_M9_COUNTRY_SOURCE(field, unit)                          \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(external.field));
+#define MACRO_SIM_M9_WORLD_SOURCE(field, unit)                            \
+        set(frame, economy, source_metric++,                              \
+            static_cast<double>(metrics.field));
+#include "macro_sim/reporting/m10_metric_sources.inc"
+#undef MACRO_SIM_M4_SOURCE
+#undef MACRO_SIM_M5_SOURCE
+#undef MACRO_SIM_M6_SOURCE
+#undef MACRO_SIM_M7_SOURCE
+#undef MACRO_SIM_M8_ENERGY_SOURCE
+#undef MACRO_SIM_M8_HOUSING_SOURCE
+#undef MACRO_SIM_M9_COUNTRY_SOURCE
+#undef MACRO_SIM_M9_WORLD_SOURCE
+        if (source_metric !=
+            kM10PublicMetricCount + kM10NativeSourceMetricCount) {
+            return Status(ErrorCode::invariant_violation,
+                          "M10 native metric catalog width disagrees");
+        }
+        const auto national_accounts =
+            build_national_accounts(domestic, external, government_debt);
+#define MACRO_SIM_NATIONAL_ACCOUNT(field, unit)                           \
+        set(frame, economy, source_metric++, national_accounts.field);
+#include "macro_sim/reporting/m10_national_accounts.inc"
+#undef MACRO_SIM_NATIONAL_ACCOUNT
+        if (source_metric != kM10MetricCount) {
+            return Status(ErrorCode::invariant_violation,
+                          "M10 national-account catalog width disagrees");
         }
     }
     return frame;

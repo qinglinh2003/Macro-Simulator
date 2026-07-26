@@ -287,6 +287,18 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.government_spending);
     writer.f64(metrics.government_deficit);
     writer.f64(metrics.public_capital);
+    writer.f64(metrics.gross_output_nominal);
+    writer.f64(metrics.consumption_output_nominal);
+    writer.f64(metrics.capital_output_nominal);
+    writer.f64(metrics.consumption_output_real);
+    writer.f64(metrics.capital_output_real);
+    writer.f64(metrics.inventory_change_nominal);
+    writer.f64(metrics.inventory_change_real);
+    writer.f64(metrics.fixed_capital_formation_nominal);
+    writer.f64(metrics.fixed_capital_formation_real);
+    writer.f64(metrics.government_consumption);
+    writer.f64(metrics.public_fixed_capital_formation);
+    writer.f64(metrics.transfer_payments);
 }
 
 [[nodiscard]] bool read_metrics(
@@ -311,7 +323,19 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.tax_total)
         && reader.f64(metrics.government_spending)
         && reader.f64(metrics.government_deficit)
-        && reader.f64(metrics.public_capital);
+        && reader.f64(metrics.public_capital)
+        && reader.f64(metrics.gross_output_nominal)
+        && reader.f64(metrics.consumption_output_nominal)
+        && reader.f64(metrics.capital_output_nominal)
+        && reader.f64(metrics.consumption_output_real)
+        && reader.f64(metrics.capital_output_real)
+        && reader.f64(metrics.inventory_change_nominal)
+        && reader.f64(metrics.inventory_change_real)
+        && reader.f64(metrics.fixed_capital_formation_nominal)
+        && reader.f64(metrics.fixed_capital_formation_real)
+        && reader.f64(metrics.government_consumption)
+        && reader.f64(metrics.public_fixed_capital_formation)
+        && reader.f64(metrics.transfer_payments);
 }
 
 void write_household(

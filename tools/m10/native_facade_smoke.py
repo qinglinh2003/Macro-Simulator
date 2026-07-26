@@ -62,6 +62,22 @@ def main() -> int:
     session.advance()
     assert session.tick == 2
     assert session.bridge.policy_generation == generation
+    maintained = session.maintained_metrics()
+    assert maintained["tick"] == session.tick
+    assert all(len(row) == 300 for row in maintained["economies"])
+    assert (
+        maintained["economies"][0]["metric.source.m4.real_output"]
+        == maintained["economies"][0]["metric.economy.real_output"]
+    )
+    assert "metric.source.m8.housing.house_price" in (
+        maintained["economies"][0]
+    )
+    assert (
+        maintained["economies"][0][
+            "metric.economy.na.expenditure_reconciled_nominal"
+        ]
+        == maintained["economies"][0]["metric.economy.na.nominal_gdp"]
+    )
     household_page = session.probe_page(
         "households", economy_id=0, maximum_rows=3,
     )

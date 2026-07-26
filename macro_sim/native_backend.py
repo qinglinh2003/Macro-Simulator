@@ -757,6 +757,10 @@ class NativeSimulationSession:
     def public_metrics(self) -> dict[str, Any]:
         return dict(self.bridge.public_metrics())
 
+    def maintained_metrics(self) -> dict[str, Any]:
+        """Return every committed M4-M9 source plus public derived series."""
+        return dict(self.bridge.maintained_metrics())
+
     def native_snapshot(self) -> dict[str, Any]:
         return dict(self.bridge.native_snapshot())
 

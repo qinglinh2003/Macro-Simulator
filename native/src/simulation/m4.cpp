@@ -1340,7 +1340,8 @@ void commit_working_state(
     const M4Runtime& runtime,
     M4TickScratch& scratch,
     double& government_spending,
-    double& public_capital_addition
+    double& public_capital_addition,
+    double& public_investment_spending
 ) {
     if (runtime.vertical != M4Vertical::capital_fiscal
         || runtime.rules.government_investment_share <= 0.0) {
@@ -1400,6 +1401,7 @@ void commit_working_state(
         budget -= value;
         government_spending += value;
         public_capital_addition += quantity;
+        public_investment_spending += value;
     }
     return Status::success();
 }
@@ -1703,7 +1705,8 @@ void commit_capital(
     double tax_total,
     double government_spending,
     double benefit_spending,
-    double public_capital
+    double public_capital,
+    double public_investment_spending
 ) noexcept {
     M4Metrics metrics;
     metrics.tick = tick;
@@ -1718,10 +1721,28 @@ void commit_capital(
         if (is_base_firm_sector(persistent->sector)) {
             metrics.real_output += firm.produced;
             metrics.nominal_output += firm.revenue;
+            const double output_value =
+                firm.produced * firm.posted_price;
+            metrics.gross_output_nominal += output_value;
+            const double inventory_change =
+                firm.closing_inventory -
+                persistent->goods_inventory.value();
+            metrics.inventory_change_real += inventory_change;
+            metrics.inventory_change_nominal +=
+                inventory_change * firm.posted_price;
         }
         if (persistent->sector == core::FirmSector::consumption) {
             sold_quantity += firm.sales;
             price_value += firm.sales * firm.posted_price;
+            metrics.consumption_output_real += firm.produced;
+            metrics.consumption_output_nominal +=
+                firm.produced * firm.posted_price;
+        } else if (persistent->sector == core::FirmSector::capital) {
+            metrics.capital_output_real += firm.produced;
+            metrics.capital_output_nominal +=
+                firm.produced * firm.posted_price;
+            metrics.fixed_capital_formation_real += firm.sales;
+            metrics.fixed_capital_formation_nominal += firm.revenue;
         }
         metrics.wages_paid += firm.wage_bill;
         metrics.firm_profit += firm.profit;
@@ -1757,6 +1778,11 @@ void commit_capital(
     metrics.tax_total = tax_total;
     metrics.government_spending =
         government_spending + benefit_spending;
+    metrics.government_consumption =
+        government_spending - public_investment_spending;
+    metrics.public_fixed_capital_formation =
+        public_investment_spending;
+    metrics.transfer_payments = benefit_spending;
     metrics.government_deficit =
         metrics.government_spending - tax_total;
     metrics.public_capital = public_capital;
@@ -1907,6 +1933,7 @@ void commit_capital(
     double tax_total = 0.0;
     double government_spending = 0.0;
     double public_capital_addition = 0.0;
+    double public_investment_spending = 0.0;
     status = run_consumption_tax(state, runtime, scratch, tax_total);
     if (!status.ok()) {
         return status;
@@ -1943,7 +1970,8 @@ void commit_capital(
             runtime,
             scratch,
             government_spending,
-            public_capital_addition
+            public_capital_addition,
+            public_investment_spending
         );
         if (!status.ok()) {
             return status;
@@ -2037,7 +2065,8 @@ void commit_capital(
         tax_total,
         government_spending,
         benefit_spending,
-        public_capital
+        public_capital,
+        public_investment_spending
     );
     capture_phase(state, scratch, options, M4Phase::validate_and_measure);
 
@@ -2505,6 +2534,18 @@ Status validate_m4_state(
         runtime.last_metrics.government_spending,
         runtime.last_metrics.government_deficit,
         runtime.last_metrics.public_capital,
+        runtime.last_metrics.gross_output_nominal,
+        runtime.last_metrics.consumption_output_nominal,
+        runtime.last_metrics.capital_output_nominal,
+        runtime.last_metrics.consumption_output_real,
+        runtime.last_metrics.capital_output_real,
+        runtime.last_metrics.inventory_change_nominal,
+        runtime.last_metrics.inventory_change_real,
+        runtime.last_metrics.fixed_capital_formation_nominal,
+        runtime.last_metrics.fixed_capital_formation_real,
+        runtime.last_metrics.government_consumption,
+        runtime.last_metrics.public_fixed_capital_formation,
+        runtime.last_metrics.transfer_payments,
     };
     if (!components_valid || !all_finite(runtime_values)
         || runtime.technology_index <= 0.0

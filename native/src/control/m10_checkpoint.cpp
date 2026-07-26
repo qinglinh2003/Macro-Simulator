@@ -268,7 +268,7 @@ load_hybrid_checkpoint(std::span<const std::uint8_t> checkpoint) {
         }
         auto restored_history = reporting::MetricHistory::restore(
             world.get_if()->economy_count(),
-            reporting::kM10PublicMetricCount, capacity,
+            reporting::kM10MetricCount, capacity,
             metadata.at("history_oldest_sequence").get<std::uint64_t>(),
             frames);
         if (!restored_history.ok()) {
