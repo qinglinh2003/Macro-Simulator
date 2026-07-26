@@ -126,6 +126,16 @@ struct M11ControlledState final {
           releases(std::move(releases_value)) {}
 };
 
+class M11ControlledSession;
+[[nodiscard]] Result<CanonicalControllerEnvelope>
+seal_m11_controller_state(Tick boundary,
+                          std::uint64_t policy_generation,
+                          const M11ControlledState &state);
+[[nodiscard]] Result<std::vector<std::uint8_t>>
+save_m11_checkpoint(const M11ControlledSession &session);
+[[nodiscard]] Result<M11ControlledSession>
+load_m11_checkpoint(std::span<const std::uint8_t> checkpoint);
+
 class M11ControlledSession final {
   public:
     M11ControlledSession(const M11ControlledSession &) = delete;
@@ -189,6 +199,11 @@ class M11ControlledSession final {
     [[nodiscard]] Result<M11ControlledSession> clone() const;
 
   private:
+    friend Result<std::vector<std::uint8_t>>
+    save_m11_checkpoint(const M11ControlledSession &);
+    friend Result<M11ControlledSession>
+    load_m11_checkpoint(std::span<const std::uint8_t>);
+
     M11ControlledSession(HybridControlledBridge bridge,
                          M11ControllerRunSpec run_spec,
                          M11ControlledState state)

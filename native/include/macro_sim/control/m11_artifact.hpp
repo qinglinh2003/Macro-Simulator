@@ -71,6 +71,10 @@ class NativePolicyArtifact final {
     [[nodiscard]] const std::vector<std::string> &feature_names() const noexcept {
         return feature_names_;
     }
+    [[nodiscard]] std::span<const std::uint8_t>
+    source_bytes() const noexcept {
+        return source_bytes_;
+    }
     [[nodiscard]] Result<std::vector<double>>
     normalized_input(std::span<const double> observation) const;
     [[nodiscard]] Result<std::vector<double>>
@@ -91,6 +95,7 @@ class NativePolicyArtifact final {
     forward_float64(std::span<const double> observation) const;
 
     NativePolicyArtifactInfo info_;
+    std::vector<std::uint8_t> source_bytes_;
     std::vector<std::string> feature_names_;
     std::vector<double> input_mean_;
     std::vector<double> input_scale_;

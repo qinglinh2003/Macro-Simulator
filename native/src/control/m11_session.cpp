@@ -567,6 +567,19 @@ encode_artifact_context(const NativePolicyArtifact &artifact,
 
 } // namespace
 
+Result<CanonicalControllerEnvelope>
+seal_m11_controller_state(Tick boundary,
+                          std::uint64_t policy_generation,
+                          const M11ControlledState &state) {
+    auto envelope =
+        make_envelope(boundary, policy_generation, state);
+    auto status = seal_controller_envelope(envelope);
+    if (!status.ok()) {
+        return status;
+    }
+    return envelope;
+}
+
 std::string_view
 m11_boundary_phase_name(M11BoundaryPhase phase) noexcept {
     switch (phase) {

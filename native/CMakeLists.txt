@@ -107,6 +107,7 @@ add_library(
         src/control/m10.cpp
         src/control/m10_checkpoint.cpp
         src/control/m11_artifact.cpp
+        src/control/m11_checkpoint.cpp
         src/control/m11_coordinator.cpp
         src/control/m11_kernel.cpp
         src/control/m11_policy.cpp

@@ -822,7 +822,12 @@ NativePolicyArtifact::load_bytes(std::span<const std::uint8_t> artifact) {
         return Status(ErrorCode::out_of_range,
                       "M11 artifact byte length is invalid");
     }
-    return parse_artifact(artifact);
+    auto parsed = parse_artifact(artifact);
+    if (parsed.ok()) {
+        parsed.get_if()->source_bytes_.assign(
+            artifact.begin(), artifact.end());
+    }
+    return parsed;
 }
 
 Result<std::vector<double>>

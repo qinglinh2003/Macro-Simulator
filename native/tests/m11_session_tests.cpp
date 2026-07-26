@@ -227,6 +227,111 @@ void test_native_rl_occupant_runs_without_python() {
         }));
 }
 
+void test_checkpoint_restores_pending_execution_exactly() {
+    M11OccupantSpec scheduled;
+    scheduled.kind = M11OccupantKind::scheduled;
+    scheduled.occupant_id = "checkpoint-script";
+    scheduled.schedule.push_back({
+        Tick(0U),
+        "fiscal_stance",
+        {{EconomyId(0U), "gov_deficit_target", 0.015}},
+    });
+    M11ControllerRunSpec spec;
+    spec.assignments.push_back(
+        {EconomyId(0U), "treasury", std::move(scheduled)});
+    auto session =
+        M11ControlledSession::create(engine(), std::move(spec));
+    assert(session.ok());
+    assert(session.get_if()
+               ->advance_until_decision({1U, true})
+               .ok());
+    auto checkpoint = save_m11_checkpoint(*session.get_if());
+    assert(checkpoint.ok());
+    auto restored = load_m11_checkpoint(*checkpoint.get_if());
+    assert(restored.ok());
+    assert(restored.get_if()->tick() == session.get_if()->tick());
+    assert(restored.get_if()->engine().world().digest() ==
+           session.get_if()->engine().world().digest());
+    assert(restored.get_if()->events().head_hash() ==
+           session.get_if()->events().head_hash());
+    assert(restored.get_if()->releases().next_sequence() ==
+           session.get_if()->releases().next_sequence());
+
+    auto original_advance =
+        session.get_if()->advance_until_decision({12U, false});
+    auto restored_advance =
+        restored.get_if()->advance_until_decision({12U, false});
+    assert(original_advance.ok());
+    assert(restored_advance.ok());
+    assert(restored.get_if()->engine().world().digest() ==
+           session.get_if()->engine().world().digest());
+    assert(restored.get_if()->events().head_hash() ==
+           session.get_if()->events().head_hash());
+    const auto restored_releases =
+        restored.get_if()->releases().releases();
+    const auto original_releases =
+        session.get_if()->releases().releases();
+    assert(restored_releases.size() == original_releases.size());
+    assert(std::equal(
+        restored_releases.begin(), restored_releases.end(),
+        original_releases.begin()));
+
+    auto corrupt = *checkpoint.get_if();
+    corrupt[corrupt.size() / 2U] ^= 0x5aU;
+    assert(!load_m11_checkpoint(corrupt).ok());
+}
+
+void test_checkpoint_preserves_human_pause_and_embedded_rl() {
+    M11ControllerRunSpec human_spec;
+    M11OccupantSpec human;
+    human.kind = M11OccupantKind::human_queue;
+    human.occupant_id = "checkpoint-human";
+    human_spec.assignments.push_back(
+        {EconomyId(0U), "treasury", std::move(human)});
+    auto human_session = M11ControlledSession::create(
+        engine(), std::move(human_spec));
+    assert(human_session.ok());
+    auto paused = human_session.get_if()->advance_until_decision(
+        {1U, true});
+    assert(paused.ok() && paused.get_if()->awaiting_human);
+    auto human_checkpoint =
+        save_m11_checkpoint(*human_session.get_if());
+    assert(human_checkpoint.ok());
+    auto restored_human =
+        load_m11_checkpoint(*human_checkpoint.get_if());
+    assert(restored_human.ok());
+    assert(restored_human.get_if()->phase() ==
+           M11BoundaryPhase::awaiting_human);
+    assert(restored_human.get_if()->tick() == Tick(0U));
+    assert(restored_human.get_if()->state().opened_context_ids ==
+           human_session.get_if()->state().opened_context_ids);
+
+    M11ControllerRunSpec rl_spec;
+    M11OccupantSpec rl;
+    rl.kind = M11OccupantKind::reinforcement_learning;
+    rl.occupant_id = "checkpoint-rl";
+    rl.artifact_path =
+        std::filesystem::path(MACRO_SIM_SOURCE_DIR) /
+        "macro_sim/rl/artifacts/fiscal_stabilization_v1.msrl";
+    rl_spec.assignments.push_back(
+        {EconomyId(0U), "treasury", std::move(rl)});
+    auto rl_session =
+        M11ControlledSession::create(engine(), std::move(rl_spec));
+    assert(rl_session.ok());
+    auto rl_checkpoint = save_m11_checkpoint(*rl_session.get_if());
+    assert(rl_checkpoint.ok());
+    auto restored_rl =
+        load_m11_checkpoint(*rl_checkpoint.get_if());
+    assert(restored_rl.ok());
+    const auto *runtime =
+        restored_rl.get_if()->seat(EconomyId(0U), "treasury");
+    assert(runtime != nullptr && runtime->artifact.has_value());
+    assert(!runtime->artifact->source_bytes().empty());
+    assert(restored_rl.get_if()
+               ->advance_until_decision({1U, true})
+               .ok());
+}
+
 } // namespace
 
 int main() {
@@ -234,5 +339,7 @@ int main() {
     test_human_pause_consumes_no_tick();
     test_scheduled_policy_reaches_effective_world();
     test_native_rl_occupant_runs_without_python();
+    test_checkpoint_restores_pending_execution_exactly();
+    test_checkpoint_preserves_human_pause_and_embedded_rl();
     return 0;
 }
