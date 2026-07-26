@@ -109,6 +109,7 @@ add_library(
         src/control/m11_artifact.cpp
         src/control/m11_checkpoint.cpp
         src/control/m11_coordinator.cpp
+        src/control/m11_frontend.cpp
         src/control/m11_kernel.cpp
         src/control/m11_policy.cpp
         src/control/m11_release.cpp
@@ -760,6 +761,24 @@ if(MACRO_SIM_BUILD_TESTS)
         NAME macro_sim.m11_session
         COMMAND macro_sim_m11_session_tests
     )
+
+    add_executable(
+        macro_sim_m11_frontend_tests
+        tests/m11_frontend_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_frontend_tests
+        PRIVATE macro_sim_core
+    )
+    macro_sim_project_options(macro_sim_m11_frontend_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_frontend_tests
+    )
+    add_test(
+        NAME macro_sim.m11_frontend
+        COMMAND macro_sim_m11_frontend_tests
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m11_kernel_golden
