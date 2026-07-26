@@ -21,10 +21,12 @@ using Json = nlohmann::json;
 constexpr std::array<std::uint8_t, 8> kMagic{
     'M', 'S', '1', '0', 'H', '0', '0', '1',
 };
-constexpr std::uint32_t kVersion = 1U;
+constexpr std::uint32_t kVersion = 2U;
 constexpr std::size_t kDigestBytes = 32U;
 constexpr std::size_t kMaximumMetadataBytes = 256U * 1024U * 1024U;
 constexpr std::size_t kMaximumObjectiveBytes = 64U * 1024U * 1024U;
+constexpr std::uint64_t kMaximumControllerArchiveBytes =
+    4ULL * 1024ULL * 1024ULL * 1024ULL;
 
 void append_u32(std::vector<std::uint8_t> &bytes, std::uint32_t value) {
     for (int shift = 24; shift >= 0; shift -= 8) {
@@ -138,7 +140,8 @@ envelope_from_json(const Json &input) {
 
 Result<std::vector<std::uint8_t>>
 save_hybrid_checkpoint(const HybridControlledBridge &bridge,
-                       std::span<const std::uint8_t> objective_envelope) {
+                       std::span<const std::uint8_t> objective_envelope,
+                       std::span<const std::uint8_t> controller_archive) {
     auto available = bridge.require_available();
     if (!available.ok()) {
         return available;
@@ -146,6 +149,11 @@ save_hybrid_checkpoint(const HybridControlledBridge &bridge,
     if (objective_envelope.size() > kMaximumObjectiveBytes) {
         return Status(ErrorCode::out_of_range,
                       "M10 objective envelope exceeds the supported size");
+    }
+    if (controller_archive.size() > kMaximumControllerArchiveBytes) {
+        return Status(
+            ErrorCode::out_of_range,
+            "M10 controller archive exceeds the supported checkpoint size");
     }
     auto world = bridge.engine_.world().checkpoint();
     if (!world.ok()) {
@@ -188,7 +196,7 @@ save_hybrid_checkpoint(const HybridControlledBridge &bridge,
     std::vector<std::uint8_t> bytes;
     bytes.reserve(kMagic.size() + 4U + 8U + encoded.size() + 8U +
                   world.get_if()->size() + 8U + objective_envelope.size() +
-                  kDigestBytes);
+                  8U + controller_archive.size() + kDigestBytes);
     bytes.insert(bytes.end(), kMagic.begin(), kMagic.end());
     append_u32(bytes, kVersion);
     append_u64(bytes, encoded.size());
@@ -198,6 +206,9 @@ save_hybrid_checkpoint(const HybridControlledBridge &bridge,
     append_u64(bytes, objective_envelope.size());
     bytes.insert(bytes.end(), objective_envelope.begin(),
                  objective_envelope.end());
+    append_u64(bytes, controller_archive.size());
+    bytes.insert(bytes.end(), controller_archive.begin(),
+                 controller_archive.end());
     const auto digest = core::sha256_digest(bytes);
     bytes.insert(bytes.end(), digest.bytes.begin(), digest.bytes.end());
     return bytes;
@@ -205,7 +216,7 @@ save_hybrid_checkpoint(const HybridControlledBridge &bridge,
 
 Result<LoadedHybridComposite>
 load_hybrid_checkpoint(std::span<const std::uint8_t> checkpoint) {
-    if (checkpoint.size() < kMagic.size() + 4U + 8U + 8U + 8U +
+    if (checkpoint.size() < kMagic.size() + 4U + 8U + 8U + 8U + 8U +
                                 kDigestBytes ||
         !std::equal(kMagic.begin(), kMagic.end(), checkpoint.begin())) {
         return corrupt();
@@ -248,11 +259,22 @@ load_hybrid_checkpoint(std::span<const std::uint8_t> checkpoint) {
         std::uint64_t objective_size = 0U;
         if (!read_u64(payload, position, objective_size) ||
             objective_size > kMaximumObjectiveBytes ||
-            objective_size > payload.size() - position ||
-            position + objective_size != payload.size()) {
+            objective_size > payload.size() - position) {
             return corrupt();
         }
         std::vector<std::uint8_t> objective(
+            payload.begin() + static_cast<std::ptrdiff_t>(position),
+            payload.begin() + static_cast<std::ptrdiff_t>(
+                                  position + objective_size));
+        position += static_cast<std::size_t>(objective_size);
+        std::uint64_t archive_size = 0U;
+        if (!read_u64(payload, position, archive_size) ||
+            archive_size > kMaximumControllerArchiveBytes ||
+            archive_size > payload.size() - position ||
+            position + archive_size != payload.size()) {
+            return corrupt();
+        }
+        std::vector<std::uint8_t> controller_archive(
             payload.begin() + static_cast<std::ptrdiff_t>(position),
             payload.end());
 
@@ -310,8 +332,11 @@ load_hybrid_checkpoint(std::span<const std::uint8_t> checkpoint) {
             receipt.acknowledged = item.at("acknowledged").get<bool>();
             bridge.receipts_.push_back(std::move(receipt));
         }
-        return LoadedHybridComposite{std::move(bridge),
-                                     std::move(objective)};
+        return LoadedHybridComposite{
+            std::move(bridge),
+            std::move(objective),
+            std::move(controller_archive),
+        };
     } catch (...) {
         return corrupt();
     }

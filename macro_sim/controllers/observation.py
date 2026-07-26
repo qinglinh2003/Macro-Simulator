@@ -14,12 +14,14 @@ at boundary 3.  This convention matches ``world.t``: the next tick not yet run.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, MutableSequence
 from dataclasses import dataclass, field
 import json
 import math
 from numbers import Integral, Real
-from typing import Any, ClassVar, Mapping, Sequence
+from typing import Any, ClassVar, Mapping, Sequence, overload
 
+from .chunk_store import ChunkChainIndex, get_chunk, put_chunk
 from .protocol import immutable_json_value
 
 
@@ -142,6 +144,391 @@ class Release:
 
     def to_json(self) -> str:
         return _stable_json(self.to_dict())
+
+
+RELEASE_CHUNK_FORMAT = "macro-sim-controller-release-chunk-v1"
+DEFAULT_RELEASE_CHUNK_SIZE = 32
+DEFAULT_RELEASE_TAIL_LIMIT = 64
+
+
+def _release_from_dict(value: Any) -> Release:
+    if not isinstance(value, dict) or set(value) != {
+        "access_class", "economy_id", "missing_reason",
+        "reference_end_tick", "reference_start_tick", "released_at_tick",
+        "revision", "series_id", "unit", "value", "vintage",
+    }:
+        raise ValueError("release chunk item fields are invalid")
+    return Release(**value)
+
+
+class ReleaseSequence(MutableSequence[Release]):
+    """List-compatible publication series with a bounded resident tail."""
+
+    def __init__(
+        self,
+        values: Sequence[Release] = (),
+        *,
+        chunk_size: int = DEFAULT_RELEASE_CHUNK_SIZE,
+        tail_limit: int = DEFAULT_RELEASE_TAIL_LIMIT,
+        chunks: Sequence[Mapping[str, Any]] | Mapping[str, Any] = (),
+        tail: Sequence[Release] | None = None,
+        total_count: int | None = None,
+    ) -> None:
+        self.chunk_size = _strict_int(
+            "release chunk_size", chunk_size, minimum=1,
+        )
+        self.tail_limit = _strict_int(
+            "release tail_limit", tail_limit, minimum=self.chunk_size,
+        )
+        if self.chunk_size > 4096 or self.tail_limit > 8192:
+            raise ValueError("release sequence bounds are too large")
+        if isinstance(chunks, Mapping):
+            self._chunks = ChunkChainIndex.from_state(chunks)
+        else:
+            self._chunks = ChunkChainIndex()
+            for descriptor in chunks:
+                self._chunks.append(descriptor)
+        self._tail = list(values if tail is None else tail)
+        if any(not isinstance(item, Release) for item in self._tail):
+            raise TypeError("release sequence tail must contain Release values")
+        archived = sum(int(item["release_count"]) for item in self._chunks)
+        self._total_count = (
+            archived + len(self._tail)
+            if total_count is None else int(total_count)
+        )
+        if self._total_count != archived + len(self._tail):
+            raise ValueError("release sequence total_count is inconsistent")
+        self._validate_descriptors()
+        self._compact_tail()
+
+    @property
+    def archived_count(self) -> int:
+        return self._total_count - len(self._tail)
+
+    @property
+    def retained_count(self) -> int:
+        return len(self._tail)
+
+    @property
+    def chunk_digests(self) -> tuple[str, ...]:
+        return tuple(
+            str(item["sha256"]) for item in self._chunks
+        ) + self._chunks.node_digests
+
+    @staticmethod
+    def _chunk_payload(
+        first_index: int, releases: Sequence[Release],
+    ) -> bytes:
+        return (
+            json.dumps(
+                {
+                    "first_index": first_index,
+                    "format": RELEASE_CHUNK_FORMAT,
+                    "releases": [item.to_dict() for item in releases],
+                },
+                ensure_ascii=False, allow_nan=False,
+                separators=(",", ":"), sort_keys=True,
+            )
+            + "\n"
+        ).encode("utf-8")
+
+    @classmethod
+    def _decode_chunk(
+        cls, payload: bytes, descriptor: Mapping[str, Any],
+    ) -> list[Release]:
+        try:
+            document = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("release chunk is not valid JSON") from exc
+        if (
+            not isinstance(document, dict)
+            or set(document) != {"first_index", "format", "releases"}
+            or document["format"] != RELEASE_CHUNK_FORMAT
+            or document["first_index"] != int(descriptor["first_index"])
+        ):
+            raise ValueError("release chunk document is invalid")
+        releases = [_release_from_dict(item) for item in document["releases"]]
+        if cls._chunk_payload(document["first_index"], releases) != payload:
+            raise ValueError("release chunk is not canonical")
+        return releases
+
+    def _validate_descriptors(self) -> None:
+        expected = 0
+        previous_release_tick = -1
+        for descriptor in self._chunks:
+            if set(descriptor) != {
+                "byte_count", "first_index", "max_reference_end",
+                "max_released_at", "min_reference_start",
+                "min_released_at", "release_count", "sha256",
+            }:
+                raise ValueError("release chunk descriptor fields are invalid")
+            count = int(descriptor["release_count"])
+            if (
+                int(descriptor["first_index"]) != expected
+                or count <= 0
+                or int(descriptor["byte_count"]) <= 0
+            ):
+                raise ValueError("release chunk descriptor range is invalid")
+            payload = get_chunk(str(descriptor["sha256"]))
+            if len(payload) != int(descriptor["byte_count"]):
+                raise ValueError("release chunk byte count does not match")
+            releases = self._decode_chunk(payload, descriptor)
+            if len(releases) != count:
+                raise ValueError("release chunk count does not match")
+            ticks = [item.released_at_tick for item in releases]
+            references = [
+                (
+                    item.reference_start_tick,
+                    item.reference_end_tick,
+                )
+                for item in releases
+            ]
+            if (
+                ticks != sorted(ticks)
+                or ticks[0] < previous_release_tick
+                or int(descriptor["min_released_at"]) != ticks[0]
+                or int(descriptor["max_released_at"]) != ticks[-1]
+                or int(descriptor["min_reference_start"])
+                != min(item[0] for item in references)
+                or int(descriptor["max_reference_end"])
+                != max(item[1] for item in references)
+            ):
+                raise ValueError("release chunk metadata does not match")
+            previous_release_tick = ticks[-1]
+            expected += count
+        if expected != self.archived_count:
+            raise ValueError("release chunk descriptors are not contiguous")
+        if self._tail:
+            ticks = [item.released_at_tick for item in self._tail]
+            if ticks != sorted(ticks) or ticks[0] < previous_release_tick:
+                raise ValueError("release sequence tail order is invalid")
+
+    def _write_chunk(self, releases: Sequence[Release]) -> None:
+        first = self.archived_count
+        payload = self._chunk_payload(first, releases)
+        digest = put_chunk(payload)
+        self._chunks.append({
+            "byte_count": len(payload),
+            "first_index": first,
+            "max_reference_end": max(
+                item.reference_end_tick for item in releases
+            ),
+            "max_released_at": max(
+                item.released_at_tick for item in releases
+            ),
+            "min_reference_start": min(
+                item.reference_start_tick for item in releases
+            ),
+            "min_released_at": min(
+                item.released_at_tick for item in releases
+            ),
+            "release_count": len(releases),
+            "sha256": digest,
+        })
+
+    def _compact_tail(self) -> None:
+        while len(self._tail) > self.tail_limit:
+            chunk = self._tail[:self.chunk_size]
+            self._write_chunk(chunk)
+            del self._tail[:self.chunk_size]
+
+    def _load_descriptor(
+        self, descriptor: Mapping[str, Any],
+    ) -> list[Release]:
+        return self._decode_chunk(
+            get_chunk(str(descriptor["sha256"])), descriptor,
+        )
+
+    def _release_at(self, index: int) -> Release:
+        if index < 0:
+            index += self._total_count
+        if not 0 <= index < self._total_count:
+            raise IndexError("release index out of range")
+        archived = self.archived_count
+        if index >= archived:
+            return self._tail[index - archived]
+        for descriptor in self._chunks:
+            first = int(descriptor["first_index"])
+            count = int(descriptor["release_count"])
+            if first <= index < first + count:
+                return self._load_descriptor(descriptor)[index - first]
+        raise RuntimeError("release chunk index is unreachable")
+
+    @overload
+    def __getitem__(self, index: int) -> Release: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[Release]: ...
+
+    def __getitem__(self, index: int | slice) -> Release | list[Release]:
+        if isinstance(index, slice):
+            start, stop, step = index.indices(self._total_count)
+            return [
+                self._release_at(position)
+                for position in range(start, stop, step)
+            ]
+        return self._release_at(index)
+
+    def __setitem__(self, index: int | slice, value: Any) -> None:
+        if isinstance(index, int):
+            if not isinstance(value, Release):
+                raise TypeError(
+                    "release sequence accepts only Release values"
+                )
+            values = list(self)
+            values[index] = value
+            self.replace_all(values)
+            return
+        if index != slice(None, None, None):
+            raise TypeError(
+                "release sequence supports only complete replacement"
+            )
+        self.replace_all(value)
+
+    def __delitem__(self, index: int | slice) -> None:
+        if isinstance(index, int):
+            normalized = index if index >= 0 else self._total_count + index
+            if normalized != self._total_count - 1:
+                raise TypeError(
+                    "release sequence supports only suffix deletion"
+                )
+            self.truncate(normalized)
+            return
+        start, stop, step = index.indices(self._total_count)
+        if step != 1 or stop != self._total_count:
+            raise TypeError("release sequence supports only suffix deletion")
+        self.truncate(start)
+
+    def insert(self, index: int, value: Release) -> None:
+        if index not in (self._total_count, -1):
+            raise TypeError("release sequence is append-only")
+        self.append(value)
+
+    def append(self, value: Release) -> None:
+        if not isinstance(value, Release):
+            raise TypeError("release sequence accepts only Release values")
+        if self._total_count and value.released_at_tick < self[-1].released_at_tick:
+            raise ValueError("release sequence cannot move backwards")
+        self._tail.append(value)
+        self._total_count += 1
+        self._compact_tail()
+
+    def truncate(self, count: int) -> None:
+        count = _strict_int("release truncate count", count)
+        if count > self._total_count:
+            raise ValueError("release truncate count is outside the sequence")
+        if count >= self.archived_count:
+            del self._tail[count - self.archived_count:]
+            self._total_count = count
+            return
+        retained = [self._release_at(index) for index in range(count)]
+        self._chunks.clear()
+        self._tail = retained
+        self._total_count = count
+        self._compact_tail()
+
+    def replace_all(self, values: Sequence[Release]) -> None:
+        self._chunks.clear()
+        self._tail.clear()
+        self._total_count = 0
+        for value in values:
+            self.append(value)
+
+    def latest(self, *, as_of_tick: int | None = None) -> Release | None:
+        for release in reversed(self._tail):
+            if as_of_tick is None or release.released_at_tick <= as_of_tick:
+                return release
+        for descriptor in reversed(self._chunks):
+            if (
+                as_of_tick is not None
+                and int(descriptor["min_released_at"]) > as_of_tick
+            ):
+                continue
+            for release in reversed(self._load_descriptor(descriptor)):
+                if as_of_tick is None \
+                        or release.released_at_tick <= as_of_tick:
+                    return release
+        return None
+
+    def recent(
+        self, *, as_of_tick: int | None = None, limit: int,
+    ) -> tuple[Release, ...]:
+        maximum = _strict_int("release recent limit", limit, minimum=1)
+        selected: list[Release] = []
+        for release in reversed(self._tail):
+            if as_of_tick is None or release.released_at_tick <= as_of_tick:
+                selected.append(release)
+                if len(selected) == maximum:
+                    return tuple(reversed(selected))
+        for descriptor in reversed(self._chunks):
+            if (
+                as_of_tick is not None
+                and int(descriptor["min_released_at"]) > as_of_tick
+            ):
+                continue
+            for release in reversed(self._load_descriptor(descriptor)):
+                if as_of_tick is None \
+                        or release.released_at_tick <= as_of_tick:
+                    selected.append(release)
+                    if len(selected) == maximum:
+                        return tuple(reversed(selected))
+        return tuple(reversed(selected))
+
+    def iter_dependency_window(
+        self, reference_start: int, reference_end: int, released_at: int,
+    ) -> Iterator[Release]:
+        for descriptor in self._chunks:
+            if (
+                int(descriptor["min_released_at"]) > released_at
+                or int(descriptor["max_reference_end"]) < reference_start
+                or int(descriptor["min_reference_start"]) > reference_end
+            ):
+                continue
+            for release in self._load_descriptor(descriptor):
+                if (
+                    release.released_at_tick <= released_at
+                    and release.reference_start_tick >= reference_start
+                    and release.reference_end_tick <= reference_end
+                ):
+                    yield release
+        for release in self._tail:
+            if (
+                release.released_at_tick <= released_at
+                and release.reference_start_tick >= reference_start
+                and release.reference_end_tick <= reference_end
+            ):
+                yield release
+
+    def __len__(self) -> int:
+        return self._total_count
+
+    def __iter__(self) -> Iterator[Release]:
+        for descriptor in self._chunks:
+            yield from self._load_descriptor(descriptor)
+        yield from self._tail
+
+    def to_state(self) -> dict[str, Any]:
+        return {
+            "chunk_size": self.chunk_size,
+            "chunks": self._chunks.to_state(),
+            "tail": list(self._tail),
+            "tail_limit": self.tail_limit,
+            "total_count": self._total_count,
+        }
+
+    @classmethod
+    def from_state(cls, state: Mapping[str, Any]) -> "ReleaseSequence":
+        if not isinstance(state, Mapping) or set(state) != {
+            "chunk_size", "chunks", "tail", "tail_limit", "total_count",
+        }:
+            raise ValueError("release sequence state fields are invalid")
+        return cls(
+            chunk_size=state["chunk_size"],
+            chunks=state["chunks"],
+            tail=state["tail"],
+            tail_limit=state["tail_limit"],
+            total_count=state["total_count"],
+        )
 
 
 @dataclass(frozen=True)
@@ -420,9 +807,19 @@ class ReleaseService:
 
     def __init__(self, spec: ObservationSpec):
         self.spec = spec
-        self._history: dict[tuple[int, str], list[Release]] = {}
+        self._history: dict[
+            tuple[int, str], ReleaseSequence | list[Release]
+        ] = {}
         self._next_period_index: dict[tuple[int, str], int] = {}
         self._last_boundary: dict[int, int] = {}
+
+    def _series(self, key: tuple[int, str]) -> ReleaseSequence:
+        current = self._history.get(key)
+        if isinstance(current, ReleaseSequence):
+            return current
+        sequence = ReleaseSequence(() if current is None else current)
+        self._history[key] = sequence
+        return sequence
 
     @staticmethod
     def _shock_observable(
@@ -610,7 +1007,19 @@ class ReleaseService:
         """
         history = self._history.get((economy_id, item.source_key), ())
         latest_by_period: dict[tuple[int, int], Release] = {}
-        for release in history:
+        candidates = (
+            history.iter_dependency_window(
+                reference_start, reference_end, released_at,
+            )
+            if isinstance(history, ReleaseSequence)
+            else (
+                release for release in history
+                if release.released_at_tick <= released_at
+                and release.reference_start_tick >= reference_start
+                and release.reference_end_tick <= reference_end
+            )
+        )
+        for release in candidates:
             if release.released_at_tick > released_at:
                 continue
             if release.reference_start_tick < reference_start \
@@ -681,7 +1090,7 @@ class ReleaseService:
                         access_class=item.access_class, unit=item.unit,
                         economy_id=economy_id,
                     )
-                    self._history.setdefault(key, []).append(release)
+                    self._series(key).append(release)
                     published.append(release)
                     period_index += 1
                 self._next_period_index[key] = period_index
@@ -699,7 +1108,7 @@ class ReleaseService:
                 release = self._make_release(
                     engine, item, economy_id, reference_end, released_at,
                 )
-                self._history.setdefault(key, []).append(release)
+                self._series(key).append(release)
                 published.append(release)
                 period_index += 1
             self._next_period_index[key] = period_index
@@ -733,9 +1142,19 @@ class ReleaseService:
                 ))
                 continue
             history = self._history.get((economy_id, item.series_id), ())
-            eligible = [release for release in history if release.released_at_tick <= boundary_tick]
+            latest = (
+                history.latest(as_of_tick=boundary_tick)
+                if isinstance(history, ReleaseSequence)
+                else next(
+                    (
+                        release for release in reversed(history)
+                        if release.released_at_tick <= boundary_tick
+                    ),
+                    None,
+                )
+            )
             visible.append(
-                eligible[-1] if eligible else self._missing_release(
+                latest if latest is not None else self._missing_release(
                     item, economy_id, boundary_tick, "not_released",
                 )
             )
@@ -768,9 +1187,19 @@ class ReleaseService:
         visible: list[Release] = []
         for item in sorted(self.spec.fields, key=lambda field: field.series_id):
             history = self._history.get((economy_id, item.series_id), ())
-            eligible = [release for release in history if release.released_at_tick <= boundary_tick]
+            latest = (
+                history.latest(as_of_tick=boundary_tick)
+                if isinstance(history, ReleaseSequence)
+                else next(
+                    (
+                        release for release in reversed(history)
+                        if release.released_at_tick <= boundary_tick
+                    ),
+                    None,
+                )
+            )
             visible.append(
-                eligible[-1] if eligible else self._missing_release(
+                latest if latest is not None else self._missing_release(
                     item, economy_id, boundary_tick, "not_released",
                 )
             )
@@ -789,10 +1218,24 @@ class ReleaseService:
 
     def history(
         self, economy_id: int, series_id: str, *, as_of_tick: int | None = None,
+        limit: int | None = None,
     ) -> tuple[Release, ...]:
-        result = tuple(self._history.get((economy_id, series_id), ()))
-        if as_of_tick is not None:
-            result = tuple(item for item in result if item.released_at_tick <= as_of_tick)
+        history = self._history.get((economy_id, series_id), ())
+        if limit is not None:
+            limit = _strict_int("history limit", limit, minimum=1)
+        if isinstance(history, ReleaseSequence):
+            if limit is not None:
+                return history.recent(
+                    as_of_tick=as_of_tick, limit=limit,
+                )
+            if as_of_tick is None:
+                return tuple(history)
+        result = tuple(
+            item for item in history
+            if as_of_tick is None or item.released_at_tick <= as_of_tick
+        )
+        if limit is not None:
+            result = result[-limit:]
         return result
 
 
@@ -963,6 +1406,20 @@ class ObjectiveEvaluator:
             newly_seen.add(release.identity)
             key = (observation.economy_id, observation.role, release.series_id)
             self._history.setdefault(key, []).append(release)
+        windows = {
+            term.series_id: term.evaluation_window
+            for term in self.spec.terms
+        }
+        for key, releases in self._history.items():
+            maximum = windows.get(key[2], 1)
+            if len(releases) > maximum:
+                del releases[:-maximum]
+        self._seen = {
+            (role,) + release.identity
+            for (_economy_id, role, _series_id), releases
+            in self._history.items()
+            for release in releases
+        }
         return newly_seen
 
     @staticmethod

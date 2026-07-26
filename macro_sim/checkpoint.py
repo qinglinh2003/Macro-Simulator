@@ -305,7 +305,11 @@ def _validate_release_service_snapshot(
     otherwise bit-identical.  Custom release-service implementations are opaque to
     this checkpoint layer and retain their own validation responsibility.
     """
-    from macro_sim.controllers.observation import Release, ReleaseService
+    from macro_sim.controllers.observation import (
+        Release,
+        ReleaseSequence,
+        ReleaseService,
+    )
 
     service = getattr(root, "release_service", None)
     if type(service) is not ReleaseService:
@@ -345,7 +349,7 @@ def _validate_release_service_snapshot(
             raise ValueError(
                 "controlled-session release history has no corresponding release clock"
             )
-        if not isinstance(releases, (list, tuple)):
+        if not isinstance(releases, (list, tuple, ReleaseSequence)):
             raise ValueError("controlled-session release history series is malformed")
         for release in releases:
             if not isinstance(release, Release):

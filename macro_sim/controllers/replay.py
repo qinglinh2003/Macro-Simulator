@@ -410,7 +410,7 @@ def replay_input_events(
     session.events.verify()
     if expected_list is not None:
         expected = canonical_json(expected_list)
-        actual = canonical_json(session.events.events)
+        actual = canonical_json(list(session.events.events))
         if actual != expected:
             raise ValueError("replayed canonical event stream differs from the source run")
     return session

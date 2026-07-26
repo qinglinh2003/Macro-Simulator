@@ -697,6 +697,7 @@ class NativeSimulationSession:
     spec: Any
     bridge: Any
     worker_count: int = 8
+    restored_controller_archive: bytes = b""
 
     @classmethod
     def create(
@@ -1225,8 +1226,13 @@ class NativeSimulationSession:
                 raise
         return result
 
-    def checkpoint(self, objective_envelope: bytes = b"{}") -> bytes:
-        return bytes(self.bridge.checkpoint(objective_envelope))
+    def checkpoint(
+        self, objective_envelope: bytes = b"{}", *,
+        controller_archive: bytes = b"",
+    ) -> bytes:
+        return bytes(self.bridge.checkpoint(
+            objective_envelope, controller_archive,
+        ))
 
     @classmethod
     def restore(
@@ -1242,7 +1248,12 @@ class NativeSimulationSession:
             raise TypeError("spec must be a NewGameSpec or NativeConfigRunSpec")
         native = _load_native()
         restored = native.HybridControlledBridge.restore_checkpoint(checkpoint)
-        return (
-            cls(spec=spec, bridge=restored["bridge"], worker_count=worker_count),
-            bytes(restored["objective_envelope"]),
+        session = cls(
+            spec=spec,
+            bridge=restored["bridge"],
+            worker_count=worker_count,
+            restored_controller_archive=bytes(
+                restored["controller_archive"],
+            ),
         )
+        return session, bytes(restored["objective_envelope"])

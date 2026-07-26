@@ -930,7 +930,7 @@ class ControlledSimulationSession:
         self.events._head_hash = snapshot.event_head_hash
 
     def _snapshot_release_service(self) -> _ReleaseServiceSnapshot:
-        from .observation import ReleaseService
+        from .observation import ReleaseSequence, ReleaseService
 
         service = self.release_service
         history = getattr(service, "_history", None)
@@ -938,7 +938,10 @@ class ControlledSimulationSession:
         last_boundary = getattr(service, "_last_boundary", None)
         if type(service) is ReleaseService \
                 and isinstance(history, dict) \
-                and all(isinstance(value, list) for value in history.values()) \
+                and all(
+                    isinstance(value, (list, ReleaseSequence))
+                    for value in history.values()
+                ) \
                 and isinstance(next_period, dict) \
                 and isinstance(last_boundary, dict):
             # ReleaseService is append-only.  Length markers avoid copying its

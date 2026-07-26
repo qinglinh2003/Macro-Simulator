@@ -291,6 +291,7 @@ class NativeFiscalStabilizationEnv:
         return {
             term.series_id: self.release_service.history(
                 self.economy_id, term.series_id, as_of_tick=boundary,
+                limit=term.evaluation_window,
             )
             for term in self.objective_spec.terms
         }

@@ -809,6 +809,7 @@ class ControllerEnv(_EnvBase):
                 self.economy_id,
                 term.series_id,
                 as_of_tick=boundary_tick,
+                limit=term.evaluation_window,
             )
             for term in self.objective_evaluator.spec.terms
         }

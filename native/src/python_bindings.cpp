@@ -3032,6 +3032,26 @@ NB_MODULE(_native, module) {
                                   result.get_if()->size());
              },
              nb::arg("objective_envelope"))
+        .def("checkpoint",
+             [](const macro_sim::control::HybridControlledBridge &value,
+                const nb::bytes &objective,
+                const nb::bytes &controller_archive) {
+                 const auto *data =
+                     static_cast<const std::uint8_t *>(objective.data());
+                 const auto *archive_data = static_cast<const std::uint8_t *>(
+                     controller_archive.data());
+                 auto result =
+                     macro_sim::control::save_hybrid_checkpoint(
+                         value, std::span<const std::uint8_t>(
+                                    data, objective.size()),
+                         std::span<const std::uint8_t>(
+                             archive_data, controller_archive.size()));
+                 require_status(result.status());
+                 return nb::bytes(result.get_if()->data(),
+                                  result.get_if()->size());
+             },
+             nb::arg("objective_envelope"),
+             nb::arg("controller_archive"))
         .def_static(
             "restore_checkpoint",
             [](const nb::bytes &checkpoint) {
@@ -3048,6 +3068,9 @@ NB_MODULE(_native, module) {
                 output["objective_envelope"] = nb::bytes(
                     result.get_if()->objective_envelope.data(),
                     result.get_if()->objective_envelope.size());
+                output["controller_archive"] = nb::bytes(
+                    result.get_if()->controller_archive.data(),
+                    result.get_if()->controller_archive.size());
                 return output;
             },
             nb::arg("checkpoint"));

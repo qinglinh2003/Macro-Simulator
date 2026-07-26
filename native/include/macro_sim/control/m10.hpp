@@ -86,7 +86,8 @@ struct LoadedHybridComposite;
 
 [[nodiscard]] Result<std::vector<std::uint8_t>>
 save_hybrid_checkpoint(const HybridControlledBridge &bridge,
-                       std::span<const std::uint8_t> objective_envelope = {});
+                       std::span<const std::uint8_t> objective_envelope = {},
+                       std::span<const std::uint8_t> controller_archive = {});
 [[nodiscard]] Result<LoadedHybridComposite>
 load_hybrid_checkpoint(std::span<const std::uint8_t> checkpoint);
 
@@ -226,6 +227,7 @@ class HybridControlledBridge final {
     friend class PreparedBoundaryLease;
     friend Result<std::vector<std::uint8_t>>
     save_hybrid_checkpoint(const HybridControlledBridge &,
+                           std::span<const std::uint8_t>,
                            std::span<const std::uint8_t>);
     friend Result<LoadedHybridComposite>
     load_hybrid_checkpoint(std::span<const std::uint8_t>);
@@ -248,6 +250,7 @@ class HybridControlledBridge final {
 struct LoadedHybridComposite final {
     HybridControlledBridge bridge;
     std::vector<std::uint8_t> objective_envelope;
+    std::vector<std::uint8_t> controller_archive;
 };
 
 [[nodiscard]] core::StateDigest

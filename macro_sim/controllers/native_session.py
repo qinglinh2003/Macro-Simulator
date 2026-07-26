@@ -228,8 +228,13 @@ class NativeControlledWorld:
     def checkpoint_controller(
         self, session: Any, objective_envelope: bytes = b"{}",
     ) -> bytes:
+        from .native_envelope import controller_archive_package
+
         self.sync_controller_state(session)
-        return self.native_session.checkpoint(objective_envelope)
+        return self.native_session.checkpoint(
+            objective_envelope,
+            controller_archive=controller_archive_package(session),
+        )
 
     def _install_policy_values(
         self, values: tuple[dict[str, Any], ...],
@@ -626,7 +631,10 @@ def restore_native_controlled_session(
         migration=bool(spec.world["migration"]),
     )
     payload = bytes(native.bridge.controller_envelope.canonical_payload)
-    decoded = decode_controller_state(payload)
+    decoded = decode_controller_state(
+        payload,
+        archive_package=native.restored_controller_archive,
+    )
     controlled = ControlledSimulationSession(
         world, run_mode=decoded["session"]["run_mode"],
     )

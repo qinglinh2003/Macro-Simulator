@@ -15,6 +15,7 @@ import math
 import random
 from typing import Any
 
+from .chunk_store import export_chunk_package, import_chunk_package
 from .coordinator import PolicyCoordinator
 from .costs import AdjustmentCostSpec, CostWeights
 from .events import EventStream
@@ -25,6 +26,7 @@ from .observation import (
     OracleObservation,
     PublicObservation,
     Release,
+    ReleaseSequence,
     ReleaseService,
 )
 from .occupants import (
@@ -47,7 +49,7 @@ from .protocol import (
 from .scheduler import CalendarSpec, DecisionScheduler, TriggerSpec, TriggerState
 
 
-CONTROLLER_ENVELOPE_FORMAT = "macro-sim-controller-envelope-v1"
+CONTROLLER_ENVELOPE_FORMAT = "macro-sim-controller-envelope-v2"
 MAX_CONTROLLER_ENVELOPE_BYTES = 16 * 1024 * 1024
 
 _TYPES = (
@@ -118,6 +120,10 @@ def _encode(value: Any) -> Any:
         return {"$bytes": base64.b64encode(value).decode("ascii")}
     if isinstance(value, random.Random):
         return {"$random": _encode(value.getstate())}
+    if isinstance(value, EventStream):
+        return {"$event_stream": _encode(value.to_state())}
+    if isinstance(value, ReleaseSequence):
+        return {"$release_sequence": _encode(value.to_state())}
     if isinstance(value, Mapping):
         pairs = [
             [_encode(key), _encode(item)]
@@ -186,6 +192,14 @@ def _decode(value: Any) -> Any:
         generator = random.Random()
         generator.setstate(_decode(value["$random"]))
         return generator
+    if "$event_stream" in value and set(value) == {"$event_stream"}:
+        state = _decode(value["$event_stream"])
+        return EventStream.from_state(state)
+    if "$release_sequence" in value and set(value) == {
+        "$release_sequence",
+    }:
+        state = _decode(value["$release_sequence"])
+        return ReleaseSequence.from_state(state)
     if "$tuple" in value and set(value) == {"$tuple"}:
         return tuple(_decode(item) for item in value["$tuple"])
     if "$list" in value and set(value) == {"$list"}:
@@ -290,10 +304,30 @@ def encode_controller_state(session: Any) -> bytes:
     return payload
 
 
-def decode_controller_state(payload: bytes) -> dict[str, Any]:
+def controller_archive_package(session: Any) -> bytes:
+    """Export every immutable chunk referenced by the controller state."""
+    events = getattr(session, "events", None)
+    digests = set(
+        () if not isinstance(events, EventStream) else events.chunk_digests
+    )
+    release_service = getattr(session, "release_service", None)
+    if isinstance(release_service, ReleaseService):
+        for history in release_service._history.values():
+            if isinstance(history, ReleaseSequence):
+                digests.update(history.chunk_digests)
+    return export_chunk_package(digests)
+
+
+def decode_controller_state(
+    payload: bytes, *, archive_package: bytes | None = None,
+) -> dict[str, Any]:
     """Decode and validate a neutral controller envelope without dynamic imports."""
     if not isinstance(payload, bytes):
         raise TypeError("controller envelope payload must be bytes")
+    imported = (
+        None if archive_package is None
+        else set(import_chunk_package(archive_package))
+    )
     if len(payload) > MAX_CONTROLLER_ENVELOPE_BYTES:
         raise ValueError("controller envelope exceeds the native size bound")
     try:
@@ -341,6 +375,15 @@ def decode_controller_state(payload: bytes) -> dict[str, Any]:
     if not isinstance(decoded["release_service"], ReleaseService):
         raise TypeError("controller envelope release service type is invalid")
     decoded["events"].verify()
+    if imported is not None:
+        referenced = set(decoded["events"].chunk_digests)
+        for history in decoded["release_service"]._history.values():
+            if isinstance(history, ReleaseSequence):
+                referenced.update(history.chunk_digests)
+        if imported != referenced:
+            raise ValueError(
+                "controller archive package does not exactly match its manifest"
+            )
     return decoded
 
 
