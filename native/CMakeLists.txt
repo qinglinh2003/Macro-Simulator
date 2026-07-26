@@ -873,6 +873,20 @@ if(MACRO_SIM_BUILD_TESTS)
             macro_sim.m10_native_facade
             PROPERTIES LABELS "python-binding"
         )
+        add_test(
+            NAME macro_sim.m10_native_controller
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m10/native_controller_smoke.py"
+                --native-dir
+                "$<TARGET_FILE_DIR:_native>"
+                --source-dir
+                "${PROJECT_SOURCE_DIR}"
+        )
+        set_tests_properties(
+            macro_sim.m10_native_controller
+            PROPERTIES LABELS "python-binding;controller;rl"
+        )
     endif()
 endif()
 

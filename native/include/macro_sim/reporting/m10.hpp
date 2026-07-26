@@ -12,7 +12,11 @@
 
 namespace macro_sim::reporting {
 
-inline constexpr std::size_t kM10PublicMetricCount = 23U;
+// Forty-one native source series back the forty-two institutional observation
+// series.  ``oracle_daily_output`` deliberately aliases the same committed
+// ``real_output`` source; access control belongs to the release layer rather
+// than to a duplicate economic measurement.
+inline constexpr std::size_t kM10PublicMetricCount = 41U;
 
 enum class MetricTier : std::uint8_t {
     causal = 0,
@@ -123,6 +127,8 @@ class MetricPipeline final {
 };
 
 [[nodiscard]] std::span<const MetricDescriptor> public_metric_descriptors() noexcept;
+[[nodiscard]] Result<std::size_t>
+public_metric_index(std::string_view stable_id) noexcept;
 [[nodiscard]] Result<MetricFrame>
 build_public_metric_frame(const simulation::M9World &world,
                           const MetricFrame *previous = nullptr);

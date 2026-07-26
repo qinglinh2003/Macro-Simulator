@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <unordered_map>
 #include <utility>
 
 namespace macro_sim::reporting {
@@ -59,6 +60,56 @@ constexpr std::array<MetricDescriptor, kM10PublicMetricCount> kDescriptors{{
      MetricAggregation::last, "m9.external.net_foreign_assets"},
     {"metric.world.remittances", "currency", 1U, MetricTier::causal,
      MetricAggregation::sum, "m9.external.remittances_received"},
+    {"metric.economy.bank_reserves_total", "currency", 1U,
+     MetricTier::causal, MetricAggregation::last,
+     "m5.total_reserves"},
+    {"metric.economy.reserve_floor_breach_share", "share", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "share(alive_bank_reserves < reserve_floor_fraction * deposits)"},
+    {"metric.economy.near_failure_bank_count", "banks", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "count(0 <= closing_bank_capital < m6.bank_minimum_capital)"},
+    {"metric.economy.energy_stock_total", "energy_units", 1U,
+     MetricTier::causal, MetricAggregation::last,
+     "m8.producer_inventory + m8.downstream_stock + m8.strategic_reserve"},
+    {"metric.economy.energy_unfilled", "energy_units", 1U,
+     MetricTier::causal, MetricAggregation::sum,
+     "m8.energy.unfilled"},
+    {"metric.world.reserves_by_economy", "anchor_currency", 1U,
+     MetricTier::causal, MetricAggregation::last,
+     "m9.peg.reserves for pegger; zero for floating economy"},
+    {"metric.shock.announced_count", "events", 1U, MetricTier::release,
+     MetricAggregation::last, "count(disclosed shocks relevant to economy)"},
+    {"metric.shock.active_count", "events", 1U, MetricTier::release,
+     MetricAggregation::last, "count(disclosed shocks active at boundary)"},
+    {"metric.shock.max_severity", "fraction", 1U, MetricTier::release,
+     MetricAggregation::last, "max(disclosed active magnitude * intensity)"},
+    {"metric.shock.time_to_next", "ticks", 1U, MetricTier::release,
+     MetricAggregation::last, "min(max(0, start - boundary)) over disclosed shocks"},
+    {"metric.shock.severity.productivity", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed productivity shock severity"},
+    {"metric.shock.severity.labor_availability", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed labor-availability shock severity"},
+    {"metric.shock.severity.energy_capacity", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed energy-capacity shock severity"},
+    {"metric.shock.severity.household_demand", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed household-demand shock severity"},
+    {"metric.shock.severity.import_capacity", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed import-capacity shock severity"},
+    {"metric.shock.severity.export_capacity", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed export-capacity shock severity"},
+    {"metric.shock.severity.credit_supply", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed credit-supply shock severity"},
+    {"metric.shock.severity.capital_destruction", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed capital-destruction shock severity"},
 }};
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
@@ -100,6 +151,70 @@ constexpr std::array<MetricDescriptor, kM10PublicMetricCount> kDescriptors{{
     const auto lower = std::max_element(
         values.begin(), values.begin() + static_cast<std::ptrdiff_t>(middle));
     return 0.5 * (*lower + upper);
+}
+
+[[nodiscard]] double shock_progress(const simulation::ShockSpec &shock,
+                                    Tick boundary) noexcept {
+    if (boundary.value() < shock.start.value() ||
+        boundary.value() >= shock.start.value() + shock.duration) {
+        return 0.0;
+    }
+    const auto elapsed = boundary.value() - shock.start.value();
+    if (shock.ramp_in_ticks > 0U || shock.ramp_out_ticks > 0U) {
+        double intensity = 1.0;
+        if (shock.ramp_in_ticks > 0U) {
+            intensity = std::min(
+                intensity, static_cast<double>(elapsed + 1U) /
+                               static_cast<double>(shock.ramp_in_ticks));
+        }
+        if (shock.ramp_out_ticks > 0U) {
+            const auto remaining =
+                shock.start.value() + shock.duration - boundary.value();
+            intensity = std::min(
+                intensity, static_cast<double>(remaining) /
+                               static_cast<double>(shock.ramp_out_ticks));
+        }
+        return std::clamp(intensity, 0.0, 1.0);
+    }
+    if (shock.shape == simulation::ShockShape::step || shock.duration <= 1U) {
+        return 1.0;
+    }
+    if (shock.shape == simulation::ShockShape::linear) {
+        return static_cast<double>(elapsed + 1U) /
+               static_cast<double>(shock.duration);
+    }
+    const double position =
+        static_cast<double>(elapsed) /
+        static_cast<double>(std::max<std::uint64_t>(1U, shock.duration - 1U));
+    return 1.0 - std::abs(2.0 * position - 1.0);
+}
+
+[[nodiscard]] bool shock_relevant(const simulation::ShockSpec &shock,
+                                  std::size_t economy) noexcept {
+    return !shock.economy.has_value() ||
+           shock.economy->value() == economy;
+}
+
+[[nodiscard]] bool shock_disclosed(const simulation::ShockSpec &shock,
+                                   Tick boundary) noexcept {
+    return shock.announcement.value_or(shock.start).value() <=
+           boundary.value();
+}
+
+[[nodiscard]] double shock_severity(const simulation::ShockSpec &shock,
+                                    Tick boundary,
+                                    bool include_announced_future) noexcept {
+    const double magnitude = std::max(0.0, shock.magnitude);
+    if (magnitude == 0.0) {
+        return 0.0;
+    }
+    if (boundary.value() < shock.start.value()) {
+        return include_announced_future ? magnitude : 0.0;
+    }
+    if (shock.kind == simulation::ShockKind::capital_destruction) {
+        return magnitude;
+    }
+    return magnitude * shock_progress(shock, boundary);
 }
 
 void set(MetricFrame &frame, std::size_t economy, std::size_t metric,
@@ -271,6 +386,21 @@ std::span<const MetricDescriptor> public_metric_descriptors() noexcept {
     return kDescriptors;
 }
 
+Result<std::size_t>
+public_metric_index(std::string_view stable_id) noexcept {
+    const auto found = std::find_if(
+        kDescriptors.begin(), kDescriptors.end(),
+        [stable_id](const MetricDescriptor &descriptor) {
+            return descriptor.stable_id == stable_id;
+        });
+    if (found == kDescriptors.end()) {
+        return Status(ErrorCode::not_found,
+                      "public metric stable ID is unknown");
+    }
+    return static_cast<std::size_t>(
+        std::distance(kDescriptors.begin(), found));
+}
+
 Result<MetricFrame>
 build_public_metric_frame(const simulation::M9World &world,
                           const MetricFrame *previous) {
@@ -304,9 +434,14 @@ build_public_metric_frame(const simulation::M9World &world,
             EconomyId(static_cast<std::uint64_t>(economy)));
         const auto *runtime = world.economy_runtime(
             EconomyId(static_cast<std::uint64_t>(economy)));
+        const auto domestic_policy = world.domestic_policy(
+            EconomyId(static_cast<std::uint64_t>(economy)));
         if (root == nullptr || financial == nullptr || runtime == nullptr) {
             return Status(ErrorCode::invariant_violation,
                           "M10 metric source economy is unavailable");
+        }
+        if (!domestic_policy.ok()) {
+            return domestic_policy.status();
         }
 
         std::vector<double> incomes;
@@ -379,6 +514,118 @@ build_public_metric_frame(const simulation::M9World &world,
         set(frame, economy, 20U, external.migrant_stock_abroad);
         set(frame, economy, 21U, external.net_foreign_assets);
         set(frame, economy, 22U, external.remittances_received);
+
+        set(frame, economy, 23U, monetary.total_reserves);
+
+        std::unordered_map<std::uint64_t, double> deposits_by_node;
+        for (const auto &account : root->postings.records()) {
+            if (!account.open ||
+                account.key.kind != core::AccountKind::deposit) {
+                continue;
+            }
+            deposits_by_node[account.key.settlement_node.value()] +=
+                std::max(0.0, account.balance.value());
+        }
+        std::size_t bank_count = 0U;
+        std::size_t reserve_floor_breaches = 0U;
+        for (const auto &reserve : root->reserves.records()) {
+            const auto *bank = root->banks.get(reserve.bank);
+            if (bank == nullptr || !bank->alive) {
+                continue;
+            }
+            ++bank_count;
+            const double floor =
+                domestic_policy.get_if()
+                    ->fiscal_monetary.reserve_floor_fraction *
+                deposits_by_node[bank->settlement_node.value()];
+            if (reserve.balance.value() + 1.0e-9 < floor) {
+                ++reserve_floor_breaches;
+            }
+        }
+        set(frame, economy, 24U,
+            bank_count == 0U
+                ? 0.0
+                : static_cast<double>(reserve_floor_breaches) /
+                      static_cast<double>(bank_count));
+
+        std::size_t near_failure_banks = 0U;
+        for (const auto &capital : root->bank_capital.records()) {
+            if (capital.alive && capital.closing_capital >= 0.0 &&
+                capital.closing_capital <
+                    financial->policy.bank_minimum_capital) {
+                ++near_failure_banks;
+            }
+        }
+        set(frame, economy, 25U,
+            static_cast<double>(near_failure_banks));
+
+        double energy_stock = runtime->strategic_reserve_stock;
+        for (const auto &producer : runtime->energy_producers) {
+            if (producer.active) {
+                energy_stock += std::max(0.0, producer.inventory);
+            }
+        }
+        for (const auto &input : runtime->energy_inputs) {
+            if (input.active) {
+                energy_stock += std::max(0.0, input.stock);
+            }
+        }
+        set(frame, economy, 26U, energy_stock);
+        set(frame, economy, 27U, domestic.energy.unfilled);
+
+        double fx_reserves = 0.0;
+        for (const auto &peg : world.pegs()) {
+            if (peg.pegger.value() == economy) {
+                fx_reserves = peg.reserves;
+                break;
+            }
+        }
+        set(frame, economy, 28U, fx_reserves);
+
+        std::size_t disclosed_count = 0U;
+        std::size_t active_count = 0U;
+        double maximum_severity = 0.0;
+        std::uint64_t time_to_next = std::numeric_limits<std::uint64_t>::max();
+        std::array<double, 8U> kind_severity{};
+        for (const auto &shock : world.shocks()) {
+            if (!shock_relevant(shock, economy) ||
+                !shock_disclosed(shock, world.tick())) {
+                continue;
+            }
+            ++disclosed_count;
+            time_to_next = std::min(
+                time_to_next,
+                shock.start.value() > world.tick().value()
+                    ? shock.start.value() - world.tick().value()
+                    : 0U);
+            const double disclosed_severity =
+                shock_severity(shock, world.tick(), true);
+            const auto kind =
+                static_cast<std::size_t>(shock.kind);
+            kind_severity[kind] =
+                std::max(kind_severity[kind], disclosed_severity);
+            const double active_severity =
+                shock_severity(shock, world.tick(), false);
+            const bool active =
+                shock.kind == simulation::ShockKind::capital_destruction
+                    ? world.tick().value() >= shock.start.value()
+                    : active_severity > 0.0;
+            if (active) {
+                ++active_count;
+                maximum_severity =
+                    std::max(maximum_severity, active_severity);
+            }
+        }
+        set(frame, economy, 29U, static_cast<double>(disclosed_count));
+        set(frame, economy, 30U, static_cast<double>(active_count));
+        set(frame, economy, 31U, maximum_severity);
+        set(frame, economy, 32U,
+            time_to_next == std::numeric_limits<std::uint64_t>::max()
+                ? 0.0
+                : static_cast<double>(time_to_next));
+        for (std::size_t kind = 0U; kind < kind_severity.size(); ++kind) {
+            set(frame, economy, 33U + kind, kind_severity[kind]);
+        }
     }
     return frame;
 }

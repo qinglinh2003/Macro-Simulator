@@ -43,6 +43,12 @@ using namespace macro_sim::reporting;
     return std::move(*result.get_if());
 }
 
+[[nodiscard]] std::size_t metric(std::string_view stable_id) {
+    auto result = public_metric_index(stable_id);
+    assert(result.ok());
+    return *result.get_if();
+}
+
 void test_descriptors_are_stable_and_complete() {
     const auto descriptors = public_metric_descriptors();
     assert(descriptors.size() == kM10PublicMetricCount);
@@ -74,6 +80,15 @@ void test_frame_matches_native_sources() {
         world.last_metrics().domestic[0].economy.economy.economy.economy;
     assert(*output.get_if() == real.real_output);
     assert(*price.get_if() == real.price_index);
+    assert(frame.get_if()
+               ->value(0U, metric("metric.economy.bank_reserves_total"))
+               .ok());
+    assert(frame.get_if()
+               ->value(0U, metric("metric.economy.energy_stock_total"))
+               .ok());
+    assert(frame.get_if()
+               ->value(0U, metric("metric.world.reserves_by_economy"))
+               .ok());
 }
 
 void test_history_is_bounded_and_cursor_checked() {
@@ -111,6 +126,45 @@ void test_inflation_uses_only_previous_committed_frame() {
     assert(inflation == closing_price / opening_price - 1.0);
 }
 
+void test_shock_metrics_respect_announcement_boundary() {
+    auto world = build_world();
+    ShockSpec shock;
+    shock.id = 801U;
+    shock.kind = ShockKind::productivity;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(5U);
+    shock.announcement = Tick(0U);
+    shock.duration = 10U;
+    shock.magnitude = 0.2;
+    assert(world.schedule_shock(shock).ok());
+
+    auto opening = build_public_metric_frame(world);
+    assert(opening.ok());
+    assert(*opening.get_if()
+                ->value(0U, metric("metric.shock.announced_count"))
+                .get_if() == 1.0);
+    assert(*opening.get_if()
+                ->value(0U, metric("metric.shock.active_count"))
+                .get_if() == 0.0);
+    assert(*opening.get_if()
+                ->value(0U, metric("metric.shock.time_to_next"))
+                .get_if() == 5.0);
+    assert(*opening.get_if()
+                ->value(
+                    0U, metric("metric.shock.severity.productivity"))
+                .get_if() == 0.2);
+
+    assert(world.advance(5U).ok());
+    auto active = build_public_metric_frame(world, opening.get_if());
+    assert(active.ok());
+    assert(*active.get_if()
+                ->value(0U, metric("metric.shock.active_count"))
+                .get_if() == 1.0);
+    assert(*active.get_if()
+                ->value(0U, metric("metric.shock.max_severity"))
+                .get_if() == 0.2);
+}
+
 } // namespace
 
 int main() {
@@ -118,6 +172,7 @@ int main() {
     test_frame_matches_native_sources();
     test_history_is_bounded_and_cursor_checked();
     test_inflation_uses_only_previous_committed_frame();
+    test_shock_metrics_respect_announcement_boundary();
     std::cout << "M10 reporting tests passed\n";
     return 0;
 }

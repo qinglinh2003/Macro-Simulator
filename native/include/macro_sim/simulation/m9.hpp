@@ -325,6 +325,9 @@ class M9World final {
     [[nodiscard]] const std::vector<ShockEvent> &shock_events() const noexcept {
         return shock_events_;
     }
+    [[nodiscard]] const std::vector<ShockSpec> &shocks() const noexcept {
+        return shocks_;
+    }
     [[nodiscard]] const M9WorldMetrics &last_metrics() const noexcept {
         return last_metrics_;
     }

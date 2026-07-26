@@ -15,6 +15,7 @@ import json
 import sys
 from typing import Any, Iterable, Mapping
 
+from macro_sim.config import Config
 from macro_sim.core.external_policy import ExternalPolicy
 from macro_sim.core.policy import Policy
 from macro_sim.core.policy_registry import EconomySet, REGISTRY
@@ -623,6 +624,44 @@ def build_world_spec(spec: NewGameSpec | Mapping[str, Any]) -> Any:
     return world
 
 
+@dataclass(frozen=True, slots=True)
+class NativeConfigRunSpec:
+    """Minimal facade metadata for non-desktop native sessions."""
+
+    player_country: int = 0
+
+    @property
+    def initial_policy_overrides(self) -> Mapping[str, Any]:
+        return {}
+
+
+def build_world_spec_from_configs(configs: Iterable[Config]) -> Any:
+    """Translate explicit immutable Config seeds into one native World.
+
+    This is the controller/RL construction path.  It deliberately bypasses
+    desktop profiles while still using the same audited M4-M8 contract mapping.
+    The resulting native World is the sole economic state owner.
+    """
+    checked = tuple(configs)
+    if not checked or not all(isinstance(item, Config) for item in checked):
+        raise TypeError("configs must contain one or more Config values")
+    native = _load_native()
+    facade_spec = NativeConfigRunSpec()
+    world = native.M9WorldSpec()
+    economies = []
+    external = []
+    for economy_id, cfg in enumerate(checked):
+        economy, policy = _m8_spec(
+            native, facade_spec, cfg, economy_id  # type: ignore[arg-type]
+        )
+        economies.append(economy)
+        external.append(_external_policy(native, policy))
+    world.economies = economies
+    world.external_policies = external
+    world.rules.periods_per_year = 365.0
+    return world
+
+
 def _controller_envelope(native: Any, world: Any) -> Any:
     payload = json.dumps(
         {
@@ -645,7 +684,7 @@ def _controller_envelope(native: Any, world: Any) -> Any:
 class NativeSimulationSession:
     """Product-level owner of a native M9 world and M10 control bridge."""
 
-    spec: NewGameSpec
+    spec: Any
     bridge: Any
     worker_count: int = 8
 
@@ -670,6 +709,36 @@ class NativeSimulationSession:
             engine, _controller_envelope(native, world)
         )
         return cls(spec=spec, bridge=bridge, worker_count=worker_count)
+
+    @classmethod
+    def create_from_configs(
+        cls,
+        configs: Iterable[Config],
+        *,
+        player_country: int = 0,
+        worker_count: int = 8,
+        history_capacity_frames: int = 4096,
+    ) -> "NativeSimulationSession":
+        checked = tuple(configs)
+        if not 0 <= player_country < len(checked):
+            raise ValueError("player_country is outside the Config sequence")
+        if worker_count < 1:
+            raise ValueError("worker_count must be positive")
+        native = _load_native()
+        world = native.WorldSession.create(
+            build_world_spec_from_configs(checked)
+        )
+        engine = native.NativeWorldEngineSession.create(
+            world, history_capacity_frames
+        )
+        bridge = native.HybridControlledBridge.create(
+            engine, _controller_envelope(native, world)
+        )
+        return cls(
+            spec=NativeConfigRunSpec(player_country),
+            bridge=bridge,
+            worker_count=worker_count,
+        )
 
     @property
     def tick(self) -> int:
@@ -880,13 +949,15 @@ class NativeSimulationSession:
     @classmethod
     def restore(
         cls,
-        spec: NewGameSpec | Mapping[str, Any],
+        spec: NewGameSpec | NativeConfigRunSpec | Mapping[str, Any],
         checkpoint: bytes,
         *,
         worker_count: int = 8,
     ) -> tuple["NativeSimulationSession", bytes]:
-        if not isinstance(spec, NewGameSpec):
+        if isinstance(spec, Mapping):
             spec = NewGameSpec.from_mapping(spec)
+        if not isinstance(spec, (NewGameSpec, NativeConfigRunSpec)):
+            raise TypeError("spec must be a NewGameSpec or NativeConfigRunSpec")
         native = _load_native()
         restored = native.HybridControlledBridge.restore_checkpoint(checkpoint)
         return (

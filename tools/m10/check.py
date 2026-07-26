@@ -29,13 +29,51 @@ def validate_contracts() -> None:
     if budget["history_capacity_frames"] <= 0:
         raise AssertionError("M10 history must be bounded")
 
+    metrics = json.loads(
+        (ROOT / "schemas/m10/public_metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if metrics["schema_version"] != "m10-public-metrics-v2":
+        raise AssertionError("M10 public metric contract changed")
+    metric_ids = [item["id"] for item in metrics["metrics"]]
+    if len(metric_ids) != 41 or len(metric_ids) != len(set(metric_ids)):
+        raise AssertionError(
+            "M10 must expose exactly 41 unique native observation sources"
+        )
+    from macro_sim.controllers.observation import DEFAULT_OBSERVATION_SPEC
+
+    aliases = metrics["observation_aliases"]
+    for field in DEFAULT_OBSERVATION_SPEC.fields:
+        if field.series_id in aliases:
+            expected_id = aliases[field.series_id]
+        else:
+            namespace = {
+                "economy": "metric.economy.",
+                "world": "metric.world.",
+                "shock": "metric.shock.",
+            }.get(field.source)
+            if namespace is None:
+                raise AssertionError(
+                    f"M10 observation source {field.source!r} is unsupported"
+                )
+            expected_id = namespace + field.source_key
+        if expected_id not in metric_ids:
+            raise AssertionError(
+                f"M10 observation series {field.series_id!r} lacks "
+                f"native source {expected_id!r}"
+            )
+
     required = (
         "docs/cpp_engine_m10_execution_plan_v34.md",
         "schemas/m10/performance_budget.json",
         "schemas/m10/public_metrics.json",
         "macro_sim/native_backend.py",
+        "macro_sim/controllers/native_observation.py",
+        "macro_sim/rl/native_envs.py",
         "tools/m10/check.py",
         "tools/m10/native_facade_smoke.py",
+        "tools/m10/native_controller_smoke.py",
     )
     for relative in required:
         if not (ROOT / relative).is_file():

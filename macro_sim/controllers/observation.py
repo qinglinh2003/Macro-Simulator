@@ -425,6 +425,47 @@ class ReleaseService:
         self._last_boundary: dict[int, int] = {}
 
     @staticmethod
+    def _shock_observable(
+        engine: Any, key: str, economy_id: int, boundary_tick: int,
+        *, role: str,
+    ) -> float:
+        """Read a disclosed shock scalar from either engine implementation.
+
+        The native engine exposes a narrow, role-aware observation provider
+        instead of materializing a second Python ``ShockEngine`` beside the
+        authoritative C++ shock tape.  The legacy Python engine continues to use
+        its typed ``ShockEngine`` unchanged.
+        """
+        native_provider = getattr(engine, "native_shock_observable", None)
+        if callable(native_provider):
+            value = native_provider(
+                key, economy_id, boundary_tick, role=role,
+            )
+            return _finite(f"shock observable {key!r}", value)
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(engine)
+        return 0.0 if shock_engine is None else shock_engine.observable(
+            key, economy_id, boundary_tick, role=role,
+        )
+
+    @staticmethod
+    def _shock_bulletins(
+        engine: Any, economy_id: int, boundary_tick: int, *, role: str,
+    ) -> tuple[Any, ...]:
+        native_provider = getattr(engine, "native_shock_bulletins", None)
+        if callable(native_provider):
+            return tuple(native_provider(
+                economy_id, boundary_tick, role=role,
+            ))
+        from macro_sim.shocks import get_shock_engine
+
+        shock_engine = get_shock_engine(engine)
+        return () if shock_engine is None else shock_engine.bulletins(
+            economy_id, boundary_tick, role=role,
+        )
+
+    @staticmethod
     def _records(engine: Any, source: str, economy_id: int) -> Sequence[Mapping[str, Any]] | None:
         economies = getattr(engine, "economies", None)
         if source == "economy":
@@ -502,12 +543,10 @@ class ReleaseService:
             )
         reference_start = max(0, requested_start)
         if item.source == "shock":
-            from macro_sim.shocks import get_shock_engine
-
-            shock_engine = get_shock_engine(engine)
             values = [
-                0.0 if shock_engine is None else shock_engine.observable(
-                    item.source_key, economy_id, released_at, role="public",
+                self._shock_observable(
+                    engine, item.source_key, economy_id, released_at,
+                    role="public",
                 )
             ]
             reason = None
@@ -633,11 +672,9 @@ class ReleaseService:
                     )
                     if released_at > boundary_tick:
                         break
-                    from macro_sim.shocks import get_shock_engine
-
-                    shock_engine = get_shock_engine(engine)
-                    value = 0.0 if shock_engine is None else shock_engine.observable(
-                        item.source_key, economy_id, released_at, role="public",
+                    value = self._shock_observable(
+                        engine, item.source_key, economy_id, released_at,
+                        role="public",
                     )
                     release = Release(
                         item.series_id, value, -1, -1, released_at,
@@ -703,11 +740,8 @@ class ReleaseService:
                 )
             )
         observation_type = PublicObservation if role == "public" else InstitutionObservation
-        from macro_sim.shocks import get_shock_engine
-
-        shock_engine = get_shock_engine(engine)
-        bulletins = () if shock_engine is None else shock_engine.bulletins(
-            economy_id, boundary_tick, role=role,
+        bulletins = self._shock_bulletins(
+            engine, economy_id, boundary_tick, role=role,
         )
         return observation_type(
             boundary_tick=boundary_tick,
@@ -740,11 +774,8 @@ class ReleaseService:
                     item, economy_id, boundary_tick, "not_released",
                 )
             )
-        from macro_sim.shocks import get_shock_engine
-
-        shock_engine = get_shock_engine(engine)
-        bulletins = () if shock_engine is None else shock_engine.bulletins(
-            economy_id, boundary_tick, role="oracle",
+        bulletins = self._shock_bulletins(
+            engine, economy_id, boundary_tick, role="oracle",
         )
         return OracleObservation(
             boundary_tick=boundary_tick,

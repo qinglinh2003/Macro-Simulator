@@ -28,6 +28,7 @@ from .observation import (
     Release,
     ReleaseService,
 )
+from .native_observation import NativeObservationSource
 from .occupants import (
     HeuristicOccupant,
     HumanQueueOccupant,
@@ -57,6 +58,7 @@ __all__ = [
     "PublicObservation",
     "Release",
     "ReleaseService",
+    "NativeObservationSource",
     "HeuristicOccupant",
     "HumanQueueOccupant",
     "NullOccupant",

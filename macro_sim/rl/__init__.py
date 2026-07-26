@@ -24,6 +24,12 @@ _EXPORTS = {
     "HeuristicPolicy": ("baselines", "HeuristicPolicy"),
     "LoadedArtifact": ("artifact", "LoadedArtifact"),
     "MaskedMultiCategorical": ("network", "MaskedMultiCategorical"),
+    "NativeFiscalStabilizationEnv": (
+        "native_envs", "NativeFiscalStabilizationEnv",
+    ),
+    "NativeFiscalStabilizationEnvFactory": (
+        "native_envs", "NativeFiscalStabilizationEnvFactory",
+    ),
     "NumpyMLPPolicy": ("model", "NumpyMLPPolicy"),
     "PPOConfig": ("algorithm", "PPOConfig"),
     "PPOUpdateStats": ("algorithm", "PPOUpdateStats"),
@@ -46,6 +52,9 @@ _EXPORTS = {
     "load_artifact": ("artifact", "load_artifact"),
     "load_artifact_bundle": ("artifact", "load_artifact_bundle"),
     "make_fiscal_stabilization_env": ("envs", "make_fiscal_stabilization_env"),
+    "make_native_fiscal_stabilization_env": (
+        "native_envs", "make_native_fiscal_stabilization_env",
+    ),
     "resolve_device": ("algorithm", "resolve_device"),
     "run_episode": ("experiment", "run_episode"),
     "save_artifact": ("artifact", "save_artifact"),

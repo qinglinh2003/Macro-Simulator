@@ -1,8 +1,11 @@
 {
-  "schema_version": "m10-public-metrics-v1",
-  "cadence": "every_committed_tick",
-  "scope": "one value per economy",
+  "schema_version": "m10-public-metrics-v2",
+  "cadence": "every_committed_boundary",
+  "scope": "one value per economy; world and shock sources are economy-indexed projections",
   "missing_value_rule": "validity bitmap; never zero-fill unavailable values",
+  "observation_aliases": {
+    "oracle_daily_output": "metric.economy.real_output"
+  },
   "metrics": [
     {"id": "metric.economy.avg_wage", "unit": "currency_per_tick", "aggregation": "mean", "parity_rule": "m7.mean_hourly_wage"},
     {"id": "metric.economy.credit_to_gdp", "unit": "share", "aggregation": "last", "parity_rule": "m5.total_loan_principal / m4.nominal_output"},
@@ -13,7 +16,7 @@
     {"id": "metric.economy.gov_deficit_to_gdp", "unit": "share", "aggregation": "last", "parity_rule": "m4.government_deficit / m4.nominal_output"},
     {"id": "metric.economy.income_gini", "unit": "index", "aggregation": "last", "parity_rule": "gini(live_household_income_realized)"},
     {"id": "metric.economy.inflation", "unit": "per_tick", "aggregation": "mean", "parity_rule": "price_index / previous_price_index - 1"},
-    {"id": "metric.economy.n_bank_failures", "unit": "count", "aggregation": "sum", "parity_rule": "m5.bank_failures"},
+    {"id": "metric.economy.n_bank_failures", "unit": "banks", "aggregation": "sum", "parity_rule": "m5.bank_failures"},
     {"id": "metric.economy.policy_rate", "unit": "rate_per_tick", "aggregation": "last", "parity_rule": "m5.policy_rate"},
     {"id": "metric.economy.population_alive", "unit": "persons", "aggregation": "last", "parity_rule": "m7.population"},
     {"id": "metric.economy.poverty_rate", "unit": "share", "aggregation": "last", "parity_rule": "share_below_half_median_household_consumption"},
@@ -26,6 +29,24 @@
     {"id": "metric.world.import_volume", "unit": "goods_units", "aggregation": "sum", "parity_rule": "m9.external.imports_volume"},
     {"id": "metric.world.migrant_stock", "unit": "persons", "aggregation": "last", "parity_rule": "m9.external.migrant_stock_abroad"},
     {"id": "metric.world.nfa", "unit": "currency", "aggregation": "last", "parity_rule": "m9.external.net_foreign_assets"},
-    {"id": "metric.world.remittances", "unit": "currency", "aggregation": "sum", "parity_rule": "m9.external.remittances_received"}
+    {"id": "metric.world.remittances", "unit": "currency", "aggregation": "sum", "parity_rule": "m9.external.remittances_received"},
+    {"id": "metric.economy.bank_reserves_total", "unit": "currency", "aggregation": "last", "parity_rule": "m5.total_reserves"},
+    {"id": "metric.economy.reserve_floor_breach_share", "unit": "share", "aggregation": "last", "parity_rule": "share(alive_bank_reserves < reserve_floor_fraction * deposits)"},
+    {"id": "metric.economy.near_failure_bank_count", "unit": "banks", "aggregation": "last", "parity_rule": "count(0 <= closing_bank_capital < m6.bank_minimum_capital)"},
+    {"id": "metric.economy.energy_stock_total", "unit": "energy_units", "aggregation": "last", "parity_rule": "m8.producer_inventory + m8.downstream_stock + m8.strategic_reserve"},
+    {"id": "metric.economy.energy_unfilled", "unit": "energy_units", "aggregation": "sum", "parity_rule": "m8.energy.unfilled"},
+    {"id": "metric.world.reserves_by_economy", "unit": "anchor_currency", "aggregation": "last", "parity_rule": "m9.peg.reserves for pegger; zero for floating economy"},
+    {"id": "metric.shock.announced_count", "unit": "events", "aggregation": "last", "parity_rule": "count(disclosed shocks relevant to economy)"},
+    {"id": "metric.shock.active_count", "unit": "events", "aggregation": "last", "parity_rule": "count(disclosed shocks active at boundary)"},
+    {"id": "metric.shock.max_severity", "unit": "fraction", "aggregation": "last", "parity_rule": "max(disclosed active magnitude * intensity)"},
+    {"id": "metric.shock.time_to_next", "unit": "ticks", "aggregation": "last", "parity_rule": "min(max(0, start - boundary)) over disclosed shocks"},
+    {"id": "metric.shock.severity.productivity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed productivity shock severity"},
+    {"id": "metric.shock.severity.labor_availability", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed labor-availability shock severity"},
+    {"id": "metric.shock.severity.energy_capacity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed energy-capacity shock severity"},
+    {"id": "metric.shock.severity.household_demand", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed household-demand shock severity"},
+    {"id": "metric.shock.severity.import_capacity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed import-capacity shock severity"},
+    {"id": "metric.shock.severity.export_capacity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed export-capacity shock severity"},
+    {"id": "metric.shock.severity.credit_supply", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed credit-supply shock severity"},
+    {"id": "metric.shock.severity.capital_destruction", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed capital-destruction shock severity"}
   ]
 }
