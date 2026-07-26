@@ -10,9 +10,14 @@ func _init() -> void:
 	assert(LocaleCatalogScript.resolve("@profile.advanced.name") == "Advanced")
 	assert(LocaleCatalogScript.resolve("AUR") == "AUR")
 	assert(LocaleCatalogScript.text("missing.key") == "missing.key")
+	assert(LocaleCatalogScript.text("desktop.free.queue_title") == "Next-day policy queue")
 
 	LocaleCatalogScript.set_locale("zh_CN")
 	assert(LocaleCatalogScript.locale() == "zh_CN")
 	assert(LocaleCatalogScript.text("menu.new") != "New simulation")
 	assert(not LocaleCatalogScript.text("menu.new").is_empty())
+	assert(
+		LocaleCatalogScript.text("desktop.free.queue_title")
+		!= "Next-day policy queue"
+	)
 	quit(0)

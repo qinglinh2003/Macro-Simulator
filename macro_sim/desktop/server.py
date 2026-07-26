@@ -61,7 +61,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=47_821)
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
-    runtime = SimulationRuntime(seed=args.seed)
+    runtime = SimulationRuntime(seed=args.seed, free_policy_mode=True)
     with _Server((args.host, args.port), runtime) as server:
         print(
             json.dumps({"status": "ready", "host": args.host, "port": args.port}),

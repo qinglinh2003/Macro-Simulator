@@ -811,6 +811,7 @@ var _release_hist: Dictionary = {}     # sid -> [{v, at}]
 var _playing := false
 var _speed := 5
 var _mode := "interactive"
+var _control_mode := "controller"
 var _tab := "focus"
 var _rank_by := "score"
 var _score_country := 0               # 世界视图国家表现雷达当前选中经济体
@@ -918,7 +919,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_SPACE:
 			_toggle_play()
 		KEY_RIGHT, KEY_PERIOD:
-			if _awaiting():
+			if _awaiting() and not _free_policy_enabled():
 				_show_hint("本届会议未闭合:请「提交提案」或「本次不动」。")
 				_render()
 			else:
@@ -1008,6 +1009,7 @@ func _on_connected() -> void:
 func _on_response(response: Dictionary) -> void:
 	var payload: Dictionary = response.get("snapshot", {})
 	if payload.has("seats") and payload.has("levers"):
+		_control_mode = str(payload.get("control_mode", _control_mode))
 		_schemas = payload.get("seats", {})
 		_index_schema()
 		if _start_menu != null and _start_menu.has_method("set_policy_schemas"):
@@ -1021,6 +1023,8 @@ func _on_response(response: Dictionary) -> void:
 			_reset_client_for_new_game(payload)
 			_outbox.append({"command": "get_schema"})
 		_snapshot = payload
+		_control_mode = str(payload.get("control_mode", _control_mode))
+		_reconcile_free_policy_queue()
 		_ingest_releases()
 		_cache_permitted()
 		var splash := _n.get("splash") as Control
@@ -1032,7 +1036,8 @@ func _on_response(response: Dictionary) -> void:
 		var verdict: Variant = payload.get("last_verdict")
 		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
 			_show_verdict(verdict)
-		if _playing and _awaiting() and _mode != "realtime":
+		if _playing and _awaiting() and _mode != "realtime" \
+				and not _free_policy_enabled():
 			_playing = false
 	_render()
 	if not _capture_policy_info.is_empty() and _lever_info.has(_capture_policy_info) \
@@ -1120,9 +1125,9 @@ func _capture(path: String) -> void:
 
 
 func _on_play_tick() -> void:
-	if not _playing or _demo_crisis:
+	if not _playing or (_demo_crisis and not _free_policy_enabled()):
 		return
-	if _awaiting():
+	if _awaiting() and not _free_policy_enabled():
 		if _mode == "realtime" and not _emergency():
 			for ctx: Dictionary in _contexts():
 				_send({"command": "resolve_context",
@@ -1234,6 +1239,26 @@ func _awaiting() -> bool:
 	return bool(_snapshot.get("awaiting_human", false))
 
 
+func _free_policy_enabled() -> bool:
+	return _control_mode == "free_policy" \
+		or str(_snapshot.get("control_mode", "")) == "free_policy"
+
+
+func _reconcile_free_policy_queue() -> void:
+	if not _free_policy_enabled() or _cart.is_empty():
+		return
+	var pending: Array = _snapshot.get("free_policy", {}).get("actions", [])
+	if not pending.is_empty():
+		return
+	var values: Dictionary = _snapshot.get("policy_values", {})
+	for item: Dictionary in _cart:
+		var name := str(item.get("lever", ""))
+		if not values.has(name) or values[name] != item.get("value"):
+			return
+	_cart.clear()
+	_edits.clear()
+
+
 func _contexts() -> Array:
 	return _snapshot.get("contexts", [])
 
@@ -1330,11 +1355,27 @@ func _reset_lever_draft(lever_name: String) -> void:
 	_cart = _cart.filter(func(item: Dictionary) -> bool:
 		return str(item.get("lever")) != lever_name)
 	_edits.erase(lever_name)
+	if _free_policy_enabled():
+		_sync_free_policy_queue()
 	_render()
+
+
+func _set_policy_edit(lever: Dictionary, value: Variant) -> void:
+	var lever_name := str(lever.get("name"))
+	_edits[lever_name] = value
+	if _free_policy_enabled():
+		# Free-policy edits are commands, not proposals. Keep the current tick
+		# immutable and replace the complete next-boundary batch immediately.
+		_add_to_cart(lever, _lever_current(lever, {}))
+	else:
+		_render()
 
 
 func _stage_lever_edit(lever: Dictionary, value: Variant) -> void:
 	var lever_name := str(lever.get("name"))
+	if _free_policy_enabled():
+		_set_policy_edit(lever, value)
+		return
 	var semantics := str(lever.get("semantics",
 		lever.get("effective_semantics", "")))
 	if semantics.contains("transition"):
@@ -1344,13 +1385,11 @@ func _stage_lever_edit(lever: Dictionary, value: Variant) -> void:
 				_cn(lever_name), _lever_value_text(lever, value)],
 			"note": "成本类 · 高 · 通过后 %d 天生效" % int(lever.get("implementation_lag", 0)),
 			"on_yes": func() -> void:
-				_edits[lever_name] = value
-				_render(),
+				_set_policy_edit(lever, value),
 		}
 		_render()
 	else:
-		_edits[lever_name] = value
-		_render()
+		_set_policy_edit(lever, value)
 
 
 func _focus_lever(lever_name: String) -> void:
@@ -1712,7 +1751,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	h.add_child(tbox)
 	tbox.add_child(_dot(TEAL, 9.0))
 	tbox.add_child(_lbl("宏观指挥室", 17, INK))
-	tbox.add_child(_lbl("MACRO COMMAND · v29", 11, Color("68788b"), true))
+	tbox.add_child(_lbl("MACRO COMMAND", 11, Color("68788b"), true))
 	var op := PanelContainer.new()
 	op.add_theme_stylebox_override("panel", _sb(TEAL_BG, TEAL_BD, 20, 5))
 	var online := HBoxContainer.new()
@@ -1758,6 +1797,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	h.add_child(waitp)
 	h.add_child(_spacer_h())
 	var modes_wrap := PanelContainer.new()
+	_n["modes_wrap"] = modes_wrap
 	modes_wrap.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 3))
 	var modes := HBoxContainer.new()
 	modes.add_theme_constant_override("separation", 2)
@@ -1782,7 +1822,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	tp.add_theme_constant_override("separation", 4)
 	transport.add_child(tp)
 	var stepb := _btn("步进", func() -> void:
-		if _awaiting():
+		if _awaiting() and not _free_policy_enabled():
 			_show_hint("本届会议未闭合,推进被暂停:请「提交提案」或「本次不动」;紧急会议在红色面板里处置。切到「实时」模式可自动通过非紧急会议。")
 			_render()
 		else:
@@ -1811,7 +1851,8 @@ func _build_header(shell: VBoxContainer) -> void:
 
 func _toggle_play() -> void:
 	_playing = not _playing
-	if _playing and _awaiting() and _mode != "realtime":
+	if _playing and _awaiting() and _mode != "realtime" \
+			and not _free_policy_enabled():
 		_show_hint("播放已就绪,但本届会议未闭合:先「提交提案」或「本次不动」,或切「实时」模式自动通过。")
 	_render()
 
@@ -1895,7 +1936,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	var search := LineEdit.new()
 	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	search.clear_button_enabled = true
-	search.placeholder_text = "搜索全部席位的政策…"
+	search.placeholder_text = LocaleCatalogScript.text("desktop.free.search_placeholder")
 	search.add_theme_font_size_override("font_size", 12)
 	search.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 8, 6))
 	search.add_theme_stylebox_override("focus", _sb(Color.WHITE, TEAL_BD, 8, 6))
@@ -1943,7 +1984,9 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	cart.add_child(vslot)
 	var crow := HBoxContainer.new()
 	crow.add_theme_constant_override("separation", 8)
-	crow.add_child(_lbl("提案篮", 10, INK3, true))
+	var cart_title := _lbl("提案篮", 10, INK3, true)
+	_n["cart_title"] = cart_title
+	crow.add_child(cart_title)
 	var ccount := _lbl("0 项", 11, Color("647585"))
 	_n["cart_count"] = ccount
 	crow.add_child(ccount)
@@ -2093,6 +2136,7 @@ func _build_overlays() -> void:
 	var trig := _btn("▲ 模拟紧急会议", func() -> void:
 		_demo_crisis = true
 		_render())
+	_n["crisis_trigger"] = trig
 	trig.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	trig.position = Vector2(-180, -54)
 	trig.add_theme_stylebox_override("normal", _sb(RED_BG, RED_BD, 10, 8))
@@ -2205,7 +2249,10 @@ func _render() -> void:
 	var yb := _n["yearbar"] as _YearBar
 	yb.frac = float(t % 365) / 365.0
 	yb.queue_redraw()
-	(_n["awaitchip"] as Control).visible = _awaiting()
+	var free_policy := _free_policy_enabled()
+	(_n["awaitchip"] as Control).visible = _awaiting() and not free_policy
+	(_n["modes_wrap"] as Control).visible = not free_policy
+	(_n["crisis_trigger"] as Control).visible = not free_policy
 	var playb := _n["play"] as Button
 	playb.text = "⏸  暂停" if _playing else "▶  播放"
 	if _playing:
@@ -2399,30 +2446,49 @@ func _render_workbench() -> void:
 	_keep_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
 	for c in lv.get_children():
 		c.queue_free()
-	var open := _awaiting()
+	var free_policy := _free_policy_enabled()
+	var open := free_policy or _awaiting()
 	var emg_ctx := _emergency_context()
-	var emg := not emg_ctx.is_empty()
+	var emg := not free_policy and not emg_ctx.is_empty()
 	var active_contexts: Array = []
 	var active_allowed := 0
 	var cap_text := ""
 	var permitted: Dictionary = {}
-	for ctx: Dictionary in _contexts():
-		if str(ctx.get("seat", "")) == _active_seat:
-			active_contexts.append(ctx)
-			if cap_text.is_empty() and ctx.get("admin_remaining") != null:
-				cap_text = "%.1f" % float(ctx.get("admin_remaining"))
-		for item: Dictionary in ctx.get("permitted_actions", []):
-			permitted[str(item.get("lever"))] = item
-			if str(ctx.get("seat", "")) == _active_seat and bool(item.get("allowed", false)):
-				active_allowed += 1
+	if free_policy:
+		active_contexts.append({"seat": _active_seat})
+		var policy_values: Dictionary = _snapshot.get("policy_values", {})
+		for seat: String in _schemas.keys():
+			for lever: Dictionary in _schemas.get(seat, {}).get("levers", []):
+				var item := lever.duplicate(true)
+				var name := str(item.get("name", ""))
+				item["allowed"] = true
+				item["max_step"] = null
+				item["current_value"] = policy_values.get(
+					name, item.get("current_value"))
+				permitted[name] = item
+				if seat == _active_seat:
+					active_allowed += 1
+	else:
+		for ctx: Dictionary in _contexts():
+			if str(ctx.get("seat", "")) == _active_seat:
+				active_contexts.append(ctx)
+				if cap_text.is_empty() and ctx.get("admin_remaining") != null:
+					cap_text = "%.1f" % float(ctx.get("admin_remaining"))
+			for item: Dictionary in ctx.get("permitted_actions", []):
+				permitted[str(item.get("lever"))] = item
+				if str(ctx.get("seat", "")) == _active_seat \
+						and bool(item.get("allowed", false)):
+					active_allowed += 1
 	for s: Dictionary in SEAT_LIST:
 		var sid := str(s["id"])
 		var b := _n["seat_" + sid] as Button
 		var n_open := 0
-		for ctx: Dictionary in _contexts():
-			if str(ctx.get("seat", "")) == sid:
-				n_open += 1
-		b.text = str(s["name"]) + (" ·%d" % n_open if n_open > 0 else "")
+		if not free_policy:
+			for ctx: Dictionary in _contexts():
+				if str(ctx.get("seat", "")) == sid:
+					n_open += 1
+		b.text = str(s["name"]) + (
+			"" if free_policy else (" ·%d" % n_open if n_open > 0 else ""))
 		var scolor: Color = s["color"]
 		if sid == _active_seat:
 			b.add_theme_stylebox_override("normal", _sb(
@@ -2438,7 +2504,10 @@ func _render_workbench() -> void:
 			brief = str(spec.get("tag", ""))
 			break
 	_set_text("seat_brief", brief)
-	if not open:
+	if free_policy:
+		_set_text("meeting",
+			LocaleCatalogScript.format("desktop.free.header", active_name))
+	elif not open:
 		_set_text("meeting", "%s · 政策窗口关闭 · 可浏览现行制度" % active_name)
 	elif active_contexts.is_empty():
 		_set_text("meeting", "%s · 本届联席会议无待决议题" % active_name)
@@ -2448,18 +2517,28 @@ func _render_workbench() -> void:
 		_set_text("meeting", "%s · %s %d 窗口 / %d 项可调%s" % [
 			active_name, status, active_contexts.size(), active_allowed, cap])
 	var meetl := _n["meeting"] as Label
-	meetl.add_theme_color_override("font_color",
-		(Color("b02a1c") if emg else Color("9a6b10")) \
-		if not active_contexts.is_empty() else INK2)
+	meetl.add_theme_color_override("font_color", TEAL_DK if free_policy else (
+		(Color("b02a1c") if emg else Color("9a6b10"))
+		if not active_contexts.is_empty() else INK2))
 	var pending_by: Dictionary = {}
-	for p in _snapshot.get("pending", []):
-		if p is Dictionary:
-			var decision: Dictionary = (p as Dictionary).get("decision", {})
-			for act in (p as Dictionary).get("actions", []):
-				if act is Dictionary:
-					pending_by[str((act as Dictionary).get("lever", ""))] = {
-						"value": (act as Dictionary).get("value"),
-						"effective_tick": decision.get("effective_tick", "?")}
+	if free_policy:
+		var free_pending: Dictionary = _snapshot.get("free_policy", {})
+		var effective: Variant = free_pending.get(
+			"effective_tick", int(_snapshot.get("tick", 0)) + 1)
+		for act in free_pending.get("actions", []):
+			if act is Dictionary:
+				pending_by[str((act as Dictionary).get("lever", ""))] = {
+					"value": (act as Dictionary).get("value"),
+					"effective_tick": effective}
+	else:
+		for p in _snapshot.get("pending", []):
+			if p is Dictionary:
+				var decision: Dictionary = (p as Dictionary).get("decision", {})
+				for act in (p as Dictionary).get("actions", []):
+					if act is Dictionary:
+						pending_by[str((act as Dictionary).get("lever", ""))] = {
+							"value": (act as Dictionary).get("value"),
+							"effective_tick": decision.get("effective_tick", "?")}
 	# 二级页签:主题页(每页 ≤8；搜索时隐藏)
 	var gflow := _n["group_chips"] as HFlowContainer
 	for c in gflow.get_children():
@@ -2467,7 +2546,9 @@ func _render_workbench() -> void:
 	var searching := not _search.is_empty()
 	var active_open := not active_contexts.is_empty()
 	var scope := _n["policy_scope"] as Button
-	scope.visible = not searching
+	if free_policy:
+		_policy_scope = "all"
+	scope.visible = not searching and not free_policy
 	scope.disabled = not active_open
 	scope.text = "本会议题" if _policy_scope == "meeting" and active_open else "全部政策"
 	if _policy_scope == "meeting" and active_open:
@@ -2484,7 +2565,7 @@ func _render_workbench() -> void:
 			page_names.append(str(pg["name"]))
 		if not page_names.has(_active_group):
 			_active_group = str(page_names[0])
-		if _policy_scope == "meeting" and active_open:
+		if not free_policy and _policy_scope == "meeting" and active_open:
 			var current_page_live := false
 			var first_live_page := ""
 			for pg: Dictionary in pages:
@@ -2515,15 +2596,17 @@ func _render_workbench() -> void:
 			else:
 				b.add_theme_stylebox_override("normal", _sb(Color.WHITE, LINE2, 14, 5))
 				b.add_theme_color_override("font_color", Color("586a7b"))
-			var live := false
-			for lever: Dictionary in pg["levers"]:
-				if not _context_for_group(str(_lever_group.get(
-						str(lever.get("name")), ""))).is_empty():
-					live = true
-					break
-			if live:
+			var live := free_policy
+			if not free_policy:
+				for lever: Dictionary in pg["levers"]:
+					if not _context_for_group(str(_lever_group.get(
+							str(lever.get("name")), ""))).is_empty():
+						live = true
+						break
+			if live and not free_policy:
 				b.text += " ●"
-			b.disabled = _policy_scope == "meeting" and active_open and not live
+			b.disabled = not free_policy and _policy_scope == "meeting" \
+				and active_open and not live
 			if draft_count > 0:
 				b.text += " ·%d" % draft_count
 			b.pressed.connect(func() -> void:
@@ -2547,7 +2630,7 @@ func _render_workbench() -> void:
 			if str(pg["name"]) != _active_group:
 				continue
 			for lever: Dictionary in pg["levers"]:
-				if _policy_scope == "meeting" and active_open \
+				if not free_policy and _policy_scope == "meeting" and active_open \
 						and _context_for_group(str(lever.get("decision_group", ""))).is_empty():
 					continue
 				rows.append({"lever": lever, "seat": _active_seat})
@@ -2583,7 +2666,8 @@ func _render_workbench() -> void:
 			cm.add_child(_lever_row(lever, str(rowdef["seat"]), permitted,
 				pending_by, searching))
 		lv.add_child(cm)
-	if not open and int(_snapshot.get("tick", 0)) < 30 and not searching:
+	if not free_policy and not open and int(_snapshot.get("tick", 0)) < 30 \
+			and not searching:
 		var guide := MarginContainer.new()
 		guide.add_theme_constant_override("margin_left", 12)
 		guide.add_theme_constant_override("margin_right", 12)
@@ -2601,7 +2685,7 @@ func _render_workbench() -> void:
 			gv.add_child(_lbl("· " + str(tip), 10, Color("3f5d8a")))
 		guide.add_child(gp)
 		lv.add_child(guide)
-	if not open and not searching:
+	if not free_policy and not open and not searching:
 		_append_governing_brief(lv)
 	_render_cart(open)
 	_restore_scroll("levers:%s:%s" % [_active_seat, _active_group], lscroll)
@@ -2686,6 +2770,10 @@ func _append_governing_brief(parent: VBoxContainer) -> void:
 
 
 func _advance_to_next_decision() -> void:
+	if _free_policy_enabled():
+		_show_hint(LocaleCatalogScript.text("desktop.free.advance_month"))
+		_send({"command": "advance", "ticks": 30})
+		return
 	if _awaiting():
 		_show_hint("已有政策会议等待处理，模拟保持暂停。")
 		return
@@ -2859,11 +2947,15 @@ func _tooltip_wrap(text: String, preferred_width: int = 34) -> String:
 
 
 func _lever_timing_text(lever: Dictionary) -> String:
+	if _free_policy_enabled():
+		return LocaleCatalogScript.text("desktop.free.timing")
 	var lag := int(lever.get("implementation_lag", 0))
 	return "即时生效" if lag <= 0 else "通过后 %d 天生效" % lag
 
 
 func _lever_adjustment_text(lever: Dictionary) -> String:
+	if _free_policy_enabled():
+		return LocaleCatalogScript.text("desktop.free.adjustment")
 	var hold := int(lever.get("min_hold_ticks", 0))
 	var scale: Variant = lever.get("control_scale")
 	var max_step: Variant = lever.get("max_step")
@@ -2909,6 +3001,8 @@ func _lever_boundary_text(lever: Dictionary) -> String:
 
 
 func _lever_cost_text(lever: Dictionary) -> String:
+	if _free_policy_enabled():
+		return LocaleCatalogScript.text("desktop.free.cost")
 	var cost_cn: String = {
 		"regime_switch": "制度切换", "major": "重大调整",
 		"ordinary": "常规调整", "operational": "日常操作",
@@ -3024,7 +3118,9 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 
 	var rule_heading := HBoxContainer.new()
 	rule_heading.add_theme_constant_override("separation", 8)
-	rule_heading.add_child(_lbl("GAME RULES · 游戏规则（非政策定义）", 10, INK3, true))
+	rule_heading.add_child(_lbl(
+		"@desktop.free.execution_heading" if _free_policy_enabled()
+		else "GAME RULES · 游戏规则（非政策定义）", 10, INK3, true))
 	rule_heading.add_child(_hrule())
 	content.add_child(rule_heading)
 	var rules := GridContainer.new()
@@ -3035,7 +3131,9 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	rules.add_child(_brief_rule_card("可选范围", _lever_kind_description(lever), rule_accent))
 	rules.add_child(_brief_rule_card("实施时间", _lever_timing_text(lever), rule_accent))
 	rules.add_child(_brief_rule_card("调整节奏", _lever_adjustment_text(lever), rule_accent))
-	rules.add_child(_brief_rule_card("行政成本", _lever_cost_text(lever), rule_accent))
+	rules.add_child(_brief_rule_card(
+		"@desktop.free.constraint_heading" if _free_policy_enabled() else "行政成本",
+		_lever_cost_text(lever), rule_accent))
 	content.add_child(rules)
 
 	var execution := HBoxContainer.new()
@@ -3048,14 +3146,19 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 	content.add_child(_brief_panel("条件与例外", _lever_boundary_text(lever),
 		Color("9a6b10"), Color("fffaf0")))
 
-	var emergency_text := "可在紧急会议中使用，紧急实施滞后为 %s。" % (
-		"即时" if lever.get("emergency_implementation_lag") == null
-		else "%d 天" % int(lever.get("emergency_implementation_lag", 0))) \
-		if bool(lever.get("emergency", false)) else "不在紧急政策白名单，只能通过常规会议调整。"
-	content.add_child(_brief_text("权限 · %s · %s\n%s" % [
-		_seat_name(str(lever.get("owner_role", ""))),
-		str(GROUP_CN.get(str(lever.get("decision_group", "")),
-			lever.get("decision_group", "政策"))), emergency_text], 10, INK3))
+	if _free_policy_enabled():
+		content.add_child(_brief_text(
+			LocaleCatalogScript.text("desktop.free.brief_footer"),
+			10, INK3))
+	else:
+		var emergency_text := "可在紧急会议中使用，紧急实施滞后为 %s。" % (
+			"即时" if lever.get("emergency_implementation_lag") == null
+			else "%d 天" % int(lever.get("emergency_implementation_lag", 0))) \
+			if bool(lever.get("emergency", false)) else "不在紧急政策白名单，只能通过常规会议调整。"
+		content.add_child(_brief_text("权限 · %s · %s\n%s" % [
+			_seat_name(str(lever.get("owner_role", ""))),
+			str(GROUP_CN.get(str(lever.get("decision_group", "")),
+				lever.get("decision_group", "政策"))), emergency_text], 10, INK3))
 
 
 func _show_lever_info(lever: Dictionary, current: Variant) -> void:
@@ -3102,7 +3205,8 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 	var row := PanelContainer.new()
 	row.custom_minimum_size = Vector2(0, 62)
 	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	row.tooltip_text = "%s\n展开政策编辑器，查看范围、成本和生效时间" % _cn(name)
+	row.tooltip_text = LocaleCatalogScript.format(
+		"desktop.free.row_tooltip", _cn(name))
 	var accent: Color = AMBER if cart_stale else (TEAL if (edited or in_cart) \
 		else (AMBER if pending else _seat_color(seat)))
 	var row_bg := AMBER_BG if cart_stale else (TEAL_BG if in_cart \
@@ -3168,7 +3272,8 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 		status_text = "草稿有改动 · 待更新"
 		status_color = AMBER
 	elif in_cart:
-		status_text = "已加入提案篮"
+		status_text = LocaleCatalogScript.text("desktop.free.status_queued") \
+			if _free_policy_enabled() else "已加入提案篮"
 		status_color = TEAL_DK
 	elif edited:
 		status_text = "未入篮草稿"
@@ -3178,7 +3283,8 @@ func _lever_row(lever: Dictionary, seat: String, permitted: Dictionary,
 			(pending_by[name] as Dictionary).get("effective_tick", "?"))
 		status_color = AMBER
 	elif allowed:
-		status_text = "本会可调整"
+		status_text = LocaleCatalogScript.text("desktop.free.status_adjustable") \
+			if _free_policy_enabled() else "本会可调整"
 		status_color = GREEN
 	else:
 		status_text = "查看制度"
@@ -3262,12 +3368,16 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 	en.clip_text = true
 	en.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tr.add_child(en)
-	var cost_class := str(lever.get("cost_class", "ordinary"))
-	var cost_cn: String = {"regime_switch": "高", "major": "高", "ordinary": "中",
-		"operational": "低"}.get(cost_class, "中")
-	var cost_fg: Color = AMBER if cost_cn == "高" else (Color("3f6db2") if cost_cn == "中" else INK2)
-	tr.add_child(_chip("成本 %.1f · %s" % [float(lever.get("admin_weight", 1.0)), cost_cn],
-		cost_fg, Color(0, 0, 0, 0), AMBER_BD if cost_cn == "高" else LINE2, 10))
+	if not _free_policy_enabled():
+		var cost_class := str(lever.get("cost_class", "ordinary"))
+		var cost_cn: String = {"regime_switch": "高", "major": "高",
+			"ordinary": "中", "operational": "低"}.get(cost_class, "中")
+		var cost_fg: Color = AMBER if cost_cn == "高" \
+			else (Color("3f6db2") if cost_cn == "中" else INK2)
+		tr.add_child(_chip("成本 %.1f · %s" % [
+			float(lever.get("admin_weight", 1.0)), cost_cn],
+			cost_fg, Color(0, 0, 0, 0),
+			AMBER_BD if cost_cn == "高" else LINE2, 10))
 	v.add_child(tr)
 	var state := PanelContainer.new()
 	state.add_theme_stylebox_override("panel", _sb(PANEL3, LINE, 8, 7))
@@ -3320,13 +3430,19 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		v.add_child(lockp)
 	var meta := HBoxContainer.new()
 	meta.add_theme_constant_override("separation", 9)
-	var lag := int(lever.get("implementation_lag", 0))
-	meta.add_child(_lbl("通过后 %d 天生效" % lag if lag > 0 else "即时生效", 10,
-		Color("68788b"), true))
-	meta.add_child(_lbl("冷却 %d 天" % int(lever.get("min_hold_ticks", 0)), 10,
-		Color("68788b"), true))
-	if bool(lever.get("emergency", false)):
-		meta.add_child(_lbl("紧急✓", 10, AMBER, true))
+	if _free_policy_enabled():
+		meta.add_child(_lbl("@desktop.free.next_day", 10, TEAL_DK, true))
+		meta.add_child(_lbl("@desktop.free.no_restrictions", 10,
+			Color("68788b"), true))
+	else:
+		var lag := int(lever.get("implementation_lag", 0))
+		meta.add_child(_lbl(
+			"通过后 %d 天生效" % lag if lag > 0 else "即时生效", 10,
+			Color("68788b"), true))
+		meta.add_child(_lbl("冷却 %d 天" % int(
+			lever.get("min_hold_ticks", 0)), 10, Color("68788b"), true))
+		if bool(lever.get("emergency", false)):
+			meta.add_child(_lbl("紧急✓", 10, AMBER, true))
 	v.add_child(meta)
 	var pend: Variant = pending_by.get(name)
 	if pend is Dictionary:
@@ -3335,7 +3451,9 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		var pr := HBoxContainer.new()
 		pr.add_theme_constant_override("separation", 8)
 		pp.add_child(pr)
-		pr.add_child(_lbl("待生效队列", 10, TEAL, true))
+		pr.add_child(_lbl(
+			"@desktop.free.queue_title" if _free_policy_enabled() else "待生效队列",
+			10, TEAL, true))
 		pr.add_child(_lbl(_lever_value_text(lever, (pend as Dictionary).get("value")),
 			11, TEAL_DK, true))
 		pr.add_child(_spacer_h())
@@ -3349,12 +3467,19 @@ func _lever_card(lever: Dictionary, permitted: Dictionary,
 		if not changed:
 			addrow.add_child(_lbl("草稿与当前值相同，不会产生政策动作", 10, INK3))
 		elif allowed and (not in_cart or cart_stale):
-			var add := _btn("更新提案篮" if cart_stale else "加入提案 ＋", func() -> void:
+			var add_label := (
+				LocaleCatalogScript.text("desktop.free.update")
+				if cart_stale else LocaleCatalogScript.text("desktop.free.add")
+			) if _free_policy_enabled() else (
+				"更新提案篮" if cart_stale else "加入提案 ＋")
+			var add := _btn(add_label, func() -> void:
 				_add_to_cart(lever, base_v), true)
 			addrow.add_child(add)
-			var lag2 := int(lever.get("implementation_lag", 0))
+			var effective_tick := int(_snapshot.get("tick", 0)) + (
+				1 if _free_policy_enabled() else maxi(
+					int(lever.get("implementation_lag", 0)), 1))
 			addrow.add_child(_lbl("预计 %s 生效" % _cal_short(
-				int(_snapshot.get("tick", 0)) + maxi(lag2, 1)), 10, INK3, true))
+				effective_tick), 10, INK3, true))
 		elif in_cart:
 			addrow.add_child(_lbl("✓ 草稿与提案篮一致", 11, TEAL_DK))
 		else:
@@ -3434,8 +3559,7 @@ func _commit_numeric_input(lever: Dictionary, text: String, is_int: bool,
 		_show_hint("请输入有效数字；百分比仍按模型值填写，例如 3% 输入 0.03。")
 		return
 	var value := clampf(cleaned.to_float(), minimum, maximum)
-	_edits[str(lever.get("name"))] = roundi(value) if is_int else value
-	_render()
+	_set_policy_edit(lever, roundi(value) if is_int else value)
 
 
 func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Control:
@@ -3536,12 +3660,10 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		inc.disabled = local_base >= hi2 - 1e-12
 		dec.pressed.connect(func() -> void:
 			var next := clampf(float(_edits.get(name, local_base)) - scale, lo2, hi2)
-			_edits[name] = roundi(next) if is_int else next
-			_render())
+			_set_policy_edit(lever, roundi(next) if is_int else next))
 		inc.pressed.connect(func() -> void:
 			var next := clampf(float(_edits.get(name, local_base)) + scale, lo2, hi2)
-			_edits[name] = roundi(next) if is_int else next
-			_render())
+			_set_policy_edit(lever, roundi(next) if is_int else next))
 	wrap.add_child(srow)
 	if numeric:
 		var direct := HBoxContainer.new()
@@ -3574,13 +3696,11 @@ func _lever_control(lever: Dictionary, perm: Dictionary, base_v: Variant) -> Con
 		if cur == null:
 			nb.text = "设置数值"
 			nb.pressed.connect(func() -> void:
-				_edits[name] = lo
-				_render())
+				_set_policy_edit(lever, lo))
 		else:
 			nb.text = "取消该限制"
 			nb.pressed.connect(func() -> void:
-				_edits[name] = null
-				_render())
+				_set_policy_edit(lever, null))
 		nrow.add_child(nb)
 		nrow.add_child(_lbl("未设置 = 不启用该上限或限制", 10, INK3))
 		wrap.add_child(nrow)
@@ -3617,8 +3737,7 @@ func _economy_set_control(name: String, cur: Variant) -> Control:
 			else:
 				next.append(target)
 			next.sort()
-			_edits[name] = next
-			_render())
+			_set_policy_edit(_lever_info.get(name, {}), next))
 		r.add_child(cb)
 		wrap.add_child(row)
 	wrap.add_child(_lbl("OR 语义:任一方向制裁即断流(对方亦可制裁我)", 10, INK3))
@@ -3640,8 +3759,7 @@ func _economy_id_control(name: String, cur: Variant, choices: Array) -> Control:
 			b.add_theme_color_override("font_color", TEAL_DK)
 		var value: Variant = opt
 		b.pressed.connect(func() -> void:
-			_edits[name] = value
-			_render())
+			_set_policy_edit(_lever_info.get(name, {}), value))
 		seg.add_child(b)
 	return seg
 
@@ -3659,21 +3777,43 @@ func _add_to_cart(lever: Dictionary, base_v: Variant) -> void:
 		"from": _lever_value_text(lever, base_v),
 		"to": _lever_value_text(lever, _edits[name]),
 		"value": _edits[name]})
+	if _free_policy_enabled():
+		_sync_free_policy_queue()
 	_render()
+
+
+func _sync_free_policy_queue() -> void:
+	if not _free_policy_enabled():
+		return
+	var actions: Array = []
+	for item: Dictionary in _cart:
+		actions.append({
+			"lever": str(item.get("lever", "")),
+			"value": item.get("value"),
+		})
+	_send({"command": "stage_policy", "actions": actions})
 
 
 func _render_cart(open: bool) -> void:
 	var items := _n["cart_items"] as VBoxContainer
 	for c in items.get_children():
 		c.queue_free()
+	var free_policy := _free_policy_enabled()
+	_set_text("cart_title", "@desktop.free.queue_title" if free_policy else "提案篮")
 	_set_text("cart_count", "%d 项" % _cart.size())
 	var admin_total := 0.0
 	for cart_item: Dictionary in _cart:
 		var info: Dictionary = _lever_info.get(str(cart_item.get("lever")), {})
 		admin_total += float(info.get("admin_weight", 0.0))
-	_set_text("cart_cost", "" if _cart.is_empty() else "行政容量 %.1f" % admin_total)
+	_set_text("cart_cost", (
+		"" if _cart.is_empty() else LocaleCatalogScript.text("desktop.free.next_day")
+	) if free_policy else (
+		"" if _cart.is_empty() else "行政容量 %.1f" % admin_total))
 	if _cart.is_empty():
-		items.add_child(_lbl("尚无动作。展开旋钮形成草稿，再加入提案篮统一裁决。",
+		items.add_child(_lbl(
+			"@desktop.free.empty"
+			if free_policy else
+			"尚无动作。展开旋钮形成草稿，再加入提案篮统一裁决。",
 			11, Color("7a8593")))
 	for c: Dictionary in _cart:
 		var key := str(c["lever"])
@@ -3706,9 +3846,18 @@ func _render_cart(open: bool) -> void:
 		r.add_child(rm)
 		items.add_child(rowp)
 	var subb := _n["submit"] as Button
-	subb.text = "提交提案(%d)" % _cart.size() if not _cart.is_empty() else "提交提案"
+	subb.text = (
+		LocaleCatalogScript.format("desktop.free.advance_apply", _cart.size())
+		if not _cart.is_empty() else
+		LocaleCatalogScript.text("desktop.free.advance")
+	) if free_policy else (
+		"提交提案(%d)" % _cart.size()
+		if not _cart.is_empty() else "提交提案")
 	subb.disabled = not open or _cart.is_empty()
-	(_n["pass"] as Button).disabled = not open
+	var pass_button := _n["pass"] as Button
+	pass_button.text = LocaleCatalogScript.text("desktop.free.clear") \
+		if free_policy else "本次不动"
+	pass_button.disabled = not open or (free_policy and _cart.is_empty())
 
 
 func _show_hint(text: String) -> void:
@@ -3745,8 +3894,12 @@ func _show_verdict(v: Dictionary) -> void:
 	for c in slot.get_children():
 		c.queue_free()
 	var status := str(v.get("status", "?"))
-	var ok := status.begins_with("accepted") or status == "noop"
+	var ok := status.begins_with("accepted") or status in [
+		"noop", "staged", "effective", "cleared"]
 	var status_cn: String = {
+		"staged": LocaleCatalogScript.text("desktop.free.verdict_staged"),
+		"effective": LocaleCatalogScript.text("desktop.free.verdict_effective"),
+		"cleared": LocaleCatalogScript.text("desktop.free.verdict_cleared"),
 		"accepted_pending": "提案获准 · 等待实施",
 		"accepted_effective": "提案获准 · 已经生效",
 		"accepted_noop": "会议完成 · 维持现状",
@@ -3795,6 +3948,12 @@ func _show_verdict(v: Dictionary) -> void:
 func _submit_cart() -> void:
 	if _cart.is_empty():
 		return
+	if _free_policy_enabled():
+		_sync_free_policy_queue()
+		_show_hint(LocaleCatalogScript.format(
+			"desktop.free.queued_hint", _cart.size()))
+		_send({"command": "advance", "ticks": 1})
+		return
 	_show_hint("已递交 %d 项动作,闭合本届会议,裁决将在边界返回…" % _cart.size())
 	var by_group: Dictionary = {}
 	for c: Dictionary in _cart:
@@ -3812,6 +3971,12 @@ func _submit_cart() -> void:
 
 
 func _submit_pass() -> void:
+	if _free_policy_enabled():
+		_cart.clear()
+		_edits.clear()
+		_sync_free_policy_queue()
+		_render()
+		return
 	for ctx: Dictionary in _contexts():
 		_send({"command": "resolve_context",
 			"context_id": str(ctx.get("context_id")), "actions": []})
@@ -6449,6 +6614,10 @@ func _render_events() -> void:
 
 # ================= 危机遮罩 =================
 func _render_crisis() -> void:
+	if _free_policy_enabled():
+		(_n["crisis"] as Control).visible = false
+		_crisis_was_visible = false
+		return
 	var real_ctx := _emergency_context()
 	var on := _emergency()
 	if not real_ctx.is_empty() \

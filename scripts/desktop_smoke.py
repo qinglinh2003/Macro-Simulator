@@ -1,9 +1,10 @@
 """End-to-end smoke drive of the desktop worker over the real TCP protocol.
 
-Simulates exactly what the Godot client's cross-seat proposal cart sends:
-resolve every open context (with real actions on the first regular boundary),
-then advance in <=100-tick bursts.  Asserts the verdict flow, the pending
-queue, and the world block stay sane over ~1.5 sim years.
+Simulates exactly what the Godot free-policy workbench sends: replace the
+next-boundary policy batch, verify that the current tick remains immutable,
+advance one day, and verify that the batch becomes effective before that
+day's simulation.  Then advance in <=100-tick bursts and check the world
+payload over ~1.5 simulation years.
 
 Usage: python scripts/desktop_smoke.py [--port 47899] [--ticks 550]
 """
@@ -62,51 +63,41 @@ def main() -> int:
         lever_total = sum(len(p["levers"]) for p in schema["seats"].values())
         assert lever_total == 102, f"expected 102 levers, got {lever_total}"
 
-        acted = False
-        verdict_seen = False
-        submitted = {}
-        while snap["tick"] < args.ticks:
-            if snap.get("awaiting_human"):
-                for ctx in list(snap["contexts"]):
-                    actions = []
-                    if not acted and ctx["decision_group"] in (
-                        "fiscal_stance", "monetary_stance"
-                    ):
-                        for item in ctx["permitted_actions"]:
-                            value = item.get("current_value")
-                            maximum = item.get("maximum")
-                            step = item.get("max_step")
-                            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                                continue
-                            if not isinstance(maximum, (int, float)) or not isinstance(step, (int, float)):
-                                continue
-                            requested = min(maximum, value + step)
-                            if requested == value or not item.get("allowed", True):
-                                continue
-                            actions.append({"lever": item["lever"], "value": requested})
-                            submitted[item["lever"]] = requested
-                            break
-                    rid += 1
-                    snap = request(stream, {
-                        "command": "resolve_context",
-                        "context_id": ctx["context_id"],
-                        "actions": actions,
-                    }, rid)
-                if submitted and not acted:
-                    acted = True
-                    print(f"t={snap['tick']}: submitted {submitted}")
-                continue
-            rid += 1
-            snap = request(stream, {"command": "advance", "ticks": 100}, rid)
-            verdict = snap.get("last_verdict")
-            if verdict and not verdict_seen:
-                verdict_seen = True
-                print(f"t={snap['tick']}: verdict={verdict['status']}"
-                      f" effective_tick={verdict.get('effective_tick')}")
-                assert str(verdict["status"]).startswith("accepted"), verdict
+        assert schema["control_mode"] == "free_policy"
+        lever = "tax_income_rate"
+        before = snap["policy_values"][lever]
+        requested = 0.7 if before != 0.7 else 0.6
+        start_tick = snap["tick"]
 
-        assert acted, "never found an actionable lever"
-        assert verdict_seen, "verdict never surfaced"
+        rid += 1
+        snap = request(stream, {
+            "command": "stage_policy",
+            "actions": [{"lever": lever, "value": requested}],
+        }, rid)
+        assert snap["tick"] == start_tick
+        assert snap["policy_values"][lever] == before
+        assert snap["free_policy"]["effective_tick"] == start_tick + 1
+        assert snap["free_policy"]["actions"] == [
+            {"lever": lever, "value": requested}
+        ]
+
+        rid += 1
+        snap = request(stream, {"command": "advance", "ticks": 1}, rid)
+        assert snap["tick"] == start_tick + 1
+        assert snap["policy_values"][lever] == requested
+        assert snap["free_policy"]["actions"] == []
+        verdict = snap["last_verdict"]
+        assert verdict["status"] == "effective", verdict
+        assert verdict["effective_tick"] == start_tick + 1
+        print(f"t={snap['tick']}: {lever} {before} -> {requested} effective")
+
+        while snap["tick"] < args.ticks:
+            rid += 1
+            snap = request(stream, {
+                "command": "advance",
+                "ticks": min(100, args.ticks - snap["tick"]),
+            }, rid)
+
         world = snap["world"]
         assert len(world["latest"]["economies"]) == 3
         assert len(world["latest"]["e"]) == 3

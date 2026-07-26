@@ -47,8 +47,8 @@ const POPULATION_LINKED_FIELDS := [
 
 const STEP_META := [
 	["@step.scenario", "SCENARIO"], ["@step.world", "WORLD"],
-	["@step.countries", "COUNTRIES"], ["@step.government", "GOVERNMENT"],
-	["@step.policy", "POLICY"], ["@step.review", "REVIEW"],
+	["@step.countries", "COUNTRIES"], ["@step.policy", "POLICY"],
+	["@step.review", "REVIEW"],
 ]
 
 const SCENARIOS := [
@@ -153,7 +153,7 @@ var _selected_country := 0
 var _player_country := 0
 var _profile_mapping_enabled := true
 var _population_mapping_enabled := true
-var _run_mode := "interactive"
+var _run_mode := "realtime"
 var _seat_occupants: Dictionary = {}
 var _calendar_open := false
 var _policy_country := 0
@@ -180,7 +180,7 @@ func _ready() -> void:
 	var capture_step := OS.get_environment("MACRO_SIM_CAPTURE_START_STEP")
 	if capture_step.is_valid_int() and capture_step.to_int() >= 1:
 		_screen = "wizard"
-		_step = clampi(capture_step.to_int(), 1, 6)
+		_step = clampi(capture_step.to_int(), 1, STEP_META.size())
 	var capture_duration := OS.get_environment("MACRO_SIM_CAPTURE_START_DURATION")
 	if capture_duration in ["1y", "5y", "10y", "custom", "inf"]:
 		_duration = capture_duration
@@ -206,7 +206,7 @@ func _reset_defaults() -> void:
 	for country: Dictionary in _countries:
 		_select_profile(country, str(country["profile"]))
 	for seat: Dictionary in SEATS:
-		_seat_occupants[str(seat["id"])] = "human"
+		_seat_occupants[str(seat["id"])] = "null"
 
 
 func set_policy_schemas(value: Dictionary) -> void:
@@ -398,10 +398,9 @@ func _build_wizard(parent: Control) -> void:
 		1: _step_scenario(content)
 		2: _step_world(content)
 		3: _step_countries(content)
-		4: _step_government(content)
-		5: _step_policy(content)
+		4: _step_policy(content)
 		_: _step_review(content)
-	if _step != 6:
+	if _step != STEP_META.size():
 		body.add_child(_summary_panel())
 	shell.add_child(_wizard_footer())
 
@@ -1520,10 +1519,9 @@ func _step_review(parent: VBoxContainer) -> void:
 		country_rows.append([str(c["name"]), "%s · %s" % [_text(str(PROFILES[str(c["profile"])]["name"])), _format("wizard.countries.population", _agent_population(c))]])
 	manifest.add_child(_manifest_card("@wizard.manifest.world", BLUE, [["@wizard.field.country_count", str(_countries.size())], ["@wizard.start_date", _date_iso(_start_date)], ["@wizard.run_duration", _duration_label()], ["@wizard.field.end_date", "@wizard.field.no_end" if _duration == "inf" else _date_iso(_end_date())], ["seed", str(_seed)], ["@wizard.field.cross_border", _cross_label()]]))
 	manifest.add_child(_manifest_card("@wizard.manifest.countries", TEAL, country_rows))
-	manifest.add_child(_manifest_card("@wizard.manifest.government", PURPLE, [["@wizard.field.player_country", str(_countries[_player_country]["name"])], ["@wizard.field.human_seats", "%d / 5" % _human_seat_count()], ["@wizard.field.meeting_mode", _run_mode], ["@wizard.field.other_countries", _format("wizard.field.frozen_countries", _countries.size() - 1)]]))
 	manifest.add_child(_manifest_card("@wizard.manifest.policy", AMBER, [["@wizard.field.relative_preset", _format("wizard.field.change_count", _policy_values.size())], ["@wizard.field.application_state", "@wizard.field.atomic_launch"], ["@wizard.field.monetary_regime", str(_policy_value("monetary_regime", "taylor"))], ["@wizard.field.fx_regime", str(_policy_value("fx_regime", "float"))]]))
 	manifest.add_child(_manifest_card("@wizard.manifest.scenario", RED, [["@wizard.field.scenario", scenario], ["@wizard.field.calibration", "@wizard.field.reduced_prototype" if _scenario != "sandbox" else "—"], ["ShockTape", "@wizard.field.shock_tape_bound"]]))
-	manifest.add_child(_manifest_card("@wizard.manifest.reproducibility", Color("3f6db2"), [["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["@wizard.field.config_authority", "@wizard.field.backend_config"], ["@wizard.field.protocol", "desktop v3"]]))
+	manifest.add_child(_manifest_card("@wizard.manifest.reproducibility", Color("3f6db2"), [["schema", "NewGameSpec v1"], ["base_seed", "%d → +i×1e6" % _seed], ["@wizard.field.config_authority", "@wizard.field.backend_config"], ["@wizard.field.protocol", "desktop v4"]]))
 
 
 func _validation_card(icon: String, title: String, sub: String, fg: Color, bg: Color, border: Color) -> Control:
@@ -1561,7 +1559,6 @@ func _summary_panel() -> Control:
 	for c: Dictionary in _countries.slice(0, 4):
 		cr.append([str(c["code"]), _text(str(PROFILES[str(c["profile"])]["name"]))])
 	col.add_child(_summary_section("@wizard.summary.countries", cr))
-	col.add_child(_summary_section("@wizard.summary.government", [["@wizard.summary.player", str(_countries[_player_country]["name"])], ["@wizard.field.human_seats", "%d/5" % _human_seat_count()], ["@wizard.summary.mode", _run_mode]]))
 	col.add_child(_summary_section("@wizard.summary.policy", [["@wizard.summary.changes", _format("wizard.summary.change_count", _policy_values.size())]]))
 	col.add_child(_v_spacer())
 	var protocol := _label("@wizard.summary.protocol", 10, GREEN, false, true); protocol.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; col.add_child(protocol); return p
@@ -1592,7 +1589,7 @@ func _summary_section(title: String, rows: Array) -> Control:
 func _wizard_footer() -> Control:
 	var p := PanelContainer.new(); p.custom_minimum_size = Vector2(0, 60); p.add_theme_stylebox_override("panel", _sb(PAPER, LINE2, 0, 12)); var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); row.add_child(_button("@wizard.nav.back", _go_back, false, 13)); row.add_child(_h_spacer())
 	var dots := HBoxContainer.new(); dots.add_theme_constant_override("separation", 6)
-	for i in 6:
+	for i in STEP_META.size():
 		var bar := ColorRect.new()
 		bar.color = TEAL if i + 1 == _step else (TEAL_BD if i + 1 < _step else LINE)
 		bar.custom_minimum_size = Vector2(22 if i + 1 == _step else 6, 6)
@@ -1600,7 +1597,7 @@ func _wizard_footer() -> Control:
 	row.add_child(dots)
 	row.add_child(_label(_format("wizard.nav.step", _step), 11, INK3, false, true))
 	row.add_child(_h_spacer())
-	if _step == 6: row.add_child(_button("@wizard.nav.launch", _begin_launch, true, 14))
+	if _step == STEP_META.size(): row.add_child(_button("@wizard.nav.launch", _begin_launch, true, 14))
 	else: row.add_child(_button("@wizard.nav.next", func() -> void: _step += 1; _render(), true, 14))
 	return p
 
@@ -1621,7 +1618,7 @@ func restore_after_launch_error(message: String) -> void:
 	_launch_timer.stop()
 	_launch_error = message
 	_screen = "wizard"
-	_step = 6
+	_step = STEP_META.size()
 	show()
 	_render()
 
@@ -1637,7 +1634,7 @@ func _advance_launch() -> void:
 
 func _build_launch(parent: Control) -> void:
 	var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(center); var col := VBoxContainer.new(); col.custom_minimum_size.x = 440; col.add_theme_constant_override("separation", 10); center.add_child(col); var h := HBoxContainer.new(); h.alignment = BoxContainer.ALIGNMENT_CENTER; h.add_theme_constant_override("separation", 12); h.add_child(_label("◌", 25, TEAL, true)); h.add_child(_label("@wizard.launch.building", 19, INK, true)); var hm := MarginContainer.new(); hm.add_theme_constant_override("margin_bottom", 20); hm.add_child(h); col.add_child(hm)
-	var defs: Array = [[_format("wizard.launch.economies", _countries.size()), _format("wizard.launch.population", _total_population_seed())], ["@wizard.launch.scenario", _scenario_name()], ["@wizard.launch.seats", _format("wizard.launch.humans", _human_seat_count())], ["@wizard.launch.rng", "seed %d" % _seed]]
+	var defs: Array = [[_format("wizard.launch.economies", _countries.size()), _format("wizard.launch.population", _total_population_seed())], ["@wizard.launch.scenario", _scenario_name()], ["@wizard.manifest.policy", _format("wizard.summary.change_count", _policy_values.size())], ["@wizard.launch.rng", "seed %d" % _seed]]
 	for i in defs.size(): var done := i < _launch_progress; var active := i == _launch_progress; var p := _panel(PAPER, TEAL_BD if active else LINE2, 10, 10); p.modulate.a = 1.0 if done or active else 0.5; var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12); p.add_child(row); var mark := _chip("✓" if done else ("·" if active else ""), Color.WHITE, GREEN if done else (TEAL if active else LINE), Color(0, 0, 0, 0)); row.add_child(mark); var text := _label(str(defs[i][0]), 13, INK); text.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(text); row.add_child(_label(str(defs[i][1]), 11, MUTED, false, true)); col.add_child(p)
 
 
@@ -1661,7 +1658,7 @@ func _build_settings(parent: Control) -> void:
 	var shade := ColorRect.new(); shade.color = Color(0.086, 0.137, 0.204, 0.34); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); parent.add_child(shade); var center := CenterContainer.new(); center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.add_child(center); var panel := _panel(PAPER, LINE, 16, 0); panel.custom_minimum_size = Vector2(880, 650); center.add_child(panel); var shell := VBoxContainer.new(); panel.add_child(shell)
 	var headp := MarginContainer.new(); headp.add_theme_constant_override("margin_left", 20); headp.add_theme_constant_override("margin_right", 20); headp.add_theme_constant_override("margin_top", 14); headp.add_theme_constant_override("margin_bottom", 14); var head := HBoxContainer.new(); head.add_theme_constant_override("separation", 10); headp.add_child(head); head.add_child(_label("@settings.title", 16, INK, true)); head.add_child(_label("@settings.subtitle", 11, INK3, false, true)); head.add_child(_h_spacer()); head.add_child(_square_button("×", func() -> void: _settings_open = false; _render(), 30)); shell.add_child(headp); shell.add_child(_h_line())
 	var bodym := MarginContainer.new(); bodym.size_flags_vertical = Control.SIZE_EXPAND_FILL; bodym.add_theme_constant_override("margin_left", 20); bodym.add_theme_constant_override("margin_right", 20); bodym.add_theme_constant_override("margin_top", 18); bodym.add_theme_constant_override("margin_bottom", 18); var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 16); grid.add_theme_constant_override("v_separation", 16); bodym.add_child(grid); shell.add_child(bodym)
-	for group: Array in [["@settings.group.display", [["@settings.fullscreen", "toggle", false], ["@settings.ui_scale", "value", "100%"], ["@settings.density", "value", "@settings.comfortable"]]], ["@settings.group.language", [["@settings.language", "value", "@settings.language.zh_cn"], ["@settings.number_abbreviation", "toggle", true]]], ["@settings.group.accessibility", [["@settings.color_safe", "toggle", false], ["@settings.reduce_motion", "toggle", false], ["@settings.high_contrast", "toggle", true]]], ["@settings.group.flow", [["@settings.default_mode", "value", "@settings.mode.interactive"], ["@settings.realtime_limit", "value", "30 s"], ["@settings.pause_on_start", "toggle", true]]], ["@settings.group.saves", [["@settings.autosave", "toggle", true], ["@settings.keep_count", "value", "10"]]], ["@settings.group.developer", [["@settings.show_internal", "toggle", true], ["@settings.audio", "value", "@settings.not_implemented"]]]]: grid.add_child(_settings_group(str(group[0]), group[1]))
+	for group: Array in [["@settings.group.display", [["@settings.fullscreen", "toggle", false], ["@settings.ui_scale", "value", "100%"], ["@settings.density", "value", "@settings.comfortable"]]], ["@settings.group.language", [["@settings.language", "value", "@settings.language.zh_cn"], ["@settings.number_abbreviation", "toggle", true]]], ["@settings.group.accessibility", [["@settings.color_safe", "toggle", false], ["@settings.reduce_motion", "toggle", false], ["@settings.high_contrast", "toggle", true]]], ["@settings.group.saves", [["@settings.autosave", "toggle", true], ["@settings.keep_count", "value", "10"]]], ["@settings.group.developer", [["@settings.show_internal", "toggle", true], ["@settings.audio", "value", "@settings.not_implemented"]]]]: grid.add_child(_settings_group(str(group[0]), group[1]))
 	shell.add_child(_h_line()); var footm := MarginContainer.new(); footm.add_theme_constant_override("margin_left", 20); footm.add_theme_constant_override("margin_right", 20); footm.add_theme_constant_override("margin_top", 12); footm.add_theme_constant_override("margin_bottom", 12); var foot := HBoxContainer.new(); foot.add_child(_label("@settings.restart", 10, AMBER, false, true)); foot.add_child(_h_spacer()); foot.add_child(_button("@settings.restore", func() -> void: pass, false, 12)); foot.add_child(_button("@settings.apply", func() -> void: _settings_open = false; _render(), true, 12)); footm.add_child(foot); shell.add_child(footm)
 
 

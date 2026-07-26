@@ -27,3 +27,7 @@ compile_commands.json
 artifacts/openecon/extreme_*/
 artifacts/experiments/
 *.msim
+
+# Godot editor caches and generated resource identifiers
+/desktop/godot/.godot/
+/desktop/godot/**/*.uid

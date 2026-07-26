@@ -35,7 +35,7 @@ func _run() -> void:
 	assert(is_equal_approx(
 		float(menu._countries[0]["overrides"]["a"]), 1.75))
 
-	menu._step = 5
+	menu._step = 4
 	menu._render()
 	await process_frame
 	var policy_number := _line_edit(menu, "0.180")

@@ -1,10 +1,12 @@
-"""Transport-neutral state machine used by the Godot desktop prototype.
+"""Transport-neutral state machine used by the Godot desktop client.
 
-The adapter deliberately owns no policy logic.  It translates small JSON commands
-into the existing controller and shock APIs so the desktop client cannot mutate the
-engine behind their validation, timing, or audit trails.
+The adapter offers two policy interaction modes.  The legacy controller mode uses
+institutional seats and decision windows.  Free policy mode keeps the Registry as
+the authority for model invariants while removing controller governance constraints:
+the player may stage any in-domain lever value at a clean boundary and the complete
+batch becomes effective for the next simulated day.
 
-Protocol v3 accepts a versioned :class:`NewGameSpec`: country count, profiles,
+Protocol v4 accepts a versioned :class:`NewGameSpec`: country count, profiles,
 world couplings, scenario, duration, scale and every policy-seat occupant are
 constructed by the engine rather than merely previewed in the client.
 """
@@ -27,7 +29,20 @@ from macro_sim.controllers import (
     ScheduledOccupant,
 )
 from macro_sim.controllers.coordinator import SEATS
-from macro_sim.controllers.protocol import canonical_value
+from macro_sim.controllers.protocol import (
+    CONTROLLER_SCHEMA_VERSION,
+    DecisionContext,
+    PendingDecision,
+    PolicyAction,
+    PolicyDecision,
+    PolicyProposal,
+    canonical_value,
+)
+from macro_sim.controllers.transaction import (
+    commit_world_policy_transaction,
+    prepare_world_policy_transaction,
+    world_capability_reason,
+)
 from macro_sim.core.policy_registry import EconomySet, apply_action_batch
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.desktop.new_game import NewGameSpec
@@ -40,7 +55,7 @@ from macro_sim.systems.banking import (
 )
 from macro_sim.systems.firm_balance_sheet import firm_balance_sheet
 from macro_sim.world import World
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 SERIES_LIMIT = 160
 BUILTIN_RL_ARTIFACT = (
     Path(__file__).resolve().parents[1]
@@ -262,8 +277,11 @@ def _jsonable(value: Any) -> Any:
 class SimulationRuntime:
     """Single-writer façade for one interactive simulation run."""
 
-    def __init__(self, *, seed: int = 7) -> None:
+    def __init__(self, *, seed: int = 7, free_policy_mode: bool = False) -> None:
+        if not isinstance(free_policy_mode, bool):
+            raise TypeError("free_policy_mode must be a boolean")
         self._seed = seed
+        self.free_policy_mode = free_policy_mode
         self._proposal_sequence = 0
         self._shock_sequence = 0
         self.world: World
@@ -305,8 +323,14 @@ class SimulationRuntime:
             world, run_mode=normalized.run_mode
         )
         for index, seat in enumerate(SEATS):
-            occupant = self._occupant(
-                normalized.seats[seat], seat=seat, seed=normalized.seed + index + 1
+            occupant = (
+                NullOccupant()
+                if self.free_policy_mode
+                else self._occupant(
+                    normalized.seats[seat],
+                    seat=seat,
+                    seed=normalized.seed + index + 1,
+                )
             )
             session.assign_seat(
                 normalized.player_country, seat, occupant, actor="desktop_new_game"
@@ -315,7 +339,7 @@ class SimulationRuntime:
         # Open the initial decision window (or execute the first fully automatic
         # boundary) before publishing any of the new roots.  Auto-occupant and
         # first-tick failures are therefore transactional too.
-        initial_result = session.advance()
+        initial_result = None if self.free_policy_mode else session.advance()
 
         # Commit only after the complete contract, configs, world and seat roster
         # have constructed successfully.  A rejected start-menu draft therefore
@@ -335,9 +359,12 @@ class SimulationRuntime:
         self._labor_flow_delta: dict[str, float] = {}
         self._last_verdict: dict[str, Any] | None = None
         self._pending_verdict_pid: str | None = None
+        self._free_policy_draft: dict[str, Any] = {}
+        self._free_policy_sequence = 0
+        self._last_free_policy_event: dict[str, Any] | None = None
         self._stock_market_history: list[dict[str, Any]] = []
         self._record_stock_market_point(0)
-        if initial_result.status == "advanced":
+        if initial_result is not None and initial_result.status == "advanced":
             self._record_result(initial_result.records)
         return self.snapshot()
 
@@ -415,6 +442,11 @@ class SimulationRuntime:
         if name == "advance":
             ticks = _integer("ticks", command.get("ticks", 1), minimum=1, maximum=100)
             return self.advance(ticks)
+        if name == "stage_policy":
+            actions = command.get("actions", [])
+            if not isinstance(actions, list):
+                raise TypeError("actions must be an array")
+            return self.stage_policy(actions)
         if name == "resolve_context":
             context_id = command.get("context_id")
             if not isinstance(context_id, str) or not context_id:
@@ -438,6 +470,7 @@ class SimulationRuntime:
         }
         return {
             "protocol_version": PROTOCOL_VERSION,
+            "control_mode": "free_policy" if self.free_policy_mode else "controller",
             "seats": seats,
             # protocol v1 clients read a flat treasury schema
             "levers": seats["treasury"]["levers"],
@@ -451,6 +484,8 @@ class SimulationRuntime:
         while advanced < ticks:
             if self._run_complete():
                 break
+            if self.free_policy_mode and self._free_policy_draft:
+                self._apply_free_policy_draft()
             result = self.session.advance()
             if result.status == "awaiting_human":
                 break
@@ -459,6 +494,155 @@ class SimulationRuntime:
         snapshot = self.snapshot()
         snapshot["advanced_ticks"] = advanced
         return snapshot
+
+    def stage_policy(
+        self, actions: list[Mapping[str, Any]]
+    ) -> dict[str, Any]:
+        """Replace the free-policy draft for the next simulated day.
+
+        Staging checks wire types, absolute Registry domains, and installed
+        capabilities.  Cross-lever and World constraints are checked atomically
+        against the complete draft immediately before it becomes effective.
+        """
+        if not self.free_policy_mode:
+            raise ValueError("stage_policy requires free policy mode")
+        if self._run_complete():
+            raise ValueError("simulation duration has ended")
+        if self.session.phase != "boundary_start":
+            raise RuntimeError("free policy changes require a clean day boundary")
+
+        economy = self.world.economies[self.player_economy]
+        normalized: dict[str, Any] = {}
+        for index, action in enumerate(actions):
+            if not isinstance(action, Mapping):
+                raise TypeError(f"actions[{index}] must be an object")
+            if set(action) != {"lever", "value"}:
+                raise ValueError(f"actions[{index}] must contain lever and value")
+            name = action["lever"]
+            if not isinstance(name, str) or name not in REGISTRY:
+                raise ValueError(f"actions[{index}] names an unknown policy lever")
+            if name in normalized:
+                raise ValueError(f"actions contain duplicate policy lever {name!r}")
+            lever = REGISTRY[name]
+            value = action["value"]
+            engine_value = (
+                frozenset(value)
+                if isinstance(lever.validation, EconomySet)
+                and isinstance(value, (list, tuple))
+                else value
+            )
+            holder = (
+                economy.external_policy
+                if lever.scope == "external"
+                else economy.policy
+            )
+            error = lever.validation.check(
+                getattr(holder, name, None), engine_value
+            )
+            if error is not None:
+                raise ValueError(f"{name}: {error}")
+            for capability in lever.requires:
+                if not bool(getattr(economy.cfg, capability, False)):
+                    raise ValueError(f"{name}: missing capability {capability}")
+            capability_error = world_capability_reason(self.world, name)
+            if capability_error is not None:
+                raise ValueError(f"{name}: {capability_error}")
+            normalized[name] = canonical_value(value)
+
+        self._free_policy_draft = normalized
+        self._free_policy_sequence += 1
+        event_id = f"free-policy:{self._free_policy_sequence}"
+        self._last_free_policy_event = {
+            "decision_id": event_id,
+            "status": "staged" if normalized else "cleared",
+            "effective_tick": (
+                self.session.boundary_tick + 1 if normalized else None
+            ),
+            "actions": [
+                {"lever": name, "value": value}
+                for name, value in sorted(normalized.items())
+            ],
+        }
+        return self.snapshot()
+
+    def _apply_free_policy_draft(self) -> None:
+        if not self._free_policy_draft:
+            return
+        boundary = self.session.boundary_tick
+        sequence = self._free_policy_sequence
+        context_id = f"free-policy:{sequence}:{boundary}"
+        actions = tuple(
+            PolicyAction(lever=name, value=value)
+            for name, value in sorted(self._free_policy_draft.items())
+        )
+        version_names = {
+            version_name
+            for action in actions
+            for version_name in (
+                action.lever,
+                *tuple(REGISTRY[action.lever].enabled_if),
+            )
+        }
+        versions = {
+            name: self.session.policy_versions.get(
+                f"{self.player_economy}:{name}", 0
+            )
+            for name in sorted(version_names)
+        }
+        context = DecisionContext(
+            context_id=context_id,
+            decision_window_id=context_id,
+            economy_id=self.player_economy,
+            seat="treasury",
+            decision_group="free_policy",
+            boundary_tick=boundary,
+            expires_at_tick=boundary,
+            policy_versions=versions,
+            observation={},
+        )
+        proposal = PolicyProposal(
+            schema_version=CONTROLLER_SCHEMA_VERSION,
+            proposal_id=context_id,
+            idempotency_key=context_id,
+            context_id=context_id,
+            actions=actions,
+            reason="desktop_free_policy",
+            based_on_policy_versions=versions,
+        )
+        decision = PolicyDecision(
+            decision_id=context_id,
+            proposal_id=context_id,
+            status="accepted_pending",
+            reason_code="free_policy",
+            accepted_tick=boundary,
+            effective_tick=boundary + 1,
+            accepted_sequence=sequence,
+        )
+        pending = PendingDecision(
+            decision=decision,
+            proposal=proposal,
+            context=context,
+        )
+        prepared = prepare_world_policy_transaction(
+            self.session,
+            (pending,),
+            transaction_id=context_id,
+        )
+        changes = commit_world_policy_transaction(self.session, prepared)
+        self._free_policy_draft = {}
+        self._last_free_policy_event = {
+            "decision_id": context_id,
+            "status": "effective",
+            "effective_tick": boundary + 1,
+            "actions": [
+                {
+                    "lever": change["lever"],
+                    "value": canonical_value(change["new"]),
+                }
+                for change in changes
+                if change["economy_id"] == self.player_economy
+            ],
+        }
 
     def resolve_context(
         self, context_id: str, actions: list[Mapping[str, Any]]
@@ -1856,8 +2040,23 @@ class SimulationRuntime:
             if lever.scope != "external"
             or hasattr(player_economy, "external_policy")
         }
+        free_policy = {
+            "enabled": self.free_policy_mode,
+            "effective_tick": (
+                self.session.boundary_tick + 1
+                if self._free_policy_draft
+                else None
+            ),
+            "actions": [
+                {"lever": name, "value": value}
+                for name, value in sorted(self._free_policy_draft.items())
+            ],
+        }
         return {
             "protocol_version": PROTOCOL_VERSION,
+            "control_mode": (
+                "free_policy" if self.free_policy_mode else "controller"
+            ),
             "new_game": {
                 "schema_version": self._new_game_spec.schema_version,
                 "model_id": self._new_game_spec.model_id,
@@ -1880,10 +2079,18 @@ class SimulationRuntime:
                 ),
             },
             "observation": self._merged_observation(),
-            "last_verdict": self._last_verdict,
+            "last_verdict": (
+                self._last_free_policy_event
+                if self.free_policy_mode
+                else self._last_verdict
+            ),
             "tick": self.session.boundary_tick,
             "phase": self.session.phase,
-            "awaiting_human": bool(self.session.missing_context_ids),
+            "awaiting_human": (
+                False
+                if self.free_policy_mode
+                else bool(self.session.missing_context_ids)
+            ),
             "metrics": metrics,
             "series": list(self._panel_history),
             "panel_details": _jsonable(self._panel_details()),
@@ -1911,8 +2118,13 @@ class SimulationRuntime:
                 "latest": _jsonable(latest_world),
                 "history": _jsonable(self._world_history),
             },
-            "contexts": contexts,
-            "pending": self.service.pending(economy_id=self.player_economy),
+            "contexts": [] if self.free_policy_mode else contexts,
+            "pending": (
+                []
+                if self.free_policy_mode
+                else self.service.pending(economy_id=self.player_economy)
+            ),
+            "free_policy": free_policy,
             "shock_bulletins": self.service.shock_bulletins(
                 economy_id=self.player_economy, seat="treasury"
             )["shock_bulletins"],

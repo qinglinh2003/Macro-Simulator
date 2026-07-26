@@ -390,6 +390,83 @@ def test_cross_seat_actions_resolve_in_one_boundary(runtime: SimulationRuntime) 
     assert set(submitted.values()) <= pending_levers
 
 
+def test_free_policy_mode_applies_unrestricted_batch_on_next_tick() -> None:
+    free = SimulationRuntime(seed=11, free_policy_mode=True)
+    opening = free.snapshot()
+    assert opening["control_mode"] == "free_policy"
+    assert opening["tick"] == 0
+    assert opening["awaiting_human"] is False
+    assert opening["contexts"] == []
+    assert opening["pending"] == []
+
+    old_tax = opening["policy_values"]["tax_income_rate"]
+    staged = free.handle({
+        "command": "stage_policy",
+        "actions": [
+            # Deliberately exceeds the Controller max-step metadata.
+            {"lever": "tax_income_rate", "value": 0.7},
+            # These two state-transition companions remain atomic.
+            {"lever": "manual_policy_rate", "value": 0.000134},
+            {"lever": "monetary_regime", "value": "manual"},
+        ],
+    })
+    assert staged["tick"] == 0
+    assert staged["policy_values"]["tax_income_rate"] == old_tax
+    assert staged["free_policy"]["effective_tick"] == 1
+    assert len(staged["free_policy"]["actions"]) == 3
+    assert staged["last_verdict"]["status"] == "staged"
+
+    effective = free.advance(1)
+    assert effective["tick"] == 1
+    assert effective["policy_values"]["tax_income_rate"] == pytest.approx(0.7)
+    assert effective["policy_values"]["manual_policy_rate"] == pytest.approx(
+        0.000134
+    )
+    assert effective["policy_values"]["monetary_regime"] == "manual"
+    assert effective["free_policy"]["actions"] == []
+    assert effective["last_verdict"]["status"] == "effective"
+    assert effective["last_verdict"]["effective_tick"] == 1
+
+
+def test_free_policy_draft_replaces_and_clears_without_advancing() -> None:
+    free = SimulationRuntime(seed=13, free_policy_mode=True)
+    old = free.snapshot()["policy_values"]["gov_deficit_target"]
+    free.stage_policy([{"lever": "gov_deficit_target", "value": 0.2}])
+    cleared = free.stage_policy([])
+    assert cleared["tick"] == 0
+    assert cleared["free_policy"]["actions"] == []
+    advanced = free.advance(1)
+    assert advanced["policy_values"]["gov_deficit_target"] == old
+
+
+def test_free_policy_keeps_atomic_model_invariants_without_governance_limits() -> None:
+    free = SimulationRuntime(seed=17, free_policy_mode=True)
+    free.stage_policy([{"lever": "monetary_regime", "value": "manual"}])
+
+    with pytest.raises(
+        ValueError, match="requires manual_policy_rate in the same batch"
+    ):
+        free.advance(1)
+
+    failed = free.snapshot()
+    assert failed["tick"] == 0
+    assert failed["policy_values"]["monetary_regime"] == "taylor"
+    assert failed["free_policy"]["actions"] == [
+        {"lever": "monetary_regime", "value": "manual"}
+    ]
+
+    free.stage_policy([
+        {"lever": "monetary_regime", "value": "manual"},
+        {"lever": "manual_policy_rate", "value": 0.0002},
+    ])
+    effective = free.advance(1)
+    assert effective["tick"] == 1
+    assert effective["policy_values"]["monetary_regime"] == "manual"
+    assert effective["policy_values"]["manual_policy_rate"] == pytest.approx(
+        0.0002
+    )
+
+
 def test_shock_is_scheduled_at_next_boundary(runtime: SimulationRuntime) -> None:
     snapshot = runtime.trigger_shock()
     assert snapshot["shock_bulletins"] == []  # not announced early
