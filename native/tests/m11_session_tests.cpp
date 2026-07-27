@@ -63,7 +63,7 @@ using namespace macro_sim::simulation;
 }
 
 [[nodiscard]] M11PolicyProposal no_action(const M11DecisionContext &context,
-                                          std::string id) {
+                                          const std::string &id) {
     M11PolicyProposal proposal;
     proposal.proposal_id = id;
     proposal.idempotency_key = id;
@@ -326,8 +326,9 @@ void test_seat_archive_restore_and_checkpoint_idempotency() {
     auto assigned = session.get_if()->assign_seat(assignment);
     assert(assigned.ok());
     assert(!assigned.get_if()->repeated);
-    assert(assigned.get_if()->archived_occupant_id.has_value());
-    const auto null_archive = *assigned.get_if()->archived_occupant_id;
+    const auto &archived_null = assigned.get_if()->archived_occupant_id;
+    assert(archived_null.has_value());
+    const auto null_archive = *archived_null;
     assert(session.get_if()
                ->seat(EconomyId(0U), "treasury")
                ->assignment.occupant.occupant_id == "cabinet-player");

@@ -15,8 +15,8 @@ inline constexpr std::uint32_t kM2CheckpointSchemaVersion = 3;
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
 
 struct CheckpointLimits final {
-    std::size_t maximum_archive_bytes{64U * 1024U * 1024U};
-    std::size_t maximum_entry_bytes{64U * 1024U * 1024U};
+    std::size_t maximum_archive_bytes{std::size_t{64} * 1024U * 1024U};
+    std::size_t maximum_entry_bytes{std::size_t{64} * 1024U * 1024U};
     std::size_t maximum_entries{16};
     std::size_t maximum_records{1'000'000};
 };

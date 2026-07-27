@@ -19,6 +19,9 @@ namespace macro_sim::reporting {
 inline constexpr std::size_t kM10PublicMetricCount = 41U;
 inline constexpr std::size_t kM10NativeSourceMetricCount =
     0U
+// The replacement lists below are additive fragments of one accumulating sum,
+// not standalone expressions; parenthesizing them would break the expansion.
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define MACRO_SIM_M4_SOURCE(field, unit) +1U
 #define MACRO_SIM_M5_SOURCE(field, unit) +1U
 #define MACRO_SIM_M6_SOURCE(field, unit) +1U
@@ -27,6 +30,7 @@ inline constexpr std::size_t kM10NativeSourceMetricCount =
 #define MACRO_SIM_M8_HOUSING_SOURCE(field, unit) +1U
 #define MACRO_SIM_M9_COUNTRY_SOURCE(field, unit) +1U
 #define MACRO_SIM_M9_WORLD_SOURCE(field, unit) +1U
+// NOLINTEND(bugprone-macro-parentheses)
 #include "macro_sim/reporting/m10_metric_sources.inc"
 #undef MACRO_SIM_M4_SOURCE
 #undef MACRO_SIM_M5_SOURCE
@@ -39,6 +43,7 @@ inline constexpr std::size_t kM10NativeSourceMetricCount =
     ;
 inline constexpr std::size_t kM10NationalAccountMetricCount =
     0U
+// NOLINTNEXTLINE(bugprone-macro-parentheses)
 #define MACRO_SIM_NATIONAL_ACCOUNT(field, unit) +1U
 #include "macro_sim/reporting/m10_national_accounts.inc"
 #undef MACRO_SIM_NATIONAL_ACCOUNT

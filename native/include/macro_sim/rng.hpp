@@ -58,6 +58,8 @@ public:
             if (!draw.ok()) {
                 return draw.status();
             }
+            // ``take()`` is rvalue-qualified, so the move is required to compile.
+            // NOLINTNEXTLINE(performance-move-const-arg)
             const auto index = std::move(draw).take();
             using std::swap;
             swap(values[remaining - 1], values[index]);

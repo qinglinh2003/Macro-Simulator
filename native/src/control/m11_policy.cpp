@@ -44,56 +44,84 @@ namespace {
     return std::nullopt;
 }
 
+// Non-throwing equivalent of PolicyValue::operator== for two values that already
+// share the same alternative index; std::variant::operator== is not noexcept.
+[[nodiscard]] bool same_alternative_equal(const PolicyValue &left,
+                                          const PolicyValue &right) noexcept {
+    if (const auto *flag = std::get_if<bool>(&left)) {
+        const auto *other = std::get_if<bool>(&right);
+        return other != nullptr && *flag == *other;
+    }
+    if (const auto *integer = std::get_if<std::int64_t>(&left)) {
+        const auto *other = std::get_if<std::int64_t>(&right);
+        return other != nullptr && *integer == *other;
+    }
+    if (const auto *number = std::get_if<double>(&left)) {
+        const auto *other = std::get_if<double>(&right);
+        return other != nullptr && *number == *other;
+    }
+    if (const auto *text = std::get_if<std::string>(&left)) {
+        const auto *other = std::get_if<std::string>(&right);
+        return other != nullptr && *text == *other;
+    }
+    if (const auto *targets = std::get_if<PolicyEconomySet>(&left)) {
+        const auto *other = std::get_if<PolicyEconomySet>(&right);
+        return other != nullptr && *targets == *other;
+    }
+    return std::holds_alternative<std::monostate>(left) &&
+           std::holds_alternative<std::monostate>(right);
+}
+
 [[nodiscard]] Result<PolicyValue>
 read_policy_value(const simulation::DomesticPolicyState &domestic,
                   const simulation::ExternalPolicyState &external,
                   std::string_view name) {
 #define MACRO_SIM_M11_DOMESTIC_NUMBER(label, section, field)                           \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{domestic.section.field};                                    \
     }
 #define MACRO_SIM_M11_DOMESTIC_NULLABLE_NUMBER(label, section, field)                  \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         const auto &item = domestic.section.field;                                     \
         return item.has_value() ? PolicyValue{*item} : PolicyValue{std::monostate{}};  \
     }
 #define MACRO_SIM_M11_DOMESTIC_INTEGER(label, section, field)                          \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{static_cast<std::int64_t>(domestic.section.field)};         \
     }
 #define MACRO_SIM_M11_DOMESTIC_BOOLEAN(label, section, field)                          \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{domestic.section.field};                                    \
     }
 #define MACRO_SIM_M11_DOMESTIC_CHOICE(label, section, field)
 #define MACRO_SIM_M11_DOMESTIC_ECONOMY_ID(label, section, field)
 #define MACRO_SIM_M11_DOMESTIC_ECONOMY_SET(label, section, field)
 #define MACRO_SIM_M11_EXTERNAL_NUMBER(label, field)                                    \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{external.field};                                            \
     }
 #define MACRO_SIM_M11_EXTERNAL_NULLABLE_NUMBER(label, field)                           \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         const auto &item = external.field;                                             \
         return item.has_value() ? PolicyValue{*item} : PolicyValue{std::monostate{}};  \
     }
 #define MACRO_SIM_M11_EXTERNAL_INTEGER(label, field)                                   \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{static_cast<std::int64_t>(external.field)};                 \
     }
 #define MACRO_SIM_M11_EXTERNAL_BOOLEAN(label, field)                                   \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{external.field};                                            \
     }
 #define MACRO_SIM_M11_EXTERNAL_CHOICE(label, field)
 #define MACRO_SIM_M11_EXTERNAL_ECONOMY_ID(label, field)                                \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return external.field.has_value()                                              \
                    ? PolicyValue{static_cast<std::int64_t>(external.field->value())}   \
                    : PolicyValue{std::monostate{}};                                    \
     }
 #define MACRO_SIM_M11_EXTERNAL_ECONOMY_SET(label, field)                               \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         return PolicyValue{external.field};                                            \
     }
 #define MACRO_SIM_M11_SPECIAL(label)
@@ -152,27 +180,35 @@ read_policy_value(const simulation::DomesticPolicyState &domestic,
                                         const PolicyValue &value) {
     const auto numeric = number_value(value);
 #define MACRO_SIM_M11_DOMESTIC_NUMBER(label, section, field)                           \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
+        if (!numeric.has_value()) {                                                    \
+            return Status(ErrorCode::invalid_argument,                                 \
+                          "M11 policy lever requires a numeric value");                \
+        }                                                                              \
         domestic.section.field = *numeric;                                             \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_DOMESTIC_NULLABLE_NUMBER(label, section, field)                  \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         if (std::holds_alternative<std::monostate>(value)) {                           \
             domestic.section.field.reset();                                            \
-        } else {                                                                       \
-            domestic.section.field = *numeric;                                         \
+            return Status::success();                                                  \
         }                                                                              \
+        if (!numeric.has_value()) {                                                    \
+            return Status(ErrorCode::invalid_argument,                                 \
+                          "M11 policy lever requires a numeric value");                \
+        }                                                                              \
+        domestic.section.field = numeric;                                              \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_DOMESTIC_INTEGER(label, section, field)                          \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         domestic.section.field = static_cast<decltype(domestic.section.field)>(        \
             std::get<std::int64_t>(value));                                            \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_DOMESTIC_BOOLEAN(label, section, field)                          \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         domestic.section.field = std::get<bool>(value);                                \
         return Status::success();                                                      \
     }
@@ -180,33 +216,41 @@ read_policy_value(const simulation::DomesticPolicyState &domestic,
 #define MACRO_SIM_M11_DOMESTIC_ECONOMY_ID(label, section, field)
 #define MACRO_SIM_M11_DOMESTIC_ECONOMY_SET(label, section, field)
 #define MACRO_SIM_M11_EXTERNAL_NUMBER(label, field)                                    \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
+        if (!numeric.has_value()) {                                                    \
+            return Status(ErrorCode::invalid_argument,                                 \
+                          "M11 policy lever requires a numeric value");                \
+        }                                                                              \
         external.field = *numeric;                                                     \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_EXTERNAL_NULLABLE_NUMBER(label, field)                           \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         if (std::holds_alternative<std::monostate>(value)) {                           \
             external.field.reset();                                                    \
-        } else {                                                                       \
-            external.field = *numeric;                                                 \
+            return Status::success();                                                  \
         }                                                                              \
+        if (!numeric.has_value()) {                                                    \
+            return Status(ErrorCode::invalid_argument,                                 \
+                          "M11 policy lever requires a numeric value");                \
+        }                                                                              \
+        external.field = numeric;                                                      \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_EXTERNAL_INTEGER(label, field)                                   \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         external.field =                                                               \
             static_cast<decltype(external.field)>(std::get<std::int64_t>(value));      \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_EXTERNAL_BOOLEAN(label, field)                                   \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         external.field = std::get<bool>(value);                                        \
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_EXTERNAL_CHOICE(label, field)
 #define MACRO_SIM_M11_EXTERNAL_ECONOMY_ID(label, field)                                \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         if (std::holds_alternative<std::monostate>(value)) {                           \
             external.field.reset();                                                    \
         } else {                                                                       \
@@ -216,7 +260,7 @@ read_policy_value(const simulation::DomesticPolicyState &domestic,
         return Status::success();                                                      \
     }
 #define MACRO_SIM_M11_EXTERNAL_ECONOMY_SET(label, field)                               \
-    if (name == label) {                                                               \
+    if (name == (label)) {                                                             \
         external.field = std::get<PolicyEconomySet>(value);                            \
         return Status::success();                                                      \
     }
@@ -379,8 +423,8 @@ Status validate_m11_policy_value(const PolicyLeverDescriptor &lever,
                           "M11 numeric policy value is outside its contract");
         }
         if (lever.kind == PolicyValueKind::integer) {
-            const auto integer = std::get<std::int64_t>(value);
-            if (static_cast<double>(integer) != *numeric) {
+            const auto *integer = std::get_if<std::int64_t>(&value);
+            if (integer == nullptr || static_cast<double>(*integer) != *numeric) {
                 return Status(ErrorCode::out_of_range,
                               "M11 integer policy value loses precision");
             }
@@ -412,7 +456,7 @@ project_m11_policy_actions(const simulation::M9World &world,
         if (!policy.ok()) {
             return policy.status();
         }
-        batch.domestic.push_back(std::move(*policy.get_if()));
+        batch.domestic.push_back(*policy.get_if());
     }
     auto ordered = std::vector<NativePolicyAction>(actions.begin(), actions.end());
     std::sort(ordered.begin(), ordered.end(),
@@ -490,7 +534,7 @@ project_m11_policy_actions(const simulation::M9World &world,
 bool m11_policy_values_equal(const PolicyValue &left,
                              const PolicyValue &right) noexcept {
     if (left.index() == right.index()) {
-        return left == right;
+        return same_alternative_equal(left, right);
     }
     const auto left_number = number_value(left);
     const auto right_number = number_value(right);

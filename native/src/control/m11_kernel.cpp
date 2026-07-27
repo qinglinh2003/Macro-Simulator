@@ -16,7 +16,7 @@ namespace {
 
 constexpr std::size_t kMaximumStableIdBytes = 128U;
 constexpr std::size_t kMaximumActorBytes = 256U;
-constexpr std::size_t kMaximumEventPayloadBytes = 4U * 1024U * 1024U;
+constexpr std::size_t kMaximumEventPayloadBytes = std::size_t{4} * 1024U * 1024U;
 
 [[nodiscard]] bool valid_stable_id(std::string_view value) noexcept {
     if (value.empty() || value.size() > kMaximumStableIdBytes) {

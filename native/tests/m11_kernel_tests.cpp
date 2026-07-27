@@ -104,6 +104,7 @@ void test_costs() {
     }};
     auto cost = macro_sim::control::m11_adjustment_cost(spec, changes, false);
     assert(cost.ok());
+    assert(lever->control_scale.has_value());
     const auto distance = 0.05 / *lever->control_scale;
     const auto expected = spec.major.fixed + spec.major.linear * distance +
                           spec.major.quadratic * distance * distance;

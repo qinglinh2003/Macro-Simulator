@@ -310,9 +310,15 @@ project_timeline_before(const simulation::M9World &world,
               });
     std::size_t cursor = 0U;
     while (cursor < timeline.size()) {
-        const auto group_tick = timeline[cursor]->decision.effective_at->value();
+        const auto &group_effective = timeline[cursor]->decision.effective_at;
+        if (!group_effective.has_value()) {
+            return Status(ErrorCode::internal_error,
+                          "M11 pending decision lost its effective tick");
+        }
+        const auto group_tick = group_effective->value();
         std::vector<NativePolicyAction> actions;
         while (cursor < timeline.size() &&
+               timeline[cursor]->decision.effective_at.has_value() &&
                timeline[cursor]->decision.effective_at->value() == group_tick) {
             actions.insert(actions.end(), timeline[cursor]->proposal.actions.begin(),
                            timeline[cursor]->proposal.actions.end());
@@ -475,6 +481,8 @@ changed_actions(const simulation::M9World &world,
                                        const M11PolicyProposal &right) {
     std::vector<std::string_view> left_names;
     std::vector<std::string_view> right_names;
+    left_names.reserve(left.actions.size());
+    right_names.reserve(right.actions.size());
     for (const auto &action : left.actions) {
         left_names.push_back(action.lever);
     }
@@ -701,7 +709,7 @@ M11PolicyCoordinator::create(const simulation::M9World &world,
         return Status(ErrorCode::invalid_argument,
                       "M11 coordinator requires an economy");
     }
-    M11PolicyCoordinator result(std::move(cost_spec));
+    M11PolicyCoordinator result(cost_spec);
     const auto levers = m11_policy_levers();
     result.policy_versions_.reserve(world.economy_count() * levers.size());
     for (std::size_t economy = 0U; economy < world.economy_count(); ++economy) {

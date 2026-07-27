@@ -1202,10 +1202,9 @@ Result<M11DecisionResult> M11ControlledSession::run_boundary_prelude() {
                                             : M11BoundaryPhase::ready_to_commit;
     result.phase = next.phase;
     result.awaiting_human = next.phase == M11BoundaryPhase::awaiting_human;
-    auto synchronized =
-        synchronize_state("m11-prelude:" + std::to_string(boundary.value()) + ":" +
-                              std::to_string(next.boundary_sequence),
-                          std::move(next));
+    auto operation_id = "m11-prelude:" + std::to_string(boundary.value()) + ":" +
+                        std::to_string(next.boundary_sequence);
+    auto synchronized = synchronize_state(std::move(operation_id), std::move(next));
     if (!synchronized.ok()) {
         return synchronized;
     }

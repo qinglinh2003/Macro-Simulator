@@ -53,8 +53,8 @@ using Json = nlohmann::json;
 constexpr std::uint32_t kLocalHeader = 0x04034b50U;
 constexpr std::uint32_t kCentralHeader = 0x02014b50U;
 constexpr std::uint32_t kEndHeader = 0x06054b50U;
-constexpr std::size_t kMaximumWeightsBytes = 1024U * 1024U * 1024U;
-constexpr std::size_t kMaximumTotalParameterBytes = 1024U * 1024U * 1024U;
+constexpr std::size_t kMaximumWeightsBytes = std::size_t{1024} * 1024U * 1024U;
+constexpr std::size_t kMaximumTotalParameterBytes = std::size_t{1024} * 1024U * 1024U;
 
 struct ZipMember final {
     std::string name;

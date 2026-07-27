@@ -12,8 +12,9 @@
 namespace macro_sim::desktop {
 
 inline constexpr std::uint32_t kM11DesktopProtocolVersion = 5U;
-inline constexpr std::size_t kM11MaximumProtocolFrameBytes = 1024U * 1024U;
-inline constexpr std::size_t kM11MaximumProtocolResponseBytes = 4U * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumProtocolFrameBytes = std::size_t{1024} * 1024U;
+inline constexpr std::size_t kM11MaximumProtocolResponseBytes =
+    std::size_t{4} * 1024U * 1024U;
 inline constexpr std::size_t kM11MaximumProtocolReceipts = 1024U;
 inline constexpr std::size_t kM11MaximumSnapshotCacheEntries = 32U;
 

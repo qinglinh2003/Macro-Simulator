@@ -397,9 +397,7 @@ void terminate_process(pid_t process) {
     return 1;
 }
 
-} // namespace
-
-int main(int argument_count, char **arguments) {
+[[nodiscard]] int run_launcher(int argument_count, char **arguments) {
     (void)::umask(static_cast<mode_t>(0077));
     (void)std::signal(SIGINT, record_shutdown_signal);
     (void)std::signal(SIGTERM, record_shutdown_signal);
@@ -542,4 +540,15 @@ int main(int argument_count, char **arguments) {
         return 1;
     }
     return exit_code(game_status);
+}
+
+} // namespace
+
+int main(int argument_count, char **arguments) {
+    try {
+        return run_launcher(argument_count, arguments);
+    } catch (...) {
+        std::cerr << "The desktop launcher failed unexpectedly.\n";
+        return 1;
+    }
 }

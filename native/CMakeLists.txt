@@ -69,7 +69,9 @@ function(macro_sim_project_options target)
             target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
             target_link_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
         elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            target_compile_options(${target} PRIVATE --coverage)
+            # Counters are shared by parallel ctest workers, so non-atomic
+            # updates race and emit negative counts during lcov capture.
+            target_compile_options(${target} PRIVATE --coverage -fprofile-update=atomic)
             target_link_options(${target} PRIVATE --coverage)
         else()
             message(FATAL_ERROR "Coverage is unsupported for ${CMAKE_CXX_COMPILER_ID}")

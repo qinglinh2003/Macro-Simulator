@@ -37,7 +37,7 @@ using namespace macro_sim::simulation;
     economy.energy_rules.producer_count = 1U;
     economy.housing_rules.enabled = false;
     M9WorldSpec spec;
-    spec.economies.push_back(std::move(economy));
+    spec.economies.push_back(economy);
     spec.external_policies.resize(1U);
     auto result = M9World::create(spec);
     assert(result.ok());

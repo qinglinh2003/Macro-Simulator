@@ -41,7 +41,7 @@ using control::M11FrontendSnapshot;
 inline constexpr std::array<std::uint8_t, 8> kSaveMagic{'M', 'S', 'D', 'T',
                                                         'P', '0', '1', '1'};
 inline constexpr std::uint32_t kSaveSchemaVersion = 1U;
-inline constexpr std::size_t kMaximumSaveMetadataBytes = 1024U * 1024U;
+inline constexpr std::size_t kMaximumSaveMetadataBytes = std::size_t{1024} * 1024U;
 inline constexpr std::uint64_t kMaximumSaveArchiveBytes =
     2ULL * 1024ULL * 1024ULL * 1024ULL;
 
@@ -1026,7 +1026,7 @@ void write_file(const std::filesystem::path &path,
     if (!stream) {
         throw ProtocolFault{"io_error", "The save file could not be opened.", false};
     }
-    constexpr std::size_t maximum_chunk = 16U * 1024U * 1024U;
+    constexpr std::size_t maximum_chunk = std::size_t{16} * 1024U * 1024U;
     std::size_t offset = 0U;
     while (offset < bytes.size()) {
         const auto count = std::min(maximum_chunk, bytes.size() - offset);
@@ -1055,7 +1055,7 @@ void write_file(const std::filesystem::path &path,
     if (!stream) {
         throw ProtocolFault{"not_found", "The save slot does not exist.", false};
     }
-    constexpr std::size_t maximum_chunk = 16U * 1024U * 1024U;
+    constexpr std::size_t maximum_chunk = std::size_t{16} * 1024U * 1024U;
     std::size_t offset = 0U;
     while (offset < bytes.size()) {
         const auto count = std::min(maximum_chunk, bytes.size() - offset);
@@ -1456,7 +1456,7 @@ struct M11ProtocolWorker::Impl final {
             }
             proposal.actions.push_back({
                 EconomyId(economy),
-                std::move(lever_name),
+                lever_name,
                 std::move(*value.get_if()),
             });
         }
@@ -1830,6 +1830,10 @@ struct M11ProtocolWorker::Impl final {
         if (!checkpoint.ok()) {
             throw status_fault(checkpoint.status());
         }
+        if (!new_game.has_value()) {
+            throw ProtocolFault{"no_session", "No simulation session is active.",
+                                false};
+        }
         auto archive =
             make_desktop_save(*new_game, owner_connection, *checkpoint.get_if());
         const auto temporary =
@@ -2096,14 +2100,13 @@ struct M11ProtocolWorker::Impl final {
             if (!assigned.ok()) {
                 throw status_fault(assigned.status());
             }
+            const auto &archived = assigned.get_if()->archived_occupant_id;
             return {
                 {"assigned", true},
                 {"economy_id", *economy},
                 {"seat", *seat},
                 {"archived_occupant_id",
-                 assigned.get_if()->archived_occupant_id.has_value()
-                     ? Json(*assigned.get_if()->archived_occupant_id)
-                     : Json(nullptr)},
+                 archived.has_value() ? Json(*archived) : Json(nullptr)},
                 {"repeated", assigned.get_if()->repeated},
             };
         }
@@ -2134,14 +2137,13 @@ struct M11ProtocolWorker::Impl final {
             if (!restored.ok()) {
                 throw status_fault(restored.status());
             }
+            const auto &archived = restored.get_if()->archived_occupant_id;
             return {
                 {"restored", true},
                 {"economy_id", *economy},
                 {"seat", *seat},
                 {"archived_occupant_id",
-                 restored.get_if()->archived_occupant_id.has_value()
-                     ? Json(*restored.get_if()->archived_occupant_id)
-                     : Json(nullptr)},
+                 archived.has_value() ? Json(*archived) : Json(nullptr)},
                 {"repeated", restored.get_if()->repeated},
             };
         }

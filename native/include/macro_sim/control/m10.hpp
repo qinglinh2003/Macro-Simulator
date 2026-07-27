@@ -19,7 +19,7 @@
 namespace macro_sim::control {
 
 inline constexpr std::size_t kM10MaximumControllerEnvelopeBytes =
-    16U * 1024U * 1024U;
+    std::size_t{16} * 1024U * 1024U;
 inline constexpr std::size_t kM10MaximumOperationIdBytes = 128U;
 inline constexpr std::size_t kM10MaximumUnacknowledgedReceipts = 1024U;
 

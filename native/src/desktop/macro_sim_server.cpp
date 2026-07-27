@@ -39,8 +39,8 @@ using macro_sim::desktop::kM11MaximumProtocolFrameBytes;
 using macro_sim::desktop::M11ProtocolOptions;
 using macro_sim::desktop::M11ProtocolWorker;
 
-inline constexpr std::size_t kMaximumBootstrapBytes = 64U * 1024U;
-inline constexpr std::size_t kSocketChunkBytes = 64U * 1024U;
+inline constexpr std::size_t kMaximumBootstrapBytes = std::size_t{64} * 1024U;
+inline constexpr std::size_t kSocketChunkBytes = std::size_t{64} * 1024U;
 
 volatile std::sig_atomic_t stop_requested = 0;
 
@@ -229,8 +229,10 @@ load_bootstrap(const std::filesystem::path &path) {
     std::size_t offset = 0U;
     while (offset < bytes.size()) {
         const auto remaining = bytes.size() - offset;
+        // Windows headers define a max() macro; the parenthesized call keeps
+        // this translation unit portable across MSVC and POSIX toolchains.
         const auto count = std::min<std::size_t>(
-            remaining, static_cast<std::size_t>(std::numeric_limits<int>::max()));
+            remaining, static_cast<std::size_t>((std::numeric_limits<int>::max)()));
 #if defined(_WIN32)
         const auto sent =
             ::send(socket, bytes.data() + offset, static_cast<int>(count), 0);
@@ -412,18 +414,28 @@ load_bootstrap(const std::filesystem::path &path) {
 
 #if defined(_WIN32)
 int wmain(int argc, wchar_t **argv) {
-    if (argc != 3 || std::wstring_view(argv[1]) != L"--bootstrap") {
-        std::cerr << "Usage: macro_sim_server --bootstrap <absolute-path>\n";
+    try {
+        if (argc != 3 || std::wstring_view(argv[1]) != L"--bootstrap") {
+            std::cerr << "Usage: macro_sim_server --bootstrap <absolute-path>\n";
+            return 1;
+        }
+        return run(std::filesystem::path(argv[2]));
+    } catch (...) {
+        std::cerr << "The native worker failed unexpectedly.\n";
         return 1;
     }
-    return run(std::filesystem::path(argv[2]));
 }
 #else
 int main(int argc, char **argv) {
-    if (argc != 3 || std::string_view(argv[1]) != "--bootstrap") {
-        std::cerr << "Usage: macro_sim_server --bootstrap <absolute-path>\n";
+    try {
+        if (argc != 3 || std::string_view(argv[1]) != "--bootstrap") {
+            std::cerr << "Usage: macro_sim_server --bootstrap <absolute-path>\n";
+            return 1;
+        }
+        return run(std::filesystem::path(argv[2]));
+    } catch (...) {
+        std::cerr << "The native worker failed unexpectedly.\n";
         return 1;
     }
-    return run(std::filesystem::path(argv[2]));
 }
 #endif

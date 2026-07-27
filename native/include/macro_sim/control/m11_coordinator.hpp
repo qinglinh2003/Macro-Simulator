@@ -232,7 +232,7 @@ class M11PolicyCoordinator final {
 
   private:
     explicit M11PolicyCoordinator(M11AdjustmentCostSpec cost_spec)
-        : cost_spec_(std::move(cost_spec)) {}
+        : cost_spec_(cost_spec) {}
 
     [[nodiscard]] M11PolicyVersion *
     mutable_policy_version(EconomyId economy, std::string_view lever) noexcept;

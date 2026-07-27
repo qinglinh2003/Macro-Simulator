@@ -651,7 +651,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
         population.population.initial_persons = population_count;
         real.settlement_banks = monetary.rules.bank_count;
         result.countries.push_back(std::move(metadata));
-        result.world.economies.push_back(std::move(economy));
+        result.world.economies.push_back(economy);
         result.world.external_policies.emplace_back();
     }
 
@@ -768,7 +768,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
 } // namespace
 
 Result<M11NativeNewGame> parse_m11_native_new_game(std::string_view json_document) {
-    if (json_document.empty() || json_document.size() > 1024U * 1024U) {
+    if (json_document.empty() || json_document.size() > std::size_t{1024} * 1024U) {
         return Status(ErrorCode::out_of_range, "new-game document size is invalid");
     }
     try {

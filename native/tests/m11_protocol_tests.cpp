@@ -414,13 +414,17 @@ void test_save_load_is_sandboxed_atomic_and_verified() {
 } // namespace
 
 int main() {
-    test_authentication_framing_and_sequence();
-    test_frame_and_response_boundaries();
-    test_session_owner_snapshot_and_delta();
-    test_human_advance_pauses_without_consuming_time();
-    test_control_commands_are_role_scoped_and_idempotent();
-    test_entity_pages_and_details_preserve_links();
-    test_seat_restore_and_audit_event_replay();
-    test_save_load_is_sandboxed_atomic_and_verified();
+    try {
+        test_authentication_framing_and_sequence();
+        test_frame_and_response_boundaries();
+        test_session_owner_snapshot_and_delta();
+        test_human_advance_pauses_without_consuming_time();
+        test_control_commands_are_role_scoped_and_idempotent();
+        test_entity_pages_and_details_preserve_links();
+        test_seat_restore_and_audit_event_replay();
+        test_save_load_is_sandboxed_atomic_and_verified();
+    } catch (...) {
+        return 1;
+    }
     return 0;
 }

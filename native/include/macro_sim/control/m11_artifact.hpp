@@ -15,9 +15,11 @@ namespace macro_sim::control {
 
 struct NativePolicyArtifactBuilder;
 
-inline constexpr std::size_t kM11MaximumArtifactBytes = 1024U * 1024U * 1024U;
-inline constexpr std::size_t kM11MaximumManifestBytes = 4U * 1024U * 1024U;
-inline constexpr std::size_t kM11MaximumParameterBytes = 512U * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumArtifactBytes =
+    std::size_t{1024} * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumManifestBytes = std::size_t{4} * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumParameterBytes =
+    std::size_t{512} * 1024U * 1024U;
 
 struct NativePolicyArtifactInfo final {
     std::string inference_capability{"msrl_v1_deterministic_inference"};
