@@ -140,6 +140,17 @@ try {
     New-Item -ItemType Directory -Force -Path $LicenseRoot | Out-Null
     Copy-Item $LauncherBinary (Join-Path $StagingBundle "Macro Command.exe")
     Copy-Item $ServerBinary (Join-Path $NativeResourceRoot "macro_sim_server.exe")
+    # Windows resolves dependent libraries next to the executable, so the
+    # runtime libraries staged beside the build output must travel with both
+    # the launcher and the worker or the worker never becomes ready.
+    $RuntimeLibraries = @(
+        Get-ChildItem -Path $NativeRoot -Filter *.dll -File -ErrorAction SilentlyContinue
+    )
+    foreach ($Library in $RuntimeLibraries) {
+        Write-Host "Staging runtime library: $($Library.Name)"
+        Copy-Item $Library.FullName (Join-Path $StagingBundle $Library.Name)
+        Copy-Item $Library.FullName (Join-Path $NativeResourceRoot $Library.Name)
+    }
     Copy-Item `
         (Join-Path $RepositoryRoot "macro_sim/rl/artifacts/fiscal_stabilization_v1.msrl") `
         (Join-Path $ArtifactRoot "fiscal_stabilization_v1.msrl")
