@@ -205,6 +205,33 @@ void test_scheduled_policy_reaches_effective_world() {
             accepted->decision_id);
     assert(decision != nullptr);
     assert(decision->status == M11DecisionStatus::effective);
+    auto replayed =
+        replay_m11_decisions(
+            session.get_if()->events().events());
+    assert(replayed.ok());
+    assert(*replayed.get_if() ==
+           std::vector<M11PolicyDecision>(
+               session.get_if()
+                   ->coordinator()
+                   .decisions()
+                   .begin(),
+               session.get_if()
+                   ->coordinator()
+                   .decisions()
+                   .end()));
+    std::vector<M11ControllerEvent> corrupt(
+        session.get_if()->events().events().begin(),
+        session.get_if()->events().events().end());
+    const auto derived = std::find_if(
+        corrupt.begin(), corrupt.end(),
+        [](const M11ControllerEvent &event) {
+            return event.event_type == "decision_accepted" ||
+                   event.event_type ==
+                       "decision_accepted_noop";
+        });
+    assert(derived != corrupt.end());
+    derived->canonical_payload.push_back(' ');
+    assert(!replay_m11_decisions(corrupt).ok());
 }
 
 void test_native_rl_occupant_runs_without_python() {
@@ -239,6 +266,20 @@ void test_native_rl_occupant_runs_without_python() {
                    decision.status ==
                        M11DecisionStatus::accepted_pending;
         }));
+    auto replayed =
+        replay_m11_decisions(
+            session.get_if()->events().events());
+    assert(replayed.ok());
+    assert(*replayed.get_if() ==
+           std::vector<M11PolicyDecision>(
+               session.get_if()
+                   ->coordinator()
+                   .decisions()
+                   .begin(),
+               session.get_if()
+                   ->coordinator()
+                   .decisions()
+                   .end()));
 }
 
 void test_checkpoint_restores_pending_execution_exactly() {

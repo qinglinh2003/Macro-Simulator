@@ -154,6 +154,9 @@ struct M11DuePlan final {
 
 [[nodiscard]] std::string_view
 m11_decision_status_name(M11DecisionStatus status) noexcept;
+[[nodiscard]] Result<std::vector<M11PolicyDecision>>
+replay_m11_decisions(
+    std::span<const M11ControllerEvent> events);
 [[nodiscard]] bool m11_world_capability(
     const simulation::M9World &world, EconomyId economy,
     std::string_view capability) noexcept;

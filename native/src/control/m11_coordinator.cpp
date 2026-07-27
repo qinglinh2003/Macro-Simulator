@@ -1,6 +1,7 @@
 #include "macro_sim/control/m11_coordinator.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -10,16 +11,21 @@
 #include <optional>
 #include <sstream>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "macro_sim/simulation/m4.hpp"
 
 namespace macro_sim::control {
 namespace {
+
+using Json = nlohmann::json;
 
 constexpr double kBudgetTolerance = 1.0e-12;
 constexpr std::size_t kMaximumIdentifierBytes = 128U;
@@ -443,6 +449,103 @@ proposal_hash(const M11PolicyProposal &proposal) {
     return result;
 }
 
+[[nodiscard]] std::string decision_event_payload(
+    const M11PolicyDecision &decision) {
+    return Json{
+        {"accepted_at",
+         decision.accepted_at.has_value()
+             ? Json(decision.accepted_at->value())
+             : Json(nullptr)},
+        {"accepted_sequence", decision.accepted_sequence},
+        {"adjustment_cost_bits",
+         std::bit_cast<std::uint64_t>(
+             decision.adjustment_cost)},
+        {"decision_id", decision.decision_id},
+        {"effective_at",
+         decision.effective_at.has_value()
+             ? Json(decision.effective_at->value())
+             : Json(nullptr)},
+        {"proposal_id", decision.proposal_id},
+        {"reason_code", decision.reason_code},
+        {"reserved_administrative_cost_bits",
+         std::bit_cast<std::uint64_t>(
+             decision.reserved_administrative_cost)},
+        {"schema_version", 1U},
+        {"status", static_cast<std::uint8_t>(decision.status)},
+    }.dump();
+}
+
+[[nodiscard]] M11PolicyDecision
+decision_from_event_payload(std::string_view payload) {
+    const auto value = Json::parse(payload);
+    static constexpr std::array<std::string_view, 10U> keys{
+        "accepted_at",
+        "accepted_sequence",
+        "adjustment_cost_bits",
+        "decision_id",
+        "effective_at",
+        "proposal_id",
+        "reason_code",
+        "reserved_administrative_cost_bits",
+        "schema_version",
+        "status",
+    };
+    if (!value.is_object() || value.size() != keys.size() ||
+        std::any_of(
+            keys.begin(), keys.end(),
+            [&](std::string_view key) {
+                return !value.contains(key);
+            }) ||
+        value.at("schema_version").get<std::uint32_t>() !=
+            1U) {
+        throw std::runtime_error(
+            "decision replay payload schema differs");
+    }
+    const auto status =
+        value.at("status").get<std::uint8_t>();
+    if (status >
+        static_cast<std::uint8_t>(
+            M11DecisionStatus::failed_at_execution)) {
+        throw std::runtime_error(
+            "decision replay status differs");
+    }
+    const auto optional_tick_from =
+        [](const Json &entry) -> std::optional<Tick> {
+        return entry.is_null()
+                   ? std::optional<Tick>{}
+                   : std::optional<Tick>(
+                         Tick(entry.get<std::uint64_t>()));
+    };
+    M11PolicyDecision result{
+        value.at("decision_id").get<std::string>(),
+        value.at("proposal_id").get<std::string>(),
+        static_cast<M11DecisionStatus>(status),
+        value.at("reason_code").get<std::string>(),
+        optional_tick_from(value.at("accepted_at")),
+        optional_tick_from(value.at("effective_at")),
+        value.at("accepted_sequence").get<std::uint64_t>(),
+        std::bit_cast<double>(
+            value.at("reserved_administrative_cost_bits")
+                .get<std::uint64_t>()),
+        std::bit_cast<double>(
+            value.at("adjustment_cost_bits")
+                .get<std::uint64_t>()),
+    };
+    if (!valid_identifier(result.decision_id) ||
+        !valid_identifier(result.proposal_id) ||
+        result.reason_code.size() > kMaximumReasonBytes ||
+        result.reason_code.find('\0') != std::string::npos ||
+        !std::isfinite(
+            result.reserved_administrative_cost) ||
+        !std::isfinite(result.adjustment_cost) ||
+        result.reserved_administrative_cost < 0.0 ||
+        result.adjustment_cost < 0.0) {
+        throw std::runtime_error(
+            "decision replay payload is invalid");
+    }
+    return result;
+}
+
 [[nodiscard]] bool same_touched_levers(
     const M11PolicyProposal &left,
     const M11PolicyProposal &right) {
@@ -509,6 +612,131 @@ std::string_view m11_decision_status_name(
             return "failed_at_execution";
     }
     return "unknown";
+}
+
+Result<std::vector<M11PolicyDecision>>
+replay_m11_decisions(
+    std::span<const M11ControllerEvent> events) {
+    if (events.size() > kM11MaximumControllerEvents) {
+        return Status(
+            ErrorCode::out_of_range,
+            "M11 decision replay event stream is oversized");
+    }
+    try {
+        std::vector<M11ControllerEvent> copy(
+            events.begin(), events.end());
+        M11EventStream validated(
+            kM11MaximumControllerEvents);
+        const core::StateDigest head =
+            copy.empty() ? core::StateDigest{}
+                         : copy.back().hash;
+        const auto validation = validated.restore(
+            std::move(copy), events.size(), head);
+        if (!validation.ok()) {
+            return validation;
+        }
+
+        std::vector<M11PolicyDecision> decisions;
+        for (const auto &event : events) {
+            const bool initial =
+                event.event_type == "decision_rejected" ||
+                event.event_type ==
+                    "decision_accepted_noop" ||
+                event.event_type == "decision_accepted";
+            const bool transition =
+                event.event_type == "decision_superseded" ||
+                event.event_type == "decision_cancelled" ||
+                event.event_type ==
+                    "decision_failed_at_execution" ||
+                event.event_type == "decision_effective";
+            if (!initial && !transition) {
+                continue;
+            }
+            auto decision = decision_from_event_payload(
+                event.canonical_payload);
+            const auto expected_status =
+                event.event_type == "decision_rejected"
+                    ? M11DecisionStatus::rejected
+                : event.event_type ==
+                          "decision_accepted_noop"
+                    ? M11DecisionStatus::accepted_noop
+                : event.event_type == "decision_accepted"
+                    ? M11DecisionStatus::accepted_pending
+                : event.event_type == "decision_superseded"
+                    ? M11DecisionStatus::superseded
+                : event.event_type == "decision_cancelled"
+                    ? M11DecisionStatus::cancelled
+                : event.event_type ==
+                          "decision_failed_at_execution"
+                    ? M11DecisionStatus::
+                          failed_at_execution
+                    : M11DecisionStatus::effective;
+            if (decision.status != expected_status) {
+                return Status(
+                    ErrorCode::corrupt_input,
+                    "M11 replay event status differs");
+            }
+            const auto found = std::find_if(
+                decisions.begin(), decisions.end(),
+                [&](const M11PolicyDecision &entry) {
+                    return entry.decision_id ==
+                           decision.decision_id;
+                });
+            if (initial) {
+                if (found != decisions.end()) {
+                    return Status(
+                        ErrorCode::corrupt_input,
+                        "M11 replay decision is duplicated");
+                }
+                decisions.push_back(std::move(decision));
+                continue;
+            }
+            if (found == decisions.end() ||
+                found->status !=
+                    M11DecisionStatus::accepted_pending ||
+                found->proposal_id != decision.proposal_id ||
+                found->accepted_at != decision.accepted_at ||
+                found->effective_at != decision.effective_at ||
+                found->accepted_sequence !=
+                    decision.accepted_sequence ||
+                found->reserved_administrative_cost !=
+                    decision.reserved_administrative_cost ||
+                found->adjustment_cost !=
+                    decision.adjustment_cost) {
+                return Status(
+                    ErrorCode::corrupt_input,
+                    "M11 replay decision transition differs");
+            }
+            *found = std::move(decision);
+        }
+        std::sort(
+            decisions.begin(), decisions.end(),
+            [](const M11PolicyDecision &left,
+               const M11PolicyDecision &right) {
+                return left.accepted_sequence <
+                       right.accepted_sequence;
+            });
+        if (std::adjacent_find(
+                decisions.begin(), decisions.end(),
+                [](const M11PolicyDecision &left,
+                   const M11PolicyDecision &right) {
+                    return left.accepted_sequence ==
+                           right.accepted_sequence;
+                }) != decisions.end()) {
+            return Status(
+                ErrorCode::corrupt_input,
+                "M11 replay decision sequence is duplicated");
+        }
+        return decisions;
+    } catch (const std::bad_alloc &) {
+        return Status(
+            ErrorCode::allocation_failure,
+            "M11 decision replay allocation failed");
+    } catch (const std::exception &) {
+        return Status(
+            ErrorCode::corrupt_input,
+            "M11 decision replay payload is invalid");
+    }
 }
 
 bool m11_world_capability(const simulation::M9World &world,
@@ -1070,9 +1298,7 @@ Result<M11PolicyDecision> M11PolicyCoordinator::submit(
         auto rejected = staged_events.append(
             boundary, "decision_rejected", proposal.idempotency_key,
             "coordinator",
-            event_payload("decision_id",
-                          decision.get_if()->decision_id,
-                          decision.get_if()->reason_code),
+            decision_event_payload(*decision.get_if()),
             M11EventVisibility::institution);
         if (!rejected.ok()) {
             return rejected.status();
@@ -1311,7 +1537,7 @@ Result<M11PolicyDecision> M11PolicyCoordinator::submit(
         auto accepted = staged_events.append(
             boundary, "decision_accepted_noop",
             proposal.idempotency_key, "coordinator",
-            event_payload("decision_id", decision.decision_id),
+            decision_event_payload(decision),
             M11EventVisibility::institution);
         if (!accepted.ok()) {
             return accepted.status();
@@ -1366,8 +1592,7 @@ Result<M11PolicyDecision> M11PolicyCoordinator::submit(
         auto superseded_event = staged_events.append(
             boundary, "decision_superseded",
             proposal.idempotency_key, "coordinator",
-            event_payload("decision_id",
-                          superseded->decision.decision_id),
+            decision_event_payload(superseded->decision),
             M11EventVisibility::institution);
         if (!superseded_event.ok()) {
             return superseded_event.status();
@@ -1410,7 +1635,7 @@ Result<M11PolicyDecision> M11PolicyCoordinator::submit(
     auto accepted = staged_events.append(
         boundary, "decision_accepted",
         proposal.idempotency_key, "coordinator",
-        event_payload("decision_id", decision.decision_id),
+        decision_event_payload(decision),
         M11EventVisibility::institution);
     if (!accepted.ok()) {
         return accepted.status();
@@ -1479,7 +1704,7 @@ Result<M11PolicyDecision> M11PolicyCoordinator::cancel(
     auto derived = staged_events.append(
         boundary, "decision_cancelled",
         std::string(operation_id), "coordinator",
-        event_payload("decision_id", decision_id),
+        decision_event_payload(pending->decision),
         M11EventVisibility::institution);
     if (!derived.ok()) {
         return derived.status();
@@ -1685,8 +1910,7 @@ Status M11PolicyCoordinator::commit_due(
         auto event = staged_events.append(
             plan.boundary, "decision_failed_at_execution",
             decision_id, "policy_executor",
-            event_payload("decision_id", decision_id,
-                          pending->decision.reason_code),
+            decision_event_payload(pending->decision),
             M11EventVisibility::institution);
         if (!event.ok()) {
             return event.status();
@@ -1718,6 +1942,14 @@ Status M11PolicyCoordinator::commit_due(
                 budget->reserved -
                     pending->decision
                         .reserved_administrative_cost);
+        }
+        auto event = staged_events.append(
+            plan.boundary, "decision_effective",
+            decision_id, "policy_executor",
+            decision_event_payload(pending->decision),
+            M11EventVisibility::institution);
+        if (!event.ok()) {
+            return event.status();
         }
     }
     for (const auto &change : plan.effective_changes) {
