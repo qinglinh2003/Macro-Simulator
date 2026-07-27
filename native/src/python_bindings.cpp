@@ -343,8 +343,8 @@ nb::dict equity_probe_to_python(
         item["issuer_kind"] =
             static_cast<std::uint8_t>(row.issuer_kind);
         item["issuer_owner_kind"] =
-            static_cast<std::uint8_t>(row.issuer.kind);
-        item["issuer_id"] = row.issuer.value;
+            static_cast<std::uint8_t>(row.issuer.kind());
+        item["issuer_id"] = row.issuer.value();
         item["issuer_account_id"] = row.issuer_account.value();
         item["currency_id"] = row.currency.value();
         item["outstanding_shares"] = row.outstanding_shares;
@@ -500,8 +500,8 @@ nb::dict snapshot_to_python(const macro_sim::core::RootState &state) {
         nb::dict item;
         item["id"] = account.id.value();
         item["kind"] = static_cast<std::uint8_t>(account.key.kind);
-        item["owner_kind"] = static_cast<std::uint8_t>(account.key.owner.kind);
-        item["owner_id"] = static_cast<std::uint32_t>(account.key.owner.value);
+        item["owner_kind"] = static_cast<std::uint8_t>(account.key.owner.kind());
+        item["owner_id"] = account.key.owner.value();
         item["settlement_node"] = account.key.settlement_node.value();
         item["balance"] = account.balance.value();
         item["open"] = account.open;
@@ -520,8 +520,8 @@ nb::dict snapshot_to_python(const macro_sim::core::RootState &state) {
         nb::dict item;
         item["id"] = loan.id.value();
         item["lender"] = loan.lender.value();
-        item["borrower_kind"] = static_cast<std::uint8_t>(loan.borrower.kind);
-        item["borrower_id"] = static_cast<std::uint32_t>(loan.borrower.value);
+        item["borrower_kind"] = static_cast<std::uint8_t>(loan.borrower.kind());
+        item["borrower_id"] = loan.borrower.value();
         item["borrower_account"] = loan.borrower_account.value();
         item["principal"] = loan.principal.value();
         item["active"] = loan.active;
@@ -1233,8 +1233,8 @@ nb::dict m8_snapshot_to_python(const macro_sim::EngineSession &session) {
     for (const auto &row : runtime->properties.records()) {
         nb::dict item;
         item["id"] = row.id.value();
-        item["owner_kind"] = static_cast<std::uint8_t>(row.owner.kind);
-        item["owner_id"] = static_cast<std::uint32_t>(row.owner.value);
+        item["owner_kind"] = static_cast<std::uint8_t>(row.owner.kind());
+        item["owner_id"] = row.owner.value();
         item["occupant_household_id"] = row.occupant.value();
         item["collateral_loan_id"] = row.collateral.value();
         item["minted_tick"] = row.minted_tick.value();
@@ -1253,11 +1253,12 @@ nb::dict m8_snapshot_to_python(const macro_sim::EngineSession &session) {
         item["dwelling_id"] = row.dwelling.value();
         item["kind"] = static_cast<std::uint8_t>(row.kind);
         item["previous_owner_kind"] =
-            static_cast<std::uint8_t>(row.previous_owner.kind);
+            static_cast<std::uint8_t>(row.previous_owner.kind());
         item["previous_owner_id"] =
-            static_cast<std::uint32_t>(row.previous_owner.value);
-        item["next_owner_kind"] = static_cast<std::uint8_t>(row.next_owner.kind);
-        item["next_owner_id"] = static_cast<std::uint32_t>(row.next_owner.value);
+            row.previous_owner.value();
+        item["next_owner_kind"] =
+            static_cast<std::uint8_t>(row.next_owner.kind());
+        item["next_owner_id"] = row.next_owner.value();
         item["tick"] = row.tick.value();
         title_events.append(std::move(item));
     }
@@ -1265,8 +1266,8 @@ nb::dict m8_snapshot_to_python(const macro_sim::EngineSession &session) {
     for (const auto &row : runtime->housing_listings) {
         nb::dict item;
         item["dwelling_id"] = row.dwelling.value();
-        item["seller_kind"] = static_cast<std::uint8_t>(row.seller.kind);
-        item["seller_id"] = static_cast<std::uint32_t>(row.seller.value);
+        item["seller_kind"] = static_cast<std::uint8_t>(row.seller.kind());
+        item["seller_id"] = row.seller.value();
         item["asking_price"] = row.asking_price;
         item["listed_tick"] = row.listed_tick.value();
         item["forced"] = row.forced;
@@ -1345,8 +1346,8 @@ nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
     for (const auto &row : runtime->securities.bonds()) {
         nb::dict item;
         item["id"] = row.id.value();
-        item["issuer_kind"] = static_cast<std::uint8_t>(row.issuer.kind);
-        item["issuer_id"] = static_cast<std::uint32_t>(row.issuer.value);
+        item["issuer_kind"] = static_cast<std::uint8_t>(row.issuer.kind());
+        item["issuer_id"] = row.issuer.value();
         item["issuer_account"] = row.issuer_account.value();
         item["currency_id"] = row.currency.value();
         item["issued_tick"] = row.issued_tick.value();
@@ -1363,8 +1364,8 @@ nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
         nb::dict item;
         item["id"] = row.id.value();
         item["issuer_kind"] = static_cast<std::uint8_t>(row.issuer_kind);
-        item["owner_kind"] = static_cast<std::uint8_t>(row.issuer.kind);
-        item["issuer_id"] = static_cast<std::uint32_t>(row.issuer.value);
+        item["owner_kind"] = static_cast<std::uint8_t>(row.issuer.kind());
+        item["issuer_id"] = row.issuer.value();
         item["issuer_account"] = row.issuer_account.value();
         item["currency_id"] = row.currency.value();
         item["outstanding_shares"] = row.outstanding_shares;
@@ -1385,8 +1386,8 @@ nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
         item["id"] = security_lot_id++;
         item["security_kind"] = static_cast<std::uint8_t>(row.security.kind);
         item["security_id"] = static_cast<std::uint32_t>(row.security.value);
-        item["holder_kind"] = static_cast<std::uint8_t>(row.holder.kind);
-        item["holder_id"] = static_cast<std::uint32_t>(row.holder.value);
+        item["holder_kind"] = static_cast<std::uint8_t>(row.holder.kind());
+        item["holder_id"] = row.holder.value();
         item["units"] = row.units;
         item["cost_basis"] = row.cost_basis.value();
         item["active"] = row.active();

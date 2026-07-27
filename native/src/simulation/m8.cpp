@@ -392,13 +392,13 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
     if (!owner.valid()) {
         return false;
     }
-    switch (owner.kind) {
+    switch (owner.kind()) {
     case core::OwnerKind::household:
-        return state.households.get(HouseholdId(owner.value)) != nullptr;
+        return state.households.get(HouseholdId(owner.value())) != nullptr;
     case core::OwnerKind::firm:
-        return state.firms.get(FirmId(owner.value)) != nullptr;
+        return state.firms.get(FirmId(owner.value())) != nullptr;
     case core::OwnerKind::bank:
-        return state.banks.get(BankId(owner.value)) != nullptr;
+        return state.banks.get(BankId(owner.value())) != nullptr;
     case core::OwnerKind::treasury:
     case core::OwnerKind::central_bank:
     case core::OwnerKind::dealer:
@@ -1293,17 +1293,17 @@ class M8Extension final : public M7TickExtension {
 
     [[nodiscard]] static AccountId owner_account(const core::RootState &state,
                                                  core::OwnerId owner) noexcept {
-        switch (owner.kind) {
+        switch (owner.kind()) {
         case core::OwnerKind::household: {
-            const auto *household = state.households.get(HouseholdId(owner.value));
+            const auto *household = state.households.get(HouseholdId(owner.value()));
             return household == nullptr ? AccountId{} : household->primary_account;
         }
         case core::OwnerKind::firm: {
-            const auto *firm = state.firms.get(FirmId(owner.value));
+            const auto *firm = state.firms.get(FirmId(owner.value()));
             return firm == nullptr ? AccountId{} : firm->primary_account;
         }
         case core::OwnerKind::bank: {
-            const auto *bank = state.banks.get(BankId(owner.value));
+            const auto *bank = state.banks.get(BankId(owner.value()));
             return bank == nullptr ? AccountId{} : bank->cash_account;
         }
         case core::OwnerKind::treasury:
@@ -1613,8 +1613,8 @@ class M8Extension final : public M7TickExtension {
             }
             bool list = !dwelling.occupant.valid();
             bool forced = false;
-            if (dwelling.owner.kind == core::OwnerKind::household &&
-                dwelling.occupant == HouseholdId(dwelling.owner.value)) {
+            if (dwelling.owner.kind() == core::OwnerKind::household &&
+                dwelling.occupant == HouseholdId(dwelling.owner.value())) {
                 const auto account = owner_account(state, dwelling.owner);
                 forced =
                     projected_balance(real, account) <= rules.distress_deposit_floor;
@@ -1650,7 +1650,8 @@ class M8Extension final : public M7TickExtension {
             return Status::success();
         }
         for (const auto &dwelling : projected_properties().records()) {
-            if (!dwelling.active || dwelling.owner.kind != core::OwnerKind::household) {
+            if (!dwelling.active ||
+                dwelling.owner.kind() != core::OwnerKind::household) {
                 continue;
             }
             const auto source = owner_account(state, dwelling.owner);
@@ -1942,11 +1943,12 @@ class M8Extension final : public M7TickExtension {
         if (!status.ok()) {
             return status;
         }
-        if (listing.seller.kind == core::OwnerKind::firm) {
+        if (listing.seller.kind() == core::OwnerKind::firm) {
             const auto found =
                 std::find_if(scratch_.builders_.begin(), scratch_.builders_.end(),
                              [&listing](const BuilderComponent &builder) {
-                                 return builder.firm == FirmId(listing.seller.value);
+                                 return builder.firm ==
+                                        FirmId(listing.seller.value());
                              });
             if (found != scratch_.builders_.end()) {
                 found->finished_inventory =
@@ -2093,11 +2095,11 @@ class M8Extension final : public M7TickExtension {
                 break;
             }
             if (!record.active || record.occupant.valid() ||
-                record.owner.kind != core::OwnerKind::household ||
+                record.owner.kind() != core::OwnerKind::household ||
                 listed[static_cast<std::size_t>(record.id.value())] != 0U) {
                 continue;
             }
-            const auto landlord = HouseholdId(record.owner.value);
+            const auto landlord = HouseholdId(record.owner.value());
             if (state.households.get(landlord) == nullptr ||
                 landlord == tenants[tenant_index]) {
                 continue;
@@ -3452,13 +3454,14 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                 return minted.status();
             }
             occupied_count += occupant.valid() ? 1U : 0U;
-            if (occupant.valid() && owner.kind == core::OwnerKind::household &&
-                owner.value != occupant.value()) {
+            if (occupant.valid() &&
+                owner.kind() == core::OwnerKind::household &&
+                owner.value() != occupant.value()) {
                 runtime.tenancies.push_back({
                     TenancyId(static_cast<std::uint64_t>(runtime.tenancies.size()) +
                               1U),
                     *minted.get_if(),
-                    HouseholdId(owner.value),
+                    HouseholdId(owner.value()),
                     occupant,
                     runtime.rent_level,
                     0,

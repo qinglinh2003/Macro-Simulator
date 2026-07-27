@@ -208,8 +208,8 @@ void write_id(BinaryWriter& writer, Id id) {
 }
 
 void write_owner(BinaryWriter& writer, OwnerId owner) {
-    writer.u8(static_cast<std::uint8_t>(owner.kind));
-    writer.u64(owner.value);
+    writer.u8(static_cast<std::uint8_t>(owner.kind()));
+    writer.u64(owner.value());
 }
 
 template <typename Id>

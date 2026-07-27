@@ -373,10 +373,10 @@ void test_homeless_owner_does_not_buy_own_listing() {
     macro_sim::DwellingId dwelling{};
     for (const auto &candidate : harness.runtime.properties.records()) {
         if (candidate.active &&
-            candidate.owner.kind == macro_sim::core::OwnerKind::household &&
+            candidate.owner.kind() == macro_sim::core::OwnerKind::household &&
             candidate.occupant ==
-                macro_sim::HouseholdId(candidate.owner.value)) {
-            owner = macro_sim::HouseholdId(candidate.owner.value);
+                macro_sim::HouseholdId(candidate.owner.value())) {
+            owner = macro_sim::HouseholdId(candidate.owner.value());
             dwelling = candidate.id;
             break;
         }

@@ -39,11 +39,11 @@ debt_by_owner(const core::RootState &root, core::OwnerKind kind,
               std::size_t count) {
     std::vector<double> output(count + 1U, 0.0);
     for (const auto &loan : root.loans.records()) {
-        if (!loan.active || loan.borrower.kind != kind ||
-            loan.borrower.value >= output.size()) {
+        if (!loan.active || loan.borrower.kind() != kind ||
+            loan.borrower.value() >= output.size()) {
             continue;
         }
-        output[loan.borrower.value] += loan.principal.value();
+        output[loan.borrower.value()] += loan.principal.value();
     }
     return output;
 }
@@ -553,8 +553,8 @@ probe_dwellings(const simulation::M9World &world, EconomyId economy,
         }
         output.rows.push_back(DwellingProbeRow{
             dwelling.id,
-            dwelling.owner.kind,
-            dwelling.owner.value,
+            dwelling.owner.kind(),
+            dwelling.owner.value(),
             dwelling.occupant,
             dwelling.collateral,
             dwelling.floor_area,
@@ -654,8 +654,8 @@ probe_security_positions(const simulation::M9World &world,
             id,
             position.security.kind,
             position.security.value,
-            position.holder.kind,
-            position.holder.value,
+            position.holder.kind(),
+            position.holder.value(),
             position.units,
             position.cost_basis.value(),
             security_market_value(financial->securities, position),

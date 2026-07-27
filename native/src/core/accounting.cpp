@@ -229,8 +229,8 @@ std::size_t PostingBook::account_hash(AccountKey key) noexcept {
         hash ^= mix(value + hash + 0x9e3779b97f4a7c15ULL);
     };
     combine(key.economy.value());
-    combine(static_cast<std::uint64_t>(key.owner.kind));
-    combine(key.owner.value);
+    combine(static_cast<std::uint64_t>(key.owner.kind()));
+    combine(key.owner.value());
     combine(key.currency.value());
     combine(key.settlement_node.value());
     return static_cast<std::size_t>(hash);

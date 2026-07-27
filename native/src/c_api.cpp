@@ -1528,9 +1528,9 @@ macro_sim_status macro_sim_m6_bonds(const macro_sim_session *session, size_t off
         auto &target = output[index];
         std::memset(&target, 0, sizeof(target));
         target.struct_size = sizeof(target);
-        target.issuer_kind = static_cast<std::uint32_t>(source.issuer.kind);
+        target.issuer_kind = static_cast<std::uint32_t>(source.issuer.kind());
         target.id = source.id.value();
-        target.issuer_id = source.issuer.value;
+        target.issuer_id = source.issuer.value();
         target.issuer_account = source.issuer_account.value();
         target.currency_id = source.currency.value();
         target.active = source.active ? 1U : 0U;
@@ -1578,9 +1578,9 @@ macro_sim_status macro_sim_m6_equities(const macro_sim_session *session, size_t 
         target.struct_size = sizeof(target);
         target.issuer_kind = static_cast<std::uint32_t>(source.issuer_kind);
         target.id = source.id.value();
-        target.owner_kind = static_cast<std::uint32_t>(source.issuer.kind);
+        target.owner_kind = static_cast<std::uint32_t>(source.issuer.kind());
         target.currency_id = source.currency.value();
-        target.issuer_id = source.issuer.value;
+        target.issuer_id = source.issuer.value();
         target.issuer_account = source.issuer_account.value();
         target.outstanding_shares = source.outstanding_shares;
         target.price = source.price.value();
@@ -2347,9 +2347,9 @@ macro_sim_status macro_sim_m8_dwellings(const macro_sim_session *session, size_t
         target.struct_size = sizeof(target);
         target.active = source.active ? 1U : 0U;
         target.id = source.id.value();
-        target.owner_kind = static_cast<std::uint32_t>(source.owner.kind);
+        target.owner_kind = static_cast<std::uint32_t>(source.owner.kind());
         target.location = source.location;
-        target.owner_id = source.owner.value;
+        target.owner_id = source.owner.value();
         target.occupant_household_id = source.occupant.value();
         target.collateral_loan_id = source.collateral.value();
         target.minted_tick = source.minted_tick.value();
@@ -2395,9 +2395,9 @@ macro_sim_status macro_sim_m8_listings(const macro_sim_session *session, size_t 
         target.struct_size = sizeof(target);
         target.active = source.active ? 1U : 0U;
         target.dwelling_id = source.dwelling.value();
-        target.seller_kind = static_cast<std::uint32_t>(source.seller.kind);
+        target.seller_kind = static_cast<std::uint32_t>(source.seller.kind());
         target.forced = source.forced ? 1U : 0U;
-        target.seller_id = source.seller.value;
+        target.seller_id = source.seller.value();
         target.listed_tick = source.listed_tick.value();
         target.asking_price = source.asking_price;
     }

@@ -163,7 +163,7 @@ void test_genesis_derives_households_from_population() {
             harness.root.loans.records().end(),
             [](const macro_sim::core::LoanRecord &loan) {
                 return loan.active &&
-                       loan.borrower.kind ==
+                       loan.borrower.kind() ==
                            macro_sim::core::OwnerKind::
                                household;
             }

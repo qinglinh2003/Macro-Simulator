@@ -1,6 +1,7 @@
 #ifndef MACRO_SIM_CORE_STATE_TYPES_HPP
 #define MACRO_SIM_CORE_STATE_TYPES_HPP
 
+#include <compare>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -23,19 +24,24 @@ enum class OwnerKind : std::uint8_t {
 
 struct OwnerId final {
     static constexpr std::uint32_t kMaximumPackedValue = (1U << 29U) - 1U;
-    OwnerKind kind : 3 = OwnerKind::institution;
-    std::uint32_t value : 29 = 0;
+    static constexpr std::uint32_t kKindShift = 29U;
+    static constexpr std::uint32_t kKindMask = 0x7U << kKindShift;
+    std::uint32_t packed{
+        static_cast<std::uint32_t>(OwnerKind::institution) << kKindShift};
 
     constexpr OwnerId() noexcept = default;
 
     template <typename Source>
         requires std::is_integral_v<Source>
     constexpr OwnerId(OwnerKind owner_kind, Source owner_value) noexcept
-        : kind(owner_kind),
-          value(std::in_range<std::uint32_t>(owner_value) &&
-                        static_cast<std::uint32_t>(owner_value) <= kMaximumPackedValue
-                    ? static_cast<std::uint32_t>(owner_value)
-                    : 0U) {}
+        : packed(
+              (static_cast<std::uint32_t>(owner_kind) << kKindShift) |
+              (std::in_range<std::uint32_t>(owner_value) &&
+                       static_cast<std::uint32_t>(owner_value) <=
+                           kMaximumPackedValue
+                   ? static_cast<std::uint32_t>(owner_value)
+                   : 0U)
+          ) {}
 
     [[nodiscard]] static constexpr OwnerId household(HouseholdId id) noexcept {
         return {OwnerKind::household, id.value()};
@@ -68,11 +74,27 @@ struct OwnerId final {
         return kMaximumPackedValue;
     }
 
-    [[nodiscard]] constexpr bool valid() const noexcept {
-        return kind <= OwnerKind::institution && value != 0;
+    [[nodiscard]] constexpr OwnerKind kind() const noexcept {
+        return static_cast<OwnerKind>((packed & kKindMask) >> kKindShift);
     }
 
-    constexpr auto operator<=>(const OwnerId&) const noexcept = default;
+    [[nodiscard]] constexpr std::uint32_t value() const noexcept {
+        return packed & kMaximumPackedValue;
+    }
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return kind() <= OwnerKind::institution && value() != 0;
+    }
+
+    constexpr bool operator==(const OwnerId&) const noexcept = default;
+
+    [[nodiscard]] constexpr std::strong_ordering
+    operator<=>(const OwnerId& other) const noexcept {
+        if (const auto kind_order = kind() <=> other.kind(); kind_order != 0) {
+            return kind_order;
+        }
+        return value() <=> other.value();
+    }
 };
 
 static_assert(sizeof(OwnerId) == sizeof(std::uint32_t));

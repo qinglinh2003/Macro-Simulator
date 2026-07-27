@@ -711,7 +711,7 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
         }
         const auto account = account_index(loan.borrower_account);
         const double amortization =
-            account_record->key.owner.kind == core::OwnerKind::household
+            account_record->key.owner.kind() == core::OwnerKind::household
                 ? runtime.rules.household_amortization
                 : runtime.rules.firm_amortization;
         const double interest_due =
@@ -736,11 +736,11 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
             }
             pnl_for(scratch, loan.lender)->loan_interest += interest;
             scratch.working_metrics_.loan_interest_paid += interest;
-            if (account_record->key.owner.kind == core::OwnerKind::household) {
+            if (account_record->key.owner.kind() == core::OwnerKind::household) {
                 scratch.working_metrics_.household_interest_paid += interest;
             } else if (full_pnl) {
                 const auto firm_id =
-                    static_cast<std::size_t>(account_record->key.owner.value);
+                    static_cast<std::size_t>(account_record->key.owner.value());
                 if (firm_id < scratch.firm_index_by_id_.size()) {
                     const auto firm_index = scratch.firm_index_by_id_[firm_id];
                     if (firm_index != kNoIndex && firm_index < real.firm_work_.size()) {

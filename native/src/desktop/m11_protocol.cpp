@@ -635,8 +635,8 @@ template <typename Id>
     return {
         {"id", row.id.value()},
         {"issuer_kind", equity_issuer_name(row.issuer_kind)},
-        {"issuer_owner_kind", owner_kind_name(row.issuer.kind)},
-        {"issuer_owner_id", row.issuer.value},
+        {"issuer_owner_kind", owner_kind_name(row.issuer.kind())},
+        {"issuer_owner_id", row.issuer.value()},
         {"issuer_account_id", row.issuer_account.value()},
         {"currency_id", row.currency.value()},
         {"outstanding_shares", row.outstanding_shares},

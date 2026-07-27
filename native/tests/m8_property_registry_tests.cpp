@@ -153,7 +153,7 @@ void test_randomized_title_journal() {
         const auto expected = record->owner;
         auto next_owner = owners[next() % owners.size()];
         if (next_owner == expected) {
-            next_owner = owners[(next_owner.value + 1) % owners.size()];
+            next_owner = owners[(next_owner.value() + 1) % owners.size()];
         }
         assert(
             registry.transfer_title(dwelling, expected, next_owner, Tick(step)).ok());

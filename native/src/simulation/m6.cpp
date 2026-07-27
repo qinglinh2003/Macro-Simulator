@@ -135,17 +135,17 @@ entry_capital_reserved(const M6TickScratch &scratch,
 
 [[nodiscard]] AccountId owner_account(const core::RootState &state,
                                       core::OwnerId owner) noexcept {
-    switch (owner.kind) {
+    switch (owner.kind()) {
     case core::OwnerKind::household: {
-        const auto *household = state.households.get(HouseholdId(owner.value));
+        const auto *household = state.households.get(HouseholdId(owner.value()));
         return household != nullptr ? household->primary_account : AccountId{};
     }
     case core::OwnerKind::firm: {
-        const auto *firm = state.firms.get(FirmId(owner.value));
+        const auto *firm = state.firms.get(FirmId(owner.value()));
         return firm != nullptr ? firm->primary_account : AccountId{};
     }
     case core::OwnerKind::bank: {
-        const auto *bank = state.banks.get(BankId(owner.value));
+        const auto *bank = state.banks.get(BankId(owner.value()));
         return bank != nullptr ? bank->cash_account : AccountId{};
     }
     case core::OwnerKind::treasury:
@@ -157,7 +157,7 @@ entry_capital_reserved(const M6TickScratch &scratch,
     case core::OwnerKind::rounding_residual:
         return state.institutions.rounding_residual_account;
     case core::OwnerKind::institution:
-        if (owner.value == 2) {
+        if (owner.value() == 2) {
             return state.institutions.clearing_account;
         }
         break;
@@ -495,8 +495,8 @@ void reduce_debt_views(M6TickScratch &scratch, AccountId account,
                     return Status(status.code(),
                                   "M6 bond coupon exceeds Treasury cash");
                 }
-                if (lot->holder.kind == core::OwnerKind::bank) {
-                    const auto bank = BankId(lot->holder.value);
+                if (lot->holder.kind() == core::OwnerKind::bank) {
+                    const auto bank = BankId(lot->holder.value());
                     auto *pnl = pnl_for(monetary, bank);
                     if (pnl != nullptr) {
                         pnl->interbank_interest_income += coupon;
@@ -629,7 +629,7 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         double income_signal = contract.income_signal;
         double peak = contract.peak_price.value();
         if (contract.issuer_kind == core::EquityIssuerKind::firm) {
-            const auto id = FirmId(contract.issuer.value);
+            const auto id = FirmId(contract.issuer.value());
             auto *lifecycle = firm_record(scratch.firms_, id);
             if (lifecycle == nullptr || !lifecycle->active) {
                 continue;
@@ -651,7 +651,7 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
             lifecycle->tobin_q_ema +=
                 runtime.rules.q_smoothing * (q - lifecycle->tobin_q_ema);
         } else {
-            const auto bank = BankId(contract.issuer.value);
+            const auto bank = BankId(contract.issuer.value());
             const auto *capital = capital_for(monetary, bank);
             const auto *pnl = pnl_for(monetary, bank);
             if (capital == nullptr || pnl == nullptr || !capital->alive) {
@@ -1110,9 +1110,9 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         FirmLifecycleRecord *firm = nullptr;
         core::BankCapitalRecord *bank_capital = nullptr;
         if (contract->issuer_kind == core::EquityIssuerKind::firm) {
-            firm = firm_record(scratch.firms_, FirmId(contract->issuer.value));
+            firm = firm_record(scratch.firms_, FirmId(contract->issuer.value()));
         } else {
-            bank_capital = capital_for(monetary, BankId(contract->issuer.value));
+            bank_capital = capital_for(monetary, BankId(contract->issuer.value()));
         }
         const double primary =
             planned_primary_issue(*contract, firm, bank_capital, runtime);
@@ -1161,7 +1161,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             if (bank_capital != nullptr) {
                 const double raised = primary_executed * price;
                 bank_capital->closing_capital += raised;
-                auto *pnl = pnl_for(monetary, BankId(contract->issuer.value));
+                auto *pnl = pnl_for(monetary, BankId(contract->issuer.value()));
                 if (pnl != nullptr) {
                     pnl->resolution_flow += raised;
                 }
@@ -1386,7 +1386,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                 for (const auto lot_id : lot_ids) {
                     const auto *lot = scratch.securities_.get(lot_id);
                     if (lot == nullptr || !lot->active() ||
-                        lot->holder.kind != core::OwnerKind::household) {
+                        lot->holder.kind() != core::OwnerKind::household) {
                         continue;
                     }
                     const auto recipient = owner_account(state, lot->holder);
@@ -2733,9 +2733,9 @@ Status validate_m6_state_fast(const core::RootState &state,
         }
         const bool issuer_kind_matches =
             (equity.issuer_kind == core::EquityIssuerKind::firm &&
-             equity.issuer.kind == core::OwnerKind::firm) ||
+             equity.issuer.kind() == core::OwnerKind::firm) ||
             (equity.issuer_kind == core::EquityIssuerKind::bank &&
-             equity.issuer.kind == core::OwnerKind::bank);
+             equity.issuer.kind() == core::OwnerKind::bank);
         const auto account = owner_account(state, equity.issuer);
         const auto *posting = state.postings.get(account);
         if (!issuer_kind_matches || equity.currency != state.currency ||
@@ -2751,7 +2751,7 @@ Status validate_m6_state_fast(const core::RootState &state,
         const auto account = owner_account(state, lot.holder);
         const auto *posting = state.postings.get(account);
         if (!account.valid() || posting == nullptr || !posting->open) {
-            switch (lot.holder.kind) {
+            switch (lot.holder.kind()) {
             case core::OwnerKind::household:
                 return Status(ErrorCode::invariant_violation,
                               "M6 household security holder reference is invalid");

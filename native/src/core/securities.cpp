@@ -190,7 +190,7 @@ std::size_t SecurityBook::pair_hash(SecurityId security, OwnerId holder) noexcep
     };
     std::uint64_t hash =
         mix(static_cast<std::uint64_t>(security.kind) ^ security.value);
-    hash ^= mix(static_cast<std::uint64_t>(holder.kind) ^ holder.value ^
+    hash ^= mix(static_cast<std::uint64_t>(holder.kind()) ^ holder.value() ^
                 0x517cc1b727220a95ULL);
     return static_cast<std::size_t>(hash);
 }
@@ -283,8 +283,8 @@ void SecurityBook::append_query_lot(SecurityLotId lot_id) {
     holder_next_[lot_index] = 0U;
     contract_next_[lot_index] = 0U;
 
-    const auto holder_kind = static_cast<std::size_t>(lot->holder.kind);
-    const auto holder_value = static_cast<std::size_t>(lot->holder.value);
+    const auto holder_kind = static_cast<std::size_t>(lot->holder.kind());
+    const auto holder_value = static_cast<std::size_t>(lot->holder.value());
     auto &holder_rows = holder_chains_[holder_kind];
     if (holder_rows.size() <= holder_value) {
         holder_rows.resize(holder_value + 1U);
@@ -366,8 +366,8 @@ void SecurityBook::unlink_query_lot(SecurityLotId lot_id) {
         }
     };
 
-    const auto holder_kind = static_cast<std::size_t>(lot->holder.kind);
-    const auto holder_value = static_cast<std::size_t>(lot->holder.value);
+    const auto holder_kind = static_cast<std::size_t>(lot->holder.kind());
+    const auto holder_value = static_cast<std::size_t>(lot->holder.value());
     if (holder_kind < holder_chains_.size() &&
         holder_value < holder_chains_[holder_kind].size()) {
         auto &rows = holder_chains_[holder_kind];
@@ -416,7 +416,7 @@ void SecurityBook::rebuild_query_indexes() {
 
 void SecurityBook::record_household_position_change(SecurityId security,
                                                     OwnerId holder) {
-    if (holder.kind == OwnerKind::household) {
+    if (holder.kind() == OwnerKind::household) {
         household_position_changes_.push_back({security, holder});
     }
 }
@@ -1006,8 +1006,8 @@ SecurityBook::lots_for_holder(OwnerId holder) const noexcept {
     if (!holder.valid()) {
         return {};
     }
-    const auto kind = static_cast<std::size_t>(holder.kind);
-    const auto value = static_cast<std::size_t>(holder.value);
+    const auto kind = static_cast<std::size_t>(holder.kind());
+    const auto value = static_cast<std::size_t>(holder.value());
     if (kind >= holder_chains_.size() ||
         value >= holder_chains_[kind].size()) {
         return {};

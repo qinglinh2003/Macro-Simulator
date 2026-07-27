@@ -280,13 +280,13 @@ PropertyRegistry::dwellings_for_owner(OwnerId owner) const noexcept {
     if (!owner.valid()) {
         return {};
     }
-    if (owner.kind == OwnerKind::household) {
-        const auto household = HouseholdId(owner.value);
+    if (owner.kind() == OwnerKind::household) {
+        const auto household = HouseholdId(owner.value());
         const auto overflow = household_owner_overflow_.find(household);
         if (overflow != household_owner_overflow_.end()) {
             return overflow->second;
         }
-        const auto index = static_cast<std::size_t>(owner.value);
+        const auto index = static_cast<std::size_t>(owner.value());
         if (index >= household_owner_primary_.size() ||
             !household_owner_primary_[index].valid()) {
             return {};
@@ -473,7 +473,7 @@ Status PropertyRegistry::validate() const noexcept {
         }
     }
     for (const auto &[owner, dwellings] : non_household_owner_index_) {
-        if (owner.kind == OwnerKind::household) {
+        if (owner.kind() == OwnerKind::household) {
             return Status(ErrorCode::invariant_violation,
                           "household owner is in the sparse index");
         }
@@ -632,15 +632,15 @@ Status PropertyRegistry::append_title_event(TitleEvent event) {
 }
 
 void PropertyRegistry::insert_owner_index(OwnerId owner, DwellingId dwelling) {
-    if (owner.kind != OwnerKind::household) {
+    if (owner.kind() != OwnerKind::household) {
         auto &dwellings = non_household_owner_index_[owner];
         dwellings.insert(
             std::lower_bound(dwellings.begin(), dwellings.end(), dwelling),
             dwelling);
         return;
     }
-    const auto household = HouseholdId(owner.value);
-    const auto index = static_cast<std::size_t>(owner.value);
+    const auto household = HouseholdId(owner.value());
+    const auto index = static_cast<std::size_t>(owner.value());
     if (household_owner_primary_.size() <= index) {
         household_owner_primary_.resize(index + 1U, DwellingId{});
     }
@@ -666,9 +666,9 @@ void PropertyRegistry::insert_owner_index(OwnerId owner, DwellingId dwelling) {
 }
 
 void PropertyRegistry::remove_owner_index(OwnerId owner, DwellingId dwelling) noexcept {
-    if (owner.kind == OwnerKind::household) {
-        const auto household = HouseholdId(owner.value);
-        const auto index = static_cast<std::size_t>(owner.value);
+    if (owner.kind() == OwnerKind::household) {
+        const auto household = HouseholdId(owner.value());
+        const auto index = static_cast<std::size_t>(owner.value());
         const auto overflow = household_owner_overflow_.find(household);
         if (overflow == household_owner_overflow_.end()) {
             if (index < household_owner_primary_.size() &&

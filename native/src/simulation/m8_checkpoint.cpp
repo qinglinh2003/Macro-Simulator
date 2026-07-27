@@ -271,8 +271,8 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 
 [[nodiscard]] Json owner_json(core::OwnerId owner) {
     return Json::array({
-        static_cast<std::uint8_t>(owner.kind),
-        static_cast<std::uint32_t>(owner.value),
+        static_cast<std::uint8_t>(owner.kind()),
+        owner.value(),
     });
 }
 

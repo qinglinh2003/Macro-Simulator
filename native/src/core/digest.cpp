@@ -64,8 +64,8 @@ void append_id(DigestWriter& writer, Id id) {
 }
 
 void append_owner(DigestWriter& writer, OwnerId owner) {
-    writer.u8(static_cast<std::uint8_t>(owner.kind));
-    writer.u64(owner.value);
+    writer.u8(static_cast<std::uint8_t>(owner.kind()));
+    writer.u64(owner.value());
 }
 
 template <typename Id, typename Value, typename AppendValue>

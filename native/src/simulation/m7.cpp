@@ -308,7 +308,7 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
     for (const auto &change : securities.household_position_changes()) {
         asset_buffer.push_back({
             core::BeneficialAssetKind::security_position,
-            HouseholdId(change.holder.value),
+            HouseholdId(change.holder.value()),
             0U,
         });
     }
@@ -327,10 +327,10 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         }
     }
     for (const auto &loan : loans) {
-        if (!loan.active || loan.borrower.kind != core::OwnerKind::household) {
+        if (!loan.active || loan.borrower.kind() != core::OwnerKind::household) {
             continue;
         }
-        const auto household = HouseholdId(loan.borrower.value);
+        const auto household = HouseholdId(loan.borrower.value());
         status = create_equal_claims(
             {
                 core::BeneficialAssetKind::household_debt,
@@ -2776,8 +2776,8 @@ Status validate_m7_state_impl(const core::RootState &state,
         }
     }
     for (const auto &lot : state.ownership.records()) {
-        if (lot.active && lot.owner.kind == core::OwnerKind::household &&
-            state.households.get(HouseholdId(lot.owner.value)) == nullptr) {
+        if (lot.active && lot.owner.kind() == core::OwnerKind::household &&
+            state.households.get(HouseholdId(lot.owner.value())) == nullptr) {
             return Status(ErrorCode::invariant_violation,
                           "ownership lot references an absent household");
         }
@@ -2971,10 +2971,10 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         security_households.reserve(financial.root.households.alive_count());
         for (const auto &lot : financial.runtime.securities.lots()) {
             if (!lot.active() ||
-                lot.holder.kind != core::OwnerKind::household) {
+                lot.holder.kind() != core::OwnerKind::household) {
                 continue;
             }
-            security_households.push_back(HouseholdId(lot.holder.value));
+            security_households.push_back(HouseholdId(lot.holder.value()));
         }
         std::sort(security_households.begin(), security_households.end());
         security_households.erase(
@@ -2993,13 +2993,13 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
             }
         }
         for (const auto &loan : financial.root.loans.records()) {
-            if (!loan.active || loan.borrower.kind != core::OwnerKind::household) {
+            if (!loan.active || loan.borrower.kind() != core::OwnerKind::household) {
                 continue;
             }
             const auto claim_status = create_equal_claims(
                 {
                     core::BeneficialAssetKind::household_debt,
-                    HouseholdId(loan.borrower.value),
+                    HouseholdId(loan.borrower.value()),
                     loan.id.value(),
                 },
                 runtime.membership, runtime.persons, runtime.beneficial_ownership);

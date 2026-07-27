@@ -10,13 +10,13 @@ namespace {
     const RootState& state,
     OwnerId owner
 ) noexcept {
-    switch (owner.kind) {
+    switch (owner.kind()) {
         case OwnerKind::household:
-            return state.households.get(HouseholdId(owner.value)) != nullptr;
+            return state.households.get(HouseholdId(owner.value())) != nullptr;
         case OwnerKind::firm:
-            return state.firms.get(FirmId(owner.value)) != nullptr;
+            return state.firms.get(FirmId(owner.value())) != nullptr;
         case OwnerKind::bank:
-            return state.banks.get(BankId(owner.value)) != nullptr;
+            return state.banks.get(BankId(owner.value())) != nullptr;
         case OwnerKind::treasury:
         case OwnerKind::central_bank:
         case OwnerKind::dealer:

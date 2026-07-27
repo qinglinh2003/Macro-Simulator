@@ -335,8 +335,8 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     for (const auto &row : runtime.securities.bonds()) {
         output["bonds"].push_back(Json::array({
             row.id.value(),
-            static_cast<std::uint8_t>(row.issuer.kind),
-            static_cast<std::uint32_t>(row.issuer.value),
+            static_cast<std::uint8_t>(row.issuer.kind()),
+            row.issuer.value(),
             row.issuer_account.value(),
             row.currency.value(),
             row.issued_tick.value(),
@@ -353,8 +353,8 @@ void decode_metrics(const Json &row, M6Metrics &value) {
         output["equities"].push_back(Json::array({
             row.id.value(),
             static_cast<std::uint8_t>(row.issuer_kind),
-            static_cast<std::uint8_t>(row.issuer.kind),
-            static_cast<std::uint32_t>(row.issuer.value),
+            static_cast<std::uint8_t>(row.issuer.kind()),
+            row.issuer.value(),
             row.issuer_account.value(),
             row.currency.value(),
             row.outstanding_shares,
@@ -375,8 +375,8 @@ void decode_metrics(const Json &row, M6Metrics &value) {
             security_lot_id++,
             static_cast<std::uint8_t>(row.security.kind),
             static_cast<std::uint32_t>(row.security.value),
-            static_cast<std::uint8_t>(row.holder.kind),
-            static_cast<std::uint32_t>(row.holder.value),
+            static_cast<std::uint8_t>(row.holder.kind()),
+            row.holder.value(),
             row.units,
             row.cost_basis.value(),
             row.active(),
