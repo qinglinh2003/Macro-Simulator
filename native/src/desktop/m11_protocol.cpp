@@ -2662,12 +2662,136 @@ struct M11ProtocolWorker::Impl final {
                 std::move(occupant),
             });
             if (!assigned.ok()) {
-                throw status_fault(assigned);
+                throw status_fault(assigned.status());
             }
             return {
                 {"assigned", true},
                 {"economy_id", *economy},
                 {"seat", *seat},
+                {"archived_occupant_id",
+                 assigned.get_if()
+                         ->archived_occupant_id
+                         .has_value()
+                     ? Json(*assigned.get_if()
+                                 ->archived_occupant_id)
+                     : Json(nullptr)},
+                {"repeated",
+                 assigned.get_if()->repeated},
+            };
+        }
+        if (*command == "restore_seat") {
+            const auto fault = require_session(
+                request, connection_id, true);
+            if (!fault.code.empty()) {
+                throw fault;
+            }
+            const auto economy =
+                required_u64(
+                    request, "economy_id",
+                    session->engine()
+                            .world()
+                            .economy_count() -
+                        1U);
+            const auto seat =
+                required_text(request, "seat", 64U);
+            const auto operation_id =
+                required_text(request, "operation_id", 128U);
+            const auto archived_occupant_id =
+                required_text(
+                    request, "archived_occupant_id", 256U);
+            if (!economy.has_value() ||
+                !seat.has_value() ||
+                !control::m11_valid_seat(*seat) ||
+                !operation_id.has_value() ||
+                !archived_occupant_id.has_value()) {
+                throw ProtocolFault{
+                    "invalid_argument",
+                    "The seat restoration is invalid.", false};
+            }
+            auto restored = session->restore_seat({
+                *operation_id,
+                std::string(connection_id),
+                EconomyId(*economy),
+                *seat,
+                *archived_occupant_id,
+            });
+            if (!restored.ok()) {
+                throw status_fault(restored.status());
+            }
+            return {
+                {"restored", true},
+                {"economy_id", *economy},
+                {"seat", *seat},
+                {"archived_occupant_id",
+                 restored.get_if()
+                         ->archived_occupant_id
+                         .has_value()
+                     ? Json(*restored.get_if()
+                                 ->archived_occupant_id)
+                     : Json(nullptr)},
+                {"repeated",
+                 restored.get_if()->repeated},
+            };
+        }
+        if (*command == "event_page") {
+            const auto fault = require_session(
+                request, connection_id, false);
+            if (!fault.code.empty()) {
+                throw fault;
+            }
+            const auto first_sequence =
+                required_u64(request, "first_sequence");
+            const auto maximum_rows =
+                required_u64(request, "maximum_rows", 256U);
+            if (!first_sequence.has_value() ||
+                !maximum_rows.has_value() ||
+                *maximum_rows == 0U) {
+                throw ProtocolFault{
+                    "invalid_argument",
+                    "The event page request is invalid.", false};
+            }
+            auto visibility =
+                control::M11EventVisibility::public_record;
+            if (request.contains("visibility")) {
+                const auto requested = required_text(
+                    request, "visibility", 32U);
+                if (!requested.has_value()) {
+                    throw ProtocolFault{
+                        "invalid_argument",
+                        "The event visibility is invalid.", false};
+                }
+                if (*requested == "institution") {
+                    visibility =
+                        control::M11EventVisibility::institution;
+                } else if (*requested == "privileged_audit") {
+                    visibility = control::M11EventVisibility::
+                        privileged_audit;
+                } else if (*requested != "public_record") {
+                    throw ProtocolFault{
+                        "invalid_argument",
+                        "The event visibility is invalid.", false};
+                }
+            }
+            auto page = session->events().page(
+                *first_sequence,
+                static_cast<std::size_t>(*maximum_rows),
+                visibility);
+            if (!page.ok()) {
+                throw status_fault(page.status());
+            }
+            const auto next_sequence =
+                page.get_if()->empty()
+                    ? session->events().next_sequence()
+                    : page.get_if()->back().sequence + 1U;
+            return {
+                {"events",
+                 json_array(*page.get_if(), event_json)},
+                {"first_sequence", *first_sequence},
+                {"next_sequence", next_sequence},
+                {"event_cursor",
+                 session->events().next_sequence()},
+                {"head_hash",
+                 session->events().head_hash().hex()},
             };
         }
         if (*command == "schedule_shock" ||

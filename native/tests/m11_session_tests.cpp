@@ -346,6 +346,119 @@ void test_checkpoint_preserves_human_pause_and_embedded_rl() {
                .ok());
 }
 
+void test_seat_archive_restore_and_checkpoint_idempotency() {
+    auto session = M11ControlledSession::create(engine());
+    assert(session.ok());
+    const auto *opening =
+        session.get_if()->seat(EconomyId(0U), "treasury");
+    assert(opening != nullptr);
+    assert(opening->assignment.occupant.kind ==
+           M11OccupantKind::null_occupant);
+
+    M11OccupantSpec human;
+    human.kind = M11OccupantKind::human_queue;
+    human.occupant_id = "cabinet-player";
+    const M11SeatAssignmentRequest assignment{
+        "assign-cabinet",
+        "operator",
+        EconomyId(0U),
+        "treasury",
+        human,
+    };
+    auto assigned =
+        session.get_if()->assign_seat(assignment);
+    assert(assigned.ok());
+    assert(!assigned.get_if()->repeated);
+    assert(assigned.get_if()
+               ->archived_occupant_id.has_value());
+    const auto null_archive =
+        *assigned.get_if()->archived_occupant_id;
+    assert(session.get_if()
+               ->seat(EconomyId(0U), "treasury")
+               ->assignment.occupant.occupant_id ==
+           "cabinet-player");
+    assert(session.get_if()
+               ->state()
+               .archived_seat_occupants.size() == 1U);
+
+    auto repeated =
+        session.get_if()->assign_seat(assignment);
+    assert(repeated.ok());
+    assert(repeated.get_if()->repeated);
+    assert(repeated.get_if()->archived_occupant_id ==
+           assigned.get_if()->archived_occupant_id);
+    assert(session.get_if()
+               ->state()
+               .archived_seat_occupants.size() == 1U);
+
+    const auto before_invalid =
+        save_m11_checkpoint(*session.get_if());
+    assert(before_invalid.ok());
+    auto invalid = session.get_if()->restore_seat({
+        "restore-wrong",
+        "operator",
+        EconomyId(1U),
+        "treasury",
+        null_archive,
+    });
+    assert(!invalid.ok());
+    const auto after_invalid =
+        save_m11_checkpoint(*session.get_if());
+    assert(after_invalid.ok());
+    assert(*before_invalid.get_if() ==
+           *after_invalid.get_if());
+
+    auto checkpoint =
+        save_m11_checkpoint(*session.get_if());
+    assert(checkpoint.ok());
+    auto restored_session =
+        load_m11_checkpoint(*checkpoint.get_if());
+    assert(restored_session.ok());
+    assert(restored_session.get_if()
+               ->state()
+               .archived_seat_occupants.size() == 1U);
+    assert(restored_session.get_if()
+               ->state()
+               .seat_operations.size() == 1U);
+
+    const M11SeatRestoreRequest restoration{
+        "restore-opening",
+        "operator",
+        EconomyId(0U),
+        "treasury",
+        null_archive,
+    };
+    auto restored =
+        restored_session.get_if()->restore_seat(restoration);
+    assert(restored.ok());
+    assert(!restored.get_if()->repeated);
+    assert(restored.get_if()
+               ->archived_occupant_id.has_value());
+    assert(restored_session.get_if()
+               ->seat(EconomyId(0U), "treasury")
+               ->assignment.occupant.kind ==
+           M11OccupantKind::null_occupant);
+    assert(restored_session.get_if()
+               ->state()
+               .archived_seat_occupants.size() == 1U);
+
+    auto restore_retry =
+        restored_session.get_if()->restore_seat(restoration);
+    assert(restore_retry.ok());
+    assert(restore_retry.get_if()->repeated);
+    assert(restore_retry.get_if()->archived_occupant_id ==
+           restored.get_if()->archived_occupant_id);
+    const auto final_checkpoint =
+        save_m11_checkpoint(*restored_session.get_if());
+    assert(final_checkpoint.ok());
+    auto final_round_trip =
+        load_m11_checkpoint(*final_checkpoint.get_if());
+    assert(final_round_trip.ok());
+    assert(final_round_trip.get_if()
+               ->state()
+               .seat_operations.size() == 2U);
+}
+
 void test_controlled_shocks_are_authorized_atomic_and_idempotent() {
     M11ControllerRunSpec spec;
     spec.shock_authorities.push_back(scenario_authority());
@@ -455,6 +568,7 @@ int main() {
     test_native_rl_occupant_runs_without_python();
     test_checkpoint_restores_pending_execution_exactly();
     test_checkpoint_preserves_human_pause_and_embedded_rl();
+    test_seat_archive_restore_and_checkpoint_idempotency();
     test_controlled_shocks_are_authorized_atomic_and_idempotent();
     test_shock_scheduled_during_human_pause_starts_next_boundary();
     return 0;

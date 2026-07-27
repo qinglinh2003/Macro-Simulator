@@ -101,6 +101,32 @@ struct M11SeatRuntime final {
     std::optional<NativePolicyArtifact> artifact{};
 };
 
+struct M11ArchivedSeatOccupant final {
+    std::string archive_id;
+    M11SeatRuntime runtime;
+};
+
+enum class M11SeatOperationKind : std::uint8_t {
+    assignment = 0,
+    restoration = 1,
+};
+
+struct M11SeatOperationRecord final {
+    std::string operation_id;
+    M11SeatOperationKind kind{M11SeatOperationKind::assignment};
+    core::StateDigest request_hash{};
+    std::optional<std::string> archived_occupant_id{};
+
+    bool operator==(const M11SeatOperationRecord &) const = default;
+};
+
+struct M11SeatChangeResult final {
+    std::optional<std::string> archived_occupant_id{};
+    bool repeated{false};
+
+    bool operator==(const M11SeatChangeResult &) const = default;
+};
+
 struct M11ControllerRunSpec final {
     std::vector<M11CalendarSpec> calendars{m11_default_calendars()};
     std::vector<M11TriggerSpec> triggers{m11_default_triggers()};
@@ -139,6 +165,14 @@ struct M11SeatAssignmentRequest final {
     M11OccupantSpec occupant{};
 };
 
+struct M11SeatRestoreRequest final {
+    std::string operation_id;
+    std::string actor;
+    EconomyId economy{};
+    std::string seat;
+    std::string archived_occupant_id;
+};
+
 struct M11ControlledState final {
     M11BoundaryPhase phase{M11BoundaryPhase::boundary_start};
     M11DecisionScheduler scheduler;
@@ -146,6 +180,8 @@ struct M11ControlledState final {
     M11EventStream events;
     M11ReleaseStream releases;
     std::vector<M11SeatRuntime> seats;
+    std::vector<M11ArchivedSeatOccupant> archived_seat_occupants;
+    std::vector<M11SeatOperationRecord> seat_operations;
     std::vector<std::string> opened_context_ids;
     std::uint64_t boundary_sequence{0U};
 
@@ -227,8 +263,10 @@ class M11ControlledSession final {
     cancel_pending(std::string_view decision_id,
                    std::string_view operation_id,
                    std::string_view actor);
-    [[nodiscard]] Status
+    [[nodiscard]] Result<M11SeatChangeResult>
     assign_seat(const M11SeatAssignmentRequest &request);
+    [[nodiscard]] Result<M11SeatChangeResult>
+    restore_seat(const M11SeatRestoreRequest &request);
     [[nodiscard]] Result<M11ShockScheduleResult>
     schedule_shock(
         const M11ControlledShockScheduleRequest &request);

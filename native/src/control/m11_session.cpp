@@ -1,6 +1,7 @@
 #include "macro_sim/control/m11_session.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
@@ -10,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 namespace macro_sim::control {
@@ -496,14 +498,39 @@ encode_artifact_context(const NativePolicyArtifact &artifact,
             << "|contexts=" << state.coordinator.contexts().size()
             << "|pending=" << state.coordinator.pending().size()
             << "|decisions=" << state.coordinator.decisions().size()
-            << "|seats=" << state.seats.size();
+            << "|seats=" << state.seats.size()
+            << "|seat_archive="
+            << state.archived_seat_occupants.size()
+            << "|seat_operations="
+            << state.seat_operations.size();
     for (const auto &seat : state.seats) {
         payload << '|' << seat.assignment.economy.value() << ':'
                 << seat.assignment.seat << ':'
                 << static_cast<unsigned>(
                        seat.assignment.occupant.kind)
+                << ':' << seat.assignment.occupant.occupant_id
                 << ':' << seat.decision_counter << ':'
                 << seat.artifact_sha256;
+    }
+    for (const auto &archived :
+         state.archived_seat_occupants) {
+        payload << "|archive:" << archived.archive_id << ':'
+                << archived.runtime.assignment.economy.value()
+                << ':' << archived.runtime.assignment.seat << ':'
+                << static_cast<unsigned>(
+                       archived.runtime.assignment.occupant.kind)
+                << ':'
+                << archived.runtime.assignment.occupant.occupant_id
+                << ':' << archived.runtime.decision_counter << ':'
+                << archived.runtime.artifact_sha256;
+    }
+    for (const auto &operation : state.seat_operations) {
+        payload << "|seat_op:" << operation.operation_id << ':'
+                << static_cast<unsigned>(operation.kind) << ':'
+                << operation.request_hash.hex() << ':'
+                << (operation.archived_occupant_id.has_value()
+                        ? *operation.archived_occupant_id
+                        : "");
     }
     const auto text = payload.str();
     envelope.canonical_payload.assign(text.begin(), text.end());
@@ -553,6 +580,152 @@ encode_artifact_context(const NativePolicyArtifact &artifact,
     return previous.has_value()
                ? boundary.value() - previous->value()
                : 0U;
+}
+
+void append_u64(std::vector<std::uint8_t> &bytes,
+                std::uint64_t value) {
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        bytes.push_back(
+            static_cast<std::uint8_t>(value >> shift));
+    }
+}
+
+void append_text(std::vector<std::uint8_t> &bytes,
+                 std::string_view value) {
+    append_u64(bytes, value.size());
+    bytes.insert(bytes.end(), value.begin(), value.end());
+}
+
+void append_policy_value(std::vector<std::uint8_t> &bytes,
+                         const PolicyValue &value) {
+    bytes.push_back(static_cast<std::uint8_t>(value.index()));
+    std::visit(
+        [&](const auto &entry) {
+            using Value = std::decay_t<decltype(entry)>;
+            if constexpr (std::is_same_v<Value, std::monostate>) {
+                return;
+            } else if constexpr (std::is_same_v<Value, bool>) {
+                bytes.push_back(entry ? 1U : 0U);
+            } else if constexpr (
+                std::is_same_v<Value, std::int64_t>) {
+                append_u64(
+                    bytes, std::bit_cast<std::uint64_t>(entry));
+            } else if constexpr (std::is_same_v<Value, double>) {
+                append_u64(
+                    bytes, std::bit_cast<std::uint64_t>(entry));
+            } else if constexpr (
+                std::is_same_v<Value, std::string>) {
+                append_text(bytes, entry);
+            } else {
+                append_u64(bytes, entry.size());
+                for (const auto economy : entry) {
+                    append_u64(bytes, economy.value());
+                }
+            }
+        },
+        value);
+}
+
+void append_occupant(std::vector<std::uint8_t> &bytes,
+                     const M11OccupantSpec &occupant) {
+    bytes.push_back(static_cast<std::uint8_t>(occupant.kind));
+    append_text(bytes, occupant.occupant_id);
+    append_u64(bytes, occupant.seed);
+    append_u64(
+        bytes,
+        std::bit_cast<std::uint64_t>(
+            occupant.random_action_probability));
+    append_u64(bytes, occupant.schedule.size());
+    for (const auto &scheduled : occupant.schedule) {
+        append_u64(bytes, scheduled.boundary.value());
+        append_text(bytes, scheduled.decision_group);
+        append_u64(bytes, scheduled.actions.size());
+        for (const auto &action : scheduled.actions) {
+            append_u64(bytes, action.economy.value());
+            append_text(bytes, action.lever);
+            append_policy_value(bytes, action.value);
+        }
+    }
+    append_text(bytes, occupant.artifact_path.generic_string());
+    append_u64(bytes, occupant.action_dimensions.size());
+    for (const auto &dimension : occupant.action_dimensions) {
+        append_text(bytes, dimension);
+    }
+}
+
+[[nodiscard]] core::StateDigest seat_assignment_request_hash(
+    const M11SeatAssignmentRequest &request) {
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(
+        128U + request.operation_id.size() +
+        request.actor.size() + request.seat.size());
+    bytes.push_back(
+        static_cast<std::uint8_t>(
+            M11SeatOperationKind::assignment));
+    append_text(bytes, request.operation_id);
+    append_text(bytes, request.actor);
+    append_u64(bytes, request.economy.value());
+    append_text(bytes, request.seat);
+    append_occupant(bytes, request.occupant);
+    return core::sha256_digest(bytes);
+}
+
+[[nodiscard]] core::StateDigest seat_restore_request_hash(
+    const M11SeatRestoreRequest &request) {
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(
+        128U + request.operation_id.size() +
+        request.actor.size() + request.seat.size() +
+        request.archived_occupant_id.size());
+    bytes.push_back(
+        static_cast<std::uint8_t>(
+            M11SeatOperationKind::restoration));
+    append_text(bytes, request.operation_id);
+    append_text(bytes, request.actor);
+    append_u64(bytes, request.economy.value());
+    append_text(bytes, request.seat);
+    append_text(bytes, request.archived_occupant_id);
+    return core::sha256_digest(bytes);
+}
+
+[[nodiscard]] std::string seat_archive_id(
+    const core::StateDigest &request_hash) {
+    return "occupant:" + request_hash.hex();
+}
+
+[[nodiscard]] const M11SeatOperationRecord *seat_operation(
+    const M11ControlledState &state,
+    std::string_view operation_id) noexcept {
+    const auto found = std::find_if(
+        state.seat_operations.begin(),
+        state.seat_operations.end(),
+        [&](const M11SeatOperationRecord &entry) {
+            return entry.operation_id == operation_id;
+        });
+    return found == state.seat_operations.end()
+               ? nullptr
+               : &*found;
+}
+
+[[nodiscard]] bool occupant_active_elsewhere(
+    const M11ControlledState &state,
+    const M11SeatRuntime &candidate,
+    EconomyId target_economy,
+    std::string_view target_seat) noexcept {
+    if (candidate.assignment.occupant.kind ==
+        M11OccupantKind::null_occupant) {
+        return false;
+    }
+    return std::any_of(
+        state.seats.begin(), state.seats.end(),
+        [&](const M11SeatRuntime &entry) {
+            return (entry.assignment.economy != target_economy ||
+                    entry.assignment.seat != target_seat) &&
+                   entry.assignment.occupant.kind ==
+                       candidate.assignment.occupant.kind &&
+                   entry.assignment.occupant.occupant_id ==
+                       candidate.assignment.occupant.occupant_id;
+        });
 }
 
 [[nodiscard]] bool valid_occupant_spec(
@@ -1513,16 +1686,38 @@ M11ControlledSession::cancel_pending(
     return *decision.get_if();
 }
 
-Status M11ControlledSession::assign_seat(
+Result<M11SeatChangeResult> M11ControlledSession::assign_seat(
     const M11SeatAssignmentRequest &request) {
-    if (state_.phase != M11BoundaryPhase::boundary_start ||
-        request.operation_id.empty() || request.actor.empty() ||
+    if (request.operation_id.empty() ||
+        request.operation_id.size() >
+            kM10MaximumOperationIdBytes ||
+        request.operation_id.find('\0') != std::string::npos ||
+        request.actor.empty() ||
         request.economy.value() >=
             bridge_.engine().world().economy_count() ||
         !m11_valid_seat(request.seat) ||
         !valid_occupant_spec(request.occupant)) {
         return invalid_session(
             "M11 seat assignment request is invalid");
+    }
+    const auto request_hash =
+        seat_assignment_request_hash(request);
+    if (const auto *existing =
+            seat_operation(state_, request.operation_id);
+        existing != nullptr) {
+        if (existing->kind !=
+                M11SeatOperationKind::assignment ||
+            existing->request_hash != request_hash) {
+            return Status(
+                ErrorCode::already_exists,
+                "M11 seat operation ID payload differs");
+        }
+        return M11SeatChangeResult{
+            existing->archived_occupant_id, true};
+    }
+    if (state_.phase != M11BoundaryPhase::boundary_start) {
+        return invalid_session(
+            "M11 seat assignment requires a boundary start");
     }
     auto next = state_;
     auto runtime = std::find_if(
@@ -1556,9 +1751,22 @@ Status M11ControlledSession::assign_seat(
         replacement.artifact =
             std::move(*artifact.get_if());
     }
+    if (occupant_active_elsewhere(
+            next, replacement, request.economy,
+            request.seat)) {
+        return Status(
+            ErrorCode::already_exists,
+            "M11 occupant is already assigned to another seat");
+    }
+    std::optional<std::string> archived_occupant_id;
     if (runtime == next.seats.end()) {
         next.seats.push_back(std::move(replacement));
     } else {
+        archived_occupant_id = seat_archive_id(request_hash);
+        next.archived_seat_occupants.push_back({
+            *archived_occupant_id,
+            std::move(*runtime),
+        });
         *runtime = std::move(replacement);
     }
     std::sort(
@@ -1572,6 +1780,19 @@ Status M11ControlledSession::assign_seat(
                        right.assignment.economy.value(),
                        right.assignment.seat};
         });
+    std::sort(
+        next.archived_seat_occupants.begin(),
+        next.archived_seat_occupants.end(),
+        [](const M11ArchivedSeatOccupant &left,
+           const M11ArchivedSeatOccupant &right) {
+            return left.archive_id < right.archive_id;
+        });
+    next.seat_operations.push_back({
+        request.operation_id,
+        M11SeatOperationKind::assignment,
+        request_hash,
+        archived_occupant_id,
+    });
     auto event = next.events.append(
         bridge_.engine().tick(), "seat_assigned",
         request.operation_id, request.actor,
@@ -1580,13 +1801,158 @@ Status M11ControlledSession::assign_seat(
             "|seat=" + request.seat +
             "|occupant=" +
             std::string(m11_occupant_kind_name(
-                request.occupant.kind)),
+                request.occupant.kind)) +
+            "|archived=" +
+            (archived_occupant_id.has_value()
+                 ? *archived_occupant_id
+                 : ""),
         M11EventVisibility::privileged_audit);
     if (!event.ok()) {
         return event.status();
     }
-    return synchronize_state(
-        "m11-seat:" + request.operation_id, std::move(next));
+    const auto status = synchronize_state(
+        "m11-seat:" + request_hash.hex(), std::move(next));
+    if (!status.ok()) {
+        return status;
+    }
+    return M11SeatChangeResult{
+        std::move(archived_occupant_id), false};
+}
+
+Result<M11SeatChangeResult> M11ControlledSession::restore_seat(
+    const M11SeatRestoreRequest &request) {
+    if (request.operation_id.empty() ||
+        request.operation_id.size() >
+            kM10MaximumOperationIdBytes ||
+        request.operation_id.find('\0') != std::string::npos ||
+        request.actor.empty() ||
+        request.economy.value() >=
+            bridge_.engine().world().economy_count() ||
+        !m11_valid_seat(request.seat) ||
+        request.archived_occupant_id.empty() ||
+        request.archived_occupant_id.size() > 256U ||
+        request.archived_occupant_id.find('\0') !=
+            std::string::npos) {
+        return invalid_session(
+            "M11 seat restoration request is invalid");
+    }
+    const auto request_hash =
+        seat_restore_request_hash(request);
+    if (const auto *existing =
+            seat_operation(state_, request.operation_id);
+        existing != nullptr) {
+        if (existing->kind !=
+                M11SeatOperationKind::restoration ||
+            existing->request_hash != request_hash) {
+            return Status(
+                ErrorCode::already_exists,
+                "M11 seat operation ID payload differs");
+        }
+        return M11SeatChangeResult{
+            existing->archived_occupant_id, true};
+    }
+    if (state_.phase != M11BoundaryPhase::boundary_start) {
+        return invalid_session(
+            "M11 seat restoration requires a boundary start");
+    }
+
+    auto next = state_;
+    const auto archived = std::find_if(
+        next.archived_seat_occupants.begin(),
+        next.archived_seat_occupants.end(),
+        [&](const M11ArchivedSeatOccupant &entry) {
+            return entry.archive_id ==
+                   request.archived_occupant_id;
+        });
+    if (archived ==
+        next.archived_seat_occupants.end()) {
+        return Status(
+            ErrorCode::not_found,
+            "M11 archived seat occupant was not found");
+    }
+    if (archived->runtime.assignment.economy !=
+            request.economy ||
+        archived->runtime.assignment.seat != request.seat) {
+        return Status(
+            ErrorCode::contract_violation,
+            "M11 archived occupant belongs to another seat");
+    }
+    if (occupant_active_elsewhere(
+            next, archived->runtime, request.economy,
+            request.seat)) {
+        return Status(
+            ErrorCode::already_exists,
+            "M11 archived occupant is already active");
+    }
+
+    auto runtime = std::find_if(
+        next.seats.begin(), next.seats.end(),
+        [&](const M11SeatRuntime &entry) {
+            return entry.assignment.economy ==
+                       request.economy &&
+                   entry.assignment.seat == request.seat;
+        });
+    auto restored = std::move(archived->runtime);
+    next.archived_seat_occupants.erase(archived);
+    std::optional<std::string> outgoing_archive_id;
+    if (runtime == next.seats.end()) {
+        next.seats.push_back(std::move(restored));
+    } else {
+        outgoing_archive_id = seat_archive_id(request_hash);
+        next.archived_seat_occupants.push_back({
+            *outgoing_archive_id,
+            std::move(*runtime),
+        });
+        *runtime = std::move(restored);
+    }
+    std::sort(
+        next.seats.begin(), next.seats.end(),
+        [](const M11SeatRuntime &left,
+           const M11SeatRuntime &right) {
+            return std::pair{
+                       left.assignment.economy.value(),
+                       left.assignment.seat} <
+                   std::pair{
+                       right.assignment.economy.value(),
+                       right.assignment.seat};
+        });
+    std::sort(
+        next.archived_seat_occupants.begin(),
+        next.archived_seat_occupants.end(),
+        [](const M11ArchivedSeatOccupant &left,
+           const M11ArchivedSeatOccupant &right) {
+            return left.archive_id < right.archive_id;
+        });
+    next.seat_operations.push_back({
+        request.operation_id,
+        M11SeatOperationKind::restoration,
+        request_hash,
+        outgoing_archive_id,
+    });
+    auto event = next.events.append(
+        bridge_.engine().tick(), "seat_restored",
+        request.operation_id, request.actor,
+        "economy=" +
+            std::to_string(request.economy.value()) +
+            "|seat=" + request.seat +
+            "|restored=" +
+            request.archived_occupant_id +
+            "|archived=" +
+            (outgoing_archive_id.has_value()
+                 ? *outgoing_archive_id
+                 : ""),
+        M11EventVisibility::privileged_audit);
+    if (!event.ok()) {
+        return event.status();
+    }
+    const auto status = synchronize_state(
+        "m11-restore:" + request_hash.hex(),
+        std::move(next));
+    if (!status.ok()) {
+        return status;
+    }
+    return M11SeatChangeResult{
+        std::move(outgoing_archive_id), false};
 }
 
 Result<M11ShockScheduleResult>

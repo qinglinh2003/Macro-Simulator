@@ -21,7 +21,7 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::uint32_t kCheckpointSchemaVersion = 1U;
+constexpr std::uint32_t kCheckpointSchemaVersion = 2U;
 
 [[nodiscard]] Status corrupt_checkpoint() noexcept {
     return Status(ErrorCode::corrupt_input,
@@ -794,6 +794,58 @@ shock_authority_from_json(const Json &value) {
     return result;
 }
 
+[[nodiscard]] Json archived_seat_json(
+    const M11ArchivedSeatOccupant &value) {
+    return {
+        {"archive_id", value.archive_id},
+        {"runtime", seat_json(value.runtime)},
+    };
+}
+
+[[nodiscard]] M11ArchivedSeatOccupant
+archived_seat_from_json(const Json &value) {
+    require_object(value, {"archive_id", "runtime"});
+    return {
+        value.at("archive_id").get<std::string>(),
+        seat_from_json(value.at("runtime")),
+    };
+}
+
+[[nodiscard]] Json seat_operation_json(
+    const M11SeatOperationRecord &value) {
+    return {
+        {"archived_occupant_id",
+         value.archived_occupant_id.has_value()
+             ? Json(*value.archived_occupant_id)
+             : Json(nullptr)},
+        {"kind", static_cast<std::uint8_t>(value.kind)},
+        {"operation_id", value.operation_id},
+        {"request_hash", digest_json(value.request_hash)},
+    };
+}
+
+[[nodiscard]] M11SeatOperationRecord
+seat_operation_from_json(const Json &value) {
+    require_object(
+        value,
+        {"archived_occupant_id", "kind", "operation_id",
+         "request_hash"});
+    std::optional<std::string> archived;
+    if (!value.at("archived_occupant_id").is_null()) {
+        archived =
+            value.at("archived_occupant_id").get<std::string>();
+    }
+    return {
+        value.at("operation_id").get<std::string>(),
+        checked_enum<M11SeatOperationKind>(
+            value.at("kind"),
+            static_cast<std::uint8_t>(
+                M11SeatOperationKind::restoration)),
+        digest_from_json(value.at("request_hash")),
+        std::move(archived),
+    };
+}
+
 [[nodiscard]] Json event_json(const M11ControllerEvent &value) {
     return Json{
         {"actor", value.actor},
@@ -941,11 +993,24 @@ release_from_json(const Json &value) {
     for (const auto &entry : state.seats) {
         seats.push_back(seat_json(entry));
     }
+    Json archived_seat_occupants = Json::array();
+    for (const auto &entry :
+         state.archived_seat_occupants) {
+        archived_seat_occupants.push_back(
+            archived_seat_json(entry));
+    }
+    Json seat_operations = Json::array();
+    for (const auto &entry : state.seat_operations) {
+        seat_operations.push_back(
+            seat_operation_json(entry));
+    }
     Json shock_authorities = Json::array();
     for (const auto &entry : run_spec.shock_authorities) {
         shock_authorities.push_back(shock_authority_json(entry));
     }
     return Json{
+        {"archived_seat_occupants",
+         std::move(archived_seat_occupants)},
         {"boundary_sequence", state.boundary_sequence},
         {"budgets", std::move(budgets)},
         {"calendars", std::move(calendars)},
@@ -969,6 +1034,7 @@ release_from_json(const Json &value) {
         {"releases", std::move(releases)},
         {"releases_next_sequence", state.releases.next_sequence()},
         {"schema_version", kCheckpointSchemaVersion},
+        {"seat_operations", std::move(seat_operations)},
         {"seats", std::move(seats)},
         {"shock_authorities", std::move(shock_authorities)},
         {"trigger_states", std::move(trigger_states)},
@@ -993,15 +1059,16 @@ state_from_archive(const Json &root,
                    M11ControllerRunSpec &run_spec) {
     require_object(
         root,
-        {"boundary_sequence", "budgets", "calendars", "contexts",
-         "cost_spec", "decisions", "events", "events_head",
+        {"archived_seat_occupants", "boundary_sequence",
+         "budgets", "calendars", "contexts", "cost_spec",
+         "decisions", "events", "events_head",
          "events_next_sequence", "fill_unassigned_with_null",
          "idempotency", "maximum_events", "maximum_releases",
-         "next_decision_sequence", "opened_context_ids", "pending",
-         "phase", "policy_versions", "releases",
-         "releases_next_sequence", "schema_version", "seats",
-         "shock_authorities", "trigger_states", "triggers",
-         "worker_count"});
+         "next_decision_sequence", "opened_context_ids",
+         "pending", "phase", "policy_versions", "releases",
+         "releases_next_sequence", "schema_version",
+         "seat_operations", "seats", "shock_authorities",
+         "trigger_states", "triggers", "worker_count"});
     if (root.at("schema_version").get<std::uint32_t>() !=
         kCheckpointSchemaVersion) {
         throw std::runtime_error("checkpoint schema differs");
@@ -1235,6 +1302,68 @@ state_from_archive(const Json &root,
             throw std::runtime_error("checkpoint seat is invalid");
         }
         run_spec.assignments.push_back(seat.assignment);
+    }
+    for (const auto &entry :
+         root.at("archived_seat_occupants")) {
+        state.archived_seat_occupants.push_back(
+            archived_seat_from_json(entry));
+    }
+    if (!std::is_sorted(
+            state.archived_seat_occupants.begin(),
+            state.archived_seat_occupants.end(),
+            [](const M11ArchivedSeatOccupant &left,
+               const M11ArchivedSeatOccupant &right) {
+                return left.archive_id < right.archive_id;
+            }) ||
+        std::adjacent_find(
+            state.archived_seat_occupants.begin(),
+            state.archived_seat_occupants.end(),
+            [](const M11ArchivedSeatOccupant &left,
+               const M11ArchivedSeatOccupant &right) {
+                return left.archive_id == right.archive_id;
+            }) != state.archived_seat_occupants.end()) {
+        throw std::runtime_error(
+            "checkpoint seat archive differs");
+    }
+    for (const auto &entry :
+         state.archived_seat_occupants) {
+        if (entry.archive_id.empty() ||
+            entry.archive_id.size() > 256U ||
+            entry.archive_id.find('\0') !=
+                std::string::npos ||
+            entry.runtime.assignment.economy.value() >=
+                world.economy_count() ||
+            !m11_valid_seat(
+                entry.runtime.assignment.seat)) {
+            throw std::runtime_error(
+                "checkpoint archived seat is invalid");
+        }
+    }
+    for (const auto &entry : root.at("seat_operations")) {
+        state.seat_operations.push_back(
+            seat_operation_from_json(entry));
+    }
+    if (state.seat_operations.size() >
+            run_spec.maximum_events) {
+        throw std::runtime_error(
+            "checkpoint seat operation history is oversized");
+    }
+    std::set<std::string> operation_ids;
+    for (const auto &entry : state.seat_operations) {
+        if (entry.operation_id.empty() ||
+            entry.operation_id.size() >
+                kM10MaximumOperationIdBytes ||
+            entry.operation_id.find('\0') !=
+                std::string::npos ||
+            !operation_ids.emplace(entry.operation_id).second ||
+            (entry.archived_occupant_id.has_value() &&
+             (entry.archived_occupant_id->empty() ||
+              entry.archived_occupant_id->size() > 256U ||
+              entry.archived_occupant_id->find('\0') !=
+                  std::string::npos))) {
+            throw std::runtime_error(
+                "checkpoint seat operation is invalid");
+        }
     }
     for (const auto &context_id : state.opened_context_ids) {
         if (state.coordinator.find_context(context_id) == nullptr) {

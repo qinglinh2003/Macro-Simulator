@@ -346,6 +346,92 @@ void test_entity_pages_and_details_preserve_links() {
     }
 }
 
+void test_seat_restore_and_audit_event_replay() {
+    auto protocol = worker();
+    assert(response(protocol, request(1U, "hello"))
+               .at("ok")
+               .get<bool>());
+    const auto created =
+        response(protocol, request(2U, "new_session"));
+    const auto session_id =
+        created.at("result")
+            .at("session_id")
+            .get<std::string>();
+
+    auto assign = request(3U, "assign_seat");
+    assign["session_id"] = session_id;
+    assign["operation_id"] = "seat-change";
+    assign["economy_id"] = 0U;
+    assign["seat"] = "treasury";
+    assign["occupant"] = {
+        {"kind", "heuristic"},
+        {"occupant_id", "fiscal-rule"},
+    };
+    const auto assigned = response(protocol, assign);
+    assert(assigned.at("ok").get<bool>());
+    assert(!assigned.at("result")
+                .at("repeated")
+                .get<bool>());
+    const auto archive_id =
+        assigned.at("result")
+            .at("archived_occupant_id")
+            .get<std::string>();
+    assert(!archive_id.empty());
+
+    assign["sequence"] = 4U;
+    assign["request_id"] = "seat-change-retry";
+    const auto repeated = response(protocol, assign);
+    assert(repeated.at("ok").get<bool>());
+    assert(repeated.at("result")
+               .at("repeated")
+               .get<bool>());
+    assert(repeated.at("result")
+               .at("archived_occupant_id") == archive_id);
+
+    auto restore = request(5U, "restore_seat");
+    restore["session_id"] = session_id;
+    restore["operation_id"] = "seat-restore";
+    restore["economy_id"] = 0U;
+    restore["seat"] = "treasury";
+    restore["archived_occupant_id"] = archive_id;
+    const auto restored = response(protocol, restore);
+    assert(restored.at("ok").get<bool>());
+    assert(!restored.at("result")
+                .at("repeated")
+                .get<bool>());
+    assert(restored.at("result")
+               .at("archived_occupant_id")
+               .is_string());
+
+    auto events = request(6U, "event_page");
+    events["session_id"] = session_id;
+    events["first_sequence"] = 0U;
+    events["maximum_rows"] = 256U;
+    events["visibility"] = "privileged_audit";
+    const auto replay = response(protocol, events);
+    assert(replay.at("ok").get<bool>());
+    assert(replay.at("result").at("next_sequence") ==
+           replay.at("result").at("event_cursor"));
+    bool saw_assignment = false;
+    bool saw_restoration = false;
+    std::string prior_hash(64U, '0');
+    for (const auto &event :
+         replay.at("result").at("events")) {
+        assert(event.at("prior_hash") == prior_hash);
+        prior_hash = event.at("hash").get<std::string>();
+        saw_assignment =
+            saw_assignment ||
+            event.at("event_type") == "seat_assigned";
+        saw_restoration =
+            saw_restoration ||
+            event.at("event_type") == "seat_restored";
+    }
+    assert(saw_assignment);
+    assert(saw_restoration);
+    assert(replay.at("result").at("head_hash") ==
+           prior_hash);
+}
+
 void test_save_load_is_sandboxed_atomic_and_verified() {
     const auto root =
         std::filesystem::temp_directory_path() /
@@ -445,6 +531,7 @@ int main() {
     test_human_advance_pauses_without_consuming_time();
     test_control_commands_are_role_scoped_and_idempotent();
     test_entity_pages_and_details_preserve_links();
+    test_seat_restore_and_audit_event_replay();
     test_save_load_is_sandboxed_atomic_and_verified();
     return 0;
 }
