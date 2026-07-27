@@ -3,6 +3,7 @@ extends Control
 ## the simulation engine remains the sole authority for economic behavior.
 
 const SimulationClientScript = preload("res://scripts/simulation_client.gd")
+const M11FrontendAdapterScript = preload("res://scripts/m11_frontend_adapter.gd")
 const StartMenuScript = preload("res://scripts/start_menu.gd")
 const LocaleCatalogScript = preload("res://scripts/localization.gd")
 
@@ -849,6 +850,8 @@ var _scroll_mem: Dictionary = {}        # key -> scroll_vertical
 var _start_menu: Control
 var _new_game_draft: Dictionary = {}
 var _new_game_pending := false
+var _m11_adapter
+var _entity_requested: Dictionary = {}
 
 
 func _ready() -> void:
@@ -860,6 +863,7 @@ func _ready() -> void:
 	_mono.fallbacks = [_sans]
 	_build_theme()
 	_build_ui()
+	_m11_adapter = M11FrontendAdapterScript.new()
 	if OS.get_environment("MACRO_SIM_SKIP_START_MENU") != "1":
 		_ensure_start_menu()
 	_client = SimulationClientScript.new()
@@ -970,6 +974,9 @@ func _request_return_to_main_menu() -> void:
 func _return_to_main_menu() -> void:
 	_playing = false
 	_outbox.clear()
+	if not _snapshot.is_empty():
+		_send({"command": "close_session"})
+		_snapshot.clear()
 	_ensure_start_menu()
 	if _start_menu.has_method("open_home"):
 		_start_menu.call("open_home", true)
@@ -1003,26 +1010,45 @@ func _pump() -> void:
 func _on_connected() -> void:
 	_set_text("conn", "@{desktop.main.fragment.94090d9c9a2ca568}")
 	_send({"command": "hello"})
-	_send({"command": "get_schema"})
 
 
 func _on_response(response: Dictionary) -> void:
-	var payload: Dictionary = response.get("snapshot", {})
-	if payload.has("seats") and payload.has("levers"):
+	var result: Dictionary = response.get("result", {})
+	var command_name := str(_active_command.get("command", ""))
+	var payload: Dictionary = {}
+	if command_name == "get_schema":
+		payload = _m11_adapter.schema_payload(result)
 		_control_mode = str(payload.get("control_mode", _control_mode))
 		_schemas = payload.get("seats", {})
 		_index_schema()
 		if _start_menu != null and _start_menu.has_method("set_policy_schemas"):
 			_start_menu.call("set_policy_schemas", _start_menu_policy_schemas())
-	else:
-		var manifest: Dictionary = payload.get("new_game", {})
-		if _new_game_pending \
-				and str(_active_command.get("command", "")) == "new_game" \
-				and _new_game_response_matches_draft(manifest):
-			_new_game_pending = false
-			_reset_client_for_new_game(payload)
-			_outbox.append({"command": "get_schema"})
+	elif command_name == "new_game":
+		_m11_adapter.reset(result, _new_game_draft)
+		payload = _m11_adapter.apply_projection(result.get("projection", {}))
+		_new_game_pending = false
+		_reset_client_for_new_game(payload)
+		_outbox.append({"command": "get_schema"})
 		_snapshot = payload
+	elif command_name == "entity_page":
+		payload = _m11_adapter.apply_entity_result(result)
+		_snapshot = payload
+		var entity_kind := str(result.get(
+			"kind", _active_command.get("kind", "")))
+		_entity_requested.erase(entity_kind)
+	elif result.has("projection"):
+		payload = _m11_adapter.apply_projection(result.get("projection", {}))
+		_snapshot = payload
+	elif command_name == "snapshot":
+		payload = _m11_adapter.apply_projection(result)
+		_snapshot = payload
+	elif command_name == "load_slot":
+		_m11_adapter.reset(result, {})
+		payload = _m11_adapter.apply_projection(result.get("projection", {}))
+		_reset_client_for_new_game(payload)
+		_snapshot = payload
+		_outbox.append({"command": "get_schema"})
+	if not payload.is_empty():
 		_control_mode = str(payload.get("control_mode", _control_mode))
 		_reconcile_free_policy_queue()
 		_ingest_releases()
@@ -1033,7 +1059,7 @@ func _on_response(response: Dictionary) -> void:
 			stw2.tween_property(splash, "modulate:a", 0.0, 0.35)
 			stw2.tween_callback(func() -> void:
 				splash.visible = false)
-		var verdict: Variant = payload.get("last_verdict")
+		var verdict: Variant = result.get("decision")
 		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
 			_show_verdict(verdict)
 		if _playing and _awaiting() and _mode != "realtime" \
@@ -1097,6 +1123,7 @@ func _reset_client_for_new_game(payload: Dictionary) -> void:
 	_last_tab = ""
 	_last_seat = ""
 	_last_page = ""
+	_entity_requested.clear()
 
 
 func _on_request_failed(message: String) -> void:
@@ -1105,6 +1132,8 @@ func _on_request_failed(message: String) -> void:
 		_new_game_pending = false
 		if _start_menu != null and _start_menu.has_method("restore_after_launch_error"):
 			_start_menu.call("restore_after_launch_error", message)
+	if str(_active_command.get("command", "")) == "entity_page":
+		_entity_requested.erase(str(_active_command.get("kind", "")))
 	_show_verdict({"status": "rejected", "reason_code": message,
 		"decision_id": "err:%d" % Time.get_ticks_msec()})
 	_active_command.clear()
@@ -2383,6 +2412,33 @@ func _render() -> void:
 			_render_policy_brief(
 				_confirm.get("lever", {}), _confirm.get("current"))
 	_localize_tree(self)
+	call_deferred("_request_visible_entity_page")
+
+
+func _request_visible_entity_page() -> void:
+	if _client == null or _snapshot.is_empty():
+		return
+	var kind: String = {
+		"households": "households",
+		"firms": "firms",
+		"stocks": "equities",
+	}.get(_tab, "")
+	if kind.is_empty():
+		return
+	var boundary := int(_snapshot.get("tick", -1))
+	if _m11_adapter.entity_boundary(kind) == boundary \
+			or int(_entity_requested.get(kind, -2)) == boundary:
+		return
+	_entity_requested[kind] = boundary
+	_send({
+		"command": "entity_page",
+		"kind": kind,
+		"economy_id": int(
+			(_snapshot.get("world", {}) as Dictionary).get(
+				"player_economy", 0)),
+		"after_id": 0,
+		"maximum_rows": 256,
+	})
 
 
 func _localize_tree(node: Node) -> void:

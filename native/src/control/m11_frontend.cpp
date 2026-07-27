@@ -251,38 +251,16 @@ void append_shock_bulletin(
            scope.principal.size() <= 128U &&
            scope.economy.value() <
                session.engine().world().economy_count() &&
-           m11_valid_seat(scope.role);
+           (scope.role == "player" ||
+            m11_valid_seat(scope.role));
 }
 
 [[nodiscard]] bool frontend_metric(
     const reporting::MetricDescriptor &descriptor) noexcept {
     return descriptor.tier == reporting::MetricTier::causal ||
            descriptor.tier == reporting::MetricTier::release ||
-           descriptor.tier == reporting::MetricTier::frontend;
-}
-
-[[nodiscard]] bool bulletin_equal(
-    const reporting::ShockBulletinProbeRow &left,
-    const reporting::ShockBulletinProbeRow &right) noexcept {
-    return left.shock_id == right.shock_id &&
-           left.kind == right.kind &&
-           left.economy == right.economy &&
-           left.announcement == right.announcement &&
-           left.start == right.start &&
-           left.expected_end == right.expected_end &&
-           left.duration == right.duration &&
-           left.magnitude == right.magnitude &&
-           left.intensity == right.intensity &&
-           left.status == right.status &&
-           left.sector == right.sector;
-}
-
-[[nodiscard]] bool bulletins_equal(
-    const std::vector<reporting::ShockBulletinProbeRow> &left,
-    const std::vector<reporting::ShockBulletinProbeRow> &right) noexcept {
-    return left.size() == right.size() &&
-           std::equal(left.begin(), left.end(), right.begin(),
-                      bulletin_equal);
+           descriptor.tier == reporting::MetricTier::frontend ||
+           descriptor.tier == reporting::MetricTier::analytic;
 }
 
 } // namespace
@@ -314,6 +292,24 @@ core::StateDigest m11_frontend_snapshot_id(
             bytes.push_back(metric.value.has_value() ? 1U : 0U);
             if (metric.value.has_value()) {
                 append_double(bytes, *metric.value);
+            }
+        }
+        append_u64(
+            bytes,
+            static_cast<std::uint64_t>(
+                snapshot.economies.size()));
+        for (const auto &economy : snapshot.economies) {
+            append_u64(bytes, economy.economy.value());
+            append_u64(
+                bytes,
+                static_cast<std::uint64_t>(
+                    economy.metrics.size()));
+            for (const auto &metric : economy.metrics) {
+                append_string(bytes, metric.stable_id);
+                append_bool(bytes, metric.value.has_value());
+                if (metric.value.has_value()) {
+                    append_double(bytes, *metric.value);
+                }
             }
         }
         append_u64(
@@ -391,24 +387,34 @@ M11FrontendProjection::snapshot(
 
     const auto &frame = session.engine().metrics().current();
     const auto descriptors = reporting::metric_descriptors();
-    result.metrics.reserve(descriptors.size());
-    for (std::size_t index = 0U; index < descriptors.size();
-         ++index) {
-        if (!frontend_metric(descriptors[index])) {
-            continue;
+    result.economies.reserve(frame.economy_count);
+    for (std::size_t economy_index = 0U;
+         economy_index < frame.economy_count;
+         ++economy_index) {
+        M11FrontendEconomy economy;
+        economy.economy = EconomyId(economy_index);
+        economy.metrics.reserve(descriptors.size());
+        for (std::size_t index = 0U;
+             index < descriptors.size(); ++index) {
+            if (!frontend_metric(descriptors[index])) {
+                continue;
+            }
+            auto value = frame.value(economy_index, index);
+            economy.metrics.push_back({
+                std::string(descriptors[index].stable_id),
+                value.ok()
+                    ? std::optional<double>(*value.get_if())
+                    : std::optional<double>{},
+            });
         }
-        auto value = frame.value(
-            static_cast<std::size_t>(scope.economy.value()),
-            index);
-        result.metrics.push_back({
-            std::string(descriptors[index].stable_id),
-            value.ok() ? std::optional<double>(*value.get_if())
-                       : std::optional<double>{},
-        });
+        std::ranges::sort(
+            economy.metrics, {},
+            &M11FrontendMetric::stable_id);
+        if (economy.economy == scope.economy) {
+            result.metrics = economy.metrics;
+        }
+        result.economies.push_back(std::move(economy));
     }
-    std::ranges::sort(
-        result.metrics, {},
-        &M11FrontendMetric::stable_id);
 
     auto domestic =
         session.engine().world().domestic_policy(scope.economy);
@@ -419,7 +425,8 @@ M11FrontendProjection::snapshot(
         session.engine().world().external_policies()
             [static_cast<std::size_t>(scope.economy.value())];
     for (const auto &lever : m11_policy_levers()) {
-        if (lever.owner_role != scope.role) {
+        if (scope.role != "player" &&
+            lever.owner_role != scope.role) {
             continue;
         }
         auto value = m11_policy_value(
@@ -439,13 +446,35 @@ M11FrontendProjection::snapshot(
     }
     std::ranges::sort(
         result.policies, {}, &M11FrontendPolicy::lever);
-    auto observations = release_service_.observation(
-        session.releases(), scope.economy, session.tick(),
-        scope.role);
-    if (!observations.ok()) {
-        return observations.status();
+    const auto append_observations =
+        [&](std::string_view role) -> Status {
+        auto observations = release_service_.observation(
+            session.releases(), scope.economy,
+            session.tick(), role);
+        if (!observations.ok()) {
+            return observations.status();
+        }
+        result.releases.insert(
+            result.releases.end(),
+            std::make_move_iterator(
+                observations.get_if()->begin()),
+            std::make_move_iterator(
+                observations.get_if()->end()));
+        return Status::success();
+    };
+    if (scope.role == "player") {
+        for (const auto role : kM11Seats) {
+            const auto status = append_observations(role);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+    } else {
+        const auto status = append_observations(scope.role);
+        if (!status.ok()) {
+            return status;
+        }
     }
-    result.releases = std::move(*observations.get_if());
     std::ranges::sort(
         result.releases,
         [](const M11ReleasedObservation &left,
@@ -457,10 +486,15 @@ M11FrontendProjection::snapshot(
                        right.series_id, right.observed_at,
                        right.released_at, right.revision);
         });
+    result.releases.erase(
+        std::unique(
+            result.releases.begin(), result.releases.end()),
+        result.releases.end());
     for (const auto &context :
          session.coordinator().contexts()) {
         if (context.economy == scope.economy &&
-            context.seat == scope.role &&
+            (scope.role == "player" ||
+             context.seat == scope.role) &&
             context.boundary <= session.tick() &&
             context.expires_at >= session.tick()) {
             result.contexts.push_back(context);
@@ -471,7 +505,8 @@ M11FrontendProjection::snapshot(
     for (const auto &pending :
          session.coordinator().pending()) {
         if (pending.context.economy == scope.economy &&
-            pending.context.seat == scope.role &&
+            (scope.role == "player" ||
+             pending.context.seat == scope.role) &&
             pending.decision.status ==
                 M11DecisionStatus::accepted_pending) {
             result.pending.push_back(pending);
@@ -549,6 +584,15 @@ M11FrontendProjection::delta(
             delta.changed_metrics.push_back(metric);
         }
     }
+    for (const auto &economy : result.economies) {
+        const auto previous = std::ranges::find(
+            base.economies, economy.economy,
+            &M11FrontendEconomy::economy);
+        if (previous == base.economies.end() ||
+            *previous != economy) {
+            delta.changed_economies.push_back(economy);
+        }
+    }
     for (const auto &policy : result.policies) {
         const auto previous = std::lower_bound(
             base.policies.begin(), base.policies.end(),
@@ -571,10 +615,7 @@ M11FrontendProjection::delta(
             delta.appended_public_events.push_back(event);
         }
     }
-    if (!bulletins_equal(
-            base.shock_bulletins, result.shock_bulletins)) {
-        delta.shock_bulletins = result.shock_bulletins;
-    }
+    delta.shock_bulletins = result.shock_bulletins;
     return delta;
 }
 

@@ -293,6 +293,18 @@ protocol_policy_value(
     };
 }
 
+[[nodiscard]] Json economy_json(
+    const control::M11FrontendEconomy &economy) {
+    Json metrics = Json::array();
+    for (const auto &metric : economy.metrics) {
+        metrics.push_back(metric_json(metric));
+    }
+    return {
+        {"economy_id", economy.economy.value()},
+        {"metrics", std::move(metrics)},
+    };
+}
+
 [[nodiscard]] Json observation_json(
     const control::M11ReleasedObservation &observation) {
     return {
@@ -826,6 +838,8 @@ template <typename Value, typename Converter>
         {"release_cursor", snapshot.release_cursor},
         {"metrics",
          json_array(snapshot.metrics, metric_json)},
+        {"economies",
+         json_array(snapshot.economies, economy_json)},
         {"policies",
          json_array(snapshot.policies, policy_json)},
         {"releases",
@@ -859,6 +873,9 @@ template <typename Value, typename Converter>
         {"release_cursor", delta.release_cursor},
         {"changed_metrics",
          json_array(delta.changed_metrics, metric_json)},
+        {"changed_economies",
+         json_array(
+             delta.changed_economies, economy_json)},
         {"changed_policies",
          json_array(delta.changed_policies, policy_json)},
         {"releases",
@@ -1451,7 +1468,7 @@ struct M11ProtocolWorker::Impl final {
     [[nodiscard]] Result<M11FrontendSnapshot>
     create_snapshot(const Json &request,
                     std::string_view connection_id) {
-        std::string role = "treasury";
+        std::string role = "player";
         if (request.contains("role")) {
             const auto checked =
                 required_text(request, "role", 64U);
@@ -1474,7 +1491,8 @@ struct M11ProtocolWorker::Impl final {
             }
             economy = *checked;
         }
-        if (!control::m11_valid_seat(role)) {
+        if (role != "player" &&
+            !control::m11_valid_seat(role)) {
             return Status(ErrorCode::invalid_argument,
                           "snapshot role is invalid");
         }
@@ -1804,7 +1822,7 @@ struct M11ProtocolWorker::Impl final {
 
     [[nodiscard]] Json policy_schema_command(
         const Json &request) const {
-        std::string role = "treasury";
+        std::string role = "player";
         if (request.contains("role")) {
             const auto checked =
                 required_text(request, "role", 64U);
@@ -1830,7 +1848,8 @@ struct M11ProtocolWorker::Impl final {
             }
             economy = *checked;
         }
-        if (!control::m11_valid_seat(role) ||
+        if ((role != "player" &&
+             !control::m11_valid_seat(role)) ||
             economy >=
                 session->engine().world().economy_count()) {
             throw ProtocolFault{
@@ -1849,7 +1868,8 @@ struct M11ProtocolWorker::Impl final {
         Json levers = Json::array();
         for (const auto &lever :
              control::m11_policy_levers()) {
-            if (lever.owner_role != role) {
+            if (role != "player" &&
+                lever.owner_role != role) {
                 continue;
             }
             auto descriptor =

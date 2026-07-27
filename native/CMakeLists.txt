@@ -857,6 +857,30 @@ if(MACRO_SIM_BUILD_TESTS)
                 LABELS "m11;native-server"
                 TIMEOUT 30
         )
+        find_program(
+            MACRO_SIM_GODOT_EXECUTABLE
+            NAMES godot godot4
+        )
+        if(MACRO_SIM_GODOT_EXECUTABLE)
+            add_test(
+                NAME macro_sim.m11_godot_e2e
+                COMMAND
+                    "${Python_EXECUTABLE}"
+                    "${PROJECT_SOURCE_DIR}/tools/m11/godot_e2e.py"
+                    --server
+                    "$<TARGET_FILE:macro_sim_server>"
+                    --godot
+                    "${MACRO_SIM_GODOT_EXECUTABLE}"
+                    --project
+                    "${PROJECT_SOURCE_DIR}/desktop/godot"
+            )
+            set_tests_properties(
+                macro_sim.m11_godot_e2e
+                PROPERTIES
+                    LABELS "m11;native-server;godot"
+                    TIMEOUT 90
+            )
+        endif()
         add_test(
             NAME macro_sim.m11_kernel_golden
             COMMAND

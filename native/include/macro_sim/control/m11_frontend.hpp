@@ -15,7 +15,7 @@
 
 namespace macro_sim::control {
 
-inline constexpr std::uint32_t kM11FrontendSnapshotSchemaVersion = 1U;
+inline constexpr std::uint32_t kM11FrontendSnapshotSchemaVersion = 2U;
 inline constexpr std::size_t kM11FrontendEventWindow = 1024U;
 
 struct M11AccessScope final {
@@ -41,6 +41,13 @@ struct M11FrontendPolicy final {
     bool operator==(const M11FrontendPolicy &) const = default;
 };
 
+struct M11FrontendEconomy final {
+    EconomyId economy{};
+    std::vector<M11FrontendMetric> metrics;
+
+    bool operator==(const M11FrontendEconomy &) const = default;
+};
+
 struct M11FrontendSnapshot final {
     std::uint32_t schema_version{
         kM11FrontendSnapshotSchemaVersion};
@@ -54,6 +61,7 @@ struct M11FrontendSnapshot final {
     std::uint64_t event_cursor{0U};
     std::uint64_t release_cursor{0U};
     std::vector<M11FrontendMetric> metrics;
+    std::vector<M11FrontendEconomy> economies;
     std::vector<M11FrontendPolicy> policies;
     std::vector<M11ReleasedObservation> releases;
     std::vector<M11DecisionContext> contexts;
@@ -75,6 +83,7 @@ struct M11FrontendDelta final {
     std::uint64_t event_cursor{0U};
     std::uint64_t release_cursor{0U};
     std::vector<M11FrontendMetric> changed_metrics;
+    std::vector<M11FrontendEconomy> changed_economies;
     std::vector<M11FrontendPolicy> changed_policies;
     std::vector<M11ReleasedObservation> releases;
     std::vector<M11DecisionContext> contexts;

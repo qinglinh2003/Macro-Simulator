@@ -120,7 +120,7 @@ void test_session_owner_snapshot_and_delta() {
             .get<std::string>();
     assert(first_snapshot.at("snapshot_sequence") == 1U);
     assert(first_snapshot.at("scope").at("role") ==
-           "treasury");
+           "player");
 
     auto snapshot = request(3U, "snapshot");
     snapshot["session_id"] = session_id;
