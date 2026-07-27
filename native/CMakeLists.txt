@@ -153,6 +153,22 @@ target_include_directories(
 target_link_libraries(macro_sim_core PUBLIC Threads::Threads ZLIB::ZLIB)
 macro_sim_project_options(macro_sim_core)
 
+add_executable(
+    macro_sim_server
+    src/desktop/macro_sim_server.cpp
+)
+target_link_libraries(
+    macro_sim_server
+    PRIVATE macro_sim_core
+)
+target_include_directories(
+    macro_sim_server
+    SYSTEM
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
+)
+macro_sim_project_options(macro_sim_server)
+
 add_library(macro_sim_c SHARED src/c_api.cpp)
 add_library(macro_sim::c ALIAS macro_sim_c)
 set_target_properties(macro_sim_c PROPERTIES EXPORT_NAME c)
@@ -201,6 +217,11 @@ if(MACRO_SIM_BUILD_PYTHON)
     endif()
     install(TARGETS _native LIBRARY DESTINATION macro_sim)
 endif()
+
+install(
+    TARGETS macro_sim_server
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
 
 if(MACRO_SIM_BUILD_TESTS)
     add_executable(macro_sim_native_tests tests/native_tests.cpp)
@@ -822,6 +843,20 @@ if(MACRO_SIM_BUILD_TESTS)
     )
 
     if(TARGET _native)
+        add_test(
+            NAME macro_sim.m11_server
+            COMMAND
+                "${Python_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tools/m11/server_smoke.py"
+                --server
+                "$<TARGET_FILE:macro_sim_server>"
+        )
+        set_tests_properties(
+            macro_sim.m11_server
+            PROPERTIES
+                LABELS "m11;native-server"
+                TIMEOUT 30
+        )
         add_test(
             NAME macro_sim.m11_kernel_golden
             COMMAND
