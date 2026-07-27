@@ -115,6 +115,7 @@ add_library(
         src/control/m11_release.cpp
         src/control/m11_session.cpp
         src/desktop/m11_new_game.cpp
+        src/desktop/m11_protocol.cpp
         src/reporting/m10.cpp
         src/reporting/probes.cpp
         src/simulation/m4.cpp
@@ -795,6 +796,29 @@ if(MACRO_SIM_BUILD_TESTS)
     add_test(
         NAME macro_sim.m11_new_game
         COMMAND macro_sim_m11_new_game_tests
+    )
+
+    add_executable(
+        macro_sim_m11_protocol_tests
+        tests/m11_protocol_tests.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_protocol_tests
+        PRIVATE macro_sim_core
+    )
+    target_include_directories(
+        macro_sim_m11_protocol_tests
+        SYSTEM
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
+    )
+    macro_sim_project_options(macro_sim_m11_protocol_tests)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_protocol_tests
+    )
+    add_test(
+        NAME macro_sim.m11_protocol
+        COMMAND macro_sim_m11_protocol_tests
     )
 
     if(TARGET _native)
