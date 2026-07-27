@@ -39,6 +39,28 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-Godot {
+    # The call operator does not wait for a GUI subsystem process and leaves a
+    # stale exit code behind, which made the export report success while writing
+    # nothing. Start-Process waits explicitly and reports the real exit code for
+    # both console and GUI builds of Godot. Arguments are pre-quoted because
+    # Start-Process joins the list without quoting.
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Program,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]] $Arguments
+    )
+    $Quoted = $Arguments | ForEach-Object {
+        if ($_ -match '\s') { '"' + $_ + '"' } else { $_ }
+    }
+    $Process = Start-Process -FilePath $Program -ArgumentList $Quoted `
+        -NoNewWindow -Wait -PassThru
+    if ($Process.ExitCode -ne 0) {
+        throw "$Program failed with exit code $($Process.ExitCode)"
+    }
+}
+
 try {
     $Godot = if ($env:GODOT) {
         $env:GODOT
@@ -52,17 +74,24 @@ try {
         }
         $Command.Source
     }
-    # The plain Windows Godot binary targets the GUI subsystem. PowerShell does
-    # not wait for such a process, so the export returns immediately with a
-    # stale exit code, prints nothing, and never writes the executable. The
-    # console variant shipped alongside it is a console subsystem binary and
-    # behaves correctly when driven from a script.
-    if ($Godot -match '(?i)\.exe$' -and $Godot -notmatch '(?i)\.console\.exe$') {
-        $ConsoleGodot = $Godot -replace '(?i)\.exe$', '.console.exe'
+    # Resolve shims and symlinks so the console variant can be found: the path
+    # on PATH may have no extension at all.
+    $GodotItem = Get-Item -LiteralPath $Godot -ErrorAction SilentlyContinue
+    if ($null -ne $GodotItem) {
+        $Resolved = if ($GodotItem.LinkTarget) { $GodotItem.LinkTarget }
+                    else { $GodotItem.FullName }
+        # The published Windows Godot build targets the GUI subsystem and writes
+        # nothing to the console. The console variant beside it is a console
+        # subsystem binary, so prefer it when the download provided one.
+        $ConsoleGodot = [System.IO.Path]::Combine(
+            [System.IO.Path]::GetDirectoryName($Resolved),
+            [System.IO.Path]::GetFileNameWithoutExtension($Resolved) + ".console.exe")
         if (Test-Path -PathType Leaf $ConsoleGodot) {
             $Godot = $ConsoleGodot
-        } else {
-            Write-Host "Console Godot binary is absent next to $Godot"
+        } elseif (Test-Path -PathType Leaf $Resolved) {
+            # Fall back to the resolved binary rather than an extensionless
+            # shim, which CreateProcess cannot always launch.
+            $Godot = $Resolved
         }
     }
     Write-Host "Using Godot executable: $Godot"
@@ -82,9 +111,9 @@ try {
         --target macro_sim_server macro_sim_launcher
 
     New-Item -ItemType Directory -Force -Path $StagingBundle | Out-Null
-    Invoke-Checked $Godot --headless `
+    Invoke-Godot $Godot --headless `
         --path (Join-Path $RepositoryRoot "desktop/godot") --import
-    Invoke-Checked $Godot --headless `
+    Invoke-Godot $Godot --headless `
         --path (Join-Path $RepositoryRoot "desktop/godot") `
         --export-release "Windows x86_64" `
         (Join-Path $StagingBundle "Macro Command.game.exe")
