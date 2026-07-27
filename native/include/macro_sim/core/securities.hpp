@@ -2,6 +2,7 @@
 #define MACRO_SIM_CORE_SECURITIES_HPP
 
 #include <array>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -29,20 +30,23 @@ enum class EquityIssuerKind : std::uint8_t {
 
 struct SecurityId final {
     static constexpr std::uint32_t kMaximumPackedValue = (1U << 31U) - 1U;
-    SecurityKind kind : 1 = SecurityKind::bond;
-    std::uint32_t value : 31 = 0;
+    static constexpr std::uint32_t kKindShift = 31U;
+    static constexpr std::uint32_t kKindMask = 1U << kKindShift;
+    std::uint32_t packed{0};
 
     constexpr SecurityId() noexcept = default;
 
     template <typename Source>
         requires std::is_integral_v<Source>
     constexpr SecurityId(SecurityKind security_kind, Source security_value) noexcept
-        : kind(security_kind),
-          value(std::in_range<std::uint32_t>(security_value) &&
-                        static_cast<std::uint32_t>(security_value) <=
-                            kMaximumPackedValue
-                    ? static_cast<std::uint32_t>(security_value)
-                    : 0U) {}
+        : packed(
+              (static_cast<std::uint32_t>(security_kind) << kKindShift) |
+              (std::in_range<std::uint32_t>(security_value) &&
+                       static_cast<std::uint32_t>(security_value) <=
+                           kMaximumPackedValue
+                   ? static_cast<std::uint32_t>(security_value)
+                   : 0U)
+          ) {}
 
     [[nodiscard]] static constexpr SecurityId bond(BondId id) noexcept {
         return {SecurityKind::bond, id.value()};
@@ -56,11 +60,27 @@ struct SecurityId final {
         return kMaximumPackedValue;
     }
 
-    [[nodiscard]] constexpr bool valid() const noexcept {
-        return kind <= SecurityKind::equity && value != 0;
+    [[nodiscard]] constexpr SecurityKind kind() const noexcept {
+        return static_cast<SecurityKind>((packed & kKindMask) >> kKindShift);
     }
 
-    constexpr auto operator<=>(const SecurityId &) const noexcept = default;
+    [[nodiscard]] constexpr std::uint32_t value() const noexcept {
+        return packed & kMaximumPackedValue;
+    }
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return kind() <= SecurityKind::equity && value() != 0;
+    }
+
+    constexpr bool operator==(const SecurityId &) const noexcept = default;
+
+    [[nodiscard]] constexpr std::strong_ordering
+    operator<=>(const SecurityId &other) const noexcept {
+        if (const auto kind_order = kind() <=> other.kind(); kind_order != 0) {
+            return kind_order;
+        }
+        return value() <=> other.value();
+    }
 };
 
 static_assert(sizeof(SecurityId) == sizeof(std::uint32_t));

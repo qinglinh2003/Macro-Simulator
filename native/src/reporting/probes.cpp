@@ -60,11 +60,11 @@ firm_lifecycle(const simulation::M6Runtime &runtime, FirmId firm) noexcept {
 issuer_equity(const core::SecurityBook &securities,
               core::OwnerId issuer) noexcept {
     for (const auto security : securities.securities_for_issuer(issuer)) {
-        if (security.kind != core::SecurityKind::equity) {
+        if (security.kind() != core::SecurityKind::equity) {
             continue;
         }
         const auto *contract =
-            securities.get(EquityId(security.value));
+            securities.get(EquityId(security.value()));
         if (contract != nullptr && contract->active) {
             return contract;
         }
@@ -75,14 +75,14 @@ issuer_equity(const core::SecurityBook &securities,
 [[nodiscard]] double security_market_value(
     const core::SecurityBook &securities,
     const core::SecurityLot &lot) noexcept {
-    if (lot.security.kind == core::SecurityKind::equity) {
+    if (lot.security.kind() == core::SecurityKind::equity) {
         const auto *contract =
-            securities.get(EquityId(lot.security.value));
+            securities.get(EquityId(lot.security.value()));
         return contract == nullptr || !contract->active
                    ? 0.0
                    : lot.units * contract->price.value();
     }
-    const auto *contract = securities.get(BondId(lot.security.value));
+    const auto *contract = securities.get(BondId(lot.security.value()));
     return contract == nullptr || !contract->active ? 0.0 : lot.units;
 }
 
@@ -130,12 +130,12 @@ void fill_person_assets(PersonProbeRow &row, const core::RootState &root,
                 const double value =
                     share * security_market_value(
                                 financial.securities, *position);
-                if (position->security.kind == core::SecurityKind::bond) {
+                if (position->security.kind() == core::SecurityKind::bond) {
                     row.bonds += value;
                     continue;
                 }
                 const auto *contract = financial.securities.get(
-                    EquityId(position->security.value));
+                    EquityId(position->security.value()));
                 if (contract != nullptr &&
                     contract->issuer_kind ==
                         core::EquityIssuerKind::bank) {
@@ -652,8 +652,8 @@ probe_security_positions(const simulation::M9World &world,
         }
         output.rows.push_back(SecurityPositionProbeRow{
             id,
-            position.security.kind,
-            position.security.value,
+            position.security.kind(),
+            position.security.value(),
             position.holder.kind(),
             position.holder.value(),
             position.units,

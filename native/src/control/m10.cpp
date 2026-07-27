@@ -273,7 +273,7 @@ HybridControlledBridge::create(EngineSession engine,
     if (!status.ok()) {
         return status;
     }
-    return std::move(result);
+    return result;
 }
 
 Status HybridControlledBridge::require_available() const noexcept {
@@ -610,7 +610,7 @@ Result<HybridControlledBridge> HybridControlledBridge::clone() const {
     }
     HybridControlledBridge result(engine_, envelope_);
     result.receipts_ = receipts_;
-    return std::move(result);
+    return result;
 }
 
 Result<reporting::HouseholdProbePage>

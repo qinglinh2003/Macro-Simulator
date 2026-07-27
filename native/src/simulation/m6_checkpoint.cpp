@@ -373,8 +373,8 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     for (const auto &row : runtime.securities.lots()) {
         output["lots"].push_back(Json::array({
             security_lot_id++,
-            static_cast<std::uint8_t>(row.security.kind),
-            static_cast<std::uint32_t>(row.security.value),
+            static_cast<std::uint8_t>(row.security.kind()),
+            row.security.value(),
             static_cast<std::uint8_t>(row.holder.kind()),
             row.holder.value(),
             row.units,

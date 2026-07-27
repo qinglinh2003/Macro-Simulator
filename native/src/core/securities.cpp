@@ -189,7 +189,7 @@ std::size_t SecurityBook::pair_hash(SecurityId security, OwnerId holder) noexcep
         return value ^ (value >> 31U);
     };
     std::uint64_t hash =
-        mix(static_cast<std::uint64_t>(security.kind) ^ security.value);
+        mix(static_cast<std::uint64_t>(security.kind()) ^ security.value());
     hash ^= mix(static_cast<std::uint64_t>(holder.kind()) ^ holder.value() ^
                 0x517cc1b727220a95ULL);
     return static_cast<std::size_t>(hash);
@@ -299,8 +299,8 @@ void SecurityBook::append_query_lot(SecurityLotId lot_id) {
     }
     holder_chain.tail = encoded_lot;
 
-    const auto contract_kind = static_cast<std::size_t>(lot->security.kind);
-    const auto contract_value = static_cast<std::size_t>(lot->security.value);
+    const auto contract_kind = static_cast<std::size_t>(lot->security.kind());
+    const auto contract_value = static_cast<std::size_t>(lot->security.value());
     auto &contract_rows = contract_chains_[contract_kind];
     if (contract_rows.size() <= contract_value) {
         contract_rows.resize(contract_value + 1U);
@@ -376,8 +376,8 @@ void SecurityBook::unlink_query_lot(SecurityLotId lot_id) {
             rows.pop_back();
         }
     }
-    const auto contract_kind = static_cast<std::size_t>(lot->security.kind);
-    const auto contract_value = static_cast<std::size_t>(lot->security.value);
+    const auto contract_kind = static_cast<std::size_t>(lot->security.kind());
+    const auto contract_value = static_cast<std::size_t>(lot->security.value());
     if (contract_kind < contract_chains_.size() &&
         contract_value < contract_chains_[contract_kind].size()) {
         auto &rows = contract_chains_[contract_kind];
@@ -600,7 +600,7 @@ Status SecurityBook::transfer_units(SecurityId security, OwnerId source,
     constexpr double transfer_tolerance = 1.0e-9;
     if (units > held + scaled_tolerance(transfer_tolerance, held)) {
         return Status(ErrorCode::insufficient_funds,
-                      security.kind == SecurityKind::bond
+                      security.kind() == SecurityKind::bond
                           ? "bond transfer exceeds holdings"
                           : "equity transfer exceeds holdings");
     }
@@ -739,12 +739,12 @@ Status SecurityBook::retire_units(SecurityId security, OwnerId holder, double un
                       "security holder index is inconsistent");
     }
     retire_from_lot(*lot);
-    if (security.kind == SecurityKind::bond) {
-        auto *contract = get(BondId(security.value));
+    if (security.kind() == SecurityKind::bond) {
+        auto *contract = get(BondId(security.value()));
         contract->outstanding_face =
             Money(std::max(0.0, contract->outstanding_face.value() - units));
     } else {
-        auto *contract = get(EquityId(security.value));
+        auto *contract = get(EquityId(security.value()));
         contract->outstanding_shares =
             std::max(0.0, contract->outstanding_shares - units);
     }
@@ -1021,8 +1021,8 @@ SecurityBook::lots_for_security(SecurityId security) const noexcept {
     if (!security.valid()) {
         return {};
     }
-    const auto kind = static_cast<std::size_t>(security.kind);
-    const auto value = static_cast<std::size_t>(security.value);
+    const auto kind = static_cast<std::size_t>(security.kind());
+    const auto value = static_cast<std::size_t>(security.value());
     if (kind >= contract_chains_.size() ||
         value >= contract_chains_[kind].size()) {
         return {};
@@ -1259,13 +1259,13 @@ Status SecurityBook::validate_security(SecurityId security) const noexcept {
     if (!security.valid()) {
         return Status(ErrorCode::invalid_argument, "invalid security ID");
     }
-    if (security.kind == SecurityKind::bond) {
-        const auto *contract = get(BondId(security.value));
+    if (security.kind() == SecurityKind::bond) {
+        const auto *contract = get(BondId(security.value()));
         if (contract == nullptr || !contract->active || contract->settled) {
             return Status(ErrorCode::not_found, "bond is not active");
         }
-    } else if (security.kind == SecurityKind::equity) {
-        const auto *contract = get(EquityId(security.value));
+    } else if (security.kind() == SecurityKind::equity) {
+        const auto *contract = get(EquityId(security.value()));
         if (contract == nullptr || !contract->active || contract->resolved) {
             return Status(ErrorCode::not_found, "equity is not active");
         }

@@ -168,9 +168,9 @@ security_from_token(std::uint64_t token) noexcept {
         if (lot == nullptr || !lot->active()) {
             continue;
         }
-        if (lot->security.kind == core::SecurityKind::equity) {
+        if (lot->security.kind() == core::SecurityKind::equity) {
             const auto *contract =
-                securities.get(EquityId(lot->security.value));
+                securities.get(EquityId(lot->security.value()));
             if (contract != nullptr && contract->active) {
                 value += lot->units * contract->price.value();
             }
@@ -408,8 +408,8 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         const auto security = security_from_token(asset.value);
         const double units =
             securities.units_held(security, core::OwnerId::household(asset.household));
-        if (security.kind == core::SecurityKind::equity) {
-            const auto *contract = securities.get(EquityId(security.value));
+        if (security.kind() == core::SecurityKind::equity) {
+            const auto *contract = securities.get(EquityId(security.value()));
             return contract == nullptr ? 0.0 : units * contract->price.value();
         }
         return units;

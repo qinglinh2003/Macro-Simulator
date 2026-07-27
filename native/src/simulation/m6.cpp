@@ -247,10 +247,10 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
 [[nodiscard]] std::optional<EquityId> firm_equity(const core::SecurityBook &book,
                                                   FirmId firm) noexcept {
     for (const auto security : book.securities_for_issuer(core::OwnerId::firm(firm))) {
-        if (security.kind != core::SecurityKind::equity) {
+        if (security.kind() != core::SecurityKind::equity) {
             continue;
         }
-        const auto id = EquityId(security.value);
+        const auto id = EquityId(security.value());
         const auto *contract = book.get(id);
         if (contract != nullptr && contract->active &&
             contract->issuer_kind == core::EquityIssuerKind::firm) {
@@ -263,10 +263,10 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
 [[nodiscard]] std::optional<EquityId> bank_equity(const core::SecurityBook &book,
                                                   BankId bank) noexcept {
     for (const auto security : book.securities_for_issuer(core::OwnerId::bank(bank))) {
-        if (security.kind != core::SecurityKind::equity) {
+        if (security.kind() != core::SecurityKind::equity) {
             continue;
         }
-        const auto id = EquityId(security.value);
+        const auto id = EquityId(security.value());
         const auto *contract = book.get(id);
         if (contract != nullptr && contract->active &&
             contract->issuer_kind == core::EquityIssuerKind::bank) {
@@ -282,10 +282,10 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
     for (const auto lot_id : book.lots_for_holder(holder)) {
         const auto *lot = book.get(lot_id);
         if (lot == nullptr || !lot->active() ||
-            lot->security.kind != core::SecurityKind::equity) {
+            lot->security.kind() != core::SecurityKind::equity) {
             continue;
         }
-        const auto *contract = book.get(EquityId(lot->security.value));
+        const auto *contract = book.get(EquityId(lot->security.value()));
         if (contract != nullptr && contract->active) {
             value += lot->units * contract->price.value();
         }
@@ -300,10 +300,10 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
     for (const auto lot_id : book.lots_for_holder(holder)) {
         const auto *lot = book.get(lot_id);
         if (lot == nullptr || !lot->active() ||
-            lot->security.kind != core::SecurityKind::bond) {
+            lot->security.kind() != core::SecurityKind::bond) {
             continue;
         }
-        const auto *contract = book.get(BondId(lot->security.value));
+        const auto *contract = book.get(BondId(lot->security.value()));
         if (contract == nullptr || !contract->active) {
             continue;
         }
@@ -921,10 +921,10 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         for (const auto lot_id : scratch.securities_.lots_for_holder(holder)) {
             const auto *lot = scratch.securities_.get(lot_id);
             if (lot == nullptr || !lot->active() ||
-                lot->security.kind != core::SecurityKind::equity) {
+                lot->security.kind() != core::SecurityKind::equity) {
                 continue;
             }
-            const auto equity_id = EquityId(lot->security.value);
+            const auto equity_id = EquityId(lot->security.value());
             const auto found =
                 std::lower_bound(bank_equities.begin(), bank_equities.end(), equity_id);
             if (found != bank_equities.end() && *found == equity_id) {

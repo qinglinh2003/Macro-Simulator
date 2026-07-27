@@ -100,7 +100,18 @@ jobs:
         run: brew install ccache ninja
       - name: Install Windows build tools
         if: runner.os == 'Windows'
-        run: choco install ccache ninja --no-progress -y
+        shell: pwsh
+        run: |
+          choco install ccache ninja --no-progress -y
+          $root = if ($env:VCPKG_INSTALLATION_ROOT) {
+            $env:VCPKG_INSTALLATION_ROOT
+          } else {
+            "C:\vcpkg"
+          }
+          & "$root\vcpkg.exe" install zlib:x64-windows --clean-after-build
+          $toolchain = "$root\scripts\buildsystems\vcpkg.cmake"
+          "CMAKE_TOOLCHAIN_FILE=$toolchain" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Resolve locked environment
         run: uv sync --group dev --group m1 --group m11
       - name: Verify contracts and current playable target
@@ -385,7 +396,18 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
       - name: Install Windows build tools
         if: runner.os == 'Windows'
-        run: choco install ccache ninja --no-progress -y
+        shell: pwsh
+        run: |
+          choco install ccache ninja --no-progress -y
+          $root = if ($env:VCPKG_INSTALLATION_ROOT) {
+            $env:VCPKG_INSTALLATION_ROOT
+          } else {
+            "C:\vcpkg"
+          }
+          & "$root\vcpkg.exe" install zlib:x64-windows --clean-after-build
+          $toolchain = "$root\scripts\buildsystems\vcpkg.cmake"
+          "CMAKE_TOOLCHAIN_FILE=$toolchain" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
       - name: Build macOS development package

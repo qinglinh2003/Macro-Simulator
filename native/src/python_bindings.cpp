@@ -1384,8 +1384,8 @@ nb::dict m6_snapshot_to_python(const macro_sim::EngineSession &session) {
     for (const auto &row : runtime->securities.lots()) {
         nb::dict item;
         item["id"] = security_lot_id++;
-        item["security_kind"] = static_cast<std::uint8_t>(row.security.kind);
-        item["security_id"] = static_cast<std::uint32_t>(row.security.value);
+        item["security_kind"] = static_cast<std::uint8_t>(row.security.kind());
+        item["security_id"] = row.security.value();
         item["holder_kind"] = static_cast<std::uint8_t>(row.holder.kind());
         item["holder_id"] = row.holder.value();
         item["units"] = row.units;
