@@ -272,7 +272,7 @@ struct PackageLayout final {
 
 [[nodiscard]] std::optional<std::string>
 read_private_file(const std::filesystem::path &path) {
-    struct stat status{};
+    struct stat status = {};
     if (::lstat(path.c_str(), &status) != 0 || !S_ISREG(status.st_mode) ||
         (status.st_mode & static_cast<mode_t>(0077)) != 0 || status.st_size <= 0 ||
         status.st_size > 65536) {

@@ -968,6 +968,9 @@ checkpointable_advance_options(const M11ControllerRunSpec &spec) noexcept {
         throw std::runtime_error("checkpoint shock authorities differ");
     }
     for (const auto &authority : run_spec.shock_authorities) {
+        const auto invalid_economy = [&](EconomyId economy) {
+            return economy.value() >= world.economy_count();
+        };
         if (authority.principal.empty() ||
             authority.maximum_schedule_ahead_ticks == 0U ||
             authority.maximum_duration_ticks == 0U ||
@@ -977,11 +980,8 @@ checkpointable_advance_options(const M11ControllerRunSpec &spec) noexcept {
             std::any_of(
                 authority.granted_seats.begin(), authority.granted_seats.end(),
                 [](const std::string &seat) { return !m11_valid_seat(seat); }) ||
-            std::any_of(
-                authority.allowed_economies.begin(), authority.allowed_economies.end(),
-                [&](EconomyId economy) {
-                    return economy.value() >= world.economy_count();
-                })) {
+            std::any_of(authority.allowed_economies.begin(),
+                        authority.allowed_economies.end(), invalid_economy)) {
             throw std::runtime_error("checkpoint shock authority is invalid");
         }
     }

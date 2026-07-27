@@ -258,12 +258,16 @@ def launch(
     layout: PackageLayout,
     completion_file: Path,
     progress_file: Path,
+    *,
+    hold_after_connect: bool = False,
 ) -> subprocess.Popen[bytes]:
     environment = dict(os.environ)
     environment["MACRO_SIM_E2E_COMPLETION_FILE"] = str(completion_file)
     environment["MACRO_SIM_E2E_PROGRESS_FILE"] = str(progress_file)
     environment["MACRO_SIM_PACKAGED_E2E"] = "1"
     environment["MACRO_SIM_SKIP_START_MENU"] = "1"
+    if hold_after_connect:
+        environment["MACRO_SIM_E2E_HOLD_AFTER_CONNECT"] = "1"
     return subprocess.Popen(
         [str(layout.launcher), "--headless"],
         stdout=subprocess.PIPE,
@@ -341,7 +345,12 @@ def run_worker_crash_flow(layout: PackageLayout) -> None:
     before = runtime_directories()
     with tempfile.TemporaryDirectory(prefix="macro-sim-worker-crash-") as temporary:
         root = Path(temporary)
-        process = launch(layout, root / "completed", root / "progress")
+        process = launch(
+            layout,
+            root / "completed",
+            root / "progress",
+            hold_after_connect=True,
+        )
         runtime = wait_for_runtime(before)
         wait_for_progress(root / "progress", "connected", process)
         pid = worker_pid(runtime)
@@ -357,7 +366,12 @@ def run_launcher_crash_flow(layout: PackageLayout) -> None:
     before = runtime_directories()
     with tempfile.TemporaryDirectory(prefix="macro-sim-launcher-crash-") as temporary:
         root = Path(temporary)
-        process = launch(layout, root / "completed", root / "progress")
+        process = launch(
+            layout,
+            root / "completed",
+            root / "progress",
+            hold_after_connect=True,
+        )
         runtime = wait_for_runtime(before)
         wait_for_progress(root / "progress", "connected", process)
         pid = worker_pid(runtime)

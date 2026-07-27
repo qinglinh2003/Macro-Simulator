@@ -112,7 +112,7 @@ read_small_file(const std::filesystem::path &path) {
         return std::nullopt;
     }
 #if !defined(_WIN32)
-    struct stat native_status{};
+    struct stat native_status = {};
     if (::stat(path.c_str(), &native_status) != 0 ||
         (native_status.st_mode & static_cast<mode_t>(0077)) != 0) {
         return std::nullopt;

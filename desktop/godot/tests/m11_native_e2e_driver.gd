@@ -13,6 +13,9 @@ func run(game) -> bool:
 			and not _game._client.busy):
 		return false
 	_report("connected")
+	if OS.get_environment("MACRO_SIM_E2E_HOLD_AFTER_CONNECT") == "1":
+		while true:
+			await _game.get_tree().process_frame
 
 	_game._on_start_menu_launch({"spec": _new_game_spec()})
 	if not await _wait_idle():
