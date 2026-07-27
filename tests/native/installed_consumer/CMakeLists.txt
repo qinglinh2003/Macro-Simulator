@@ -11,6 +11,12 @@ add_executable(
 )
 target_compile_features(macro_sim_installed_c_smoke PRIVATE c_std_11)
 target_link_libraries(macro_sim_installed_c_smoke PRIVATE macro_sim::c)
+# Derive the expected version from the installed package so the smoke test
+# cannot go stale when a milestone bumps the engine version suffix.
+target_compile_definitions(
+    macro_sim_installed_c_smoke
+    PRIVATE "MACRO_SIM_EXPECTED_VERSION_PREFIX=\"${macro_sim_VERSION}\""
+)
 
 if(WIN32)
     add_custom_command(

@@ -317,9 +317,11 @@ project_timeline_before(const simulation::M9World &world,
         }
         const auto group_tick = group_effective->value();
         std::vector<NativePolicyAction> actions;
-        while (cursor < timeline.size() &&
-               timeline[cursor]->decision.effective_at.has_value() &&
-               timeline[cursor]->decision.effective_at->value() == group_tick) {
+        while (cursor < timeline.size()) {
+            const auto &item_effective = timeline[cursor]->decision.effective_at;
+            if (!item_effective.has_value() || item_effective->value() != group_tick) {
+                break;
+            }
             actions.insert(actions.end(), timeline[cursor]->proposal.actions.begin(),
                            timeline[cursor]->proposal.actions.end());
             ++cursor;

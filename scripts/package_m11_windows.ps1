@@ -52,6 +52,20 @@ try {
         }
         $Command.Source
     }
+    # The plain Windows Godot binary targets the GUI subsystem. PowerShell does
+    # not wait for such a process, so the export returns immediately with a
+    # stale exit code, prints nothing, and never writes the executable. The
+    # console variant shipped alongside it is a console subsystem binary and
+    # behaves correctly when driven from a script.
+    if ($Godot -match '(?i)\.exe$' -and $Godot -notmatch '(?i)\.console\.exe$') {
+        $ConsoleGodot = $Godot -replace '(?i)\.exe$', '.console.exe'
+        if (Test-Path -PathType Leaf $ConsoleGodot) {
+            $Godot = $ConsoleGodot
+        } else {
+            Write-Host "Console Godot binary is absent next to $Godot"
+        }
+    }
+    Write-Host "Using Godot executable: $Godot"
     if ((Test-Path $OutputBundle) -or
         (Test-Path $OutputArchive) -or
         (Test-Path $OutputChecksum)) {
@@ -80,6 +94,12 @@ try {
     $LauncherBinary = Join-Path $NativeRoot "macro_sim_launcher.exe"
     foreach ($Required in @($GameBinary, $ServerBinary, $LauncherBinary)) {
         if (-not (Test-Path -PathType Leaf $Required)) {
+            Write-Host "Staging bundle contents:"
+            Get-ChildItem -Recurse -Force $StagingBundle |
+                ForEach-Object { Write-Host "  $($_.FullName)" }
+            Write-Host "Native build output:"
+            Get-ChildItem -Force $NativeRoot -Filter *.exe |
+                ForEach-Object { Write-Host "  $($_.FullName)" }
             throw "The exported application or native runtime is incomplete: $Required"
         }
     }
