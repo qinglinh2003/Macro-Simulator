@@ -1,5 +1,7 @@
 #include <cassert>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <utility>
 
@@ -17,9 +19,11 @@ inline constexpr std::string_view kToken =
     "0123456789abcdef0123456789abcdef"
     "0123456789abcdef0123456789abcdef";
 
-[[nodiscard]] M11ProtocolWorker worker() {
+[[nodiscard]] M11ProtocolWorker worker(
+    std::filesystem::path save_root = {}) {
     M11ProtocolOptions options;
     options.capability_token = std::string(kToken);
+    options.save_root = std::move(save_root);
     auto result =
         M11ProtocolWorker::create(std::move(options));
     assert(result.ok());
@@ -189,11 +193,258 @@ void test_human_advance_pauses_without_consuming_time() {
                .at("boundary") == 0U);
 }
 
+void test_control_commands_are_role_scoped_and_idempotent() {
+    auto protocol = worker();
+    assert(response(protocol, request(1U, "hello"))
+               .at("ok")
+               .get<bool>());
+    const auto created =
+        response(protocol, request(2U, "new_session"));
+    const auto session_id =
+        created.at("result")
+            .at("session_id")
+            .get<std::string>();
+
+    auto schema_request = request(3U, "policy_schema");
+    schema_request["session_id"] = session_id;
+    schema_request["role"] = "central_bank";
+    const auto schema =
+        response(protocol, schema_request);
+    assert(schema.at("ok").get<bool>());
+    assert(!schema.at("result")
+                .at("levers")
+                .empty());
+    for (const auto &lever :
+         schema.at("result").at("levers")) {
+        assert(lever.at("owner_role") == "central_bank");
+    }
+
+    auto advance = request(4U, "advance");
+    advance["session_id"] = session_id;
+    const auto paused = response(protocol, advance);
+    assert(paused.at("ok").get<bool>());
+    const auto &contexts =
+        paused.at("result")
+            .at("projection")
+            .at("snapshot")
+            .at("contexts");
+    assert(!contexts.empty());
+    const auto context_id =
+        contexts.front()
+            .at("context_id")
+            .get<std::string>();
+
+    auto proposal =
+        request(5U, "submit_human_policy");
+    proposal["session_id"] = session_id;
+    proposal["context_id"] = context_id;
+    proposal["operation_id"] = "hold-context";
+    proposal["actions"] = Json::array();
+    const auto held = response(protocol, proposal);
+    assert(held.at("ok").get<bool>());
+    assert(held.at("result")
+               .at("decision")
+               .at("status") == "accepted_noop");
+
+    auto shock = request(6U, "schedule_shock");
+    shock["session_id"] = session_id;
+    shock["operation_id"] = "shock-operation";
+    shock["seat"] = "energy";
+    shock["shock"] = {
+        {"shock_id", 9001U},
+        {"kind", "energy_capacity"},
+        {"economy_id", 0U},
+        {"start", 1U},
+        {"duration", 3U},
+        {"magnitude", 0.25},
+        {"shape", "step"},
+    };
+    const auto scheduled = response(protocol, shock);
+    assert(scheduled.at("ok").get<bool>());
+    assert(!scheduled.at("result")
+                .at("repeated")
+                .get<bool>());
+
+    shock["sequence"] = 7U;
+    shock["request_id"] = "shock-retry-new-sequence";
+    const auto repeated = response(protocol, shock);
+    assert(repeated.at("ok").get<bool>());
+    assert(repeated.at("result")
+               .at("repeated")
+               .get<bool>());
+    assert(repeated.at("result").at("shock_id") == 9001U);
+
+    auto contexts_request =
+        request(8U, "decision_context");
+    contexts_request["session_id"] = session_id;
+    contexts_request["role"] = "central_bank";
+    const auto central_contexts =
+        response(protocol, contexts_request);
+    assert(central_contexts.at("ok").get<bool>());
+    for (const auto &context :
+         central_contexts.at("result").at("contexts")) {
+        assert(context.at("seat") == "central_bank");
+    }
+}
+
+void test_entity_pages_and_details_preserve_links() {
+    auto protocol = worker();
+    assert(response(protocol, request(1U, "hello"))
+               .at("ok")
+               .get<bool>());
+    const auto created =
+        response(protocol, request(2U, "new_session"));
+    const auto session_id =
+        created.at("result")
+            .at("session_id")
+            .get<std::string>();
+
+    auto page_request = request(3U, "entity_page");
+    page_request["session_id"] = session_id;
+    page_request["kind"] = "households";
+    page_request["economy_id"] = 0U;
+    page_request["after_id"] = 0U;
+    page_request["maximum_rows"] = 4U;
+    const auto page = response(protocol, page_request);
+    assert(page.at("ok").get<bool>());
+    assert(page.at("result").at("kind") == "households");
+    assert(!page.at("result").at("rows").empty());
+    const auto first =
+        page.at("result").at("rows").front();
+    assert(first.at("member_ids").empty());
+    const auto household_id =
+        first.at("id").get<std::uint64_t>();
+
+    auto detail_request = request(4U, "entity_detail");
+    detail_request["session_id"] = session_id;
+    detail_request["kind"] = "household";
+    detail_request["economy_id"] = 0U;
+    detail_request["entity_id"] = household_id;
+    const auto detail = response(protocol, detail_request);
+    assert(detail.at("ok").get<bool>());
+    const auto entity = detail.at("result").at("entity");
+    assert(entity.at("id") == household_id);
+    assert(entity.at("member_count") ==
+           entity.at("member_ids").size());
+    if (!entity.at("member_ids").empty()) {
+        const auto person_id =
+            entity.at("member_ids")
+                .front()
+                .get<std::uint64_t>();
+        auto person_request =
+            request(5U, "entity_detail");
+        person_request["session_id"] = session_id;
+        person_request["kind"] = "person";
+        person_request["economy_id"] = 0U;
+        person_request["entity_id"] = person_id;
+        const auto person =
+            response(protocol, person_request);
+        assert(person.at("ok").get<bool>());
+        assert(person.at("result")
+                   .at("entity")
+                   .at("household_id") == household_id);
+    }
+}
+
+void test_save_load_is_sandboxed_atomic_and_verified() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        "macro-sim-m11-protocol-save-test";
+    std::error_code cleanup_error;
+    std::filesystem::remove_all(root, cleanup_error);
+    auto protocol = worker(root);
+    assert(response(protocol, request(1U, "hello"))
+               .at("ok")
+               .get<bool>());
+    const auto created =
+        response(protocol, request(2U, "new_session"));
+    const auto first_session =
+        created.at("result")
+            .at("session_id")
+            .get<std::string>();
+
+    auto save = request(3U, "save_slot");
+    save["session_id"] = first_session;
+    save["slot_id"] = "campaign_01";
+    const auto saved = response(protocol, save);
+    assert(saved.at("ok").get<bool>());
+    assert(saved.at("result").at("bytes")
+               .get<std::uint64_t>() > 0U);
+    assert(std::filesystem::is_regular_file(
+        root / "campaign_01.msim"));
+
+    auto close = request(4U, "close_session");
+    close["session_id"] = first_session;
+    assert(response(protocol, close).at("ok").get<bool>());
+
+    auto load = request(5U, "load_slot");
+    load["slot_id"] = "campaign_01";
+    const auto loaded = response(protocol, load);
+    assert(loaded.at("ok").get<bool>());
+    const auto second_session =
+        loaded.at("result")
+            .at("session_id")
+            .get<std::string>();
+    assert(second_session != first_session);
+    assert(loaded.at("result")
+               .at("projection")
+               .at("snapshot")
+               .at("boundary") == 0U);
+
+    save = request(6U, "save_slot");
+    save["session_id"] = second_session;
+    save["slot_id"] = "campaign_01";
+    assert(response(protocol, save).at("ok").get<bool>());
+    close = request(7U, "close_session");
+    close["session_id"] = second_session;
+    assert(response(protocol, close).at("ok").get<bool>());
+
+    const auto path = root / "campaign_01.msim";
+    const auto size = std::filesystem::file_size(path);
+    assert(size > 32U);
+    {
+        std::fstream stream(
+            path, std::ios::binary | std::ios::in |
+                      std::ios::out);
+        assert(stream);
+        stream.seekg(
+            static_cast<std::streamoff>(size - 1U));
+        char corrupt = '\0';
+        stream.read(&corrupt, 1);
+        assert(stream);
+        corrupt = static_cast<char>(
+            static_cast<unsigned char>(corrupt) ^ 0x5aU);
+        stream.seekp(
+            static_cast<std::streamoff>(size - 1U));
+        stream.write(&corrupt, 1);
+        assert(stream);
+    }
+    load = request(8U, "load_slot");
+    load["slot_id"] = "campaign_01";
+    const auto corrupt = response(protocol, load);
+    assert(!corrupt.at("ok").get<bool>());
+    assert(corrupt.at("error").at("code") ==
+           "corrupt_input");
+    assert(!protocol.has_session());
+
+    auto invalid_slot = request(9U, "load_slot");
+    invalid_slot["slot_id"] = "../escape";
+    const auto rejected =
+        response(protocol, invalid_slot);
+    assert(!rejected.at("ok").get<bool>());
+    assert(rejected.at("error").at("code") ==
+           "invalid_argument");
+    std::filesystem::remove_all(root, cleanup_error);
+}
+
 } // namespace
 
 int main() {
     test_authentication_framing_and_sequence();
     test_session_owner_snapshot_and_delta();
     test_human_advance_pauses_without_consuming_time();
+    test_control_commands_are_role_scoped_and_idempotent();
+    test_entity_pages_and_details_preserve_links();
+    test_save_load_is_sandboxed_atomic_and_verified();
     return 0;
 }
