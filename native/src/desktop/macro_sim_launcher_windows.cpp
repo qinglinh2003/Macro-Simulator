@@ -114,6 +114,7 @@ class PrivateSecurity final {
     }
 
     [[nodiscard]] SECURITY_ATTRIBUTES *attributes() noexcept { return &attributes_; }
+    [[nodiscard]] PACL acl() const noexcept { return access_control_list_; }
 
   private:
     std::vector<std::byte> token_user_;
@@ -223,6 +224,19 @@ class RuntimeDirectory final {
             name.append(suffix->begin(), suffix->begin() + 32);
             const auto candidate = *root / name;
             if (CreateDirectoryW(candidate.c_str(), security_.attributes())) {
+                // The SE_DACL_PROTECTED control bit carried by the creation
+                // descriptor is not reliably persisted onto the new object, so
+                // the runtime directory can still report inherited access
+                // rules. Apply the owner-only DACL explicitly and refuse to use
+                // the directory when the protection cannot be established.
+                std::wstring target = candidate.wstring();
+                if (SetNamedSecurityInfoW(
+                        target.data(), SE_FILE_OBJECT,
+                        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                        nullptr, nullptr, security_.acl(), nullptr) != ERROR_SUCCESS) {
+                    RemoveDirectoryW(candidate.c_str());
+                    return false;
+                }
                 path_ = candidate;
                 return true;
             }
