@@ -6,6 +6,8 @@ const SimulationClientScript = preload("res://scripts/simulation_client.gd")
 const M11FrontendAdapterScript = preload("res://scripts/m11_frontend_adapter.gd")
 const StartMenuScript = preload("res://scripts/start_menu.gd")
 const LocaleCatalogScript = preload("res://scripts/localization.gd")
+const M11NativeE2EDriverScript = preload(
+	"res://tests/m11_native_e2e_driver.gd")
 
 const SPEEDS := [1, 5, 15, 60]
 
@@ -909,6 +911,14 @@ func _ready() -> void:
 	if not pre_lever.is_empty():
 		_expanded_lever = pre_lever
 	_capture_policy_info = OS.get_environment("MACRO_SIM_CAPTURE_POLICY_INFO")
+	if OS.get_environment("MACRO_SIM_PACKAGED_E2E") == "1":
+		_run_packaged_e2e.call_deferred()
+
+
+func _run_packaged_e2e() -> void:
+	var driver = M11NativeE2EDriverScript.new()
+	var succeeded := await driver.run(self)
+	get_tree().quit(0 if succeeded else 2)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1801,7 +1811,7 @@ func _build_ui() -> void:
 	spin.pivot_offset = Vector2(15, 15)
 	spin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	sv.add_child(spin)
-	var stw := create_tween().set_loops()
+	var stw := create_tween().bind_node(spin).set_loops()
 	stw.tween_property(spin, "rotation", TAU, 1.1).from(0.0)
 	var sload := _lbl("@{desktop.main.fragment.2af295a5eea998b4} · @{desktop.main.fragment.9dd6ecef8da54cee}", 12, INK2)
 	sload.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1834,7 +1844,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	op.add_child(online)
 	var live_dot := _dot(TEAL)
 	online.add_child(live_dot)
-	var breath := create_tween().set_loops()
+	var breath := create_tween().bind_node(live_dot).set_loops()
 	breath.tween_property(live_dot, "modulate:a", 0.35, 0.9)\
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	breath.tween_property(live_dot, "modulate:a", 1.0, 0.9)\
@@ -1863,7 +1873,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	wbx.add_theme_constant_override("separation", 7)
 	waitp.add_child(wbx)
 	var wdot := _dot(AMBER)
-	var wtw := create_tween().set_loops()
+	var wtw := create_tween().bind_node(wdot).set_loops()
 	wtw.tween_property(wdot, "modulate:a", 0.3, 0.55).set_trans(Tween.TRANS_SINE)
 	wtw.tween_property(wdot, "modulate:a", 1.0, 0.55).set_trans(Tween.TRANS_SINE)
 	wbx.add_child(wdot)
@@ -6739,7 +6749,7 @@ func _render_events() -> void:
 		var br := HBoxContainer.new()
 		br.add_theme_constant_override("separation", 7)
 		var pulse_dot := _dot(RED, 7)
-		var ptw := create_tween().set_loops()
+		var ptw := create_tween().bind_node(pulse_dot).set_loops()
 		ptw.tween_property(pulse_dot, "modulate:a", 0.3, 0.6)\
 			.set_trans(Tween.TRANS_SINE)
 		ptw.tween_property(pulse_dot, "modulate:a", 1.0, 0.6)\

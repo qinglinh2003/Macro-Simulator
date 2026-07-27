@@ -31,9 +31,8 @@ enum class PolicyValueKind : std::uint8_t {
 };
 
 using PolicyEconomySet = std::vector<EconomyId>;
-using PolicyValue = std::variant<
-    std::monostate, bool, std::int64_t, double, std::string,
-    PolicyEconomySet>;
+using PolicyValue = std::variant<std::monostate, bool, std::int64_t, double,
+                                 std::string, PolicyEconomySet>;
 
 struct PolicyLeverDescriptor final {
     std::string_view name;
@@ -72,29 +71,25 @@ struct NativePolicyAction final {
     bool operator==(const NativePolicyAction &) const = default;
 };
 
-[[nodiscard]] std::span<const PolicyLeverDescriptor>
-m11_policy_levers() noexcept;
+[[nodiscard]] std::span<const PolicyLeverDescriptor> m11_policy_levers() noexcept;
 [[nodiscard]] const PolicyLeverDescriptor *
 find_m11_policy_lever(std::string_view name) noexcept;
-[[nodiscard]] Status
-validate_m11_policy_value(const PolicyLeverDescriptor &lever,
-                          const PolicyValue &value,
-                          EconomyId owner,
-                          std::size_t economy_count) noexcept;
+[[nodiscard]] Status validate_m11_policy_value(const PolicyLeverDescriptor &lever,
+                                               const PolicyValue &value,
+                                               EconomyId owner,
+                                               std::size_t economy_count) noexcept;
 [[nodiscard]] Result<PolicyValue>
 m11_policy_value(const simulation::DomesticPolicyState &domestic,
                  const simulation::ExternalPolicyState &external,
                  std::string_view name);
 [[nodiscard]] Result<simulation::WorldPolicyBatch>
-project_m11_policy_actions(
-    const simulation::M9World &world,
-    std::span<const NativePolicyAction> actions);
+project_m11_policy_actions(const simulation::M9World &world,
+                           std::span<const NativePolicyAction> actions);
 
-[[nodiscard]] bool m11_policy_values_equal(
-    const PolicyValue &left, const PolicyValue &right) noexcept;
+[[nodiscard]] bool m11_policy_values_equal(const PolicyValue &left,
+                                           const PolicyValue &right) noexcept;
 [[nodiscard]] Result<double>
-m11_policy_numeric_distance(const PolicyLeverDescriptor &lever,
-                            const PolicyValue &left,
+m11_policy_numeric_distance(const PolicyLeverDescriptor &lever, const PolicyValue &left,
                             const PolicyValue &right) noexcept;
 
 } // namespace macro_sim::control

@@ -122,6 +122,13 @@ def run(server: Path) -> None:
             if not created.get("ok"):
                 raise AssertionError(f"new session failed: {created}")
             session_id = created["result"]["session_id"]
+            peer.close()
+            peer = socket.create_connection(
+                ("127.0.0.1", int(readiness["port"])),
+                timeout=10.0,
+            )
+            peer.settimeout(10.0)
+            buffer.clear()
             peer.sendall(
                 request(4, "shutdown", session_id=session_id)
             )

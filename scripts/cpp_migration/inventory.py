@@ -1497,6 +1497,14 @@ def build_probes_inventory() -> dict[str, Any]:
 def _module_owner(path: str) -> str:
     if path == "macro_sim/desktop/native_projection.py":
         return "m10"
+    if path in {
+        "scripts/desktop_smoke.py",
+        "scripts/package_m11_linux.sh",
+        "scripts/package_m11_macos.sh",
+        "scripts/package_m11_windows.ps1",
+        "scripts/run_godot_prototype.sh",
+    }:
+        return "m11"
     if path.startswith("desktop/godot"):
         return "m11"
     if path.startswith(("configs/", "scripts/")):
@@ -1543,6 +1551,14 @@ def _module_owner(path: str) -> str:
 
 
 def _module_action(path: str) -> str:
+    if path in {
+        "scripts/desktop_smoke.py",
+        "scripts/package_m11_linux.sh",
+        "scripts/package_m11_macos.sh",
+        "scripts/package_m11_windows.ps1",
+        "scripts/run_godot_prototype.sh",
+    }:
+        return "keep_client"
     if path.startswith("scripts/"):
         return "oracle_only"
     if path.startswith(("configs/", "macro_sim/data/")):
@@ -1563,7 +1579,7 @@ def _module_paths() -> list[Path]:
     roots_and_suffixes = (
         (REPO_ROOT / "macro_sim", {".py", ".json", ".msrl"}),
         (REPO_ROOT / "desktop/godot", {".gd", ".tscn", ".godot", ".json", ".svg"}),
-        (REPO_ROOT / "scripts", {".py", ".sh"}),
+        (REPO_ROOT / "scripts", {".ps1", ".py", ".sh"}),
         (REPO_ROOT / "configs", {".yaml"}),
     )
     for root, suffixes in roots_and_suffixes:

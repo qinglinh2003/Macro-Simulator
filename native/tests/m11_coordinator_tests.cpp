@@ -23,9 +23,8 @@ using namespace macro_sim::simulation;
     real.consumption_firms = 2U;
     real.capital_firms = 1U;
     real.seed = seed;
-    real.requested_capabilities =
-        capability_bit(M4Capability::physical_capital) |
-        capability_bit(M4Capability::government);
+    real.requested_capabilities = capability_bit(M4Capability::physical_capital) |
+                                  capability_bit(M4Capability::government);
     monetary.rules.bank_count = 2U;
     monetary.rules.opening_capital_per_bank = 100.0;
     financial.rules.entry_beta = 0.0;
@@ -59,20 +58,17 @@ using namespace macro_sim::simulation;
     return std::move(*result.get_if());
 }
 
-[[nodiscard]] M11PolicyProposal proposal(
-    const M11DecisionContext &context, std::string proposal_id,
-    std::string idempotency_key,
-    std::vector<NativePolicyAction> actions,
-    std::optional<std::string> supersedes = std::nullopt) {
+[[nodiscard]] M11PolicyProposal
+proposal(const M11DecisionContext &context, std::string proposal_id,
+         std::string idempotency_key, std::vector<NativePolicyAction> actions,
+         std::optional<std::string> supersedes = std::nullopt) {
     std::vector<M11ProposalVersion> versions;
     for (const auto &action : actions) {
-        const auto permitted =
-            std::find_if(
-                context.permitted_actions.begin(),
-                context.permitted_actions.end(),
-                [&](const M11PermittedAction &entry) {
-                    return entry.lever == action.lever;
-                });
+        const auto permitted = std::find_if(context.permitted_actions.begin(),
+                                            context.permitted_actions.end(),
+                                            [&](const M11PermittedAction &entry) {
+                                                return entry.lever == action.lever;
+                                            });
         assert(permitted != context.permitted_actions.end());
         versions.push_back({action.lever, permitted->policy_version});
         const auto *lever = find_m11_policy_lever(action.lever);
@@ -81,13 +77,9 @@ using namespace macro_sim::simulation;
         while (!prerequisites.empty()) {
             const auto separator = prerequisites.find('|');
             const auto name = prerequisites.substr(0U, separator);
-            const auto version =
-                std::find_if(
-                    context.policy_versions.begin(),
-                    context.policy_versions.end(),
-                    [&](const M11PolicyVersion &entry) {
-                        return entry.lever == name;
-                    });
+            const auto version = std::find_if(
+                context.policy_versions.begin(), context.policy_versions.end(),
+                [&](const M11PolicyVersion &entry) { return entry.lever == name; });
             assert(version != context.policy_versions.end());
             versions.push_back({std::string(name), version->version});
             if (separator == std::string_view::npos) {
@@ -97,23 +89,18 @@ using namespace macro_sim::simulation;
         }
     }
     return {
-        std::move(proposal_id),
-        std::move(idempotency_key),
-        context.context_id,
-        std::move(actions),
-        std::move(versions),
-        "test proposal",
+        std::move(proposal_id), std::move(idempotency_key), context.context_id,
+        std::move(actions),     std::move(versions),        "test proposal",
         std::move(supersedes),
     };
 }
 
-[[nodiscard]] M11DecisionContext open_tax_context(
-    M11PolicyCoordinator &coordinator,
-    const M9World &world,
-    const M11DecisionScheduler &scheduler) {
+[[nodiscard]] M11DecisionContext
+open_tax_context(M11PolicyCoordinator &coordinator, const M9World &world,
+                 const M11DecisionScheduler &scheduler) {
     auto opened = coordinator.open_context(
-        world, scheduler, world.tick(), EconomyId(0U), "treasury",
-        "tax_and_transfers", Tick(world.tick().value() + 1U));
+        world, scheduler, world.tick(), EconomyId(0U), "treasury", "tax_and_transfers",
+        Tick(world.tick().value() + 1U));
     assert(opened.ok());
     return *opened.get_if();
 }
@@ -128,34 +115,30 @@ void test_submission_idempotency_and_effective_commit() {
     M11EventStream events(128U);
     auto context = open_tax_context(coordinator, world, scheduler);
     const auto tax =
-        std::find_if(
-            context.permitted_actions.begin(),
-            context.permitted_actions.end(),
-            [](const M11PermittedAction &entry) {
-                return entry.lever == "tax_income_rate";
-            });
+        std::find_if(context.permitted_actions.begin(), context.permitted_actions.end(),
+                     [](const M11PermittedAction &entry) {
+                         return entry.lever == "tax_income_rate";
+                     });
     assert(tax != context.permitted_actions.end());
     assert(tax->allowed);
 
-    auto request = proposal(
-        context, "proposal-tax-1", "idem-tax-1",
-        {{EconomyId(0U), "tax_income_rate", 0.25}});
-    auto accepted = coordinator.submit(
-        world, scheduler, world.tick(), request, "player", events);
+    auto request = proposal(context, "proposal-tax-1", "idem-tax-1",
+                            {{EconomyId(0U), "tax_income_rate", 0.25}});
+    auto accepted =
+        coordinator.submit(world, scheduler, world.tick(), request, "player", events);
     assert(accepted.ok());
-    assert(accepted.get_if()->status ==
-           M11DecisionStatus::accepted_pending);
+    assert(accepted.get_if()->status == M11DecisionStatus::accepted_pending);
     assert(accepted.get_if()->effective_at == Tick(30U));
     assert(accepted.get_if()->reserved_administrative_cost > 0.0);
     assert(accepted.get_if()->adjustment_cost > 0.0);
-    auto repeated = coordinator.submit(
-        world, scheduler, world.tick(), request, "player", events);
+    auto repeated =
+        coordinator.submit(world, scheduler, world.tick(), request, "player", events);
     assert(repeated.ok());
     assert(*repeated.get_if() == *accepted.get_if());
 
     request.actions.front().value = 0.26;
-    const auto conflicting = coordinator.submit(
-        world, scheduler, world.tick(), request, "player", events);
+    const auto conflicting =
+        coordinator.submit(world, scheduler, world.tick(), request, "player", events);
     assert(!conflicting.ok());
     assert(conflicting.status().code() == ErrorCode::already_exists);
 
@@ -168,12 +151,10 @@ void test_submission_idempotency_and_effective_commit() {
     assert(!plan.get_if()->effective_changes.empty());
     assert(world.update_policy_batch(plan.get_if()->policy_batch).ok());
     assert(coordinator.commit_due(*plan.get_if(), events).ok());
-    const auto *effective =
-        coordinator.find_decision(accepted.get_if()->decision_id);
+    const auto *effective = coordinator.find_decision(accepted.get_if()->decision_id);
     assert(effective != nullptr);
     assert(effective->status == M11DecisionStatus::effective);
-    auto version =
-        coordinator.policy_version(EconomyId(0U), "tax_income_rate");
+    auto version = coordinator.policy_version(EconomyId(0U), "tax_income_rate");
     assert(version.ok());
     assert(*version.get_if() == 1U);
     auto domestic = world.domestic_policy(EconomyId(0U));
@@ -190,30 +171,24 @@ void test_cancel_and_supersede_refunds() {
     auto coordinator = std::move(*coordinator_result.get_if());
     M11EventStream events(128U);
     auto context = open_tax_context(coordinator, world, scheduler);
-    auto first_request = proposal(
-        context, "proposal-tax-first", "idem-tax-first",
-        {{EconomyId(0U), "tax_income_rate", 0.25}});
-    auto first = coordinator.submit(
-        world, scheduler, world.tick(), first_request, "player", events);
+    auto first_request = proposal(context, "proposal-tax-first", "idem-tax-first",
+                                  {{EconomyId(0U), "tax_income_rate", 0.25}});
+    auto first = coordinator.submit(world, scheduler, world.tick(), first_request,
+                                    "player", events);
     assert(first.ok());
-    auto replacement_request = proposal(
-        context, "proposal-tax-replacement", "idem-tax-replacement",
-        {{EconomyId(0U), "tax_income_rate", 0.30}},
-        first_request.proposal_id);
-    auto replacement = coordinator.submit(
-        world, scheduler, world.tick(), replacement_request, "player",
-        events);
+    auto replacement_request =
+        proposal(context, "proposal-tax-replacement", "idem-tax-replacement",
+                 {{EconomyId(0U), "tax_income_rate", 0.30}}, first_request.proposal_id);
+    auto replacement = coordinator.submit(world, scheduler, world.tick(),
+                                          replacement_request, "player", events);
     assert(replacement.ok());
-    assert(replacement.get_if()->status ==
-           M11DecisionStatus::accepted_pending);
-    const auto *superseded =
-        coordinator.find_decision(first.get_if()->decision_id);
+    assert(replacement.get_if()->status == M11DecisionStatus::accepted_pending);
+    const auto *superseded = coordinator.find_decision(first.get_if()->decision_id);
     assert(superseded != nullptr);
     assert(superseded->status == M11DecisionStatus::superseded);
 
-    auto cancelled = coordinator.cancel(
-        world.tick(), replacement.get_if()->decision_id,
-        "cancel-tax-replacement", "player", events);
+    auto cancelled = coordinator.cancel(world.tick(), replacement.get_if()->decision_id,
+                                        "cancel-tax-replacement", "player", events);
     assert(cancelled.ok());
     assert(cancelled.get_if()->status == M11DecisionStatus::cancelled);
     assert(coordinator.budgets().size() == 1U);
@@ -232,22 +207,19 @@ void test_symmetric_world_conflict_fails_both_peggers() {
     M11EventStream events(256U);
     std::vector<std::string> decisions;
     for (std::uint32_t economy = 0U; economy < 2U; ++economy) {
-        auto context = coordinator.open_context(
-            world, scheduler, world.tick(), EconomyId(economy),
-            "central_bank", "fx_operations", Tick(1U));
+        auto context =
+            coordinator.open_context(world, scheduler, world.tick(), EconomyId(economy),
+                                     "central_bank", "fx_operations", Tick(1U));
         assert(context.ok());
         auto request = proposal(
-            *context.get_if(),
-            "proposal-peg-" + std::to_string(economy),
+            *context.get_if(), "proposal-peg-" + std::to_string(economy),
             "idem-peg-" + std::to_string(economy),
             {
                 {EconomyId(economy), "fx_regime", std::string("peg")},
-                {EconomyId(economy), "peg_anchor",
-                 std::int64_t{economy == 0U ? 1 : 0}},
+                {EconomyId(economy), "peg_anchor", std::int64_t{economy == 0U ? 1 : 0}},
             });
-        auto accepted = coordinator.submit(
-            world, scheduler, world.tick(), std::move(request),
-            "player", events);
+        auto accepted = coordinator.submit(world, scheduler, world.tick(),
+                                           std::move(request), "player", events);
         assert(accepted.ok());
         decisions.push_back(accepted.get_if()->decision_id);
     }
@@ -260,13 +232,10 @@ void test_symmetric_world_conflict_fails_both_peggers() {
     for (const auto &decision_id : decisions) {
         const auto *decision = coordinator.find_decision(decision_id);
         assert(decision != nullptr);
-        assert(decision->status ==
-               M11DecisionStatus::failed_at_execution);
+        assert(decision->status == M11DecisionStatus::failed_at_execution);
     }
-    assert(world.external_policies()[0U].fx_regime ==
-           FxRegime::floating);
-    assert(world.external_policies()[1U].fx_regime ==
-           FxRegime::floating);
+    assert(world.external_policies()[0U].fx_regime == FxRegime::floating);
+    assert(world.external_policies()[1U].fx_regime == FxRegime::floating);
 }
 
 void test_emergency_context_has_cross_group_controls() {
@@ -276,17 +245,16 @@ void test_emergency_context_has_cross_group_controls() {
     assert(scheduler_result.ok() && coordinator_result.ok());
     auto scheduler = std::move(*scheduler_result.get_if());
     auto coordinator = std::move(*coordinator_result.get_if());
-    auto context = coordinator.open_context(
-        world, scheduler, world.tick(), EconomyId(0U), "treasury",
-        "emergency", Tick(1U), true, "exogenous_supply_crisis");
+    auto context = coordinator.open_context(world, scheduler, world.tick(),
+                                            EconomyId(0U), "treasury", "emergency",
+                                            Tick(1U), true, "exogenous_supply_crisis");
     assert(context.ok());
     assert(context.get_if()->administrative_capacity == 20.0);
-    assert(std::any_of(
-        context.get_if()->permitted_actions.begin(),
-        context.get_if()->permitted_actions.end(),
-        [](const M11PermittedAction &entry) {
-            return entry.lever == "gov_consumption_share";
-        }));
+    assert(std::any_of(context.get_if()->permitted_actions.begin(),
+                       context.get_if()->permitted_actions.end(),
+                       [](const M11PermittedAction &entry) {
+                           return entry.lever == "gov_consumption_share";
+                       }));
 }
 
 } // namespace

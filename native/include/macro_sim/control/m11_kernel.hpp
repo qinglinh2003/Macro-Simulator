@@ -49,8 +49,7 @@ inline constexpr std::array<std::string_view, kM11DecisionGroupCount>
     }};
 
 [[nodiscard]] bool m11_valid_seat(std::string_view seat) noexcept;
-[[nodiscard]] bool
-m11_valid_decision_group(std::string_view decision_group) noexcept;
+[[nodiscard]] bool m11_valid_decision_group(std::string_view decision_group) noexcept;
 
 struct M11CalendarSpec final {
     std::string decision_group;
@@ -112,10 +111,8 @@ struct M11MetricSample final {
 
 [[nodiscard]] std::vector<M11CalendarSpec> m11_default_calendars();
 [[nodiscard]] std::vector<M11TriggerSpec> m11_default_triggers();
-[[nodiscard]] Status
-validate_m11_calendar(const M11CalendarSpec &calendar) noexcept;
-[[nodiscard]] Status
-validate_m11_trigger(const M11TriggerSpec &trigger) noexcept;
+[[nodiscard]] Status validate_m11_calendar(const M11CalendarSpec &calendar) noexcept;
+[[nodiscard]] Status validate_m11_trigger(const M11TriggerSpec &trigger) noexcept;
 
 class M11DecisionScheduler final {
   public:
@@ -129,8 +126,7 @@ class M11DecisionScheduler final {
     [[nodiscard]] const std::vector<M11TriggerSpec> &triggers() const noexcept {
         return triggers_;
     }
-    [[nodiscard]] const std::vector<M11TriggerState> &
-    trigger_states() const noexcept {
+    [[nodiscard]] const std::vector<M11TriggerState> &trigger_states() const noexcept {
         return trigger_states_;
     }
     [[nodiscard]] bool due(std::string_view decision_group, Tick tick,
@@ -140,9 +136,8 @@ class M11DecisionScheduler final {
     [[nodiscard]] Result<std::vector<M11TriggerNotice>>
     evaluate_triggers(Tick boundary, EconomyId economy,
                       std::span<const M11MetricSample> metrics);
-    [[nodiscard]] Status
-    restore_trigger_states(std::vector<M11TriggerState> states,
-                           std::size_t economy_count);
+    [[nodiscard]] Status restore_trigger_states(std::vector<M11TriggerState> states,
+                                                std::size_t economy_count);
 
   private:
     M11DecisionScheduler(std::vector<M11CalendarSpec> calendars,
@@ -182,12 +177,10 @@ struct M11PolicyChange final {
     PolicyValue new_value{};
 };
 
-[[nodiscard]] Status
-validate_m11_cost_spec(const M11AdjustmentCostSpec &spec) noexcept;
+[[nodiscard]] Status validate_m11_cost_spec(const M11AdjustmentCostSpec &spec) noexcept;
 [[nodiscard]] Result<double>
 m11_adjustment_cost(const M11AdjustmentCostSpec &spec,
-                    std::span<const M11PolicyChange> changes,
-                    bool emergency) noexcept;
+                    std::span<const M11PolicyChange> changes, bool emergency) noexcept;
 [[nodiscard]] Result<double>
 m11_administrative_cost(const M11AdjustmentCostSpec &spec,
                         std::span<const M11PolicyChange> changes) noexcept;
@@ -214,8 +207,7 @@ struct M11ControllerEvent final {
 
 class M11EventStream final {
   public:
-    explicit M11EventStream(
-        std::size_t maximum_events = kM11MaximumControllerEvents)
+    explicit M11EventStream(std::size_t maximum_events = kM11MaximumControllerEvents)
         : maximum_events_(maximum_events) {}
 
     [[nodiscard]] std::uint64_t next_sequence() const noexcept {
@@ -234,9 +226,9 @@ class M11EventStream final {
     [[nodiscard]] Result<std::vector<M11ControllerEvent>>
     page(std::uint64_t first_sequence, std::size_t maximum_rows,
          M11EventVisibility maximum_visibility) const;
-    [[nodiscard]] Status
-    restore(std::vector<M11ControllerEvent> events,
-            std::uint64_t next_sequence, core::StateDigest head_hash);
+    [[nodiscard]] Status restore(std::vector<M11ControllerEvent> events,
+                                 std::uint64_t next_sequence,
+                                 core::StateDigest head_hash);
 
   private:
     std::size_t maximum_events_{kM11MaximumControllerEvents};
@@ -271,9 +263,8 @@ class M11ReleaseStream final {
         return releases_;
     }
     [[nodiscard]] Result<M11ReleaseRecord>
-    append(EconomyId economy, std::string series_id, Tick observed_at,
-           Tick released_at, std::uint32_t revision,
-           std::optional<double> value,
+    append(EconomyId economy, std::string series_id, Tick observed_at, Tick released_at,
+           std::uint32_t revision, std::optional<double> value,
            std::uint64_t source_event_sequence);
     [[nodiscard]] Result<std::vector<M11ReleaseRecord>>
     page(std::uint64_t first_sequence, std::size_t maximum_rows,

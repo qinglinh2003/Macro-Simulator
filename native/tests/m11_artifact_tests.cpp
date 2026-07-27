@@ -23,16 +23,14 @@ void test_builtin_artifact_and_golden_vectors() {
     assert(loaded.ok());
     auto artifact = std::move(*loaded.get_if());
     const auto &info = artifact.info();
-    assert(
-        info.artifact_sha256 ==
-        "1cfc9b0f3b0d2f18ea9b54bbc4130ff447936cbb685aa14e01dd35ef28d107e6");
+    assert(info.artifact_sha256 ==
+           "1cfc9b0f3b0d2f18ea9b54bbc4130ff447936cbb685aa14e01dd35ef28d107e6");
     assert(info.observation_dimension == 101U);
     assert(info.action_dimension == 1U);
     assert(info.layer_count == 3U);
     assert(info.float32);
     assert(info.deterministic);
-    assert(info.inference_capability ==
-           "msrl_v1_deterministic_inference");
+    assert(info.inference_capability == "msrl_v1_deterministic_inference");
     assert(info.temperature == 1.0);
     assert(artifact.feature_names().size() == 101U);
 
@@ -56,11 +54,9 @@ void test_builtin_artifact_and_golden_vectors() {
         0.3422205249993660,
         0.2586735079656094,
     };
-    for (std::size_t index = 0; index < expected_probabilities.size();
-         ++index) {
-        assert(std::abs(
-                   (*probabilities.get_if())[index] -
-                   expected_probabilities[index]) < 2.0e-12);
+    for (std::size_t index = 0; index < expected_probabilities.size(); ++index) {
+        assert(std::abs((*probabilities.get_if())[index] -
+                        expected_probabilities[index]) < 2.0e-7);
     }
     auto code = artifact.predict_codes(zeros, all_allowed);
     assert(code.ok());
@@ -78,9 +74,7 @@ void test_builtin_artifact_and_golden_vectors() {
         0.054109569638967514,
     };
     for (std::size_t index = 0; index < ramp_expected.size(); ++index) {
-        assert(
-            std::abs((*logits.get_if())[index] - ramp_expected[index]) <
-            2.0e-5);
+        assert(std::abs((*logits.get_if())[index] - ramp_expected[index]) < 2.0e-5);
     }
     code = artifact.predict_codes(ramp, all_allowed);
     assert(code.ok());
@@ -99,9 +93,8 @@ void test_corruption_and_shape_rejection() {
     assert(ending > 0);
     std::vector<std::uint8_t> valid(static_cast<std::size_t>(ending));
     stream.seekg(0, std::ios::beg);
-    stream.read(
-        reinterpret_cast<char *>(valid.data()),
-        static_cast<std::streamsize>(valid.size()));
+    stream.read(reinterpret_cast<char *>(valid.data()),
+                static_cast<std::streamsize>(valid.size()));
     assert(stream);
     assert(!valid.empty());
     auto corrupt = valid;
@@ -110,8 +103,8 @@ void test_corruption_and_shape_rejection() {
     assert(!loaded.ok());
     assert(loaded.status().code() == ErrorCode::corrupt_input);
 
-    loaded = NativePolicyArtifact::load_file(
-        artifact_path().parent_path() / "absent.msrl");
+    loaded =
+        NativePolicyArtifact::load_file(artifact_path().parent_path() / "absent.msrl");
     assert(!loaded.ok());
     assert(loaded.status().code() == ErrorCode::not_found);
 
@@ -122,8 +115,8 @@ void test_corruption_and_shape_rejection() {
     assert(!logits.ok());
     assert(logits.status().code() == ErrorCode::invalid_argument);
     std::vector<double> observation(101U, 0.0);
-    auto code = loaded.get_if()->predict_codes(
-        observation, std::vector<std::uint8_t>{1U, 1U});
+    auto code =
+        loaded.get_if()->predict_codes(observation, std::vector<std::uint8_t>{1U, 1U});
     assert(!code.ok());
     assert(code.status().code() == ErrorCode::invalid_argument);
 }

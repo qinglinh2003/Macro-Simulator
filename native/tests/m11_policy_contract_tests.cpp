@@ -23,9 +23,8 @@ using namespace macro_sim::simulation;
     real.consumption_firms = 2;
     real.capital_firms = 1;
     real.seed = seed;
-    real.requested_capabilities =
-        capability_bit(M4Capability::physical_capital) |
-        capability_bit(M4Capability::government);
+    real.requested_capabilities = capability_bit(M4Capability::physical_capital) |
+                                  capability_bit(M4Capability::government);
     monetary.rules.bank_count = 2;
     monetary.rules.opening_capital_per_bank = 100.0;
     population.financial_economy.rules.entry_beta = 0.0;
@@ -90,28 +89,21 @@ void test_every_lever_reads_and_noop_projects() {
     const auto &external = world.external_policies()[0U];
     std::vector<NativePolicyAction> actions;
     for (const auto &lever : m11_policy_levers()) {
-        auto value = m11_policy_value(
-            *domestic.get_if(), external, lever.name);
+        auto value = m11_policy_value(*domestic.get_if(), external, lever.name);
         assert(value.ok());
-        assert(validate_m11_policy_value(
-                   lever, *value.get_if(), EconomyId(0U),
-                   world.economy_count())
+        assert(validate_m11_policy_value(lever, *value.get_if(), EconomyId(0U),
+                                         world.economy_count())
                    .ok());
-        actions.push_back(
-            {EconomyId(0U), std::string(lever.name), *value.get_if()});
+        actions.push_back({EconomyId(0U), std::string(lever.name), *value.get_if()});
     }
     auto batch = project_m11_policy_actions(world, actions);
     assert(batch.ok());
-    assert(batch.get_if()->expected_generation ==
-           world.policy_generation());
+    assert(batch.get_if()->expected_generation == world.policy_generation());
     for (const auto &action : actions) {
-        auto projected = m11_policy_value(
-            batch.get_if()->domestic[0U],
-            batch.get_if()->external[0U],
-            action.lever);
+        auto projected = m11_policy_value(batch.get_if()->domestic[0U],
+                                          batch.get_if()->external[0U], action.lever);
         assert(projected.ok());
-        assert(m11_policy_values_equal(
-            *projected.get_if(), action.value));
+        assert(m11_policy_values_equal(*projected.get_if(), action.value));
     }
 }
 
@@ -130,23 +122,18 @@ void test_multi_lever_projection_and_atomic_constraints() {
     assert(projected.ok());
     const auto &first = projected.get_if()->domestic[0U];
     assert(first.fiscal_monetary.government_deficit_target == 0.01);
-    assert(first.fiscal_monetary.monetary_regime ==
-           MonetaryRegime::manual);
+    assert(first.fiscal_monetary.monetary_regime == MonetaryRegime::manual);
     assert(first.fiscal_monetary.manual_policy_rate == 0.001);
     assert(!first.fiscal_monetary.state_resolution_backstop);
     assert(!first.financial.bank_resolution_fund);
-    assert(projected.get_if()->external[0U].fx_regime ==
-           FxRegime::peg);
-    assert(projected.get_if()->external[0U].peg_anchor ==
-           EconomyId(1U));
+    assert(projected.get_if()->external[0U].fx_regime == FxRegime::peg);
+    assert(projected.get_if()->external[0U].peg_anchor == EconomyId(1U));
     assert(projected.get_if()->external[1U].tariff == 0.25);
 
     const std::vector<NativePolicyAction> missing_manual{
         {EconomyId(0U), "monetary_regime", std::string("manual")},
     };
-    assert(!project_m11_policy_actions(
-                build_world(), missing_manual)
-                .ok());
+    assert(!project_m11_policy_actions(build_world(), missing_manual).ok());
 
     const std::vector<NativePolicyAction> competing_pegs{
         {EconomyId(0U), "fx_regime", std::string("peg")},
@@ -154,9 +141,7 @@ void test_multi_lever_projection_and_atomic_constraints() {
         {EconomyId(1U), "fx_regime", std::string("peg")},
         {EconomyId(1U), "peg_anchor", std::int64_t{0}},
     };
-    assert(!project_m11_policy_actions(
-                build_world(), competing_pegs)
-                .ok());
+    assert(!project_m11_policy_actions(build_world(), competing_pegs).ok());
 }
 
 void test_type_range_and_duplicate_rejection() {
@@ -164,25 +149,21 @@ void test_type_range_and_duplicate_rejection() {
     const std::vector<NativePolicyAction> wrong_type{
         {EconomyId(0U), "tariff", true},
     };
-    assert(project_m11_policy_actions(world, wrong_type)
-               .status()
-               .code() == ErrorCode::invalid_argument);
+    assert(project_m11_policy_actions(world, wrong_type).status().code() ==
+           ErrorCode::invalid_argument);
     const std::vector<NativePolicyAction> out_of_range{
         {EconomyId(0U), "tariff", 6.0},
     };
-    assert(project_m11_policy_actions(world, out_of_range)
-               .status()
-               .code() == ErrorCode::out_of_range);
+    assert(project_m11_policy_actions(world, out_of_range).status().code() ==
+           ErrorCode::out_of_range);
     const std::vector<NativePolicyAction> duplicate{
         {EconomyId(0U), "tariff", 0.1},
         {EconomyId(0U), "tariff", 0.2},
     };
-    assert(project_m11_policy_actions(world, duplicate)
-               .status()
-               .code() == ErrorCode::already_exists);
+    assert(project_m11_policy_actions(world, duplicate).status().code() ==
+           ErrorCode::already_exists);
     const std::vector<NativePolicyAction> invalid_set{
-        {EconomyId(0U),
-         "sanctions_imposed_on",
+        {EconomyId(0U), "sanctions_imposed_on",
          PolicyEconomySet{EconomyId(1U), EconomyId(1U)}},
     };
     assert(!project_m11_policy_actions(world, invalid_set).ok());

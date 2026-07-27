@@ -147,47 +147,39 @@ struct M11DuePlan final {
     std::string exclusion_reason;
 
     [[nodiscard]] bool has_due_decisions() const noexcept {
-        return !effective_decision_ids.empty() ||
-               !failed_decision_ids.empty();
+        return !effective_decision_ids.empty() || !failed_decision_ids.empty();
     }
 };
 
 [[nodiscard]] std::string_view
 m11_decision_status_name(M11DecisionStatus status) noexcept;
 [[nodiscard]] Result<std::vector<M11PolicyDecision>>
-replay_m11_decisions(
-    std::span<const M11ControllerEvent> events);
-[[nodiscard]] bool m11_world_capability(
-    const simulation::M9World &world, EconomyId economy,
-    std::string_view capability) noexcept;
+replay_m11_decisions(std::span<const M11ControllerEvent> events);
+[[nodiscard]] bool m11_world_capability(const simulation::M9World &world,
+                                        EconomyId economy,
+                                        std::string_view capability) noexcept;
 
 class M11PolicyCoordinator final {
   public:
     [[nodiscard]] static Result<M11PolicyCoordinator>
-    create(const simulation::M9World &world,
-           M11AdjustmentCostSpec cost_spec = {});
+    create(const simulation::M9World &world, M11AdjustmentCostSpec cost_spec = {});
 
     [[nodiscard]] const M11AdjustmentCostSpec &cost_spec() const noexcept {
         return cost_spec_;
     }
-    [[nodiscard]] std::span<const M11PolicyVersion>
-    policy_versions() const noexcept {
+    [[nodiscard]] std::span<const M11PolicyVersion> policy_versions() const noexcept {
         return policy_versions_;
     }
-    [[nodiscard]] std::span<const M11DecisionContext>
-    contexts() const noexcept {
+    [[nodiscard]] std::span<const M11DecisionContext> contexts() const noexcept {
         return contexts_;
     }
-    [[nodiscard]] std::span<const M11PendingDecision>
-    pending() const noexcept {
+    [[nodiscard]] std::span<const M11PendingDecision> pending() const noexcept {
         return pending_;
     }
-    [[nodiscard]] std::span<const M11PolicyDecision>
-    decisions() const noexcept {
+    [[nodiscard]] std::span<const M11PolicyDecision> decisions() const noexcept {
         return decisions_;
     }
-    [[nodiscard]] std::span<const M11AdministrativeBudget>
-    budgets() const noexcept {
+    [[nodiscard]] std::span<const M11AdministrativeBudget> budgets() const noexcept {
         return budgets_;
     }
     [[nodiscard]] std::span<const M11IdempotencyRecord>
@@ -207,52 +199,43 @@ class M11PolicyCoordinator final {
     [[nodiscard]] Result<std::uint64_t>
     policy_version(EconomyId economy, std::string_view lever) const noexcept;
     [[nodiscard]] const M11PolicyVersion *
-    find_policy_version(EconomyId economy,
-                        std::string_view lever) const noexcept;
+    find_policy_version(EconomyId economy, std::string_view lever) const noexcept;
 
     [[nodiscard]] Result<M11DecisionContext>
     open_context(const simulation::M9World &world,
                  const M11DecisionScheduler &scheduler, Tick boundary,
-                 EconomyId economy, std::string seat,
-                 std::string decision_group, Tick expires_at,
-                 bool emergency = false,
-                 std::string emergency_trigger = {},
-                 std::uint64_t elapsed_ticks = 0U,
+                 EconomyId economy, std::string seat, std::string decision_group,
+                 Tick expires_at, bool emergency = false,
+                 std::string emergency_trigger = {}, std::uint64_t elapsed_ticks = 0U,
                  std::span<const M11ReleasedObservation> observation = {});
     [[nodiscard]] Result<M11PolicyDecision>
-    submit(const simulation::M9World &world,
-           const M11DecisionScheduler &scheduler, Tick boundary,
-           M11PolicyProposal proposal, std::string_view actor,
+    submit(const simulation::M9World &world, const M11DecisionScheduler &scheduler,
+           Tick boundary, M11PolicyProposal proposal, std::string_view actor,
            M11EventStream &events);
     [[nodiscard]] Result<M11PolicyDecision>
-    cancel(Tick boundary, std::string_view decision_id,
-           std::string_view operation_id, std::string_view actor,
-           M11EventStream &events);
-    [[nodiscard]] Result<M11DuePlan>
-    prepare_due(const simulation::M9World &world, Tick boundary) const;
-    [[nodiscard]] Status
-    commit_due(const M11DuePlan &plan, M11EventStream &events);
-    [[nodiscard]] Status
-    fail_due(const M11DuePlan &plan, std::string_view reason,
-             M11EventStream &events);
+    cancel(Tick boundary, std::string_view decision_id, std::string_view operation_id,
+           std::string_view actor, M11EventStream &events);
+    [[nodiscard]] Result<M11DuePlan> prepare_due(const simulation::M9World &world,
+                                                 Tick boundary) const;
+    [[nodiscard]] Status commit_due(const M11DuePlan &plan, M11EventStream &events);
+    [[nodiscard]] Status fail_due(const M11DuePlan &plan, std::string_view reason,
+                                  M11EventStream &events);
 
-    [[nodiscard]] Status restore(
-        const simulation::M9World &world,
-        std::vector<M11PolicyVersion> policy_versions,
-        std::vector<M11DecisionContext> contexts,
-        std::vector<M11PendingDecision> pending,
-        std::vector<M11PolicyDecision> decisions,
-        std::vector<M11AdministrativeBudget> budgets,
-        std::vector<M11IdempotencyRecord> idempotency,
-        std::uint64_t next_decision_sequence);
+    [[nodiscard]] Status restore(const simulation::M9World &world,
+                                 std::vector<M11PolicyVersion> policy_versions,
+                                 std::vector<M11DecisionContext> contexts,
+                                 std::vector<M11PendingDecision> pending,
+                                 std::vector<M11PolicyDecision> decisions,
+                                 std::vector<M11AdministrativeBudget> budgets,
+                                 std::vector<M11IdempotencyRecord> idempotency,
+                                 std::uint64_t next_decision_sequence);
 
   private:
     explicit M11PolicyCoordinator(M11AdjustmentCostSpec cost_spec)
         : cost_spec_(std::move(cost_spec)) {}
 
     [[nodiscard]] M11PolicyVersion *
-    mutable_policy_version(EconomyId economy,
-                           std::string_view lever) noexcept;
+    mutable_policy_version(EconomyId economy, std::string_view lever) noexcept;
     [[nodiscard]] M11DecisionContext *
     mutable_context(std::string_view context_id) noexcept;
     [[nodiscard]] M11PendingDecision *
@@ -263,19 +246,17 @@ class M11PolicyCoordinator final {
     mutable_budget(EconomyId economy, std::string_view seat,
                    std::string_view decision_group) noexcept;
     [[nodiscard]] Result<M11AdministrativeBudget *>
-    ensure_budget(const M11DecisionScheduler &scheduler,
-                  EconomyId economy, std::string_view seat,
-                  std::string_view decision_group, Tick boundary);
+    ensure_budget(const M11DecisionScheduler &scheduler, EconomyId economy,
+                  std::string_view seat, std::string_view decision_group,
+                  Tick boundary);
     [[nodiscard]] M11PolicyDecision
-    make_decision(const M11PolicyProposal &proposal,
-                  M11DecisionStatus status, std::string reason,
-                  std::optional<Tick> accepted_at,
-                  std::optional<Tick> effective_at,
-                  double administrative_cost = 0.0,
+    make_decision(const M11PolicyProposal &proposal, M11DecisionStatus status,
+                  std::string reason, std::optional<Tick> accepted_at,
+                  std::optional<Tick> effective_at, double administrative_cost = 0.0,
                   double adjustment_cost = 0.0);
-    [[nodiscard]] Result<M11PolicyDecision>
-    reject(const M11PolicyProposal &proposal, std::string reason,
-           core::StateDigest request_hash);
+    [[nodiscard]] Result<M11PolicyDecision> reject(const M11PolicyProposal &proposal,
+                                                   std::string reason,
+                                                   core::StateDigest request_hash);
     void refund(M11PendingDecision &pending, double fraction) noexcept;
 
     M11AdjustmentCostSpec cost_spec_{};

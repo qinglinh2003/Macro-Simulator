@@ -161,6 +161,9 @@ target_link_libraries(
     macro_sim_server
     PRIVATE macro_sim_core
 )
+if(WIN32)
+    target_link_libraries(macro_sim_server PRIVATE ws2_32)
+endif()
 target_include_directories(
     macro_sim_server
     SYSTEM
@@ -168,6 +171,32 @@ target_include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
 )
 macro_sim_project_options(macro_sim_server)
+
+if(WIN32)
+    add_executable(
+        macro_sim_launcher
+        WIN32
+        src/desktop/macro_sim_launcher_windows.cpp
+    )
+    target_link_libraries(
+        macro_sim_launcher
+        PRIVATE bcrypt advapi32 shell32
+    )
+elseif(UNIX)
+    add_executable(
+        macro_sim_launcher
+        src/desktop/macro_sim_launcher.cpp
+    )
+endif()
+if(TARGET macro_sim_launcher)
+    target_include_directories(
+        macro_sim_launcher
+        SYSTEM
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vendor/nlohmann-json/single_include"
+    )
+    macro_sim_project_options(macro_sim_launcher)
+endif()
 
 add_library(macro_sim_c SHARED src/c_api.cpp)
 add_library(macro_sim::c ALIAS macro_sim_c)
@@ -194,7 +223,14 @@ if(MACRO_SIM_BUILD_PYTHON)
         set(Python_FIND_VIRTUALENV ONLY)
         set(Python_ROOT_DIR "$ENV{VIRTUAL_ENV}")
     endif()
-    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
+    find_package(
+        Python 3.12
+        REQUIRED
+        COMPONENTS
+            Interpreter
+            Development.Module
+            Development.SABIModule
+    )
     execute_process(
         COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
         RESULT_VARIABLE nanobind_result
@@ -218,10 +254,28 @@ if(MACRO_SIM_BUILD_PYTHON)
     install(TARGETS _native LIBRARY DESTINATION macro_sim)
 endif()
 
+set(
+    MACRO_SIM_RUNTIME_INSTALL_DIR
+    "${CMAKE_INSTALL_BINDIR}"
+)
+if(SKBUILD)
+    set(
+        MACRO_SIM_RUNTIME_INSTALL_DIR
+        "macro_sim/bin"
+    )
+endif()
 install(
     TARGETS macro_sim_server
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    RUNTIME DESTINATION
+        "${MACRO_SIM_RUNTIME_INSTALL_DIR}"
 )
+if(TARGET macro_sim_launcher)
+    install(
+        TARGETS macro_sim_launcher
+        RUNTIME DESTINATION
+            "${MACRO_SIM_RUNTIME_INSTALL_DIR}"
+    )
+endif()
 
 if(MACRO_SIM_BUILD_TESTS)
     add_executable(macro_sim_native_tests tests/native_tests.cpp)
@@ -842,6 +896,33 @@ if(MACRO_SIM_BUILD_TESTS)
         COMMAND macro_sim_m11_protocol_tests
     )
 
+    add_executable(
+        macro_sim_m11_parser_fuzz_smoke
+        tests/m11_parser_fuzz_smoke.cpp
+    )
+    target_link_libraries(
+        macro_sim_m11_parser_fuzz_smoke
+        PRIVATE macro_sim_core macro_sim_c
+    )
+    target_compile_definitions(
+        macro_sim_m11_parser_fuzz_smoke
+        PRIVATE MACRO_SIM_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    )
+    macro_sim_project_options(macro_sim_m11_parser_fuzz_smoke)
+    macro_sim_enable_runtime_assertions(
+        macro_sim_m11_parser_fuzz_smoke
+    )
+    add_test(
+        NAME macro_sim.m11_parser_fuzz
+        COMMAND macro_sim_m11_parser_fuzz_smoke
+    )
+    set_tests_properties(
+        macro_sim.m11_parser_fuzz
+        PROPERTIES
+            LABELS "m11;fuzz;parser"
+            TIMEOUT 120
+    )
+
     if(TARGET _native)
         add_test(
             NAME macro_sim.m11_server
@@ -880,6 +961,30 @@ if(MACRO_SIM_BUILD_TESTS)
                     LABELS "m11;native-server;godot"
                     TIMEOUT 90
             )
+            if(TARGET macro_sim_launcher)
+                add_test(
+                    NAME macro_sim.m11_launcher_e2e
+                    COMMAND
+                        "${Python_EXECUTABLE}"
+                        "${PROJECT_SOURCE_DIR}/tools/m11/launcher_e2e.py"
+                        --launcher
+                        "$<TARGET_FILE:macro_sim_launcher>"
+                        --server
+                        "$<TARGET_FILE:macro_sim_server>"
+                        --godot
+                        "${MACRO_SIM_GODOT_EXECUTABLE}"
+                        --project
+                        "${PROJECT_SOURCE_DIR}/desktop/godot"
+                        --artifact
+                        "${PROJECT_SOURCE_DIR}/macro_sim/rl/artifacts/fiscal_stabilization_v1.msrl"
+                )
+                set_tests_properties(
+                    macro_sim.m11_launcher_e2e
+                    PROPERTIES
+                        LABELS "m11;native-server;godot;launcher"
+                        TIMEOUT 90
+                )
+            endif()
         endif()
         add_test(
             NAME macro_sim.m11_kernel_golden

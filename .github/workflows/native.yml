@@ -1,4 +1,4 @@
-name: Native M9 World
+name: Native M11 Product
 
 on:
   push:
@@ -10,6 +10,8 @@ on:
       - refactor/cpp-m7-v33
       - refactor/cpp-m8-v33
       - refactor/cpp-m9-v33
+      - refactor/cpp-m10-v34
+      - refactor/cpp-m11-v34
       - refactor/cpp-engine-v33
   pull_request:
     paths:
@@ -18,7 +20,11 @@ on:
       - "CMakePresets.json"
       - "macro_sim/**/*.py"
       - "native/**"
+      - "desktop/godot/**"
       - "pyproject.toml"
+      - "scripts/package_m11_linux.sh"
+      - "scripts/package_m11_macos.sh"
+      - "scripts/package_m11_windows.ps1"
       - "schemas/m0/**"
       - "schemas/m1/**"
       - "schemas/m2/**"
@@ -29,6 +35,8 @@ on:
       - "schemas/m7/**"
       - "schemas/m8/**"
       - "schemas/m9/**"
+      - "schemas/m10/**"
+      - "schemas/m11/**"
       - "tests/native/**"
       - "tools/m1/**"
       - "tools/m2/**"
@@ -39,6 +47,8 @@ on:
       - "tools/m7/**"
       - "tools/m8/**"
       - "tools/m9/**"
+      - "tools/m10/**"
+      - "tools/m11/**"
       - "uv.lock"
   workflow_dispatch:
 
@@ -51,14 +61,21 @@ concurrency:
 
 jobs:
   native:
-    name: ${{ matrix.os }} / C++20 / wheel
+    name: ${{ matrix.platform }} / C++20 / wheel
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-14
-          - ubuntu-24.04
-          - windows-2022
+        include:
+          - os: macos-14
+            platform: macos-arm64
+          - os: macos-13
+            platform: macos-x86_64
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - os: windows-2022
+            platform: windows-x86_64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -85,57 +102,69 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ccache ninja --no-progress -y
       - name: Resolve locked environment
-        run: uv sync --group dev --group m1
-      - name: Verify M9 contracts and current playable target
-        run: uv run python tools/m9/check.py --skip-build
+        run: uv sync --group dev --group m1 --group m11
+      - name: Verify contracts and current playable target
+        run: uv run python tools/m11/check.py --skip-build
       - name: Configure native release
-        run: uv run cmake --preset m9-release
+        run: uv run cmake --preset m11-release
       - name: Build native release
-        run: uv run cmake --build --preset m9-release --parallel 8
+        run: uv run cmake --build --preset m11-release --parallel 8
       - name: Test native release
-        run: uv run ctest --preset m9-release -j 8
+        run: uv run ctest --preset m11-release -j 8
       - name: Verify installed C package
         run: >-
           uv run python tools/m1/installed_c_smoke.py
-          --build-dir build/native/m9-release
-          --prefix build/install/m9-ci
+          --build-dir build/native/m11-release
+          --prefix build/install/m11-ci
       - name: Verify M5 monetary performance budget
         run: >-
           uv run python tools/m5/performance_gate.py
           --budget schemas/m5/performance_budget.json
-          --build-dir build/native/m9-release
+          --build-dir build/native/m11-release
       - name: Verify M6 securities performance budget
         run: >-
           uv run python tools/m6/performance_gate.py
           --budget schemas/m6/performance_budget.json
-          --build-dir build/native/m9-release
+          --build-dir build/native/m11-release
       - name: Verify M7 population and labor performance budget
         run: >-
           uv run python tools/m7/performance_gate.py
           --budget schemas/m7/performance_budget.json
-          --build-dir build/native/m9-release
+          --build-dir build/native/m11-release
       - name: Verify M8 energy and housing performance budget
         run: >-
           uv run python tools/m8/performance_gate.py
           --budget schemas/m8/performance_budget.json
-          --build-dir build/native/m9-release
+          --build-dir build/native/m11-release
       - name: Verify M9 World performance budget
         run: >-
           uv run python tools/m9/performance_gate.py
           --budget schemas/m9/performance_budget.json
-          --build-dir build/native/m9-release
+          --build-dir build/native/m11-release
+      - name: Verify M11 desktop performance budget
+        if: runner.os != 'Windows'
+        run: >-
+          uv run python tools/m11/p3_desktop_gate.py
+          --server build/native/m11-release/native/macro_sim_server
+          --budget schemas/m10/performance_budget.json
       - name: Build wheel and source distribution
         run: |
-          uv build --wheel
+          uv run cibuildwheel --output-dir dist
           uv build --sdist
-      - name: Verify isolated wheel
-        run: uv run python tools/m9/wheel_smoke.py --wheel-dir dist
+      - name: Verify isolated wheel on CPython 3.12
+        run: >-
+          uv run python tools/m11/wheel_smoke.py
+          --wheel-dir dist --python 3.12
+      - name: Verify the same abi3 wheel on CPython 3.14
+        run: >-
+          uv run python tools/m11/wheel_smoke.py
+          --wheel-dir dist --python 3.14
       - name: Verify source artifact offline inputs
-        run: uv run python tools/m9/source_artifact_smoke.py --sdist-dir dist
+        run: uv run python tools/m11/source_artifact_smoke.py --sdist-dir dist
       - name: Upload native artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.os }}
+          name: native-${{ matrix.platform }}
           path: |
             dist/*
             schemas/m1/hashes.lock.json
@@ -183,8 +212,203 @@ jobs:
       - name: Resolve locked environment
         run: uv sync --group dev --group m1
       - name: Configure sanitizer build
-        run: uv run cmake --preset m9-asan
+        run: uv run cmake --preset m11-asan
       - name: Build sanitizer targets
-        run: uv run cmake --build --preset m9-asan --parallel 8
+        run: uv run cmake --build --preset m11-asan --parallel 8
       - name: Run sanitizer tests
-        run: uv run ctest --preset m9-asan -j 8
+        run: uv run ctest --preset m11-asan -j 8
+      - name: Run parser fuzz corpus under sanitizers
+        run: >-
+          uv run ctest --preset m11-asan -j 8
+          --label-regex fuzz
+
+  static-analysis:
+    name: Ubuntu / format and clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install build and analysis tools
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          ccache clang-format clang-tidy ninja-build
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Configure analysis build
+        run: uv run cmake --preset m11-debug
+      - name: Build analysis targets
+        run: uv run cmake --build --preset m11-debug --parallel 8
+      - name: Run format and clang-tidy gates
+        run: >-
+          uv run python tools/m11/static_analysis.py
+          --build-dir build/native/m11-debug
+
+  thread-sanitizer:
+    name: Ubuntu / TSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ccache ninja-build
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Configure TSan build
+        run: uv run cmake --preset m11-tsan
+      - name: Build TSan targets
+        run: uv run cmake --build --preset m11-tsan --parallel 8
+      - name: Run TSan tests
+        run: uv run ctest --preset m11-tsan -j 8
+
+  coverage:
+    name: Ubuntu / native coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install build and coverage tools
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y ccache ninja-build lcov
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Configure coverage build
+        run: uv run cmake --preset m11-coverage
+      - name: Build coverage targets
+        run: uv run cmake --build --preset m11-coverage --parallel 8
+      - name: Run coverage tests
+        run: uv run ctest --preset m11-coverage -j 8
+      - name: Capture first-party coverage
+        run: |
+          lcov --capture \
+            --directory build/native/m11-coverage \
+            --output-file build/native/m11-coverage/coverage.info \
+            --ignore-errors mismatch
+          lcov --remove \
+            build/native/m11-coverage/coverage.info \
+            '/usr/*' '*/native/vendor/*' '*/build/*' \
+            --output-file build/native/m11-coverage/coverage.info \
+            --ignore-errors unused
+          lcov --summary build/native/m11-coverage/coverage.info
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-coverage
+          path: build/native/m11-coverage/coverage.info
+          if-no-files-found: error
+
+  desktop-package:
+    name: ${{ matrix.platform }} / packaged Godot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macos-arm64
+            architecture: arm64
+            package: build/package/Macro Command.app
+            archive: build/package/Macro Command-macos-arm64.zip*
+          - os: macos-13
+            platform: macos-x86_64
+            architecture: x86_64
+            package: build/package/Macro Command.app
+            archive: build/package/Macro Command-macos-x86_64.zip*
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+            architecture: x86_64
+            package: build/package/linux/Macro Command
+            archive: build/package/linux/MacroCommand-linux-x86_64.tar.gz*
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+            architecture: aarch64
+            package: build/package/linux/Macro Command
+            archive: build/package/linux/MacroCommand-linux-aarch64.tar.gz*
+          - os: windows-2022
+            platform: windows-x86_64
+            architecture: x86_64
+            package: build/package/windows/Macro Command
+            archive: build/package/windows/MacroCommand-windows-x86_64.zip*
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.23"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.1
+          use-dotnet: false
+          include-templates: true
+      - name: Install build tools
+        if: runner.os == 'macOS'
+        run: brew install ccache ninja
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ccache ninja-build
+      - name: Enable MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install Windows build tools
+        if: runner.os == 'Windows'
+        run: choco install ccache ninja --no-progress -y
+      - name: Resolve locked environment
+        run: uv sync --group dev --group m1
+      - name: Build macOS development package
+        if: runner.os == 'macOS'
+        run: scripts/package_m11_macos.sh
+        env:
+          MACRO_SIM_PACKAGE_ARCH: ${{ matrix.architecture }}
+      - name: Build Linux package
+        if: runner.os == 'Linux'
+        run: scripts/package_m11_linux.sh
+        env:
+          MACRO_SIM_PACKAGE_ARCH: ${{ matrix.architecture }}
+      - name: Build Windows development package
+        if: runner.os == 'Windows'
+        run: pwsh -File scripts/package_m11_windows.ps1
+      - name: Verify packaged native product
+        run: >-
+          uv run python tools/m11/packaged_godot_e2e.py
+          --package "${{ matrix.package }}"
+          --platform "${{ matrix.platform }}"
+      - name: Upload desktop package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macro-command-${{ matrix.platform }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error

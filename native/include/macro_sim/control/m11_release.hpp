@@ -72,29 +72,27 @@ struct M11ReleasedObservation final {
 m11_observation_fields() noexcept;
 [[nodiscard]] const M11ObservationFieldDescriptor *
 find_m11_observation_field(std::string_view series_id) noexcept;
-[[nodiscard]] bool m11_release_permitted(
-    const M11ObservationFieldDescriptor &field,
-    std::string_view role) noexcept;
+[[nodiscard]] bool m11_release_permitted(const M11ObservationFieldDescriptor &field,
+                                         std::string_view role) noexcept;
 
 class M11ReleaseService final {
   public:
     [[nodiscard]] Result<std::size_t>
     publish_due(const reporting::MetricPipeline &metrics,
                 const simulation::M9World &world, Tick boundary,
-                std::uint64_t source_event_sequence,
-                M11ReleaseStream &stream) const;
+                std::uint64_t source_event_sequence, M11ReleaseStream &stream) const;
     [[nodiscard]] Result<std::vector<M11ReleasedObservation>>
-    observation(const M11ReleaseStream &stream, EconomyId economy,
-                Tick as_of, std::string_view role) const;
+    observation(const M11ReleaseStream &stream, EconomyId economy, Tick as_of,
+                std::string_view role) const;
     [[nodiscard]] std::vector<M11MetricSample>
-    trigger_samples(const M11ReleaseStream &stream,
-                    EconomyId economy, Tick as_of) const;
+    trigger_samples(const M11ReleaseStream &stream, EconomyId economy,
+                    Tick as_of) const;
 
   private:
     [[nodiscard]] Result<std::optional<double>>
     aggregate(const reporting::MetricHistoryPage &history,
-              const M11ObservationFieldDescriptor &field,
-              EconomyId economy, Tick endpoint) const;
+              const M11ObservationFieldDescriptor &field, EconomyId economy,
+              Tick endpoint) const;
 };
 
 } // namespace macro_sim::control

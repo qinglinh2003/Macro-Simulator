@@ -14,8 +14,7 @@
 namespace macro_sim::desktop {
 
 inline constexpr std::uint32_t kM11NewGameSchemaVersion = 1U;
-inline constexpr std::string_view kM11PlayableModelId =
-    "current_playable_native_v1";
+inline constexpr std::string_view kM11PlayableModelId = "current_playable_native_v1";
 inline constexpr std::size_t kM11MaximumNewGameCountries = 8U;
 
 struct M11CountryMetadata final {

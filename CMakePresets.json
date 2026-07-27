@@ -206,6 +206,30 @@
     {
       "name": "m10-benchmark",
       "inherits": "m9-benchmark"
+    },
+    {
+      "name": "m11-debug",
+      "inherits": "m10-debug"
+    },
+    {
+      "name": "m11-release",
+      "inherits": "m10-release"
+    },
+    {
+      "name": "m11-asan",
+      "inherits": "m10-asan"
+    },
+    {
+      "name": "m11-tsan",
+      "inherits": "m1-tsan"
+    },
+    {
+      "name": "m11-coverage",
+      "inherits": "m1-coverage"
+    },
+    {
+      "name": "m11-benchmark",
+      "inherits": "m10-benchmark"
     }
   ],
   "buildPresets": [
@@ -376,6 +400,30 @@
     {
       "name": "m10-benchmark",
       "configurePreset": "m10-benchmark"
+    },
+    {
+      "name": "m11-debug",
+      "configurePreset": "m11-debug"
+    },
+    {
+      "name": "m11-release",
+      "configurePreset": "m11-release"
+    },
+    {
+      "name": "m11-asan",
+      "configurePreset": "m11-asan"
+    },
+    {
+      "name": "m11-tsan",
+      "configurePreset": "m11-tsan"
+    },
+    {
+      "name": "m11-coverage",
+      "configurePreset": "m11-coverage"
+    },
+    {
+      "name": "m11-benchmark",
+      "configurePreset": "m11-benchmark"
     }
   ],
   "testPresets": [
@@ -644,6 +692,51 @@
           "label": "python-binding"
         }
       },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m11-debug",
+      "configurePreset": "m11-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m11-release",
+      "configurePreset": "m11-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m11-asan",
+      "configurePreset": "m11-asan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m11-tsan",
+      "configurePreset": "m11-tsan",
+      "filter": {
+        "exclude": {
+          "label": "python-binding"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "m11-coverage",
+      "configurePreset": "m11-coverage",
       "output": {
         "outputOnFailure": true
       }

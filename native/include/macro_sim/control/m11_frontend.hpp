@@ -49,8 +49,7 @@ struct M11FrontendEconomy final {
 };
 
 struct M11FrontendSnapshot final {
-    std::uint32_t schema_version{
-        kM11FrontendSnapshotSchemaVersion};
+    std::uint32_t schema_version{kM11FrontendSnapshotSchemaVersion};
     std::string cache_epoch;
     std::uint64_t snapshot_sequence{0U};
     core::StateDigest snapshot_id{};
@@ -71,8 +70,7 @@ struct M11FrontendSnapshot final {
 };
 
 struct M11FrontendDelta final {
-    std::uint32_t schema_version{
-        kM11FrontendSnapshotSchemaVersion};
+    std::uint32_t schema_version{kM11FrontendSnapshotSchemaVersion};
     core::StateDigest base_snapshot_id{};
     core::StateDigest result_snapshot_id{};
     std::uint64_t base_sequence{0U};
@@ -95,21 +93,17 @@ struct M11FrontendDelta final {
 class M11FrontendProjection final {
   public:
     [[nodiscard]] Result<M11FrontendSnapshot>
-    snapshot(const M11ControlledSession &session,
-             const M11AccessScope &scope,
-             std::string cache_epoch,
-             std::uint64_t snapshot_sequence) const;
+    snapshot(const M11ControlledSession &session, const M11AccessScope &scope,
+             std::string cache_epoch, std::uint64_t snapshot_sequence) const;
     [[nodiscard]] Result<M11FrontendDelta>
-    delta(const M11FrontendSnapshot &base,
-          const M11FrontendSnapshot &result) const;
+    delta(const M11FrontendSnapshot &base, const M11FrontendSnapshot &result) const;
 
   private:
     M11ReleaseService release_service_{};
 };
 
 [[nodiscard]] core::StateDigest
-m11_frontend_snapshot_id(
-    const M11FrontendSnapshot &snapshot) noexcept;
+m11_frontend_snapshot_id(const M11FrontendSnapshot &snapshot) noexcept;
 
 } // namespace macro_sim::control
 

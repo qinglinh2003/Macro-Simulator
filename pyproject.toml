@@ -1,6 +1,6 @@
 [project]
 name = "macro-simulator"
-version = "0.9.0"
+version = "0.11.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -42,6 +42,9 @@ m1 = [
     "nanobind>=2.9.2,<3",
     "scikit-build-core>=0.11.6,<0.12",
 ]
+m11 = [
+    "cibuildwheel==3.4.1",
+]
 
 [build-system]
 requires = [
@@ -57,7 +60,11 @@ cmake.source-dir = "."
 sdist.include = [
     "/CMakeLists.txt",
     "/CMakePresets.json",
+    "/desktop/godot/**",
     "/native/**",
+    "/scripts/package_m11_linux.sh",
+    "/scripts/package_m11_macos.sh",
+    "/scripts/package_m11_windows.ps1",
     "/schemas/m0/**",
     "/schemas/m1/**",
     "/schemas/m2/**",
@@ -97,3 +104,8 @@ wheel.py-api = "cp312"
 MACRO_SIM_BUILD_BENCHMARKS = "OFF"
 MACRO_SIM_BUILD_PYTHON = "ON"
 MACRO_SIM_BUILD_TESTS = "OFF"
+
+[tool.cibuildwheel]
+build = "cp312-*"
+skip = "*-musllinux*"
+build-frontend = "uv"

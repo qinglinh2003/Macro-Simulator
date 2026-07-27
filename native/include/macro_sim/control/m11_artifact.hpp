@@ -15,15 +15,12 @@ namespace macro_sim::control {
 
 struct NativePolicyArtifactBuilder;
 
-inline constexpr std::size_t kM11MaximumArtifactBytes =
-    1024U * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumArtifactBytes = 1024U * 1024U * 1024U;
 inline constexpr std::size_t kM11MaximumManifestBytes = 4U * 1024U * 1024U;
-inline constexpr std::size_t kM11MaximumParameterBytes =
-    512U * 1024U * 1024U;
+inline constexpr std::size_t kM11MaximumParameterBytes = 512U * 1024U * 1024U;
 
 struct NativePolicyArtifactInfo final {
-    std::string inference_capability{
-        "msrl_v1_deterministic_inference"};
+    std::string inference_capability{"msrl_v1_deterministic_inference"};
     std::string artifact_sha256;
     std::string context_contract_hash;
     std::string action_contract_hash;
@@ -71,8 +68,7 @@ class NativePolicyArtifact final {
     [[nodiscard]] const std::vector<std::string> &feature_names() const noexcept {
         return feature_names_;
     }
-    [[nodiscard]] std::span<const std::uint8_t>
-    source_bytes() const noexcept {
+    [[nodiscard]] std::span<const std::uint8_t> source_bytes() const noexcept {
         return source_bytes_;
     }
     [[nodiscard]] Result<std::vector<double>>

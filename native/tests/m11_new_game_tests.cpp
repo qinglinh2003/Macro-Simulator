@@ -14,8 +14,7 @@ using namespace macro_sim::control;
 using namespace macro_sim::desktop;
 using namespace macro_sim::simulation;
 
-[[nodiscard]] std::string new_game_document(
-    std::string_view scenario = "sandbox") {
+[[nodiscard]] std::string new_game_document(std::string_view scenario = "sandbox") {
     return std::string(R"JSON({
         "schema_version":1,
         "seed":17,
@@ -79,8 +78,7 @@ using namespace macro_sim::simulation;
 void test_default_is_complete_latest_world() {
     auto game = default_m11_native_new_game(23U);
     assert(game.ok());
-    assert(game.get_if()->model_id ==
-           kM11PlayableModelId);
+    assert(game.get_if()->model_id == kM11PlayableModelId);
     assert(game.get_if()->countries.size() == 3U);
     assert(game.get_if()->controller.worker_count == 8U);
     for (const auto &economy : game.get_if()->world.economies) {
@@ -107,20 +105,16 @@ void test_default_is_complete_latest_world() {
     }
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
-    auto engine = EngineSession::create(
-        std::move(*world.get_if()), 256U);
+    auto engine = EngineSession::create(std::move(*world.get_if()), 256U);
     assert(engine.ok());
-    auto session = M11ControlledSession::create(
-        std::move(*engine.get_if()),
-        std::move(game.get_if()->controller));
+    auto session = M11ControlledSession::create(std::move(*engine.get_if()),
+                                                std::move(game.get_if()->controller));
     assert(session.ok());
-    assert(session.get_if()->engine().world().economy_count() ==
-           3U);
+    assert(session.get_if()->engine().world().economy_count() == 3U);
 }
 
 void test_profiles_counts_policy_and_calendar_are_native() {
-    auto game =
-        parse_m11_native_new_game(new_game_document());
+    auto game = parse_m11_native_new_game(new_game_document());
     assert(game.ok());
     assert(game.get_if()->seed == 17U);
     assert(game.get_if()->start_date == "2024-02-29");
@@ -147,27 +141,18 @@ void test_profiles_counts_policy_and_calendar_are_native() {
 
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
-    auto batch = project_m11_policy_actions(
-        *world.get_if(),
-        game.get_if()->initial_policy_actions);
+    auto batch = project_m11_policy_actions(*world.get_if(),
+                                            game.get_if()->initial_policy_actions);
     assert(batch.ok());
-    assert(world.get_if()
-               ->update_policy_batch(*batch.get_if())
-               .ok());
-    auto policy =
-        world.get_if()->domestic_policy(EconomyId(0U));
+    assert(world.get_if()->update_policy_batch(*batch.get_if()).ok());
+    auto policy = world.get_if()->domestic_policy(EconomyId(0U));
     assert(policy.ok());
-    assert(policy.get_if()
-               ->fiscal_monetary
-               .government_deficit_target == 0.02);
+    assert(policy.get_if()->fiscal_monetary.government_deficit_target == 0.02);
 }
 
 void test_native_crisis_scenarios_are_live() {
-    for (const auto scenario :
-         {"oil", "gfc", "pandemic", "disaster"}) {
-        auto game =
-            parse_m11_native_new_game(
-                new_game_document(scenario));
+    for (const auto scenario : {"oil", "gfc", "pandemic", "disaster"}) {
+        auto game = parse_m11_native_new_game(new_game_document(scenario));
         assert(game.ok());
         assert(!game.get_if()->world.shocks.empty());
         auto world = M9World::create(game.get_if()->world);
@@ -176,10 +161,8 @@ void test_native_crisis_scenarios_are_live() {
 }
 
 void test_invalid_contract_is_rejected() {
-    auto malformed =
-        parse_m11_native_new_game("{not-json}");
-    assert(malformed.status().code() ==
-           ErrorCode::corrupt_input);
+    auto malformed = parse_m11_native_new_game("{not-json}");
+    assert(malformed.status().code() == ErrorCode::corrupt_input);
     auto extra = new_game_document();
     const auto position = extra.rfind('}');
     assert(position != std::string::npos);

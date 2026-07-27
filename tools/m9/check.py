@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -67,11 +68,12 @@ def validate_contracts() -> None:
     version = (
         ROOT / "native/include/macro_sim/version.hpp"
     ).read_text(encoding="utf-8")
-    if '"0.9.0-m9"' not in version:
-        raise AssertionError("M9 is not the current native engine version")
-    metadata = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    if 'version = "0.9.0"' not in metadata:
-        raise AssertionError("M9 package version is stale")
+    match = re.search(
+        r'kEngineVersion\s*=\s*"(\d+)\.(\d+)\.(\d+)-m(\d+)"',
+        version,
+    )
+    if match is None or tuple(map(int, match.groups())) < (0, 9, 0, 9):
+        raise AssertionError("native engine predates the M9 frontier")
 
     m8_header = (
         ROOT / "native/include/macro_sim/simulation/m8.hpp"
