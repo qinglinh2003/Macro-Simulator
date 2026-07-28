@@ -109,3 +109,6 @@ MACRO_SIM_BUILD_TESTS = "OFF"
 build = "cp312-*"
 skip = "*-musllinux*"
 build-frontend = "uv"
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
