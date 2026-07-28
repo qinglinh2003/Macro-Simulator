@@ -68,7 +68,7 @@ jobs:
         include:
           - os: macos-14
             platform: macos-arm64
-          - os: macos-13
+          - os: macos-15-intel
             platform: macos-x86_64
           - os: ubuntu-24.04
             platform: linux-x86_64
@@ -351,7 +351,7 @@ jobs:
             architecture: arm64
             package: build/package/Macro Command.app
             archive: build/package/Macro Command-macos-arm64.zip*
-          - os: macos-13
+          - os: macos-15-intel
             platform: macos-x86_64
             architecture: x86_64
             package: build/package/Macro Command.app
