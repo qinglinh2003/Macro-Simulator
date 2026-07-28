@@ -6,7 +6,7 @@
     "win32": 2500000
   },
   "maximum_allocations_per_day": 2,
-  "maximum_scaling_ratio": 2.7,
+  "maximum_scaling_ratio": 2.8,
   "p0": {
     "banks": 16,
     "firms": 300,
