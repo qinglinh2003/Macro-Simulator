@@ -108,7 +108,7 @@ jobs:
           } else {
             "C:\vcpkg"
           }
-          & "$root\vcpkg.exe" install zlib:x64-windows --clean-after-build
+          & "$root\vcpkg.exe" install zlib:x64-windows zlib:x64-windows-static --clean-after-build
           $toolchain = "$root\scripts\buildsystems\vcpkg.cmake"
           "CMAKE_TOOLCHAIN_FILE=$toolchain" |
             Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
