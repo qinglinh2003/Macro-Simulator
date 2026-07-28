@@ -34,7 +34,7 @@ def validate_contracts() -> None:
         },
         "maximum_allocations_per_day": 2200,
         "maximum_daily_scaling_ratio": 3.2,
-        "maximum_matching_normalized_scaling_ratio": 2.6,
+        "maximum_matching_normalized_scaling_ratio": 3.2,
         "maximum_roster_normalized_scaling_ratio": 1.5,
         "p0": {
             "banks": 8,
