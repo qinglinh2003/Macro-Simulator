@@ -112,4 +112,4 @@ build-frontend = "uv"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
-environment = { VCPKG_TARGET_TRIPLET = "x64-windows-static" }
+environment = { VCPKG_TARGET_TRIPLET = "x64-windows-static", CMAKE_ARGS = "-DVCPKG_TARGET_TRIPLET=x64-windows-static" }
