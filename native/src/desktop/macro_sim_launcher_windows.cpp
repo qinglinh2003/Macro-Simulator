@@ -230,10 +230,12 @@ class RuntimeDirectory final {
                 // rules. Apply the owner-only DACL explicitly and refuse to use
                 // the directory when the protection cannot be established.
                 std::wstring target = candidate.wstring();
-                if (SetNamedSecurityInfoW(
-                        target.data(), SE_FILE_OBJECT,
-                        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                        nullptr, nullptr, security_.acl(), nullptr) != ERROR_SUCCESS) {
+                if (SetNamedSecurityInfoW(target.data(), SE_FILE_OBJECT,
+                                          DACL_SECURITY_INFORMATION, nullptr, nullptr,
+                                          security_.acl(), nullptr) != ERROR_SUCCESS ||
+                    SetNamedSecurityInfoW(target.data(), SE_FILE_OBJECT,
+                                          PROTECTED_DACL_SECURITY_INFORMATION, nullptr,
+                                          nullptr, nullptr, nullptr) != ERROR_SUCCESS) {
                     RemoveDirectoryW(candidate.c_str());
                     return false;
                 }

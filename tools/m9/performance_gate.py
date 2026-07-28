@@ -58,10 +58,13 @@ def main() -> int:
     normalized_scaling = (
         n256["median_ns"] / n64["median_ns"]
     ) / (n256["economies"] / n64["economies"])
-    if (
-        normalized_scaling
-        > budget["maximum_normalized_64_to_256_scaling"]
-    ):
+    maximum_normalized_scaling = budget[
+        "maximum_normalized_64_to_256_scaling_by_platform"
+    ].get(
+        arguments.platform,
+        budget["maximum_normalized_64_to_256_scaling"],
+    )
+    if normalized_scaling > maximum_normalized_scaling:
         failures.append("M9 N=64 to N=256 scaling exceeds the budget")
     if measured["dense_edge_threshold"] != budget["dense_edge_threshold"]:
         failures.append("M9 dense edge threshold differs from the contract")
@@ -76,6 +79,7 @@ def main() -> int:
         "failures": failures,
         "measurement": measured,
         "normalized_64_to_256_scaling": normalized_scaling,
+        "maximum_normalized_64_to_256_scaling": maximum_normalized_scaling,
         "platform": arguments.platform,
         "platform_absolute_n256_p95_ns": absolute_p95,
         "schema_version": "m9-performance-gate-result-v1",

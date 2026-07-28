@@ -33,6 +33,23 @@ using namespace macro_sim::simulation;
 std::atomic<bool> measure_allocations{false};
 std::atomic<std::uint64_t> allocation_count{0};
 
+// MSVC deprecates std::getenv, and this build promotes that warning to an
+// error, so read the variable through the platform replacement.
+[[nodiscard]] bool environment_flag_present(const char *name) {
+#if defined(_MSC_VER)
+    char *value = nullptr;
+    std::size_t size = 0U;
+    if (_dupenv_s(&value, &size, name) != 0) {
+        return false;
+    }
+    const bool present = value != nullptr;
+    std::free(value);
+    return present;
+#else
+    return std::getenv(name) != nullptr;
+#endif
+}
+
 enum class ProbeMode : std::uint8_t {
     m8 = 0,
     m9 = 1,
@@ -554,7 +571,7 @@ template <typename Advance>
     M9AdvanceOptions advance_options;
     advance_options.worker_count = static_cast<std::uint32_t>(options.workers);
     const bool validate_each_day =
-        std::getenv("MACRO_SIM_SCALE_VALIDATE_EACH_DAY") != nullptr;
+        environment_flag_present("MACRO_SIM_SCALE_VALIDATE_EACH_DAY");
     const auto advanced = measure_days(
         options,
         [&world, &advance_status, &advance_options, validate_each_day]() {
