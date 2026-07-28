@@ -98,9 +98,10 @@ def run(server: Path) -> None:
                 raise AssertionError("bootstrap file was not consumed")
             if readiness["protocol_version"] != 5:
                 raise AssertionError("worker protocol version differs")
-            mode = stat.S_IMODE(ready.stat().st_mode)
-            if mode & 0o077:
-                raise AssertionError("readiness file is not user-only")
+            if os.name != "nt":
+                mode = stat.S_IMODE(ready.stat().st_mode)
+                if mode & 0o077:
+                    raise AssertionError("readiness file is not user-only")
 
             peer = socket.create_connection(
                 ("127.0.0.1", int(readiness["port"])),

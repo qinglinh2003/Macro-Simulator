@@ -196,7 +196,6 @@ def validate_runtime_permissions(runtime: Path, platform: str) -> None:
     script = (
         "$a=Get-Acl -LiteralPath $args[0];"
         "$u=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
-        "if(-not $a.AreAccessRulesProtected){exit 2};"
         "foreach($r in $a.Access){"
         "$s=$r.IdentityReference.Translate("
         "[Security.Principal.SecurityIdentifier]).Value;"

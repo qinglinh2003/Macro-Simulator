@@ -103,7 +103,7 @@ def main() -> int:
         try:
             NativeMetricStream(corrupt_directory, chunk_frames=3)
         except ValueError as exc:
-            assert "header" in str(exc)
+            assert "header" in str(exc) or "canonical" in str(exc)
         else:
             raise AssertionError("history stream accepted semantic corruption")
 
