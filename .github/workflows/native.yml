@@ -116,6 +116,9 @@ jobs:
         run: >-
           uv sync --no-install-project --extra rl --extra visualization
           --group dev --group m1 --group m11
+      - name: Set Intel macOS wheel deployment target
+        if: matrix.platform == 'macos-x86_64'
+        run: echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> "$GITHUB_ENV"
       - name: Verify contracts and current playable target
         run: uv run python tools/m11/check.py --skip-build
       - name: Configure native release
