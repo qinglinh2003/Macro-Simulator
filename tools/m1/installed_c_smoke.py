@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -38,7 +39,13 @@ def main() -> int:
             str(args.prefix),
         ]
     )
-    with tempfile.TemporaryDirectory(prefix="macro-sim-c-smoke-") as raw:
+    # MSVC may keep its PDB service alive briefly after the consumer exits.
+    # The smoke has already completed by cleanup time, so tolerate only this
+    # platform-specific temporary-directory cleanup race.
+    with tempfile.TemporaryDirectory(
+        prefix="macro-sim-c-smoke-",
+        ignore_cleanup_errors=os.name == "nt",
+    ) as raw:
         build_dir = Path(raw) / "build"
         run(
             [
