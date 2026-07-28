@@ -194,18 +194,21 @@ def validate_runtime_permissions(runtime: Path, platform: str) -> None:
             raise AssertionError("worker readiness file is not owner-only")
         return
     script = (
-        "$a=Get-Acl -LiteralPath $args[0];"
+        "$a=Get-Acl -LiteralPath $env:MACRO_SIM_E2E_RUNTIME_PATH;"
         "$u=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;"
         "foreach($r in $a.Access){"
         "$s=$r.IdentityReference.Translate("
         "[Security.Principal.SecurityIdentifier]).Value;"
         "if($s -ne $u){exit 3}}"
     )
+    environment = dict(os.environ)
+    environment["MACRO_SIM_E2E_RUNTIME_PATH"] = os.fspath(runtime)
     subprocess.run(
-        ["pwsh", "-NoProfile", "-Command", script, str(runtime)],
+        ["pwsh", "-NoProfile", "-Command", script],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=environment,
     )
 
 
