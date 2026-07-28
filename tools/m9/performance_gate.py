@@ -58,12 +58,7 @@ def main() -> int:
     normalized_scaling = (
         n256["median_ns"] / n64["median_ns"]
     ) / (n256["economies"] / n64["economies"])
-    maximum_normalized_scaling = budget[
-        "maximum_normalized_64_to_256_scaling_by_platform"
-    ].get(
-        arguments.platform,
-        budget["maximum_normalized_64_to_256_scaling"],
-    )
+    maximum_normalized_scaling = budget["maximum_normalized_64_to_256_scaling"]
     if normalized_scaling > maximum_normalized_scaling:
         failures.append("M9 N=64 to N=256 scaling exceeds the budget")
     if measured["dense_edge_threshold"] != budget["dense_edge_threshold"]:

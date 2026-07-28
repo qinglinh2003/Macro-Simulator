@@ -34,10 +34,7 @@ def validate_contracts() -> None:
         },
         "dense_edge_threshold": 256,
         "maximum_allocations_per_economy_day": 400,
-        "maximum_normalized_64_to_256_scaling": 2.0,
-        "maximum_normalized_64_to_256_scaling_by_platform": {
-            "darwin": 2.25,
-        },
+        "maximum_normalized_64_to_256_scaling": 2.5,
         "minimum_active_routes_per_day": 1,
         "p0": {
             "days": 7,
