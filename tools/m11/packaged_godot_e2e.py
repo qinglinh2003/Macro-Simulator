@@ -166,6 +166,10 @@ def wait_for_progress(path: Path, phase: str, process: subprocess.Popen[bytes]) 
             return
         if process.poll() is not None:
             stdout, stderr = process.communicate()
+            if path.is_file() and expected in path.read_text(
+                encoding="utf-8"
+            ):
+                return
             raise AssertionError(
                 f"packaged E2E exited before {phase}:\n"
                 + (stdout + stderr).decode(errors="replace")
