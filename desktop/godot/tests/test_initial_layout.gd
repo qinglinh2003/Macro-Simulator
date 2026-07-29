@@ -17,17 +17,15 @@ func _run() -> void:
 	game.size = VIEWPORT_SIZE
 	root.add_child(game)
 	await process_frame
+	_assert_header_bounds(game, "first layout")
 	game._render()
 	await process_frame
 
-	# Every transport control must remain in the logical launch viewport.
-	for key: String in ["main_menu", "mode_interactive", "mode_realtime",
-			"play", "speed_1", "speed_5", "speed_15", "speed_60"]:
-		var control := game._n[key] as Control
-		var rect := control.get_global_rect()
-		assert(rect.position.x >= 0.0, "%s starts outside the viewport" % key)
-		assert(rect.end.x <= VIEWPORT_SIZE.x,
-			"%s exceeds the launch viewport" % key)
+	_assert_header_bounds(game, "rendered layout")
+	var menu_center := (game._n["main_menu"] as Control).get_global_rect().get_center().y
+	var play_center := (game._n["play"] as Control).get_global_rect().get_center().y
+	assert(absf(menu_center - play_center) <= 2.0,
+		"identity and transport controls must share one visual baseline")
 
 	# Institutional seat controls must have discrete hit rectangles.  This guards
 	# against restoring the overflowing single-row HBox implementation.
@@ -47,3 +45,16 @@ func _run() -> void:
 	game.queue_free()
 	OS.set_environment("MACRO_SIM_SKIP_START_MENU", "")
 	quit(0)
+
+
+func _assert_header_bounds(game: Control, phase: String) -> void:
+	# Every transport control must remain in the logical launch viewport both
+	# before and after the first localized render.
+	for key: String in ["main_menu", "mode_interactive", "mode_realtime",
+			"play", "speed_1", "speed_5", "speed_15", "speed_60"]:
+		var control := game._n[key] as Control
+		var rect := control.get_global_rect()
+		assert(rect.position.x >= 0.0,
+			"%s: %s starts outside the viewport" % [phase, key])
+		assert(rect.end.x <= VIEWPORT_SIZE.x,
+			"%s: %s exceeds the launch viewport" % [phase, key])

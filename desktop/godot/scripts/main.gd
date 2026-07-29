@@ -875,6 +875,10 @@ func _ready() -> void:
 		_set_text("conn", "@{desktop.main.fragment.1f0ac6953e0411c0} · @{desktop.main.fragment.ab7e3afbecbdafbe}"))
 	_client.response_received.connect(_on_response)
 	_client.request_failed.connect(_on_request_failed)
+	# Set visibility, localized labels, and minimum sizes before the first frame.
+	# Waiting for the worker response leaves raw catalog tokens in the command
+	# bar long enough to produce a visibly oversized initial layout.
+	_render()
 	var timer := Timer.new()
 	timer.wait_time = 1.0
 	timer.timeout.connect(_on_play_tick)
@@ -1822,15 +1826,12 @@ func _build_header(shell: VBoxContainer) -> void:
 	var hp := PanelContainer.new()
 	hp.add_theme_stylebox_override("panel", _sb(PANEL, Color("dbe2ea"), 13, 10))
 	shell.add_child(hp)
-	# Keep operational controls out of the identity row.  At the supported
-	# 1440px logical viewport the former single HBox exceeded its minimum width,
-	# so Godot drew the transport controls beyond the rounded header panel.
-	var header_rows := VBoxContainer.new()
-	header_rows.add_theme_constant_override("separation", 8)
-	hp.add_child(header_rows)
+	# One command line with two clear zones: identity and time on the left,
+	# simulation controls on the right.  Localized labels are resolved before
+	# the first layout pass so placeholder tokens cannot inflate minimum widths.
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
-	header_rows.add_child(h)
+	hp.add_child(h)
 	var menu_button := _btn("⌂  @{desktop.main.fragment.d8c47e9776cf1082}", _request_return_to_main_menu)
 	menu_button.tooltip_text = "@{desktop.main.fragment.a917151f6055da74}"
 	menu_button.custom_minimum_size = Vector2(90, 0)
@@ -1895,7 +1896,7 @@ func _build_header(shell: VBoxContainer) -> void:
 	modes_wrap.add_child(modes)
 	for m: Array in [["interactive", "@{desktop.main.fragment.99f1b08f6464952c}"], ["realtime", "@{desktop.main.fragment.c69ec2ffb0db8ca4}"]]:
 		var mb := Button.new()
-		mb.text = m[1]
+		mb.text = LocaleCatalogScript.resolve(str(m[1]))
 		mb.tooltip_text = "@{desktop.main.fragment.87ed126f7bd1121e}\n@{desktop.main.fragment.66bba32fb837bee4}\n@{desktop.main.fragment.4c643d2e18d8f950}"
 		var mid: String = m[0]
 		mb.pressed.connect(func() -> void:
@@ -1906,16 +1907,9 @@ func _build_header(shell: VBoxContainer) -> void:
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
 
-	# Mode and speed controls form one compact operational cluster on their own
-	# row.  Keeping the cluster visually contiguous avoids a detached label
-	# floating between the mode selector and the transport controls.
-	var transport_row := HBoxContainer.new()
-	transport_row.add_theme_constant_override("separation", 8)
-	transport_row.alignment = BoxContainer.ALIGNMENT_END
-	header_rows.add_child(transport_row)
 	var operational_cluster := HBoxContainer.new()
 	operational_cluster.add_theme_constant_override("separation", 8)
-	transport_row.add_child(operational_cluster)
+	h.add_child(operational_cluster)
 	operational_cluster.add_child(modes_wrap)
 	operational_cluster.add_child(_vdiv())
 	var transport := PanelContainer.new()
@@ -2012,7 +2006,7 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	chips.add_theme_constant_override("v_separation", 5)
 	for s: Dictionary in SEAT_LIST:
 		var b := Button.new()
-		b.text = str(s["name"])
+		b.text = LocaleCatalogScript.resolve(str(s["name"]))
 		b.add_theme_font_size_override("font_size", 12)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var sid := str(s["id"])
@@ -2362,7 +2356,9 @@ func _render() -> void:
 	(_n["modes_wrap"] as Control).visible = not free_policy
 	(_n["crisis_trigger"] as Control).visible = not free_policy
 	var playb := _n["play"] as Button
-	playb.text = "⏸  @{desktop.main.fragment.8d12fc0d4eb26021}" if _playing else "▶  @{desktop.main.fragment.c3396195e91ccdd8}"
+	playb.text = LocaleCatalogScript.resolve(
+		"⏸  @{desktop.main.fragment.8d12fc0d4eb26021}" if _playing
+		else "▶  @{desktop.main.fragment.c3396195e91ccdd8}")
 	if _playing:
 		playb.add_theme_stylebox_override("normal", _sb(TEAL, Color("0c8579"), 8, 7))
 		playb.add_theme_color_override("font_color", Color.WHITE)
