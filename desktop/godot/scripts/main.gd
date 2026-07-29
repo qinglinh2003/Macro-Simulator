@@ -77,7 +77,7 @@ const SEAT_LIST := [
 	{"id": "regulator", "name": "@seat.regulator", "tag": "@{desktop.main.fragment.4715621e26b8a39a} · prudential", "color": Color("7a4fd0")},
 	{"id": "external_affairs", "name": "@seat.external", "tag": "@{desktop.main.fragment.152131b96f49234c} · external", "color": Color("c17d16")},
 	{"id": "energy", "name": "@seat.energy", "tag": "@{desktop.main.fragment.9196f0338a8d16d7} · energy", "color": Color("b0641f")},
-	{"id": "labor_social", "name": "@seat.labor_social", "tag": "@policy_group.labor_welfare · labor", "color": Color("1f9d63")},
+	{"id": "labor_social", "name": "@{seat.labor_social}", "tag": "@{policy_group.labor_welfare}", "color": Color("1f9d63")},
 ]
 
 const GROUP_CN := {
@@ -86,7 +86,7 @@ const GROUP_CN := {
 	"liquidity_operations": "@{desktop.main.fragment.9c743e43ab9325f2}", "fx_operations": "@{desktop.main.fragment.04ab5fc4bf852a19}",
 	"macroprudential": "@{desktop.main.fragment.e3ed6c9d74e30ff1}", "structural_law": "@{desktop.main.fragment.2c11b7c8e657c355}",
 	"trade_and_migration": "@{desktop.main.fragment.a2bd9fd816a4dc32}", "energy_operations": "@{desktop.main.fragment.5a8c4b8f3da8f888}",
-	"energy_structure": "@{desktop.main.fragment.96638a61052f9d71}", "labor_and_welfare": "@policy_group.labor_welfare",
+	"energy_structure": "@{desktop.main.fragment.96638a61052f9d71}", "labor_and_welfare": "@{policy_group.labor_welfare}",
 }
 
 # Choice labels are presentation-only; submissions use Registry canonical values.
@@ -209,9 +209,9 @@ const LEVER_PAGES := {
 			"bond_maturity"]},
 	],
 	"labor_social": [
-		{"name": "@policy_group.employment_policy", "levers": ["min_wage", "job_guarantee",
+		{"name": "@{policy_group.employment_policy}", "levers": ["min_wage", "job_guarantee",
 			"jg_wage_ratio", "jg_public_works_share"]},
-		{"name": "@policy_group.social_protection", "levers": ["benefit_replacement",
+		{"name": "@{policy_group.social_protection}", "levers": ["benefit_replacement",
 			"benefit_income_floor", "pension_replacement"]},
 	],
 	"central_bank": [
