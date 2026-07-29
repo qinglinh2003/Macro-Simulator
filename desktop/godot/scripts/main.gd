@@ -1822,9 +1822,15 @@ func _build_header(shell: VBoxContainer) -> void:
 	var hp := PanelContainer.new()
 	hp.add_theme_stylebox_override("panel", _sb(PANEL, Color("dbe2ea"), 13, 10))
 	shell.add_child(hp)
+	# Keep operational controls out of the identity row.  At the supported
+	# 1440px logical viewport the former single HBox exceeded its minimum width,
+	# so Godot drew the transport controls beyond the rounded header panel.
+	var header_rows := VBoxContainer.new()
+	header_rows.add_theme_constant_override("separation", 8)
+	hp.add_child(header_rows)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 14)
-	hp.add_child(h)
+	h.add_theme_constant_override("separation", 12)
+	header_rows.add_child(h)
 	var menu_button := _btn("⌂  @{desktop.main.fragment.d8c47e9776cf1082}", _request_return_to_main_menu)
 	menu_button.tooltip_text = "@{desktop.main.fragment.a917151f6055da74}"
 	menu_button.custom_minimum_size = Vector2(90, 0)
@@ -1899,8 +1905,16 @@ func _build_header(shell: VBoxContainer) -> void:
 			_render())
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
-	h.add_child(modes_wrap)
-	h.add_child(_vdiv())
+
+	# Mode and speed controls get an independent, right-aligned row.  This
+	# preserves their full hit targets instead of allowing the identity row to
+	# overflow the rounded header panel on a fresh 1440x900 launch.
+	var transport_row := HBoxContainer.new()
+	transport_row.add_theme_constant_override("separation", 8)
+	transport_row.alignment = BoxContainer.ALIGNMENT_END
+	header_rows.add_child(transport_row)
+	transport_row.add_child(modes_wrap)
+	transport_row.add_child(_lbl("SIMULATION · @{desktop.main.fragment.18a29569240cf047}", 9, INK3, true))
 	var transport := PanelContainer.new()
 	transport.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 4))
 	var tp := HBoxContainer.new()
@@ -1931,7 +1945,7 @@ func _build_header(shell: VBoxContainer) -> void:
 			_render())
 		_n["speed_%d" % s] = sbn
 		tp.add_child(sbn)
-	h.add_child(transport)
+	transport_row.add_child(transport)
 
 
 func _toggle_play() -> void:
@@ -1986,8 +2000,13 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	_n["seat_brief"] = seat_brief
 	title_row.add_child(seat_brief)
 	head.add_child(title_row)
-	var chips := HBoxContainer.new()
+	# A fixed HBox made the five institutional seats overlap whenever their
+	# localized labels exceeded the panel width.  Flow layout retains the same
+	# visual language while providing a deterministic second line when needed.
+	var chips := HFlowContainer.new()
 	chips.add_theme_constant_override("separation", 5)
+	chips.add_theme_constant_override("h_separation", 5)
+	chips.add_theme_constant_override("v_separation", 5)
 	for s: Dictionary in SEAT_LIST:
 		var b := Button.new()
 		b.text = str(s["name"])
