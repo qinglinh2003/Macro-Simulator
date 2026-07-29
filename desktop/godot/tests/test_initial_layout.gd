@@ -33,6 +33,25 @@ func _run() -> void:
 	assert(policy_search.get_global_rect().size.x >= 390.0,
 		"policy search must reclaim the closed scope selector space")
 
+	# Long metric identifiers in these panorama pages previously propagated
+	# their intrinsic width into the main HBox and pushed the timeline offscreen.
+	var timeline_panel := game._n["timeline_panel"] as Control
+	var timeline_x := timeline_panel.get_global_rect().position.x
+	game._tab = "panels"
+	for panel_group: String in ["population", "debt_risk", "national_accounts"]:
+		game._goto_panel_group = panel_group
+		game._render()
+		await process_frame
+		await process_frame
+		var timeline_rect := timeline_panel.get_global_rect()
+		assert(absf(timeline_rect.position.x - timeline_x) <= 1.0,
+			"%s displaced the timeline" % panel_group)
+		assert(timeline_rect.end.x <= VIEWPORT_SIZE.x,
+			"%s pushed the timeline outside the viewport" % panel_group)
+		_assert_horizontal_bounds(
+			game._n["center_body"] as Control,
+			(game._n["center_frame"] as Control).get_global_rect(), panel_group)
+
 	# Institutional seat controls must have discrete hit rectangles.  This guards
 	# against restoring the overflowing single-row HBox implementation.
 	var seats: Array[Control] = []
@@ -64,3 +83,16 @@ func _assert_header_bounds(game: Control, phase: String) -> void:
 			"%s: %s starts outside the viewport" % [phase, key])
 		assert(rect.end.x <= VIEWPORT_SIZE.x,
 			"%s: %s exceeds the launch viewport" % [phase, key])
+
+
+func _assert_horizontal_bounds(node: Node, bounds: Rect2, panel_group: String) -> void:
+	if node is Control:
+		var control := node as Control
+		if control.visible and control.get_global_rect().size.x > 0.0:
+			var rect := control.get_global_rect()
+			assert(rect.position.x >= bounds.position.x - 1.0,
+				"%s contains a control left of the center frame" % panel_group)
+			assert(rect.end.x <= bounds.end.x + 1.0,
+				"%s contains a control right of the center frame" % panel_group)
+	for child: Node in node.get_children():
+		_assert_horizontal_bounds(child, bounds, panel_group)

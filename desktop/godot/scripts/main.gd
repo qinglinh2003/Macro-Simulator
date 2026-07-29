@@ -1966,14 +1966,25 @@ func _build_main(shell: VBoxContainer) -> void:
 	var wb := VBoxContainer.new()
 	wbp.add_child(wb)
 	_build_workbench(wb)
+	# Dynamic indicator pages contain long localized labels and stable metric
+	# identifiers.  A zero-minimum clipping frame prevents those descendants
+	# from increasing the three-column shell's minimum width and displacing the
+	# timeline.  The inner center still receives the complete allocated width.
+	var center_frame := Control.new()
+	center_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	center_frame.clip_contents = true
+	_n["center_frame"] = center_frame
+	main.add_child(center_frame)
 	var center := VBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.add_theme_constant_override("separation", 10)
-	main.add_child(center)
+	center_frame.add_child(center)
 	_build_center(center)
 	var tlp := PanelContainer.new()
 	tlp.custom_minimum_size = Vector2(330, 0)
 	tlp.add_theme_stylebox_override("panel", _sb(PANEL, LINE, 13, 0))
+	_n["timeline_panel"] = tlp
 	main.add_child(tlp)
 	var tl := VBoxContainer.new()
 	tlp.add_child(tl)
@@ -5864,11 +5875,18 @@ func _render_panels_tab(body: VBoxContainer) -> void:
 	header.add_child(header_row)
 	header_row.add_child(_dot(group_color, 8))
 	var heading := VBoxContainer.new()
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_constant_override("separation", 1)
-	heading.add_child(_lbl(group_name, 15, INK))
-	heading.add_child(_lbl(str(PANEL_DESCRIPTIONS.get(group_id, "")), 10, INK2))
+	var group_title := _lbl(group_name, 15, INK)
+	group_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	group_title.clip_text = true
+	heading.add_child(group_title)
+	var group_description := _lbl(
+		str(PANEL_DESCRIPTIONS.get(group_id, "")), 10, INK2)
+	group_description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	group_description.clip_text = true
+	heading.add_child(group_description)
 	header_row.add_child(heading)
-	header_row.add_child(_spacer_h())
 	header_row.add_child(_chip("ECONOMY · @{desktop.main.fragment.25fea06069b1ff3d}", group_color.darkened(0.18),
 		Color(group_color.r, group_color.g, group_color.b, 0.08),
 		Color(group_color.r, group_color.g, group_color.b, 0.35), 9))
@@ -5931,6 +5949,7 @@ func _panel_kpi_card(item: Array, latest: Dictionary,
 	var kind := str(item[2])
 	var card := PanelContainer.new()
 	card.custom_minimum_size.y = 82
+	card.clip_contents = true
 	var rest := _sb(Color("f8fafc"), Color("e0e7ef"), 10, 9)
 	var hover := _sb(Color.WHITE, Color(color.r, color.g, color.b, 0.65), 10, 9, 7)
 	card.add_theme_stylebox_override("panel", rest)
@@ -5944,9 +5963,16 @@ func _panel_kpi_card(item: Array, latest: Dictionary,
 	var title := HBoxContainer.new()
 	title.add_theme_constant_override("separation", 5)
 	title.add_child(_dot(color, 6))
-	title.add_child(_lbl(label, 10, INK2))
-	title.add_child(_spacer_h())
-	title.add_child(_lbl(key, 8, INK3, true))
+	var display_label := _lbl(label, 10, INK2)
+	display_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	display_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	display_label.clip_text = true
+	title.add_child(display_label)
+	var metric_key := _lbl(key, 8, INK3, true)
+	metric_key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	metric_key.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	metric_key.clip_text = true
+	title.add_child(metric_key)
 	col.add_child(title)
 	var value_row := HBoxContainer.new()
 	var has_data := not series.is_empty()
@@ -6021,6 +6047,7 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size.y = 218 if chart_type in [
 		"age_participation", "pyramid", "sector_matrix", "deciles"] else 198
+	panel.clip_contents = true
 	panel.add_theme_stylebox_override("panel", _sb(
 		Color("fbfcfd"), Color("dde5ed"), 11, 10, 4))
 	var col := VBoxContainer.new()
@@ -6028,9 +6055,17 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 	panel.add_child(col)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 7)
-	head.add_child(_lbl(str(spec.get("title", "CHART")), 9, INK3, true))
-	head.add_child(_spacer_h())
-	head.add_child(_lbl(str(spec.get("note", "")), 8, INK3))
+	var chart_title := _lbl(str(spec.get("title", "CHART")), 9, INK3, true)
+	chart_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	chart_title.clip_text = true
+	head.add_child(chart_title)
+	var chart_note := _lbl(str(spec.get("note", "")), 8, INK3)
+	chart_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chart_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	chart_note.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	chart_note.clip_text = true
+	head.add_child(chart_note)
 	col.add_child(head)
 	var data: Array = []
 	for item: Array in spec.get("items", []):
