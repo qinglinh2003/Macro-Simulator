@@ -30,6 +30,16 @@ func run(game) -> bool:
 		"new session did not start at day zero",
 	):
 		return false
+	if not _require(
+		str(_game._snapshot.get("control_mode", "")) == "free_policy",
+		"desktop session did not enter free-policy mode",
+	):
+		return false
+	if not _require(
+		not bool(_game._snapshot.get("awaiting_human", true)),
+		"free-policy mode unexpectedly opened a human decision boundary",
+	):
+		return false
 	var world: Dictionary = _game._snapshot.get("world", {})
 	var latest: Dictionary = world.get("latest", {})
 	if not _require(
@@ -73,65 +83,47 @@ func run(game) -> bool:
 	_game._tab = "focus"
 	_game._render()
 
-	_game._send({"command": "advance", "ticks": 1})
-	if not await _wait_idle():
-		return false
-	_report("decision_boundary")
-	if not _require(
-		bool(_game._snapshot.get("awaiting_human", false)),
-		"human decision boundary did not open",
-	):
-		return false
-	if not _require(not _game._contexts().is_empty(), "no decision context opened"):
-		return false
-
-	var first_context: Dictionary = _game._contexts()[0]
-	var actions: Array = []
-	for raw_action: Variant in first_context.get("permitted_actions", []):
-		if raw_action is Dictionary and bool(
-			(raw_action as Dictionary).get("allowed", false)):
-			var action := raw_action as Dictionary
-			actions.append({
-				"lever": action.get("lever"),
-				"value": action.get("current_value"),
-			})
-			break
 	_game._send({
-		"command": "resolve_context",
-		"context_id": first_context.get("context_id"),
-		"actions": actions,
+		"command": "stage_policy",
+		"actions": [{
+			"lever": "gov_consumption_share",
+			"value": 0.35,
+		}],
 	})
 	if not await _wait_idle():
 		return false
-	_report("first_policy")
-
-	var resolution_guard := 0
-	while bool(_game._snapshot.get("awaiting_human", false)):
-		var contexts: Array = _game._contexts()
-		if not _require(not contexts.is_empty(), "decision context disappeared"):
-			return false
-		var context: Dictionary = contexts[0]
-		_game._send({
-			"command": "resolve_context",
-			"context_id": context.get("context_id"),
-			"actions": [],
-		})
-		if not await _wait_idle():
-			return false
-		resolution_guard += 1
-		if not _require(
-			resolution_guard < 32,
-			"decision resolution exceeded its safety bound",
-		):
-			return false
-	_report("policies_resolved")
+	_report("policy_staged")
+	if not _require(
+		(_game._snapshot.get("free_policy", {}).get("actions", []) as Array).size() == 1,
+		"free-policy action was not staged",
+	):
+		return false
+	if not _require(
+		int(_game._snapshot.get("tick", -1)) == 0,
+		"staging a policy changed the current day",
+	):
+		return false
 
 	_game._send({"command": "advance", "ticks": 1})
 	if not await _wait_idle():
 		return false
-	_report("played")
+	_report("policy_effective")
 	var saved_tick := int(_game._snapshot.get("tick", -1))
-	if not _require(saved_tick >= 1, "simulation did not advance"):
+	if not _require(saved_tick == 1, "simulation did not advance exactly one day"):
+		return false
+	if not _require(
+		is_equal_approx(
+			float(_game._snapshot.get(
+				"policy_values", {}).get("gov_consumption_share", -1.0)),
+			0.35,
+		),
+		"staged policy was not effective on the next day",
+	):
+		return false
+	if not _require(
+		(_game._snapshot.get("free_policy", {}).get("actions", []) as Array).is_empty(),
+		"effective free-policy queue was not cleared",
+	):
 		return false
 
 	_game._send({
@@ -305,12 +297,12 @@ func _new_game_spec() -> Dictionary:
 		"player_country": 0,
 		"run_mode": "interactive",
 		"seats": {
-			"treasury": "human",
-			"cb": "human",
-			"labor_social": "human",
-			"regulator": "human",
-			"external": "human",
-			"energy": "human",
+			"treasury": "null",
+			"cb": "null",
+			"labor_social": "null",
+			"regulator": "null",
+			"external": "null",
+			"energy": "null",
 		},
 		"initial_policy_overrides": {},
 	}

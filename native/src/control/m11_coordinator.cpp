@@ -700,6 +700,33 @@ bool m11_world_capability(const simulation::M9World &world, EconomyId economy,
     return false;
 }
 
+Result<simulation::WorldPolicyBatch>
+prepare_m11_free_policy_batch(const simulation::M9World &world,
+                              std::span<const NativePolicyAction> actions) {
+    auto batch = project_m11_policy_actions(world, actions);
+    if (!batch.ok()) {
+        return batch.status();
+    }
+    for (const auto &action : actions) {
+        const auto *lever = find_m11_policy_lever(action.lever);
+        if (lever == nullptr) {
+            return Status(ErrorCode::not_found, "M11 free-policy lever was not found");
+        }
+        for (const auto capability :
+             split_contract_list(lever->required_capabilities)) {
+            if (!m11_world_capability(world, action.economy, capability)) {
+                return Status(ErrorCode::contract_violation,
+                              "M11 free-policy capability is unavailable");
+            }
+        }
+    }
+    auto prerequisites = validate_enabled_prerequisites(*batch.get_if(), actions);
+    if (!prerequisites.ok()) {
+        return prerequisites;
+    }
+    return std::move(*batch.get_if());
+}
+
 Result<M11PolicyCoordinator>
 M11PolicyCoordinator::create(const simulation::M9World &world,
                              M11AdjustmentCostSpec cost_spec) {

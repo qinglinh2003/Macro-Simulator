@@ -818,7 +818,8 @@ var _release_hist: Dictionary = {}     # sid -> [{v, at}]
 var _playing := false
 var _speed := 5
 var _mode := "interactive"
-var _control_mode := "controller"
+var _control_mode := "free_policy"
+var _play_timer: Timer
 var _tab := "focus"
 var _rank_by := "score"
 var _score_country := 0               #  World View National Performance Radar Current Selected Economy Body
@@ -883,11 +884,11 @@ func _ready() -> void:
 	# Waiting for the worker response leaves raw catalog tokens in the command
 	# bar long enough to produce a visibly oversized initial layout.
 	_render()
-	var timer := Timer.new()
-	timer.wait_time = 1.0
-	timer.timeout.connect(_on_play_tick)
-	add_child(timer)
-	timer.start()
+	_play_timer = Timer.new()
+	_play_timer.timeout.connect(_on_play_tick)
+	add_child(_play_timer)
+	_configure_play_timer()
+	_play_timer.start()
 	_capture_path = OS.get_environment("MACRO_SIM_CAPTURE_PATH")
 	if OS.get_environment("MACRO_SIM_CAPTURE_CRISIS") == "1":
 		_demo_crisis = true
@@ -948,6 +949,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_send({"command": "advance", "ticks": 1})
 		KEY_1, KEY_2, KEY_3, KEY_4:
 			_speed = SPEEDS[key.keycode - KEY_1]
+			_configure_play_timer()
 			_render()
 		KEY_N:
 			_advance_to_next_decision()
@@ -1034,6 +1036,7 @@ func _on_response(response: Dictionary) -> void:
 	var result: Dictionary = response.get("result", {})
 	var command_name := str(_active_command.get("command", ""))
 	var payload: Dictionary = {}
+	_control_mode = str(result.get("control_mode", _control_mode))
 	if command_name == "get_schema":
 		payload = _m11_adapter.schema_payload(result)
 		_control_mode = str(payload.get("control_mode", _control_mode))
@@ -1066,8 +1069,12 @@ func _on_response(response: Dictionary) -> void:
 		_reset_client_for_new_game(payload)
 		_snapshot = payload
 		_outbox.append({"command": "get_schema"})
+	elif command_name == "stage_policy" and result.get("free_policy") is Dictionary:
+		payload = _m11_adapter.apply_free_policy_state(result.get("free_policy", {}))
+		_snapshot = payload
 	if not payload.is_empty():
 		_control_mode = str(payload.get("control_mode", _control_mode))
+		_configure_play_timer()
 		_reconcile_free_policy_queue()
 		_ingest_releases()
 		_cache_permitted()
@@ -1077,12 +1084,13 @@ func _on_response(response: Dictionary) -> void:
 			stw2.tween_property(splash, "modulate:a", 0.0, 0.35)
 			stw2.tween_callback(func() -> void:
 				splash.visible = false)
-		var verdict: Variant = result.get("decision")
-		if verdict is Dictionary and not (verdict as Dictionary).is_empty():
-			_show_verdict(verdict)
 		if _playing and _awaiting() and _mode != "realtime" \
 				and not _free_policy_enabled():
 			_playing = false
+	var verdict: Variant = result.get("decision")
+	if command_name != "stage_policy" \
+			and verdict is Dictionary and not (verdict as Dictionary).is_empty():
+		_show_verdict(verdict)
 	_render()
 	if not _capture_policy_info.is_empty() and _lever_info.has(_capture_policy_info) \
 			and not _snapshot.is_empty():
@@ -1183,6 +1191,12 @@ func _capture(path: String) -> void:
 func _on_play_tick() -> void:
 	if not _playing or (_demo_crisis and not _free_policy_enabled()):
 		return
+	if _free_policy_enabled():
+		if _client == null or _client.busy or not _active_command.is_empty() \
+				or not _outbox.is_empty():
+			return
+		_send({"command": "advance", "ticks": 1})
+		return
 	if _awaiting() and not _free_policy_enabled():
 		if _mode == "realtime" and not _emergency():
 			for ctx: Dictionary in _contexts():
@@ -1190,6 +1204,15 @@ func _on_play_tick() -> void:
 					"context_id": str(ctx.get("context_id")), "actions": []})
 		return
 	_send({"command": "advance", "ticks": _speed})
+
+
+func _configure_play_timer() -> void:
+	if _play_timer == null:
+		return
+	_play_timer.wait_time = maxf(
+		1.0 / float(maxi(_speed, 1)) if _free_policy_enabled() else 1.0,
+		0.016,
+	)
 
 
 #  Synchronization helper.
@@ -1943,6 +1966,7 @@ func _build_header(shell: VBoxContainer) -> void:
 		var chosen := s
 		sbn.pressed.connect(func() -> void:
 			_speed = chosen
+			_configure_play_timer()
 			_render())
 		_n["speed_%d" % s] = sbn
 		tp.add_child(sbn)
@@ -3974,7 +3998,13 @@ func _sync_free_policy_queue() -> void:
 			"lever": str(item.get("lever", "")),
 			"value": item.get("value"),
 		})
-	_send({"command": "stage_policy", "actions": actions})
+	# A drag can generate several complete replacement batches before the native
+	# worker responds. Only the newest unsent batch matters, and it must remain
+	# ahead of any already queued advance command.
+	_outbox = _outbox.filter(func(command: Dictionary) -> bool:
+		return str(command.get("command", "")) != "stage_policy")
+	_outbox.push_front({"command": "stage_policy", "actions": actions})
+	_pump()
 
 
 func _render_cart(open: bool) -> void:

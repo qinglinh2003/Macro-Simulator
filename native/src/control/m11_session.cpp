@@ -1211,7 +1211,8 @@ Result<M11DecisionResult> M11ControlledSession::run_boundary_prelude() {
     return result;
 }
 
-Result<M11DecisionResult> M11ControlledSession::commit_ready_boundary() {
+Result<M11DecisionResult> M11ControlledSession::commit_ready_boundary(
+    std::span<const NativePolicyAction> free_policy_actions) {
     if (state_.phase != M11BoundaryPhase::ready_to_commit) {
         return Status(ErrorCode::invalid_transaction_state,
                       "M11 boundary is not ready to commit");
@@ -1225,6 +1226,29 @@ Result<M11DecisionResult> M11ControlledSession::commit_ready_boundary() {
     auto committed_plan = next.coordinator.commit_due(*plan.get_if(), next.events);
     if (!committed_plan.ok()) {
         return committed_plan;
+    }
+    std::optional<simulation::WorldPolicyBatch> free_policy_batch;
+    if (!free_policy_actions.empty()) {
+        if (!plan.get_if()->effective_changes.empty()) {
+            return Status(
+                ErrorCode::invalid_transaction_state,
+                "M11 free policy cannot share a boundary with controller policy");
+        }
+        auto prepared = prepare_m11_free_policy_batch(bridge_.engine().world(),
+                                                      free_policy_actions);
+        if (!prepared.ok()) {
+            return prepared.status();
+        }
+        free_policy_batch = std::move(*prepared.get_if());
+        auto policy_event = next.events.append(
+            boundary, "free_policy_effective",
+            "free-policy:" + std::to_string(boundary.value()) + ":" +
+                std::to_string(next.boundary_sequence),
+            "player", "actions=" + std::to_string(free_policy_actions.size()),
+            M11EventVisibility::public_record);
+        if (!policy_event.ok()) {
+            return policy_event.status();
+        }
     }
     auto event = next.events.append(
         boundary, "boundary_committing",
@@ -1245,7 +1269,8 @@ Result<M11DecisionResult> M11ControlledSession::commit_ready_boundary() {
     batch.operation_id = "m11-engine-boundary:" + std::to_string(boundary.value()) +
                          ":" + std::to_string(next.boundary_sequence);
     batch.expected_controller_hash = bridge_.controller_envelope().hash;
-    batch.policies = plan.get_if()->policy_batch;
+    batch.policies = free_policy_batch.has_value() ? std::move(*free_policy_batch)
+                                                   : plan.get_if()->policy_batch;
     batch.advance_ticks = 1U;
     batch.advance_options = run_spec_.advance_options;
     auto lease = bridge_.prepare_boundary(batch);
@@ -1320,6 +1345,57 @@ M11ControlledSession::advance_until_decision(const M11AdvanceLimit &limit) {
             return aggregate;
         }
         boundary_had_context = false;
+    }
+    aggregate.limit_reached = true;
+    return aggregate;
+}
+
+Result<M11DecisionResult>
+M11ControlledSession::advance_free_policy(std::span<const NativePolicyAction> actions,
+                                          const M11AdvanceLimit &limit) {
+    if (limit.maximum_ticks == 0U) {
+        return invalid_session("M11 advance limit must be positive");
+    }
+    if (state_.phase != M11BoundaryPhase::boundary_start) {
+        return Status(ErrorCode::invalid_transaction_state,
+                      "M11 free policy requires a clean boundary");
+    }
+    auto prepared = prepare_m11_free_policy_batch(bridge_.engine().world(), actions);
+    if (!prepared.ok()) {
+        return prepared.status();
+    }
+
+    M11DecisionResult aggregate;
+    aggregate.phase = state_.phase;
+    aggregate.boundary = bridge_.engine().tick();
+    bool first_boundary = true;
+    while (aggregate.elapsed_ticks < limit.maximum_ticks) {
+        if (state_.phase == M11BoundaryPhase::boundary_start) {
+            auto prelude = run_boundary_prelude();
+            if (!prelude.ok()) {
+                return prelude.status();
+            }
+            aggregate.opened_context_ids = prelude.get_if()->opened_context_ids;
+            aggregate.decisions.insert(aggregate.decisions.end(),
+                                       prelude.get_if()->decisions.begin(),
+                                       prelude.get_if()->decisions.end());
+            if (prelude.get_if()->awaiting_human) {
+                aggregate.phase = state_.phase;
+                aggregate.boundary = bridge_.engine().tick();
+                aggregate.awaiting_human = true;
+                return aggregate;
+            }
+        }
+        auto committed = commit_ready_boundary(
+            first_boundary ? actions : std::span<const NativePolicyAction>{});
+        if (!committed.ok()) {
+            return committed.status();
+        }
+        first_boundary = false;
+        ++aggregate.elapsed_ticks;
+        aggregate.advance = committed.get_if()->advance;
+        aggregate.phase = state_.phase;
+        aggregate.boundary = bridge_.engine().tick();
     }
     aggregate.limit_reached = true;
     return aggregate;

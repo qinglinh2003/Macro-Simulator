@@ -235,6 +235,9 @@ class M11ControlledSession final {
 
     [[nodiscard]] Result<M11DecisionResult>
     advance_until_decision(const M11AdvanceLimit &limit = {});
+    [[nodiscard]] Result<M11DecisionResult>
+    advance_free_policy(std::span<const NativePolicyAction> actions,
+                        const M11AdvanceLimit &limit = {});
     [[nodiscard]] Result<M11PolicyDecision>
     submit_policy_proposal(M11PolicyProposal proposal, std::string_view actor);
     [[nodiscard]] Result<M11PolicyDecision>
@@ -267,7 +270,8 @@ class M11ControlledSession final {
     [[nodiscard]] Status synchronize_state(std::string operation_id,
                                            M11ControlledState next);
     [[nodiscard]] Result<M11DecisionResult> run_boundary_prelude();
-    [[nodiscard]] Result<M11DecisionResult> commit_ready_boundary();
+    [[nodiscard]] Result<M11DecisionResult>
+    commit_ready_boundary(std::span<const NativePolicyAction> free_policy_actions = {});
     [[nodiscard]] Result<M11PolicyProposal>
     automatic_proposal(M11SeatRuntime &seat, const M11DecisionContext &context) const;
     [[nodiscard]] bool has_unanswered_human_context() const noexcept;

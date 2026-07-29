@@ -40,7 +40,7 @@ using control::M11FrontendSnapshot;
 
 inline constexpr std::array<std::uint8_t, 8> kSaveMagic{'M', 'S', 'D', 'T',
                                                         'P', '0', '1', '1'};
-inline constexpr std::uint32_t kSaveSchemaVersion = 1U;
+inline constexpr std::uint32_t kSaveSchemaVersion = 2U;
 inline constexpr std::size_t kMaximumSaveMetadataBytes = std::size_t{1024} * 1024U;
 inline constexpr std::uint64_t kMaximumSaveArchiveBytes =
     2ULL * 1024ULL * 1024ULL * 1024ULL;
@@ -54,6 +54,7 @@ struct ProtocolFault final {
 struct LoadedDesktopSave final {
     M11NativeNewGame metadata;
     std::string authority_principal;
+    std::vector<control::NativePolicyAction> free_policy_actions;
     std::vector<std::uint8_t> checkpoint;
 };
 
@@ -856,8 +857,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     return value;
 }
 
-[[nodiscard]] Json save_metadata_json(const M11NativeNewGame &game,
-                                      std::string_view authority_principal) {
+[[nodiscard]] Json
+save_metadata_json(const M11NativeNewGame &game, std::string_view authority_principal,
+                   std::span<const control::NativePolicyAction> free_policy_actions) {
     Json countries = Json::array();
     for (const auto &country : game.countries) {
         countries.push_back({
@@ -866,11 +868,16 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
             {"profile", country.profile},
         });
     }
+    Json staged = Json::array();
+    for (const auto &action : free_policy_actions) {
+        staged.push_back(action_json(action));
+    }
     return {
         {"authority_principal", authority_principal},
         {"countries", std::move(countries)},
         {"duration_ticks",
          game.duration_ticks.has_value() ? Json(*game.duration_ticks) : Json(nullptr)},
+        {"free_policy_actions", std::move(staged)},
         {"model_id", game.model_id},
         {"player_economy", game.player_economy},
         {"run_mode", game.run_mode},
@@ -882,8 +889,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 
 [[nodiscard]] std::vector<std::uint8_t>
 make_desktop_save(const M11NativeNewGame &game, std::string_view authority_principal,
+                  std::span<const control::NativePolicyAction> free_policy_actions,
                   std::span<const std::uint8_t> checkpoint) {
-    const auto metadata = save_metadata_json(game, authority_principal).dump();
+    const auto metadata =
+        save_metadata_json(game, authority_principal, free_policy_actions).dump();
     if (metadata.size() > kMaximumSaveMetadataBytes ||
         checkpoint.size() > kMaximumSaveArchiveBytes) {
         throw ProtocolFault{"out_of_range", "The desktop save exceeds its size limit.",
@@ -948,10 +957,11 @@ make_desktop_save(const M11NativeNewGame &game, std::string_view authority_princ
         throw ProtocolFault{"corrupt_input", "The desktop save metadata is invalid.",
                             false};
     }
-    static constexpr std::array<std::string_view, 9> metadata_fields{{
+    static constexpr std::array<std::string_view, 10> metadata_fields{{
         "authority_principal",
         "countries",
         "duration_ticks",
+        "free_policy_actions",
         "model_id",
         "player_economy",
         "run_mode",
@@ -965,6 +975,7 @@ make_desktop_save(const M11NativeNewGame &game, std::string_view authority_princ
             [&metadata](std::string_view key) { return metadata.contains(key); }) ||
         !metadata.at("authority_principal").is_string() ||
         !metadata.at("countries").is_array() || !metadata.at("model_id").is_string() ||
+        !metadata.at("free_policy_actions").is_array() ||
         !metadata.at("run_mode").is_string() ||
         !metadata.at("start_date").is_string() ||
         !metadata.at("schema_version").is_number_unsigned() ||
@@ -1003,6 +1014,42 @@ make_desktop_save(const M11NativeNewGame &game, std::string_view authority_princ
             country.at("code").get<std::string>(),
             country.at("profile").get<std::string>(),
         });
+    }
+    std::set<std::pair<std::uint64_t, std::string>> touched;
+    for (const auto &entry : metadata.at("free_policy_actions")) {
+        if (!entry.is_object() || entry.size() != 3U || !entry.contains("economy_id") ||
+            !entry.contains("lever") || !entry.contains("value") ||
+            !entry.at("economy_id").is_number_unsigned() ||
+            !entry.at("lever").is_string()) {
+            throw ProtocolFault{"corrupt_input",
+                                "The desktop save free-policy action is invalid.",
+                                false};
+        }
+        const auto economy = entry.at("economy_id").get<std::uint64_t>();
+        const auto lever_name = entry.at("lever").get<std::string>();
+        const auto *lever = control::find_m11_policy_lever(lever_name);
+        if (economy >= result.metadata.countries.size() || lever == nullptr ||
+            !touched.emplace(economy, lever_name).second) {
+            throw ProtocolFault{"corrupt_input",
+                                "The desktop save free-policy action is invalid.",
+                                false};
+        }
+        auto value = protocol_policy_value(*lever, entry.at("value"));
+        if (!value.ok()) {
+            throw ProtocolFault{"corrupt_input",
+                                "The desktop save free-policy value is invalid.",
+                                false};
+        }
+        if (!control::validate_m11_policy_value(*lever, *value.get_if(),
+                                                EconomyId(economy),
+                                                result.metadata.countries.size())
+                 .ok()) {
+            throw ProtocolFault{"corrupt_input",
+                                "The desktop save free-policy value is invalid.",
+                                false};
+        }
+        result.free_policy_actions.push_back(
+            {EconomyId(economy), lever_name, std::move(*value.get_if())});
     }
     cursor += metadata_count;
     result.checkpoint.assign(
@@ -1129,6 +1176,8 @@ struct M11ProtocolWorker::Impl final {
     std::deque<M11FrontendSnapshot> snapshots;
     M11FrontendProjection projection;
     std::optional<M11NativeNewGame> new_game;
+    std::vector<control::NativePolicyAction> free_policy_actions;
+    std::uint64_t next_free_policy_sequence{0U};
     bool shutdown{false};
 
     [[nodiscard]] ConnectionState *connection(std::string_view identifier) {
@@ -1224,6 +1273,108 @@ struct M11ProtocolWorker::Impl final {
         return result;
     }
 
+    [[nodiscard]] Json free_policy_json() const {
+        Json actions = Json::array();
+        for (const auto &action : free_policy_actions) {
+            actions.push_back(action_json(action));
+        }
+        return {
+            {"enabled", true},
+            {"effective_tick", session != nullptr && !free_policy_actions.empty()
+                                   ? Json(session->tick().value() + 1U)
+                                   : Json(nullptr)},
+            {"actions", std::move(actions)},
+        };
+    }
+
+    void decorate_free_policy(Json &result) const {
+        const auto mode = result.at("mode").get<std::string>();
+        auto &payload = mode == "delta" ? result.at("delta") : result.at("snapshot");
+        payload["control_mode"] = "free_policy";
+        payload["free_policy"] = free_policy_json();
+    }
+
+    [[nodiscard]] Json free_policy_decision(std::string_view status,
+                                            std::optional<Tick> effective) {
+        const auto identifier =
+            "free-policy:" + std::to_string(session->tick().value()) + ":" +
+            std::to_string(next_free_policy_sequence++);
+        return {
+            {"decision_id", identifier},
+            {"proposal_id", identifier},
+            {"status", status},
+            {"reason_code", ""},
+            {"accepted_at", session->tick().value()},
+            {"effective_at",
+             effective.has_value() ? Json(effective->value()) : Json(nullptr)},
+            {"effective_tick",
+             effective.has_value() ? Json(effective->value()) : Json(nullptr)},
+            {"accepted_sequence", next_free_policy_sequence - 1U},
+            {"reserved_administrative_cost", 0.0},
+            {"reserved_admin_cost", 0.0},
+            {"adjustment_cost", 0.0},
+        };
+    }
+
+    [[nodiscard]] std::vector<control::NativePolicyAction>
+    free_policy_actions_from_request(const Json &request) const {
+        if (!request.contains("actions") || !request.at("actions").is_array() ||
+            request.at("actions").size() > control::kM11MaximumProposalActions) {
+            throw ProtocolFault{"invalid_argument", "The free-policy batch is invalid.",
+                                false};
+        }
+        const auto owner = new_game.has_value() ? new_game->player_economy : 0U;
+        std::set<std::pair<std::uint64_t, std::string>> touched;
+        std::vector<control::NativePolicyAction> actions;
+        actions.reserve(request.at("actions").size());
+        for (const auto &entry : request.at("actions")) {
+            if (!entry.is_object() || !entry.contains("lever") ||
+                !entry.contains("value") || !entry.at("lever").is_string()) {
+                throw ProtocolFault{"invalid_argument",
+                                    "A free-policy action is invalid.", false};
+            }
+            auto economy = owner;
+            if (entry.contains("economy_id")) {
+                if (!entry.at("economy_id").is_number_unsigned()) {
+                    throw ProtocolFault{"invalid_argument",
+                                        "A free-policy economy is invalid.", false};
+                }
+                economy = entry.at("economy_id").get<std::uint64_t>();
+            }
+            if (economy != owner) {
+                throw ProtocolFault{"access_denied",
+                                    "Free policy cannot target a non-player economy.",
+                                    false};
+            }
+            const auto lever_name = entry.at("lever").get<std::string>();
+            const auto *lever = control::find_m11_policy_lever(lever_name);
+            if (lever == nullptr || !touched.emplace(economy, lever_name).second) {
+                throw ProtocolFault{"invalid_argument",
+                                    "A free-policy lever is unknown or duplicated.",
+                                    false};
+            }
+            auto value = protocol_policy_value(*lever, entry.at("value"));
+            if (!value.ok()) {
+                throw status_fault(value.status());
+            }
+            auto validated = control::validate_m11_policy_value(
+                *lever, *value.get_if(), EconomyId(economy),
+                session->engine().world().economy_count());
+            if (!validated.ok()) {
+                throw status_fault(validated);
+            }
+            actions.push_back(
+                {EconomyId(economy), lever_name, std::move(*value.get_if())});
+        }
+        std::sort(actions.begin(), actions.end(),
+                  [](const control::NativePolicyAction &left,
+                     const control::NativePolicyAction &right) {
+                      return std::pair{left.economy.value(), left.lever} <
+                             std::pair{right.economy.value(), right.lever};
+                  });
+        return actions;
+    }
+
     [[nodiscard]] Json snapshot_result(const Json &request,
                                        std::string_view connection_id) {
         auto current = create_snapshot(request, connection_id);
@@ -1244,22 +1395,28 @@ struct M11ProtocolWorker::Impl final {
             if (found != snapshots.end()) {
                 auto delta = projection.delta(*found, *current.get_if());
                 if (delta.ok()) {
-                    return {
+                    Json result{
                         {"mode", "delta"},
                         {"delta", delta_json(*delta.get_if())},
                     };
+                    decorate_free_policy(result);
+                    return result;
                 }
             }
-            return {
+            Json result{
                 {"mode", "full_resync"},
                 {"reason", "snapshot_base_unavailable"},
                 {"snapshot", snapshot_json(*current.get_if())},
             };
+            decorate_free_policy(result);
+            return result;
         }
-        return {
+        Json result{
             {"mode", "full"},
             {"snapshot", snapshot_json(*current.get_if())},
         };
+        decorate_free_policy(result);
+        return result;
     }
 
     [[nodiscard]] Json new_session_command(const Json &request,
@@ -1289,6 +1446,11 @@ struct M11ProtocolWorker::Impl final {
         if (!built.ok()) {
             throw status_fault(built.status());
         }
+        // The desktop product is an unrestricted policy sandbox. Controller
+        // occupants remain available to non-desktop M11 consumers, but desktop
+        // sessions never turn policy calendars into player permissions.
+        built.get_if()->controller.assignments.clear();
+        built.get_if()->controller.fill_unassigned_with_null = true;
         if (!options.built_in_rl_artifact.empty()) {
             for (auto &assignment : built.get_if()->controller.assignments) {
                 if (assignment.occupant.kind ==
@@ -1348,6 +1510,8 @@ struct M11ProtocolWorker::Impl final {
         cache_epoch = random_hex(16U);
         next_snapshot_sequence = 1U;
         snapshots.clear();
+        free_policy_actions.clear();
+        next_free_policy_sequence = 0U;
         new_game = std::move(*built.get_if());
         Json snapshot_request = request;
         snapshot_request["session_id"] = session_identifier;
@@ -1361,6 +1525,7 @@ struct M11ProtocolWorker::Impl final {
                                    ? Json(*new_game->duration_ticks)
                                    : Json(nullptr)},
             {"player_economy", new_game->player_economy},
+            {"control_mode", "free_policy"},
             {"countries",
              [&]() {
                  Json countries = Json::array();
@@ -1506,6 +1671,25 @@ struct M11ProtocolWorker::Impl final {
             if (role != "player" && lever.owner_role != role) {
                 continue;
             }
+            bool available = true;
+            std::string_view capabilities = lever.required_capabilities;
+            while (!capabilities.empty()) {
+                const auto separator = capabilities.find('|');
+                const auto capability = capabilities.substr(0U, separator);
+                if (!capability.empty() &&
+                    !control::m11_world_capability(session->engine().world(),
+                                                   EconomyId(economy), capability)) {
+                    available = false;
+                    break;
+                }
+                if (separator == std::string_view::npos) {
+                    break;
+                }
+                capabilities.remove_prefix(separator + 1U);
+            }
+            if (role == "player" && !available) {
+                continue;
+            }
             auto descriptor = policy_descriptor_json(lever);
             auto value =
                 control::m11_policy_value(*domestic.get_if(), external, lever.name);
@@ -1524,6 +1708,7 @@ struct M11ProtocolWorker::Impl final {
             {"schema_version", 1U},
             {"economy_id", economy},
             {"role", role},
+            {"control_mode", "free_policy"},
             {"levers", std::move(levers)},
         };
     }
@@ -1836,8 +2021,8 @@ struct M11ProtocolWorker::Impl final {
             throw ProtocolFault{"no_session", "No simulation session is active.",
                                 false};
         }
-        auto archive =
-            make_desktop_save(*new_game, owner_connection, *checkpoint.get_if());
+        auto archive = make_desktop_save(*new_game, owner_connection,
+                                         free_policy_actions, *checkpoint.get_if());
         const auto temporary =
             options.save_root / (std::string(*slot) + ".tmp-" + random_hex(8U));
         try {
@@ -1910,6 +2095,8 @@ struct M11ProtocolWorker::Impl final {
         }
         session = std::make_unique<M11ControlledSession>(std::move(*restored.get_if()));
         new_game = std::move(loaded.metadata);
+        free_policy_actions = std::move(loaded.free_policy_actions);
+        next_free_policy_sequence = 0U;
         owner_connection = std::string(connection_id);
         session_identifier = random_hex(16U);
         cache_epoch = random_hex(16U);
@@ -1926,6 +2113,7 @@ struct M11ProtocolWorker::Impl final {
                                    ? Json(*new_game->duration_ticks)
                                    : Json(nullptr)},
             {"player_economy", new_game->player_economy},
+            {"control_mode", "free_policy"},
             {"projection", snapshot_result(snapshot_request, connection_id)},
         };
     }
@@ -1947,6 +2135,7 @@ struct M11ProtocolWorker::Impl final {
                 {"capabilities",
                  {
                      "controlled_session",
+                     "free_policy",
                      "snapshot_delta",
                      "role_scoped_release",
                      "native_checkpoint",
@@ -2015,6 +2204,28 @@ struct M11ProtocolWorker::Impl final {
                 throw fault;
             }
             return entity_page_command(request, *command == "entity_detail");
+        }
+        if (*command == "stage_policy") {
+            const auto fault = require_session(request, connection_id, true);
+            if (!fault.code.empty()) {
+                throw fault;
+            }
+            if (session->phase() != control::M11BoundaryPhase::boundary_start) {
+                throw ProtocolFault{
+                    "invalid_transaction_state",
+                    "Free policy may only be staged at a clean day boundary.", false};
+            }
+            free_policy_actions = free_policy_actions_from_request(request);
+            return {
+                {"control_mode", "free_policy"},
+                {"free_policy", free_policy_json()},
+                {"decision",
+                 free_policy_decision(
+                     free_policy_actions.empty() ? "cleared" : "staged",
+                     free_policy_actions.empty()
+                         ? std::optional<Tick>{}
+                         : std::optional<Tick>{Tick(session->tick().value() + 1U)})},
+            };
         }
         if (*command == "submit_policy" || *command == "submit_human_policy") {
             const auto fault = require_session(request, connection_id, true);
@@ -2323,23 +2534,31 @@ struct M11ProtocolWorker::Impl final {
                                     "Advance ticks must be between 1 and 10000.",
                                     false};
             }
-            bool stop = true;
             if (request.contains("stop_after_context_boundary")) {
                 if (!request.at("stop_after_context_boundary").is_boolean()) {
                     throw ProtocolFault{"invalid_argument",
                                         "The advance stop mode is invalid.", false};
                 }
-                stop = request.at("stop_after_context_boundary").get<bool>();
             }
-            auto advanced = session->advance_until_decision({ticks, stop});
+            const bool had_staged_policy = !free_policy_actions.empty();
+            const auto effective_tick = Tick(session->tick().value() + 1U);
+            auto advanced =
+                session->advance_free_policy(free_policy_actions, {ticks, false});
             if (!advanced.ok()) {
                 throw status_fault(advanced.status());
             }
+            if (advanced.get_if()->elapsed_ticks > 0U) {
+                free_policy_actions.clear();
+            }
             auto projection_result = snapshot_result(request, connection_id);
-            return {
+            Json result{
                 {"advance", decision_result_json(*advanced.get_if())},
                 {"projection", std::move(projection_result)},
             };
+            if (had_staged_policy && advanced.get_if()->elapsed_ticks > 0U) {
+                result["decision"] = free_policy_decision("effective", effective_tick);
+            }
+            return result;
         }
         if (*command == "save_slot") {
             const auto fault = require_session(request, connection_id, true);
@@ -2363,6 +2582,8 @@ struct M11ProtocolWorker::Impl final {
             cache_epoch.clear();
             snapshots.clear();
             next_snapshot_sequence = 1U;
+            free_policy_actions.clear();
+            next_free_policy_sequence = 0U;
             return {{"closed", true}};
         }
         throw ProtocolFault{"unknown_command", "The command is not supported.", false};

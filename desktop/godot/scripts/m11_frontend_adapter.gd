@@ -168,7 +168,7 @@ func schema_payload(result: Dictionary) -> Dictionary:
 		"schema_version": result.get("schema_version", 1),
 		"economy_id": result.get("economy_id", 0),
 		"seat": "treasury",
-		"control_mode": "controller",
+		"control_mode": result.get("control_mode", "free_policy"),
 		"seats": seats,
 		"levers": seats["treasury"]["levers"],
 	}
@@ -203,6 +203,14 @@ func apply_entity_result(result: Dictionary) -> Dictionary:
 
 func entity_boundary(kind: String) -> int:
 	return int(_entity_boundaries.get(kind, -1))
+
+
+func apply_free_policy_state(state: Dictionary) -> Dictionary:
+	if _raw.is_empty():
+		return {}
+	_raw["control_mode"] = "free_policy"
+	_raw["free_policy"] = state.duplicate(true)
+	return legacy_snapshot()
 
 
 func legacy_snapshot() -> Dictionary:
@@ -256,7 +264,12 @@ func legacy_snapshot() -> Dictionary:
 		"boundary": _raw.get("boundary", 0),
 		"phase": _raw.get("phase", "boundary_start"),
 		"awaiting_human": _raw.get("awaiting_human", false),
-		"control_mode": "controller",
+		"control_mode": _raw.get("control_mode", "free_policy"),
+		"free_policy": _raw.get("free_policy", {
+			"enabled": true,
+			"effective_tick": null,
+			"actions": [],
+		}),
 		"metrics": metrics,
 		"metric_values": _stable_metric_values(_raw.get("metrics", [])),
 		"series": _series.duplicate(true),
@@ -292,6 +305,7 @@ func _apply_delta(raw_delta: Variant) -> void:
 	for key in [
 		"boundary", "phase", "awaiting_human", "event_cursor",
 		"release_cursor", "releases", "contexts", "pending", "shock_bulletins",
+		"control_mode", "free_policy",
 	]:
 		if delta.has(key):
 			_raw[key] = delta[key]

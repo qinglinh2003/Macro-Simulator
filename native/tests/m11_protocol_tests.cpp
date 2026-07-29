@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -49,6 +50,16 @@ worker(std::filesystem::path save_root = {},
 
 [[nodiscard]] Json response(M11ProtocolWorker &protocol, const Json &value) {
     return Json::parse(protocol.handle_frame(value.dump()));
+}
+
+[[nodiscard]] Json policy_value(const Json &snapshot, std::string_view lever) {
+    for (const auto &policy : snapshot.at("policies")) {
+        if (policy.at("lever") == lever) {
+            return policy.at("value");
+        }
+    }
+    assert(false);
+    return nullptr;
 }
 
 void test_authentication_framing_and_sequence() {
@@ -156,20 +167,102 @@ void test_session_owner_snapshot_and_delta() {
     assert(!protocol.has_session());
 }
 
-void test_human_advance_pauses_without_consuming_time() {
+void test_free_policy_stages_and_applies_atomically() {
     auto protocol = worker();
-    assert(response(protocol, request(1U, "hello")).at("ok").get<bool>());
+    const auto hello = response(protocol, request(1U, "hello"));
+    assert(hello.at("ok").get<bool>());
+    bool supports_free_policy = false;
+    for (const auto &capability : hello.at("result").at("capabilities")) {
+        supports_free_policy = supports_free_policy || capability == "free_policy";
+    }
+    assert(supports_free_policy);
     const auto created = response(protocol, request(2U, "new_session"));
     assert(created.at("ok").get<bool>());
     const auto session_id = created.at("result").at("session_id").get<std::string>();
-    auto advance = request(3U, "advance");
+    const auto &initial = created.at("result").at("projection").at("snapshot");
+    assert(initial.at("control_mode") == "free_policy");
+    assert(!initial.at("awaiting_human").get<bool>());
+
+    auto stage = request(3U, "stage_policy");
+    stage["session_id"] = session_id;
+    stage["actions"] =
+        Json::array({{{"lever", "gov_consumption_share"}, {"value", 0.35}}});
+    const auto staged = response(protocol, stage);
+    assert(staged.at("ok").get<bool>());
+    assert(staged.at("result").at("decision").at("status") == "staged");
+    assert(staged.at("result").at("decision").at("effective_tick") == 1U);
+    assert(staged.at("result").at("free_policy").at("actions").size() == 1U);
+    assert(std::abs(policy_value(initial, "gov_consumption_share").get<double>() -
+                    0.35) > 0.05);
+
+    auto snapshot = request(4U, "snapshot");
+    snapshot["session_id"] = session_id;
+    const auto staged_snapshot = response(protocol, snapshot);
+    assert(staged_snapshot.at("ok").get<bool>());
+    const auto &before = staged_snapshot.at("result").at("snapshot");
+    assert(before.at("boundary") == 0U);
+    assert(before.at("free_policy").at("actions").size() == 1U);
+    assert(policy_value(before, "gov_consumption_share") != 0.35);
+
+    auto advance = request(5U, "advance");
     advance["session_id"] = session_id;
-    advance["ticks"] = 5U;
-    const auto paused = response(protocol, advance);
-    assert(paused.at("ok").get<bool>());
-    assert(paused.at("result").at("advance").at("awaiting_human").get<bool>());
-    assert(paused.at("result").at("advance").at("elapsed_ticks") == 0U);
-    assert(paused.at("result").at("projection").at("snapshot").at("boundary") == 0U);
+    advance["ticks"] = 1U;
+    const auto applied = response(protocol, advance);
+    assert(applied.at("ok").get<bool>());
+    assert(applied.at("result").at("advance").at("elapsed_ticks") == 1U);
+    assert(!applied.at("result").at("advance").at("awaiting_human").get<bool>());
+    assert(applied.at("result").at("decision").at("status") == "effective");
+    const auto &after = applied.at("result").at("projection").at("snapshot");
+    assert(after.at("boundary") == 1U);
+    assert(after.at("free_policy").at("actions").empty());
+    assert(policy_value(after, "gov_consumption_share") == 0.35);
+
+    stage = request(6U, "stage_policy");
+    stage["session_id"] = session_id;
+    stage["actions"] =
+        Json::array({{{"lever", "monetary_regime"}, {"value", "manual"}}});
+    assert(response(protocol, stage).at("ok").get<bool>());
+    advance = request(7U, "advance");
+    advance["session_id"] = session_id;
+    const auto rejected = response(protocol, advance);
+    assert(!rejected.at("ok").get<bool>());
+    assert(rejected.at("error").at("code") == "invalid_argument");
+
+    snapshot = request(8U, "snapshot");
+    snapshot["session_id"] = session_id;
+    const auto unchanged = response(protocol, snapshot);
+    assert(unchanged.at("ok").get<bool>());
+    assert(unchanged.at("result").at("snapshot").at("boundary") == 1U);
+    assert(
+        unchanged.at("result").at("snapshot").at("free_policy").at("actions").size() ==
+        1U);
+
+    stage = request(9U, "stage_policy");
+    stage["session_id"] = session_id;
+    stage["actions"] = Json::array({
+        {{"lever", "manual_policy_rate"}, {"value", 0.005}},
+        {{"lever", "monetary_regime"}, {"value", "manual"}},
+    });
+    assert(response(protocol, stage).at("ok").get<bool>());
+    advance = request(10U, "advance");
+    advance["session_id"] = session_id;
+    const auto linked = response(protocol, advance);
+    assert(linked.at("ok").get<bool>());
+    assert(linked.at("result").at("projection").at("snapshot").at("boundary") == 2U);
+    assert(policy_value(linked.at("result").at("projection").at("snapshot"),
+                        "monetary_regime") == "manual");
+    assert(policy_value(linked.at("result").at("projection").at("snapshot"),
+                        "manual_policy_rate") == 0.005);
+
+    advance = request(11U, "advance");
+    advance["session_id"] = session_id;
+    advance["ticks"] = 60U;
+    advance["stop_after_context_boundary"] = true;
+    const auto uninterrupted = response(protocol, advance);
+    assert(uninterrupted.at("ok").get<bool>());
+    assert(uninterrupted.at("result").at("advance").at("elapsed_ticks") == 60U);
+    assert(uninterrupted.at("result").at("projection").at("snapshot").at("boundary") ==
+           62U);
 }
 
 void test_control_commands_are_role_scoped_and_idempotent() {
@@ -183,30 +276,13 @@ void test_control_commands_are_role_scoped_and_idempotent() {
     schema_request["role"] = "central_bank";
     const auto schema = response(protocol, schema_request);
     assert(schema.at("ok").get<bool>());
+    assert(schema.at("result").at("control_mode") == "free_policy");
     assert(!schema.at("result").at("levers").empty());
     for (const auto &lever : schema.at("result").at("levers")) {
         assert(lever.at("owner_role") == "central_bank");
     }
 
-    auto advance = request(4U, "advance");
-    advance["session_id"] = session_id;
-    const auto paused = response(protocol, advance);
-    assert(paused.at("ok").get<bool>());
-    const auto &contexts =
-        paused.at("result").at("projection").at("snapshot").at("contexts");
-    assert(!contexts.empty());
-    const auto context_id = contexts.front().at("context_id").get<std::string>();
-
-    auto proposal = request(5U, "submit_human_policy");
-    proposal["session_id"] = session_id;
-    proposal["context_id"] = context_id;
-    proposal["operation_id"] = "hold-context";
-    proposal["actions"] = Json::array();
-    const auto held = response(protocol, proposal);
-    assert(held.at("ok").get<bool>());
-    assert(held.at("result").at("decision").at("status") == "accepted_noop");
-
-    auto shock = request(6U, "schedule_shock");
+    auto shock = request(4U, "schedule_shock");
     shock["session_id"] = session_id;
     shock["operation_id"] = "shock-operation";
     shock["seat"] = "energy";
@@ -220,14 +296,14 @@ void test_control_commands_are_role_scoped_and_idempotent() {
     assert(scheduled.at("ok").get<bool>());
     assert(!scheduled.at("result").at("repeated").get<bool>());
 
-    shock["sequence"] = 7U;
+    shock["sequence"] = 5U;
     shock["request_id"] = "shock-retry-new-sequence";
     const auto repeated = response(protocol, shock);
     assert(repeated.at("ok").get<bool>());
     assert(repeated.at("result").at("repeated").get<bool>());
     assert(repeated.at("result").at("shock_id") == 9001U);
 
-    auto contexts_request = request(8U, "decision_context");
+    auto contexts_request = request(6U, "decision_context");
     contexts_request["session_id"] = session_id;
     contexts_request["role"] = "central_bank";
     const auto central_contexts = response(protocol, contexts_request);
@@ -353,7 +429,13 @@ void test_save_load_is_sandboxed_atomic_and_verified() {
     const auto created = response(protocol, request(2U, "new_session"));
     const auto first_session = created.at("result").at("session_id").get<std::string>();
 
-    auto save = request(3U, "save_slot");
+    auto stage = request(3U, "stage_policy");
+    stage["session_id"] = first_session;
+    stage["actions"] =
+        Json::array({{{"lever", "gov_consumption_share"}, {"value", 0.23}}});
+    assert(response(protocol, stage).at("ok").get<bool>());
+
+    auto save = request(4U, "save_slot");
     save["session_id"] = first_session;
     save["slot_id"] = "campaign_01";
     const auto saved = response(protocol, save);
@@ -361,23 +443,36 @@ void test_save_load_is_sandboxed_atomic_and_verified() {
     assert(saved.at("result").at("bytes").get<std::uint64_t>() > 0U);
     assert(std::filesystem::is_regular_file(root / "campaign_01.msim"));
 
-    auto close = request(4U, "close_session");
+    auto close = request(5U, "close_session");
     close["session_id"] = first_session;
     assert(response(protocol, close).at("ok").get<bool>());
 
-    auto load = request(5U, "load_slot");
+    auto load = request(6U, "load_slot");
     load["slot_id"] = "campaign_01";
     const auto loaded = response(protocol, load);
     assert(loaded.at("ok").get<bool>());
     const auto second_session = loaded.at("result").at("session_id").get<std::string>();
     assert(second_session != first_session);
     assert(loaded.at("result").at("projection").at("snapshot").at("boundary") == 0U);
+    assert(loaded.at("result")
+               .at("projection")
+               .at("snapshot")
+               .at("free_policy")
+               .at("actions")
+               .size() == 1U);
 
-    save = request(6U, "save_slot");
+    auto advance = request(7U, "advance");
+    advance["session_id"] = second_session;
+    const auto applied = response(protocol, advance);
+    assert(applied.at("ok").get<bool>());
+    assert(policy_value(applied.at("result").at("projection").at("snapshot"),
+                        "gov_consumption_share") == 0.23);
+
+    save = request(8U, "save_slot");
     save["session_id"] = second_session;
     save["slot_id"] = "campaign_01";
     assert(response(protocol, save).at("ok").get<bool>());
-    close = request(7U, "close_session");
+    close = request(9U, "close_session");
     close["session_id"] = second_session;
     assert(response(protocol, close).at("ok").get<bool>());
 
@@ -396,14 +491,14 @@ void test_save_load_is_sandboxed_atomic_and_verified() {
         stream.write(&corrupt, 1);
         assert(stream);
     }
-    load = request(8U, "load_slot");
+    load = request(10U, "load_slot");
     load["slot_id"] = "campaign_01";
     const auto corrupt = response(protocol, load);
     assert(!corrupt.at("ok").get<bool>());
     assert(corrupt.at("error").at("code") == "corrupt_input");
     assert(!protocol.has_session());
 
-    auto invalid_slot = request(9U, "load_slot");
+    auto invalid_slot = request(11U, "load_slot");
     invalid_slot["slot_id"] = "../escape";
     const auto rejected = response(protocol, invalid_slot);
     assert(!rejected.at("ok").get<bool>());
@@ -418,7 +513,7 @@ int main() {
         test_authentication_framing_and_sequence();
         test_frame_and_response_boundaries();
         test_session_owner_snapshot_and_delta();
-        test_human_advance_pauses_without_consuming_time();
+        test_free_policy_stages_and_applies_atomically();
         test_control_commands_are_role_scoped_and_idempotent();
         test_entity_pages_and_details_preserve_links();
         test_seat_restore_and_audit_event_replay();

@@ -158,6 +158,9 @@ replay_m11_decisions(std::span<const M11ControllerEvent> events);
 [[nodiscard]] bool m11_world_capability(const simulation::M9World &world,
                                         EconomyId economy,
                                         std::string_view capability) noexcept;
+[[nodiscard]] Result<simulation::WorldPolicyBatch>
+prepare_m11_free_policy_batch(const simulation::M9World &world,
+                              std::span<const NativePolicyAction> actions);
 
 class M11PolicyCoordinator final {
   public:
