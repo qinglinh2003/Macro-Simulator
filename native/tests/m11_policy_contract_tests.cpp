@@ -1,3 +1,4 @@
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <set>
@@ -60,7 +61,7 @@ void test_catalog_is_complete_and_sorted() {
     const auto levers = m11_policy_levers();
     assert(levers.size() == 102U);
     assert(kM11PolicyContractSha256 ==
-           "40cc69d0ec0208ae440a743143148814cc337bed9979e93d54623b55883b8698");
+           "b871cbf679516a6012658e715ab0b3e099d31076e387fa70bd69b8edaaae23a4");
     std::set<std::string_view> seats;
     std::set<std::string_view> groups;
     for (std::size_t index = 0; index < levers.size(); ++index) {
@@ -77,8 +78,23 @@ void test_catalog_is_complete_and_sorted() {
         groups.insert(lever.decision_group);
         assert(find_m11_policy_lever(lever.name) == &lever);
     }
-    assert(seats.size() == 5U);
-    assert(groups.size() == 11U);
+    assert(seats.size() == 6U);
+    assert(groups.size() == 12U);
+    const std::array<std::string_view, 7U> labor_social{{
+        "benefit_income_floor",
+        "benefit_replacement",
+        "jg_public_works_share",
+        "jg_wage_ratio",
+        "job_guarantee",
+        "min_wage",
+        "pension_replacement",
+    }};
+    for (const auto name : labor_social) {
+        const auto *lever = find_m11_policy_lever(name);
+        assert(lever != nullptr);
+        assert(lever->owner_role == "labor_social");
+        assert(lever->decision_group == "labor_and_welfare");
+    }
     assert(find_m11_policy_lever("absent") == nullptr);
 }
 

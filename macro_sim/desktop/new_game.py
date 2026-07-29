@@ -156,6 +156,7 @@ PROFILE_BY_ID: dict[str, CountryProfile] = {
 SEAT_ALIASES = {
     "cb": "central_bank",
     "treasury": "treasury",
+    "labor_social": "labor_social",
     "regulator": "regulator",
     "external": "external_affairs",
     "energy": "energy",
@@ -463,6 +464,7 @@ class NewGameSpec:
             "seats": {
                 "treasury": "human",
                 "cb": "human",
+                "labor_social": "human",
                 "regulator": "human",
                 "external": "human",
                 "energy": "human",
@@ -575,7 +577,7 @@ class NewGameSpec:
         if not isinstance(raw_seats, Mapping):
             raise TypeError("seats must be an object")
         if set(raw_seats) != set(SEAT_ALIASES):
-            raise ValueError("seats must assign all five policy institutions")
+            raise ValueError("seats must assign all six policy institutions")
         seats: dict[str, str] = {}
         for alias, occupant in raw_seats.items():
             if occupant not in OCCUPANT_TYPES:

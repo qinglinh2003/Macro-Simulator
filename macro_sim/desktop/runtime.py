@@ -902,7 +902,7 @@ class SimulationRuntime:
         del self._stock_market_history[:-SERIES_LIMIT]
 
     def _merged_observation(self) -> dict[str, Any]:
-        """Union of the five seat bulletins for the player economy.
+        """Union of all seat bulletins for the player economy.
 
         The player holds every seat, so their information set is the union of
         the per-seat access classes.  Keyed by series_id; a released value from

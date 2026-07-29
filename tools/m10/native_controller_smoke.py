@@ -53,7 +53,7 @@ def main() -> int:
     awaiting = controlled.advance()
     assert awaiting.status == "awaiting_human"
     assert controlled.boundary_tick == 0
-    assert len(awaiting.contexts) == 11
+    assert len(awaiting.contexts) == 12
     assert len(awaiting.missing_context_ids) == 3
     checkpoint = controlled_world.checkpoint_controller(
         controlled, b'{"objective":"controlled-split"}',
@@ -104,7 +104,7 @@ def main() -> int:
     assert split_first == first
     assert controlled.boundary_tick == 1
     assert controlled_world.native_session.tick == 1
-    assert len(first.contexts) == 11
+    assert len(first.contexts) == 12
     fiscal = [
         decision for decision in first.decisions
         if decision.proposal_id.endswith("fiscal_stance:0:regular:native-smoke")

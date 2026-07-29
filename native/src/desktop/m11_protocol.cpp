@@ -1299,8 +1299,10 @@ struct M11ProtocolWorker::Impl final {
         }
         control::M11ShockAuthority authority;
         authority.principal = std::string(connection_id);
-        authority.granted_seats = {"treasury", "central_bank", "regulator",
-                                   "external_affairs", "energy"};
+        authority.granted_seats = {
+            "treasury", "central_bank", "labor_social", "regulator",
+            "external_affairs", "energy",
+        };
         authority.allowed_kinds = {
             simulation::ShockKind::productivity,
             simulation::ShockKind::labor_availability,

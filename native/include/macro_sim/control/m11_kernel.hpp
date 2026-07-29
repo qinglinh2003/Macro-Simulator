@@ -19,8 +19,8 @@
 
 namespace macro_sim::control {
 
-inline constexpr std::size_t kM11SeatCount = 5U;
-inline constexpr std::size_t kM11DecisionGroupCount = 11U;
+inline constexpr std::size_t kM11SeatCount = 6U;
+inline constexpr std::size_t kM11DecisionGroupCount = 12U;
 inline constexpr std::size_t kM11DefaultTriggerCount = 8U;
 inline constexpr std::size_t kM11MaximumControllerEvents = 1U << 20U;
 inline constexpr std::size_t kM11MaximumControllerReleases = 1U << 20U;
@@ -29,6 +29,7 @@ inline constexpr std::array<std::string_view, kM11SeatCount> kM11Seats{{
     "central_bank",
     "energy",
     "external_affairs",
+    "labor_social",
     "regulator",
     "treasury",
 }};
@@ -38,6 +39,7 @@ inline constexpr std::array<std::string_view, kM11DecisionGroupCount>
         "monetary_stance",
         "liquidity_operations",
         "fiscal_stance",
+        "labor_and_welfare",
         "tax_and_transfers",
         "debt_management",
         "macroprudential",

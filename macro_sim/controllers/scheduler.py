@@ -39,6 +39,7 @@ DEFAULT_CALENDARS: dict[str, CalendarSpec] = {
     "monetary_stance": CalendarSpec(45, admin_capacity=12),
     "liquidity_operations": CalendarSpec(45, admin_capacity=10),
     "fiscal_stance": CalendarSpec(91, admin_capacity=18),
+    "labor_and_welfare": CalendarSpec(91, admin_capacity=18),
     "tax_and_transfers": CalendarSpec(365, admin_capacity=25),
     "debt_management": CalendarSpec(91, admin_capacity=12),
     "macroprudential": CalendarSpec(91, admin_capacity=20),
@@ -155,7 +156,7 @@ DEFAULT_TRIGGERS: tuple[TriggerSpec, ...] = (
         "exogenous_demand_crisis", "shock_demand_severity",
         enter_threshold=0.20, exit_threshold=0.05,
         min_persist_ticks=1, cooldown_ticks=30,
-        authorized_seats=("central_bank", "treasury"),
+        authorized_seats=("central_bank", "labor_social", "treasury"),
     ),
 )
 

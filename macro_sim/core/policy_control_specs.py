@@ -62,7 +62,7 @@ def _S(
 
 # The order mirrors REGISTRY so this is also a practical 102-row review table.
 CONTROL_SPECS: dict[str, LeverControlSpec] = {
-    # -- Treasury: fiscal stance and social protection -------------------
+    # -- Treasury: fiscal stance -----------------------------------------
     "gov_consumption_share": _S(
         "treasury", "fiscal_stance", 7, 45, emergency=True,
         emergency_implementation_lag=1, control_scale=0.01, max_step=0.05,
@@ -76,15 +76,15 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
         control_scale=0.05, max_step=0.20,
     ),
     "benefit_replacement": _S(
-        "treasury", "fiscal_stance", 7, 91, emergency=True,
+        "labor_social", "labor_and_welfare", 7, 91, emergency=True,
         emergency_implementation_lag=1, control_scale=0.05, max_step=0.20,
     ),
     "benefit_income_floor": _S(
-        "treasury", "fiscal_stance", 7, 91, emergency=True,
+        "labor_social", "labor_and_welfare", 7, 91, emergency=True,
         emergency_implementation_lag=1, control_scale=0.05, max_step=0.20,
     ),
     "pension_replacement": _S(
-        "treasury", "fiscal_stance", 30, 365,
+        "labor_social", "labor_and_welfare", 30, 365,
         control_scale=0.05, max_step=0.20, admin_weight=2.0,
         cost_class="major",
     ),
@@ -186,18 +186,18 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
         admin_weight=2.0, cost_class="major",
     ),
 
-    # -- Treasury: labour and automatic stabilizers ----------------------
+    # -- Labour and social protection -----------------------------------
     "min_wage": _S(
-        "treasury", "tax_and_transfers", 30, 365,
+        "labor_social", "labor_and_welfare", 30, 365,
         control_scale=0.05, max_step=0.25, admin_weight=2.0,
         cost_class="major",
     ),
     "job_guarantee": _S(
-        "treasury", "fiscal_stance", 7, 91, emergency=True,
+        "labor_social", "labor_and_welfare", 7, 91, emergency=True,
         emergency_implementation_lag=1, admin_weight=2.0, cost_class="major",
     ),
     "jg_wage_ratio": _S(
-        "treasury", "fiscal_stance", 7, 91, emergency=True,
+        "labor_social", "labor_and_welfare", 7, 91, emergency=True,
         emergency_implementation_lag=1, control_scale=0.05, max_step=0.20,
     ),
 
@@ -414,7 +414,7 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
     ),
 
     "jg_public_works_share": _S(
-        "treasury", "fiscal_stance", 7, 91, emergency=True,
+        "labor_social", "labor_and_welfare", 7, 91, emergency=True,
         emergency_implementation_lag=1, control_scale=0.05, max_step=0.20,
     ),
     "deposit_rate_floor": _S(
@@ -565,7 +565,8 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
 
 
 _OWNER_ROLES = frozenset({
-    "central_bank", "treasury", "regulator", "external_affairs", "energy",
+    "central_bank", "treasury", "labor_social", "regulator",
+    "external_affairs", "energy",
 })
 _COST_CLASSES = frozenset({"ordinary", "major", "regime_switch", "operational"})
 

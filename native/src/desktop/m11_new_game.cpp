@@ -163,7 +163,8 @@ struct Profile final {
     if (value == "external") {
         return "external_affairs";
     }
-    if (value == "treasury" || value == "regulator" || value == "energy") {
+    if (value == "treasury" || value == "labor_social" ||
+        value == "regulator" || value == "energy") {
         return value;
     }
     return std::nullopt;
@@ -664,7 +665,8 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
         return Status(ErrorCode::invalid_argument, "new-game run mode is invalid");
     }
     const auto &seats = document.at("seats");
-    if (!exact_keys(seats, {"treasury", "cb", "regulator", "external", "energy"})) {
+    if (!exact_keys(seats, {"treasury", "cb", "labor_social", "regulator",
+                            "external", "energy"})) {
         return Status(ErrorCode::invalid_argument, "new-game seats are invalid");
     }
     for (const auto &entry : seats.items()) {
@@ -831,6 +833,7 @@ Result<M11NativeNewGame> default_m11_native_new_game(std::uint64_t seed) {
          {
              {"treasury", "human"},
              {"cb", "human"},
+             {"labor_social", "human"},
              {"regulator", "human"},
              {"external", "human"},
              {"energy", "human"},

@@ -56,7 +56,7 @@ func _run() -> void:
 	# against restoring the overflowing single-row HBox implementation.
 	var seats: Array[Control] = []
 	for seat_id: String in ["treasury", "central_bank", "regulator",
-			"external_affairs", "energy"]:
+			"external_affairs", "energy", "labor_social"]:
 		seats.append(game._n["seat_" + seat_id] as Control)
 	for left_index in seats.size():
 		for right_index in range(left_index + 1, seats.size()):

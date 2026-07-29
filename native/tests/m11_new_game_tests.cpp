@@ -65,6 +65,7 @@ using namespace macro_sim::simulation;
         "seats":{
             "treasury":"human",
             "cb":"heuristic",
+            "labor_social":"null",
             "regulator":"null",
             "external":"fuzz",
             "energy":"scheduled"
@@ -137,7 +138,7 @@ void test_profiles_counts_policy_and_calendar_are_native() {
     assert(real.rules.capital_productivity == 2.88);
     assert(first.energy_rules.producer_productivity == 1.05);
     assert(game.get_if()->initial_policy_actions.size() == 1U);
-    assert(game.get_if()->controller.assignments.size() == 5U);
+    assert(game.get_if()->controller.assignments.size() == 6U);
 
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());

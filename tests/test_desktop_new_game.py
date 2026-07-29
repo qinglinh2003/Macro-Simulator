@@ -223,7 +223,7 @@ def test_new_game_constructs_selected_profiles_world_and_player() -> None:
     runtime = SimulationRuntime(seed=1)
     snapshot = runtime.reset(spec=raw)
 
-    assert snapshot["protocol_version"] == PROTOCOL_VERSION == 3
+    assert snapshot["protocol_version"] == PROTOCOL_VERSION == 4
     assert [row["latin"] for row in snapshot["world"]["countries"]] == ["PRT", "RES"]
     assert snapshot["world"]["player_economy"] == 1
     assert runtime.world.trade is False
@@ -245,6 +245,7 @@ def test_scenario_policy_and_occupants_are_live_engine_inputs() -> None:
     raw["seats"] = {
         "treasury": "rl",
         "cb": "heuristic",
+        "labor_social": "null",
         "regulator": "null",
         "external": "null",
         "energy": "null",
@@ -258,7 +259,7 @@ def test_scenario_policy_and_occupants_are_live_engine_inputs() -> None:
     assert runtime.world.shock_engine.specs
     assert {
         type(runtime.session.seat_assignments[(0, seat)])
-        for seat in ("regulator", "external_affairs", "energy")
+        for seat in ("labor_social", "regulator", "external_affairs", "energy")
     } == {NullOccupant}
     assert isinstance(runtime.session.seat_assignments[(0, "central_bank")], HeuristicOccupant)
     assert isinstance(runtime.session.seat_assignments[(0, "treasury")], RLOccupant)
@@ -276,6 +277,7 @@ def test_all_registry_levers_can_enter_through_initial_policy_contract() -> None
     seat_alias = {
         "central_bank": "cb",
         "treasury": "treasury",
+        "labor_social": "labor_social",
         "regulator": "regulator",
         "external_affairs": "external",
         "energy": "energy",

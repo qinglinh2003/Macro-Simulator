@@ -39,7 +39,7 @@ void test_default_contract() {
     assert(*capacity.get_if() == 25.0);
 
     const auto calendars = macro_sim::control::m11_default_calendars();
-    assert(calendars.size() == 11U);
+    assert(calendars.size() == 12U);
     for (const auto &calendar : calendars) {
         assert(macro_sim::control::validate_m11_calendar(calendar).ok());
     }

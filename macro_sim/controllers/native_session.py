@@ -584,7 +584,7 @@ class NativeControlledWorld:
 def create_native_controlled_session(
     spec: Any, *, worker_count: int = 8,
 ) -> tuple[NativeControlledWorld, Any]:
-    """Create the existing five-seat controller over a native economic World."""
+    """Create the six-seat controller over a native economic World."""
     from macro_sim.native_backend import NativeSimulationSession
 
     from .session import ControlledSimulationSession

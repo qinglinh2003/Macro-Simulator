@@ -304,11 +304,11 @@ def main() -> int:
     rows = _rows()
     if len(rows) != 102:
         raise AssertionError(f"expected 102 policy levers, got {len(rows)}")
-    if len({row["owner_role"] for row in rows}) != 5:
-        raise AssertionError("native control contract must contain five seats")
-    if len({row["decision_group"] for row in rows}) != 11:
+    if len({row["owner_role"] for row in rows}) != 6:
+        raise AssertionError("native control contract must contain six seats")
+    if len({row["decision_group"] for row in rows}) != 12:
         raise AssertionError(
-            "native control contract must contain eleven decision groups"
+            "native control contract must contain twelve decision groups"
         )
     json_contract = _json_contract(rows)
     parsed = json.loads(json_contract)

@@ -178,6 +178,7 @@ std::vector<M11CalendarSpec> m11_default_calendars() {
         {"monetary_stance", 45U, 0U, 1U, 12.0},
         {"liquidity_operations", 45U, 0U, 1U, 10.0},
         {"fiscal_stance", 91U, 0U, 1U, 18.0},
+        {"labor_and_welfare", 91U, 0U, 1U, 18.0},
         {"tax_and_transfers", 365U, 0U, 1U, 25.0},
         {"debt_management", 91U, 0U, 1U, 12.0},
         {"macroprudential", 91U, 0U, 1U, 20.0},
@@ -269,7 +270,7 @@ std::vector<M11TriggerSpec> m11_default_triggers() {
          1U,
          30U,
          1U,
-         {"central_bank", "treasury"},
+         {"central_bank", "labor_social", "treasury"},
          "emergency"},
     };
 }

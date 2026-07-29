@@ -47,10 +47,11 @@ def test_policy_tripwires_and_aliases():
         "central_bank",
         "energy",
         "external_affairs",
+        "labor_social",
         "regulator",
         "treasury",
     ]
-    assert len(metadata["decision_groups"]) == 11
+    assert len(metadata["decision_groups"]) == 12
     assert policy["aliases"] == {
         "firm_capital_haircut": "regulatory_firm_capital_haircut",
         "firm_inventory_haircut": "regulatory_firm_inventory_haircut",

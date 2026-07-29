@@ -307,6 +307,7 @@ func _new_game_spec() -> Dictionary:
 		"seats": {
 			"treasury": "human",
 			"cb": "human",
+			"labor_social": "human",
 			"regulator": "human",
 			"external": "human",
 			"energy": "human",

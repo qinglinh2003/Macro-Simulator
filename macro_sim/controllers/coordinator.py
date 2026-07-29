@@ -43,7 +43,14 @@ from .transaction import (
 )
 
 
-SEATS = ("central_bank", "energy", "external_affairs", "regulator", "treasury")
+SEATS = (
+    "central_bank",
+    "energy",
+    "external_affairs",
+    "labor_social",
+    "regulator",
+    "treasury",
+)
 
 
 def policy_key(economy_id: int, lever: str) -> str:

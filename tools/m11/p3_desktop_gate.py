@@ -30,6 +30,7 @@ DEFAULT_BUDGET = ROOT / "schemas/m10/performance_budget.json"
 SEATS = (
     "treasury",
     "central_bank",
+    "labor_social",
     "regulator",
     "external_affairs",
     "energy",

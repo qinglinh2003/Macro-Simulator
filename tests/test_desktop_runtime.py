@@ -19,6 +19,7 @@ from macro_sim.desktop.server import _Server
 ALL_DECISION_GROUPS = {
     "debt_management",
     "fiscal_stance",
+    "labor_and_welfare",
     "tax_and_transfers",
     "monetary_stance",
     "liquidity_operations",
@@ -49,7 +50,7 @@ def _pass_all_contexts(runtime: SimulationRuntime) -> dict:
     return snapshot
 
 
-def test_new_game_exposes_all_five_seats(runtime: SimulationRuntime) -> None:
+def test_new_game_exposes_all_six_seats(runtime: SimulationRuntime) -> None:
     snapshot = runtime.snapshot()
     assert snapshot["tick"] == 0
     assert snapshot["awaiting_human"] is True
@@ -213,8 +214,7 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
     assert summary["firm_count"] == len(items)
     assert len({firm["firm_id"] for firm in items}) == len(items)
     assert {firm["sector"] for firm in items} == {
-        "必需消费", "可选消费", "资本品", "能源",
-        "住房建设",
+        "necessity", "luxury", "capital", "energy", "housing",
     }
 
     for firm in items:
@@ -267,7 +267,7 @@ def test_firm_explorer_reconciles_books_people_and_ownership(
     assert contracts
     assert advanced["summary"]["employment_fte"] > 0.0
     assert all(employee["hire_date"] for employee in contracts)
-    assert all(employee["status"] in {"在岗", "停薪留职"} for employee in contracts)
+    assert all(employee["status"] in {"active", "suspended"} for employee in contracts)
     members_by_id = {
         member["person_id"]: member
         for household in advanced_snapshot["households"]["items"]
@@ -540,13 +540,14 @@ def test_get_schema_covers_all_seats(runtime: SimulationRuntime) -> None:
     schema = runtime.handle({"command": "get_schema"})
     # protocol v1 compatibility surface
     assert schema["seat"] == "treasury"
-    assert isinstance(schema["levers"], list) and len(schema["levers"]) == 35
+    assert isinstance(schema["levers"], list) and len(schema["levers"]) == 28
     # protocol v2+ compatibility: every seat, 102 levers total
     seats = schema["seats"]
     counts = {seat: len(payload["levers"]) for seat, payload in seats.items()}
     assert counts == {
-        "treasury": 35,
+        "treasury": 28,
         "central_bank": 24,
+        "labor_social": 7,
         "regulator": 28,
         "external_affairs": 9,
         "energy": 6,

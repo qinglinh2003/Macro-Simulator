@@ -77,6 +77,7 @@ const SEAT_LIST := [
 	{"id": "regulator", "name": "@seat.regulator", "tag": "@{desktop.main.fragment.4715621e26b8a39a} · prudential", "color": Color("7a4fd0")},
 	{"id": "external_affairs", "name": "@seat.external", "tag": "@{desktop.main.fragment.152131b96f49234c} · external", "color": Color("c17d16")},
 	{"id": "energy", "name": "@seat.energy", "tag": "@{desktop.main.fragment.9196f0338a8d16d7} · energy", "color": Color("b0641f")},
+	{"id": "labor_social", "name": "@seat.labor_social", "tag": "@policy_group.labor_welfare · labor", "color": Color("1f9d63")},
 ]
 
 const GROUP_CN := {
@@ -85,7 +86,7 @@ const GROUP_CN := {
 	"liquidity_operations": "@{desktop.main.fragment.9c743e43ab9325f2}", "fx_operations": "@{desktop.main.fragment.04ab5fc4bf852a19}",
 	"macroprudential": "@{desktop.main.fragment.e3ed6c9d74e30ff1}", "structural_law": "@{desktop.main.fragment.2c11b7c8e657c355}",
 	"trade_and_migration": "@{desktop.main.fragment.a2bd9fd816a4dc32}", "energy_operations": "@{desktop.main.fragment.5a8c4b8f3da8f888}",
-	"energy_structure": "@{desktop.main.fragment.96638a61052f9d71}",
+	"energy_structure": "@{desktop.main.fragment.96638a61052f9d71}", "labor_and_welfare": "@policy_group.labor_welfare",
 }
 
 # Choice labels are presentation-only; submissions use Registry canonical values.
@@ -195,20 +196,23 @@ const LEVER_PAGES := {
 	"treasury": [
 		{"name": "@{desktop.main.fragment.18d12f807b67b127}", "levers": ["gov_consumption_share", "gov_deficit_target",
 			"gov_investment_share", "deficit_u_cap", "deficit_u_ref",
-			"fiscal_uses_national_accounts_gdp"]},
-		{"name": "@{desktop.main.fragment.ac69ca1a175804a3}", "levers": ["job_guarantee", "jg_wage_ratio",
-			"jg_public_works_share", "benefit_replacement", "benefit_income_floor",
-			"pension_replacement", "housing_permits"]},
+			"fiscal_uses_national_accounts_gdp", "housing_permits"]},
 		{"name": "@{desktop.main.fragment.c55e81b5476016e8}", "levers": ["tax_income_rate", "tax_profit_rate",
 			"tax_consumption_rate", "tax_wealth_rate", "tax_luxury_rate",
 			"tax_necessity_rate", "tax_energy_rate", "tax_energy_windfall"]},
 		{"name": "@{desktop.main.fragment.72bf885ef5ef4264}", "levers": ["income_allowance", "wealth_allowance",
 			"housing_in_wealth_tax", "housing_property_tax", "housing_transfer_tax",
 			"land_fee_share", "land_fee_stock_elasticity"]},
-		{"name": "@{desktop.main.fragment.25f1fe1a6eec04af}", "levers": ["min_wage", "energy_subsidy_rate",
+		{"name": "@{desktop.main.fragment.25f1fe1a6eec04af}", "levers": ["energy_subsidy_rate",
 			"energy_subsidy_threshold", "energy_cap_compensation"]},
 		{"name": "@{desktop.main.fragment.b3800b69f28ded62}", "levers": ["bond_coupon", "bond_finance_frac",
 			"bond_maturity"]},
+	],
+	"labor_social": [
+		{"name": "@policy_group.employment_policy", "levers": ["min_wage", "job_guarantee",
+			"jg_wage_ratio", "jg_public_works_share"]},
+		{"name": "@policy_group.social_protection", "levers": ["benefit_replacement",
+			"benefit_income_floor", "pension_replacement"]},
 	],
 	"central_bank": [
 		{"name": "@{desktop.main.fragment.3a1e1e12721eb47b}", "levers": ["monetary_regime", "manual_policy_rate",

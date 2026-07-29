@@ -3,7 +3,8 @@ extends RefCounted
 
 const SERIES_LIMIT := 160
 const SEATS := [
-	"treasury", "central_bank", "regulator", "external_affairs", "energy",
+	"treasury", "central_bank", "labor_social", "regulator",
+	"external_affairs", "energy",
 ]
 
 const METRIC_ALIASES := {

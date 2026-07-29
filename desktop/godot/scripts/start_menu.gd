@@ -78,7 +78,8 @@ const COUNTRY_COLORS := [Color("0f9d90"), Color("2f6fd0"), Color("7a4fd0"), Colo
 
 const SEATS := [
 	{"id": "cb", "name": "@seat.central_bank", "color": Color("2f6fd0"), "groups": "monetary · liquidity · fx (24)"},
-	{"id": "treasury", "name": "@seat.treasury", "color": Color("0f9d90"), "groups": "fiscal · tax · debt (35)"},
+	{"id": "treasury", "name": "@seat.treasury", "color": Color("0f9d90"), "groups": "fiscal · tax · debt (28)"},
+	{"id": "labor_social", "name": "@seat.labor_social", "color": Color("1f9d63"), "groups": "labor · welfare (7)"},
 	{"id": "regulator", "name": "@seat.regulator", "color": Color("7a4fd0"), "groups": "macropru · structural (28)"},
 	{"id": "external", "name": "@seat.external", "color": Color("3f6db2"), "groups": "trade · migration (9)"},
 	{"id": "energy", "name": "@seat.energy", "color": Color("c17d16"), "groups": "operations · structure (6)"},
@@ -93,6 +94,7 @@ const OCCUPANTS := [
 const SEAT_SCHEMA_KEYS := {
 	"cb": "central_bank", "treasury": "treasury", "regulator": "regulator",
 	"external": "external_affairs", "energy": "energy",
+	"labor_social": "labor_social",
 }
 
 const STRUCT_GROUPS := [
@@ -105,9 +107,20 @@ const STRUCT_GROUPS := [
 
 const POLICY_PREVIEW := {
 	"treasury": [
-		{"group": "@policy_group.fiscal_stance", "id": "fiscal_stance", "levers": [["@policy.gov_consumption_share", "gov_consumption_share", "number", 0.18, 0.005], ["@policy.gov_deficit_target", "gov_deficit_target", "percent", 0.03, 0.005], ["@policy.benefit_replacement", "benefit_replacement", "percent", 0.40, 0.02], ["@policy.job_guarantee", "job_guarantee", "bool", false, 1.0]]},
+		{"group": "@policy_group.fiscal_stance", "id": "fiscal_stance", "levers": [["@policy.gov_consumption_share", "gov_consumption_share", "number", 0.18, 0.005], ["@policy.gov_deficit_target", "gov_deficit_target", "percent", 0.03, 0.005]]},
 		{"group": "@policy_group.tax_transfers", "id": "tax_and_transfers", "levers": [["@policy.tax_income_rate", "tax_income_rate", "percent", 0.22, 0.01], ["@policy.tax_consumption_rate", "tax_consumption_rate", "percent", 0.15, 0.01], ["@policy.energy_subsidy_rate", "energy_subsidy_rate", "percent", 0.08, 0.01]]},
 		{"group": "@policy_group.debt_management", "id": "debt_management", "levers": [["@policy.bond_finance_frac", "bond_finance_frac", "percent", 0.60, 0.05], ["@policy.bond_maturity", "bond_maturity", "integer", 20, 1.0]]},
+	],
+	"labor_social": [
+		{"group": "@policy_group.labor_welfare", "id": "labor_and_welfare", "levers": [
+			["@policy.min_wage", "min_wage", "number", 1.0, 0.05],
+			["@policy.job_guarantee", "job_guarantee", "bool", false, 1.0],
+			["@policy.jg_wage_ratio", "jg_wage_ratio", "percent", 0.80, 0.05],
+			["@policy.jg_public_works_share", "jg_public_works_share", "percent", 0.50, 0.05],
+			["@policy.benefit_replacement", "benefit_replacement", "percent", 0.40, 0.05],
+			["@policy.benefit_income_floor", "benefit_income_floor", "number", 0.60, 0.05],
+			["@policy.pension_replacement", "pension_replacement", "percent", 0.40, 0.05],
+		]},
 	],
 	"cb": [
 		{"group": "@policy_group.monetary_stance", "id": "monetary_stance", "levers": [["@policy.monetary_regime", "monetary_regime", "regime", "taylor", 0], ["@policy.manual_policy_rate", "manual_policy_rate", "annual_rate", 0.000134, 0.000027], ["@policy.inflation_target", "inflation_target", "annual_rate", 0.000054, 0.000027], ["@policy.taylor_phi_pi", "taylor_phi_pi", "number", 1.5, 0.1]]},
@@ -1170,7 +1183,7 @@ func _step_government(parent: VBoxContainer) -> void:
 	parent.add_child(_kicker("@wizard.government.player_country")); var countries := HFlowContainer.new(); countries.add_theme_constant_override("h_separation", 8); countries.add_theme_constant_override("v_separation", 8); parent.add_child(countries)
 	for i in _countries.size():
 		var c: Dictionary = _countries[i]; var idx := i; var b := _select_chip("■  %s  %s" % [str(c["code"]), str(c["name"])], i == _player_country, func() -> void: _player_country = idx; _render()); b.add_theme_color_override("font_color", c["color"] if i == _player_country else INK2); countries.add_child(b)
-	var sm := MarginContainer.new(); sm.add_theme_constant_override("margin_top", 18); sm.add_theme_constant_override("margin_bottom", 8); sm.add_child(_kicker(_format("wizard.government.five_seats", str(_countries[_player_country]["name"])))); parent.add_child(sm)
+	var sm := MarginContainer.new(); sm.add_theme_constant_override("margin_top", 18); sm.add_theme_constant_override("margin_bottom", 8); sm.add_child(_kicker(_format("wizard.government.policy_seats", str(_countries[_player_country]["name"])))); parent.add_child(sm)
 	var seatlist := VBoxContainer.new(); seatlist.add_theme_constant_override("separation", 8); parent.add_child(seatlist)
 	for seat: Dictionary in SEATS: seatlist.add_child(_seat_row(seat))
 	var note := _label(_format("wizard.government.seat_count", _human_seat_count()), 11, INK3); var nm := MarginContainer.new(); nm.add_theme_constant_override("margin_top", 6); nm.add_child(note); parent.add_child(nm)

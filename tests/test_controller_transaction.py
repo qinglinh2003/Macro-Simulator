@@ -172,6 +172,29 @@ def test_registry_has_complete_c1_metadata_and_numeric_controls():
         assert lever.validation.max_step is not None and lever.validation.max_step > 0.0, name
 
 
+def test_labor_social_seat_owns_the_complete_employment_and_welfare_bundle():
+    expected = {
+        "min_wage",
+        "job_guarantee",
+        "jg_wage_ratio",
+        "jg_public_works_share",
+        "benefit_replacement",
+        "benefit_income_floor",
+        "pension_replacement",
+    }
+    owned = {
+        name for name, lever in REGISTRY.items()
+        if lever.owner_role == "labor_social"
+    }
+    assert owned == expected
+    assert {
+        REGISTRY[name].decision_group for name in owned
+    } == {"labor_and_welfare"}
+    assert sum(
+        lever.owner_role == "treasury" for lever in REGISTRY.values()
+    ) == 28
+
+
 def test_prepare_action_batch_is_pure_and_rejects_alias_duplicates():
     world = _world(1, coupled=False)
     econ = world.economies[0]
