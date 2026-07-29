@@ -1906,15 +1906,18 @@ func _build_header(shell: VBoxContainer) -> void:
 		_n["mode_" + mid] = mb
 		modes.add_child(mb)
 
-	# Mode and speed controls get an independent, right-aligned row.  This
-	# preserves their full hit targets instead of allowing the identity row to
-	# overflow the rounded header panel on a fresh 1440x900 launch.
+	# Mode and speed controls form one compact operational cluster on their own
+	# row.  Keeping the cluster visually contiguous avoids a detached label
+	# floating between the mode selector and the transport controls.
 	var transport_row := HBoxContainer.new()
 	transport_row.add_theme_constant_override("separation", 8)
 	transport_row.alignment = BoxContainer.ALIGNMENT_END
 	header_rows.add_child(transport_row)
-	transport_row.add_child(modes_wrap)
-	transport_row.add_child(_lbl("SIMULATION · @{desktop.main.fragment.18a29569240cf047}", 9, INK3, true))
+	var operational_cluster := HBoxContainer.new()
+	operational_cluster.add_theme_constant_override("separation", 8)
+	transport_row.add_child(operational_cluster)
+	operational_cluster.add_child(modes_wrap)
+	operational_cluster.add_child(_vdiv())
 	var transport := PanelContainer.new()
 	transport.add_theme_stylebox_override("panel", _sb(PANEL2, LINE, 22, 4))
 	var tp := HBoxContainer.new()
@@ -1945,7 +1948,7 @@ func _build_header(shell: VBoxContainer) -> void:
 			_render())
 		_n["speed_%d" % s] = sbn
 		tp.add_child(sbn)
-	transport_row.add_child(transport)
+	operational_cluster.add_child(transport)
 
 
 func _toggle_play() -> void:
@@ -2000,17 +2003,18 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	_n["seat_brief"] = seat_brief
 	title_row.add_child(seat_brief)
 	head.add_child(title_row)
-	# A fixed HBox made the five institutional seats overlap whenever their
-	# localized labels exceeded the panel width.  Flow layout retains the same
-	# visual language while providing a deterministic second line when needed.
-	var chips := HFlowContainer.new()
-	chips.add_theme_constant_override("separation", 5)
+	# Localized seat names cannot fit five abreast in the workbench.  A three
+	# column grid provides fixed, non-overlapping hit targets and an intentional
+	# two-row institutional hierarchy at every supported window width.
+	var chips := GridContainer.new()
+	chips.columns = 3
 	chips.add_theme_constant_override("h_separation", 5)
 	chips.add_theme_constant_override("v_separation", 5)
 	for s: Dictionary in SEAT_LIST:
 		var b := Button.new()
 		b.text = str(s["name"])
 		b.add_theme_font_size_override("font_size", 12)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var sid := str(s["id"])
 		b.pressed.connect(func() -> void:
 			_active_seat = sid

@@ -40,6 +40,9 @@ func _run() -> void:
 			assert(not seats[left_index].get_global_rect().intersects(
 				seats[right_index].get_global_rect()),
 				"seat controls %d and %d overlap" % [left_index, right_index])
+	assert(seats[3].get_global_rect().position.y
+		> seats[0].get_global_rect().position.y,
+		"the policy desk must wrap seats into a second row")
 
 	game.queue_free()
 	OS.set_environment("MACRO_SIM_SKIP_START_MENU", "")
