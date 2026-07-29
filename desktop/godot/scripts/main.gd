@@ -2048,9 +2048,12 @@ func _build_workbench(wb: VBoxContainer) -> void:
 	_n["search"] = search
 	search_row.add_child(search)
 	var scope := Button.new()
-	scope.text = "@{desktop.main.fragment.fe8af2657e540cbd}"
+	scope.text = LocaleCatalogScript.resolve(
+		"@{desktop.main.fragment.fe8af2657e540cbd}")
 	scope.tooltip_text = "@{desktop.main.fragment.a7d8f1624cd08199}\n@{desktop.main.fragment.7f98f9c6a3409542}"
 	scope.add_theme_font_size_override("font_size", 11)
+	scope.custom_minimum_size = Vector2(84, 0)
+	scope.size_flags_horizontal = Control.SIZE_SHRINK_END
 	scope.pressed.connect(func() -> void:
 		_policy_scope = "all" if _policy_scope == "meeting" else "meeting"
 		_expanded_lever = ""
@@ -2707,9 +2710,15 @@ func _render_workbench() -> void:
 	var scope := _n["policy_scope"] as Button
 	if free_policy:
 		_policy_scope = "all"
-	scope.visible = not searching and not free_policy
-	scope.disabled = not active_open
-	scope.text = "@{desktop.main.fragment.fe8af2657e540cbd}" if _policy_scope == "meeting" and active_open else "@{desktop.main.fragment.aa62abe9efa2901e}"
+	# With the policy window closed, the desk already shows the whole mandate.
+	# Hiding the inactive selector removes a large grey dead zone and lets search
+	# use the complete row.  The selector appears only when both scopes exist.
+	scope.visible = active_open and not searching and not free_policy
+	scope.disabled = false
+	scope.text = LocaleCatalogScript.resolve(
+		"@{desktop.main.fragment.fe8af2657e540cbd}"
+		if _policy_scope == "meeting"
+		else "@{desktop.main.fragment.aa62abe9efa2901e}")
 	if _policy_scope == "meeting" and active_open:
 		scope.add_theme_stylebox_override("normal", _sb(AMBER_BG, AMBER_BD, 8, 6))
 		scope.add_theme_color_override("font_color", Color("8a6114"))

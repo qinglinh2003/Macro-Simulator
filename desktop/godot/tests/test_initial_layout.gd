@@ -26,6 +26,12 @@ func _run() -> void:
 	var play_center := (game._n["play"] as Control).get_global_rect().get_center().y
 	assert(absf(menu_center - play_center) <= 2.0,
 		"identity and transport controls must share one visual baseline")
+	var policy_scope := game._n["policy_scope"] as Button
+	var policy_search := game._n["search"] as LineEdit
+	assert(not policy_scope.visible,
+		"a closed policy desk must not show an inactive scope selector")
+	assert(policy_search.get_global_rect().size.x >= 390.0,
+		"policy search must reclaim the closed scope selector space")
 
 	# Institutional seat controls must have discrete hit rectangles.  This guards
 	# against restoring the overflowing single-row HBox implementation.
