@@ -592,6 +592,9 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country capability is invalid");
     }
+    if (overrides.contains("demographics_enabled")) {
+        population.rules.mortality = population.rules.fertility;
+    }
     if (overrides.contains("capital_market")) {
         if (!overrides.at("capital_market").is_boolean()) {
             return Status(ErrorCode::invalid_argument,
@@ -830,6 +833,8 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         if (!override_status.ok()) {
             return override_status;
         }
+        population.population.fixed_genesis_vital_rates = true;
+        population.population.genesis_vital_rates = population.rules.vital_rates;
         population.population.initial_persons = population_count;
         if (country.at("overrides").contains("demographics_population")) {
             scale_representative_entities(economy, population_count);

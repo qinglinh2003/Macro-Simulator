@@ -1930,7 +1930,7 @@ class Config:
         assert self.tfp_learning_theta >= 0.0, "tfp_learning_theta must be >= 0"
         assert self.suspension_timer >= 1 and 0.0 < self.suspension_quit_discount <= 1.5, "suspension params out of range"
         assert not (self.labor_person_efficiency and self.labor_matching != "persistent"), "person efficiency needs persistent rosters (e_i lives on hires)"
-        assert self.efficiency_sigma >= 0.0, "efficiency_sigma must be non-negative"
+        assert 0.0 <= self.efficiency_sigma <= 2.0, "efficiency_sigma must be in [0, 2]"
         assert not (self.labor_participation and self.labor_matching != "persistent"), "participation margin needs persistent rosters"
         assert self.reservation_markup >= 0.0 and 0.0 <= self.welfare_quit_hazard <= 1.0, "participation params out of range"
         assert self.subscale_viability_workers >= 0.0 and self.subscale_grace_days >= 1, "subscale exit params out of range"

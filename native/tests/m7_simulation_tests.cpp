@@ -184,6 +184,35 @@ void test_genesis_derives_households_from_population() {
         });
 }
 
+void test_genesis_person_efficiency_is_deterministic_and_configurable() {
+    auto heterogeneous = build();
+    double sum = 0.0;
+    double square_sum = 0.0;
+    for (const auto person_id : heterogeneous.runtime.persons.alive_ids()) {
+        const double value = heterogeneous.runtime.persons.get(person_id)->efficiency;
+        assert(std::isfinite(value) && value > 0.0);
+        sum += value;
+        square_sum += value * value;
+    }
+    const double count =
+        static_cast<double>(heterogeneous.runtime.persons.alive_count());
+    const double variance = square_sum / count - (sum / count) * (sum / count);
+    assert(variance > 0.01);
+
+    auto repeated = build();
+    for (const auto person_id : heterogeneous.runtime.persons.alive_ids()) {
+        assert(heterogeneous.runtime.persons.get(person_id)->efficiency ==
+               repeated.runtime.persons.get(person_id)->efficiency);
+    }
+
+    auto homogeneous_spec = base_spec();
+    homogeneous_spec.rules.efficiency_sigma = 0.0;
+    auto homogeneous = build(homogeneous_spec);
+    for (const auto person_id : homogeneous.runtime.persons.alive_ids()) {
+        assert(homogeneous.runtime.persons.get(person_id)->efficiency == 1.0);
+    }
+}
+
 void test_death_and_estate_settle_exactly_once() {
     auto harness = build();
     const auto household = harness.runtime.persons.get(PersonId(1))->household;
@@ -386,6 +415,9 @@ void test_relationship_household_lifecycle() {
     }
     assert(result.ok());
     assert(result.get_if()->metrics.marriages > 0);
+    assert(result.get_if()->metrics.active_unions > 0);
+    assert(result.get_if()->metrics.mean_partner_age_gap >= 0.0);
+    assert(result.get_if()->metrics.mean_partner_log_efficiency_gap >= 0.0);
     assert(harness.runtime.relationships.validate(harness.runtime.persons).ok());
     PersonId partnered{};
     for (const auto person : harness.runtime.persons.alive_ids()) {
@@ -1076,12 +1108,16 @@ void test_validation_rejects_invalid_population() {
     spec.rules.beneficial_ownership = false;
     spec.rules.estates = true;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.efficiency_sigma = -0.1;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
 }
 
 } // namespace
 
 int main() {
     test_genesis_derives_households_from_population();
+    test_genesis_person_efficiency_is_deterministic_and_configurable();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();

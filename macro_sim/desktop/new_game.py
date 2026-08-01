@@ -272,6 +272,9 @@ CAPABILITY_DISABLE_CASCADE: dict[str, dict[str, Any]] = {
     },
     "demographics_enabled": {
         "demographic_lifecycle_consumption": False,
+        "demographic_marriage_enabled": False,
+        "demographic_divorce_enabled": False,
+        "demographic_adult_leaving_home_enabled": False,
         "labor_matching": "spot",
         "labor_fractional_hours": False,
         "labor_second_job": False,

@@ -64,10 +64,10 @@ void test_descriptors_are_stable_and_complete() {
     assert(public_descriptors.size() == kM10PublicMetricCount);
     const auto descriptors = metric_descriptors();
     assert(descriptors.size() == kM10MetricCount);
-    assert(kM10NativeSourceMetricCount == 214U);
+    assert(kM10NativeSourceMetricCount == 219U);
     assert(kM10DashboardMetricCount == 85U);
     assert(kM10NationalAccountMetricCount == 63U);
-    assert(kM10MetricCount == 438U);
+    assert(kM10MetricCount == 443U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());
@@ -222,8 +222,7 @@ void test_distribution_metrics_are_native_and_complete() {
         for (std::size_t decile = 1U; decile <= 10U; ++decile) {
             const auto stable_id =
                 std::string(prefix) + std::to_string(decile) + "_share";
-            const auto share =
-                frame.get_if()->value(0U, metric(stable_id));
+            const auto share = frame.get_if()->value(0U, metric(stable_id));
             assert(share.ok());
             assert(*share.get_if() >= 0.0);
             total_share += *share.get_if();
@@ -369,8 +368,8 @@ void test_typed_probes_are_stable_and_paged() {
 
 void test_firm_scoped_employment_probes_return_exact_contracts() {
     auto world = build_world();
-    auto *population = const_cast<M7Runtime *>(
-        world.economy_population_runtime(EconomyId(0U)));
+    auto *population =
+        const_cast<M7Runtime *>(world.economy_population_runtime(EconomyId(0U)));
     assert(population != nullptr);
     const auto first =
         population->employment.hire(PersonId(1U), FirmId(1U), 7, 4.25, 0.75);
@@ -380,8 +379,8 @@ void test_firm_scoped_employment_probes_return_exact_contracts() {
     assert(second.ok());
     assert(population->employment.suspend(*first.get_if(), 9).ok());
 
-    const auto contracts = probe_jobs_for_firm(
-        world, EconomyId(0U), FirmId(1U), 0U, 8U);
+    const auto contracts =
+        probe_jobs_for_firm(world, EconomyId(0U), FirmId(1U), 0U, 8U);
     assert(contracts.ok());
     assert(contracts.get_if()->page.total_rows == 1U);
     assert(contracts.get_if()->rows.size() == 1U);
@@ -396,38 +395,35 @@ void test_firm_scoped_employment_probes_return_exact_contracts() {
     assert(contract.suspended);
     assert(contract.active);
 
-    const auto people = probe_persons_for_firm(
-        world, EconomyId(0U), FirmId(1U), 0U, 8U);
+    const auto people =
+        probe_persons_for_firm(world, EconomyId(0U), FirmId(1U), 0U, 8U);
     assert(people.ok());
     assert(people.get_if()->page.total_rows == 1U);
     assert(people.get_if()->rows.size() == 1U);
     assert(people.get_if()->rows.front().id == PersonId(1U));
     assert(people.get_if()->rows.front().primary_job == *first.get_if());
 
-    const auto empty = probe_jobs_for_firm(
-        world, EconomyId(0U), FirmId(3U), 0U, 8U);
+    const auto empty = probe_jobs_for_firm(world, EconomyId(0U), FirmId(3U), 0U, 8U);
     assert(empty.ok());
     assert(empty.get_if()->rows.empty());
-    assert(!probe_jobs_for_firm(
-                world, EconomyId(0U), FirmId(999U), 0U, 8U)
-                .ok());
+    assert(!probe_jobs_for_firm(world, EconomyId(0U), FirmId(999U), 0U, 8U).ok());
 }
 
 void test_household_scoped_probes_return_every_member() {
     auto world = build_world(24U);
-    auto *population = const_cast<M7Runtime *>(
-        world.economy_population_runtime(EconomyId(0U)));
+    auto *population =
+        const_cast<M7Runtime *>(world.economy_population_runtime(EconomyId(0U)));
     assert(population != nullptr);
     const auto household = HouseholdId(1U);
     const auto expected_members = population->membership.members(household);
     assert(expected_members.size() > 1U);
 
-    const auto hired = population->employment.hire(
-        expected_members.front(), FirmId(1U), 7, 4.25, 0.75);
+    const auto hired = population->employment.hire(expected_members.front(), FirmId(1U),
+                                                   7, 4.25, 0.75);
     assert(hired.ok());
 
-    const auto people = probe_persons_for_household(
-        world, EconomyId(0U), household, 0U, 8U);
+    const auto people =
+        probe_persons_for_household(world, EconomyId(0U), household, 0U, 8U);
     assert(people.ok());
     assert(people.get_if()->page.total_rows == expected_members.size());
     assert(people.get_if()->rows.size() == expected_members.size());
@@ -435,20 +431,17 @@ void test_household_scoped_probes_return_every_member() {
         assert(person.household == household);
     }
 
-    const auto contracts = probe_jobs_for_household(
-        world, EconomyId(0U), household, 0U, 8U);
+    const auto contracts =
+        probe_jobs_for_household(world, EconomyId(0U), household, 0U, 8U);
     assert(contracts.ok());
     assert(contracts.get_if()->page.total_rows == 1U);
     assert(contracts.get_if()->rows.size() == 1U);
     assert(contracts.get_if()->rows.front().id == *hired.get_if());
-    assert(contracts.get_if()->rows.front().person ==
-           expected_members.front());
+    assert(contracts.get_if()->rows.front().person == expected_members.front());
 
-    assert(!probe_persons_for_household(
-                world, EconomyId(0U), HouseholdId(999U), 0U, 8U)
+    assert(!probe_persons_for_household(world, EconomyId(0U), HouseholdId(999U), 0U, 8U)
                 .ok());
-    assert(!probe_jobs_for_household(
-                world, EconomyId(0U), HouseholdId(999U), 0U, 8U)
+    assert(!probe_jobs_for_household(world, EconomyId(0U), HouseholdId(999U), 0U, 8U)
                 .ok());
 }
 

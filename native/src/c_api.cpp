@@ -158,6 +158,11 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(mean_household_size);
     MACRO_SIM_FILL_M7(working_age_share);
     MACRO_SIM_FILL_M7(dependency_ratio);
+    MACRO_SIM_FILL_M7(mean_person_efficiency);
+    MACRO_SIM_FILL_M7(person_efficiency_stddev);
+    MACRO_SIM_FILL_M7(active_unions);
+    MACRO_SIM_FILL_M7(mean_partner_age_gap);
+    MACRO_SIM_FILL_M7(mean_partner_log_efficiency_gap);
     MACRO_SIM_FILL_M7(participation_rate);
     MACRO_SIM_FILL_M7(estates_settled);
     MACRO_SIM_FILL_M7(beneficial_lots_transferred);
@@ -1790,6 +1795,7 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->fertility_width = value.vital_rates.fertility_width;
     output->sex_ratio_at_birth = value.vital_rates.sex_ratio_at_birth;
     output->vital_interval = value.vital_rates.interval;
+    output->efficiency_sigma = value.efficiency_sigma;
     output->annual_churn = value.annual_churn;
     output->firing_adjustment = value.firing_adjustment;
     output->layoff_band = value.layoff_band;
@@ -1875,6 +1881,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.vital_rates.fertility_width = rules->fertility_width;
     value.vital_rates.sex_ratio_at_birth = rules->sex_ratio_at_birth;
     value.vital_rates.interval = rules->vital_interval;
+    value.efficiency_sigma = rules->efficiency_sigma;
     value.annual_churn = rules->annual_churn;
     value.firing_adjustment = rules->firing_adjustment;
     value.layoff_band = rules->layoff_band;

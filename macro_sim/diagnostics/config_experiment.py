@@ -638,6 +638,20 @@ def apply_native_activation_scenario(
     elif scenario == "labor_demand_contraction":
         rules.initial_expected_demand *= 4.0
         rules.demand_adjustment = 0.10
+    elif scenario == "unpartnered_marriage_market":
+        population.population.target_household_size = 1.0
+        population_rules.marriage_interval_days = 14
+        population_rules.annual_marriage_rate = 1.0
+        population_rules.annual_divorce_rate = 0.0
+    elif scenario == "eligible_peak_leaving_home":
+        population_rules.leave_home_min_age = 18
+    elif scenario == "long_horizon_peak_leaving_home":
+        population_rules.leave_home_min_age = 18
+        population_rules.annual_leave_rate_peak = 0.05
+        population_rules.annual_leave_rate_late = 0.01
+    elif scenario == "eligible_late_leaving_home":
+        population_rules.leave_home_min_age = 18
+        population_rules.leave_home_peak_end_age = 18
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules

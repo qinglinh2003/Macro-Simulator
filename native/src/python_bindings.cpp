@@ -725,6 +725,11 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(mean_household_size);
     MACRO_SIM_M7_METRIC(working_age_share);
     MACRO_SIM_M7_METRIC(dependency_ratio);
+    MACRO_SIM_M7_METRIC(mean_person_efficiency);
+    MACRO_SIM_M7_METRIC(person_efficiency_stddev);
+    MACRO_SIM_M7_METRIC(active_unions);
+    MACRO_SIM_M7_METRIC(mean_partner_age_gap);
+    MACRO_SIM_M7_METRIC(mean_partner_log_efficiency_gap);
     MACRO_SIM_M7_METRIC(participation_rate);
     MACRO_SIM_M7_METRIC(estates_settled);
     MACRO_SIM_M7_METRIC(beneficial_lots_transferred);
@@ -1914,6 +1919,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(fractional_hours);
     MACRO_SIM_BIND_M7_RULE(second_jobs);
     MACRO_SIM_BIND_M7_RULE(suspensions);
+    MACRO_SIM_BIND_M7_RULE(efficiency_sigma);
     MACRO_SIM_BIND_M7_RULE(annual_churn);
     MACRO_SIM_BIND_M7_RULE(firing_adjustment);
     MACRO_SIM_BIND_M7_RULE(layoff_band);
@@ -1955,7 +1961,11 @@ NB_MODULE(_native, module) {
         .def_rw("start_calendar_day",
                 &macro_sim::simulation::M7PopulationSpec::start_calendar_day)
         .def_rw("target_household_size",
-                &macro_sim::simulation::M7PopulationSpec::target_household_size);
+                &macro_sim::simulation::M7PopulationSpec::target_household_size)
+        .def_rw("fixed_genesis_vital_rates",
+                &macro_sim::simulation::M7PopulationSpec::fixed_genesis_vital_rates)
+        .def_rw("genesis_vital_rates",
+                &macro_sim::simulation::M7PopulationSpec::genesis_vital_rates);
     nb::class_<macro_sim::simulation::M7SimulationSpec>(module, "M7SimulationSpec")
         .def(nb::init<>())
         .def_rw("financial_economy",

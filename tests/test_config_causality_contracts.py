@@ -137,6 +137,7 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "churn_annual",
         "delta",
+        "efficiency_sigma",
         "job_search_intensity",
         "labor_fractional_hours",
         "labor_job_ladder",
@@ -156,7 +157,7 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
         "theta_wage",
         "welfare_quit_hazard",
     }
-    assert len(neutral) == 14
+    assert len(neutral) == 15
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
@@ -168,3 +169,42 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
     )
     assert accounting["route_status"] == "native_fixed"
     assert accounting["status"] == "invariance_review_required"
+
+
+def test_demography_contracts_cover_every_mapped_causal_field() -> None:
+    neutral = screening_contracts(module="demography_and_households")
+    activated = activation_contracts(module="demography_and_households")
+    assert {contract.field_name for contract in activated} == {
+        "demographic_adult_leaving_home_enabled",
+        "demographic_annual_leave_rate_late",
+        "demographic_annual_leave_rate_peak",
+        "demographic_leave_home_peak_end_age",
+        "marriage_assortativity",
+    }
+    assert {contract.field_name for contract in (*neutral, *activated)} == {
+        "demographic_adult_leaving_home_enabled",
+        "demographic_annual_divorce_rate_base",
+        "demographic_annual_leave_rate_late",
+        "demographic_annual_leave_rate_peak",
+        "demographic_annual_marriage_rate_peak",
+        "demographic_divorce_enabled",
+        "demographic_leave_home_min_age",
+        "demographic_leave_home_peak_end_age",
+        "demographic_marriage_enabled",
+        "demographic_marriage_market_interval_days",
+        "demographics_enabled",
+        "demographics_mortality_scale",
+        "demographics_tfr",
+        "marriage_assortativity",
+    }
+    assert len(neutral) == 9
+    assert all(
+        set(contract.expected_directions) <= set(contract.primary_metrics)
+        for contract in (*neutral, *activated)
+    )
+    lifecycle = next(
+        row
+        for row in build_contract_registry()["contracts"]
+        if row["field_id"] == "config.demographic_lifecycle_consumption"
+    )
+    assert lifecycle["status"] == "blocked_native_route"

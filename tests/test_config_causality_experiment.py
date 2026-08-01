@@ -8,6 +8,7 @@ from macro_sim.diagnostics.config_experiment import (
     apply_config_treatment,
     derive_analysis_metrics,
     effect_scales,
+    native_treatment_spec,
     native_world_treatment_spec,
     paired_effect,
     population_scaled_new_game,
@@ -325,6 +326,85 @@ def test_labor_demand_contraction_preserves_layoff_band() -> None:
     assert population_rules.layoff_band == pytest.approx(expected_band)
     assert rules.initial_expected_demand == pytest.approx(opening_demand * 4.0)
     assert rules.demand_adjustment == pytest.approx(0.10)
+
+
+def test_unpartnered_marriage_activation_preserves_assortativity() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=43
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = native_spec.economies[0].domestic_economy.rules
+    expected_assortativity = rules.marriage_rules.assortativity
+    apply_native_activation_scenario(
+        native_spec, scenario="unpartnered_marriage_market"
+    )
+    population = native_spec.economies[0].domestic_economy
+    rules = population.rules
+    assert population.population.target_household_size == pytest.approx(1.0)
+    assert rules.marriage_interval_days == 14
+    assert rules.annual_marriage_rate == pytest.approx(1.0)
+    assert rules.annual_divorce_rate == pytest.approx(0.0)
+    assert rules.marriage_rules.assortativity == pytest.approx(
+        expected_assortativity
+    )
+
+
+def test_mortality_treatment_preserves_genesis_age_profile() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=44
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    population = native_spec.economies[0].domestic_economy
+    genesis_makeham = population.population.genesis_vital_rates.makeham_a
+    runtime_makeham = population.rules.vital_rates.makeham_a
+    assert population.population.fixed_genesis_vital_rates is True
+    assert genesis_makeham == pytest.approx(runtime_makeham)
+
+    native_spec = native_treatment_spec(
+        baseline,
+        field="demographics_mortality_scale",
+        value=0.5,
+    )
+    population = native_spec.economies[0].domestic_economy
+    assert population.population.genesis_vital_rates.makeham_a == pytest.approx(
+        genesis_makeham
+    )
+    assert population.rules.vital_rates.makeham_a < genesis_makeham
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_peak_end"),
+    (
+        ("eligible_peak_leaving_home", 30),
+        ("eligible_late_leaving_home", 18),
+    ),
+)
+def test_leaving_home_activation_creates_an_eligible_genesis_cohort(
+    scenario: str, expected_peak_end: int
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=45
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+    rules = native_spec.economies[0].domestic_economy.rules
+    assert rules.leave_home_min_age == 18
+    assert rules.leave_home_peak_end_age == expected_peak_end
+
+
+def test_long_horizon_leaving_home_activation_preserves_survivors() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=7300, seed=45
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    apply_native_activation_scenario(
+        native_spec, scenario="long_horizon_peak_leaving_home"
+    )
+    rules = native_spec.economies[0].domestic_economy.rules
+    assert rules.leave_home_min_age == 18
+    assert rules.leave_home_peak_end_age == 30
+    assert rules.annual_leave_rate_peak == pytest.approx(0.05)
+    assert rules.annual_leave_rate_late == pytest.approx(0.01)
 
 
 def test_entry_pressure_activation_preserves_the_daily_entry_cap() -> None:

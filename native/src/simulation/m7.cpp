@@ -23,6 +23,8 @@ constexpr std::uint64_t kChurnStream = 0x4c41424f52434855ULL;
 constexpr std::uint64_t kLayoffStream = 0x4c41594f46463031ULL;
 constexpr std::uint64_t kWelfareStream = 0x57454c4641524551ULL;
 constexpr std::uint64_t kParticipationStream = 0x5041525449434950ULL;
+constexpr std::uint64_t kEfficiencyStreamA = 0x4546464943494541ULL;
+constexpr std::uint64_t kEfficiencyStreamB = 0x4546464943494542ULL;
 constexpr std::uint64_t kSecondJobStream = 0x5345434f4e444a42ULL;
 constexpr std::uint64_t kLadderStream = 0x4c41444445523031ULL;
 constexpr std::uint64_t kLadderFirmStream = 0x4c41444445523032ULL;
@@ -51,6 +53,19 @@ constexpr double kLaborTolerance = 1.0e-8;
 [[nodiscard]] double completed_age(const core::PersonRecord &person,
                                    std::int32_t day) noexcept {
     return std::max(0.0, static_cast<double>(day - person.birth_day) / kDaysPerYear);
+}
+
+[[nodiscard]] double genesis_person_efficiency(std::uint64_t seed, PersonId person,
+                                               double sigma) noexcept {
+    if (sigma <= 0.0) {
+        return 1.0;
+    }
+    const double first =
+        std::max(unit_draw(seed, person.value(), 0, kEfficiencyStreamA), 0x1.0p-53);
+    const double second = unit_draw(seed, person.value(), 0, kEfficiencyStreamB);
+    const double standard_normal =
+        std::sqrt(-2.0 * std::log(first)) * std::cos(6.28318530717958647692 * second);
+    return std::exp(-0.5 * sigma * sigma + sigma * standard_normal);
 }
 
 struct FirmLaborTotals final {
@@ -500,7 +515,8 @@ void record_head_separation(core::SeparationKind kind,
 void measure_population(const core::RootState &state, const M7Rules &rules,
                         const core::PersonStore &persons,
                         const core::HouseholdMembershipBook &membership,
-                        std::int32_t day, M7Metrics &metrics) {
+                        const core::RelationshipBook &relationships, std::int32_t day,
+                        M7Metrics &metrics) {
     metrics.population = persons.alive_count();
     std::uint64_t working = 0;
     std::uint64_t dependents = 0;
@@ -533,6 +549,45 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     metrics.dependency_ratio =
         working == 0 ? static_cast<double>(dependents)
                      : static_cast<double>(dependents) / static_cast<double>(working);
+    double efficiency_sum = 0.0;
+    double efficiency_square_sum = 0.0;
+    for (const auto id : persons.alive_ids()) {
+        const double efficiency = persons.get(id)->efficiency;
+        efficiency_sum += efficiency;
+        efficiency_square_sum += efficiency * efficiency;
+    }
+    const double population = static_cast<double>(metrics.population);
+    metrics.mean_person_efficiency =
+        population <= 0.0 ? 0.0 : efficiency_sum / population;
+    metrics.person_efficiency_stddev =
+        population <= 0.0
+            ? 0.0
+            : std::sqrt(std::max(0.0, efficiency_square_sum / population -
+                                          metrics.mean_person_efficiency *
+                                              metrics.mean_person_efficiency));
+    metrics.active_unions = 0;
+    metrics.mean_partner_age_gap = 0.0;
+    metrics.mean_partner_log_efficiency_gap = 0.0;
+    for (const auto &union_record : relationships.unions()) {
+        if (!union_record.active) {
+            continue;
+        }
+        const auto *first = persons.get(union_record.first);
+        const auto *second = persons.get(union_record.second);
+        if (first == nullptr || second == nullptr || !first->alive || !second->alive) {
+            continue;
+        }
+        ++metrics.active_unions;
+        metrics.mean_partner_age_gap +=
+            std::abs(completed_age(*first, day) - completed_age(*second, day));
+        metrics.mean_partner_log_efficiency_gap +=
+            std::abs(std::log(first->efficiency) - std::log(second->efficiency));
+    }
+    if (metrics.active_unions > 0U) {
+        const double denominator = static_cast<double>(metrics.active_unions);
+        metrics.mean_partner_age_gap /= denominator;
+        metrics.mean_partner_log_efficiency_gap /= denominator;
+    }
 }
 
 [[nodiscard]] Status transfer_household_residual(
@@ -2405,6 +2460,9 @@ class M7Extension final : public M6TickExtension {
                 if (!created.ok()) {
                     return created.status();
                 }
+                scratch_.persons_.get(*created.get_if())->efficiency =
+                    genesis_person_efficiency(state.seed, *created.get_if(),
+                                              runtime_.rules.efficiency_sigma);
                 const auto status =
                     scratch_.membership_.add(*created.get_if(), baby.household);
                 if (!status.ok()) {
@@ -2487,7 +2545,7 @@ class M7Extension final : public M6TickExtension {
         }
         ++scratch_.population_rng_counter_;
         measure_population(state, runtime_.rules, scratch_.persons_,
-                           scratch_.membership_, calendar_day,
+                           scratch_.membership_, scratch_.relationships_, calendar_day,
                            scratch_.working_metrics_);
         if (runtime_.rules.persistent_labor) {
             measure_labor(state, runtime_.rules, monetary.policy, scratch_.persons_,
@@ -2896,6 +2954,7 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.annual_divorce_rate,
         rules.annual_leave_rate_peak,
         rules.annual_leave_rate_late,
+        rules.efficiency_sigma,
     };
     if (rules.working_age < 1U || rules.retirement_age <= rules.working_age ||
         rules.retirement_age > rules.vital_rates.maximum_age ||
@@ -2913,7 +2972,8 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.prime_participation_rate > 1.0 || rules.older_participation_rate < 0.0 ||
         rules.older_participation_rate > 1.0 || rules.reservation_markup < 0.0 ||
         rules.welfare_quit_hazard < 0.0 || rules.welfare_quit_hazard > 1.0 ||
-        rules.family_transfer_buffer < 1.0 ||
+        rules.family_transfer_buffer < 1.0 || rules.efficiency_sigma < 0.0 ||
+        rules.efficiency_sigma > 2.0 ||
         (rules.family_transfers && !rules.relationships) ||
         rules.marriage_interval_days == 0 || rules.annual_marriage_rate < 0.0 ||
         rules.annual_marriage_rate > 1.0 || rules.annual_divorce_rate < 0.0 ||
@@ -2946,6 +3006,9 @@ Status validate_m7_population_spec(const M7PopulationSpec &population) noexcept 
             static_cast<double>(population.initial_persons)) {
         return Status(ErrorCode::invalid_argument,
                       "M7 population specification is invalid");
+    }
+    if (population.fixed_genesis_vital_rates) {
+        return validate_vital_rates(population.genesis_vital_rates);
     }
     return Status::success();
 }
@@ -3081,12 +3144,15 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
     runtime.current_calendar_day = spec.population.start_calendar_day;
     runtime.firm_target_ema.resize(
         static_cast<std::size_t>(financial.root.firms.allocator_state().next_id), 0.0);
-    const auto age_weights = stable_age_weights(spec.rules.vital_rates);
+    const auto &genesis_vital_rates = spec.population.fixed_genesis_vital_rates
+                                          ? spec.population.genesis_vital_rates
+                                          : spec.rules.vital_rates;
+    const auto age_weights = stable_age_weights(genesis_vital_rates);
     if (age_weights.empty()) {
         return Status(ErrorCode::invalid_argument,
                       "M7 stable age distribution is invalid");
     }
-    const auto female_share = algorithms::female_birth_share(spec.rules.vital_rates);
+    const auto female_share = algorithms::female_birth_share(genesis_vital_rates);
     if (!female_share.ok()) {
         return female_share.status();
     }
@@ -3125,6 +3191,8 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         }
         const auto person_id = *created.get_if();
         auto *stored = runtime.persons.get(person_id);
+        stored->efficiency = genesis_person_efficiency(financial.root.seed, person_id,
+                                                       runtime.rules.efficiency_sigma);
         const bool working_age =
             age >= spec.rules.working_age && age < spec.rules.retirement_age;
         stored->participating = working_age && structurally_participates(
@@ -3294,8 +3362,8 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         }
     }
     measure_population(financial.root, runtime.rules, runtime.persons,
-                       runtime.membership, runtime.current_calendar_day,
-                       runtime.last_metrics);
+                       runtime.membership, runtime.relationships,
+                       runtime.current_calendar_day, runtime.last_metrics);
     runtime.last_metrics.beneficial_projection_error =
         beneficial_projection_error(runtime.beneficial_ownership);
     const auto state_status = validate_m7_state(

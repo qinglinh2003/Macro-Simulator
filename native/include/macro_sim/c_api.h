@@ -508,6 +508,7 @@ typedef struct macro_sim_m7_rules {
     double fertility_width;
     double sex_ratio_at_birth;
     double vital_interval;
+    double efficiency_sigma;
     double annual_churn;
     double firing_adjustment;
     double layoff_band;
@@ -541,6 +542,11 @@ typedef struct macro_sim_m7_metrics {
     double mean_household_size;
     double working_age_share;
     double dependency_ratio;
+    double mean_person_efficiency;
+    double person_efficiency_stddev;
+    uint64_t active_unions;
+    double mean_partner_age_gap;
+    double mean_partner_log_efficiency_gap;
     double participation_rate;
     uint64_t estates_settled;
     uint64_t beneficial_lots_transferred;

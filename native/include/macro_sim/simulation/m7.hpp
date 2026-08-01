@@ -32,6 +32,7 @@ struct M7Rules final {
     bool fractional_hours{true};
     bool second_jobs{true};
     bool suspensions{true};
+    double efficiency_sigma{0.35};
     double annual_churn{0.28};
     double firing_adjustment{0.03};
     double layoff_band{0.05};
@@ -73,6 +74,8 @@ struct M7PopulationSpec final {
     std::uint64_t initial_persons{100};
     std::int32_t start_calendar_day{0};
     double target_household_size{2.5};
+    bool fixed_genesis_vital_rates{false};
+    algorithms::VitalRates genesis_vital_rates{};
 };
 
 struct M7SimulationSpec final {
@@ -121,6 +124,11 @@ struct M7Metrics final {
     double mean_household_size{0.0};
     double working_age_share{0.0};
     double dependency_ratio{0.0};
+    double mean_person_efficiency{0.0};
+    double person_efficiency_stddev{0.0};
+    std::uint64_t active_unions{0};
+    double mean_partner_age_gap{0.0};
+    double mean_partner_log_efficiency_gap{0.0};
     double participation_rate{0.0};
     std::uint64_t estates_settled{0};
     std::uint64_t beneficial_lots_transferred{0};

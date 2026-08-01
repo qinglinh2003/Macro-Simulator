@@ -357,6 +357,18 @@ def test_labor_capability_disable_cascades_are_valid_and_explicit() -> None:
     assert without_relationship_wages.labor_job_ladder is False
 
 
+def test_demography_disable_cascade_closes_lifecycle_events() -> None:
+    config = apply_config_treatment(
+        [NewGameSpec.default().configs()[0]],
+        field="demographics_enabled",
+        value=False,
+    )[0]
+    assert config.demographic_lifecycle_consumption is False
+    assert config.demographic_marriage_enabled is False
+    assert config.demographic_divorce_enabled is False
+    assert config.demographic_adult_leaving_home_enabled is False
+
+
 def test_config_experiment_bridge_routes_complete_world_rules() -> None:
     configs = NewGameSpec.default(seed=53).configs()[:2]
     world = build_world_spec_from_configs(

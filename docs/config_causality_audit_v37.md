@@ -595,12 +595,12 @@ allocation. These are implementation gaps, not small elasticities.
 
 ### 8.8 Labor-market screen
 
-The labor inventory contains 26 Config fields. Twenty have native causal
-routes and reviewed contracts: 14 neutral-baseline treatments and six
-conditional treatments. Three fields (`efficiency_sigma`,
-`suspension_quit_discount`, and `wage_indexation`) remain blocked native routes.
-The remaining three are deliberate native invariants: persistent labor
-accounting, explicit matching, and person-level efficiency.
+The labor inventory contains 26 Config fields. Twenty-one have native causal
+routes and reviewed contracts: 15 neutral-baseline treatments and six
+conditional treatments. Two fields (`suspension_quit_discount` and
+`wage_indexation`) remain blocked native routes. The remaining three are
+deliberate native invariants: persistent labor accounting, explicit matching,
+and person-level efficiency.
 
 `labor_accounting=false` cannot be treated as an ordinary all-module ablation.
 The current energy, payroll, and household projections require persistent
@@ -608,7 +608,7 @@ person-job records, so disabling that vertical while retaining downstream
 modules is not a coherent playable economy. It is now classified as a fixed
 engine architecture choice rather than credited with a causal effect.
 
-The final evidence set covers 168 native worlds at 100,000 persons. The core
+The final evidence set covers 180 native worlds at 100,000 persons. The core
 neutral and conditional screens use four paired seeds, 90 days, a 22-day
 burn-in, and eight workers. One-year paired runs resolve the wage-downward-
 adjustment extremes. Every final run passed the native stability gates.
@@ -622,6 +622,14 @@ invalid projection, and a native regression preserves this rule.
 
 Current findings:
 
+- `efficiency_sigma` now owns a complete native route instead of silently
+  leaving every person at efficiency one. Genesis residents and newborns draw
+  deterministic mean-normalized lognormal efficiency, and the engine publishes
+  its mean and standard deviation. At 100,000 persons, setting sigma to zero
+  removes all dispersion; raising it from 0.35 to 0.70 raises the standard
+  deviation by about 120.5%, while mean efficiency remains statistically
+  unchanged near one. This also supplies the heterogeneity required by
+  assortative marriage.
 - Annual exogenous churn is strongly live. Moving `churn_annual` from 0.28 to
   0.14 / 0.42 changes 90-day churn separations by about -54.5% / +66.3%.
   Search intensity is also monotonic: 0.075 / 0.30 changes cumulative hires by
@@ -683,6 +691,69 @@ The labor screen therefore distinguishes three different problems that a raw
 default thresholds suppress all events, and live coefficients whose accepted
 range is economically too weak or too destructive. Calibration must repair the
 latter two without weakening the native state invariants.
+
+### 8.9 Demography and household-lifecycle screen
+
+The demography inventory currently has 14 executable Config contracts. The
+core final screen covers 96 native worlds at 100,000 persons: four paired seeds,
+365 days, and eight native workers. Age-threshold contracts use separate
+lifecycle horizons because a one-year screen cannot identify the age at which a
+child leaves home.
+
+The screen found and repaired two causal-identification defects before crediting
+any result. First, changing mortality also changed the stable genesis age
+distribution, so lower mortality created an older opening population and could
+raise near-term deaths. Experiments now freeze genesis vital rates and vary only
+runtime hazards. Second, every native person previously had efficiency one,
+making the marriage-assortativity coefficient mathematically silent. The new
+person-efficiency route and observables separate this matching mechanism from
+marriage incidence.
+
+Current findings:
+
+- Fertility and mortality are live with clean directions. Moving total
+  fertility from 1.6 to 1.0 / 2.2 changes annual births by about -37.4% /
+  +37.7%. Moving the mortality multiplier from 0.85 to 0.50 / 1.50 changes
+  deaths by about -36.4% / +66.0%. Disabling the legacy demographics package
+  removes both flows and now consistently disables its dependent marriage,
+  divorce, and leaving-home capabilities.
+- Marriage and divorce incidence respond almost proportionally to their annual
+  hazards. Halving/doubling the marriage rate changes new marriages by about
+  -50.0% / +101.5%; halving/doubling the divorce rate changes divorces by about
+  -48.8% / +94.0%. Disabling either capability removes its corresponding event
+  flow.
+- `demographic_marriage_market_interval_days` is not an economic gameplay
+  parameter. Moving the clearing cadence from 30 days to 14 / 90 days changes
+  annual marriage incidence by only about +0.84% / +0.15%, with both intervals
+  unresolved. Its hazard is already interval-adjusted, so this field is now
+  treated as a numerical-cadence equivalence contract rather than a required
+  nonzero causal effect.
+- Assortative matching is strongly live without changing the number of
+  marriages materially. Setting its weight from 1 to zero raises the mean
+  absolute partner log-efficiency gap by about 893%; raising it to four lowers
+  that gap by about 48.5%. Both four-seed intervals exclude zero. The mechanism
+  changes who marries whom, not the aggregate marriage hazard.
+- Leaving-home capabilities and rates are live under an eligible-cohort
+  scenario. Disabling the capability removes all departures. Halving/doubling
+  the late-age hazard changes departures by about -43.9% / +90.1%; the same
+  treatment on the peak-age hazard changes them by about -49.6% / +83.2%.
+- The minimum leaving age requires a long horizon but is highly salient: in a
+  provisional ten-year 100,000-person run, moving the threshold from 21 to 18
+  raises cumulative departures by about 558%, while moving it to 26 lowers them
+  by about 95%. Multi-seed confirmation remains required.
+- The endpoint of the peak leaving-age band is live but weak. The original
+  ten-year design was invalid because no genesis child crossed the 30/35-year
+  endpoints. In a corrected twenty-year eligible-cohort scenario with lower
+  shared departure hazards, moving the endpoint from 30 to 26 / 35 changes
+  cumulative departures by about -2.64% / +1.45%. These are single-seed
+  mechanism checks, not confidence-qualified estimates; the field is unlikely
+  to merit a prominent gameplay control at its current salience.
+
+`demographic_lifecycle_consumption` remains a real semantic native gap. The
+Python Config defines finite-life consumption budgeting, while its historical
+native assignment only toggled household moves after marriage, divorce, and
+leaving home. The audit now blocks this field instead of falsely crediting that
+unrelated assignment as an implemented route.
 
 ## 9. Execution gates
 

@@ -266,6 +266,7 @@ M7_RULE_FIELDS = {
     "fractional_hours": "labor_fractional_hours",
     "second_jobs": "labor_second_job",
     "suspensions": "labor_suspension",
+    "efficiency_sigma": "efficiency_sigma",
     "annual_churn": "churn_annual",
     "firing_adjustment": "lambda_fire",
     "layoff_band": "layoff_band",
@@ -559,6 +560,8 @@ def _m8_spec(
     vital.makeham_a *= float(cfg.demographics_mortality_scale)
     vital.gompertz_b *= float(cfg.demographics_mortality_scale)
     population.rules.vital_rates = vital
+    population.population.fixed_genesis_vital_rates = True
+    population.population.genesis_vital_rates = vital
     marriage = population.rules.marriage_rules
     marriage.assortativity = float(cfg.marriage_assortativity)
     population.rules.marriage_rules = marriage

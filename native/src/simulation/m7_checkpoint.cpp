@@ -143,6 +143,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.fractional_hours,
         value.second_jobs,
         value.suspensions,
+        value.efficiency_sigma,
         value.annual_churn,
         value.firing_adjustment,
         value.layoff_band,
@@ -184,7 +185,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 42U) {
+    if (!row.is_array() || row.size() != 43U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -198,6 +199,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.fractional_hours = row[index++].get<bool>();
     value.second_jobs = row[index++].get<bool>();
     value.suspensions = row[index++].get<bool>();
+    value.efficiency_sigma = row[index++].get<double>();
     value.annual_churn = row[index++].get<double>();
     value.firing_adjustment = row[index++].get<double>();
     value.layoff_band = row[index++].get<double>();
@@ -368,6 +370,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.mean_household_size,
         value.working_age_share,
         value.dependency_ratio,
+        value.mean_person_efficiency,
+        value.person_efficiency_stddev,
+        value.active_unions,
+        value.mean_partner_age_gap,
+        value.mean_partner_log_efficiency_gap,
         value.participation_rate,
         value.estates_settled,
         value.beneficial_lots_transferred,
@@ -414,7 +421,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 49U) {
+    if (!row.is_array() || row.size() != 54U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -425,6 +432,11 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.mean_household_size = row[index++].get<double>();
     value.working_age_share = row[index++].get<double>();
     value.dependency_ratio = row[index++].get<double>();
+    value.mean_person_efficiency = row[index++].get<double>();
+    value.person_efficiency_stddev = row[index++].get<double>();
+    value.active_unions = row[index++].get<std::uint64_t>();
+    value.mean_partner_age_gap = row[index++].get<double>();
+    value.mean_partner_log_efficiency_gap = row[index++].get<double>();
     value.participation_rate = row[index++].get<double>();
     value.estates_settled = row[index++].get<std::uint64_t>();
     value.beneficial_lots_transferred = row[index++].get<std::uint64_t>();

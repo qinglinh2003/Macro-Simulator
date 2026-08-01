@@ -49,7 +49,10 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
     }
     expected = {
         "alpha1": "consumption_prices_and_expectations",
+        "bank_relationship_lock_in": "banking_and_credit",
         "delta": "labor_market",
+        "energy_mortality_gamma": "energy",
+        "housing_fertility_elasticity": "housing",
         "labor_relationship_wages": "labor_market",
         "lambda_p": "securities_and_capital_markets",
         "monetary_direct_transmission": "banking_and_credit",
@@ -63,3 +66,13 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         field_name: rows[field_name]["module"]
         for field_name in expected
     } == expected
+
+
+def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -> None:
+    rows = {
+        row["id"]: row for row in build_audit_inventory()["rows"]
+    }
+    lifecycle = rows["config.demographic_lifecycle_consumption"]
+    assert lifecycle["route_status"] == "missing_native_route"
+    assert lifecycle["experiment_role"] == "repair_before_experiment"
+    assert "finite-life consumption" in lifecycle["route_note"]

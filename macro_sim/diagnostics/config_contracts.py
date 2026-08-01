@@ -66,6 +66,8 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.poverty_rate",
     ),
     "labor_market": (
+        "metric.source.m7.mean_person_efficiency",
+        "metric.source.m7.person_efficiency_stddev",
         "metric.source.m7.participation_rate",
         "metric.source.m7.employed_fte",
         "metric.source.m7.out_of_labor_force",
@@ -88,6 +90,27 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.underemployed_share",
         "metric.economy.avg_wage",
         "metric.economy.real_output",
+    ),
+    "demography_and_households": (
+        "metric.source.m7.population",
+        "metric.source.m7.mean_person_efficiency",
+        "metric.source.m7.person_efficiency_stddev",
+        "metric.source.m7.births",
+        "metric.source.m7.deaths",
+        "metric.source.m7.households_with_members",
+        "metric.source.m7.mean_household_size",
+        "metric.source.m7.working_age_share",
+        "metric.source.m7.dependency_ratio",
+        "metric.source.m7.active_unions",
+        "metric.source.m7.mean_partner_age_gap",
+        "metric.source.m7.mean_partner_log_efficiency_gap",
+        "metric.source.m7.marriages",
+        "metric.source.m7.divorces",
+        "metric.source.m7.widowhoods",
+        "metric.source.m7.leaving_home_events",
+        "metric.economy.na.household_consumption_real",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
     ),
     "distribution_and_welfare": (
         "metric.economy.poverty_rate",
@@ -533,6 +556,7 @@ def _consumption_contracts() -> Mapping[str, Mapping[str, Any]]:
 
 
 def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
+    efficiency_dispersion = "metric.source.m7.person_efficiency_stddev"
     participation = "metric.source.m7.participation_rate"
     hires = "metric.source.m7.hires"
     churn = "metric.source.m7.churn_separations"
@@ -556,6 +580,12 @@ def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
             "values": (0.0, 0.0099),
             "directions": {wage: "decrease"},
             "rationale": "Faster downward wage adjustment should reduce posted and relationship wages when firms face labor surplus; employment and output are equilibrium trade-offs.",
+        },
+        "config.efficiency_sigma": {
+            "status": "screening_ready",
+            "values": (0.0, 0.70),
+            "directions": {efficiency_dispersion: "increase"},
+            "rationale": "The standard deviation of permanent lognormal person efficiency should increase with its genesis dispersion parameter while mean efficiency remains normalized near one. Output, wages, sorting, and employment are equilibrium spillovers.",
         },
         "config.job_search_intensity": {
             "status": "screening_ready",
@@ -688,11 +718,129 @@ def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
+    births = "metric.source.m7.births"
+    deaths = "metric.source.m7.deaths"
+    marriages = "metric.source.m7.marriages"
+    divorces = "metric.source.m7.divorces"
+    leaving = "metric.source.m7.leaving_home_events"
+    partner_efficiency_gap = (
+        "metric.source.m7.mean_partner_log_efficiency_gap"
+    )
+    return {
+        "config.demographic_adult_leaving_home_enabled": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {leaving: "decrease"},
+            "statistics": {leaving: "cumulative"},
+            "activation": "eligible_peak_leaving_home",
+            "rationale": "A shared minimum eligibility age of 18 exposes the oldest genesis children within one year. Disabling adult household formation should then remove departures and reduce the creation of one-person households.",
+        },
+        "config.demographic_annual_divorce_rate_base": {
+            "status": "screening_ready",
+            "values": (0.006, 0.024),
+            "directions": {divorces: "increase"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "A higher annual union-dissolution hazard should raise cumulative divorces while exposing household-size, housing, consumption, and labor spillovers.",
+        },
+        "config.demographic_annual_leave_rate_late": {
+            "status": "activation_scenario_required",
+            "values": (0.025, 0.10),
+            "directions": {leaving: "increase"},
+            "statistics": {leaving: "cumulative"},
+            "activation": "eligible_late_leaving_home",
+            "rationale": "A shared eligibility and peak-end age of 18 exposes the oldest genesis children directly to the late departure hazard. A higher rate should raise cumulative household formation.",
+        },
+        "config.demographic_annual_leave_rate_peak": {
+            "status": "activation_scenario_required",
+            "values": (0.125, 0.50),
+            "directions": {leaving: "increase"},
+            "statistics": {leaving: "cumulative"},
+            "activation": "eligible_peak_leaving_home",
+            "rationale": "A shared minimum eligibility age of 18 places the oldest genesis children in the peak band within one year. A higher departure hazard should raise cumulative household formation.",
+        },
+        "config.demographic_annual_marriage_rate_peak": {
+            "status": "screening_ready",
+            "values": (0.15, 0.60),
+            "directions": {marriages: "increase"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "A higher annual acceptance hazard in the marriage market should raise cumulative new unions over a fixed year.",
+        },
+        "config.demographic_divorce_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {divorces: "decrease"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "Disabling divorce should remove union-dissolution events while retaining mortality-driven widowhood as a separate mechanism.",
+        },
+        "config.demographic_leave_home_min_age": {
+            "status": "screening_ready",
+            "values": (18, 26),
+            "directions": {leaving: "decrease"},
+            "statistics": {leaving: "cumulative"},
+            "horizon_days": 3650,
+            "rationale": "A higher eligibility age should reduce the stock of co-resident adult children able to establish a new household.",
+        },
+        "config.demographic_leave_home_peak_end_age": {
+            "status": "activation_scenario_required",
+            "values": (26, 35),
+            "directions": {leaving: "increase"},
+            "statistics": {leaving: "cumulative"},
+            "activation": "long_horizon_peak_leaving_home",
+            "horizon_days": 7300,
+            "rationale": "A shared minimum age of 18 and lower common departure hazards preserve enough co-resident children to cross the alternative peak-band endpoints over twenty years. Because the peak rate exceeds the late rate, extending the band should raise cumulative departures.",
+        },
+        "config.demographic_marriage_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {marriages: "decrease"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "Disabling marriage should remove newly formed unions without suppressing the dissolution of unions created at genesis.",
+        },
+        "config.demographic_marriage_market_interval_days": {
+            "status": "screening_ready",
+            "values": (14, 90),
+            "directions": {marriages: "invariance"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "This is a numerical market-clearing cadence rather than an economic intensity: the annual acceptance hazard is interval-adjusted, so cumulative marriage incidence should remain equivalent apart from finite-sample timing noise. It is not a gameplay lever.",
+        },
+        "config.demographics_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {births: "decrease", deaths: "decrease"},
+            "statistics": {births: "cumulative", deaths: "cumulative"},
+            "rationale": "The legacy master switch closes vital events and dependent person-level capabilities. Its broad effects are interpreted as a capability package, not as pure fertility or mortality coefficients.",
+        },
+        "config.demographics_mortality_scale": {
+            "status": "screening_ready",
+            "values": (0.50, 1.50),
+            "directions": {deaths: "increase"},
+            "statistics": {deaths: "cumulative"},
+            "rationale": "Scaling the Makeham and Gompertz hazards upward should raise cumulative deaths and change dependency, estates, labor supply, and consumption.",
+        },
+        "config.demographics_tfr": {
+            "status": "screening_ready",
+            "values": (1.0, 2.2),
+            "directions": {births: "increase"},
+            "statistics": {births: "cumulative"},
+            "rationale": "A higher total fertility rate should raise cumulative births, with population and dependency effects emerging over longer horizons.",
+        },
+        "config.marriage_assortativity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 4.0),
+            "directions": {partner_efficiency_gap: "decrease"},
+            "activation": "unpartnered_marriage_market",
+            "rationale": "A shared one-person-household genesis removes pre-existing unions and activates a common marriage market. A higher efficiency-similarity weight should reduce the mean absolute log-efficiency gap within active couples, potentially trading off against age similarity.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
     **_consumption_contracts(),
     **_labor_contracts(),
+    **_demography_contracts(),
 }
 
 

@@ -168,6 +168,17 @@ PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
     "config.symmetric_k": "obsolete alternative capital formulation",
 }
 
+# These fields reach a native member with a different economic meaning. A
+# syntactic assignment is not sufficient evidence of an implemented Config
+# route, so they remain repair work until the intended mechanism exists.
+INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
+    "config.demographic_lifecycle_consumption": (
+        "Config defines a finite-life consumption budget, while the native "
+        "member currently controls household moves after marriage, divorce, "
+        "and leaving home"
+    ),
+}
+
 
 SCALE_FIELDS = frozenset(
     {
@@ -187,6 +198,7 @@ SCALE_FIELDS = frozenset(
 # assigned reliably with token matching. Keep their economic owner explicit so
 # a field is reviewed with the mechanism that actually reads it in C++.
 FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
+    "bank_relationship_lock_in": "banking_and_credit",
     "alpha1": "consumption_prices_and_expectations",
     "alpha2": "consumption_prices_and_expectations",
     "consumption_rationed_signal": "consumption_prices_and_expectations",
@@ -205,6 +217,11 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "lambda_fire": "labor_market",
     "labor_relationship_wages": "labor_market",
     "omega": "labor_market",
+    "energy_mortality_gamma": "energy",
+    "energy_mortality_mult_hi": "energy",
+    "housing_fertility_elasticity": "housing",
+    "housing_fertility_mult_hi": "housing",
+    "housing_fertility_mult_lo": "housing",
     "founder_owned_genesis": "securities_and_capital_markets",
     "index_startup": "securities_and_capital_markets",
     "lambda_p": "securities_and_capital_markets",
@@ -354,6 +371,14 @@ def _route_for(row: Mapping[str, Any]) -> Route:
     if field_id in PLANNED_REMOVAL_FIELDS:
         return Route(
             "planned_removal", note=PLANNED_REMOVAL_FIELDS[field_id]
+        )
+    if field_id in INCOMPLETE_NATIVE_ROUTE_FIELDS:
+        targets = _source_routes(name, NATIVE_RULE_MAPS)
+        targets += MANUAL_CONFIG_ROUTES.get(name, ())
+        return Route(
+            "missing_native_route",
+            tuple(sorted(set(targets))),
+            INCOMPLETE_NATIVE_ROUTE_FIELDS[field_id],
         )
     if declaring_type == "Config":
         targets = _source_routes(name, NATIVE_RULE_MAPS)
