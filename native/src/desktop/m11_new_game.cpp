@@ -34,14 +34,15 @@ struct Profile final {
     double fertility{2.0};
     double mortality_scale{1.0};
     double energy_productivity{1.0};
+    double necessity_share{0.50};
 };
 
 [[nodiscard]] const Profile *profile(std::string_view name) noexcept {
     static constexpr Profile symmetric{};
-    static constexpr Profile advanced{1.20, 1.0, 0.012, 1.6, 0.85, 1.05};
-    static constexpr Profile developing{0.75, 1.5, 0.030, 2.4, 1.20, 1.0};
-    static constexpr Profile entrepot{1.15, 0.4, 0.018, 1.3, 0.80, 0.85};
-    static constexpr Profile petrostate{0.85, 0.8, 0.010, 2.2, 0.90, 1.40};
+    static constexpr Profile advanced{1.20, 1.0, 0.012, 1.6, 0.85, 1.05, 0.50};
+    static constexpr Profile developing{0.75, 1.5, 0.030, 2.4, 1.20, 1.0, 0.65};
+    static constexpr Profile entrepot{1.15, 0.4, 0.018, 1.3, 0.80, 0.85, 0.50};
+    static constexpr Profile petrostate{0.85, 0.8, 0.010, 2.2, 0.90, 1.40, 0.50};
     if (name == "symmetric" || name == "custom") {
         return &symmetric;
     }
@@ -363,6 +364,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     financial.rules.bank_equity_trading = true;
     financial.rules.bank_equity_lambda = 0.0019;
     financial.rules.bank_dynamics = true;
+    financial.rules.household_equity_target = 0.30;
     population.rules.fertility = true;
     population.rules.mortality = true;
     population.rules.persistent_labor = true;
@@ -382,6 +384,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.leaving_home = true;
     population.rules.annual_marriage_rate = 0.30;
     population.rules.annual_divorce_rate = 0.012;
+    population.rules.marriage_rules.assortativity = 1.0;
     spec.energy_rules.enabled = true;
     spec.energy_rules.household_energy = true;
     spec.energy_rules.deprivation = true;
@@ -558,6 +561,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
     if (!assign_number("a", real.rules.linear_productivity) ||
         !assign_number("a_K", real.rules.capital_productivity) ||
         !assign_number("alpha", real.rules.capital_share) ||
+        !assign_number("necessity_share0", financial.rules.initial_necessity_share) ||
         !assign_number("tfp_drift_rate", real.rules.annual_tfp_growth)) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country number is invalid");
@@ -804,6 +808,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         real.rules.linear_productivity *= selected_profile->productivity;
         real.rules.capital_productivity *= selected_profile->productivity;
         real.rules.annual_tfp_growth = selected_profile->tfp_growth;
+        financial.rules.initial_necessity_share = selected_profile->necessity_share;
         monetary.rules.bank_count = base_banks;
         population.population.initial_persons = real.households;
         population.population.start_calendar_day = *ordinal;

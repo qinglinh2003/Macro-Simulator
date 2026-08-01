@@ -96,8 +96,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.household_bankruptcy = row.at("household_bankruptcy").get<bool>();
     value.bank_resolution_fund = row.at("bank_resolution_fund").get<bool>();
     value.bank_minimum_capital = row.at("bank_minimum_capital").get<double>();
-    value.bankrupt_persistence =
-        row.at("bankrupt_persistence").get<std::uint32_t>();
+    value.bankrupt_persistence = row.at("bankrupt_persistence").get<std::uint32_t>();
     value.regulatory_capital_haircut =
         row.at("regulatory_capital_haircut").get<double>();
     value.regulatory_inventory_haircut =
@@ -122,8 +121,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"chartist_weight", value.chartist_weight},
         {"household_equity_target", value.household_equity_target},
         {"portfolio_adjustment", value.portfolio_adjustment},
-        {"portfolio_review_interval_days",
-         value.portfolio_review_interval_days},
+        {"portfolio_review_interval_days", value.portfolio_review_interval_days},
         {"equity_finance", value.equity_finance},
         {"equity_issue_lambda", value.equity_issue_lambda},
         {"margin_credit", value.margin_credit},
@@ -147,6 +145,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"k_entry_demand", value.k_entry_demand},
         {"k_entry_hazard", value.k_entry_hazard},
         {"consumption_strata", value.consumption_strata},
+        {"initial_necessity_share", value.initial_necessity_share},
         {"sector_switching", value.sector_switching},
         {"switch_return_gap", value.switch_return_gap},
         {"switch_pressure_days", value.switch_pressure_days},
@@ -205,6 +204,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(k_entry_demand, double);
     M6_RULE(k_entry_hazard, double);
     M6_RULE(consumption_strata, bool);
+    M6_RULE(initial_necessity_share, double);
     M6_RULE(sector_switching, bool);
     M6_RULE(switch_return_gap, double);
     M6_RULE(switch_pressure_days, std::uint32_t);
@@ -496,8 +496,7 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
         if (!row.is_array() || row.size() != 8) {
             throw std::runtime_error("invalid M6 security lot");
         }
-        const auto expected_id =
-            static_cast<std::uint64_t>(lots.size()) + 1U;
+        const auto expected_id = static_cast<std::uint64_t>(lots.size()) + 1U;
         if (row[0].get<std::uint64_t>() != expected_id) {
             throw std::runtime_error("invalid M6 security lot identity");
         }

@@ -17,6 +17,7 @@ compile_commands.json
 /outputs/
 /diagnostic.png
 /artifacts/diagnostics/
+/artifacts/config-audit/
 /artifacts/migration/*
 !/artifacts/migration/README.md
 

@@ -449,6 +449,32 @@ void test_capital_firms_are_not_idle_consumption_shells() {
     }
 }
 
+void test_genesis_respects_initial_necessity_share() {
+    auto spec = base_spec();
+    spec.rules.initial_necessity_share = 0.66;
+    auto harness = build(spec);
+    std::uint64_t necessity = 0U;
+    std::uint64_t luxury = 0U;
+    harness.root.firms.for_each_alive([&](FirmId id,
+                                          const macro_sim::core::FirmComponent &firm) {
+        if (firm.sector != macro_sim::core::FirmSector::consumption) {
+            return;
+        }
+        const auto &lifecycle =
+            harness.runtime.firms[static_cast<std::size_t>(id.value())];
+        if (lifecycle.stratum == macro_sim::simulation::ConsumptionStratum::necessity) {
+            ++necessity;
+        } else {
+            ++luxury;
+        }
+    });
+    assert(necessity == 4U);
+    assert(luxury == 2U);
+
+    spec.rules.initial_necessity_share = 1.01;
+    assert(!macro_sim::simulation::build_m6_genesis(spec).ok());
+}
+
 void test_firm_dividends_follow_equity_ownership() {
     auto spec = base_spec();
     auto &fiscal = spec.monetary_economy.policy;
@@ -720,6 +746,7 @@ int main() {
     test_bank_entry_uses_post_extension_founder_cash();
     test_firm_entry_uses_post_extension_founder_cash();
     test_capital_firms_are_not_idle_consumption_shells();
+    test_genesis_respects_initial_necessity_share();
     test_firm_dividends_follow_equity_ownership();
     test_wealth_tax_base_includes_securities_and_subtracts_debt();
     test_capital_firm_entry_responds_to_sector_capacity_pressure();

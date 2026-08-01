@@ -1,0 +1,616 @@
+# Config causality and calibration audit v37
+
+Status: P0 inventory and P1 harness complete; P2 production complete and firm screen in progress  
+Scope: the latest native C++ engine, not a historical Python model  
+Branch: `audit/config-causality-v37`
+
+## 1. Objective
+
+This audit establishes that every player-relevant immutable Config input has a
+real, directionally plausible, measurable effect in the native economic engine.
+It precedes the Policy audit so that genesis conditions, institutional
+capabilities, structural assumptions, live policy levers, shocks, and numerical
+controls are not mixed into one experiment.
+
+The final deliverable is not merely a sensitivity table. It is a causal contract
+for every Config field:
+
+1. the field reaches the native engine;
+2. the field changes the mechanism stated in its economic definition;
+3. the primary effect has the expected sign and a plausible magnitude;
+4. important spillovers and trade-offs are observable;
+5. the effect is robust across seeds, horizons, and large populations;
+6. the field is either meaningful to players or deliberately hidden as an
+   implementation control.
+
+## 2. Meaning of "all modules enabled"
+
+The playable baseline enables every completed, mutually compatible economic
+module. It does not enable every boolean in the repository.
+
+Some booleans select alternative model formulations, activate stress-only
+mechanisms, or control diagnostics. Enabling all of them simultaneously would
+not represent a neutral economy and can make causal attribution impossible.
+
+The current baseline requires the following module families:
+
+| Module family | Required baseline capabilities |
+|---|---|
+| Firms and accounts | full P&L, priced balance sheets, capital-service pricing |
+| Firm dynamics | entry, exit, subscale exit, capital-firm entry |
+| Banking and credit | banks, realized P&L, household credit, relationship lending |
+| Interbank and runs | interbank market and bank-run mechanism |
+| Securities | government bonds, firm equity, equity finance |
+| Public sector | government and national accounts |
+| Demography | fertility, mortality, household lifecycle, family transfers |
+| Labor | persistent matching, fractional hours, second jobs, suspensions, search friction, relationship wages, job ladder, efficiency, participation |
+| Housing | registry, resale, mortgages, underwriting, rental, construction |
+| Energy | producers, household energy use, deprivation gauges |
+| Distribution | consumption strata and sector switching |
+| Open economy | trade, capital flows, and migration |
+
+The static gate currently passes for all required module families and for all
+three built-in country profiles.
+
+The following examples are intentionally not part of the all-on baseline:
+
+- `consumption_rationed_signal`: a stress experiment. Genesis stockouts can
+  otherwise become a persistent demand shock.
+- `symmetric_k`: an alternative capital formulation, not an additive module.
+- `deposit_interest_arrears`: a contract treatment that needs its own banking
+  stress scenario before becoming a baseline choice.
+- `couple`: an internal world coupling state derived from open-economy
+  capabilities, not a player-facing switch.
+
+Every such exception must have an explicit disposition and activation test.
+
+## 3. Canonical Config surface
+
+The canonical M0 inventory contains 455 immutable inputs:
+
+| Declaring type | Fields |
+|---|---:|
+| `Config` | 370 |
+| `LifecycleHouseholdConfig` | 4 |
+| `RelationshipConfig` | 12 |
+| `SocialDynamicsConfig` | 35 |
+| `World` | 34 |
+
+The audit first separates these fields by ownership:
+
+| Ownership | Meaning | Dynamic test |
+|---|---|---|
+| Gameplay structure / physics | immutable economic mechanism or behavior | causal treatment |
+| Policy seed | initial value of a runtime Policy lever | excluded; tested in Policy audit |
+| Shock | exogenous intervention definition | excluded; tested in Shock audit |
+| Scale | population or institution count | scale-invariance and density test |
+| Genesis transient | opening balance, price, stock, or expectation | convergence and washout test |
+| Numerical / observability | tolerance, reconciliation, history, run control | invariance and reliability test |
+
+The adjudicated P0 inventory reports:
+
+| Disposition | Fields |
+|---|---:|
+| Native route confirmed | 219 |
+| Native route missing or incomplete | 75 |
+| Policy-owned; defer to Policy audit | 108 |
+| Shock-owned; defer to Shock audit | 4 |
+| Numerical or observability invariance | 18 |
+| Deliberately fixed in the native engine | 11 |
+| Superseded compatibility names | 16 |
+| Derived values | 2 |
+| Run control | 1 |
+| Planned removal | 1 |
+
+The 75 missing or incomplete routes are real implementation work; they are not
+allowed to enter a dynamic run and be reported as small elasticities. The other
+non-routed fields have been marked as exactly one of:
+
+- `real_gap`: missing or incomplete native implementation;
+- `native_fixed`: the latest engine deliberately fixes the behavior;
+- `derived`: computed from other inputs and invalid as an independent treatment;
+- `superseded`: retained compatibility name replaced by a canonical field;
+- `run_control`: duration, seed, clock, or diagnostics rather than economics;
+- `remove`: obsolete surface that should leave Config.
+
+## 4. Economic module catalog
+
+Dynamic treatments are organized into the following modules. This list is also
+the reporting order, so effects are judged against mechanism-specific outcomes
+before broad macro spillovers.
+
+| Module | Primary outcomes | Important spillovers |
+|---|---|---|
+| Scale and genesis | per-capita output, price/wage normalization, convergence half-life | memory, throughput, finite-size variance |
+| Production and technology | real output, productivity, capital stock, utilization | wages, prices, employment, investment |
+| Firms and industrial dynamics | entry, exit, concentration, firm size and profitability | employment, output volatility, credit losses |
+| Consumption, prices and expectations | consumption, inventories, markups, CPI and inflation | output gap, employment, household welfare |
+| Labor market | participation, employment, unemployment, hours, vacancies and flows | wages, production, poverty, fiscal balance |
+| Demography and households | births, deaths, age structure, household size and dependency | labor supply, consumption, housing demand |
+| Distribution and welfare | poverty, income and wealth Gini, deciles, savings | consumption, labor participation, fiscal cost |
+| Government and public sector | tax receipts, spending, deficit, debt, public capital | output, employment, inflation, distribution |
+| Banking and credit | lending, deposits, spreads, arrears, capital and bank failures | investment, consumption, bankruptcies |
+| Securities and capital markets | issuance, prices, returns, turnover and leverage | investment, wealth, financial fragility |
+| Housing | prices, transactions, tenure, rent burden, mortgages, construction | wealth, consumption, fertility, credit risk |
+| Energy | price, output, inventory, deprivation and reserves | CPI, production costs, poverty, mortality |
+| Open economy | trade, current account, FX, capital flows, migration and remittances | output, wages, inflation, reserves |
+| Numerics and observability | identities, deterministic replay, tolerance failures | no material economic effect expected |
+
+## 5. Causal experiment design
+
+### 5.1 Unit of intervention
+
+One experiment changes exactly one immutable Config treatment before genesis.
+The control and treatment share:
+
+- the same engine commit and build;
+- the same country profile and all non-treatment Config values;
+- the same seed;
+- the same population and institution densities;
+- the same start date, horizon, world graph, policies, and shocks;
+- the same worker count and reporting schedule.
+
+This paired-counterfactual design removes most Monte Carlo noise. No-shock runs
+measure endogenous transmission. A field that only operates under a particular
+state receives a second, predeclared activation scenario.
+
+### 5.2 Treatment levels
+
+- Boolean: `false` versus `true`.
+- Category: baseline versus every valid alternative.
+- Positive numeric: central difference near the baseline, normally `-10%` and
+  `+10%`, plus economically meaningful low/high levels.
+- Bounded share or probability: symmetric movement in log-odds space where
+  possible, so 0.01 and 0.99 are not treated as ordinary interior values.
+- Zero baseline: a documented absolute step based on the field's unit.
+- Count: coordinated density-preserving changes, not a lone count that changes
+  the meaning of population scale.
+
+Invalid or economically impossible combinations are rejected before simulation.
+
+### 5.3 Scale and horizons
+
+Small toy economies are not accepted as causal evidence.
+
+| Stage | Population per country | Seeds | Horizons | Purpose |
+|---|---:|---:|---|---|
+| Wiring smoke | 100,000 | 1 | 90 days | crash, route and exact-no-effect detection |
+| Screening | 100,000 | 4 | 1 and 5 years | effect sign, timing and broad magnitude |
+| Confirmation | 1,000,000 | 8 | 1, 5 and 20 years | confidence interval and finite-size robustness |
+| Rare-event stress | 1,000,000 | 16+ | scenario-specific | failures, tail risk and activation-only mechanisms |
+
+The native engine uses eight workers for all full runs. Concurrency across runs
+is limited so independent simulations do not oversubscribe the machine.
+
+### 5.4 Estimands
+
+For outcome `Y`, treatment `x`, seed `s`, and horizon window `h`, the audit stores:
+
+- paired average treatment effect: mean of `Y_treatment - Y_control` by seed;
+- relative effect for positive level variables;
+- local elasticity: `d log(Y) / d log(x)` where defined;
+- semi-elasticity for rates and bounded outcomes;
+- cumulative effect and area under the response curve;
+- peak effect, time to peak, time to half-decay, and terminal effect;
+- volatility and downside-tail effects;
+- event-rate differences for bankruptcy, default, bank failure, migration, and
+  demographic transitions.
+
+Paired seed-block confidence intervals are the default. Time-series uncertainty
+uses block bootstrap windows rather than treating every day as independent.
+Screening across many field-outcome pairs reports false-discovery-adjusted
+significance as supporting evidence, never as the sole gameplay criterion.
+
+### 5.5 Causal decomposition
+
+For important fields the audit records a mechanism chain, for example:
+
+`productivity -> unit cost -> price/wage -> demand -> employment -> welfare`
+
+The decomposition combines:
+
+1. temporal ordering of maintained native metrics;
+2. accounting decompositions such as GDP expenditure and income identities;
+3. stock-flow decompositions for bank, firm, government, household, housing,
+   energy, and external balance sheets;
+4. sequential ablations of explicitly competing channels;
+5. factorial interaction terms for joint treatments.
+
+The report must distinguish a direct mechanism effect from equilibrium feedback.
+
+## 6. Combination packages
+
+Commonly co-moving Config treatments are tested only after their components pass
+single-factor validation. Each package uses a fractional or full factorial design
+that includes the single treatments and their interaction terms.
+
+Initial packages:
+
+1. Productive capacity: productivity, capital share, depreciation, investment
+   adjustment, public-capital productivity, and TFP law.
+2. Labor institutions: matching friction, search intensity, participation,
+   wage adjustment, job ladder, second jobs, and suspension rules.
+3. Credit architecture: bank competition, leverage dispersion, relationship
+   lending, amortization, interbank, household credit, and bank runs.
+4. Housing and family formation: supply response, transaction friction,
+   mortgage availability, rent adjustment, leaving-home elasticity, and
+   fertility-housing coupling.
+5. Energy dependence: household energy need, production capacity, downstream
+   intensity, inventories, hoarding, and deprivation transmission.
+6. Firm dynamism: entry hurdle, entry rate, exit hazard, startup balance sheet,
+   sector switching, and retooling loss.
+7. Open economy: trade capacity, FX adjustment and friction, capital mobility,
+   migration, remittances, and wage smoothing.
+
+Policy values are held fixed in this phase. Tax-benefit, monetary, regulatory,
+foreign-policy, and energy-policy packages belong to the subsequent Policy audit.
+
+## 7. Acceptance criteria
+
+### 7.1 Wiring
+
+A gameplay field passes wiring when a nontrivial treatment changes its native
+contract or genesis state and produces a deterministic difference in at least
+one mechanism-proximal observable under its activation scenario.
+
+A byte-identical or numerically identical trajectory is a failure unless the
+field is classified as scale, genesis washout, numerical invariance, derived, or
+superseded.
+
+### 7.2 Economic realism
+
+Each field has a predeclared expected direction, operating horizon, monotonicity
+expectation, and plausible magnitude band. Empirical bands must cite primary
+sources or explicitly state that they are model-design priors.
+
+Failure classes:
+
+- wrong sign;
+- correct sign but implausibly weak;
+- correct sign but explosively strong;
+- effect arrives on the wrong clock;
+- mechanism works but violates an accounting identity;
+- only a genesis artifact is visible;
+- sign changes without an economically explained regime transition.
+
+### 7.3 Gameplay salience
+
+Player-facing Config fields should create a recognizable strategic difference
+without guaranteeing one dominant choice. A field is salient when at least one
+primary outcome moves materially while at least one trade-off, cost, risk, or
+time delay remains visible.
+
+Silent player fields are not automatically amplified. The preferred resolution
+order is:
+
+1. fix a missing route or broken observable;
+2. use a correct activation scenario;
+3. merge or remove redundant fields;
+4. hide expert/numerical controls from ordinary setup;
+5. recalibrate magnitude only when the underlying economic channel is valid.
+
+### 7.4 Stability and invariants
+
+All accepted treatments must preserve finite values, deterministic replay,
+conservation gates, accounting identities, valid entity references, and bounded
+failure rates. Numerical controls must not materially alter economic outcomes
+inside their certified operating range.
+
+## 8. Findings to date
+
+### 8.1 Product contract and routing
+
+The native product baseline comparison now projects every one of the 219
+currently routed Config fields into the exact C++ new-game contract at 100,000
+persons per country:
+
+| Native baseline relationship | Fields |
+|---|---:|
+| Exact semantic value | 199 |
+| Representative-agent density scaling | 7 |
+| Experiment scale override | 7 |
+| Experiment seed override | 1 |
+| Computed or unit-encoded value | 5 |
+
+Two unexplained product drifts were found and repaired:
+
+- `theta_equity` was 0.30 in Config but 0.25 in the native product;
+- `marriage_assortativity` was 1.0 in Config but 0.25 in the native product.
+
+`energy_hh_share` is not a drift: Config expresses an expenditure share while
+the native rule stores physical need, so the bridge must apply
+`share * wage / energy_price`. The experiment overlay previously skipped this
+conversion and now preserves it.
+
+The opening firm money, inventory, capital, expected demand, energy-producer
+cash, and builder demand seed are density-scaled after product overrides. The
+first experiment overlay wrote unscaled treatment values into an already scaled
+contract. The corrected overlay preserves the native control multiplier. For
+example, a +/-20% `K_firm0` treatment now changes actual opening capital by
+exactly +/-20%.
+
+### 8.2 Structural defects found by dynamic experiments
+
+1. `a` reaches `linear_productivity`, but the playable product uses
+   Cobb-Douglas consumption firms and therefore reads Hicks-neutral `A` instead.
+   `a` is now classified as a compatibility field for the retired cash-loop
+   vertical rather than a second player-facing productivity control.
+2. Both dividend implementations had a large-population rounding defect. The
+   securities path and the no-equity M4 fallback reconstructed a final payment
+   from algebraic totals rather than the clearing account's actual remaining
+   balance. At 100,000 households this could fail the sufficient-funds gate.
+   Both paths now distribute a bounded real remainder and have native
+   large-population regressions.
+3. `necessity_share0` now reaches C++ genesis and changes the number of
+   necessity firms, but a 0.50 to 0.80 treatment still produces an identical
+   economic trajectory under equal tax rates. The native goods market lacks
+   the old two-stage Engel mechanism (necessities first, discretionary goods
+   second). This is a genuine mechanism-salience failure, not a route failure.
+4. `lambda_I` is dormant while desired capital is below installed capital; the
+   baseline initially remains on replacement investment. It is assigned a
+   predeclared positive-capital-gap activation scenario rather than being
+   reported as silent.
+5. Lowering capital-goods productivity was rejected as an activation for
+   `capital_rationed_signal`: it created a bottleneck that producers could not
+   respond to, so disabling the expectations signal changed cumulative
+   investment by only about 0.0000007%. Halving opening consumption-firm
+   capital instead creates funded investment orders and unmet demand while
+   retaining supply response. Under this common activation, disabling the
+   signal lowers 90-day cumulative investment by 2.66%.
+
+### 8.3 Production and technology early screen
+
+The current early screen uses 100,000 persons, four paired seeds, 90 days,
+eight native workers, and a 22-day burn-in. It is a timing and wiring screen,
+not the final empirical calibration.
+
+| Config | Observed causal response | Current decision |
+|---|---|---|
+| `alpha`, 0.25 / 0.35 | real GDP per capita about -31.7% / +40.1%; capital moves in the expected direction | live but probably too sensitive; inspect factor-income and price channels before calibration |
+| `capital_firm_entry=false` | capital-firm count is lower, but the birth flow is unresolved over 90 days | extend to one and five years; do not infer from broad RNG divergence |
+| `capital_market=false` | equity market capitalization and primary issuance fall 100% | direct capability effect passes; quantify real spillovers separately |
+| `A`, -20% / +20% | real GDP per capita about -23.1% / +16.6%; price level moves oppositely | direction passes; asymmetry and magnitude require medium-run calibration |
+| `a_K`, -20% / +20% | capital output about -8.2% / +5.9%; investment about -12.8% / +8.1% | direction passes, upper investment interval remains wide |
+| `delta_K`, -20% / +20% | capital about +0.22% / -0.20%; investment about -12.0% / +13.7% | replacement and stock legs both pass |
+| `K_firm0`, -20% / +20% | post-burn-in capital about -18.8% / +19.9% after correcting density scaling | genesis effect passes; multi-year washout remains to be measured |
+| `tfp_drift_rate`, 0.6% / 2.4% annual | 90-day output effect is small and its interval crosses zero | inconclusive at this horizon; use the predeclared five-year trend estimand |
+| `v`, -20% / +20% | investment about -27.6% / +154%; strong threshold asymmetry | live but highly nonlinear; map the capital-gap response surface |
+| `lambda_issue`, 0.1 / 0.3 | first-window issuance about -87.7 / +38.7 per day; 90-day cumulative issuance -2,369 / +1,027, then convergence | valid adjustment-speed control; judge the expected direction on the first-window flow and report cumulative reversal and half-life as trade-offs |
+| `capital_rationed_signal=false`, positive-capital-gap activation | cumulative investment -2.66%; paired 95% level interval -51,572 to -25,911 capital units; first difference day 7 | conditional mechanism passes; keep it out of a neutral no-gap screen |
+| `lambda_I`, -20% / +20%, positive-capital-gap activation | cumulative investment -4.59% / +2.02%; low arm interval resolves, high arm interval crosses zero; response peaks in the first week | mechanism passes but is asymmetric and seed-sensitive; map the response surface before calibration |
+
+The screen does not treat every changed metric as evidence. Capability switches
+can alter conditional random-number consumption even before their event fires.
+Acceptance therefore requires a predeclared mechanism-proximal metric and a
+paired interval that resolves the expected effect. Small seed blocks use
+Student's t intervals, and direction checks report `pass`, `fail`, or
+`inconclusive` when the interval crosses zero.
+
+### 8.4 Production and technology one-year screen
+
+The one-year batch completed 72 native runs without a stability failure. It
+uses the same 100,000-person, four-seed paired design and a 90-day burn-in.
+
+- Moving `alpha` from 0.30 to 0.25 / 0.35 changes post-burn-in real GDP per
+  capita by about -26.5% / +36.3%. The mechanism is live, but this response is
+  too strong to accept without decomposing factor income, labor demand, prices,
+  and the Cobb-Douglas normalization.
+- Disabling capital-firm entry reduces one-year capital-firm births by 3.5 on
+  average, with a paired 95% interval of -5.55 to -1.45, and reduces the mean
+  capital-firm stock by 0.35%. The rare event channel is now resolved.
+- Disabling capital markets removes equity capitalization and issuance and
+  lowers post-burn-in real GDP per capita by about 10.1%. The direct ablation
+  passes; the real-side magnitude still needs an equity-finance decomposition.
+- A +/-20% change in `A` moves real GDP per capita by about -18.7% / +12.4%
+  and the price level by +22.8% / -14.8%. Both directions pass, with material
+  asymmetry.
+- A +/-20% change in `a_K` moves capital output by about -10.2% / +6.5% and
+  investment by -10.3% / +6.8%. Both arms resolve at one year.
+- A -20% / +20% change in `delta_K` moves installed capital by +0.65% / -0.64%
+  and investment by -7.16% / +1.78%. The signs pass but replacement investment
+  is strongly asymmetric.
+- A -20% / +20% opening-capital treatment still leaves aggregate capital about
+  -17.8% / +17.5% apart after burn-in. Neither arm reaches half-decay in one
+  year, so `K_firm0` remains a persistent-path initial condition rather than a
+  demonstrated washout.
+- A -20% / +20% change in `v` moves installed capital by -2.26% / +1.92%, but
+  investment by -51.6% / +1.33%. The upper investment interval crosses zero;
+  the control lies close to an accelerator threshold.
+- `lambda_issue=0.1` lowers first-window primary issuance as expected. The 0.3
+  arm raises early issuance but its one-year cumulative effect reverses and is
+  imprecise. This confirms an adjustment-speed interpretation; a permanent
+  positive cumulative sign would be an invalid acceptance criterion.
+
+Expected-direction metrics are now automatically included in each contract's
+primary time-path set, even when they are not part of the broad module metric
+catalog. Washout checks require an observed half-decay; a merely smaller
+terminal difference is reported as inconclusive.
+
+### 8.5 Five-year trend and initial-condition screen
+
+The targeted five-year batch completed 20 additional native runs, covering
+36,500 simulated days without a stability failure.
+
+- Reducing annual `tfp_drift_rate` from 1.2% to 0.6% lowers fifth-year real GDP
+  per capita by about 4.1%; increasing it to 2.4% raises fifth-year real GDP per
+  capita by about 9.4%. The paired direction resolves in both arms. The price
+  level moves oppositely, by about +3.0% / -3.7% at the endpoint.
+- The GDP response is larger than the mechanically accumulated TFP difference,
+  indicating amplification through production, prices, labor, and capital. It
+  is a live growth-rate parameter, not an undetectable annual drift, but the
+  amplification must be decomposed before empirical calibration.
+- A -20% / +20% `K_firm0` treatment reaches capital half-decay on day 1,593 /
+  1,354 respectively. Fifth-year aggregate capital remains about -9.3% / +8.2%
+  from control. Opening capital therefore changes a four-year-plus development
+  path; it should be presented as a meaningful initial endowment rather than a
+  harmless transient.
+- Fifth-year real GDP per capita no longer differs precisely under either
+  opening-capital arm even though the physical stock remains different. The
+  long-run stock and flow implications must therefore be reported separately.
+
+### 8.6 Firms and industrial dynamics screen
+
+All 19 mapped causal or genesis fields in this module now have reviewed
+contracts: 13 neutral-baseline contracts and six conditional contracts. The
+one-year neutral batch completed 104 native runs; the conditional screens added
+72 runs. No run failed a native stability gate.
+
+One invalid dependency closure was repaired before measurement. Disabling
+`firm_dynamics` while founder-owned per-firm equity remained enabled violated
+the Config contract. The shared capability cascade now closes per-firm equity
+and its dependants explicitly. Effects of this master switch are consequently
+reported as a capability package, not as a pure birth/death coefficient.
+
+Current findings:
+
+- Disabling firm dynamics removes 100% of observed births and exits and lowers
+  post-burn-in real output by about 11%. The real effect includes the required
+  founder-equity dependency closure.
+- Disabling `firm_subscale_exit` removes all roughly 555 first-year exits. A
+  half hazard lowers exits by about 27.2%, a double hazard raises them by 11.2%,
+  a 90-day grace period raises exits by 18.8%, and a 365-day grace period lowers
+  them by 98.2%. This is the dominant incumbent-exit mechanism and is highly
+  salient.
+- `subscale_viability_workers` changes neither total exits at 0.05 nor at 2.0,
+  despite the baseline being 0.5. The same field also enters the capital-firm
+  spin-off threshold and causes tiny capital-firm-count changes. This overloaded
+  meaning should be split or recalibrated; its named viability channel is
+  currently silent.
+- Lowering the consumption-entry hurdle to zero raises first-year births by
+  2.25 on average with a resolved interval; doubling the hurdle lowers births
+  by 1.75 but the interval narrowly crosses zero. `entry_beta` has the expected
+  average signs but remains imprecise with only about five baseline births per
+  year.
+- `entry_max=1/6` is exactly silent in the neutral economy because desired daily
+  entry never reaches even one. Under a shared high-entry-pressure activation,
+  it lowers/raises 90-day births by about 63%/61%; both intervals resolve. It is
+  a valid conditional safety cap, not a neutral-economy growth control.
+- Capital-entry hazard has the expected sign: halving it reduces the mean
+  capital-firm stock by about 0.19%, while the upper arm remains imprecise.
+  `k_entry_demand` is not monotonic over the tested ranges. The maintained
+  metrics combine consumption- and capital-firm births, so a sector-specific
+  capital-birth observable is needed before causal diagnosis is complete.
+- Turning off the full cash-basis firm P&L changes trajectories, but the
+  one-year cumulative interest and profit intervals both cross zero. The
+  accounting channel is live but not yet gameplay-salient under normal credit
+  conditions.
+- `w_firm0` and `mu_firm0` violate their documented genesis-washout role. A
+  +/-20% opening wage leaves the mean wage about -20.1%/+19.8% after burn-in;
+  the high-wage arm lowers real output by about 8.1%. A 0.15/0.25 opening markup
+  leaves average markup about -17.1%/+16.1%, with the largest difference at the
+  end of year one. These behave as persistent nominal and pricing anchors, not
+  temporary initial quotes.
+- Opening expected energy demand does decay, although its lower arm rebounds
+  after first crossing half-decay. Washout acceptance now requires both an
+  observed half-decay and a terminal effect no larger than half the peak.
+
+The neutral baseline produces no sector switches at all. Conditional tests
+therefore isolate each switching input with a shared return-differential setup:
+
+- `switch_hazard` and `switch_retool_loss` pass their direct event and destroyed-
+  capital metrics;
+- lowering `switch_return_gap` to zero raises 90-day switches by about 812 on
+  average, while 0.10 remains imprecise relative to the 0.50 control;
+- shortening `switch_pressure_days` from the default 60 to 2/10 days raises
+  switches by about 1,840/581. The original 30/120-day probe was exactly silent
+  because return leadership reset before eligibility;
+- `shell_exit_ticks=180/548`, under isolated idle-firm activation, changes
+  two-year exits by about +249/-319, and the first differences occur on the
+  declared threshold days.
+
+The switching machinery is functional, but the default 50% return gap plus a
+60-day uninterrupted pressure requirement effectively disables it. That is a
+calibration and gameplay-salience failure even though stress activation passes.
+
+## 9. Execution gates
+
+### P0 - Static ownership and routing
+
+- Generate the 455-field ledger from the canonical schema.
+- Verify the all-module playable baseline.
+- Locate every native route.
+- Adjudicate every missing route.
+- Prevent an unrouted field from being reported as a small elasticity.
+
+### P1 - Native paired-run harness
+
+- Build treatment manifests from the ledger.
+- Run paired seed blocks with eight native workers.
+- Store daily maintained metrics and summary estimands.
+- Record commit, build, Config hash, seed, duration, population, and timing.
+- Support resume and deduplicate completed runs.
+
+### P2 - Module screening
+
+- Run 100,000-person one-year and five-year screens.
+- Produce route, sign, salience, stability, and timing scorecards.
+- Repair no-effect, wrong-sign, clock, and observability failures per module.
+
+### P3 - Interaction and activation scenarios
+
+- Run the seven combination packages.
+- Run stress-only and rare-event mechanisms in predeclared scenarios.
+- Decompose direct effects, spillovers, and interactions.
+
+### P4 - Large-scale confirmation and empirical calibration
+
+- Confirm material results at one million people.
+- Compare finite-size bias between 100,000 and one million people.
+- Calibrate plausible ranges against primary empirical sources.
+- Freeze per-field causal contracts and regression thresholds.
+
+### P5 - Policy audit handoff
+
+- Move runtime levers to the Policy experiment matrix.
+- Reuse the same estimators, outcome catalog, activation scenarios, and
+  acceptance gates.
+
+## 10. Reproducible artifacts
+
+The static ledger is generated with:
+
+```bash
+.venv/bin/python scripts/config_causality_audit.py \
+  --json-output artifacts/config-audit/config_inventory.json \
+  --markdown-output artifacts/config-audit/config_inventory.md \
+  --fail-on-disabled-module
+```
+
+Generated results live under `artifacts/config-audit/` and are not committed.
+Source code, schemas, field dispositions, experiment manifests, tests, and this
+protocol are committed. The audit does not use the legacy Python simulation as
+an oracle; Python only orchestrates the native C++ engine and analyzes results.
+
+The native product-baseline comparison and treatment contracts are generated
+with:
+
+```bash
+PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
+  .venv/bin/python scripts/config_native_baseline_audit.py \
+  --output artifacts/config-audit/native_baseline.json
+
+.venv/bin/python scripts/config_causality_contracts.py \
+  --output artifacts/config-audit/config_contracts.json
+```
+
+A curated module batch is resumable and reuses the paired controls:
+
+```bash
+PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
+  .venv/bin/python scripts/config_causality_batch.py \
+  --module production_and_technology \
+  --population 100000 --days 365 --workers 8 \
+  --output-dir artifacts/config-audit/production-1y
+```
+
+Reviewed conditional contracts use a shared activation for both sides of every
+paired comparison. Contracts with the same horizon, country count, metrics, and
+activation reuse one control block:
+
+```bash
+PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
+  .venv/bin/python scripts/config_causality_batch.py \
+  --module production_and_technology --activation \
+  --population 100000 --days 90 --workers 8 \
+  --output-dir artifacts/config-audit/production-90d-activation
+```

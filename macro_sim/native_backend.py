@@ -208,6 +208,7 @@ M7_POLICY_FIELDS = {
 M6_RULE_FIELDS = {
     "bonds": "bonds",
     "bond_maturity_bucket": "bond_maturity_bucket",
+    "firm_equity": "per_firm_equity",
     "shares_per_firm": "shares_per_firm",
     "watchlist_size": "watchlist_size",
     "founder_owned_genesis": "founder_owned_genesis",
@@ -218,6 +219,7 @@ M6_RULE_FIELDS = {
     "q_smoothing": "lambda_q",
     "fundamental_weight": "w_fundamental",
     "chartist_weight": "w_chartist",
+    "household_equity_target": "theta_equity",
     "portfolio_adjustment": "portfolio_adjust",
     "equity_finance": "equity_finance",
     "equity_issue_lambda": "lambda_issue",
@@ -242,6 +244,7 @@ M6_RULE_FIELDS = {
     "k_entry_demand": "k_entry_demand",
     "k_entry_hazard": "k_entry_hazard",
     "consumption_strata": "consumption_strata",
+    "initial_necessity_share": "necessity_share0",
     "sector_switching": "sector_switching",
     "switch_return_gap": "switch_return_gap",
     "switch_pressure_days": "switch_pressure_days",
@@ -526,8 +529,24 @@ def _m8_spec(
     financial = native.M6SimulationSpec()
     financial.monetary_economy = monetary
     _assign(financial.policy, policy, M6_POLICY_FIELDS)
+    financial.policy.household_bond_target = float(cfg.bond_theta)
     financial.policy.bank_bond_appetite = float(cfg.bank_bond_appetite)
     _assign(financial.rules, cfg, M6_RULE_FIELDS)
+    if not cfg.capital_market:
+        financial.rules.firm_equity = False
+        financial.rules.bank_equity = False
+        financial.rules.bank_equity_trading = False
+        financial.rules.equity_finance = False
+        financial.rules.margin_credit = False
+    if not cfg.bank_enabled:
+        monetary.rules.household_credit = False
+        monetary.rules.interbank = False
+        monetary.rules.rate_competition = False
+        monetary.rules.relationship_lock_in = False
+        financial.rules.bank_equity = False
+        financial.rules.bank_equity_trading = False
+        financial.rules.bank_dynamics = False
+        financial.monetary_economy = monetary
 
     population = native.M7SimulationSpec()
     population.financial_economy = financial
@@ -719,6 +738,10 @@ def build_world_spec(spec: NewGameSpec | Mapping[str, Any]) -> Any:
     rules.migration = bool(spec.world["migration"])
     rules.fx_adjustment = float(spec.world["fx_lambda"])
     rules.fx_friction = float(spec.world["fx_friction"])
+    rules.fx_spread = float(spec.world.get("fx_spread", 0.0))
+    rules.fx_loss_mutualization = bool(
+        spec.world.get("fx_loss_mutualization", False)
+    )
     rules.fx_trade_cap = float(spec.world["fx_trade_cap"])
     rules.capital_mobility = float(spec.world["capital_mobility"])
     rules.capital_adjustment = float(spec.world["capital_adjust"])
@@ -733,6 +756,18 @@ def build_world_spec(spec: NewGameSpec | Mapping[str, Any]) -> Any:
     return world
 
 
+def build_native_new_game_spec(
+    spec: NewGameSpec | Mapping[str, Any],
+) -> Any:
+    """Parse the product new-game contract without constructing live state."""
+    if not isinstance(spec, NewGameSpec):
+        spec = NewGameSpec.from_mapping(spec)
+    native = _load_native()
+    return native.native_spec_from_new_game(
+        json.dumps(spec.to_dict(), sort_keys=True, separators=(",", ":"))
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NativeConfigRunSpec:
     """Minimal facade metadata for non-desktop native sessions."""
@@ -744,7 +779,11 @@ class NativeConfigRunSpec:
         return {}
 
 
-def build_world_spec_from_configs(configs: Iterable[Config]) -> Any:
+def build_world_spec_from_configs(
+    configs: Iterable[Config],
+    *,
+    world_overrides: Mapping[str, Any] | None = None,
+) -> Any:
     """Translate explicit immutable Config seeds into one native World.
 
     This is the controller/RL construction path.  It deliberately bypasses
@@ -767,7 +806,53 @@ def build_world_spec_from_configs(configs: Iterable[Config]) -> Any:
         external.append(_external_policy(native, policy))
     world.economies = economies
     world.external_policies = external
-    world.rules.periods_per_year = 365.0
+    rules = world.rules
+    rules.periods_per_year = 365.0
+    if world_overrides is not None:
+        allowed = {
+            "trade",
+            "capital",
+            "migration",
+            "fx_lambda",
+            "fx_friction",
+            "fx_spread",
+            "fx_loss_mutualization",
+            "fx_trade_cap",
+            "capital_mobility",
+            "capital_adjust",
+            "migration_rate",
+            "migration_max_share",
+            "remittance_share",
+            "wage_smoothing",
+            "peg_reserves0",
+        }
+        unknown = set(world_overrides) - allowed
+        if unknown:
+            raise ValueError(
+                "unknown native World Config fields: "
+                + ", ".join(sorted(unknown))
+            )
+        world_rule_fields = {
+            "trade": "trade",
+            "capital": "capital",
+            "migration": "migration",
+            "fx_lambda": "fx_adjustment",
+            "fx_friction": "fx_friction",
+            "fx_spread": "fx_spread",
+            "fx_loss_mutualization": "fx_loss_mutualization",
+            "fx_trade_cap": "fx_trade_cap",
+            "capital_mobility": "capital_mobility",
+            "capital_adjust": "capital_adjustment",
+            "migration_rate": "migration_rate",
+            "migration_max_share": "migration_max_share",
+            "remittance_share": "remittance_share",
+            "wage_smoothing": "wage_smoothing",
+            "peg_reserves0": "initial_peg_reserves",
+        }
+        for source, target in world_rule_fields.items():
+            if source in world_overrides:
+                setattr(rules, target, world_overrides[source])
+    world.rules = rules
     return world
 
 
@@ -847,6 +932,7 @@ class NativeSimulationSession:
         player_country: int = 0,
         worker_count: int = 8,
         history_capacity_frames: int = 2048,
+        world_overrides: Mapping[str, Any] | None = None,
     ) -> "NativeSimulationSession":
         checked = tuple(configs)
         if not 0 <= player_country < len(checked):
@@ -855,8 +941,36 @@ class NativeSimulationSession:
             raise ValueError("worker_count must be positive")
         native = _load_native()
         world = native.WorldSession.create(
-            build_world_spec_from_configs(checked)
+            build_world_spec_from_configs(
+                checked, world_overrides=world_overrides
+            )
         )
+        engine = native.NativeWorldEngineSession.create(
+            world, history_capacity_frames
+        )
+        bridge = native.HybridControlledBridge.create(
+            engine, _controller_envelope(native, world)
+        )
+        return cls(
+            spec=NativeConfigRunSpec(player_country),
+            bridge=bridge,
+            worker_count=worker_count,
+        )
+
+    @classmethod
+    def create_from_native_spec(
+        cls,
+        native_spec: Any,
+        *,
+        player_country: int = 0,
+        worker_count: int = 8,
+        history_capacity_frames: int = 2048,
+    ) -> "NativeSimulationSession":
+        """Create a session from an already-audited native experiment spec."""
+        if worker_count < 1:
+            raise ValueError("worker_count must be positive")
+        native = _load_native()
+        world = native.WorldSession.create(native_spec)
         engine = native.NativeWorldEngineSession.create(
             world, history_capacity_frames
         )

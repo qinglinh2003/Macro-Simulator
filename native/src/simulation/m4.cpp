@@ -100,8 +100,8 @@ technology_for(core::FirmTechnology technology) noexcept {
 }
 
 [[nodiscard]] Status transfer(const core::RootState &state, M4TickScratch &scratch,
-                              AccountId source, AccountId destination,
-                              double amount) noexcept {
+                              AccountId source, AccountId destination, double amount,
+                              std::string_view insufficient_context) noexcept {
     static_cast<void>(state);
     if (!std::isfinite(amount) || amount < -algorithms::kEconomicEpsilon) {
         return Status(ErrorCode::invalid_argument,
@@ -126,8 +126,7 @@ technology_for(core::FirmTechnology technology) noexcept {
     }
     if ((source_flags & M4TickScratch::kAccountAllowsNegative) == 0U &&
         scratch.balances_[source_index] + kTolerance < amount) {
-        return Status(ErrorCode::insufficient_funds,
-                      "M4 transfer exceeds available money");
+        return Status(ErrorCode::insufficient_funds, insufficient_context);
     }
     scratch.balances_[source_index] -= amount;
     scratch.balances_[destination_index] += amount;
@@ -640,7 +639,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             }
             const double pay = hired * firm_work.posted_wage;
             const auto status = transfer(state, scratch, firm->primary_account,
-                                         household->primary_account, pay);
+                                         household->primary_account, pay,
+                                         "M4 labor payroll exceeds available money");
             if (!status.ok()) {
                 return status;
             }
@@ -759,7 +759,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 break;
             }
             const double value = quantity * offer.price.value();
-            status = transfer(state, scratch, order.buyer, offer.seller, value);
+            status = transfer(state, scratch, order.buyer, offer.seller, value,
+                              "M4 goods purchase exceeds available money");
             if (!status.ok()) {
                 return status;
             }
@@ -954,7 +955,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                           "M4 household buyer projection is stale");
         }
         const auto status =
-            transfer(state, scratch, trade.buyer, trade.seller, trade.value.value());
+            transfer(state, scratch, trade.buyer, trade.seller, trade.value.value(),
+                     "M4 cleared goods purchase exceeds available money");
         if (!status.ok()) {
             return status;
         }
@@ -1046,7 +1048,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                            generic_spent * runtime.rules.consumption_tax_rate;
         const double paid = std::min(due, scratch.balances_[account]);
         const auto status =
-            transfer(state, scratch, household->primary_account, treasury, paid);
+            transfer(state, scratch, household->primary_account, treasury, paid,
+                     "M4 consumption tax exceeds available money");
         if (!status.ok()) {
             return status;
         }
@@ -1110,7 +1113,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         const double value = quantity * work.posted_price;
         const auto *firm = state.firms.get(scratch.firm_ids_[index]);
         const auto status =
-            transfer(state, scratch, treasury, firm->primary_account, value);
+            transfer(state, scratch, treasury, firm->primary_account, value,
+                     "M4 government procurement exceeds available money");
         if (!status.ok()) {
             return status;
         }
@@ -1174,7 +1178,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         const double value = quantity * work.posted_price;
         const auto *firm = state.firms.get(scratch.firm_ids_[index]);
         const auto status =
-            transfer(state, scratch, treasury, firm->primary_account, value);
+            transfer(state, scratch, treasury, firm->primary_account, value,
+                     "M4 public investment exceeds available money");
         if (!status.ok()) {
             return status;
         }
@@ -1213,8 +1218,9 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 static_cast<std::size_t>(firm->primary_account.value());
             const double due = runtime.rules.profit_tax_rate * work.profit;
             work.profit_tax = std::min(due, scratch.balances_[account]);
-            const auto status = transfer(state, scratch, firm->primary_account,
-                                         treasury, work.profit_tax);
+            const auto status =
+                transfer(state, scratch, firm->primary_account, treasury,
+                         work.profit_tax, "M4 profit tax exceeds available money");
             if (!status.ok()) {
                 return status;
             }
@@ -1226,8 +1232,9 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         work.dividends =
             std::min(firm->dividend_payout * distributable, scratch.balances_[account]);
         if (work.dividends > algorithms::kEconomicEpsilon) {
-            const auto status = transfer(state, scratch, firm->primary_account,
-                                         clearing, work.dividends);
+            const auto status =
+                transfer(state, scratch, firm->primary_account, clearing,
+                         work.dividends, "M4 dividend exceeds available money");
             if (!status.ok()) {
                 return status;
             }
@@ -1245,25 +1252,31 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     }
     if (dividend_total > algorithms::kEconomicEpsilon && !dividends_handled &&
         !scratch.household_ids_.empty()) {
-        const double share =
-            dividend_total / static_cast<double>(scratch.household_ids_.size());
+        const auto clearing_index = static_cast<std::size_t>(clearing.value());
+        double remaining =
+            std::min(dividend_total, std::max(0.0, scratch.balances_[clearing_index]));
         for (std::size_t index = 0; index + 1 < scratch.household_ids_.size();
              ++index) {
             const auto *household = state.households.get(scratch.household_ids_[index]);
+            const auto recipients_left = scratch.household_ids_.size() - index;
+            const double share = remaining / static_cast<double>(recipients_left);
             const auto status =
-                transfer(state, scratch, clearing, household->primary_account, share);
+                transfer(state, scratch, clearing, household->primary_account, share,
+                         "M4 dividend allocation exceeds clearing balance");
             if (!status.ok()) {
                 return status;
             }
+            remaining -= share;
             scratch.household_work_[index].income_realized += share;
         }
         const auto last_index = scratch.household_ids_.size() - 1;
         const auto *household =
             state.households.get(scratch.household_ids_[last_index]);
         const double remainder =
-            dividend_total - share * static_cast<double>(last_index);
+            std::min(remaining, std::max(0.0, scratch.balances_[clearing_index]));
         const auto status =
-            transfer(state, scratch, clearing, household->primary_account, remainder);
+            transfer(state, scratch, clearing, household->primary_account, remainder,
+                     "M4 dividend remainder exceeds clearing balance");
         if (!status.ok()) {
             return status;
         }
@@ -1287,8 +1300,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         const double due = runtime.rules.income_tax_rate *
                            std::max(0.0, work.income_realized - income_allowance);
         const double paid = std::min(due, scratch.balances_[account]);
-        auto status =
-            transfer(state, scratch, household->primary_account, treasury, paid);
+        auto status = transfer(state, scratch, household->primary_account, treasury,
+                               paid, "M4 income tax exceeds available money");
         if (!status.ok()) {
             return status;
         }
@@ -1313,7 +1326,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 std::max(0.0, work.labor_capacity - work.labor_sold);
             const double payment = guarantee_wage * residual;
             const auto status =
-                transfer(state, scratch, treasury, household->primary_account, payment);
+                transfer(state, scratch, treasury, household->primary_account, payment,
+                         "M4 job guarantee exceeds treasury capacity");
             if (!status.ok()) {
                 return status;
             }
@@ -1332,7 +1346,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                  ? 0.0
                  : std::max(0.0, work.labor_capacity - work.labor_sold));
         auto status =
-            transfer(state, scratch, treasury, household->primary_account, benefit);
+            transfer(state, scratch, treasury, household->primary_account, benefit,
+                     "M4 unemployment benefit exceeds treasury capacity");
         if (!status.ok()) {
             return status;
         }
@@ -1342,7 +1357,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             const double floor = runtime.rules.benefit_income_floor * mean_wage;
             const double top_up = std::max(0.0, floor - work.income_realized);
             status =
-                transfer(state, scratch, treasury, household->primary_account, top_up);
+                transfer(state, scratch, treasury, household->primary_account, top_up,
+                         "M4 income-floor benefit exceeds treasury capacity");
             if (!status.ok()) {
                 return status;
             }
@@ -1386,8 +1402,9 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                              std::max(0.0, scratch.household_net_wealth_[index] -
                                                wealth_allowance),
                          std::max(0.0, scratch.balances_[account]));
-            const auto status = transfer(state, scratch, household->primary_account,
-                                         treasury, wealth_tax);
+            const auto status =
+                transfer(state, scratch, household->primary_account, treasury,
+                         wealth_tax, "M4 wealth tax exceeds available money");
             if (!status.ok()) {
                 return status;
             }
@@ -1970,7 +1987,8 @@ Status stage_m4_transfer(const core::RootState &state, M4TickScratch &scratch,
         return Status(ErrorCode::invalid_argument,
                       "M4 staged transfer amount is invalid");
     }
-    return transfer(state, scratch, source, destination, amount);
+    return transfer(state, scratch, source, destination, amount,
+                    "M4 staged transfer exceeds available money");
 }
 
 Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,

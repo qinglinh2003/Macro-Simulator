@@ -14,8 +14,20 @@ from macro_sim.controllers import (
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.desktop.new_game import NewGameSpec
 from macro_sim.desktop.runtime import PROTOCOL_VERSION, SimulationRuntime
+from macro_sim.diagnostics.config_experiment import (
+    apply_config_treatment,
+    native_treatment_spec,
+    population_scaled_new_game,
+)
+from macro_sim.diagnostics.config_native_baseline import (
+    build_native_baseline_audit,
+)
 from macro_sim.economy import Economy
-from macro_sim.native_backend import build_world_spec, build_world_spec_from_configs
+from macro_sim.native_backend import (
+    build_native_new_game_spec,
+    build_world_spec,
+    build_world_spec_from_configs,
+)
 
 
 def _automatic_spec(*, seed: int = 41) -> dict:
@@ -267,6 +279,219 @@ def test_representative_entities_preserve_population_scaled_genesis_capacity() -
             + cfg.bank_capital_frac * private_opening_money
         ) / 2
     )
+
+
+def test_config_experiment_bridge_routes_security_targets_and_switches() -> None:
+    baseline = NewGameSpec.default().configs()[0]
+    config = apply_config_treatment(
+        [baseline],
+        field="per_firm_equity",
+        value=False,
+    )[0]
+    config = replace(
+        config,
+        bond_theta=0.19,
+        theta_equity=0.37,
+    )
+    economy = build_world_spec_from_configs([config]).economies[0]
+    financial = economy.domestic_economy.financial_economy
+
+    assert financial.policy.household_bond_target == pytest.approx(0.19)
+    assert financial.rules.household_equity_target == pytest.approx(0.37)
+    assert financial.rules.firm_equity is False
+
+    without_capital_market_config = apply_config_treatment(
+        [baseline], field="capital_market", value=False
+    )[0]
+    without_capital_market = build_world_spec_from_configs(
+        [without_capital_market_config]
+    ).economies[0].domestic_economy.financial_economy
+    assert without_capital_market.rules.firm_equity is False
+    assert without_capital_market.rules.bank_equity is False
+    assert without_capital_market.rules.bank_equity_trading is False
+    assert without_capital_market.rules.equity_finance is False
+    assert without_capital_market.rules.margin_credit is False
+
+
+def test_config_experiment_bridge_matches_bank_disable_cascade() -> None:
+    config = apply_config_treatment(
+        [NewGameSpec.default().configs()[0]],
+        field="bank_enabled",
+        value=False,
+    )[0]
+    economy = build_world_spec_from_configs([config]).economies[0]
+    financial = economy.domestic_economy.financial_economy
+    monetary = financial.monetary_economy
+
+    assert monetary.rules.household_credit is False
+    assert monetary.rules.interbank is False
+    assert monetary.rules.rate_competition is False
+    assert monetary.rules.relationship_lock_in is False
+    assert financial.rules.bank_equity is False
+    assert financial.rules.bank_equity_trading is False
+    assert financial.rules.bank_dynamics is False
+
+
+def test_firm_dynamics_disable_cascade_is_valid_and_explicit() -> None:
+    config = apply_config_treatment(
+        [NewGameSpec.default().configs()[0]],
+        field="firm_dynamics",
+        value=False,
+    )[0]
+    assert config.firm_dynamics is False
+    assert config.per_firm_equity is False
+    assert config.equity_finance is False
+    assert config.margin_credit is False
+
+
+def test_config_experiment_bridge_routes_complete_world_rules() -> None:
+    configs = NewGameSpec.default(seed=53).configs()[:2]
+    world = build_world_spec_from_configs(
+        configs,
+        world_overrides={
+            "trade": True,
+            "capital": True,
+            "migration": True,
+            "fx_lambda": 0.07,
+            "fx_friction": 0.02,
+            "fx_spread": 0.004,
+            "fx_loss_mutualization": True,
+            "fx_trade_cap": 0.11,
+            "capital_mobility": 0.08,
+            "capital_adjust": 0.09,
+            "migration_rate": 0.015,
+            "migration_max_share": 0.20,
+            "remittance_share": 0.25,
+            "wage_smoothing": 0.03,
+            "peg_reserves0": 6_000.0,
+        },
+    )
+
+    assert world.rules.trade is True
+    assert world.rules.capital is True
+    assert world.rules.migration is True
+    assert world.rules.fx_adjustment == pytest.approx(0.07)
+    assert world.rules.fx_friction == pytest.approx(0.02)
+    assert world.rules.fx_spread == pytest.approx(0.004)
+    assert world.rules.fx_loss_mutualization is True
+    assert world.rules.fx_trade_cap == pytest.approx(0.11)
+    assert world.rules.capital_mobility == pytest.approx(0.08)
+    assert world.rules.capital_adjustment == pytest.approx(0.09)
+    assert world.rules.migration_rate == pytest.approx(0.015)
+    assert world.rules.migration_max_share == pytest.approx(0.20)
+    assert world.rules.remittance_share == pytest.approx(0.25)
+    assert world.rules.wage_smoothing == pytest.approx(0.03)
+    assert world.rules.initial_peg_reserves == pytest.approx(6_000.0)
+
+
+def test_native_treatment_overlay_preserves_computed_bridge_semantics() -> None:
+    baseline = population_scaled_new_game(
+        population=1_000, days=30, seed=59
+    )
+    control = build_native_new_game_spec(baseline)
+    base_config = baseline.configs()[0]
+    base_economy = control.economies[0]
+    base_population = base_economy.domestic_economy
+    base_financial = base_population.financial_economy
+    base_monetary = base_financial.monetary_economy
+    base_real = base_monetary.real_economy
+    private_opening_money = (
+        base_real.households * base_real.rules.initial_household_money
+        + (base_real.consumption_firms + base_real.capital_firms)
+        * base_real.rules.initial_firm_money
+        + base_economy.energy_rules.producer_count
+        * base_economy.energy_rules.initial_producer_cash
+        + base_economy.housing_rules.builder_count
+        * base_economy.housing_rules.initial_builder_cash_buffer
+    )
+
+    capital_fraction = base_config.bank_capital_frac + 0.01
+    capital_treatment = native_treatment_spec(
+        baseline, field="bank_capital_frac", value=capital_fraction
+    )
+    capital_rules = (
+        capital_treatment.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.rules
+    )
+    assert capital_rules.opening_capital_per_bank == pytest.approx(
+        base_monetary.rules.opening_capital_per_bank
+        + 0.01 * private_opening_money / base_monetary.rules.bank_count
+    )
+
+    opening_capital_treatment = native_treatment_spec(
+        baseline, field="K_firm0", value=base_config.K_firm0 * 1.2
+    )
+    treated_real = (
+        opening_capital_treatment.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy
+    )
+    assert treated_real.rules.initial_consumption_capital == pytest.approx(
+        base_real.rules.initial_consumption_capital * 1.2
+    )
+
+    energy_share_treatment = native_treatment_spec(
+        baseline, field="energy_hh_share", value=0.12
+    )
+    treated_energy = energy_share_treatment.economies[0].energy_rules
+    assert treated_energy.household_need == pytest.approx(
+        0.12 * treated_energy.initial_wage / treated_energy.initial_price
+    )
+
+    appetite_treatment = native_treatment_spec(
+        baseline, field="bank_bond_appetite", value=0.23
+    )
+    assert (
+        appetite_treatment.economies[0]
+        .domestic_economy.financial_economy.policy.bank_bond_appetite
+        == pytest.approx(0.23)
+    )
+
+    mortality_treatment = native_treatment_spec(
+        baseline, field="demographics_mortality_scale", value=1.25
+    )
+    treated_vital = mortality_treatment.economies[0].domestic_economy.rules.vital_rates
+    base_vital = base_population.rules.vital_rates
+    mortality_ratio = 1.25 / base_config.demographics_mortality_scale
+    assert treated_vital.makeham_a == pytest.approx(
+        base_vital.makeham_a * mortality_ratio
+    )
+    assert treated_vital.gompertz_b == pytest.approx(
+        base_vital.gompertz_b * mortality_ratio
+    )
+
+    date_treatment = native_treatment_spec(
+        baseline, field="simulation_start_date", value="2024-02-29"
+    )
+    assert (
+        date_treatment.economies[0].domestic_economy.population.start_calendar_day
+        == date(2024, 2, 29).toordinal()
+    )
+
+    government_treatment = native_treatment_spec(
+        baseline, field="government", value=False
+    )
+    government_real = (
+        government_treatment.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy
+    )
+    assert government_real.requested_capabilities & (1 << 1) == 0
+    assert (
+        government_treatment.economies[0]
+        .domestic_economy.financial_economy.rules.bonds
+        is False
+    )
+
+
+def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
+    payload = build_native_baseline_audit(
+        population=1_000, seed=61, countries=2
+    )
+    assert payload["field_count"] == 219
+    assert payload["status_counts"].get("projection_missing", 0) == 0
+    rows = {row["field_name"]: row for row in payload["rows"]}
+    assert rows["K_firm0"]["status"] == "density_scaled"
+    assert rows["theta_equity"]["status"] == "exact"
+    assert rows["marriage_assortativity"]["status"] == "exact"
 
 
 def test_new_game_constructs_selected_profiles_world_and_player() -> None:

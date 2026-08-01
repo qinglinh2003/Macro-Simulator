@@ -1843,6 +1843,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_RULE(k_entry_demand);
     MACRO_SIM_BIND_M6_RULE(k_entry_hazard);
     MACRO_SIM_BIND_M6_RULE(consumption_strata);
+    MACRO_SIM_BIND_M6_RULE(initial_necessity_share);
     MACRO_SIM_BIND_M6_RULE(sector_switching);
     MACRO_SIM_BIND_M6_RULE(switch_return_gap);
     MACRO_SIM_BIND_M6_RULE(switch_pressure_days);
@@ -2497,19 +2498,25 @@ NB_MODULE(_native, module) {
             },
             nb::arg("checkpoint"));
     module.def(
+        "native_spec_from_new_game",
+        [](std::string_view document) {
+            auto game = macro_sim::desktop::parse_m11_native_new_game(document);
+            require_status(game.status());
+            return std::move(game.get_if()->world);
+        },
+        nb::arg("document"));
+    module.def(
         "native_world_from_new_game",
         [](std::string_view document) {
             auto game = macro_sim::desktop::parse_m11_native_new_game(document);
             require_status(game.status());
-            auto world =
-                macro_sim::simulation::M9World::create(game.get_if()->world);
+            auto world = macro_sim::simulation::M9World::create(game.get_if()->world);
             require_status(world.status());
             if (!game.get_if()->initial_policy_actions.empty()) {
                 auto batch = macro_sim::control::project_m11_policy_actions(
                     *world.get_if(), game.get_if()->initial_policy_actions);
                 require_status(batch.status());
-                require_status(
-                    world.get_if()->update_policy_batch(*batch.get_if()));
+                require_status(world.get_if()->update_policy_batch(*batch.get_if()));
             }
             return std::move(*world.get_if());
         },

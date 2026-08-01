@@ -60,7 +60,8 @@ void assert_close(double left, double right, double tolerance = 1.0e-10) {
                     "n_firms_k":5,
                     "n_firms_e":3,
                     "n_builders":4,
-                    "n_banks":3
+                    "n_banks":3,
+                    "necessity_share0":0.75
                 }
             },
             {
@@ -135,6 +136,7 @@ void test_default_is_complete_latest_world() {
         assert_close(financial.rules.residual_income_lambda, 0.0019);
         assert_close(financial.rules.portfolio_adjustment, 0.048);
         assert_close(financial.rules.bank_equity_lambda, 0.0019);
+        assert_close(financial.rules.household_equity_target, 0.30);
         assert_close(real.rules.wage_calvo_probability, 0.011);
         assert_close(real.rules.price_calvo_probability, 0.0037);
         assert_close(real.rules.public_capital_gamma, 0.10);
@@ -174,6 +176,7 @@ void test_default_is_complete_latest_world() {
         assert(monetary.policy.state_resolution_backstop);
         assert(monetary.rules.opening_capital_per_bank > 0.0);
         assert_close(population.policy.pension_replacement, 0.20);
+        assert_close(population.rules.marriage_rules.assortativity, 1.0);
     }
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
@@ -201,8 +204,7 @@ void test_default_is_complete_latest_world() {
         const auto *root = world.get_if()->economy_root(EconomyId(economy_index));
         assert(root != nullptr);
         root->banks.for_each_alive([root, economy_index](
-                                       BankId id,
-                                       const core::BankComponent &bank) {
+                                       BankId id, const core::BankComponent &bank) {
             if (!bank.alive) {
                 return;
             }
@@ -218,8 +220,7 @@ void test_default_is_complete_latest_world() {
                         const auto candidate_reserve =
                             root->reserves.balance(candidate_bank.settlement_node);
                         std::cerr << "  bank=" << candidate.value()
-                                  << " alive=" << candidate_bank.alive
-                                  << " reserve="
+                                  << " alive=" << candidate_bank.alive << " reserve="
                                   << (candidate_reserve.ok()
                                           ? candidate_reserve.get_if()->value()
                                           : std::numeric_limits<double>::quiet_NaN())
@@ -257,6 +258,7 @@ void test_profiles_counts_policy_and_calendar_are_native() {
     assert(first.energy_rules.producer_count == 3U);
     assert(first.housing_rules.builder_count == 4U);
     assert(monetary.rules.bank_count == 3U);
+    assert_close(financial.rules.initial_necessity_share, 0.75);
     assert(real.settlement_banks == 3U);
     assert(real.rules.linear_productivity == 1.2);
     assert(real.rules.capital_productivity == 2.88);
@@ -281,6 +283,82 @@ void test_profiles_counts_policy_and_calendar_are_native() {
     auto policy = world.get_if()->domestic_policy(EconomyId(0U));
     assert(policy.ok());
     assert(policy.get_if()->fiscal_monetary.government_deficit_target == 0.02);
+}
+
+void test_large_population_dividend_distribution_is_stable() {
+    auto document = new_game_document();
+    const std::string small_counts = R"JSON("demographics_population":95,
+                    "n_firms_c":13,
+                    "n_firms_k":5,
+                    "n_firms_e":3,
+                    "n_builders":4,
+                    "n_banks":3)JSON";
+    const std::string large_counts = R"JSON("demographics_population":100000,
+                    "n_firms_c":1500,
+                    "n_firms_k":500,
+                    "n_firms_e":250,
+                    "n_builders":625,
+                    "n_banks":8)JSON";
+    const auto position = document.find(small_counts);
+    assert(position != std::string::npos);
+    document.replace(position, small_counts.size(), large_counts);
+
+    auto game = parse_m11_native_new_game(document);
+    assert(game.ok());
+    auto world = M9World::create(game.get_if()->world);
+    assert(world.ok());
+    M9AdvanceOptions options;
+    options.worker_count = 8U;
+    const auto result = world.get_if()->advance(30U, options);
+    if (!result.ok()) {
+        std::cerr << "large-population baseline failed: " << result.status().message()
+                  << "\n";
+    }
+    assert(result.ok());
+    assert(result.get_if()->advanced_ticks == 30U);
+}
+
+void test_large_population_dividend_fallback_is_stable_without_equity() {
+    auto document = new_game_document();
+    const std::string small_counts = R"JSON("demographics_population":95,
+                    "n_firms_c":13,
+                    "n_firms_k":5,
+                    "n_firms_e":3,
+                    "n_builders":4,
+                    "n_banks":3)JSON";
+    const std::string large_counts = R"JSON("demographics_population":100000,
+                    "n_firms_c":1500,
+                    "n_firms_k":500,
+                    "n_firms_e":250,
+                    "n_builders":625,
+                    "n_banks":8)JSON";
+    const auto counts_position = document.find(small_counts);
+    assert(counts_position != std::string::npos);
+    document.replace(counts_position, small_counts.size(), large_counts);
+    const auto seed_position = document.find(R"JSON("seed":17)JSON");
+    assert(seed_position != std::string::npos);
+    document.replace(seed_position, 9U, R"JSON("seed":211)JSON");
+
+    auto game = parse_m11_native_new_game(document);
+    assert(game.ok());
+    auto &rules =
+        game.get_if()->world.economies[0U].domestic_economy.financial_economy.rules;
+    rules.firm_equity = false;
+    rules.bank_equity = false;
+    rules.bank_equity_trading = false;
+    rules.equity_finance = false;
+    rules.margin_credit = false;
+    auto world = M9World::create(game.get_if()->world);
+    assert(world.ok());
+    M9AdvanceOptions options;
+    options.worker_count = 8U;
+    const auto result = world.get_if()->advance(30U, options);
+    if (!result.ok()) {
+        std::cerr << "large-population dividend fallback failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    assert(result.get_if()->advanced_ticks == 30U);
 }
 
 void test_native_crisis_scenarios_are_live() {
@@ -314,6 +392,8 @@ void test_invalid_contract_is_rejected() {
 int main() {
     test_default_is_complete_latest_world();
     test_profiles_counts_policy_and_calendar_are_native();
+    test_large_population_dividend_distribution_is_stable();
+    test_large_population_dividend_fallback_is_stable_without_equity();
     test_native_crisis_scenarios_are_live();
     test_invalid_contract_is_rejected();
     return 0;

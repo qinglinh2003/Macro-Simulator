@@ -2689,7 +2689,6 @@ class M6Extension final : public M5TickExtension {
             return Status::success();
         }
         const auto clearing = state.institutions.clearing_account;
-        double distributed = 0.0;
         double equal_distribution = 0.0;
         for (std::size_t firm_index = 0; firm_index < real.firm_ids_.size();
              ++firm_index) {
@@ -2749,26 +2748,44 @@ class M6Extension final : public M5TickExtension {
                 }
                 remaining_units -= lot->units;
                 remaining_dividend -= amount;
-                distributed += amount;
             }
         }
-        equal_distribution +=
-            std::max(0.0, dividend_total - distributed - equal_distribution);
+        // Every dividend with active equity lots is exhausted by the
+        // remaining-dividend branch above. Firms without an active ownership
+        // projection enter equal_distribution directly. Reconstructing a
+        // third residual as dividend_total - distributed introduced a
+        // population-scale floating-point artifact: summing tens of thousands
+        // of owner transfers rounded differently from the clearing balance,
+        // and the fallback then attempted to distribute the rounding residue
+        // a second time.
         if (equal_distribution <= kEconomicEpsilon || real.household_ids_.empty()) {
             return Status::success();
         }
+        const auto clearing_index = account_index(clearing);
+        if (clearing_index >= real.balances_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M6 dividend clearing projection is absent");
+        }
+        const double available = std::max(0.0, real.balances_[clearing_index]);
+        const double shortfall = std::max(0.0, equal_distribution - available);
+        const double rounding_tolerance =
+            1.0e-10 * std::max(1.0, std::abs(dividend_total));
+        if (shortfall > rounding_tolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 dividend ownership distribution is inconsistent");
+        }
+        double remaining_distribution = std::min(equal_distribution, available);
         const double share =
-            equal_distribution / static_cast<double>(real.household_ids_.size());
+            remaining_distribution / static_cast<double>(real.household_ids_.size());
         for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
             const auto *household = state.households.get(real.household_ids_[index]);
             if (household == nullptr) {
                 return Status(ErrorCode::invariant_violation,
                               "M6 dividend fallback household is absent");
             }
-            const double amount =
-                index + 1U == real.household_ids_.size()
-                    ? equal_distribution - share * static_cast<double>(index)
-                    : share;
+            const double amount = index + 1U == real.household_ids_.size()
+                                      ? remaining_distribution
+                                      : std::min(share, remaining_distribution);
             const auto status =
                 transfer(state, real, clearing, household->primary_account, amount);
             if (!status.ok()) {
@@ -2776,6 +2793,7 @@ class M6Extension final : public M5TickExtension {
                               "M6 dividend fallback exceeds clearing cash");
             }
             real.household_work_[index].income_realized += amount;
+            remaining_distribution -= amount;
         }
         return Status::success();
     }
@@ -3138,6 +3156,7 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.subscale_exit_hazard,
         spec.rules.k_entry_demand,
         spec.rules.k_entry_hazard,
+        spec.rules.initial_necessity_share,
         spec.rules.switch_return_gap,
         spec.rules.switch_hazard,
         spec.rules.switch_retool_loss,
@@ -3171,6 +3190,8 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.subscale_grace_days == 0U || spec.rules.subscale_exit_hazard < 0.0 ||
         spec.rules.subscale_exit_hazard > 1.0 || spec.rules.k_entry_demand <= 0.0 ||
         spec.rules.k_entry_hazard < 0.0 || spec.rules.k_entry_hazard > 1.0 ||
+        spec.rules.initial_necessity_share < 0.0 ||
+        spec.rules.initial_necessity_share > 1.0 ||
         spec.rules.switch_return_gap < 0.0 || spec.rules.switch_pressure_days == 0 ||
         spec.rules.switch_hazard < 0.0 || spec.rules.switch_hazard > 1.0 ||
         spec.rules.switch_retool_loss < 0.0 || spec.rules.switch_retool_loss > 1.0 ||
@@ -3335,6 +3356,7 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     runtime.firms.resize(
         static_cast<std::size_t>(value.root.firms.allocator_state().next_id));
     std::vector<FirmId> equity_firms;
+    std::uint64_t consumption_index = 0U;
     value.root.firms.for_each_alive([&](FirmId id, const core::FirmComponent &firm) {
         FirmLifecycleRecord lifecycle;
         lifecycle.firm = id;
@@ -3364,8 +3386,18 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
             lifecycle.statement.cash + lifecycle.statement.eligible_collateral_value;
         lifecycle.statement.borrowing_base_headroom =
             lifecycle.statement.borrowing_base_proxy;
-        lifecycle.stratum = id.value() % 2 == 0 ? ConsumptionStratum::luxury
-                                                : ConsumptionStratum::necessity;
+        if (firm.sector == core::FirmSector::consumption) {
+            const double before = std::ceil(static_cast<double>(consumption_index) *
+                                            runtime.rules.initial_necessity_share);
+            ++consumption_index;
+            const double after = std::ceil(static_cast<double>(consumption_index) *
+                                           runtime.rules.initial_necessity_share);
+            lifecycle.stratum = after > before ? ConsumptionStratum::necessity
+                                               : ConsumptionStratum::luxury;
+        } else {
+            lifecycle.stratum = id.value() % 2 == 0 ? ConsumptionStratum::luxury
+                                                    : ConsumptionStratum::necessity;
+        }
         lifecycle.active = true;
         runtime.firms[static_cast<std::size_t>(id.value())] = lifecycle;
         if (firm.sector == core::FirmSector::consumption && runtime.rules.firm_equity) {
