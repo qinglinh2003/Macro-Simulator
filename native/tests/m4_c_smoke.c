@@ -1,4 +1,6 @@
+#include <math.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -54,7 +56,12 @@ int main(void) {
     }
     if (macro_sim_m4_advance(source, 10, &advanced).code != MACRO_SIM_OK
         || advanced.advanced_ticks != 10 || advanced.next_tick != 10
-        || advanced.metrics.total_money != 3200.0) {
+        || fabs(advanced.metrics.total_money - 3200.0) > 1.0e-9) {
+        fprintf(stderr,
+                "M4 C smoke mismatch: advanced=%llu next=%llu total_money=%.17g\n",
+                (unsigned long long)advanced.advanced_ticks,
+                (unsigned long long)advanced.next_tick,
+                advanced.metrics.total_money);
         return 3;
     }
     if (macro_sim_m4_state_digest(

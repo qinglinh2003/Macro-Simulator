@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -91,13 +92,14 @@ struct Harness final {
     return result;
 }
 
-[[nodiscard]] macro_sim::Result<M8AdvanceResult> advance(Harness &harness,
-                                                         std::uint64_t count) {
+[[nodiscard]] macro_sim::Result<M8AdvanceResult>
+advance(Harness &harness, std::uint64_t count, const M8AdvanceOptions &options = {}) {
     return advance_m8_ticks(harness.root, harness.real_runtime, harness.real_scratch,
                             harness.monetary_runtime, harness.monetary_scratch,
                             harness.financial_runtime, harness.financial_scratch,
                             harness.population_runtime, harness.population_scratch,
-                            harness.runtime, harness.scratch, harness.tick, count);
+                            harness.runtime, harness.scratch, harness.tick, count,
+                            options);
 }
 
 void test_genesis_mints_real_assets_without_money() {
@@ -245,6 +247,94 @@ void test_builders_create_permitted_real_stock() {
     assert(harness.root.genesis_money == money_before);
 }
 
+void test_builder_plan_can_finance_work_in_progress() {
+    auto value = housing_spec();
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 1;
+    value.housing_rules.builder_productivity = 0.1;
+    value.housing_rules.builder_demand_seed = 1.0;
+    value.housing_rules.initial_builder_cash_buffer = 1.0;
+    value.housing_policy.land_fee_share = 0.0;
+    value.housing_policy.annual_housing_permits = 10;
+    auto harness = build(value);
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.economy.economy.economy.new_credit > 0.0);
+    assert(harness.runtime.builders.front().work_in_progress > 0.05);
+}
+
+void test_builder_exit_transfers_work_in_progress() {
+    auto value = housing_spec();
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 2;
+    value.housing_rules.builder_productivity = 0.1;
+    value.housing_rules.builder_demand_seed = 1.0;
+    value.housing_rules.initial_builder_cash_buffer = 100.0;
+    value.housing_policy.land_fee_share = 0.0;
+    value.housing_policy.annual_housing_permits = 100;
+    auto control = build(value);
+    auto exiting = build(value);
+    assert(exiting.runtime.builders.size() == 2U);
+    const auto exiting_firm = exiting.runtime.builders.front().firm;
+    control.runtime.builders.front().work_in_progress = 3.0;
+    exiting.runtime.builders.front().work_in_progress = 3.0;
+
+    M8AdvanceOptions options;
+    options.base.base.force_firm_exit = exiting_firm;
+    const auto control_result = advance(control, 1);
+    const auto exit_result = advance(exiting, 1, options);
+    assert(control_result.ok());
+    assert(exit_result.ok());
+    const auto physical_builder_stock = [](const M8Runtime &runtime) {
+        double total = 0.0;
+        for (const auto &builder : runtime.builders) {
+            if (builder.active) {
+                // Finished inventory is already represented by registered dwellings.
+                total += builder.work_in_progress;
+            }
+        }
+        return total + static_cast<double>(runtime.properties.active_count());
+    };
+    const double control_work = physical_builder_stock(control.runtime);
+    const double exit_work = physical_builder_stock(exiting.runtime);
+    if (std::abs(control_work - exit_work) >= 1.0e-8) {
+        std::cerr << "builder exit lost physical stock: control=" << control_work
+                  << " exit=" << exit_work << " successor="
+                  << exiting.financial_scratch.firm_exits_.front().successor.value()
+                  << "\n";
+    }
+    assert(std::abs(control_work - exit_work) < 1.0e-8);
+    const auto source =
+        std::find_if(exiting.runtime.builders.begin(), exiting.runtime.builders.end(),
+                     [exiting_firm](const BuilderComponent &builder) {
+                         return builder.firm == exiting_firm;
+                     });
+    assert(source != exiting.runtime.builders.end());
+    assert(!source->active);
+    assert(source->work_in_progress == 0.0);
+}
+
+void test_idle_builder_sector_consolidates() {
+    auto value = housing_spec();
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 2;
+    value.housing_rules.builder_demand_seed = 0.0;
+    value.housing_rules.initial_builder_cash_buffer = 100.0;
+    value.housing_policy.land_fee_share = 0.0;
+    value.domestic_economy.financial_economy.rules.firm_subscale_exit = true;
+    auto harness = build(value);
+    const auto result = advance(harness, 1'000);
+    assert(result.ok());
+    const auto active =
+        std::count_if(harness.runtime.builders.begin(), harness.runtime.builders.end(),
+                      [](const BuilderComponent &builder) { return builder.active; });
+    assert(active == 1);
+}
+
 void test_builder_energy_input_is_canonical() {
     auto value = housing_spec();
     value.energy_rules.enabled = true;
@@ -333,6 +423,9 @@ int main() {
     test_quiet_days_preserve_title_exactly();
     test_capability_dependencies_are_rejected();
     test_builders_create_permitted_real_stock();
+    test_builder_plan_can_finance_work_in_progress();
+    test_builder_exit_transfers_work_in_progress();
+    test_idle_builder_sector_consolidates();
     test_builder_energy_input_is_canonical();
     test_affordability_feedback_reaches_demographic_port();
     test_last_death_transfers_title_to_public_estate();

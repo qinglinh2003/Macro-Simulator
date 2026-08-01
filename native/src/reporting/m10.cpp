@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <numeric>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace macro_sim::reporting {
@@ -39,7 +41,8 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
     {"metric.economy.population_alive", "persons", 1U, MetricTier::causal,
      MetricAggregation::last, "m7.population"},
     {"metric.economy.poverty_rate", "share", 1U, MetricTier::analytic,
-     MetricAggregation::last, "share_below_half_median_household_consumption"},
+     MetricAggregation::last,
+     "person_share_below_half_person_weighted_median_equivalized_consumption"},
     {"metric.economy.price_index", "index", 1U, MetricTier::causal,
      MetricAggregation::mean, "m4.price_index"},
     {"metric.economy.real_output", "goods_units", 1U, MetricTier::causal,
@@ -110,6 +113,96 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
     {"metric.shock.severity.capital_destruction", "fraction", 1U,
      MetricTier::release, MetricAggregation::last,
      "max disclosed capital-destruction shock severity"},
+    {"metric.economy.hh_wealth_gini", "index", 30U, MetricTier::analytic,
+     MetricAggregation::last,
+     "gini(nonnegative household deposits + securities + housing - debt)"},
+    {"metric.economy.wage_p90_p10_ratio", "ratio", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "weighted_p90(active hourly wage) / weighted_p10(active hourly wage)"},
+    {"metric.economy.welfare_log", "log_real_consumption", 30U,
+     MetricTier::analytic, MetricAggregation::mean,
+     "person-weighted mean log equivalized real household consumption"},
+    {"metric.economy.savings_rate", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last,
+     "(live household realized income - consumption) / realized income"},
+    {"metric.economy.bottom10_consumption", "real_currency", 30U,
+     MetricTier::analytic, MetricAggregation::mean,
+     "mean equivalized real consumption of the bottom population decile"},
+    {"metric.economy.income_decile_1_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "bottom household income decile share"},
+    {"metric.economy.income_decile_2_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "second household income decile share"},
+    {"metric.economy.income_decile_3_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "third household income decile share"},
+    {"metric.economy.income_decile_4_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "fourth household income decile share"},
+    {"metric.economy.income_decile_5_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "fifth household income decile share"},
+    {"metric.economy.income_decile_6_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "sixth household income decile share"},
+    {"metric.economy.income_decile_7_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "seventh household income decile share"},
+    {"metric.economy.income_decile_8_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "eighth household income decile share"},
+    {"metric.economy.income_decile_9_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "ninth household income decile share"},
+    {"metric.economy.income_decile_10_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "top household income decile share"},
+    {"metric.economy.wealth_decile_1_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "bottom household net-wealth decile share"},
+    {"metric.economy.wealth_decile_2_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "second household net-wealth decile share"},
+    {"metric.economy.wealth_decile_3_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "third household net-wealth decile share"},
+    {"metric.economy.wealth_decile_4_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "fourth household net-wealth decile share"},
+    {"metric.economy.wealth_decile_5_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "fifth household net-wealth decile share"},
+    {"metric.economy.wealth_decile_6_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "sixth household net-wealth decile share"},
+    {"metric.economy.wealth_decile_7_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "seventh household net-wealth decile share"},
+    {"metric.economy.wealth_decile_8_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "eighth household net-wealth decile share"},
+    {"metric.economy.wealth_decile_9_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "ninth household net-wealth decile share"},
+    {"metric.economy.wealth_decile_10_share", "share", 30U, MetricTier::analytic,
+     MetricAggregation::last, "top household net-wealth decile share"},
+    {"metric.economy.consumption_decile_1_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "bottom population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_2_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "second population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_3_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "third population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_4_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "fourth population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_5_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "fifth population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_6_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "sixth population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_7_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "seventh population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_8_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "eighth population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_9_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "ninth population equivalized-consumption decile share"},
+    {"metric.economy.consumption_decile_10_share", "share", 30U,
+     MetricTier::analytic, MetricAggregation::last,
+     "top population equivalized-consumption decile share"},
+#define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule)   \
+    {stable_id, unit, 30U, MetricTier::analytic,                          \
+     MetricAggregation::last, parity_rule},
+#include "macro_sim/reporting/m10_dashboard_metrics.inc"
+#undef MACRO_SIM_DASHBOARD_METRIC
 #define MACRO_SIM_M4_SOURCE(field, unit)                                  \
     {"metric.source.m4." #field, unit, 1U, MetricTier::analytic,          \
      MetricAggregation::last, "simulation::M4Metrics::" #field},
@@ -151,6 +244,17 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
 #undef MACRO_SIM_NATIONAL_ACCOUNT
 }};
 
+enum class DashboardMetric : std::size_t {
+#define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule) symbol,
+#include "macro_sim/reporting/m10_dashboard_metrics.inc"
+#undef MACRO_SIM_DASHBOARD_METRIC
+    count,
+};
+
+static_assert(
+    static_cast<std::size_t>(DashboardMetric::count) ==
+    kM10DashboardMetricCount);
+
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
 [[nodiscard]] double gini(std::vector<double> values) {
@@ -175,21 +279,279 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
                       0.0, 1.0);
 }
 
-[[nodiscard]] double median(std::vector<double> values) {
+[[nodiscard]] double top_decile_share(std::vector<double> values) {
     if (values.empty()) {
         return 0.0;
     }
-    const std::size_t middle = values.size() / 2U;
-    std::nth_element(values.begin(),
-                     values.begin() + static_cast<std::ptrdiff_t>(middle),
-                     values.end());
-    const double upper = values[middle];
-    if (values.size() % 2U != 0U) {
-        return upper;
+    for (auto &value : values) {
+        value = std::max(0.0, value);
     }
-    const auto lower = std::max_element(
-        values.begin(), values.begin() + static_cast<std::ptrdiff_t>(middle));
-    return 0.5 * (*lower + upper);
+    std::sort(values.begin(), values.end(), std::greater<double>{});
+    const double total = std::accumulate(values.begin(), values.end(), 0.0);
+    if (total <= 1.0e-12) {
+        return 0.0;
+    }
+    const std::size_t count = std::max<std::size_t>(
+        1U, (values.size() + 9U) / 10U);
+    return std::accumulate(
+               values.begin(),
+               values.begin() +
+                   static_cast<std::vector<double>::difference_type>(
+                       count),
+               0.0) /
+           total;
+}
+
+[[nodiscard]] double pareto_slope(std::vector<double> values) {
+    values.erase(
+        std::remove_if(
+            values.begin(), values.end(),
+            [](double value) {
+                return !finite(value) || value <= 1.0e-12;
+            }),
+        values.end());
+    if (values.size() < 3U) {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end(), std::greater<double>{});
+    values.resize(std::max<std::size_t>(
+        3U, (values.size() + 9U) / 10U));
+    double mean_log_rank = 0.0;
+    double mean_log_size = 0.0;
+    for (std::size_t index = 0U; index < values.size(); ++index) {
+        mean_log_rank += std::log(static_cast<double>(index + 1U));
+        mean_log_size += std::log(values[index]);
+    }
+    mean_log_rank /= static_cast<double>(values.size());
+    mean_log_size /= static_cast<double>(values.size());
+    double covariance = 0.0;
+    double rank_variance = 0.0;
+    for (std::size_t index = 0U; index < values.size(); ++index) {
+        const double rank =
+            std::log(static_cast<double>(index + 1U)) -
+            mean_log_rank;
+        covariance += rank * (std::log(values[index]) - mean_log_size);
+        rank_variance += rank * rank;
+    }
+    const double rank_size_slope =
+        rank_variance > 1.0e-12
+            ? covariance / rank_variance
+            : 0.0;
+    return rank_size_slope < -1.0e-12
+               ? -1.0 / rank_size_slope
+               : 0.0;
+}
+
+struct EquivalizedConsumption final {
+    double value{0.0};
+    std::size_t persons{0U};
+};
+
+struct WeightedObservation final {
+    double value{0.0};
+    double weight{0.0};
+};
+
+struct DecileDistribution final {
+    std::array<double, 10U> shares{};
+    double bottom_mean{0.0};
+};
+
+[[nodiscard]] double relative_consumption_poverty(
+    std::vector<EquivalizedConsumption> households
+) {
+    households.erase(
+        std::remove_if(
+            households.begin(), households.end(),
+            [](const EquivalizedConsumption &household) {
+                return household.persons == 0U;
+            }),
+        households.end());
+    if (households.empty()) {
+        return 0.0;
+    }
+    std::sort(
+        households.begin(), households.end(),
+        [](const EquivalizedConsumption &left,
+           const EquivalizedConsumption &right) {
+            return left.value < right.value;
+        });
+    const std::size_t persons = std::accumulate(
+        households.begin(), households.end(), std::size_t{0U},
+        [](std::size_t total, const EquivalizedConsumption &household) {
+            return total + household.persons;
+        });
+    if (persons == 0U) {
+        return 0.0;
+    }
+    const std::size_t median_rank = (persons + 1U) / 2U;
+    std::size_t cumulative = 0U;
+    double person_weighted_median = households.back().value;
+    for (const auto &household : households) {
+        cumulative += household.persons;
+        if (cumulative >= median_rank) {
+            person_weighted_median = household.value;
+            break;
+        }
+    }
+    const double poverty_line = 0.5 * person_weighted_median;
+    if (poverty_line <= 1.0e-12) {
+        return 0.0;
+    }
+    const std::size_t persons_below = std::accumulate(
+        households.begin(), households.end(), std::size_t{0U},
+        [poverty_line](
+            std::size_t total,
+            const EquivalizedConsumption &household
+        ) {
+            return total +
+                (household.value < poverty_line ? household.persons : 0U);
+        });
+    return static_cast<double>(persons_below) /
+        static_cast<double>(persons);
+}
+
+[[nodiscard]] DecileDistribution decile_distribution(
+    std::vector<WeightedObservation> observations
+) {
+    observations.erase(
+        std::remove_if(
+            observations.begin(), observations.end(),
+            [](const WeightedObservation &observation) {
+                return !finite(observation.value) ||
+                    !finite(observation.weight) ||
+                    observation.weight <= 0.0;
+            }),
+        observations.end());
+    DecileDistribution result;
+    if (observations.empty()) {
+        return result;
+    }
+    for (auto &observation : observations) {
+        observation.value = std::max(0.0, observation.value);
+    }
+    std::sort(
+        observations.begin(), observations.end(),
+        [](const WeightedObservation &left,
+           const WeightedObservation &right) {
+            return left.value < right.value;
+        });
+    const double total_weight = std::accumulate(
+        observations.begin(), observations.end(), 0.0,
+        [](double total, const WeightedObservation &observation) {
+            return total + observation.weight;
+        });
+    const double total_resource = std::accumulate(
+        observations.begin(), observations.end(), 0.0,
+        [](double total, const WeightedObservation &observation) {
+            return total + observation.value * observation.weight;
+        });
+    if (total_weight <= 1.0e-12) {
+        return result;
+    }
+
+    const double decile_weight = total_weight / 10.0;
+    std::size_t decile = 0U;
+    double used_in_decile = 0.0;
+    std::array<double, 10U> resource{};
+    for (const auto &observation : observations) {
+        double remaining = observation.weight;
+        while (remaining > 1.0e-12 && decile < resource.size()) {
+            const double room = decile_weight - used_in_decile;
+            const double allocated = std::min(remaining, room);
+            resource[decile] += allocated * observation.value;
+            remaining -= allocated;
+            used_in_decile += allocated;
+            if (used_in_decile + 1.0e-12 >= decile_weight) {
+                ++decile;
+                used_in_decile = 0.0;
+            }
+        }
+    }
+    if (total_resource > 1.0e-12) {
+        for (std::size_t index = 0U; index < result.shares.size(); ++index) {
+            result.shares[index] = resource[index] / total_resource;
+        }
+    }
+    result.bottom_mean =
+        decile_weight > 1.0e-12 ? resource[0U] / decile_weight : 0.0;
+    return result;
+}
+
+[[nodiscard]] double weighted_quantile(
+    std::vector<WeightedObservation> observations, double probability
+) {
+    observations.erase(
+        std::remove_if(
+            observations.begin(), observations.end(),
+            [](const WeightedObservation &observation) {
+                return !finite(observation.value) ||
+                    !finite(observation.weight) ||
+                    observation.weight <= 0.0;
+            }),
+        observations.end());
+    if (observations.empty()) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    std::sort(
+        observations.begin(), observations.end(),
+        [](const WeightedObservation &left,
+           const WeightedObservation &right) {
+            return left.value < right.value;
+        });
+    const double total_weight = std::accumulate(
+        observations.begin(), observations.end(), 0.0,
+        [](double total, const WeightedObservation &observation) {
+            return total + observation.weight;
+        });
+    const double target = std::clamp(probability, 0.0, 1.0) * total_weight;
+    double cumulative = 0.0;
+    for (const auto &observation : observations) {
+        cumulative += observation.weight;
+        if (cumulative + 1.0e-12 >= target) {
+            return observation.value;
+        }
+    }
+    return observations.back().value;
+}
+
+[[nodiscard]] std::size_t age_bucket(std::uint32_t age) noexcept {
+    if (age < 15U) {
+        return 0U;
+    }
+    if (age < 25U) {
+        return 1U;
+    }
+    if (age < 35U) {
+        return 2U;
+    }
+    if (age < 45U) {
+        return 3U;
+    }
+    if (age < 55U) {
+        return 4U;
+    }
+    if (age < 65U) {
+        return 5U;
+    }
+    return 6U;
+}
+
+[[nodiscard]] double security_market_value(
+    const core::SecurityBook &securities,
+    const core::SecurityLot &lot
+) noexcept {
+    if (lot.security.kind() == core::SecurityKind::equity) {
+        const auto *contract =
+            securities.get(EquityId(lot.security.value()));
+        return contract == nullptr || !contract->active
+            ? 0.0
+            : lot.units * contract->price.value();
+    }
+    const auto *contract = securities.get(BondId(lot.security.value()));
+    return contract == nullptr || !contract->active
+        ? 0.0
+        : lot.units;
 }
 
 [[nodiscard]] double shock_progress(const simulation::ShockSpec &shock,
@@ -261,6 +623,12 @@ void set(MetricFrame &frame, std::size_t economy, std::size_t metric,
     const std::size_t offset = economy * kM10MetricCount + metric;
     frame.values[offset] = value;
     frame.valid[offset] = finite(value) ? 1U : 0U;
+}
+
+void set_dashboard(MetricFrame &frame, std::size_t economy,
+                   DashboardMetric metric, double value) {
+    set(frame, economy,
+        kM10BasePublicMetricCount + static_cast<std::size_t>(metric), value);
 }
 
 [[nodiscard]] const simulation::M4Metrics &m4(const M8Metrics &metrics) noexcept {
@@ -356,11 +724,19 @@ struct NativeNationalAccounts final {
     accounts.private_fixed_capital_formation_nominal =
         accounts.fixed_capital_formation_nominal -
         accounts.public_fixed_capital_formation_nominal;
+    // Energy production that is not consumed remains either in producer
+    // inventories or in the strategic reserve.  `energy.sold` includes sales
+    // out of the reserve, while a positive reserve flow is a purchase from a
+    // private producer.  This expression therefore measures the change in the
+    // complete energy stock without double-counting reserve transactions.
+    const double energy_inventory_change =
+        energy.production - energy.sold +
+        std::max(0.0, energy.strategic_reserve_flow);
     accounts.inventory_change_nominal =
         real.inventory_change_nominal +
-        energy.strategic_reserve_flow * energy.transaction_price;
+        energy_inventory_change * energy.transaction_price;
     accounts.inventory_change_real =
-        real.inventory_change_real + energy.strategic_reserve_flow;
+        real.inventory_change_real + energy_inventory_change;
     accounts.exports_nominal = external.exports_value;
     accounts.imports_nominal = external.imports_value;
     accounts.net_exports_nominal =
@@ -396,6 +772,10 @@ struct NativeNationalAccounts final {
     const double fixed_capital_formation_real =
         real.fixed_capital_formation_real +
         housing.construction_output;
+    accounts.household_consumption_real = household_consumption_real;
+    accounts.government_consumption_real = government_consumption_real;
+    accounts.fixed_capital_formation_real =
+        fixed_capital_formation_real;
     accounts.expenditure_observed_real =
         household_consumption_real + government_consumption_real +
         fixed_capital_formation_real + accounts.inventory_change_real +
@@ -408,6 +788,9 @@ struct NativeNationalAccounts final {
 
     accounts.compensation_employees_nominal = real.wages_paid;
     accounts.cash_operating_surplus_nominal = real.firm_profit;
+    // Native production accounts are measured at basic prices.  Product
+    // taxes are therefore an observed zero rather than an unavailable value.
+    accounts.net_product_taxes_observed = 0.0;
     accounts.income_observed_nominal =
         accounts.compensation_employees_nominal +
         accounts.cash_operating_surplus_nominal;
@@ -652,8 +1035,11 @@ build_metric_frame(const simulation::M9World &world,
     MetricFrame frame;
     frame.tick = world.tick();
     frame.economy_count = world.economy_count();
-    frame.values.assign(frame.economy_count * kM10MetricCount,
-                        std::numeric_limits<double>::quiet_NaN());
+    // Availability is represented exclusively by `valid`. Keeping the backing
+    // value finite makes metric frames deterministic and safely serializable
+    // even when a statistic (for example a wage quantile before the first
+    // hire) is not yet available.
+    frame.values.assign(frame.economy_count * kM10MetricCount, 0.0);
     frame.valid.assign(frame.values.size(), 0U);
 
     for (std::size_t economy = 0; economy < frame.economy_count; ++economy) {
@@ -667,11 +1053,14 @@ build_metric_frame(const simulation::M9World &world,
             EconomyId(static_cast<std::uint64_t>(economy)));
         const auto *financial = world.economy_financial_runtime(
             EconomyId(static_cast<std::uint64_t>(economy)));
+        const auto *population_runtime = world.economy_population_runtime(
+            EconomyId(static_cast<std::uint64_t>(economy)));
         const auto *runtime = world.economy_runtime(
             EconomyId(static_cast<std::uint64_t>(economy)));
         const auto domestic_policy = world.domestic_policy(
             EconomyId(static_cast<std::uint64_t>(economy)));
-        if (root == nullptr || financial == nullptr || runtime == nullptr) {
+        if (root == nullptr || financial == nullptr ||
+            population_runtime == nullptr || runtime == nullptr) {
             return Status(ErrorCode::invariant_violation,
                           "M10 metric source economy is unavailable");
         }
@@ -679,24 +1068,220 @@ build_metric_frame(const simulation::M9World &world,
             return domestic_policy.status();
         }
 
-        std::vector<double> incomes;
-        std::vector<double> consumption;
-        incomes.reserve(root->households.alive_count());
-        consumption.reserve(root->households.alive_count());
-        root->households.for_each_alive(
-            [&](HouseholdId, const core::HouseholdComponent &household) {
-                incomes.push_back(household.income_realized);
-                consumption.push_back(household.spent);
-            });
-        const double consumption_median = median(consumption);
-        const double poverty_line = 0.5 * consumption_median;
-        const double poverty =
-            poverty_line > 1.0e-12 && !consumption.empty()
-                ? static_cast<double>(std::count_if(
-                      consumption.begin(), consumption.end(),
-                      [poverty_line](double value) { return value < poverty_line; })) /
-                      static_cast<double>(consumption.size())
-                : 0.0;
+        double energy_stock = runtime->strategic_reserve_stock;
+        for (const auto &producer : runtime->energy_producers) {
+            if (producer.active) {
+                energy_stock += std::max(0.0, producer.inventory);
+            }
+        }
+        for (const auto &input : runtime->energy_inputs) {
+            if (input.active) {
+                energy_stock += std::max(0.0, input.stock);
+            }
+        }
+
+        const bool refresh_distribution =
+            previous == nullptr ||
+            frame.tick.value() % 30U == 0U ||
+            !previous->value(economy, 41U).ok() ||
+            (!previous->value(economy, 42U).ok() &&
+             population_runtime->employment.active_count() > 0U);
+        if (refresh_distribution) {
+            const std::size_t household_slots =
+                root->households.slot_count() + 1U;
+            std::vector<double> debt(household_slots, 0.0);
+            std::vector<double> securities_value(household_slots, 0.0);
+            std::vector<double> housing_value(household_slots, 0.0);
+            for (const auto &loan : root->loans.records()) {
+                if (!loan.active ||
+                    loan.borrower.kind() != core::OwnerKind::household ||
+                    loan.borrower.value() >= debt.size()) {
+                    continue;
+                }
+                debt[loan.borrower.value()] +=
+                    std::max(0.0, loan.principal.value());
+            }
+            for (const auto &lot : financial->securities.lots()) {
+                if (!lot.active() ||
+                    lot.holder.kind() != core::OwnerKind::household ||
+                    lot.holder.value() >= securities_value.size()) {
+                    continue;
+                }
+                securities_value[lot.holder.value()] +=
+                    std::max(
+                        0.0,
+                        security_market_value(financial->securities, lot));
+            }
+            for (const auto &dwelling : runtime->properties.records()) {
+                if (!dwelling.active ||
+                    dwelling.owner.kind() != core::OwnerKind::household ||
+                    dwelling.owner.value() >= housing_value.size()) {
+                    continue;
+                }
+                housing_value[dwelling.owner.value()] +=
+                    std::max(0.0, runtime->house_price);
+            }
+
+            std::vector<double> incomes;
+            std::vector<double> wealth;
+            std::vector<EquivalizedConsumption> consumption;
+            std::vector<WeightedObservation> income_observations;
+            std::vector<WeightedObservation> wealth_observations;
+            std::vector<WeightedObservation> consumption_observations;
+            const std::size_t household_count =
+                root->households.alive_count();
+            incomes.reserve(household_count);
+            wealth.reserve(household_count);
+            consumption.reserve(household_count);
+            income_observations.reserve(household_count);
+            wealth_observations.reserve(household_count);
+            consumption_observations.reserve(household_count);
+            double total_income = 0.0;
+            double total_consumption = 0.0;
+            double welfare_weighted_sum = 0.0;
+            double welfare_weight = 0.0;
+            const double price_index =
+                std::max(1.0e-9, real.price_index);
+            root->households.for_each_alive(
+                [&](HouseholdId household_id,
+                    const core::HouseholdComponent &household) {
+                    const std::size_t household_index =
+                        static_cast<std::size_t>(household_id.value());
+                    const std::size_t persons =
+                        population_runtime->membership.members(
+                            household_id).size();
+                    if (persons == 0U) {
+                        return;
+                    }
+                    const double person_weight =
+                        static_cast<double>(persons);
+                    const double scale = std::sqrt(person_weight);
+                    const double energy_spent =
+                        household_index < runtime->household_energy.size() &&
+                            runtime->household_energy[household_index].active
+                        ? runtime->household_energy[household_index].spent
+                        : 0.0;
+                    const double household_consumption =
+                        std::max(0.0, household.spent + energy_spent);
+                    const double equivalized_consumption =
+                        household_consumption / scale;
+                    const double equivalized_real_consumption =
+                        equivalized_consumption / price_index;
+                    const auto balance =
+                        root->postings.balance(household.primary_account);
+                    const double cash =
+                        balance.ok()
+                        ? std::max(0.0, balance.get_if()->value())
+                        : 0.0;
+                    const double net_wealth = std::max(
+                        0.0,
+                        cash + securities_value[household_index] +
+                            housing_value[household_index] -
+                            debt[household_index]);
+
+                    incomes.push_back(household.income_realized);
+                    wealth.push_back(net_wealth);
+                    consumption.push_back({
+                        equivalized_consumption,
+                        persons,
+                    });
+                    income_observations.push_back({
+                        std::max(0.0, household.income_realized / scale),
+                        person_weight,
+                    });
+                    wealth_observations.push_back({
+                        net_wealth / scale,
+                        person_weight,
+                    });
+                    consumption_observations.push_back({
+                        equivalized_real_consumption,
+                        person_weight,
+                    });
+                    total_income += household.income_realized;
+                    total_consumption += household_consumption;
+                    welfare_weighted_sum +=
+                        person_weight *
+                        std::log(std::max(
+                            1.0e-9, equivalized_real_consumption));
+                    welfare_weight += person_weight;
+                });
+
+            const auto income_distribution =
+                decile_distribution(std::move(income_observations));
+            const auto wealth_distribution =
+                decile_distribution(std::move(wealth_observations));
+            const auto consumption_distribution =
+                decile_distribution(std::move(consumption_observations));
+            set(frame, economy, 7U, gini(std::move(incomes)));
+            set(
+                frame, economy, 12U,
+                relative_consumption_poverty(std::move(consumption)));
+            if (!wealth.empty()) {
+                set(frame, economy, 41U, gini(std::move(wealth)));
+            }
+
+            std::vector<WeightedObservation> wages;
+            wages.reserve(population_runtime->employment.active_count());
+            for (const auto &job :
+                 population_runtime->employment.records()) {
+                if (!job.active || job.suspended ||
+                    job.wage <= 0.0 || job.hours <= 0.0) {
+                    continue;
+                }
+                wages.push_back({job.wage, job.hours});
+            }
+            if (!wages.empty()) {
+                const double p10 = weighted_quantile(wages, 0.10);
+                const double p90 =
+                    weighted_quantile(std::move(wages), 0.90);
+                if (finite(p10) && finite(p90) && p10 > 1.0e-12) {
+                    set(frame, economy, 42U, p90 / p10);
+                }
+            }
+            if (welfare_weight > 1.0e-12) {
+                set(
+                    frame, economy, 43U,
+                    welfare_weighted_sum / welfare_weight);
+            }
+            if (std::abs(total_income) > 1.0e-12) {
+                set(
+                    frame, economy, 44U,
+                    (total_income - total_consumption) / total_income);
+            }
+            set(
+                frame, economy, 45U,
+                consumption_distribution.bottom_mean);
+            for (std::size_t decile = 0U; decile < 10U; ++decile) {
+                set(
+                    frame, economy, 46U + decile,
+                    income_distribution.shares[decile]);
+                set(
+                    frame, economy, 56U + decile,
+                    wealth_distribution.shares[decile]);
+                set(
+                    frame, economy, 66U + decile,
+                    consumption_distribution.shares[decile]);
+            }
+        } else {
+            for (const std::size_t metric : {
+                     7U, 12U, 41U, 42U, 43U, 44U, 45U, 46U, 47U, 48U,
+                     49U, 50U, 51U, 52U, 53U, 54U, 55U, 56U, 57U, 58U,
+                     59U, 60U, 61U, 62U, 63U, 64U, 65U, 66U, 67U, 68U,
+                     69U, 70U, 71U, 72U, 73U, 74U, 75U,
+                 }) {
+                const auto carried = previous->value(economy, metric);
+                if (carried.ok()) {
+                    set(frame, economy, metric, *carried.get_if());
+                }
+            }
+            for (std::size_t metric = kM10BasePublicMetricCount;
+                 metric < kM10PublicMetricCount; ++metric) {
+                const auto carried = previous->value(economy, metric);
+                if (carried.ok()) {
+                    set(frame, economy, metric, *carried.get_if());
+                }
+            }
+        }
         const double nominal_output = real.nominal_output;
         const auto treasury_balance =
             root->postings.balance(root->institutions.treasury_account);
@@ -706,12 +1291,12 @@ build_metric_frame(const simulation::M9World &world,
         const double government_debt =
             financial->securities.total_bond_face().value() -
             treasury_balance.get_if()->value();
+        const auto national_accounts =
+            build_national_accounts(domestic, external, government_debt);
 
         set(frame, economy, 0U, population.mean_hourly_wage);
         set(frame, economy, 1U,
-            nominal_output > 1.0e-12
-                ? monetary.total_loan_principal / nominal_output
-                : 0.0);
+            national_accounts.credit_to_annualized_gdp);
         set(frame, economy, 2U, population.employed_fte);
         set(frame, economy, 3U,
             domestic.energy.transaction_price > 1.0e-12
@@ -726,7 +1311,6 @@ build_metric_frame(const simulation::M9World &world,
             nominal_output > 1.0e-12
                 ? real.government_deficit / nominal_output
                 : 0.0);
-        set(frame, economy, 7U, gini(std::move(incomes)));
         double inflation = 0.0;
         if (previous != nullptr) {
             const auto previous_price = previous->value(economy, 13U);
@@ -738,7 +1322,6 @@ build_metric_frame(const simulation::M9World &world,
         set(frame, economy, 9U, static_cast<double>(monetary.bank_failures));
         set(frame, economy, 10U, monetary.policy_rate);
         set(frame, economy, 11U, static_cast<double>(population.population));
-        set(frame, economy, 12U, poverty);
         set(frame, economy, 13U, real.price_index);
         set(frame, economy, 14U, real.real_output);
         set(frame, economy, 15U, population.unemployment_rate);
@@ -760,6 +1343,643 @@ build_metric_frame(const simulation::M9World &world,
             }
             deposits_by_node[account.key.settlement_node.value()] +=
                 std::max(0.0, account.balance.value());
+        }
+        if (refresh_distribution) {
+            std::unordered_map<std::uint64_t, double> household_debt;
+            std::unordered_map<std::uint64_t, double> firm_debt;
+            for (const auto &loan : root->loans.records()) {
+                if (!loan.active || loan.principal.value() <= 0.0) {
+                    continue;
+                }
+                if (loan.borrower.kind() == core::OwnerKind::household) {
+                    household_debt[loan.borrower.value()] +=
+                        loan.principal.value();
+                } else if (loan.borrower.kind() ==
+                           core::OwnerKind::firm) {
+                    firm_debt[loan.borrower.value()] +=
+                        loan.principal.value();
+                }
+            }
+
+            std::unordered_map<std::uint64_t, bool> active_firm;
+            std::vector<double> tobin_q;
+            tobin_q.reserve(financial->firms.size());
+            for (const auto &record : financial->firms) {
+                active_firm[record.firm.value()] = record.active;
+                if (record.active && finite(record.tobin_q_ema)) {
+                    tobin_q.push_back(record.tobin_q_ema);
+                }
+            }
+
+            std::array<double, 4U> sector_firms{};
+            std::array<double, 4U> sector_sales{};
+            std::array<double, 4U> sector_employment{};
+            std::vector<double> firm_debt_observations;
+            std::vector<double> firm_output_observations;
+            firm_debt_observations.reserve(root->firms.alive_count());
+            firm_output_observations.reserve(root->firms.alive_count());
+            double inventory_total = 0.0;
+            double sales_total = 0.0;
+            double markup_total = 0.0;
+            double markup_count = 0.0;
+            double producing_firms = 0.0;
+            double selling_firms = 0.0;
+            double borrowing_firms = 0.0;
+            root->firms.for_each_alive(
+                [&](FirmId firm_id, const core::FirmComponent &firm) {
+                    const auto active = active_firm.find(
+                        firm_id.value());
+                    if (active != active_firm.end() && !active->second) {
+                        return;
+                    }
+                    const auto sector = static_cast<std::size_t>(
+                        firm.sector);
+                    if (sector < sector_firms.size()) {
+                        sector_firms[sector] += 1.0;
+                        sector_sales[sector] +=
+                            std::max(0.0, firm.sales_previous);
+                    }
+                    const double sales =
+                        std::max(0.0, firm.sales_previous);
+                    const double output_value =
+                        sales * std::max(0.0, firm.posted_price.value());
+                    const double debt =
+                        firm_debt[firm_id.value()];
+                    firm_debt_observations.push_back(debt);
+                    firm_output_observations.push_back(output_value);
+                    inventory_total += std::max(
+                        0.0, firm.goods_inventory.value());
+                    sales_total += sales;
+                    markup_total += std::max(0.0, firm.markup);
+                    markup_count += 1.0;
+                    producing_firms +=
+                        (firm.hired_previous > 1.0e-12 ||
+                         sales > 1.0e-12)
+                        ? 1.0
+                        : 0.0;
+                    selling_firms += sales > 1.0e-12 ? 1.0 : 0.0;
+                    borrowing_firms += debt > 1.0e-12 ? 1.0 : 0.0;
+                });
+
+            for (const auto &job :
+                 population_runtime->employment.records()) {
+                if (!job.active || job.suspended ||
+                    job.hours <= 0.0) {
+                    continue;
+                }
+                const auto *firm = root->firms.get(job.firm);
+                if (firm == nullptr) {
+                    continue;
+                }
+                const auto sector = static_cast<std::size_t>(
+                    firm->sector);
+                if (sector < sector_employment.size()) {
+                    sector_employment[sector] += job.hours;
+                }
+            }
+
+            std::unordered_map<std::uint64_t, double> household_equity;
+            std::unordered_map<std::uint64_t, double> household_securities;
+            for (const auto &lot : financial->securities.lots()) {
+                if (!lot.active() ||
+                    lot.holder.kind() != core::OwnerKind::household) {
+                    continue;
+                }
+                const double value = std::max(
+                    0.0, security_market_value(
+                             financial->securities, lot));
+                household_securities[lot.holder.value()] += value;
+                if (lot.security.kind() ==
+                    core::SecurityKind::equity) {
+                    household_equity[lot.holder.value()] += value;
+                }
+            }
+
+            std::vector<double> household_debt_observations;
+            std::vector<double> household_equity_observations;
+            household_debt_observations.reserve(
+                root->households.alive_count());
+            household_equity_observations.reserve(
+                root->households.alive_count());
+            double household_cash = 0.0;
+            double household_security_value = 0.0;
+            root->households.for_each_alive(
+                [&](HouseholdId household_id,
+                    const core::HouseholdComponent &household) {
+                    household_debt_observations.push_back(
+                        household_debt[household_id.value()]);
+                    household_equity_observations.push_back(
+                        household_equity[household_id.value()]);
+                    const auto balance = root->postings.balance(
+                        household.primary_account);
+                    if (balance.ok()) {
+                        household_cash += std::max(
+                            0.0, balance.get_if()->value());
+                    }
+                    household_security_value +=
+                        household_securities[household_id.value()];
+                });
+
+            std::array<double, 7U> male_by_age{};
+            std::array<double, 7U> female_by_age{};
+            std::array<double, 6U> population_by_labor_age{};
+            std::array<double, 6U> participating_by_age{};
+            std::array<double, 6U> employed_by_age{};
+            double child_population = 0.0;
+            double working_age_population = 0.0;
+            double elder_population = 0.0;
+            for (const auto person_id :
+                 population_runtime->persons.alive_ids()) {
+                const auto *person =
+                    population_runtime->persons.get(person_id);
+                if (person == nullptr) {
+                    continue;
+                }
+                const auto age_days = std::max<std::int64_t>(
+                    0, static_cast<std::int64_t>(
+                           population_runtime->current_calendar_day) -
+                           static_cast<std::int64_t>(
+                               person->birth_day));
+                const auto age = static_cast<std::uint32_t>(
+                    age_days / 365);
+                const auto bucket = age_bucket(age);
+                if (person->sex == core::PersonSex::male) {
+                    male_by_age[bucket] += 1.0;
+                } else {
+                    female_by_age[bucket] += 1.0;
+                }
+                if (bucket > 0U) {
+                    const auto labor_bucket = bucket - 1U;
+                    population_by_labor_age[labor_bucket] += 1.0;
+                    participating_by_age[labor_bucket] +=
+                        person->participating ? 1.0 : 0.0;
+                    employed_by_age[labor_bucket] +=
+                        population_runtime->employment.active_hours(
+                            person_id) > 1.0e-12
+                        ? 1.0
+                        : 0.0;
+                }
+                if (age < population_runtime->rules.working_age) {
+                    child_population += 1.0;
+                } else if (age <
+                           population_runtime->rules.retirement_age) {
+                    working_age_population += 1.0;
+                } else {
+                    elder_population += 1.0;
+                }
+            }
+
+            std::array<std::vector<WeightedObservation>, 3U>
+                consumption_by_generation;
+            const double consumption_price =
+                std::max(1.0e-9, real.price_index);
+            root->households.for_each_alive(
+                [&](HouseholdId household_id,
+                    const core::HouseholdComponent &household) {
+                    const auto members =
+                        population_runtime->membership.members(
+                            household_id);
+                    if (members.empty()) {
+                        return;
+                    }
+                    std::array<double, 3U> group_members{};
+                    for (const auto person_id : members) {
+                        const auto *person =
+                            population_runtime->persons.get(person_id);
+                        if (person == nullptr || !person->alive) {
+                            continue;
+                        }
+                        const auto age_days = std::max<std::int64_t>(
+                            0, static_cast<std::int64_t>(
+                                   population_runtime
+                                       ->current_calendar_day) -
+                                   static_cast<std::int64_t>(
+                                       person->birth_day));
+                        const auto age = static_cast<std::uint32_t>(
+                            age_days / 365);
+                        const std::size_t group =
+                            age <
+                                    population_runtime->rules
+                                        .working_age
+                            ? 0U
+                            : (age <
+                                       population_runtime->rules
+                                           .retirement_age
+                                   ? 1U
+                                   : 2U);
+                        group_members[group] += 1.0;
+                    }
+                    const auto index = static_cast<std::size_t>(
+                        household_id.value());
+                    const double energy_spent =
+                        index < runtime->household_energy.size() &&
+                            runtime->household_energy[index].active
+                        ? runtime->household_energy[index].spent
+                        : 0.0;
+                    const double equivalized =
+                        std::max(
+                            0.0, household.spent + energy_spent) /
+                        std::sqrt(
+                            static_cast<double>(members.size())) /
+                        consumption_price;
+                    for (std::size_t group = 0U;
+                         group < group_members.size(); ++group) {
+                        if (group_members[group] > 0.0) {
+                            consumption_by_generation[group].push_back({
+                                equivalized,
+                                group_members[group],
+                            });
+                        }
+                    }
+                });
+
+            std::unordered_set<std::uint64_t> tenant_households;
+            std::unordered_set<std::uint64_t> landlord_households;
+            for (const auto &tenancy : runtime->tenancies) {
+                if (!tenancy.active) {
+                    continue;
+                }
+                tenant_households.insert(tenancy.tenant.value());
+                landlord_households.insert(tenancy.landlord.value());
+            }
+            double rental_vacancies = 0.0;
+            for (const auto &dwelling : runtime->properties.records()) {
+                if (!dwelling.active ||
+                    dwelling.owner.kind() !=
+                        core::OwnerKind::household) {
+                    continue;
+                }
+                if (!dwelling.occupant.valid()) {
+                    rental_vacancies += 1.0;
+                } else if (dwelling.occupant.value() !=
+                           dwelling.owner.value()) {
+                    landlord_households.insert(
+                        dwelling.owner.value());
+                    tenant_households.insert(
+                        dwelling.occupant.value());
+                }
+            }
+
+            double builder_work_in_progress = 0.0;
+            double builder_inventory = 0.0;
+            for (const auto &builder : runtime->builders) {
+                if (!builder.active) {
+                    continue;
+                }
+                builder_work_in_progress +=
+                    std::max(0.0, builder.work_in_progress);
+                builder_inventory +=
+                    std::max(0.0, builder.finished_inventory);
+            }
+            const auto mortgage_count = static_cast<double>(
+                std::count_if(
+                    runtime->mortgages.begin(),
+                    runtime->mortgages.end(),
+                    [](const simulation::MortgageRecord &mortgage) {
+                        return mortgage.active;
+                    }));
+
+            const double population_total =
+                static_cast<double>(population.population);
+            const double household_debt_total =
+                std::accumulate(
+                    household_debt_observations.begin(),
+                    household_debt_observations.end(), 0.0);
+            const double firm_debt_total =
+                std::accumulate(
+                    firm_debt_observations.begin(),
+                    firm_debt_observations.end(), 0.0);
+            const double deposit_total = std::accumulate(
+                deposits_by_node.begin(), deposits_by_node.end(), 0.0,
+                [](double total, const auto &entry) {
+                    return total + entry.second;
+                });
+            const double q_mean =
+                tobin_q.empty()
+                ? 0.0
+                : std::accumulate(
+                      tobin_q.begin(), tobin_q.end(), 0.0) /
+                      static_cast<double>(tobin_q.size());
+            const double q_variance =
+                tobin_q.empty()
+                ? 0.0
+                : std::accumulate(
+                      tobin_q.begin(), tobin_q.end(), 0.0,
+                      [q_mean](double total, double value) {
+                          const double difference = value - q_mean;
+                          return total + difference * difference;
+                      }) /
+                      static_cast<double>(tobin_q.size());
+            const double household_equity_total =
+                std::accumulate(
+                    household_equity_observations.begin(),
+                    household_equity_observations.end(), 0.0);
+            double previous_wage = 0.0;
+            if (previous != nullptr) {
+                const auto value = previous->value(economy, 0U);
+                if (value.ok()) {
+                    previous_wage = *value.get_if();
+                }
+            }
+
+            set_dashboard(
+                frame, economy, DashboardMetric::inventory_to_sales,
+                safe_ratio(inventory_total, sales_total));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::production_realization_rate,
+                safe_ratio(
+                    real.real_output,
+                    national_accounts.gross_output_real));
+            set_dashboard(
+                frame, economy, DashboardMetric::underemployed_share,
+                safe_ratio(
+                    population.underemployed_heads,
+                    population.employed_heads +
+                        population.unemployment));
+            set_dashboard(
+                frame, economy, DashboardMetric::wage_inflation,
+                previous_wage > 1.0e-12
+                ? population.mean_hourly_wage / previous_wage - 1.0
+                : 0.0);
+            set_dashboard(
+                frame, economy, DashboardMetric::avg_markup,
+                safe_ratio(markup_total, markup_count));
+            set_dashboard(
+                frame, economy, DashboardMetric::gov_debt,
+                government_debt);
+            set_dashboard(
+                frame, economy, DashboardMetric::bank_deposit_total,
+                deposit_total);
+            set_dashboard(
+                frame, economy, DashboardMetric::household_debt_total,
+                household_debt_total);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::household_debt_total_observed,
+                household_debt_total);
+            set_dashboard(
+                frame, economy, DashboardMetric::firm_debt_total,
+                firm_debt_total);
+            set_dashboard(
+                frame, economy, DashboardMetric::household_debt_gini,
+                gini(household_debt_observations));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::household_debt_top10_share,
+                top_decile_share(household_debt_observations));
+            set_dashboard(
+                frame, economy, DashboardMetric::firm_debt_gini,
+                gini(firm_debt_observations));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::firm_debt_top10_share,
+                top_decile_share(firm_debt_observations));
+            set_dashboard(
+                frame, economy, DashboardMetric::equity_market_cap,
+                securities.firm_equity_market_cap +
+                    securities.bank_equity_market_cap);
+            set_dashboard(
+                frame, economy, DashboardMetric::tobin_q_mean,
+                q_mean);
+            set_dashboard(
+                frame, economy, DashboardMetric::tobin_q_dispersion,
+                std::sqrt(std::max(0.0, q_variance)));
+            set_dashboard(
+                frame, economy, DashboardMetric::equity_wealth_share,
+                safe_ratio(
+                    household_equity_total,
+                    household_cash + household_security_value));
+            set_dashboard(
+                frame, economy, DashboardMetric::equity_ownership_gini,
+                gini(household_equity_observations));
+            const auto wealth_gini = frame.value(economy, 41U);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::hh_wealth_gini_incl_equity,
+                wealth_gini.ok() ? *wealth_gini.get_if() : 0.0);
+            set_dashboard(
+                frame, economy, DashboardMetric::mortgage_count,
+                mortgage_count);
+            set_dashboard(
+                frame, economy, DashboardMetric::tenant_share,
+                safe_ratio(
+                    static_cast<double>(tenant_households.size()),
+                    static_cast<double>(
+                        population.households_with_members)));
+            set_dashboard(
+                frame, economy, DashboardMetric::rental_vacancies,
+                rental_vacancies);
+            set_dashboard(
+                frame, economy, DashboardMetric::landlord_count,
+                static_cast<double>(landlord_households.size()));
+            set_dashboard(
+                frame, economy, DashboardMetric::builder_wip_units,
+                builder_work_in_progress);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::builder_inventory_units,
+                builder_inventory);
+            set_dashboard(
+                frame, economy, DashboardMetric::builder_employment,
+                sector_employment[
+                    static_cast<std::size_t>(
+                        core::FirmSector::construction)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::energy_cost_share,
+                safe_ratio(
+                    domestic.energy.household_spending,
+                    national_accounts.household_consumption_nominal));
+            set_dashboard(
+                frame, economy, DashboardMetric::energy_coverage_mean,
+                safe_ratio(energy_stock, domestic.energy.sold));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::net_population_growth_rate_annualized,
+                safe_ratio(
+                    365.0 *
+                        (static_cast<double>(population.births) -
+                         static_cast<double>(population.deaths)),
+                    population_total));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::birth_rate_per_1000_annualized,
+                safe_ratio(
+                    365000.0 *
+                        static_cast<double>(population.births),
+                    population_total));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::death_rate_per_1000_annualized,
+                safe_ratio(
+                    365000.0 *
+                        static_cast<double>(population.deaths),
+                    population_total));
+            set_dashboard(
+                frame, economy, DashboardMetric::firm_count_c,
+                sector_firms[
+                    static_cast<std::size_t>(
+                        core::FirmSector::consumption)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::firm_count_k,
+                sector_firms[
+                    static_cast<std::size_t>(
+                        core::FirmSector::capital)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::firm_count_e,
+                sector_firms[
+                    static_cast<std::size_t>(
+                        core::FirmSector::energy)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::firm_count_construction,
+                sector_firms[
+                    static_cast<std::size_t>(
+                        core::FirmSector::construction)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::n_firms_producing,
+                producing_firms);
+            set_dashboard(
+                frame, economy, DashboardMetric::n_firms_selling,
+                selling_firms);
+            set_dashboard(
+                frame, economy, DashboardMetric::n_firms_borrowing,
+                borrowing_firms);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::firm_size_gini_output,
+                gini(firm_output_observations));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::firm_size_top_share_output,
+                top_decile_share(firm_output_observations));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::firm_size_pareto_slope,
+                pareto_slope(firm_output_observations));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::working_age_population,
+                working_age_population);
+            set_dashboard(
+                frame, economy, DashboardMetric::child_population,
+                child_population);
+            set_dashboard(
+                frame, economy, DashboardMetric::child_share,
+                safe_ratio(child_population, population_total));
+            set_dashboard(
+                frame, economy, DashboardMetric::adult_share,
+                safe_ratio(working_age_population, population_total));
+            set_dashboard(
+                frame, economy, DashboardMetric::elder_population,
+                elder_population);
+            set_dashboard(
+                frame, economy, DashboardMetric::elder_share,
+                safe_ratio(elder_population, population_total));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::child_median_consumption,
+                consumption_by_generation[0U].empty()
+                ? 0.0
+                : weighted_quantile(
+                      consumption_by_generation[0U], 0.5));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::adult_median_consumption,
+                consumption_by_generation[1U].empty()
+                ? 0.0
+                : weighted_quantile(
+                      consumption_by_generation[1U], 0.5));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::elder_median_consumption,
+                consumption_by_generation[2U].empty()
+                ? 0.0
+                : weighted_quantile(
+                      consumption_by_generation[2U], 0.5));
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::labor_sector_consumption_fte,
+                sector_employment[
+                    static_cast<std::size_t>(
+                        core::FirmSector::consumption)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::labor_sector_capital_fte,
+                sector_employment[
+                    static_cast<std::size_t>(
+                        core::FirmSector::capital)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::labor_sector_energy_fte,
+                sector_employment[
+                    static_cast<std::size_t>(
+                        core::FirmSector::energy)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::labor_sector_construction_fte,
+                sector_employment[
+                    static_cast<std::size_t>(
+                        core::FirmSector::construction)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::sector_consumption_sales,
+                sector_sales[
+                    static_cast<std::size_t>(
+                        core::FirmSector::consumption)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::sector_capital_sales,
+                sector_sales[
+                    static_cast<std::size_t>(
+                        core::FirmSector::capital)]);
+            set_dashboard(
+                frame, economy, DashboardMetric::sector_energy_sales,
+                sector_sales[
+                    static_cast<std::size_t>(
+                        core::FirmSector::energy)]);
+            set_dashboard(
+                frame, economy,
+                DashboardMetric::sector_construction_sales,
+                sector_sales[
+                    static_cast<std::size_t>(
+                        core::FirmSector::construction)]);
+            for (std::size_t age = 0U; age < 6U; ++age) {
+                set_dashboard(
+                    frame, economy,
+                    static_cast<DashboardMetric>(
+                        static_cast<std::size_t>(
+                            DashboardMetric::
+                                age_15_24_participation) +
+                        age),
+                    safe_ratio(
+                        participating_by_age[age],
+                        population_by_labor_age[age]));
+                set_dashboard(
+                    frame, economy,
+                    static_cast<DashboardMetric>(
+                        static_cast<std::size_t>(
+                            DashboardMetric::age_15_24_employment) +
+                        age),
+                    safe_ratio(
+                        employed_by_age[age],
+                        population_by_labor_age[age]));
+            }
+            for (std::size_t age = 0U; age < 7U; ++age) {
+                set_dashboard(
+                    frame, economy,
+                    static_cast<DashboardMetric>(
+                        static_cast<std::size_t>(
+                            DashboardMetric::pyramid_male_0_14) +
+                        age * 2U),
+                    male_by_age[age]);
+                set_dashboard(
+                    frame, economy,
+                    static_cast<DashboardMetric>(
+                        static_cast<std::size_t>(
+                            DashboardMetric::pyramid_female_0_14) +
+                        age * 2U),
+                    female_by_age[age]);
+            }
         }
         std::size_t bank_count = 0U;
         std::size_t reserve_floor_breaches = 0U;
@@ -794,17 +2014,6 @@ build_metric_frame(const simulation::M9World &world,
         set(frame, economy, 25U,
             static_cast<double>(near_failure_banks));
 
-        double energy_stock = runtime->strategic_reserve_stock;
-        for (const auto &producer : runtime->energy_producers) {
-            if (producer.active) {
-                energy_stock += std::max(0.0, producer.inventory);
-            }
-        }
-        for (const auto &input : runtime->energy_inputs) {
-            if (input.active) {
-                energy_stock += std::max(0.0, input.stock);
-            }
-        }
         set(frame, economy, 26U, energy_stock);
         set(frame, economy, 27U, domestic.energy.unfilled);
 
@@ -901,8 +2110,6 @@ build_metric_frame(const simulation::M9World &world,
             return Status(ErrorCode::invariant_violation,
                           "M10 native metric catalog width disagrees");
         }
-        const auto national_accounts =
-            build_national_accounts(domestic, external, government_debt);
 #define MACRO_SIM_NATIONAL_ACCOUNT(field, unit)                           \
         set(frame, economy, source_metric++, national_accounts.field);
 #include "macro_sim/reporting/m10_national_accounts.inc"

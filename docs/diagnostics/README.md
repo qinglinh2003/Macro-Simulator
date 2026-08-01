@@ -10,6 +10,10 @@ empirical claim.
 For the current v23 findings and handoff state, read
 [`V23_FINDINGS_20260714.md`](./V23_FINDINGS_20260714.md).
 
+For the current native no-shock baseline, large-population evidence, repaired
+defects, and remaining calibration frontiers, read
+[`NATIVE_BASELINE_FINDINGS_20260730.md`](./NATIVE_BASELINE_FINDINGS_20260730.md).
+
 ## Quick start
 
 Run these commands from the worktree root:

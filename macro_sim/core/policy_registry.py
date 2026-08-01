@@ -174,9 +174,9 @@ def _L(name, validation, **kw):
 REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     # -- fiscal: spending & transfers --
     _L("gov_consumption_share", Range(0.0, 0.6), requires=frozenset({"government"}),
-       shadowed_by=("gov_deficit_target>0",),
-       read_point="systems/goods.py::tender (elif branch)",
-       state_notes="NO-OP while gov_deficit_target>0 (v13 preset defaults 0.03)"),
+       read_point="native/src/simulation/m4.cpp::settle_fiscal",
+       state_notes="Caps government consumption inside the discretionary fiscal "
+                   "envelope; automatic transfers remain outside this cap"),
     _L("gov_deficit_target", Range(0.0, 0.3), requires=frozenset({"government"}),
        read_point="systems/goods.py::tender (if branch)"),
     _L("deficit_u_ref", Range(0.0, 1.0), requires=frozenset({"government"}),

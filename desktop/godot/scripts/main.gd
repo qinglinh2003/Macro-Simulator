@@ -481,7 +481,7 @@ const PANEL_GROUPS := [
 		["household_debt_total", "@{desktop.main.fragment.d2cef874cd4f31ad}", "num"],
 		["firm_debt_total", "@{desktop.main.fragment.e011facc0e2e08e2}", "num"],
 		["debt_service_to_nominal_gdp", "@{desktop.main.fragment.041d6a395228b3a4}/GDP", "pct"],
-		["household_interest_arrears_closing", "@{desktop.main.fragment.4371e83ba7df1016}", "num"],
+		["household_interest_paid", "@{desktop.main.metric.household_interest_paid}", "num"],
 		["bank_realized_credit_losses", "@{desktop.main.fragment.5bc962af39069036}", "num"],
 		["hh_bankruptcies", "@{desktop.main.fragment.8063e9732b41f137}", "num"]]},
 	{"id": "capital_markets", "name": "@{desktop.main.fragment.096a9b89a6ca0eca}", "color": Color("4a6fa5"), "requires": "capital_market", "items": [
@@ -649,9 +649,9 @@ const PANEL_CHARTS := {
 			"items": [["household_debt_total", "@{desktop.main.fragment.d2cef874cd4f31ad}", "num", BLUE],
 				["firm_debt_total", "@{desktop.main.fragment.e011facc0e2e08e2}", "num", TEAL]]},
 		{"type": "line", "title": "SERVICE · @{desktop.main.fragment.b7c861c177e00379}", "note": "@{desktop.main.fragment.abc939e2ca913882}",
-			"items": [["household_contractual_debt_service_due", "@{desktop.main.fragment.fa871132ba185e37}", "num", BLUE],
-				["household_debt_service_reserved", "@{desktop.main.fragment.4a0204a109e960f9}", "num", GREEN],
-				["household_interest_arrears_closing", "@{desktop.main.fragment.734552749b99fbad}", "num", RED],
+			"items": [["household_interest_paid", "@{desktop.main.metric.household_interest_paid}", "num", BLUE],
+				["principal_repaid", "@{desktop.main.metric.principal_repaid}", "num", GREEN],
+				["loan_interest_paid", "@{desktop.main.metric.loan_interest_paid}", "num", PURPLE],
 				["bank_realized_credit_losses", "@{desktop.main.fragment.ba26d799bd4f7004}", "num", AMBER]]},
 		{"type": "bars", "title": "CONCENTRATION · @{desktop.main.fragment.23f435a95808071c}", "note": "Gini @{desktop.main.fragment.749e9657ca6cafb1}10%@{desktop.main.fragment.a81ca4bf0f3d9803}",
 			"items": [["household_debt_gini", "@{desktop.main.fragment.d2cef874cd4f31ad} Gini", "idx", BLUE],
@@ -663,12 +663,12 @@ const PANEL_CHARTS := {
 				["hh_bankruptcies", "@{desktop.main.fragment.8063e9732b41f137}", "num", RED],
 				["debt_service_to_nominal_gdp", "@{desktop.main.fragment.041d6a395228b3a4}/GDP", "pct", AMBER],
 				["total_debt_service_to_nominal_gdp", "@{desktop.main.fragment.c417610326355e77}/GDP", "pct", PURPLE]]},
-		{"type": "line", "title": "ARREARS LEDGER · @{desktop.main.fragment.d8179e21e8e72929}", "note": "@{desktop.main.fragment.141d799724f2713d}",
-			"items": [["household_interest_arrears_opening", "@{desktop.main.fragment.ef419d680060beee}", "num", AMBER],
-				["household_interest_arrears_extinguished", "@{desktop.main.fragment.6904831f716678f7}", "num", GREEN],
-				["household_interest_arrears_in_goods_reservation", "@{desktop.main.fragment.fda24ddca3af8794}", "num", BLUE],
-				["household_interest_arrears_closing", "@{desktop.main.fragment.734552749b99fbad}", "num", RED],
-				["household_interest_arrears_stock_flow_residual", "@{desktop.main.fragment.cc9890fbcb181918}", "num", PURPLE]]},
+		{"type": "line", "title": "CREDIT LEDGER · @{desktop.main.chart.credit_ledger}", "note": "@{desktop.main.chart.credit_ledger_note}",
+			"items": [["new_loans_total", "@{desktop.main.metric.new_credit}", "num", GREEN],
+				["principal_repaid", "@{desktop.main.metric.principal_repaid}", "num", BLUE],
+				["household_interest_paid", "@{desktop.main.metric.household_interest_paid}", "num", AMBER],
+				["loan_interest_paid", "@{desktop.main.metric.loan_interest_paid}", "num", PURPLE],
+				["bank_realized_credit_losses", "@{desktop.main.fragment.ba26d799bd4f7004}", "num", RED]]},
 	],
 	"capital_markets": [
 		{"type": "firm_bubbles", "title": "VALUATION MAP · @{desktop.main.fragment.a90828d709ed8ba5}", "note": "@{desktop.main.fragment.b22bf69bcd81f36f} Q · @{desktop.main.fragment.63338b74fc190a9a} · @{desktop.main.fragment.b4b35dae92ac2997}=@{desktop.main.fragment.7dc0b3b746b81556}"},
@@ -1056,7 +1056,8 @@ func _on_response(response: Dictionary) -> void:
 		_snapshot = payload
 		var entity_kind := str(result.get(
 			"kind", _active_command.get("kind", "")))
-		_entity_requested.erase(entity_kind)
+		_entity_requested.erase(str(
+			_active_command.get("_local_request_key", entity_kind)))
 	elif result.has("projection"):
 		payload = _m11_adapter.apply_projection(result.get("projection", {}))
 		_snapshot = payload
@@ -1159,7 +1160,8 @@ func _on_request_failed(message: String) -> void:
 		if _start_menu != null and _start_menu.has_method("restore_after_launch_error"):
 			_start_menu.call("restore_after_launch_error", message)
 	if str(_active_command.get("command", "")) == "entity_page":
-		_entity_requested.erase(str(_active_command.get("kind", "")))
+		_entity_requested.erase(str(_active_command.get(
+			"_local_request_key", _active_command.get("kind", ""))))
 	_show_verdict({"status": "rejected", "reason_code": message,
 		"decision_id": "err:%d" % Time.get_ticks_msec()})
 	_active_command.clear()
@@ -1465,23 +1467,221 @@ func _cart_has(lever_name: String) -> bool:
 
 
 func _reset_lever_draft(lever_name: String) -> void:
+	if _free_policy_enabled():
+		var targets := _explicit_free_policy_targets()
+		targets.erase(lever_name)
+		_apply_free_policy_targets(targets, "", null)
+		return
 	_cart = _cart.filter(func(item: Dictionary) -> bool:
 		return str(item.get("lever")) != lever_name)
 	_edits.erase(lever_name)
-	if _free_policy_enabled():
-		_sync_free_policy_queue()
 	_render()
 
 
 func _set_policy_edit(lever: Dictionary, value: Variant) -> void:
 	var lever_name := str(lever.get("name"))
-	_edits[lever_name] = value
 	if _free_policy_enabled():
 		# Free-policy edits are commands, not proposals. Keep the current tick
 		# immutable and replace the complete next-boundary batch immediately.
-		_add_to_cart(lever, _lever_current(lever, {}))
+		var targets := _explicit_free_policy_targets()
+		var base_value: Variant = _lever_current(lever, {})
+		if _policy_values_equal(value, base_value):
+			targets.erase(lever_name)
+		else:
+			targets[lever_name] = value
+		_apply_free_policy_targets(targets, lever_name, value)
 	else:
+		_edits[lever_name] = value
 		_render()
+
+
+func _policy_values_equal(left: Variant, right: Variant) -> bool:
+	if left == null or right == null:
+		return left == null and right == null
+	if (left is int or left is float) and (right is int or right is float):
+		return is_equal_approx(float(left), float(right))
+	return left == right
+
+
+func _explicit_free_policy_targets() -> Dictionary:
+	var targets: Dictionary = {}
+	for item: Dictionary in _cart:
+		if not bool(item.get("automatic", false)):
+			targets[str(item.get("lever", ""))] = item.get("value")
+	return targets
+
+
+func _projected_policy_value(name: String, targets: Dictionary) -> Variant:
+	if targets.has(name):
+		return targets[name]
+	var lever: Dictionary = _lever_info.get(name, {})
+	return _lever_current(lever, {}) if not lever.is_empty() else null
+
+
+func _set_automatic_policy_target(targets: Dictionary,
+		automatic: Dictionary, name: String, value: Variant) -> void:
+	if targets.has(name):
+		return
+	var lever: Dictionary = _lever_info.get(name, {})
+	if lever.is_empty() or _policy_values_equal(
+			value, _lever_current(lever, {})):
+		return
+	targets[name] = value
+	automatic[name] = true
+
+
+func _default_manual_policy_rate() -> float:
+	var lever: Dictionary = _lever_info.get("manual_policy_rate", {})
+	var minimum := float(lever.get("minimum", 0.0))
+	var maximum := float(lever.get("maximum", 0.01))
+	var metrics: Dictionary = _snapshot.get("metrics", {})
+	var policies: Dictionary = _snapshot.get("policy_values", {})
+	var source: Variant = metrics.get(
+		"policy_rate", policies.get("r_neutral", minimum))
+	if source == null or source is bool or source is String:
+		source = minimum
+	return clampf(float(source), minimum, maximum)
+
+
+func _default_peg_anchor() -> Variant:
+	var anchor_lever: Dictionary = _lever_info.get("peg_anchor", {})
+	for raw_choice: Variant in anchor_lever.get("choices", []):
+		if raw_choice != null:
+			return int(raw_choice)
+	var world := _world()
+	var player := int(world.get("player_economy", 0))
+	var countries: Array = world.get("countries", [])
+	for index in countries.size():
+		if index != player:
+			return index
+	return null
+
+
+func _normalize_free_policy_targets(targets: Dictionary,
+		changed_name: String, changed_value: Variant) -> Dictionary:
+	var automatic: Dictionary = {}
+	# The latest direct edit wins when a pair of policy fields represents one
+	# economic choice. Companion fields are staged in the same atomic batch.
+	match changed_name:
+		"monetary_regime":
+			targets.erase("manual_policy_rate")
+			if str(changed_value) == "manual":
+				_set_automatic_policy_target(
+					targets, automatic, "manual_policy_rate",
+					_default_manual_policy_rate())
+			else:
+				_set_automatic_policy_target(
+					targets, automatic, "manual_policy_rate", null)
+		"manual_policy_rate":
+			targets.erase("monetary_regime")
+			_set_automatic_policy_target(
+				targets, automatic, "monetary_regime",
+				"taylor" if changed_value == null else "manual")
+		"fx_regime":
+			targets.erase("peg_anchor")
+			if str(changed_value) == "peg":
+				var anchor: Variant = _default_peg_anchor()
+				if anchor == null:
+					_show_hint(LocaleCatalogScript.text(
+						"desktop.free.peg_requires_partner"))
+					targets.erase("fx_regime")
+				else:
+					_set_automatic_policy_target(
+						targets, automatic, "peg_anchor", anchor)
+			else:
+				_set_automatic_policy_target(
+					targets, automatic, "peg_anchor", null)
+		"peg_anchor":
+			targets.erase("fx_regime")
+			_set_automatic_policy_target(
+				targets, automatic, "fx_regime",
+				"float" if changed_value == null else "peg")
+
+	# Recreate companions for prior explicit edits after transient automatic
+	# entries have been stripped from the cart.
+	if targets.has("monetary_regime"):
+		if str(targets["monetary_regime"]) == "manual":
+			if _projected_policy_value("manual_policy_rate", targets) == null:
+				_set_automatic_policy_target(
+					targets, automatic, "manual_policy_rate",
+					_default_manual_policy_rate())
+		else:
+			_set_automatic_policy_target(
+				targets, automatic, "manual_policy_rate", null)
+	elif targets.has("manual_policy_rate"):
+		_set_automatic_policy_target(
+			targets, automatic, "monetary_regime",
+			"taylor" if targets["manual_policy_rate"] == null else "manual")
+
+	if targets.has("fx_regime"):
+		if str(targets["fx_regime"]) == "peg":
+			if _projected_policy_value("peg_anchor", targets) == null:
+				var anchor: Variant = _default_peg_anchor()
+				if anchor != null:
+					_set_automatic_policy_target(
+						targets, automatic, "peg_anchor", anchor)
+		else:
+			_set_automatic_policy_target(
+				targets, automatic, "peg_anchor", null)
+	elif targets.has("peg_anchor"):
+		_set_automatic_policy_target(
+			targets, automatic, "fx_regime",
+			"float" if targets["peg_anchor"] == null else "peg")
+
+	# If the player explicitly disables a prerequisite, discard stale child
+	# edits. Editing a child instead automatically enables its prerequisite.
+	if changed_value is bool and not bool(changed_value):
+		for raw_name: Variant in targets.keys():
+			var dependent: Dictionary = _lever_info.get(str(raw_name), {})
+			if changed_name in dependent.get("enabled_if", []):
+				targets.erase(raw_name)
+				automatic.erase(raw_name)
+	var changed := true
+	while changed:
+		changed = false
+		for raw_name: Variant in targets.keys():
+			var lever: Dictionary = _lever_info.get(str(raw_name), {})
+			for raw_prerequisite: Variant in lever.get("enabled_if", []):
+				var prerequisite := str(raw_prerequisite)
+				var projected: Variant = _projected_policy_value(
+					prerequisite, targets)
+				if projected is bool and bool(projected):
+					continue
+				var before := targets.size()
+				_set_automatic_policy_target(
+					targets, automatic, prerequisite, true)
+				changed = changed or targets.size() != before
+	return automatic
+
+
+func _apply_free_policy_targets(targets: Dictionary,
+		changed_name: String, changed_value: Variant) -> void:
+	var automatic := _normalize_free_policy_targets(
+		targets, changed_name, changed_value)
+	_edits.clear()
+	_cart.clear()
+	var names: Array = targets.keys()
+	names.sort()
+	for raw_name: Variant in names:
+		var name := str(raw_name)
+		var lever: Dictionary = _lever_info.get(name, {})
+		if lever.is_empty():
+			continue
+		var base_value: Variant = _lever_current(lever, {})
+		var target_value: Variant = targets[name]
+		if _policy_values_equal(target_value, base_value):
+			continue
+		_edits[name] = target_value
+		_cart.append({
+			"lever": name,
+			"group": str(_lever_group.get(name, "")),
+			"from": _lever_value_text(lever, base_value),
+			"to": _lever_value_text(lever, target_value),
+			"value": target_value,
+			"automatic": automatic.has(name),
+		})
+	_sync_free_policy_queue()
+	_render()
 
 
 func _stage_lever_edit(lever: Dictionary, value: Variant) -> void:
@@ -2489,27 +2689,68 @@ func _render() -> void:
 func _request_visible_entity_page() -> void:
 	if _client == null or _snapshot.is_empty():
 		return
-	var kind: String = {
-		"households": "households",
-		"firms": "firms",
-		"stocks": "equities",
-	}.get(_tab, "")
-	if kind.is_empty():
+	var kinds: Array = {
+		"households": [
+			"households", "household_persons", "household_jobs", "firms",
+		],
+		"firms": ["firms", "firm_jobs", "firm_persons", "equities"],
+		"stocks": ["equities", "firms", "banks"],
+	}.get(_tab, [])
+	if kinds.is_empty():
 		return
 	var boundary := int(_snapshot.get("tick", -1))
-	if _m11_adapter.entity_boundary(kind) == boundary \
-			or int(_entity_requested.get(kind, -2)) == boundary:
-		return
-	_entity_requested[kind] = boundary
-	_send({
-		"command": "entity_page",
-		"kind": kind,
-		"economy_id": int(
-			(_snapshot.get("world", {}) as Dictionary).get(
-				"player_economy", 0)),
-		"after_id": 0,
-		"maximum_rows": 256,
-	})
+	var economy_id := int(
+		(_snapshot.get("world", {}) as Dictionary).get(
+			"player_economy", 0))
+	for raw_kind: Variant in kinds:
+		var kind := str(raw_kind)
+		var firm_scoped := kind in ["firm_jobs", "firm_persons"]
+		var household_scoped := kind in [
+			"household_jobs", "household_persons",
+		]
+		var firm_id := (
+			int(_firm_selected)
+			if firm_scoped and _firm_selected.is_valid_int()
+			else 0
+		)
+		var household_id := (
+			_household_selected if household_scoped else 0
+		)
+		if firm_scoped and firm_id <= 0:
+			continue
+		if household_scoped and household_id <= 0:
+			continue
+		var scope_id := firm_id if firm_scoped else household_id
+		var scoped := firm_scoped or household_scoped
+		var request_key := (
+			"%s:%d" % [kind, scope_id] if scoped else kind
+		)
+		var cached: bool = _m11_adapter.entity_boundary(kind) == boundary
+		if scoped:
+			cached = cached and _m11_adapter.entity_scope(kind) == scope_id
+		if cached or int(_entity_requested.get(request_key, -2)) == boundary:
+			continue
+		_entity_requested[request_key] = boundary
+		var command := {
+			"command": "entity_page",
+			"kind": kind,
+			"economy_id": economy_id,
+			"after_id": 0,
+			"maximum_rows": (
+				1024
+				if kind in [
+					"persons", "jobs", "firm_persons", "firm_jobs",
+					"household_persons", "household_jobs",
+				]
+				else 256
+			),
+			"_local_request_key": request_key,
+		}
+		if firm_scoped:
+			command["firm_id"] = firm_id
+		elif household_scoped:
+			command["household_id"] = household_id
+		_send(command)
 
 
 func _localize_tree(node: Node) -> void:
@@ -3921,8 +4162,13 @@ func _economy_set_control(name: String, cur: Variant) -> Control:
 	if cur is Array:
 		for e in cur:
 			selected.append(int(e))
-	var countries: Array = _world().get("countries", [])
-	for i in range(1, maxi(countries.size(), 3)):
+	var world := _world()
+	var countries: Array = world.get("countries", [])
+	var player := int(world.get("player_economy", 0))
+	var economy_count := maxi(countries.size(), 3)
+	for i in economy_count:
+		if i == player:
+			continue
 		var row := PanelContainer.new()
 		var on := selected.has(i)
 		row.add_theme_stylebox_override("panel", _sb(
@@ -3954,7 +4200,15 @@ func _economy_set_control(name: String, cur: Variant) -> Control:
 func _economy_id_control(name: String, cur: Variant, choices: Array) -> Control:
 	var seg := HBoxContainer.new()
 	seg.add_theme_constant_override("separation", 3)
-	var opts: Array = choices if not choices.is_empty() else [1, 2, null]
+	var opts: Array = choices.duplicate()
+	if opts.is_empty():
+		var world := _world()
+		var player := int(world.get("player_economy", 0))
+		for index in (world.get("countries", []) as Array).size():
+			if index != player:
+				opts.append(index)
+	if not opts.has(null):
+		opts.append(null)
 	for opt in opts:
 		var b := Button.new()
 		b.text = "@{desktop.main.fragment.03b6f87d3f3f5f29}" if opt == null else _country_name(int(opt))
@@ -4376,14 +4630,27 @@ func _render_households_tab(body: VBoxContainer) -> void:
 	if not selected_found:
 		_household_selected = int((items[0] as Dictionary).get("household_id", -1))
 
-	var main := HBoxContainer.new()
+	var compact_layout := get_viewport_rect().size.x < 1650.0
+	var main: BoxContainer
+	if compact_layout:
+		main = VBoxContainer.new()
+	else:
+		main = HBoxContainer.new()
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main.add_theme_constant_override("separation", 9)
 	body.add_child(main)
 	var list_shell := PanelContainer.new()
-	list_shell.custom_minimum_size.x = 205
-	list_shell.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	list_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_shell.custom_minimum_size = (
+		Vector2(0, 128) if compact_layout else Vector2(205, 0)
+	)
+	list_shell.size_flags_horizontal = (
+		Control.SIZE_EXPAND_FILL
+		if compact_layout else Control.SIZE_SHRINK_BEGIN
+	)
+	list_shell.size_flags_vertical = (
+		Control.SIZE_SHRINK_BEGIN
+		if compact_layout else Control.SIZE_EXPAND_FILL
+	)
 	list_shell.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), LINE, 11, 7))
 	var list_col := VBoxContainer.new()
 	list_col.add_theme_constant_override("separation", 6)
@@ -4411,7 +4678,8 @@ func _render_households_tab(body: VBoxContainer) -> void:
 		if active:
 			selected = item
 		var entry := Button.new()
-		entry.custom_minimum_size = Vector2(188, 54)
+		entry.custom_minimum_size = Vector2(
+			0 if compact_layout else 188, 54)
 		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		entry.text = "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d  ·  %d @{desktop.main.fragment.50f5d65d57290f75}\n@{desktop.main.fragment.cce7e7779e0b03eb} %s  ·  @{desktop.main.fragment.2a5946bee7716fae} %s" % [
 			household_id, int(item.get("member_count", 0)),
@@ -4552,7 +4820,9 @@ func _household_member_card(member: Dictionary, focused: bool = false) -> Contro
 	if member.get("guardian_id") != null:
 		links.append("@{desktop.main.fragment.10dde3dd123a4243} P%03d" % int(member.get("guardian_id")))
 	var demographic := "@{desktop.main.fragment.7e3781ea90e9583f} %s · %s" % [
-		str(member.get("birth_date", "—")),
+		str(member.get(
+			"birth_date",
+			_cal_short(int(member.get("birth_day", 0))))),
 		_row_domain_text(
 			member, "marital_status", "marital_status_id",
 			"marital_status", "unknown")]
@@ -4785,14 +5055,27 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 		_firm_selected = _canonical_entity_id(
 			(items[0] as Dictionary).get("firm_id", ""))
 
-	var main := HBoxContainer.new()
+	var compact_layout := get_viewport_rect().size.x < 1650.0
+	var main: BoxContainer
+	if compact_layout:
+		main = VBoxContainer.new()
+	else:
+		main = HBoxContainer.new()
 	main.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main.add_theme_constant_override("separation", 9)
 	body.add_child(main)
 	var list_shell := PanelContainer.new()
-	list_shell.custom_minimum_size.x = 205
-	list_shell.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	list_shell.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_shell.custom_minimum_size = (
+		Vector2(0, 128) if compact_layout else Vector2(205, 0)
+	)
+	list_shell.size_flags_horizontal = (
+		Control.SIZE_EXPAND_FILL
+		if compact_layout else Control.SIZE_SHRINK_BEGIN
+	)
+	list_shell.size_flags_vertical = (
+		Control.SIZE_SHRINK_BEGIN
+		if compact_layout else Control.SIZE_EXPAND_FILL
+	)
 	list_shell.add_theme_stylebox_override("panel", _sb(Color("f7f9fc"), LINE, 11, 7))
 	var list_col := VBoxContainer.new()
 	list_col.add_theme_constant_override("separation", 6)
@@ -4823,7 +5106,8 @@ func _render_firms_tab(body: VBoxContainer) -> void:
 		var operations: Dictionary = item.get("operations", {})
 		var labor: Dictionary = item.get("labor", {})
 		var entry := Button.new()
-		entry.custom_minimum_size = Vector2(188, 57)
+		entry.custom_minimum_size = Vector2(
+			0 if compact_layout else 188, 57)
 		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		entry.text = "%s  ·  %s\n@{desktop.main.fragment.c5678fcca666b891} %s  ·  @{desktop.main.fragment.86df9b5b13baec22} %s  ·  %.1f FTE" % [
 			firm_display_id, _sector_text(item),
@@ -4913,6 +5197,10 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 		"@{desktop.main.fragment.5bf5a63f1a877c6d}" if bool(equity.get("enabled", false)) else "@{desktop.main.fragment.fb08d8804ef10514}"]
 	header_col.add_child(_lbl(identity_text + "   |   " + bank_text, 8, INK3, true))
 	parent.add_child(header)
+
+	_firm_section_head(parent, "WORKFORCE · @{desktop.main.fragment.1d223584d993a49d}",
+		"%d @{desktop.main.fragment.33e4a7c51e662103} · %.2f FTE" % [int(labor.get("contract_count", 0)), float(labor.get("employment_fte", 0.0))])
+	parent.add_child(_firm_workforce_panel(labor.get("employees", [])))
 
 	_firm_section_head(parent, "OPERATIONS · @{desktop.main.fragment.728d2ec69c3d5351}", "@{desktop.main.fragment.0f6b1949b093e352} → @{desktop.main.fragment.76ab7d3b41f2326d} → @{desktop.main.fragment.f04b061471b1fd16} → @{desktop.main.fragment.780c5fd5b10533dc}")
 	var operating_metrics := HBoxContainer.new()
@@ -5037,10 +5325,6 @@ func _render_firm_detail(parent: VBoxContainer, firm: Dictionary, as_of_date: St
 	]))
 	parent.add_child(capital_panels)
 
-	_firm_section_head(parent, "WORKFORCE · @{desktop.main.fragment.1d223584d993a49d}",
-		"%d @{desktop.main.fragment.33e4a7c51e662103} · %.2f FTE" % [int(labor.get("contract_count", 0)), float(labor.get("employment_fte", 0.0))])
-	parent.add_child(_firm_workforce_panel(labor.get("employees", [])))
-
 	_firm_section_head(parent, "EQUITY & OWNERSHIP · @{desktop.main.fragment.c30ef26f876eea36}",
 		"@{desktop.main.fragment.5e1d15ae7877b5c5} · @{desktop.main.fragment.71013b918d5c459f}")
 	parent.add_child(_firm_equity_panel(equity))
@@ -5105,6 +5389,8 @@ func _firm_workforce_panel(employees: Array) -> Control:
 		var household_text := "—" if employee.get("household_id") == null else "@{desktop.main.fragment.a70a77c75b1dc74f} #%03d" % int(employee.get("household_id"))
 		var row := HBoxContainer.new()
 		row.add_child(_lbl("P%03d · %s · %s" % [person_id, sex_text, age_text], 9, INK, true))
+		row.add_child(_chip("J%06d" % int(employee.get("job_id", 0)),
+			Color("315f88"), Color("eef5fb"), Color("c9dcea"), 7))
 		row.add_child(_chip(_row_domain_text(
 			employee, "contract", "contract_id", "contract", "unknown"),
 			INK2, PANEL2, LINE2, 7))
@@ -5134,11 +5420,10 @@ func _firm_workforce_panel(employees: Array) -> Control:
 			hire_text = _cal_short(int(employee.get("hire_day")))
 		if hire_text.is_empty():
 			hire_text = "—"
-		col.add_child(_lbl("%s · @{desktop.main.fragment.db69901a9202d20f} %s · @{desktop.main.fragment.06c891807ee3feec} %.2f FTE · @{desktop.main.fragment.e11646a02c1553f6} %s · @{desktop.main.fragment.b5ad66754cde276d} %s · @{desktop.main.fragment.2810c1ae78fdf74e} %.2f · @{desktop.main.fragment.fc792be83b1c575e} %s" % [
+		col.add_child(_lbl("%s · @{desktop.main.fragment.db69901a9202d20f} %s · @{desktop.main.fragment.06c891807ee3feec} %.2f FTE · @{desktop.main.fragment.e11646a02c1553f6} %s · @{desktop.main.fragment.2810c1ae78fdf74e} %.2f" % [
 			household_text, hire_text,
 			float(employee.get("contract_hours", 0.0)), _firm_number(employee.get("locked_wage")),
-			_firm_number(employee.get("paid_wage")), float(employee.get("efficiency", 1.0)),
-			_firm_number(employee.get("compensation"))], 8, INK3, true))
+			float(employee.get("efficiency", 1.0))], 8, INK3, true))
 		if employee.get("suspended_since_tick") != null:
 			col.add_child(_lbl("@{desktop.main.fragment.422db1ea9e3b0b29} %s · @{desktop.main.fragment.802a6e8a29d4b7ed} %s · @{desktop.main.fragment.d657d37417081d24}" % [
 				_cal_short(int(employee.get("suspended_since_tick"))),
@@ -6009,12 +6294,16 @@ func _panel_kpi_card(item: Array, latest: Dictionary,
 	title.add_child(metric_key)
 	col.add_child(title)
 	var value_row := HBoxContainer.new()
-	var has_data := not series.is_empty()
+	var has_data := latest.has(key)
 	var current := float(latest.get(key, 0.0))
-	value_row.add_child(_lbl(_fmt_val(kind, current) if has_data else "—",
+	value_row.add_child(_lbl(
+		_fmt_val(kind, current)
+			if has_data
+			else "@{desktop.main.distribution.not_measured}",
 		19, color if has_data else Color("a2adb8"), true))
 	value_row.add_child(_spacer_h())
-	if series.size() >= 2:
+	if has_data and series.size() >= 2 \
+			and (series[-2] as Dictionary).has(key):
 		var previous := float((series[-2] as Dictionary).get(key, current))
 		value_row.add_child(_lbl(_panel_delta(kind, previous, current), 9, INK3, true))
 	col.add_child(value_row)
@@ -6053,7 +6342,8 @@ func _panel_delta(kind: String, previous: float, current: float) -> String:
 func _panel_values(series: Array, key: String) -> Array:
 	var values: Array = []
 	for point: Dictionary in series:
-		values.append(float(point.get(key, 0.0)))
+		if point.has(key):
+			values.append(float(point[key]))
 	return values
 
 
@@ -6106,12 +6396,15 @@ func _panel_chart(spec: Dictionary, latest: Dictionary,
 		var key := str(item[0])
 		var kind := str(item[2])
 		var color: Color = item[3] if item.size() > 3 else fallback_color
+		var values := _panel_values(series, key)
+		if not latest.has(key) and values.is_empty():
+			continue
 		data.append({
 			"key": key,
 			"label": LocaleCatalogScript.resolve(str(item[1])),
 			"kind": kind,
 			"color": color,
-			"values": _panel_values(series, key),
+			"values": values,
 			"value": float(latest.get(key, 0.0)),
 			"text": _fmt_val(kind, float(latest.get(key, 0.0))),
 		})
@@ -7480,6 +7773,13 @@ class _PanelLorenzChart extends Control:
 
 	func _draw() -> void:
 		var plot := Rect2(Vector2(24, 18), size - Vector2(34, 35))
+		if income.size() < 2 and wealth.size() < 2:
+			draw_string(
+				font, Vector2(0, size.y * 0.52),
+				LocaleCatalogScript.resolve(
+					str("@{desktop.main.distribution.not_measured}")),
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
+			return
 		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.end.x, plot.position.y), Color("b9c5d1"), 1.0)
 		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.end.x, plot.end.y), Color("aebbc8"))
 		draw_line(Vector2(plot.position.x, plot.end.y), Vector2(plot.position.x, plot.position.y), Color("aebbc8"))
@@ -7502,6 +7802,11 @@ class _PanelDecileChart extends Control:
 
 	func _draw() -> void:
 		if income.size() < 10 or consumption.size() < 10:
+			draw_string(
+				font, Vector2(0, size.y * 0.52),
+				LocaleCatalogScript.resolve(
+					str("@{desktop.main.distribution.not_measured}")),
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, Color("849098"))
 			return
 		var plot := Rect2(Vector2(24, 22), size - Vector2(34, 45))
 		var max_value := 0.01

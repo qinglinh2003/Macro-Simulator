@@ -166,6 +166,125 @@ void test_round_trip_and_continuation_are_exact() {
     assert(loaded.ok());
     auto restored = restore(std::move(*loaded.get_if()));
     assert(restored.tick == original.tick);
+    if (!(restored.runtime == original.runtime)) {
+        const auto &left =
+            restored.runtime.last_metrics.economy.economy.economy.economy;
+        const auto &right =
+            original.runtime.last_metrics.economy.economy.economy.economy;
+        std::cerr
+            << "M8 runtime mismatch:"
+            << " producers="
+            << (restored.runtime.energy_producers ==
+                original.runtime.energy_producers)
+            << " inputs="
+            << (restored.runtime.energy_inputs == original.runtime.energy_inputs)
+            << " household_energy="
+            << (restored.runtime.household_energy ==
+                original.runtime.household_energy)
+            << " deprivation="
+            << (restored.runtime.deprivation == original.runtime.deprivation)
+            << " energy_metrics="
+            << (restored.runtime.last_metrics.energy ==
+                original.runtime.last_metrics.energy)
+            << " housing_metrics="
+            << (restored.runtime.last_metrics.housing ==
+                original.runtime.last_metrics.housing)
+            << " economy_metrics="
+            << (restored.runtime.last_metrics.economy ==
+                original.runtime.last_metrics.economy)
+            << " m6_metrics="
+            << (restored.runtime.last_metrics.economy.economy ==
+                original.runtime.last_metrics.economy.economy)
+            << " m5_metrics="
+            << (restored.runtime.last_metrics.economy.economy.economy ==
+                original.runtime.last_metrics.economy.economy.economy)
+            << " m4_metrics="
+            << (restored.runtime.last_metrics.economy.economy.economy.economy ==
+                original.runtime.last_metrics.economy.economy.economy.economy)
+            << " energy_policy="
+            << (restored.runtime.energy_policy ==
+                original.runtime.energy_policy)
+            << " energy_rules="
+            << (restored.runtime.energy_rules ==
+                original.runtime.energy_rules)
+            << " energy_input="
+            << (restored.runtime.energy_input ==
+                original.runtime.energy_input)
+            << " housing_policy="
+            << (restored.runtime.housing_policy ==
+                original.runtime.housing_policy)
+            << " housing_rules="
+            << (restored.runtime.housing_rules ==
+                original.runtime.housing_rules)
+            << " housing_input="
+            << (restored.runtime.housing_input ==
+                original.runtime.housing_input)
+            << " properties="
+            << (restored.runtime.properties == original.runtime.properties)
+            << " listings="
+            << (restored.runtime.housing_listings ==
+                original.runtime.housing_listings)
+            << " mortgages="
+            << (restored.runtime.mortgages == original.runtime.mortgages)
+            << " tenancies="
+            << (restored.runtime.tenancies == original.runtime.tenancies)
+            << " builders="
+            << (restored.runtime.builders == original.runtime.builders)
+            << " affordability="
+            << (restored.runtime.housing_affordability ==
+                original.runtime.housing_affordability)
+            << " scalars="
+            << (restored.runtime.strategic_reserve_stock ==
+                    original.runtime.strategic_reserve_stock &&
+                restored.runtime.strategic_reserve_cost ==
+                    original.runtime.strategic_reserve_cost &&
+                restored.runtime.energy_price == original.runtime.energy_price &&
+                restored.runtime.slow_energy_price ==
+                    original.runtime.slow_energy_price &&
+                restored.runtime.energy_event_counter ==
+                    original.runtime.energy_event_counter &&
+                restored.runtime.house_price == original.runtime.house_price &&
+                restored.runtime.rent_level == original.runtime.rent_level &&
+                restored.runtime.genesis_dwelling_count ==
+                    original.runtime.genesis_dwelling_count &&
+                restored.runtime.permit_year == original.runtime.permit_year &&
+                restored.runtime.permits_used == original.runtime.permits_used &&
+                restored.runtime.housing_event_counter ==
+                    original.runtime.housing_event_counter)
+            << "\n";
+#define REPORT_M4_FIELD(name)                                                   \
+    if (left.name != right.name) {                                              \
+        std::cerr << "M4 metric mismatch " #name ": restored=" << left.name      \
+                  << " original=" << right.name << "\n";                        \
+    }
+        REPORT_M4_FIELD(real_output)
+        REPORT_M4_FIELD(nominal_output)
+        REPORT_M4_FIELD(price_index)
+        REPORT_M4_FIELD(unemployment_rate)
+        REPORT_M4_FIELD(total_money)
+        REPORT_M4_FIELD(conservation_drift)
+        REPORT_M4_FIELD(aggregate_capital)
+        REPORT_M4_FIELD(household_consumption)
+        REPORT_M4_FIELD(wages_paid)
+        REPORT_M4_FIELD(firm_profit)
+        REPORT_M4_FIELD(tax_total)
+        REPORT_M4_FIELD(government_spending)
+        REPORT_M4_FIELD(government_deficit)
+        REPORT_M4_FIELD(public_capital)
+        REPORT_M4_FIELD(gross_output_nominal)
+        REPORT_M4_FIELD(consumption_output_nominal)
+        REPORT_M4_FIELD(capital_output_nominal)
+        REPORT_M4_FIELD(consumption_output_real)
+        REPORT_M4_FIELD(capital_output_real)
+        REPORT_M4_FIELD(inventory_change_nominal)
+        REPORT_M4_FIELD(inventory_change_real)
+        REPORT_M4_FIELD(fixed_capital_formation_nominal)
+        REPORT_M4_FIELD(fixed_capital_formation_real)
+        REPORT_M4_FIELD(government_consumption)
+        REPORT_M4_FIELD(public_fixed_capital_formation)
+        REPORT_M4_FIELD(transfer_payments)
+#undef REPORT_M4_FIELD
+    }
     assert(restored.runtime == original.runtime);
     assert(digest(restored) == before);
     assert(advance(original, 20).ok());

@@ -162,6 +162,53 @@ void fill_person_assets(PersonProbeRow &row, const core::RootState &root,
     row.net_worth = row.gross_assets - row.debt;
 }
 
+[[nodiscard]] PersonProbeRow make_person_probe_row(
+    const core::PersonRecord &person,
+    const simulation::M7Runtime &population,
+    const core::RootState *root,
+    const simulation::M6Runtime *financial) {
+    PersonProbeRow row;
+    row.id = person.id;
+    row.sex = person.sex;
+    row.birth_day = person.birth_day;
+    row.death_day = person.death_day;
+    const auto age_at =
+        person.alive ? population.current_calendar_day : person.death_day;
+    row.age_days = std::max(0, age_at - person.birth_day);
+    row.mother = person.mother;
+    row.father = person.father;
+    row.partner = person.partner;
+    row.guardian = person.guardian;
+    row.household = person.household;
+    row.primary_job = population.employment.primary_job(person.id);
+    row.secondary_job = population.employment.secondary_job(person.id);
+    row.efficiency = person.efficiency;
+    if (financial != nullptr && root != nullptr) {
+        fill_person_assets(row, *root, *financial, population);
+    }
+    row.participating = person.participating;
+    row.searching = person.searching;
+    row.alive = person.alive;
+    return row;
+}
+
+[[nodiscard]] JobProbeRow
+make_job_probe_row(const core::JobRecord &job) noexcept {
+    return JobProbeRow{
+        job.id,
+        job.person,
+        job.firm,
+        job.hire_day,
+        job.separation_day,
+        job.suspension_day,
+        job.wage,
+        job.hours,
+        job.secondary,
+        job.suspended,
+        job.active,
+    };
+}
+
 template <typename Row>
 void finish_page(ProbePageInfo &page, std::vector<Row> &rows,
                  std::size_t maximum_rows) {
@@ -463,29 +510,8 @@ probe_persons(const simulation::M9World &world, EconomyId economy,
         if (person.id.value() <= after_id) {
             continue;
         }
-        PersonProbeRow row;
-        row.id = person.id;
-        row.sex = person.sex;
-        row.birth_day = person.birth_day;
-        row.death_day = person.death_day;
-        const auto age_at =
-            person.alive ? population->current_calendar_day : person.death_day;
-        row.age_days = std::max(0, age_at - person.birth_day);
-        row.mother = person.mother;
-        row.father = person.father;
-        row.partner = person.partner;
-        row.guardian = person.guardian;
-        row.household = person.household;
-        row.primary_job = population->employment.primary_job(person.id);
-        row.secondary_job = population->employment.secondary_job(person.id);
-        row.efficiency = person.efficiency;
-        if (financial != nullptr && root != nullptr) {
-            fill_person_assets(row, *root, *financial, *population);
-        }
-        row.participating = person.participating;
-        row.searching = person.searching;
-        row.alive = person.alive;
-        output.rows.push_back(std::move(row));
+        output.rows.push_back(
+            make_person_probe_row(person, *population, root, financial));
         if (output.rows.size() > maximum_rows) {
             break;
         }
@@ -519,9 +545,218 @@ probe_jobs(const simulation::M9World &world, EconomyId economy,
         if (job.id.value() <= after_id) {
             continue;
         }
-        output.rows.push_back(JobProbeRow{
-            job.id, job.person, job.firm, job.hire_day, job.separation_day,
-            job.wage, job.hours, job.secondary, job.suspended, job.active});
+        output.rows.push_back(make_job_probe_row(job));
+        if (output.rows.size() > maximum_rows) {
+            break;
+        }
+    }
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
+Result<JobProbePage>
+probe_jobs_for_household(const simulation::M9World &world, EconomyId economy,
+                         HouseholdId household, std::uint64_t after_id,
+                         std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *root = world.economy_root(economy);
+    const auto *population = world.economy_population_runtime(economy);
+    if (root == nullptr || !household.valid() ||
+        root->households.get(household) == nullptr) {
+        return Status(ErrorCode::not_found,
+                      "household job probe requires an existing household");
+    }
+    if (population == nullptr) {
+        return Status(
+            ErrorCode::invalid_handle,
+            "household job probe requires the native population module");
+    }
+
+    std::vector<JobId> jobs;
+    const auto members = population->membership.members(household);
+    jobs.reserve(members.size() * 2U);
+    for (const auto person : members) {
+        for (const auto job : {
+                 population->employment.primary_job(person),
+                 population->employment.secondary_job(person)}) {
+            if (job.valid()) {
+                jobs.push_back(job);
+            }
+        }
+    }
+    std::sort(jobs.begin(), jobs.end(),
+              [](JobId left, JobId right) {
+                  return left.value() < right.value();
+              });
+    jobs.erase(std::unique(jobs.begin(), jobs.end()), jobs.end());
+
+    JobProbePage output;
+    output.page = {
+        world.tick(), economy, after_id,
+        static_cast<std::uint64_t>(jobs.size()), false};
+    output.rows.reserve(std::min(jobs.size(), maximum_rows + 1U));
+    for (const auto job_id : jobs) {
+        if (job_id.value() <= after_id) {
+            continue;
+        }
+        const auto *job = population->employment.get(job_id);
+        if (job == nullptr) {
+            continue;
+        }
+        output.rows.push_back(make_job_probe_row(*job));
+        if (output.rows.size() > maximum_rows) {
+            break;
+        }
+    }
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
+Result<JobProbePage>
+probe_jobs_for_firm(const simulation::M9World &world, EconomyId economy,
+                    FirmId firm, std::uint64_t after_id,
+                    std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *root = world.economy_root(economy);
+    const auto *population = world.economy_population_runtime(economy);
+    if (root == nullptr || !firm.valid() || root->firms.get(firm) == nullptr) {
+        return Status(ErrorCode::not_found,
+                      "firm job probe requires an existing firm");
+    }
+    if (population == nullptr) {
+        return Status(ErrorCode::invalid_handle,
+                      "firm job probe requires the native population module");
+    }
+    const auto roster = population->employment.roster(firm);
+    JobProbePage output;
+    output.page = {
+        world.tick(), economy, after_id,
+        static_cast<std::uint64_t>(roster.size()), false};
+    output.rows.reserve(std::min(roster.size(), maximum_rows + 1U));
+    for (const auto job_id : roster) {
+        const auto *job = population->employment.get(job_id);
+        if (job == nullptr || !job->active || job->id.value() <= after_id) {
+            continue;
+        }
+        output.rows.push_back(make_job_probe_row(*job));
+    }
+    std::sort(output.rows.begin(), output.rows.end(),
+              [](const JobProbeRow &left, const JobProbeRow &right) {
+                  return left.id.value() < right.id.value();
+              });
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
+Result<PersonProbePage>
+probe_persons_for_household(const simulation::M9World &world,
+                            EconomyId economy, HouseholdId household,
+                            std::uint64_t after_id,
+                            std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *root = world.economy_root(economy);
+    const auto *population = world.economy_population_runtime(economy);
+    const auto *financial = world.economy_financial_runtime(economy);
+    if (root == nullptr || !household.valid() ||
+        root->households.get(household) == nullptr) {
+        return Status(
+            ErrorCode::not_found,
+            "household person probe requires an existing household");
+    }
+    if (population == nullptr) {
+        return Status(
+            ErrorCode::invalid_handle,
+            "household person probe requires the native population module");
+    }
+
+    const auto members = population->membership.members(household);
+    PersonProbePage output;
+    output.page = {
+        world.tick(), economy, after_id,
+        static_cast<std::uint64_t>(members.size()), false};
+    output.rows.reserve(std::min(members.size(), maximum_rows + 1U));
+    for (const auto person_id : members) {
+        if (person_id.value() <= after_id) {
+            continue;
+        }
+        const auto *person = population->persons.get(person_id);
+        if (person == nullptr) {
+            continue;
+        }
+        output.rows.push_back(
+            make_person_probe_row(*person, *population, root, financial));
+    }
+    std::sort(output.rows.begin(), output.rows.end(),
+              [](const PersonProbeRow &left, const PersonProbeRow &right) {
+                  return left.id.value() < right.id.value();
+              });
+    finish_page(output.page, output.rows, maximum_rows);
+    return output;
+}
+
+Result<PersonProbePage>
+probe_persons_for_firm(const simulation::M9World &world, EconomyId economy,
+                       FirmId firm, std::uint64_t after_id,
+                       std::size_t maximum_rows) {
+    auto status = validate_request(world, economy, maximum_rows);
+    if (!status.ok()) {
+        return status;
+    }
+    const auto *root = world.economy_root(economy);
+    const auto *population = world.economy_population_runtime(economy);
+    const auto *financial = world.economy_financial_runtime(economy);
+    if (root == nullptr || !firm.valid() || root->firms.get(firm) == nullptr) {
+        return Status(ErrorCode::not_found,
+                      "firm person probe requires an existing firm");
+    }
+    if (population == nullptr) {
+        return Status(ErrorCode::invalid_handle,
+                      "firm person probe requires the native population module");
+    }
+    std::vector<PersonId> people;
+    const auto roster = population->employment.roster(firm);
+    people.reserve(roster.size());
+    for (const auto job_id : roster) {
+        const auto *job = population->employment.get(job_id);
+        if (job != nullptr && job->active) {
+            people.push_back(job->person);
+        }
+    }
+    std::sort(people.begin(), people.end(),
+              [](PersonId left, PersonId right) {
+                  return left.value() < right.value();
+              });
+    people.erase(
+        std::unique(people.begin(), people.end(),
+                    [](PersonId left, PersonId right) {
+                        return left.value() == right.value();
+                    }),
+        people.end());
+
+    PersonProbePage output;
+    output.page = {
+        world.tick(), economy, after_id,
+        static_cast<std::uint64_t>(people.size()), false};
+    output.rows.reserve(std::min(people.size(), maximum_rows + 1U));
+    for (const auto person_id : people) {
+        if (person_id.value() <= after_id) {
+            continue;
+        }
+        const auto *person = population->persons.get(person_id);
+        if (person == nullptr) {
+            continue;
+        }
+        output.rows.push_back(
+            make_person_probe_row(*person, *population, root, financial));
         if (output.rows.size() > maximum_rows) {
             break;
         }
@@ -689,7 +924,10 @@ probe_economy_diagnostics(const simulation::M9World &world,
         [](const simulation::PegRuntime &peg) { return peg.intact; });
     output.households = root.households.alive_count();
     output.firms = root.firms.alive_count();
-    output.banks = root.banks.alive_count();
+    root.banks.for_each_alive(
+        [&output](BankId, const core::BankComponent &bank) {
+            output.banks += bank.alive ? 1U : 0U;
+        });
     output.account_balance_total = root.postings.total_deposits().value();
     output.loan_principal_total = root.loans.total_principal().value();
     output.reserve_total = root.reserves.total_reserves().value();

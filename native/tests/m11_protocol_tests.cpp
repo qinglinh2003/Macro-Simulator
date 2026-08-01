@@ -3,11 +3,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 #include <utility>
 
 #include <nlohmann/json.hpp>
 
+#include "macro_sim/control/m11_policy.hpp"
 #include "macro_sim/desktop/m11_protocol.hpp"
 
 namespace {
@@ -265,6 +267,95 @@ void test_free_policy_stages_and_applies_atomically() {
            62U);
 }
 
+void test_every_player_policy_value_kind_can_be_staged() {
+    auto protocol = worker();
+    assert(response(protocol, request(1U, "hello")).at("ok").get<bool>());
+    const auto created = response(protocol, request(2U, "new_session"));
+    assert(created.at("ok").get<bool>());
+    const auto session_id = created.at("result").at("session_id").get<std::string>();
+
+    std::uint64_t sequence = 3U;
+    auto schema_request = request(sequence++, "policy_schema");
+    schema_request["session_id"] = session_id;
+    const auto schema = response(protocol, schema_request);
+    assert(schema.at("ok").get<bool>());
+    const auto levers = schema.at("result").at("levers");
+    assert(levers.size() == control::m11_policy_levers().size());
+
+    std::set<std::string> encountered_kinds;
+    std::set<std::string> nullable_numbers;
+    for (const auto &lever : levers) {
+        const auto name = lever.at("name").get<std::string>();
+        const auto kind = lever.at("value_kind").get<std::string>();
+        encountered_kinds.insert(kind);
+        const bool nullable = lever.at("nullable").get<bool>();
+        assert(nullable == (kind == "nullable_number" || kind == "economy_id"));
+        if (kind == "nullable_number") {
+            nullable_numbers.insert(name);
+        }
+
+        Json value = lever.at("current_value");
+        if (kind == "boolean") {
+            value = !value.get<bool>();
+        } else if (kind == "number" || kind == "nullable_number" ||
+                   kind == "integer") {
+            const auto minimum =
+                lever.at("minimum").is_null() ? 0.0
+                                                : lever.at("minimum").get<double>();
+            const auto maximum =
+                lever.at("maximum").is_null() ? minimum
+                                                : lever.at("maximum").get<double>();
+            auto candidate = minimum;
+            if (!value.is_null() && std::abs(value.get<double>() - minimum) < 1e-12) {
+                candidate = maximum;
+            }
+            value = kind == "integer" ? Json(static_cast<std::int64_t>(
+                                            std::llround(candidate)))
+                                      : Json(candidate);
+        } else if (kind == "choice") {
+            for (const auto &choice : lever.at("choices")) {
+                if (choice != value) {
+                    value = choice;
+                    break;
+                }
+            }
+        } else if (kind == "economy_id") {
+            if (!lever.at("choices").empty()) {
+                value = lever.at("choices").front();
+            }
+        } else if (kind == "economy_set") {
+            value = Json::array({1U});
+        } else {
+            assert(false);
+        }
+
+        auto stage = request(sequence++, "stage_policy");
+        stage["session_id"] = session_id;
+        stage["actions"] =
+            Json::array({{{"lever", name}, {"value", std::move(value)}}});
+        const auto staged = response(protocol, stage);
+        assert(staged.at("ok").get<bool>());
+        assert(staged.at("result").at("free_policy").at("actions").size() == 1U);
+
+        auto clear = request(sequence++, "stage_policy");
+        clear["session_id"] = session_id;
+        clear["actions"] = Json::array();
+        const auto cleared = response(protocol, clear);
+        assert(cleared.at("ok").get<bool>());
+        assert(cleared.at("result").at("free_policy").at("actions").empty());
+    }
+
+    for (const auto expected : {"number", "nullable_number", "integer", "boolean",
+                                "choice", "economy_id", "economy_set"}) {
+        assert(encountered_kinds.contains(expected));
+    }
+    for (const auto expected : {"emigration_cap", "immigration_cap", "import_quota",
+                                "manual_policy_rate", "tax_luxury_rate",
+                                "tax_necessity_rate"}) {
+        assert(nullable_numbers.contains(expected));
+    }
+}
+
 void test_control_commands_are_role_scoped_and_idempotent() {
     auto protocol = worker();
     assert(response(protocol, request(1U, "hello")).at("ok").get<bool>());
@@ -343,9 +434,44 @@ void test_entity_pages_and_details_preserve_links() {
     const auto entity = detail.at("result").at("entity");
     assert(entity.at("id") == household_id);
     assert(entity.at("member_count") == entity.at("member_ids").size());
+    assert(entity.at("member_count").get<std::size_t>() > 1U);
+
+    auto household_people_request = request(5U, "entity_page");
+    household_people_request["session_id"] = session_id;
+    household_people_request["kind"] = "household_persons";
+    household_people_request["economy_id"] = 0U;
+    household_people_request["household_id"] = household_id;
+    household_people_request["after_id"] = 0U;
+    household_people_request["maximum_rows"] = 32U;
+    const auto household_people =
+        response(protocol, household_people_request);
+    assert(household_people.at("ok").get<bool>());
+    assert(household_people.at("result").at("kind") ==
+           "household_persons");
+    assert(household_people.at("result").at("household_id") ==
+           household_id);
+    assert(household_people.at("result").at("rows").size() ==
+           entity.at("member_count").get<std::size_t>());
+    for (const auto &person : household_people.at("result").at("rows")) {
+        assert(person.at("household_id") == household_id);
+    }
+
+    auto household_jobs_request = request(6U, "entity_page");
+    household_jobs_request["session_id"] = session_id;
+    household_jobs_request["kind"] = "household_jobs";
+    household_jobs_request["economy_id"] = 0U;
+    household_jobs_request["household_id"] = household_id;
+    household_jobs_request["after_id"] = 0U;
+    household_jobs_request["maximum_rows"] = 32U;
+    const auto household_jobs =
+        response(protocol, household_jobs_request);
+    assert(household_jobs.at("ok").get<bool>());
+    assert(household_jobs.at("result").at("kind") == "household_jobs");
+    assert(household_jobs.at("result").at("household_id") ==
+           household_id);
     if (!entity.at("member_ids").empty()) {
         const auto person_id = entity.at("member_ids").front().get<std::uint64_t>();
-        auto person_request = request(5U, "entity_detail");
+        auto person_request = request(7U, "entity_detail");
         person_request["session_id"] = session_id;
         person_request["kind"] = "person";
         person_request["economy_id"] = 0U;
@@ -354,6 +480,53 @@ void test_entity_pages_and_details_preserve_links() {
         assert(person.at("ok").get<bool>());
         assert(person.at("result").at("entity").at("household_id") == household_id);
     }
+}
+
+void test_firm_scoped_entity_pages_preserve_contract_scope() {
+    auto protocol = worker();
+    assert(response(protocol, request(1U, "hello")).at("ok").get<bool>());
+    const auto created = response(protocol, request(2U, "new_session"));
+    const auto session_id = created.at("result").at("session_id").get<std::string>();
+
+    auto firms_request = request(3U, "entity_page");
+    firms_request["session_id"] = session_id;
+    firms_request["kind"] = "firms";
+    firms_request["economy_id"] = 0U;
+    firms_request["after_id"] = 0U;
+    firms_request["maximum_rows"] = 1U;
+    const auto firms = response(protocol, firms_request);
+    assert(firms.at("ok").get<bool>());
+    assert(!firms.at("result").at("rows").empty());
+    const auto firm_id =
+        firms.at("result").at("rows").front().at("id").get<std::uint64_t>();
+
+    auto jobs_request = request(4U, "entity_page");
+    jobs_request["session_id"] = session_id;
+    jobs_request["kind"] = "firm_jobs";
+    jobs_request["economy_id"] = 0U;
+    jobs_request["firm_id"] = firm_id;
+    jobs_request["after_id"] = 0U;
+    jobs_request["maximum_rows"] = 32U;
+    const auto jobs = response(protocol, jobs_request);
+    assert(jobs.at("ok").get<bool>());
+    assert(jobs.at("result").at("kind") == "firm_jobs");
+    assert(jobs.at("result").at("firm_id") == firm_id);
+    for (const auto &job : jobs.at("result").at("rows")) {
+        assert(job.at("firm_id") == firm_id);
+        assert(job.contains("suspension_day"));
+    }
+
+    auto persons_request = request(5U, "entity_page");
+    persons_request["session_id"] = session_id;
+    persons_request["kind"] = "firm_persons";
+    persons_request["economy_id"] = 0U;
+    persons_request["firm_id"] = firm_id;
+    persons_request["after_id"] = 0U;
+    persons_request["maximum_rows"] = 32U;
+    const auto persons = response(protocol, persons_request);
+    assert(persons.at("ok").get<bool>());
+    assert(persons.at("result").at("kind") == "firm_persons");
+    assert(persons.at("result").at("firm_id") == firm_id);
 }
 
 void test_seat_restore_and_audit_event_replay() {
@@ -514,8 +687,10 @@ int main() {
         test_frame_and_response_boundaries();
         test_session_owner_snapshot_and_delta();
         test_free_policy_stages_and_applies_atomically();
+        test_every_player_policy_value_kind_can_be_staged();
         test_control_commands_are_role_scoped_and_idempotent();
         test_entity_pages_and_details_preserve_links();
+        test_firm_scoped_entity_pages_preserve_contract_scope();
         test_seat_restore_and_audit_event_replay();
         test_save_load_is_sandboxed_atomic_and_verified();
     } catch (...) {

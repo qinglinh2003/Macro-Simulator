@@ -658,13 +658,18 @@ bool m11_world_capability(const simulation::M9World &world, EconomyId economy,
         return has(simulation::M4Capability::government);
     }
     if (capability == "bank_enabled") {
-        return has(simulation::M4Capability::commercial_banks);
+        // Banking is a native M5 module. The M4 capability mask deliberately
+        // rejects later-vertical bits, so consulting its historical
+        // commercial_banks placeholder makes every live M5 bank look absent.
+        return monetary->rules.bank_count > 0U;
     }
     if (capability == "bank_realized_pnl") {
         return monetary->rules.realized_bank_pnl;
     }
     if (capability == "bonds") {
-        return has(simulation::M4Capability::securities);
+        // Securities are owned by M6 and exposed through its rules, not by the
+        // lower M4 capability mask.
+        return financial->rules.bonds;
     }
     if (capability == "consumption_strata") {
         return financial->rules.consumption_strata;

@@ -150,6 +150,7 @@ struct JobProbeRow final {
     FirmId firm{};
     std::int32_t hire_day{0};
     std::int32_t separation_day{-1};
+    std::int32_t suspension_day{-1};
     double wage{0.0};
     double hours{0.0};
     bool secondary{false};
@@ -274,6 +275,23 @@ probe_persons(const simulation::M9World &world, EconomyId economy,
 [[nodiscard]] Result<JobProbePage>
 probe_jobs(const simulation::M9World &world, EconomyId economy,
            std::uint64_t after_id, std::size_t maximum_rows);
+[[nodiscard]] Result<JobProbePage>
+probe_jobs_for_household(const simulation::M9World &world, EconomyId economy,
+                         HouseholdId household, std::uint64_t after_id,
+                         std::size_t maximum_rows);
+[[nodiscard]] Result<JobProbePage>
+probe_jobs_for_firm(const simulation::M9World &world, EconomyId economy,
+                    FirmId firm, std::uint64_t after_id,
+                    std::size_t maximum_rows);
+[[nodiscard]] Result<PersonProbePage>
+probe_persons_for_household(const simulation::M9World &world,
+                            EconomyId economy, HouseholdId household,
+                            std::uint64_t after_id,
+                            std::size_t maximum_rows);
+[[nodiscard]] Result<PersonProbePage>
+probe_persons_for_firm(const simulation::M9World &world, EconomyId economy,
+                       FirmId firm, std::uint64_t after_id,
+                       std::size_t maximum_rows);
 [[nodiscard]] Result<DwellingProbePage>
 probe_dwellings(const simulation::M9World &world, EconomyId economy,
                 std::uint64_t after_id, std::size_t maximum_rows);

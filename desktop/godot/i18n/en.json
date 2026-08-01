@@ -391,6 +391,7 @@
   "desktop.free.verdict_effective": "Policy changes are now effective",
   "desktop.free.verdict_cleared": "Next-day policy changes cleared",
   "desktop.free.queued_hint": "%d policy changes are queued and will take effect automatically on the next day.",
+  "desktop.free.peg_requires_partner": "A currency peg requires at least one other floating-rate economy in the world.",
   "desktop.main.fragment.c613e26dcc4db0b5": "Real economy",
   "desktop.main.fragment.d00091cb2bfe9634": "Labour force",
   "desktop.main.fragment.aab5501bd82dde20": "Prices and currencies",
@@ -1235,6 +1236,7 @@
   "desktop.main.fragment.d55cc2145168659e": "General adjustments",
   "desktop.main.fragment.d088a57270bb2245": "Daily Operations",
   "desktop.main.fragment.41cd94251cb3d6eb": "Policy information is currently unavailable.",
+  "desktop.main.distribution.not_measured": "Not yet measured",
   "desktop.main.fragment.f6814fea9925bef5": "Current entry into force",
   "desktop.main.fragment.bb505e6a0774debf": "Suggested observation",
   "desktop.main.fragment.ad4ff9ec3d88e93d": "Rules of the game (non-policy definition)",
@@ -1793,5 +1795,11 @@
   "domain.age_group.unknown": "Unknown age",
   "desktop.calendar.full": "Year %d · Quarter %d · Day %d",
   "desktop.calendar.short": "Year %d · Day %d",
-  "desktop.format.rate_per_day": "%.2f%%/day"
+  "desktop.format.rate_per_day": "%.2f%%/day",
+  "desktop.main.metric.household_interest_paid": "Household interest paid",
+  "desktop.main.metric.principal_repaid": "Loan principal repaid",
+  "desktop.main.metric.loan_interest_paid": "Loan interest paid",
+  "desktop.main.metric.new_credit": "New credit",
+  "desktop.main.chart.credit_ledger": "Credit-flow ledger",
+  "desktop.main.chart.credit_ledger_note": "New lending, principal repayment, interest paid, and realized credit losses"
 }

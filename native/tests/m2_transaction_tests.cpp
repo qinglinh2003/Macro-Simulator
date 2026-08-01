@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -329,6 +330,40 @@ void test_locally_validated_commit_rejects_contract_mutations() {
     assert(!state.transaction_active);
 }
 
+void test_large_fan_out_accepts_only_floating_point_residual() {
+    GenesisSpec spec;
+    spec.vertical = GenesisVertical::m4_v1_capital_fiscal;
+    spec.households = 1'275;
+    spec.settlement_banks = 1;
+    spec.government = true;
+    spec.aggregate_opening_money = Money(127'500.0);
+    auto built = macro_sim::core::build_genesis(spec);
+    assert(built.ok());
+    auto state = std::move(built).take();
+
+    SettlementTransaction transaction(state);
+    for (std::uint64_t index = 1; index <= 375; ++index) {
+        assert(transaction.transfer(
+            state.institutions.treasury_account,
+            account_for(state, HouseholdId(index)),
+            Money(2'000.0)
+        ).ok());
+    }
+    constexpr double kBuilderOpening = 52.08333333333333;
+    for (std::uint64_t index = 376; index <= 1'275; ++index) {
+        assert(transaction.transfer(
+            state.institutions.treasury_account,
+            account_for(state, HouseholdId(index)),
+            Money(kBuilderOpening)
+        ).ok());
+    }
+    assert(transaction.commit().ok());
+    assert(macro_sim::core::run_invariants(state).ok());
+    assert(std::abs(
+        balance(state, state.institutions.rounding_residual_account)
+    ) < 1.0e-6);
+}
+
 void test_every_fault_ordinal_restores_exact_digest() {
     auto reference = make_state();
     SettlementTransaction accepted(reference);
@@ -420,6 +455,7 @@ int main() {
     test_invalid_batch_restores_exact_digest();
     test_locally_validated_transfer_matches_full_commit();
     test_locally_validated_commit_rejects_contract_mutations();
+    test_large_fan_out_accepts_only_floating_point_residual();
     test_every_fault_ordinal_restores_exact_digest();
     test_nested_transaction_is_rejected_without_releasing_owner();
     test_world_transaction_restores_every_root_on_late_failure();

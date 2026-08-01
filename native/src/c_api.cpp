@@ -103,11 +103,13 @@ void fill_m5_metrics(macro_sim_m5_metrics &output,
     output.reserve_stock = metrics.reserve_stock;
     output.omo_flow = metrics.omo_flow;
     output.lolr_advances = metrics.lolr_advances;
+    output.lolr_outstanding = metrics.lolr_outstanding;
     output.interbank_volume = metrics.interbank_volume;
     output.interbank_rate = metrics.interbank_rate;
     output.run_flight_volume = metrics.run_flight_volume;
     output.resolution_cost = metrics.resolution_cost;
     output.realized_credit_losses = metrics.realized_credit_losses;
+    output.realized_interbank_losses = metrics.realized_interbank_losses;
     output.alive_banks = metrics.alive_banks;
     output.bank_failures = metrics.bank_failures;
 }
@@ -1761,6 +1763,7 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     MACRO_SIM_M7_RULE_FLAG(relationship_wages);
     MACRO_SIM_M7_RULE_FLAG(job_ladder);
     MACRO_SIM_M7_RULE_FLAG(participation_margin);
+    MACRO_SIM_M7_RULE_FLAG(age_participation);
     MACRO_SIM_M7_RULE_FLAG(family_transfers);
     MACRO_SIM_M7_RULE_FLAG(relationships);
     MACRO_SIM_M7_RULE_FLAG(marriage);
@@ -1794,6 +1797,9 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->search_intensity = value.search_intensity;
     output->ladder_search_intensity = value.ladder_search_intensity;
     output->ladder_premium = value.ladder_premium;
+    output->young_participation_rate = value.young_participation_rate;
+    output->prime_participation_rate = value.prime_participation_rate;
+    output->older_participation_rate = value.older_participation_rate;
     output->reservation_markup = value.reservation_markup;
     output->welfare_quit_hazard = value.welfare_quit_hazard;
     output->family_transfer_buffer = value.family_transfer_buffer;
@@ -1818,10 +1824,10 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
         !valid_flag(rules->frictional_search) ||
         !valid_flag(rules->relationship_wages) || !valid_flag(rules->job_ladder) ||
         !valid_flag(rules->participation_margin) ||
-        !valid_flag(rules->family_transfers) || !valid_flag(rules->relationships) ||
-        !valid_flag(rules->marriage) || !valid_flag(rules->divorce) ||
-        !valid_flag(rules->household_lifecycle) || !valid_flag(rules->leaving_home) ||
-        !valid_flag(rules->forbid_same_household) ||
+        !valid_flag(rules->age_participation) || !valid_flag(rules->family_transfers) ||
+        !valid_flag(rules->relationships) || !valid_flag(rules->marriage) ||
+        !valid_flag(rules->divorce) || !valid_flag(rules->household_lifecycle) ||
+        !valid_flag(rules->leaving_home) || !valid_flag(rules->forbid_same_household) ||
         !valid_flag(rules->forbid_close_kin)) {
         return status(MACRO_SIM_INVALID_ARGUMENT,
                       "session and valid M7 rules are required");
@@ -1843,6 +1849,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     MACRO_SIM_COPY_M7_FLAG(relationship_wages);
     MACRO_SIM_COPY_M7_FLAG(job_ladder);
     MACRO_SIM_COPY_M7_FLAG(participation_margin);
+    MACRO_SIM_COPY_M7_FLAG(age_participation);
     MACRO_SIM_COPY_M7_FLAG(family_transfers);
     MACRO_SIM_COPY_M7_FLAG(relationships);
     MACRO_SIM_COPY_M7_FLAG(marriage);
@@ -1875,6 +1882,9 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.search_intensity = rules->search_intensity;
     value.ladder_search_intensity = rules->ladder_search_intensity;
     value.ladder_premium = rules->ladder_premium;
+    value.young_participation_rate = rules->young_participation_rate;
+    value.prime_participation_rate = rules->prime_participation_rate;
+    value.older_participation_rate = rules->older_participation_rate;
     value.reservation_markup = rules->reservation_markup;
     value.welfare_quit_hazard = rules->welfare_quit_hazard;
     value.family_transfer_buffer = rules->family_transfer_buffer;

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "macro_sim/algorithms/market.hpp"
@@ -38,9 +39,7 @@ enum class M4Capability : std::uint64_t {
     reinforcement_learning = 1ULL << 14U,
 };
 
-[[nodiscard]] constexpr std::uint64_t capability_bit(
-    M4Capability capability
-) noexcept {
+[[nodiscard]] constexpr std::uint64_t capability_bit(M4Capability capability) noexcept {
     return static_cast<std::uint64_t>(capability);
 }
 
@@ -78,6 +77,8 @@ struct M4Rules final {
     double deficit_unemployment_reference{0.0};
     double deficit_unemployment_cap{1.0};
     double government_investment_share{0.04};
+    double public_capital_gamma{0.0};
+    double public_capital_depreciation{2.28e-4};
     double unemployment_benefit_replacement{0.40};
     double income_allowance{0.0};
     double wealth_allowance{0.0};
@@ -97,9 +98,11 @@ struct M4Rules final {
     double initial_wage{1.0};
     double initial_markup{0.2};
     double initial_expected_demand{10.0};
+    bool capital_rationed_signal{false};
+    bool consumption_rationed_signal{false};
     std::uint32_t market_sample_size{1};
 
-    bool operator==(const M4Rules&) const = default;
+    bool operator==(const M4Rules &) const = default;
 };
 
 struct M4SimulationSpec final {
@@ -113,9 +116,7 @@ struct M4SimulationSpec final {
     std::uint64_t seed{0};
     std::uint64_t requested_capabilities{0};
     bool stochastic{false};
-    algorithms::MatchingProtocol market_protocol{
-        algorithms::MatchingProtocol::sampled
-    };
+    algorithms::MatchingProtocol market_protocol{algorithms::MatchingProtocol::sampled};
     M4Rules rules{};
 };
 
@@ -132,6 +133,9 @@ struct M4Metrics final {
     double wages_paid{0.0};
     double firm_profit{0.0};
     double tax_total{0.0};
+    double tax_profit{0.0};
+    double tax_income{0.0};
+    double tax_consumption{0.0};
     double government_spending{0.0};
     double government_deficit{0.0};
     double public_capital{0.0};
@@ -148,7 +152,7 @@ struct M4Metrics final {
     double public_fixed_capital_formation{0.0};
     double transfer_payments{0.0};
 
-    bool operator==(const M4Metrics&) const = default;
+    bool operator==(const M4Metrics &) const = default;
 };
 
 enum class M4Phase : std::uint8_t {
@@ -172,7 +176,7 @@ struct M4PhaseSummary final {
     std::uint64_t transfer_count{0};
     std::uint64_t trade_count{0};
 
-    bool operator==(const M4PhaseSummary&) const = default;
+    bool operator==(const M4PhaseSummary &) const = default;
 };
 
 struct M4ExternalGoodsOffer final {
@@ -181,7 +185,7 @@ struct M4ExternalGoodsOffer final {
     double stock{0.0};
     double price{0.0};
 
-    bool operator==(const M4ExternalGoodsOffer&) const = default;
+    bool operator==(const M4ExternalGoodsOffer &) const = default;
 };
 
 struct M4AdvanceOptions final {
@@ -212,32 +216,31 @@ struct M4Runtime final {
     M4Vertical vertical{M4Vertical::cash_loop};
     std::uint64_t capability_mask{0};
     M4Rules rules{};
-    algorithms::MatchingProtocol market_protocol{
-        algorithms::MatchingProtocol::sampled
-    };
+    algorithms::MatchingProtocol market_protocol{algorithms::MatchingProtocol::sampled};
     bool stochastic{false};
     PhiloxKey rng_key{};
     PhiloxCounter rng_counter{};
     double technology_index{1.0};
     double public_capital{0.0};
+    double public_capital_reference{1.0};
     double previous_nominal_output{0.0};
     M4Metrics last_metrics{};
     std::vector<M4PhaseSummary> last_phase_trace;
 };
 
 class M4TickScratch final {
-public:
+  public:
     static constexpr std::uint8_t kAccountOpen = 1U;
     static constexpr std::uint8_t kAccountAllowsNegative = 2U;
 
     M4TickScratch() = default;
-    M4TickScratch(const M4TickScratch&) = delete;
-    M4TickScratch& operator=(const M4TickScratch&) = delete;
-    M4TickScratch(M4TickScratch&&) noexcept = default;
-    M4TickScratch& operator=(M4TickScratch&&) noexcept = default;
+    M4TickScratch(const M4TickScratch &) = delete;
+    M4TickScratch &operator=(const M4TickScratch &) = delete;
+    M4TickScratch(M4TickScratch &&) noexcept = default;
+    M4TickScratch &operator=(M4TickScratch &&) noexcept = default;
     ~M4TickScratch() = default;
 
-    void reserve(const core::RootState& state);
+    void reserve(const core::RootState &state);
     [[nodiscard]] std::uint64_t capacity_signature() const noexcept;
 
     // Reusable implementation storage. This is intentionally exposed to the
@@ -247,6 +250,8 @@ public:
         double income_realized{0.0};
         double consumption_budget{0.0};
         double spent{0.0};
+        double necessity_spent{0.0};
+        double luxury_spent{0.0};
         double labor_sold{0.0};
         double labor_capacity{1.0};
     };
@@ -262,6 +267,7 @@ public:
         double sales{0.0};
         double revenue{0.0};
         double wage_bill{0.0};
+        double production_input_cost{0.0};
         double profit{0.0};
         double profit_tax{0.0};
         double dividends{0.0};
@@ -285,6 +291,7 @@ public:
     std::vector<std::size_t> capital_firm_indices_;
     std::vector<std::size_t> energy_firm_indices_;
     std::vector<std::size_t> construction_firm_indices_;
+    std::vector<std::uint8_t> firm_consumption_strata_;
     std::vector<std::size_t> household_order_;
     std::vector<std::size_t> firm_order_;
     std::vector<double> balances_;
@@ -292,6 +299,7 @@ public:
     std::vector<std::uint8_t> account_flags_;
     std::vector<double> reserve_balances_;
     std::vector<double> reserve_minimum_;
+    std::vector<double> household_net_wealth_;
     std::vector<HouseholdWork> household_work_;
     std::vector<FirmWork> firm_work_;
     std::vector<algorithms::BuyOrder> orders_;
@@ -305,71 +313,62 @@ public:
     std::uint64_t trade_count_{0};
     double external_goods_units_{0.0};
     double external_goods_value_{0.0};
+    double supplemental_tax_receipts_{0.0};
+    double supplemental_nontax_receipts_{0.0};
+    double supplemental_government_consumption_{0.0};
+    double supplemental_transfer_payments_{0.0};
 };
 
 class M4TickExtension {
-public:
+  public:
     M4TickExtension() = default;
-    M4TickExtension(const M4TickExtension&) = delete;
-    M4TickExtension& operator=(const M4TickExtension&) = delete;
+    M4TickExtension(const M4TickExtension &) = delete;
+    M4TickExtension &operator=(const M4TickExtension &) = delete;
     virtual ~M4TickExtension() = default;
 
-    [[nodiscard]] virtual Status prepare_tick(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status after_planning(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status run_labor(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng,
-        bool& handled
-    ) = 0;
-    [[nodiscard]] virtual Status before_settlement(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status after_settlement(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status close_institutions(
-        const core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick tick,
-        PhiloxRng& rng
-    ) = 0;
-    [[nodiscard]] virtual Status validate(
-        const core::RootState& state,
-        const M4Runtime& runtime,
-        const M4TickScratch& scratch,
-        Tick tick
-    ) const = 0;
-    virtual void commit(
-        core::RootState& state,
-        M4Runtime& runtime,
-        M4TickScratch& scratch,
-        Tick closed_tick,
-        const M4Metrics& metrics
-    ) noexcept = 0;
+    [[nodiscard]] virtual Status prepare_tick(const core::RootState &state,
+                                              M4Runtime &runtime,
+                                              M4TickScratch &scratch, Tick tick,
+                                              PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status after_planning(const core::RootState &state,
+                                                M4Runtime &runtime,
+                                                M4TickScratch &scratch, Tick tick,
+                                                PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status run_labor(const core::RootState &state,
+                                           M4Runtime &runtime, M4TickScratch &scratch,
+                                           Tick tick, PhiloxRng &rng,
+                                           bool &handled) = 0;
+    [[nodiscard]] virtual Status before_settlement(const core::RootState &state,
+                                                   M4Runtime &runtime,
+                                                   M4TickScratch &scratch, Tick tick,
+                                                   PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status distribute_dividends(const core::RootState &,
+                                                      M4Runtime &, M4TickScratch &,
+                                                      Tick, PhiloxRng &, double,
+                                                      bool &handled) {
+        handled = false;
+        return Status::success();
+    }
+    [[nodiscard]] virtual Status
+    prepare_household_net_wealth(const core::RootState &, M4Runtime &, M4TickScratch &,
+                                 Tick, PhiloxRng &, std::span<double>) {
+        return Status::success();
+    }
+    [[nodiscard]] virtual Status after_settlement(const core::RootState &state,
+                                                  M4Runtime &runtime,
+                                                  M4TickScratch &scratch, Tick tick,
+                                                  PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status close_institutions(const core::RootState &state,
+                                                    M4Runtime &runtime,
+                                                    M4TickScratch &scratch, Tick tick,
+                                                    PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status validate(const core::RootState &state,
+                                          const M4Runtime &runtime,
+                                          const M4TickScratch &scratch,
+                                          Tick tick) const = 0;
+    virtual void commit(core::RootState &state, M4Runtime &runtime,
+                        M4TickScratch &scratch, Tick closed_tick,
+                        const M4Metrics &metrics) noexcept = 0;
 };
 
 struct M4Initialization final {
@@ -377,47 +376,25 @@ struct M4Initialization final {
     M4Runtime runtime;
 };
 
-[[nodiscard]] Status validate_spec(const M4SimulationSpec& spec) noexcept;
-[[nodiscard]] Status stage_m4_transfer(
-    const core::RootState& state,
-    M4TickScratch& scratch,
-    AccountId source,
-    AccountId destination,
-    double amount
-) noexcept;
-[[nodiscard]] Status validate_m4_state(
-    const core::RootState& root,
-    const M4Runtime& runtime,
-    Tick tick
-) noexcept;
-[[nodiscard]] Result<M4Initialization> build_m4_genesis(
-    const M4SimulationSpec& spec
-);
-[[nodiscard]] Result<M4AdvanceResult> advance_ticks(
-    core::RootState& state,
-    M4Runtime& runtime,
-    M4TickScratch& scratch,
-    Tick& tick,
-    std::uint64_t count,
-    const M4AdvanceOptions& options = {}
-);
-[[nodiscard]] Result<M4AdvanceResult> advance_tick(
-    core::RootState& state,
-    M4Runtime& runtime,
-    M4TickScratch& scratch,
-    Tick& tick,
-    const M4AdvanceOptions& options = {}
-);
-[[nodiscard]] Result<M4AdvanceResult> advance_ticks_extended(
-    core::RootState& state,
-    M4Runtime& runtime,
-    M4TickScratch& scratch,
-    Tick& tick,
-    std::uint64_t count,
-    M4TickExtension& extension,
-    const M4AdvanceOptions& options = {}
-);
+[[nodiscard]] Status validate_spec(const M4SimulationSpec &spec) noexcept;
+[[nodiscard]] Status stage_m4_transfer(const core::RootState &state,
+                                       M4TickScratch &scratch, AccountId source,
+                                       AccountId destination, double amount) noexcept;
+[[nodiscard]] Status validate_m4_state(const core::RootState &root,
+                                       const M4Runtime &runtime, Tick tick) noexcept;
+[[nodiscard]] Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec);
+[[nodiscard]] Result<M4AdvanceResult>
+advance_ticks(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
+              Tick &tick, std::uint64_t count, const M4AdvanceOptions &options = {});
+[[nodiscard]] Result<M4AdvanceResult>
+advance_tick(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
+             Tick &tick, const M4AdvanceOptions &options = {});
+[[nodiscard]] Result<M4AdvanceResult>
+advance_ticks_extended(core::RootState &state, M4Runtime &runtime,
+                       M4TickScratch &scratch, Tick &tick, std::uint64_t count,
+                       M4TickExtension &extension,
+                       const M4AdvanceOptions &options = {});
 
-}  // namespace macro_sim::simulation
+} // namespace macro_sim::simulation
 
 #endif

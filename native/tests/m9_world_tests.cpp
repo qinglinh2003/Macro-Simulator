@@ -192,6 +192,35 @@ void test_trade_fx_and_tariff_clear_deterministically() {
     assert(replay.digest() == digest);
 }
 
+void test_no_shock_open_world_fx_remains_bounded() {
+    WorldRules rules;
+    rules.trade = true;
+    rules.capital = true;
+    rules.migration = true;
+    rules.fx_trade_cap = 0.15;
+    rules.fx_adjustment = 0.05;
+    rules.capital_mobility = 1.0;
+    rules.capital_adjustment = 0.2;
+    rules.migration_rate = 0.02;
+    rules.migration_max_share = 0.25;
+    rules.remittance_share = 0.2;
+    rules.wage_smoothing = 0.02;
+    auto world = build_world(3, rules);
+
+    const auto result = world.advance(730U);
+    assert(result.ok());
+    for (std::size_t index = 0; index < 3U; ++index) {
+        const auto rate =
+            world.rates().rate(EconomyId(static_cast<std::uint64_t>(index)));
+        assert(std::isfinite(rate));
+        assert(rate > 0.1);
+        assert(rate < 10.0);
+    }
+    assert(std::isfinite(result.get_if()->metrics.dealer_valuation));
+    assert(std::isfinite(result.get_if()->metrics.world_nfa));
+    assert(world.validate().ok());
+}
+
 void test_unilateral_sanction_has_symmetric_effect() {
     WorldRules rules;
     rules.trade = true;
@@ -582,6 +611,7 @@ int main() {
     test_single_country_is_an_inert_m8_container();
     test_closed_single_country_fast_path_matches_staged_world();
     test_trade_fx_and_tariff_clear_deterministically();
+    test_no_shock_open_world_fx_remains_bounded();
     test_unilateral_sanction_has_symmetric_effect();
     test_faults_leave_the_complete_old_world();
     test_policy_peg_and_shock_contracts();

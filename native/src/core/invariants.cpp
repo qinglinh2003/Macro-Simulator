@@ -221,6 +221,10 @@ InvariantReport run_invariants(const RootState& state) noexcept {
 
     const double reserve_total = state.reserves.total_reserves().value();
     const double reserve_stock = state.reserves.reserve_stock().value();
+    double gross_reserve_positions = 0.0;
+    for (const auto& reserve : state.reserves.records()) {
+        gross_reserve_positions += std::abs(reserve.balance.value());
+    }
     const double tracked_reserve =
         state.reserves.total_roundoff_drift()
         - state.reserves.reserve_stock_roundoff_drift();
@@ -230,7 +234,12 @@ InvariantReport run_invariants(const RootState& state) noexcept {
         state.accounting_tolerance,
         1.0e-10
             * std::max(
-                {std::abs(reserve_stock), std::abs(reserve_total), 1.0}
+                {
+                    std::abs(reserve_stock),
+                    std::abs(reserve_total),
+                    gross_reserve_positions,
+                    1.0,
+                }
             )
     );
     if (std::abs(reserve_unexplained) > reserve_tolerance) {

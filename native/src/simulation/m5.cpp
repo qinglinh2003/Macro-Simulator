@@ -13,6 +13,7 @@
 #include "macro_sim/algorithms/behavior.hpp"
 #include "macro_sim/algorithms/market.hpp"
 #include "macro_sim/core/invariants.hpp"
+#include "macro_sim/core/transaction.hpp"
 
 namespace macro_sim::simulation {
 namespace {
@@ -25,8 +26,7 @@ constexpr std::uint64_t kM4FiscalCapabilities =
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
-[[nodiscard]] constexpr bool valid_loan_purpose(
-    core::LoanPurpose purpose) noexcept {
+[[nodiscard]] constexpr bool valid_loan_purpose(core::LoanPurpose purpose) noexcept {
     switch (purpose) {
     case core::LoanPurpose::general:
     case core::LoanPurpose::mortgage:
@@ -226,8 +226,7 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
         if (indexed.valid() && indexed.value() <= scratch.loans_.size()) {
             const auto &loan =
                 scratch.loans_[static_cast<std::size_t>(indexed.value() - 1U)];
-            if (loan.id == indexed && loan.active &&
-                loan.borrower_account == account &&
+            if (loan.id == indexed && loan.active && loan.borrower_account == account &&
                 loan.principal.value() > algorithms::kEconomicEpsilon) {
                 return loan.lender;
             }
@@ -285,8 +284,7 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
     if (runtime.rules.relationship_lock_in) {
         const auto account_slot = account_index(account);
         if (account_slot < scratch.debt_by_account_.size() &&
-            scratch.debt_by_account_[account_slot] >
-                algorithms::kEconomicEpsilon &&
+            scratch.debt_by_account_[account_slot] > algorithms::kEconomicEpsilon &&
             bank_capacity(state, runtime, scratch, incumbent) + kTolerance >=
                 requested) {
             return incumbent;
@@ -357,9 +355,8 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
                 ? runtime.last_metrics.economy.price_index
                 : runtime.headline_price_index;
         const double previous_price =
-            policy.core_inflation_sensor ||
-                    runtime.previous_headline_price_index <=
-                        algorithms::kEconomicEpsilon
+            policy.core_inflation_sensor || runtime.previous_headline_price_index <=
+                                                algorithms::kEconomicEpsilon
                 ? runtime.previous_price_index
                 : runtime.previous_headline_price_index;
         if (previous_price > algorithms::kEconomicEpsilon &&
@@ -408,8 +405,7 @@ void apply_fiscal_policy(M4Runtime &real, const M5Runtime &runtime) noexcept {
     real.rules.consumption_tax_rate = runtime.policy.consumption_tax_rate;
     real.rules.necessity_consumption_tax_rate =
         runtime.policy.necessity_consumption_tax_rate;
-    real.rules.luxury_consumption_tax_rate =
-        runtime.policy.luxury_consumption_tax_rate;
+    real.rules.luxury_consumption_tax_rate = runtime.policy.luxury_consumption_tax_rate;
     real.rules.wealth_tax_rate = runtime.policy.wealth_tax_rate;
     real.rules.wealth_allowance = runtime.policy.wealth_allowance;
     real.rules.unemployment_benefit_replacement =
@@ -451,23 +447,22 @@ void open_financial_books(const core::RootState &state, const M4TickScratch &rea
     }
     std::fill(scratch.bank_alive_.begin(), scratch.bank_alive_.end(), 0U);
     scratch.candidate_banks_.clear();
-    state.banks.for_each_alive(
-        [&real, &scratch, tick](BankId id, const core::BankComponent &bank) {
-            const auto index = bank_index(id);
-            scratch.bank_alive_[index] = bank.alive ? 1U : 0U;
-            if (bank.alive) {
-                scratch.candidate_banks_.push_back(
-                    static_cast<std::size_t>(id.value()));
-            }
-            const double cash = projected_balance(real, bank.cash_account);
-            scratch.bank_capital_live_[index] = cash;
-            auto *pnl = pnl_for(scratch, id);
-            *pnl = core::BankPnlRecord{id, tick};
-            auto *capital = capital_for(scratch, id);
-            capital->opening_capital = cash;
-            capital->closing_capital = cash;
-            capital->alive = bank.alive;
-        });
+    state.banks.for_each_alive([&real, &scratch,
+                                tick](BankId id, const core::BankComponent &bank) {
+        const auto index = bank_index(id);
+        scratch.bank_alive_[index] = bank.alive ? 1U : 0U;
+        if (bank.alive) {
+            scratch.candidate_banks_.push_back(static_cast<std::size_t>(id.value()));
+        }
+        const double cash = projected_balance(real, bank.cash_account);
+        scratch.bank_capital_live_[index] = cash;
+        auto *pnl = pnl_for(scratch, id);
+        *pnl = core::BankPnlRecord{id, tick};
+        auto *capital = capital_for(scratch, id);
+        capital->opening_capital = cash;
+        capital->closing_capital = cash;
+        capital->alive = bank.alive;
+    });
     refresh_aggregates(state, real, scratch);
 }
 
@@ -529,13 +524,21 @@ void open_financial_books(const core::RootState &state, const M4TickScratch &rea
 void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kind,
                       BankId bank, double amount, double rate, Tick tick) {
     for (auto &operation : scratch.central_bank_operations_) {
-        if (operation.active && operation.kind == kind &&
-            operation.counterparty == bank) {
+        if (operation.kind != kind || operation.counterparty != bank) {
+            continue;
+        }
+        if (operation.active) {
             operation.principal = Money(operation.principal.value() + amount);
             operation.rate = Rate(rate);
             operation.maturity_tick = Tick(tick.value() + 1);
             return;
         }
+        operation.principal = Money(amount);
+        operation.rate = Rate(rate);
+        operation.opened_tick = tick;
+        operation.maturity_tick = Tick(tick.value() + 1);
+        operation.active = true;
+        return;
     }
     scratch.central_bank_operations_.push_back({
         CentralBankOperationId(scratch.central_bank_operations_.size() + 1),
@@ -547,6 +550,50 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
         Tick(tick.value() + 1),
         true,
     });
+}
+
+[[nodiscard]] Status service_lolr(const core::RootState &state, M4TickScratch &real,
+                                  M5TickScratch &scratch, Tick tick) {
+    for (auto &operation : scratch.central_bank_operations_) {
+        if (!operation.active ||
+            operation.kind != core::CentralBankOperationKind::lender_of_last_resort ||
+            operation.maturity_tick > tick) {
+            continue;
+        }
+        const auto *bank = state.banks.get(operation.counterparty);
+        const auto bank_slot = bank_index(operation.counterparty);
+        if (bank == nullptr || !bank->alive || scratch.bank_alive_[bank_slot] == 0U) {
+            continue;
+        }
+        const auto node_slot = node_index(bank->settlement_node);
+        const auto cash_slot = account_index(bank->cash_account);
+        const double interest_due =
+            operation.principal.value() * operation.rate.value();
+        const double interest_paid =
+            std::min({interest_due, std::max(0.0, real.reserve_balances_[node_slot]),
+                      std::max(0.0, real.balances_[cash_slot])});
+        if (interest_paid > algorithms::kEconomicEpsilon) {
+            const auto status =
+                transfer(state, real, bank->cash_account,
+                         state.institutions.treasury_account, interest_paid);
+            if (!status.ok()) {
+                return status;
+            }
+            pnl_for(scratch, operation.counterparty)->interbank_interest_expense +=
+                interest_paid;
+        }
+        const double principal_paid =
+            std::min(operation.principal.value(),
+                     std::max(0.0, real.reserve_balances_[node_slot]));
+        if (principal_paid > algorithms::kEconomicEpsilon) {
+            real.reserve_balances_[node_slot] -= principal_paid;
+            scratch.reserve_stock_ -= principal_paid;
+            operation.principal = Money(operation.principal.value() - principal_paid);
+        }
+        operation.active = operation.principal.value() > algorithms::kEconomicEpsilon;
+        operation.maturity_tick = Tick(tick.value() + 1U);
+    }
+    return Status::success();
 }
 
 [[nodiscard]] Status run_omo(const core::RootState &state, const M5Runtime &runtime,
@@ -637,40 +684,18 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
                                 M4TickScratch &real, M5Runtime &runtime,
                                 M5TickScratch &scratch, Tick tick,
                                 double credit_supply_multiplier) {
-    const double capital_price = real_runtime.rules.initial_capital_price;
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(real.firm_ids_[index]);
-        auto &work = real.firm_work_[index];
-        const auto account = account_index(firm->primary_account);
-        const double debt = scratch.debt_by_account_[account];
-        const double cash = real.balances_[account];
-        const double request =
-            std::max(0.0, work.posted_wage * work.labor_demand_notional +
-                              capital_price * work.investment_target - cash);
-        const double net_worth =
-            std::max(0.0, cash + 0.5 * work.closing_inventory * work.posted_price +
-                              0.7 * work.closing_capital * capital_price - debt);
-        double room =
-            std::max(0.0, runtime.policy.firm_leverage_limit * net_worth - debt);
-        if (runtime.rules.direct_monetary_transmission &&
-            runtime.policy.firm_minimum_dscr > 0.0) {
-            const double operating_cash =
-                std::max(0.0, work.posted_price * work.demand_expected -
-                                  work.posted_wage * work.labor_demand_notional);
-            const double service_rate =
-                runtime.policy_rate + runtime.rules.firm_amortization;
-            if (service_rate > algorithms::kEconomicEpsilon) {
-                room = std::min(room,
-                                operating_cash /
-                                    (runtime.policy.firm_minimum_dscr * service_rate));
-            }
+        if (firm == nullptr || (firm->sector != core::FirmSector::consumption &&
+                                firm->sector != core::FirmSector::capital)) {
+            // Energy and construction plans are finalized by M8 after this
+            // generic phase.  Their specialized stages re-underwrite those
+            // completed plans before labor matching.
+            continue;
         }
-        static_cast<void>(grant_credit(state, real, runtime, scratch,
-                                       firm->primary_account, request, room, tick,
-                                       credit_supply_multiplier));
-        work.labor_demand_effective =
-            std::max(0.0, std::min(work.labor_demand_notional,
-                                   real.balances_[account] / work.posted_wage));
+        static_cast<void>(stage_m5_firm_plan_credit(state, real_runtime, real, runtime,
+                                                    scratch, index, tick,
+                                                    credit_supply_multiplier));
     }
     if (runtime.rules.household_credit) {
         for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
@@ -809,6 +834,16 @@ void add_interbank(M5TickScratch &scratch, BankId lender, BankId borrower,
                                                 M5TickScratch &scratch,
                                                 BankId borrower) {
     const auto *borrower_bank = state.banks.get(borrower);
+    const auto borrower_account = account_index(borrower_bank->cash_account);
+    double total_principal = 0.0;
+    for (const auto &record : scratch.interbank_) {
+        if (record.active && record.borrower == borrower) {
+            total_principal += record.principal.value();
+        }
+    }
+    const double recoverable =
+        std::min(total_principal,
+                 std::max(0.0, real.balances_[borrower_account] + total_principal));
     for (auto &record : scratch.interbank_) {
         if (!record.active || record.borrower != borrower) {
             continue;
@@ -816,9 +851,23 @@ void add_interbank(M5TickScratch &scratch, BankId lender, BankId borrower,
         const auto *lender = state.banks.get(record.lender);
         const double principal = record.principal.value();
         real.balances_[account_index(lender->cash_account)] -= principal;
-        real.balances_[account_index(borrower_bank->cash_account)] += principal;
+        real.balances_[borrower_account] += principal;
         pnl_for(scratch, record.lender)->realized_interbank_losses += principal;
         pnl_for(scratch, borrower)->resolution_flow += principal;
+        double recovery = 0.0;
+        if (total_principal > algorithms::kEconomicEpsilon) {
+            recovery = recoverable * principal / total_principal;
+        }
+        if (recovery > algorithms::kEconomicEpsilon) {
+            const auto status = transfer(state, real, borrower_bank->cash_account,
+                                         lender->cash_account, recovery);
+            if (!status.ok()) {
+                return status;
+            }
+            pnl_for(scratch, record.lender)->realized_interbank_losses -= recovery;
+            pnl_for(scratch, borrower)->resolution_flow -= recovery;
+        }
+        scratch.working_metrics_.realized_interbank_losses += principal - recovery;
         record.principal = Money(0.0);
         record.accrued_interest = Money(0.0);
         record.active = false;
@@ -895,36 +944,49 @@ void add_interbank(M5TickScratch &scratch, BankId lender, BankId borrower,
         std::max(0.0, runtime.policy_rate + runtime.rules.interbank_rate_base +
                           runtime.rules.interbank_tightness * tightness);
     scratch.working_metrics_.interbank_rate = rate;
-    double remaining_supply = surplus;
-    state.banks.for_each_alive([&state, &real, &scratch, tick, rate, deficit, surplus,
-                                &remaining_supply](
-                                   BankId borrower_id,
-                                   const core::BankComponent &borrower) {
+    state.banks.for_each_alive([&state, &real, &scratch, tick, rate, deficit,
+                                surplus](BankId borrower_id,
+                                         const core::BankComponent &borrower) {
         const auto borrower_node = node_index(borrower.settlement_node);
         const double need = std::max(0.0, -real.reserve_balances_[borrower_node]);
         double funding = std::min(need, std::min(deficit, surplus) * need / deficit);
+        double available_total = 0.0;
         state.banks.for_each_alive(
-            [&real, &scratch, tick, rate, borrower_id, &borrower, &funding,
-             &remaining_supply](BankId lender_id, const core::BankComponent &lender) {
-                if (funding <= algorithms::kEconomicEpsilon ||
-                    remaining_supply <= algorithms::kEconomicEpsilon ||
-                    lender_id == borrower_id) {
+            [&real, &scratch, borrower_id,
+             &available_total](BankId lender_id, const core::BankComponent &lender) {
+                if (lender_id == borrower_id ||
+                    scratch.bank_alive_[bank_index(lender_id)] == 0U) {
                     return;
                 }
-                const auto lender_node = node_index(lender.settlement_node);
-                const double available =
-                    std::max(0.0, real.reserve_balances_[lender_node]);
-                const double amount = std::min(funding, available);
-                if (amount <= algorithms::kEconomicEpsilon) {
-                    return;
-                }
-                static_cast<void>(move_reserves(real, lender.settlement_node,
-                                                borrower.settlement_node, amount));
-                add_interbank(scratch, lender_id, borrower_id, amount, rate, tick);
-                scratch.working_metrics_.interbank_volume += amount;
-                funding -= amount;
-                remaining_supply -= amount;
+                available_total += std::max(
+                    0.0, real.reserve_balances_[node_index(lender.settlement_node)]);
             });
+        if (available_total <= algorithms::kEconomicEpsilon) {
+            return;
+        }
+        funding = std::min(funding, available_total);
+        const double requested_funding = funding;
+        state.banks.for_each_alive([&real, &scratch, tick, rate, borrower_id, &borrower,
+                                    &funding, available_total, requested_funding](
+                                       BankId lender_id,
+                                       const core::BankComponent &lender) {
+            if (funding <= algorithms::kEconomicEpsilon || lender_id == borrower_id ||
+                scratch.bank_alive_[bank_index(lender_id)] == 0U) {
+                return;
+            }
+            const auto lender_node = node_index(lender.settlement_node);
+            const double available = std::max(0.0, real.reserve_balances_[lender_node]);
+            const double amount =
+                std::min(funding, requested_funding * available / available_total);
+            if (amount <= algorithms::kEconomicEpsilon) {
+                return;
+            }
+            static_cast<void>(move_reserves(real, lender.settlement_node,
+                                            borrower.settlement_node, amount));
+            add_interbank(scratch, lender_id, borrower_id, amount, rate, tick);
+            scratch.working_metrics_.interbank_volume += amount;
+            funding -= amount;
+        });
     });
     return Status::success();
 }
@@ -952,6 +1014,73 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
     add_cb_operation(scratch, core::CentralBankOperationKind::lender_of_last_resort,
                      bank_id, amount, runtime.policy_rate, tick);
     scratch.working_metrics_.lolr_advances += amount;
+}
+
+[[nodiscard]] Status close_end_of_day_liquidity(const core::RootState &state,
+                                                M5Runtime &runtime, M4TickScratch &real,
+                                                M5TickScratch &scratch, Tick tick) {
+    auto status = run_interbank(state, runtime, real, scratch, tick);
+    if (!status.ok() || !runtime.policy.lender_of_last_resort) {
+        return status;
+    }
+    state.banks.for_each_alive(
+        [&runtime, &real, &scratch, tick](BankId id, const core::BankComponent &bank) {
+            const auto bank_slot = bank_index(id);
+            if (!bank.alive || scratch.bank_alive_[bank_slot] == 0U ||
+                scratch.bank_capital_live_[bank_slot] <= 0.0) {
+                return;
+            }
+            const auto node_slot = node_index(bank.settlement_node);
+            const double shortfall = std::max(0.0, -real.reserve_balances_[node_slot]);
+            if (shortfall > algorithms::kEconomicEpsilon) {
+                add_lolr(runtime, scratch, real, bank, id, shortfall, tick);
+            }
+        });
+    return Status::success();
+}
+
+[[nodiscard]] Status reassign_failed_reserve_position(const core::RootState &state,
+                                                      M4TickScratch &real,
+                                                      M5TickScratch &scratch,
+                                                      BankId failed) {
+    if (scratch.alive_banks_.empty()) {
+        return Status::success();
+    }
+    const auto *failed_bank = state.banks.get(failed);
+    const auto failed_node = failed_bank->settlement_node;
+    const double residual = real.reserve_balances_[node_index(failed_node)];
+    if (std::abs(residual) <= algorithms::kEconomicEpsilon) {
+        return Status::success();
+    }
+    double total_weight = 0.0;
+    for (const auto bank : scratch.alive_banks_) {
+        total_weight += std::max(0.0, scratch.deposits_by_bank_[bank_index(bank)]);
+    }
+    const bool equal_weights = total_weight <= algorithms::kEconomicEpsilon;
+    if (equal_weights) {
+        total_weight = static_cast<double>(scratch.alive_banks_.size());
+    }
+    double remaining = std::abs(residual);
+    for (std::size_t index = 0; index < scratch.alive_banks_.size(); ++index) {
+        const auto bank = scratch.alive_banks_[index];
+        const auto *component = state.banks.get(bank);
+        const double weight =
+            equal_weights ? 1.0
+                          : std::max(0.0, scratch.deposits_by_bank_[bank_index(bank)]);
+        const double amount =
+            index + 1U == scratch.alive_banks_.size()
+                ? remaining
+                : std::min(remaining, std::abs(residual) * weight / total_weight);
+        const auto status =
+            residual > 0.0
+                ? move_reserves(real, failed_node, component->settlement_node, amount)
+                : move_reserves(real, component->settlement_node, failed_node, amount);
+        if (!status.ok()) {
+            return status;
+        }
+        remaining -= amount;
+    }
+    return Status::success();
 }
 
 [[nodiscard]] Status resolve_bank(const core::RootState &state, M5Runtime &runtime,
@@ -1090,7 +1219,7 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
         }
     }
     refresh_aggregates(state, real, scratch);
-    return Status::success();
+    return reassign_failed_reserve_position(state, real, scratch, failed);
 }
 
 [[nodiscard]] Status force_default(const core::RootState &state, M4TickScratch &real,
@@ -1441,8 +1570,7 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
     for (std::size_t index = 0; index < scratch.loans_.size(); ++index) {
         const auto &loan = scratch.loans_[index];
         if (loan.id.value() != index + 1 || !finite(loan.principal.value()) ||
-            loan.principal.value() < -kTolerance ||
-            !valid_loan_purpose(loan.purpose) ||
+            loan.principal.value() < -kTolerance || !valid_loan_purpose(loan.purpose) ||
             state.banks.get(loan.lender) == nullptr ||
             state.postings.get(loan.borrower_account) == nullptr) {
             return Status(ErrorCode::invariant_violation,
@@ -1539,7 +1667,11 @@ class M5Extension final : public M4TickExtension {
         }
         apply_fiscal_policy(real_runtime, runtime_);
         open_financial_books(state, real, runtime_, scratch_, tick);
-        auto status = run_deposit_competition(state, runtime_, real, scratch_);
+        auto status = service_lolr(state, real, scratch_, tick);
+        if (!status.ok()) {
+            return status;
+        }
+        status = run_deposit_competition(state, runtime_, real, scratch_);
         if (!status.ok()) {
             return status;
         }
@@ -1587,6 +1719,44 @@ class M5Extension final : public M4TickExtension {
         }
         return extension_->before_settlement(state, real_runtime, real, runtime_,
                                              scratch_, tick, rng);
+    }
+
+    Status distribute_dividends(const core::RootState &state, M4Runtime &real_runtime,
+                                M4TickScratch &real, Tick tick, PhiloxRng &rng,
+                                double dividend_total, bool &handled) override {
+        handled = false;
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->distribute_dividends(state, real_runtime, real, runtime_,
+                                                scratch_, tick, rng, dividend_total,
+                                                handled);
+    }
+
+    Status prepare_household_net_wealth(const core::RootState &state,
+                                        M4Runtime &real_runtime, M4TickScratch &real,
+                                        Tick tick, PhiloxRng &rng,
+                                        std::span<double> net_wealth) override {
+        if (net_wealth.size() != real.household_ids_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M5 household wealth projection is stale");
+        }
+        for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
+            const auto *household = state.households.get(real.household_ids_[index]);
+            if (household == nullptr) {
+                return Status(ErrorCode::invariant_violation,
+                              "M5 household wealth owner is absent");
+            }
+            const auto account = account_index(household->primary_account);
+            if (account < scratch_.debt_by_account_.size()) {
+                net_wealth[index] -= scratch_.debt_by_account_[account];
+            }
+        }
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->prepare_household_net_wealth(
+            state, real_runtime, real, runtime_, scratch_, tick, rng, net_wealth);
     }
 
     Status after_settlement(const core::RootState &state, M4Runtime &real_runtime,
@@ -1645,6 +1815,10 @@ class M5Extension final : public M4TickExtension {
                 return status;
             }
         }
+        status = close_end_of_day_liquidity(state, runtime_, real, scratch_, tick);
+        if (!status.ok()) {
+            return status;
+        }
         scratch_.working_metrics_.total_loan_principal = std::accumulate(
             scratch_.loans_.begin(), scratch_.loans_.end(), 0.0,
             [](double total, const core::LoanRecord &loan) {
@@ -1653,6 +1827,16 @@ class M5Extension final : public M4TickExtension {
         scratch_.working_metrics_.total_reserves = std::accumulate(
             real.reserve_balances_.begin(), real.reserve_balances_.end(), 0.0);
         scratch_.working_metrics_.reserve_stock = scratch_.reserve_stock_;
+        scratch_.working_metrics_.lolr_outstanding = std::accumulate(
+            scratch_.central_bank_operations_.begin(),
+            scratch_.central_bank_operations_.end(), 0.0,
+            [](double total, const core::CentralBankOperationRecord &operation) {
+                return total + (operation.active && operation.kind ==
+                                                        core::CentralBankOperationKind::
+                                                            lender_of_last_resort
+                                    ? operation.principal.value()
+                                    : 0.0);
+            });
         for (const auto &capital : scratch_.bank_capital_) {
             scratch_.working_metrics_.total_bank_capital += capital.closing_capital;
             if (capital.alive) {
@@ -1689,6 +1873,9 @@ class M5Extension final : public M4TickExtension {
             bank.alive = scratch_.bank_alive_[bank_index(id)] != 0U;
         });
         scratch_.working_metrics_.economy = metrics;
+        scratch_.working_metrics_.economy.conservation_drift =
+            metrics.total_money - scratch_.working_metrics_.total_loan_principal -
+            state.genesis_money.value();
         scratch_.working_metrics_.policy_rate = runtime_.policy_rate;
         scratch_.working_metrics_.inflation_sensor = runtime_.inflation_sensor;
         runtime_.previous_price_index = runtime_.last_metrics.economy.price_index;
@@ -1714,6 +1901,61 @@ class M5Extension final : public M4TickExtension {
 };
 
 } // namespace
+
+double stage_m5_firm_plan_credit(const core::RootState &state,
+                                 const M4Runtime &real_economy_runtime,
+                                 M4TickScratch &real_economy, M5Runtime &runtime,
+                                 M5TickScratch &scratch, std::size_t firm_index,
+                                 Tick tick, double credit_supply_multiplier,
+                                 double additional_cash_need) {
+    if (firm_index >= real_economy.firm_ids_.size() ||
+        firm_index >= real_economy.firm_work_.size()) {
+        return 0.0;
+    }
+    const auto *firm = state.firms.get(real_economy.firm_ids_[firm_index]);
+    if (firm == nullptr) {
+        return 0.0;
+    }
+    auto &work = real_economy.firm_work_[firm_index];
+    const auto account = account_index(firm->primary_account);
+    if (account >= scratch.debt_by_account_.size() ||
+        account >= real_economy.balances_.size()) {
+        return 0.0;
+    }
+    const double capital_price = real_economy_runtime.rules.initial_capital_price;
+    const double debt = scratch.debt_by_account_[account];
+    const double cash = real_economy.balances_[account];
+    const double request =
+        std::max(0.0, work.posted_wage * work.labor_demand_notional +
+                          capital_price * work.investment_target +
+                          std::max(0.0, additional_cash_need) - cash);
+    const double net_worth =
+        std::max(0.0, cash + 0.5 * work.closing_inventory * work.posted_price +
+                          0.7 * work.closing_capital * capital_price - debt);
+    double room = std::max(0.0, runtime.policy.firm_leverage_limit * net_worth - debt);
+    if (runtime.rules.direct_monetary_transmission &&
+        runtime.policy.firm_minimum_dscr > 0.0) {
+        const double operating_cash =
+            std::max(0.0, work.posted_price * work.demand_expected -
+                              work.posted_wage * work.labor_demand_notional);
+        const double service_rate =
+            runtime.policy_rate + runtime.rules.firm_amortization;
+        if (service_rate > algorithms::kEconomicEpsilon) {
+            room = std::min(room, operating_cash / (runtime.policy.firm_minimum_dscr *
+                                                    service_rate));
+        }
+    }
+    const double granted =
+        grant_credit(state, real_economy, runtime, scratch, firm->primary_account,
+                     request, room, tick, credit_supply_multiplier);
+    work.labor_demand_effective =
+        work.posted_wage > algorithms::kEconomicEpsilon
+            ? std::max(0.0,
+                       std::min(work.labor_demand_notional,
+                                real_economy.balances_[account] / work.posted_wage))
+            : 0.0;
+    return granted;
+}
 
 void M5TickScratch::reserve(const core::RootState &state) {
     loans_.reserve(state.loans.size() + state.households.alive_count() +
@@ -1938,17 +2180,15 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
                 loan.borrower_account == quote.borrower_account &&
                 loan.borrower == quote.borrower && loan.lender == quote.lender) {
                 const double old_principal = loan.principal.value();
-                const double new_principal =
-                    old_principal + quote.principal.value();
-                loan.terms.annual_rate = Rate(
-                    new_principal > algorithms::kEconomicEpsilon
-                        ? (old_principal * loan.terms.annual_rate.value() +
-                           quote.principal.value() * quote.annual_rate.value()) /
-                              new_principal
-                        : quote.annual_rate.value());
+                const double new_principal = old_principal + quote.principal.value();
+                loan.terms.annual_rate =
+                    Rate(new_principal > algorithms::kEconomicEpsilon
+                             ? (old_principal * loan.terms.annual_rate.value() +
+                                quote.principal.value() * quote.annual_rate.value()) /
+                                   new_principal
+                             : quote.annual_rate.value());
                 loan.terms.maturity_tick =
-                    std::max(loan.terms.maturity_tick,
-                             Tick(tick.value() + 3650U));
+                    std::max(loan.terms.maturity_tick, Tick(tick.value() + 3650U));
                 loan.principal = Money(new_principal);
                 id = candidate;
             }
@@ -2009,14 +2249,12 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
 }
 
 Status stage_m5_loan_repayment(const core::RootState &state,
-                               M4TickScratch &real_economy,
-                               M5TickScratch &scratch, LoanId loan_id,
-                               AccountId payer, Money amount) noexcept {
+                               M4TickScratch &real_economy, M5TickScratch &scratch,
+                               LoanId loan_id, AccountId payer, Money amount) noexcept {
     if (!loan_id.valid() || loan_id.value() > scratch.loans_.size()) {
         return Status(ErrorCode::not_found, "M5 loan is absent");
     }
-    if (!finite(amount.value()) ||
-        amount.value() <= algorithms::kEconomicEpsilon) {
+    if (!finite(amount.value()) || amount.value() <= algorithms::kEconomicEpsilon) {
         return Status(ErrorCode::invalid_argument,
                       "M5 loan repayment amount is invalid");
     }
@@ -2035,8 +2273,7 @@ Status stage_m5_loan_repayment(const core::RootState &state,
         account_slot >= real_economy.balances_.size() ||
         account_slot >= scratch.debt_by_account_.size() ||
         lender_slot >= scratch.exposure_by_bank_.size()) {
-        return Status(ErrorCode::not_found,
-                      "M5 loan repayment projection is stale");
+        return Status(ErrorCode::not_found, "M5 loan repayment projection is stale");
     }
     const double principal = std::min(amount.value(), loan.principal.value());
     if (real_economy.balances_[account_slot] + kTolerance < principal) {
@@ -2109,6 +2346,218 @@ Status stage_m5_loan_writeoff(const core::RootState &state, M4TickScratch &real_
     return Status::success();
 }
 
+Status close_m5_external_liquidity(core::RootState &state, M5Runtime &runtime,
+                                   Tick closed_tick) {
+    struct BankLiquidity final {
+        BankId bank{};
+        SettlementNodeId node{};
+        double reserve{0.0};
+    };
+    std::vector<BankLiquidity> banks;
+    banks.reserve(state.banks.alive_count());
+    state.banks.for_each_alive(
+        [&state, &banks](BankId id, const core::BankComponent &bank) {
+            if (!bank.alive) {
+                return;
+            }
+            const auto reserve = state.reserves.balance(bank.settlement_node);
+            if (reserve.ok()) {
+                banks.push_back({id, bank.settlement_node, reserve.get_if()->value()});
+            }
+        });
+    if (banks.empty()) {
+        return Status::success();
+    }
+
+    double deficit = 0.0;
+    double surplus = 0.0;
+    for (const auto &bank : banks) {
+        if (!finite(bank.reserve)) {
+            return Status(ErrorCode::invariant_violation,
+                          "external settlement produced non-finite reserves");
+        }
+        deficit += std::max(0.0, -bank.reserve);
+        surplus += std::max(0.0, bank.reserve);
+    }
+
+    struct ReserveLoan final {
+        BankId lender{};
+        BankId borrower{};
+        double principal{0.0};
+    };
+    std::vector<ReserveLoan> loans;
+    double interbank_volume = 0.0;
+    double interbank_rate = runtime.policy_rate;
+    if (runtime.rules.interbank && banks.size() > 1U &&
+        deficit > algorithms::kEconomicEpsilon &&
+        surplus > algorithms::kEconomicEpsilon) {
+        const double tightness = std::min(1.0, deficit / surplus);
+        interbank_rate =
+            std::max(0.0, runtime.policy_rate + runtime.rules.interbank_rate_base +
+                              runtime.rules.interbank_tightness * tightness);
+        core::SettlementTransaction transaction(state);
+        for (auto &borrower : banks) {
+            double need = std::max(0.0, -borrower.reserve);
+            for (auto &lender : banks) {
+                if (need <= algorithms::kEconomicEpsilon ||
+                    lender.bank == borrower.bank) {
+                    continue;
+                }
+                const double amount = std::min(need, std::max(0.0, lender.reserve));
+                if (amount <= algorithms::kEconomicEpsilon) {
+                    continue;
+                }
+                const auto status = transaction.move_reserves(
+                    lender.node, borrower.node, Money(amount));
+                if (!status.ok()) {
+                    return status;
+                }
+                lender.reserve -= amount;
+                borrower.reserve += amount;
+                need -= amount;
+                interbank_volume += amount;
+                loans.push_back({lender.bank, borrower.bank, amount});
+            }
+        }
+        if (!loans.empty()) {
+            const auto committed = transaction.commit_locally_validated();
+            if (!committed.ok()) {
+                return committed;
+            }
+            auto records = state.interbank.records();
+            for (const auto &loan : loans) {
+                auto active = std::find_if(
+                    records.begin(), records.end(), [&loan](const auto &record) {
+                        return record.active && record.lender == loan.lender &&
+                               record.borrower == loan.borrower;
+                    });
+                if (active != records.end()) {
+                    const double old_principal = active->principal.value();
+                    const double total = old_principal + loan.principal;
+                    active->rate = Rate(total > algorithms::kEconomicEpsilon
+                                            ? (old_principal * active->rate.value() +
+                                               loan.principal * interbank_rate) /
+                                                  total
+                                            : 0.0);
+                    active->principal = Money(total);
+                    active->maturity_tick = Tick(closed_tick.value() + 1U);
+                    continue;
+                }
+                auto reusable =
+                    std::find_if(records.begin(), records.end(),
+                                 [](const auto &record) { return !record.active; });
+                const core::InterbankRecord replacement{
+                    reusable != records.end()
+                        ? reusable->id
+                        : InterbankContractId(records.size() + 1U),
+                    loan.lender,
+                    loan.borrower,
+                    Money(loan.principal),
+                    Rate(interbank_rate),
+                    Money(0.0),
+                    closed_tick,
+                    Tick(closed_tick.value() + 1U),
+                    true,
+                };
+                if (reusable != records.end()) {
+                    *reusable = replacement;
+                } else {
+                    records.push_back(replacement);
+                }
+            }
+            state.interbank.replace_records(records);
+        }
+    }
+
+    double lolr_advances = 0.0;
+    if (runtime.policy.lender_of_last_resort) {
+        core::SettlementTransaction transaction(state);
+        std::vector<std::pair<BankId, double>> advances;
+        advances.reserve(banks.size());
+        for (const auto &bank : banks) {
+            const auto reserve = state.reserves.balance(bank.node);
+            const auto *capital = state.bank_capital.get(bank.bank);
+            if (!reserve.ok() || capital == nullptr || !capital->alive ||
+                capital->closing_capital <= 0.0) {
+                continue;
+            }
+            const double shortfall = std::max(0.0, -reserve.get_if()->value());
+            if (shortfall <= algorithms::kEconomicEpsilon) {
+                continue;
+            }
+            const auto status = transaction.issue_reserves(bank.node, Money(shortfall));
+            if (!status.ok()) {
+                return status;
+            }
+            advances.emplace_back(bank.bank, shortfall);
+            lolr_advances += shortfall;
+        }
+        if (!advances.empty()) {
+            const auto committed = transaction.commit_locally_validated();
+            if (!committed.ok()) {
+                return committed;
+            }
+            auto operations = state.central_bank_operations.records();
+            for (const auto &[bank, amount] : advances) {
+                auto operation =
+                    std::find_if(operations.begin(), operations.end(),
+                                 [bank](const auto &candidate) {
+                                     return candidate.active &&
+                                            candidate.kind ==
+                                                core::CentralBankOperationKind::
+                                                    lender_of_last_resort &&
+                                            candidate.counterparty == bank;
+                                 });
+                if (operation != operations.end()) {
+                    operation->principal = Money(operation->principal.value() + amount);
+                    operation->rate = Rate(runtime.policy_rate);
+                    operation->maturity_tick = Tick(closed_tick.value() + 1U);
+                    continue;
+                }
+                operation = std::find_if(operations.begin(), operations.end(),
+                                         [bank](const auto &candidate) {
+                                             return !candidate.active &&
+                                                    candidate.kind ==
+                                                        core::CentralBankOperationKind::
+                                                            lender_of_last_resort &&
+                                                    candidate.counterparty == bank;
+                                         });
+                const core::CentralBankOperationRecord replacement{
+                    operation != operations.end()
+                        ? operation->id
+                        : CentralBankOperationId(operations.size() + 1U),
+                    core::CentralBankOperationKind::lender_of_last_resort,
+                    bank,
+                    Money(amount),
+                    Rate(runtime.policy_rate),
+                    closed_tick,
+                    Tick(closed_tick.value() + 1U),
+                    true,
+                };
+                if (operation != operations.end()) {
+                    *operation = replacement;
+                } else {
+                    operations.push_back(replacement);
+                }
+            }
+            state.central_bank_operations.replace_records(operations);
+        }
+    }
+
+    runtime.last_metrics.interbank_volume += interbank_volume;
+    if (interbank_volume > algorithms::kEconomicEpsilon) {
+        runtime.last_metrics.interbank_rate = interbank_rate;
+    }
+    runtime.last_metrics.lolr_advances += lolr_advances;
+    runtime.last_metrics.total_reserves = state.reserves.total_reserves().value();
+    runtime.last_metrics.reserve_stock = state.reserves.reserve_stock().value();
+    runtime.last_metrics.lolr_outstanding =
+        state.central_bank_operations
+            .total_principal(core::CentralBankOperationKind::lender_of_last_resort)
+            .value();
+    return Status::success();
+}
+
 Status validate_m5_policy(const M5PolicyState &policy) noexcept {
     const std::array values{
         policy.government_consumption_share,
@@ -2157,13 +2606,12 @@ Status validate_m5_policy(const M5PolicyState &policy) noexcept {
         static_cast<std::uint8_t>(policy.monetary_regime) > 2U ||
         policy.rate_inertia < 0.0 || policy.rate_inertia > 1.0 ||
         policy.inflation_target < -0.02 || policy.inflation_target > 0.02 ||
-        policy.taylor_inflation < 0.0 ||
-        policy.taylor_unemployment < 0.0 || policy.neutral_rate < 0.0 ||
-        policy.natural_unemployment < 0.0 || policy.natural_unemployment > 1.0 ||
-        policy.inflation_sensor_lambda < 0.0 || policy.inflation_sensor_lambda > 1.0 ||
-        policy.maximum_policy_rate <= 0.0 || policy.reserve_gap_close < 0.0 ||
-        policy.reserve_gap_close > 1.0 || policy.reserve_target < 0.0 ||
-        policy.reserve_floor_fraction < 0.0 ||
+        policy.taylor_inflation < 0.0 || policy.taylor_unemployment < 0.0 ||
+        policy.neutral_rate < 0.0 || policy.natural_unemployment < 0.0 ||
+        policy.natural_unemployment > 1.0 || policy.inflation_sensor_lambda < 0.0 ||
+        policy.inflation_sensor_lambda > 1.0 || policy.maximum_policy_rate <= 0.0 ||
+        policy.reserve_gap_close < 0.0 || policy.reserve_gap_close > 1.0 ||
+        policy.reserve_target < 0.0 || policy.reserve_floor_fraction < 0.0 ||
         policy.government_consumption_share < 0.0 ||
         policy.government_consumption_share > 1.0 ||
         policy.government_deficit_target < 0.0 ||

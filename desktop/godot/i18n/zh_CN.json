@@ -391,6 +391,7 @@
   "desktop.free.verdict_effective": "政策修改已经生效",
   "desktop.free.verdict_cleared": "下日政策修改已清空",
   "desktop.free.queued_hint": "%d 项政策修改已排入队列；推进下一日后自动生效。",
+  "desktop.free.peg_requires_partner": "固定汇率需要世界中至少存在一个实行浮动汇率的其他经济体。",
   "desktop.main.fragment.c613e26dcc4db0b5": "实体经济",
   "desktop.main.fragment.d00091cb2bfe9634": "劳动力",
   "desktop.main.fragment.aab5501bd82dde20": "价格与货币",
@@ -1619,6 +1620,7 @@
   "desktop.main.fragment.4344b9c932cd2a58": "查看维度详情",
   "desktop.main.fragment.bb12a8574625dbe1": "」指标全景",
   "desktop.main.fragment.98d5200f51face49": "尚未发布",
+  "desktop.main.distribution.not_measured": "尚未统计",
   "desktop.main.fragment.7d3700550a037943": "等待首期公报",
   "desktop.main.fragment.d7718e74c3af68c2": "滞后",
   "desktop.main.fragment.a9105fc058c4896a": "持平",
@@ -1793,5 +1795,11 @@
   "domain.age_group.unknown": "年龄未知",
   "desktop.calendar.full": "第 %d 年 · 第 %d 季 · 第 %d 天",
   "desktop.calendar.short": "第 %d 年 · 第 %d 日",
-  "desktop.format.rate_per_day": "%.2f%%/日"
+  "desktop.format.rate_per_day": "%.2f%%/日",
+  "desktop.main.metric.household_interest_paid": "家庭利息偿付",
+  "desktop.main.metric.principal_repaid": "贷款本金偿付",
+  "desktop.main.metric.loan_interest_paid": "贷款利息偿付",
+  "desktop.main.metric.new_credit": "新增信贷",
+  "desktop.main.chart.credit_ledger": "信贷流量账",
+  "desktop.main.chart.credit_ledger_note": "新增贷款、还本、付息与实际信用损失"
 }

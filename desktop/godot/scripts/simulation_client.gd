@@ -110,13 +110,18 @@ func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	if status == StreamPeerTCP.STATUS_CONNECTED:
 		if not _was_connected:
+			# Only a request that was already pending before reconnection needs
+			# retransmission. The connected callback can enqueue the initial
+			# hello request, and resending that newly created frame here would
+			# produce a duplicate response that corrupts the next request ID.
+			var retry_pending := busy and not _pending_frame.is_empty()
 			_was_connected = true
-			connected.emit()
-			if busy and not _pending_frame.is_empty():
+			if retry_pending:
 				var retry_error := _peer.put_data(_pending_frame)
 				if retry_error != OK:
 					request_failed.emit(
 						"Could not retry the interrupted simulation command.")
+			connected.emit()
 		_read_available()
 	elif status in [StreamPeerTCP.STATUS_NONE, StreamPeerTCP.STATUS_ERROR]:
 		if _was_connected:

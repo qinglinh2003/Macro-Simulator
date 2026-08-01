@@ -23,10 +23,10 @@ func _init() -> void:
 	assert(menu._draft_manifest()["duration"] == 2)
 	assert(not menu._draft_manifest().has("performance_scale"))
 	var scale: Dictionary = menu._draft_manifest()["countries"][0]["overrides"]
-	assert(scale["n_households"] == 80)
-	assert(scale["demographics_population"] == 80)
-	assert(scale["n_firms_c"] == 12)
-	assert(scale["n_builders"] == 5)
+	assert(scale["n_households"] == 100_000)
+	assert(scale["demographics_population"] == 100_000)
+	assert(scale["n_firms_c"] == 1_500)
+	assert(scale["n_builders"] == 625)
 
 	menu._duration = "inf"
 	assert(menu._duration_ticks_value() == null)

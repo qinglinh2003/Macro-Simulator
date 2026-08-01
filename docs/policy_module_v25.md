@@ -374,12 +374,11 @@ Real-world-changeable rules living as literals in code — each needs a ruling
   pure component. `job_guarantee_wage` is a PASSIVE posted-wage gauge (ratio × mean wage,
   regardless of the flag); the activity gauge is jg_employment, observable only in slack
   windows (genesis clearing works).
-- **PRECEDENCE SHADOWING (found by the P0 scaffold, first hour)**: gov_consumption_share
-  is a NO-OP while gov_deficit_target>0 (goods.py branch order), and `Config.v13()`
-  presets gov_deficit_target=0.03 — the share lever was silently inert in every
-  v13-family config INCLUDING the 30y portraits (defc>0 archetypes China/India/USA;
-  the defc=0 archetypes Germany/Gulf/Hub had it live). Registry consequence: levers
-  declare `shadowed_by` (executable via the paired effectiveness tests)
+- **PRECEDENCE SHADOWING (historical behavior, removed in the native engine)**:
+  `gov_consumption_share` was a NO-OP while `gov_deficit_target>0` in the old
+  Python branch order. The native fiscal rule treats the deficit target as the
+  discretionary envelope and the consumption share as its composition cap, so
+  both levers now remain effective.
 
 ## 2. Architecture (three layers)
 
@@ -510,7 +509,9 @@ Frontier digest `43ed38f7` bit-exact through every batch.
 
 ### Findings the effectiveness scaffold produced (beyond dead levers)
 1. Taylor family two-sided clamp shadowing (ZLB AND r_max) -> interior-liftoff technique.
-2. gov_consumption_share precedence-shadowed by gov_deficit_target in ALL v13 presets.
+2. The historical Python presets precedence-shadowed
+   `gov_consumption_share` with `gov_deficit_target`; the native engine no
+   longer does so.
 3. bond issuance is demand-constrained: finance_frac upward moves are supply-cap-shadowed.
 4. deposit_rate AND deposit_rate_floor are DEAD outside bank_realized_pnl (the whole
    deposit-interest leg lives in finalize_bank_pnl) -- capability requirement filed.

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 import hashlib
 import json
+import math
 import sys
 from typing import Any, Iterable, Mapping
 
@@ -48,6 +49,7 @@ M4_RULE_FIELDS = {
     "capital_productivity": "a_K",
     "total_factor_productivity": "A",
     "capital_share": "alpha",
+    "capital_output_ratio": "v",
     "demand_adjustment": "lambda_d",
     "income_adjustment": "lambda_y",
     "inventory_ratio": "phi",
@@ -61,6 +63,7 @@ M4_RULE_FIELDS = {
     "price_calvo_probability": "theta_price",
     "income_propensity": "alpha1",
     "wealth_propensity": "alpha2",
+    "dividend_payout": "rho",
     "investment_adjustment": "lambda_I",
     "capital_depreciation": "delta_K",
     "annual_tfp_growth": "tfp_drift_rate",
@@ -73,6 +76,8 @@ M4_RULE_FIELDS = {
     "deficit_unemployment_reference": "deficit_u_ref",
     "deficit_unemployment_cap": "deficit_u_cap",
     "government_investment_share": "gov_investment_share",
+    "public_capital_gamma": "public_capital_gamma",
+    "public_capital_depreciation": "public_capital_depreciation",
     "unemployment_benefit_replacement": "benefit_replacement",
     "income_allowance": "income_allowance",
     "wealth_allowance": "wealth_allowance",
@@ -91,6 +96,8 @@ M4_RULE_FIELDS = {
     "initial_wage": "w_firm0",
     "initial_markup": "mu_firm0",
     "initial_expected_demand": "demand_e_firm0",
+    "capital_rationed_signal": "capital_rationed_signal",
+    "consumption_rationed_signal": "consumption_rationed_signal",
     "market_sample_size": "search_m",
 }
 
@@ -227,6 +234,13 @@ M6_RULE_FIELDS = {
     "entry_max": "entry_max",
     "startup_deposits": "startup_deposits",
     "startup_capital": "startup_capital",
+    "firm_subscale_exit": "firm_subscale_exit",
+    "capital_firm_entry": "capital_firm_entry",
+    "subscale_viability_workers": "subscale_viability_workers",
+    "subscale_grace_days": "subscale_grace_days",
+    "subscale_exit_hazard": "subscale_exit_hazard",
+    "k_entry_demand": "k_entry_demand",
+    "k_entry_hazard": "k_entry_hazard",
     "consumption_strata": "consumption_strata",
     "sector_switching": "sector_switching",
     "switch_return_gap": "switch_return_gap",
@@ -304,7 +318,7 @@ ENERGY_RULE_FIELDS = {
     "producer_productivity": "a_E",
     "capacity_per_capital": "kappa_E",
     "initial_utilization": "energy_util0",
-    "producer_inventory_ratio": "energy_coverage_ticks",
+    "producer_inventory_ratio": "phi",
     "demand_adjustment": "lambda_d",
     "markup_adjustment": "eta",
     "markup_minimum": "mu_min",
@@ -413,6 +427,28 @@ NATIVE_POLICY_LEVERS = (
     | SPECIAL_POLICY_LEVERS
 )
 
+# The original calibration counts establishments per household, while the
+# current new-game manifest counts people and lets demographic genesis form
+# households.  Convert the historical densities through the genesis household
+# size before scaling representative firms.  Omitting this conversion makes
+# every large economy 2.5x overcapitalized and overstocked at birth.
+_REFERENCE_PERSONS_PER_HOUSEHOLD = 2.5
+_REFERENCE_BASE_FIRMS_PER_PERSON = 0.20 / _REFERENCE_PERSONS_PER_HOUSEHOLD
+_REFERENCE_ENERGY_FIRMS_PER_PERSON = 0.025 / _REFERENCE_PERSONS_PER_HOUSEHOLD
+_REFERENCE_BUILDERS_PER_PERSON = 0.0625 / _REFERENCE_PERSONS_PER_HOUSEHOLD
+
+
+def _representative_entity_scale(
+    cfg: Any, count: int, reference_density: float,
+) -> float:
+    population = int(cfg.demographics_population)
+    if population <= 0:
+        return 1.0
+    return max(
+        1.0e-6,
+        reference_density * float(population) / float(max(1, count)),
+    )
+
 
 def _policy_from_spec(
     spec: NewGameSpec, economy_id: int, cfg: Any
@@ -445,6 +481,28 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
     output.requested_capabilities = (1 << 0) | (1 << 1)
     output.stochastic = bool(cfg.tfp_drift_sigma or cfg.gibrat_sigma)
     _assign(output.rules, cfg, M4_RULE_FIELDS)
+    firm_scale = _representative_entity_scale(
+        cfg,
+        output.consumption_firms + output.capital_firms,
+        _REFERENCE_BASE_FIRMS_PER_PERSON,
+    )
+    for field_name in (
+        "initial_firm_money",
+        "initial_consumption_inventory",
+        "initial_capital_inventory",
+        "initial_consumption_capital",
+    ):
+        setattr(
+            output.rules,
+            field_name,
+            float(getattr(output.rules, field_name)) * firm_scale,
+        )
+    demand_scale = _representative_entity_scale(
+        cfg,
+        output.consumption_firms + output.capital_firms,
+        _REFERENCE_BASE_FIRMS_PER_PERSON,
+    )
+    output.rules.initial_expected_demand *= demand_scale
     return output
 
 
@@ -476,6 +534,7 @@ def _m8_spec(
     population.policy.inheritance_tax_rate = float(cfg.tax_wealth_rate)
     _assign(population.policy, policy, M7_POLICY_FIELDS)
     _assign(population.rules, cfg, M7_RULE_FIELDS)
+    population.rules.age_participation = bool(cfg.labor_participation)
     vital = population.rules.vital_rates
     vital.total_fertility_rate = float(cfg.demographics_tfr)
     vital.makeham_a *= float(cfg.demographics_mortality_scale)
@@ -503,9 +562,59 @@ def _m8_spec(
         "industry_first": native.EnergyRationing.INDUSTRY_FIRST,
     }[policy.energy_rationing]
     _assign(output.energy_rules, cfg, ENERGY_RULE_FIELDS)
+    # ``energy_coverage_ticks`` is the downstream firms' input buffer in the
+    # Config contract.  Energy producers use the ordinary finished-goods
+    # inventory ratio (``phi``), exactly like the original energy grammar.
+    output.energy_rules.household_need = (
+        float(cfg.energy_hh_share)
+        * float(cfg.w_firm0)
+        / max(1.0e-12, float(cfg.p_efirm0))
+    )
+    energy_scale = _representative_entity_scale(
+        cfg,
+        int(output.energy_rules.producer_count),
+        _REFERENCE_ENERGY_FIRMS_PER_PERSON,
+    )
+    output.energy_rules.initial_producer_cash *= energy_scale
     _assign(output.housing_policy, policy, HOUSING_POLICY_FIELDS)
     output.housing_policy.wealth_tax_rate = float(policy.tax_wealth_rate)
     _assign(output.housing_rules, cfg, HOUSING_RULE_FIELDS)
+    builder_scale = _representative_entity_scale(
+        cfg,
+        int(output.housing_rules.builder_count),
+        _REFERENCE_BUILDERS_PER_PERSON,
+    )
+    output.housing_rules.initial_builder_cash_buffer *= builder_scale
+    output.housing_rules.builder_demand_seed *= builder_scale
+    if cfg.bank_enabled:
+        person_count = int(cfg.demographics_population)
+        household_count = (
+            math.ceil(person_count / population.population.target_household_size)
+            if person_count > 0
+            else int(monetary.real_economy.households)
+        )
+        real_rules = monetary.real_economy.rules
+        private_opening_money = (
+            household_count * float(real_rules.initial_household_money)
+            + (
+                int(monetary.real_economy.consumption_firms)
+                + int(monetary.real_economy.capital_firms)
+            ) * float(real_rules.initial_firm_money)
+            + int(output.energy_rules.producer_count)
+            * float(output.energy_rules.initial_producer_cash)
+            + int(output.housing_rules.builder_count)
+            * float(output.housing_rules.initial_builder_cash_buffer)
+        )
+        total_bank_capital = (
+            float(cfg.d_bank0)
+            + float(cfg.bank_capital_frac) * private_opening_money
+        )
+        monetary.rules.opening_capital_per_bank = (
+            total_bank_capital / max(1, int(monetary.rules.bank_count))
+        )
+        financial.monetary_economy = monetary
+        population.financial_economy = financial
+        output.domestic_economy = population
     return output, external
 
 
@@ -712,7 +821,16 @@ class NativeSimulationSession:
         if worker_count < 1:
             raise ValueError("worker_count must be positive")
         native = _load_native()
-        world = native.WorldSession.create(build_world_spec(spec))
+        # Product NewGameSpec construction is owned by the same native parser
+        # used by the Godot desktop worker.  Keeping a second Python mapping
+        # here allowed omitted defaults (notably the exogenous/stochastic TFP
+        # regime) to diverge silently from the actual game.
+        document = json.dumps(
+            spec.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        world = native.native_world_from_new_game(document)
         engine = native.NativeWorldEngineSession.create(
             world, history_capacity_frames
         )

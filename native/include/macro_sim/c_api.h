@@ -288,11 +288,13 @@ typedef struct macro_sim_m5_metrics {
     double reserve_stock;
     double omo_flow;
     double lolr_advances;
+    double lolr_outstanding;
     double interbank_volume;
     double interbank_rate;
     double run_flight_volume;
     double resolution_cost;
     double realized_credit_losses;
+    double realized_interbank_losses;
     uint64_t alive_banks;
     uint64_t bank_failures;
 } macro_sim_m5_metrics;
@@ -481,6 +483,7 @@ typedef struct macro_sim_m7_rules {
     uint32_t relationship_wages;
     uint32_t job_ladder;
     uint32_t participation_margin;
+    uint32_t age_participation;
     uint32_t family_transfers;
     uint32_t relationships;
     uint32_t marriage;
@@ -512,6 +515,9 @@ typedef struct macro_sim_m7_rules {
     double search_intensity;
     double ladder_search_intensity;
     double ladder_premium;
+    double young_participation_rate;
+    double prime_participation_rate;
+    double older_participation_rate;
     double reservation_markup;
     double welfare_quit_hazard;
     double family_transfer_buffer;

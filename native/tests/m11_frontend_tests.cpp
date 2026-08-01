@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -68,6 +69,16 @@ using namespace macro_sim::simulation;
                                });
 }
 
+[[nodiscard]] const M11FrontendMetric *
+find_metric(const M11FrontendSnapshot &snapshot, std::string_view stable_id) {
+    const auto iterator = std::ranges::lower_bound(
+        snapshot.metrics, stable_id, {}, &M11FrontendMetric::stable_id);
+    return iterator == snapshot.metrics.end() ||
+            iterator->stable_id != stable_id
+        ? nullptr
+        : &*iterator;
+}
+
 void test_snapshot_is_role_scoped_and_deterministic() {
     auto session = M11ControlledSession::create(engine());
     assert(session.ok());
@@ -84,6 +95,22 @@ void test_snapshot_is_role_scoped_and_deterministic() {
                                   &M11FrontendMetric::stable_id));
     assert(std::ranges::is_sorted(treasury.get_if()->policies, {},
                                   &M11FrontendPolicy::lever));
+    for (const auto stable_id : {
+             "metric.economy.hh_wealth_gini",
+             "metric.economy.wage_p90_p10_ratio",
+             "metric.economy.welfare_log",
+             "metric.economy.savings_rate",
+             "metric.economy.income_decile_1_share",
+             "metric.economy.wealth_decile_10_share",
+             "metric.economy.consumption_decile_10_share",
+        }) {
+        const auto *metric = find_metric(*treasury.get_if(), stable_id);
+        assert(metric != nullptr);
+        if (std::string_view(stable_id).find("decile") !=
+            std::string_view::npos) {
+            assert(metric->value.has_value());
+        }
+    }
     for (const auto &policy : treasury.get_if()->policies) {
         const auto *lever = find_m11_policy_lever(policy.lever);
         assert(lever != nullptr);
@@ -139,6 +166,46 @@ void test_delta_requires_exact_base_and_reports_changes() {
     tampered_base.metrics.front().stable_id = "tampered";
     assert(projection.delta(tampered_base, *result.get_if()).status().code() ==
            ErrorCode::stale_handle);
+}
+
+void test_distribution_projection_is_populated_after_warmup() {
+    auto session = M11ControlledSession::create(engine());
+    assert(session.ok());
+    assert(session.get_if()->advance_until_decision({90U, false}).ok());
+    M11FrontendProjection projection;
+    const auto snapshot = projection.snapshot(
+        *session.get_if(), {"player", EconomyId(0U), "treasury"},
+        "distribution-warmup", 1U);
+    assert(snapshot.ok());
+    for (const auto stable_id : {
+             "metric.economy.hh_wealth_gini",
+             "metric.economy.wage_p90_p10_ratio",
+             "metric.economy.welfare_log",
+             "metric.economy.savings_rate",
+             "metric.economy.bottom10_consumption",
+         }) {
+        const auto *metric = find_metric(*snapshot.get_if(), stable_id);
+        assert(metric != nullptr);
+        assert(metric->value.has_value());
+        assert(std::isfinite(*metric->value));
+    }
+    for (const auto prefix : {
+             "metric.economy.income_decile_",
+             "metric.economy.wealth_decile_",
+             "metric.economy.consumption_decile_",
+         }) {
+        double total = 0.0;
+        for (std::size_t decile = 1U; decile <= 10U; ++decile) {
+            const auto stable_id =
+                std::string(prefix) + std::to_string(decile) + "_share";
+            const auto *metric =
+                find_metric(*snapshot.get_if(), stable_id);
+            assert(metric != nullptr);
+            assert(metric->value.has_value());
+            total += *metric->value;
+        }
+        assert(std::abs(total - 1.0) < 1.0e-9);
+    }
 }
 
 void test_context_projection_is_private_and_fully_hashed() {
@@ -202,6 +269,7 @@ void test_invalid_scope_is_rejected() {
 int main() {
     test_snapshot_is_role_scoped_and_deterministic();
     test_delta_requires_exact_base_and_reports_changes();
+    test_distribution_projection_is_populated_after_warmup();
     test_context_projection_is_private_and_fully_hashed();
     test_invalid_scope_is_rejected();
     return 0;

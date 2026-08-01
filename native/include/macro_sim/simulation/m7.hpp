@@ -44,6 +44,10 @@ struct M7Rules final {
     double ladder_search_intensity{0.03};
     double ladder_premium{0.05};
     bool participation_margin{true};
+    bool age_participation{false};
+    double young_participation_rate{0.65};
+    double prime_participation_rate{0.88};
+    double older_participation_rate{0.65};
     double reservation_markup{1.0};
     double welfare_quit_hazard{0.02};
     bool family_transfers{false};
@@ -146,6 +150,15 @@ struct M7Metrics final {
     double family_exposed_households{0.0};
     double hires{0.0};
     double separations{0.0};
+    double churn_separations{0.0};
+    double demand_layoff_separations{0.0};
+    double cash_layoff_separations{0.0};
+    double firm_exit_separations{0.0};
+    double death_separations{0.0};
+    double retirement_separations{0.0};
+    double welfare_quits{0.0};
+    double suspensions_flow{0.0};
+    double recalls{0.0};
     std::uint64_t marriages{0};
     std::uint64_t divorces{0};
     std::uint64_t widowhoods{0};
@@ -255,11 +268,26 @@ class M7TickExtension {
                 M6TickScratch &financial_scratch, M7Runtime &runtime,
                 M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
+    prepare_household_net_wealth(const core::RootState &, M4Runtime &, M4TickScratch &,
+                                 M5Runtime &, M5TickScratch &, M6Runtime &,
+                                 M6TickScratch &, M7Runtime &, M7TickScratch &, Tick,
+                                 PhiloxRng &, std::span<double>) {
+        return Status::success();
+    }
+    [[nodiscard]] virtual Status
     close_day(const core::RootState &state, M4Runtime &real_economy_runtime,
               M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
               M5TickScratch &monetary_scratch, M6Runtime &financial_runtime,
               M6TickScratch &financial_scratch, M7Runtime &runtime,
               M7TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status after_financial_lifecycle(const core::RootState &,
+                                                           M4Runtime &, M4TickScratch &,
+                                                           M5Runtime &, M5TickScratch &,
+                                                           M6Runtime &, M6TickScratch &,
+                                                           M7Runtime &, M7TickScratch &,
+                                                           Tick, PhiloxRng &) {
+        return Status::success();
+    }
     [[nodiscard]] virtual Status
     validate(const core::RootState &state, const M4Runtime &real_economy_runtime,
              const M4TickScratch &real_economy_scratch,

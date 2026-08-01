@@ -131,11 +131,13 @@ struct M5Metrics final {
     double reserve_stock{0.0};
     double omo_flow{0.0};
     double lolr_advances{0.0};
+    double lolr_outstanding{0.0};
     double interbank_volume{0.0};
     double interbank_rate{0.0};
     double run_flight_volume{0.0};
     double resolution_cost{0.0};
     double realized_credit_losses{0.0};
+    double realized_interbank_losses{0.0};
     std::uint64_t alive_banks{0};
     std::uint64_t bank_failures{0};
 
@@ -223,20 +225,28 @@ quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,
                 AccountId borrower_account, Money requested, Money borrower_limit,
                 double credit_supply_multiplier = 1.0);
-[[nodiscard]] Result<LoanId> stage_m5_credit(const core::RootState &state,
+[[nodiscard]] Result<LoanId>
+stage_m5_credit(const core::RootState &state, M4TickScratch &real_economy,
+                const M5Runtime &runtime, M5TickScratch &scratch,
+                const M5CreditQuote &quote, Tick tick,
+                core::LoanPurpose purpose = core::LoanPurpose::general);
+[[nodiscard]] double stage_m5_firm_plan_credit(
+    const core::RootState &state, const M4Runtime &real_economy_runtime,
+    M4TickScratch &real_economy, M5Runtime &runtime, M5TickScratch &scratch,
+    std::size_t firm_index, Tick tick, double credit_supply_multiplier = 1.0,
+    double additional_cash_need = 0.0);
+[[nodiscard]] Status stage_m5_loan_repayment(const core::RootState &state,
                                              M4TickScratch &real_economy,
-                                             const M5Runtime &runtime,
-                                             M5TickScratch &scratch,
-                                             const M5CreditQuote &quote, Tick tick,
-                                             core::LoanPurpose purpose =
-                                                 core::LoanPurpose::general);
-[[nodiscard]] Status stage_m5_loan_repayment(
-    const core::RootState &state, M4TickScratch &real_economy,
-    M5TickScratch &scratch, LoanId loan, AccountId payer, Money amount) noexcept;
+                                             M5TickScratch &scratch, LoanId loan,
+                                             AccountId payer, Money amount) noexcept;
 [[nodiscard]] Status stage_m5_loan_writeoff(const core::RootState &state,
                                             M4TickScratch &real_economy,
                                             M5TickScratch &scratch, LoanId loan,
                                             Tick tick) noexcept;
+// Re-closes bank reserves after payments posted outside the domestic tick, such
+// as world trade and remittance settlement.
+[[nodiscard]] Status close_m5_external_liquidity(core::RootState &state,
+                                                 M5Runtime &runtime, Tick closed_tick);
 
 class M5TickExtension {
   public:
@@ -261,6 +271,20 @@ class M5TickExtension {
     before_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
                       M4TickScratch &real_economy_scratch, M5Runtime &runtime,
                       M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status distribute_dividends(const core::RootState &,
+                                                      M4Runtime &, M4TickScratch &,
+                                                      M5Runtime &, M5TickScratch &,
+                                                      Tick, PhiloxRng &, double,
+                                                      bool &handled) {
+        handled = false;
+        return Status::success();
+    }
+    [[nodiscard]] virtual Status
+    prepare_household_net_wealth(const core::RootState &, M4Runtime &, M4TickScratch &,
+                                 M5Runtime &, M5TickScratch &, Tick, PhiloxRng &,
+                                 std::span<double>) {
+        return Status::success();
+    }
     [[nodiscard]] virtual Status
     after_settlement(const core::RootState &state, M4Runtime &real_economy_runtime,
                      M4TickScratch &real_economy_scratch, M5Runtime &runtime,
