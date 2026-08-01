@@ -121,3 +121,50 @@ def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+
+
+def test_labor_contracts_cover_every_mapped_causal_field() -> None:
+    neutral = screening_contracts(module="labor_market")
+    activated = activation_contracts(module="labor_market")
+    assert {contract.field_name for contract in activated} == {
+        "labor_job_ladder",
+        "labor_participation",
+        "labor_relationship_wages",
+        "ladder_search_intensity",
+        "layoff_band",
+        "welfare_quit_hazard",
+    }
+    assert {contract.field_name for contract in (*neutral, *activated)} == {
+        "churn_annual",
+        "delta",
+        "job_search_intensity",
+        "labor_fractional_hours",
+        "labor_job_ladder",
+        "labor_matching_friction",
+        "labor_participation",
+        "labor_relationship_wages",
+        "labor_second_job",
+        "labor_suspension",
+        "ladder_premium",
+        "ladder_search_intensity",
+        "lambda_fire",
+        "layoff_band",
+        "layoff_target_smooth",
+        "omega",
+        "reservation_markup",
+        "suspension_timer",
+        "theta_wage",
+        "welfare_quit_hazard",
+    }
+    assert len(neutral) == 14
+    assert all(
+        set(contract.expected_directions) <= set(contract.primary_metrics)
+        for contract in (*neutral, *activated)
+    )
+    accounting = next(
+        row
+        for row in build_contract_registry()["contracts"]
+        if row["field_id"] == "config.labor_accounting"
+    )
+    assert accounting["route_status"] == "native_fixed"
+    assert accounting["status"] == "invariance_review_required"

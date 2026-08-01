@@ -68,8 +68,21 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
     "labor_market": (
         "metric.source.m7.participation_rate",
         "metric.source.m7.employed_fte",
+        "metric.source.m7.out_of_labor_force",
         "metric.source.m7.hires",
         "metric.source.m7.separations",
+        "metric.source.m7.churn_separations",
+        "metric.source.m7.demand_layoff_separations",
+        "metric.source.m7.cash_layoff_separations",
+        "metric.source.m7.welfare_quits",
+        "metric.source.m7.suspensions_flow",
+        "metric.source.m7.recalls",
+        "metric.source.m7.suspended",
+        "metric.source.m7.second_job_hours",
+        "metric.source.m7.job_to_job_moves",
+        "metric.source.m7.nonsearching",
+        "metric.source.m7.mean_hourly_wage",
+        "metric.source.m7.underemployment_hours",
         "metric.source.m7.vacancies",
         "metric.economy.unemployment_rate",
         "metric.economy.underemployed_share",
@@ -519,10 +532,167 @@ def _consumption_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
+    participation = "metric.source.m7.participation_rate"
+    hires = "metric.source.m7.hires"
+    churn = "metric.source.m7.churn_separations"
+    layoffs = "metric.source.m7.demand_layoff_separations"
+    suspensions = "metric.source.m7.suspensions_flow"
+    suspended = "metric.source.m7.suspended"
+    second_jobs = "metric.source.m7.second_job_hours"
+    moves = "metric.source.m7.job_to_job_moves"
+    welfare_quits = "metric.source.m7.welfare_quits"
+    wage = "metric.source.m7.mean_hourly_wage"
+    return {
+        "config.churn_annual": {
+            "status": "screening_ready",
+            "values": (0.14, 0.42),
+            "directions": {churn: "increase"},
+            "statistics": {churn: "cumulative"},
+            "rationale": "The annual exogenous separation probability should change cumulative churn separations while preserving demand layoffs as a distinct channel.",
+        },
+        "config.delta": {
+            "status": "screening_ready",
+            "values": (0.0, 0.0099),
+            "directions": {wage: "decrease"},
+            "rationale": "Faster downward wage adjustment should reduce posted and relationship wages when firms face labor surplus; employment and output are equilibrium trade-offs.",
+        },
+        "config.job_search_intensity": {
+            "status": "screening_ready",
+            "values": (0.075, 0.30),
+            "directions": {hires: "increase"},
+            "statistics": {hires: "cumulative"},
+            "rationale": "With frictional matching enabled, a higher daily contact probability should raise successful hires over a fixed horizon.",
+        },
+        "config.labor_fractional_hours": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {second_jobs: "decrease"},
+            "statistics": {second_jobs: "cumulative"},
+            "rationale": "Disabling the intensive margin also closes dependent second jobs; the package should remove secondary hours and change underemployment and vacancies.",
+        },
+        "config.labor_job_ladder": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {moves: "decrease"},
+            "statistics": {moves: "cumulative"},
+            "activation": "active_job_ladder",
+            "rationale": "A shared zero wage-premium threshold creates qualifying on-the-job offers; disabling the ladder should then remove job-to-job moves while leaving ordinary unemployment matching enabled.",
+        },
+        "config.labor_matching_friction": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {hires: "increase"},
+            "statistics": {hires: "cumulative"},
+            "rationale": "Removing the daily contact gate should accelerate vacancy filling and raise cumulative hires, with unemployment as the main spillover.",
+        },
+        "config.labor_participation": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {participation: "increase"},
+            "activation": "binding_labor_reservation",
+            "rationale": "A shared binding reservation markup causes eligible workers to withdraw under the endogenous margin; disabling it should keep them in the labor force.",
+        },
+        "config.labor_relationship_wages": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {moves: "decrease"},
+            "statistics": {moves: "cumulative"},
+            "activation": "active_job_ladder",
+            "rationale": "Relationship wages are required by the job ladder, so this capability ablation closes the ladder under a shared active-ladder setup and is interpreted as a wage-contract package.",
+        },
+        "config.labor_second_job": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {second_jobs: "decrease"},
+            "statistics": {second_jobs: "cumulative"},
+            "rationale": "Disabling secondary contracts should remove hours sold by workers whose primary job does not use their full daily labor capacity.",
+        },
+        "config.labor_suspension": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {suspensions: "decrease"},
+            "statistics": {suspensions: "cumulative"},
+            "rationale": "Without employment-preserving suspensions, payroll shortfalls should become cash layoffs rather than retained recall options.",
+        },
+        "config.ladder_premium": {
+            "status": "screening_ready",
+            "values": (0.0, 0.10),
+            "directions": {moves: "decrease"},
+            "statistics": {moves: "cumulative"},
+            "rationale": "A larger required wage gain should reject more on-the-job offers and reduce job-to-job transitions.",
+        },
+        "config.ladder_search_intensity": {
+            "status": "activation_scenario_required",
+            "values": (0.015, 0.06),
+            "directions": {moves: "increase"},
+            "statistics": {moves: "cumulative"},
+            "activation": "active_job_ladder",
+            "rationale": "A shared zero wage-premium threshold supplies qualifying offers, so a higher daily on-the-job search probability should raise cumulative job-to-job transitions.",
+        },
+        "config.lambda_fire": {
+            "status": "screening_ready",
+            "values": (0.015, 0.06),
+            "directions": {layoffs: "increase"},
+            "statistics": {layoffs: "cumulative"},
+            "rationale": "Faster closure of a firm's excess-labor gap should raise demand layoffs over a fixed adjustment window and reduce labor hoarding.",
+        },
+        "config.layoff_band": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.50),
+            "directions": {layoffs: "decrease"},
+            "statistics": {layoffs: "cumulative"},
+            "activation": "labor_demand_contraction",
+            "rationale": "A shared high opening demand estimate with fast demand learning creates a common hiring boom and correction; a wider employment hysteresis band should absorb more of that contraction before layoffs begin.",
+        },
+        "config.layoff_target_smooth": {
+            "status": "screening_ready",
+            "values": (0.01, 0.08),
+            "directions": {layoffs: "increase"},
+            "statistics": {layoffs: "cumulative"},
+            "rationale": "During a demand contraction, faster target smoothing lets the protected firing target fall sooner and should increase layoffs over a fixed horizon.",
+        },
+        "config.omega": {
+            "status": "screening_ready",
+            "values": (0.00375, 0.015),
+            "directions": {wage: "increase"},
+            "rationale": "Faster shortage-driven wage adjustment should raise wages when desired labor exceeds available hires.",
+        },
+        "config.reservation_markup": {
+            "status": "screening_ready",
+            "values": (0.5, 2.5),
+            "directions": {participation: "decrease"},
+            "rationale": "A higher reservation markup raises the wage required relative to the welfare outside option and should reduce labor-force participation.",
+        },
+        "config.suspension_timer": {
+            "status": "screening_ready",
+            "values": (1, 90),
+            "directions": {suspended: "increase"},
+            "rationale": "A longer recall window should retain more suspended matches; automatic cash layoffs and successful outside matches are reported as competing transition flows rather than assigned a permanent sign.",
+        },
+        "config.theta_wage": {
+            "status": "screening_ready",
+            "values": (0.0055, 0.022),
+            "directions": {wage: "nonzero"},
+            "statistics": {wage: "post_burnin_volatility"},
+            "rationale": "The Calvo wage-reset probability should change wage dynamics and the pass-through speed of labor shortages or surpluses.",
+        },
+        "config.welfare_quit_hazard": {
+            "status": "activation_scenario_required",
+            "values": (0.01, 0.08),
+            "directions": {welfare_quits: "increase"},
+            "statistics": {welfare_quits: "cumulative"},
+            "activation": "binding_labor_reservation",
+            "rationale": "A shared binding reservation threshold creates underpaid incumbents, so a higher daily quit hazard should raise welfare-motivated separations.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
     **_consumption_contracts(),
+    **_labor_contracts(),
 }
 
 

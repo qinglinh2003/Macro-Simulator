@@ -1679,6 +1679,9 @@ class M7Extension final : public M6TickExtension {
                     return Status(ErrorCode::invariant_violation,
                                   "recall job references an absent person");
                 }
+                if (!person->participating) {
+                    continue;
+                }
                 const double job_labor = job->hours * person->efficiency;
                 const double job_cost = job_labor * job->wage;
                 if (active_labor + job_labor > target + kLaborTolerance ||

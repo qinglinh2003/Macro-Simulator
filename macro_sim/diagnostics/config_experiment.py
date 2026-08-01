@@ -596,6 +596,7 @@ def apply_native_activation_scenario(
         raise IndexError("target_economy is outside the native experiment spec")
     economy = economies[target_economy]
     population = economy.domestic_economy
+    population_rules = population.rules
     financial = population.financial_economy
     financial_rules = financial.rules
     monetary = financial.monetary_economy
@@ -630,12 +631,20 @@ def apply_native_activation_scenario(
     elif scenario == "sector_returns_gap":
         financial_rules.switch_pressure_days = 5
         financial_rules.switch_hazard = 0.05
+    elif scenario == "active_job_ladder":
+        population_rules.ladder_premium = 0.0
+    elif scenario == "binding_labor_reservation":
+        population_rules.reservation_markup = 2.5
+    elif scenario == "labor_demand_contraction":
+        rules.initial_expected_demand *= 4.0
+        rules.demand_adjustment = 0.10
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules
     monetary.real_economy = real
     financial.rules = financial_rules
     financial.monetary_economy = monetary
+    population.rules = population_rules
     population.financial_economy = financial
     economy.domestic_economy = population
     economies[target_economy] = economy

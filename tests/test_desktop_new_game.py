@@ -344,6 +344,19 @@ def test_firm_dynamics_disable_cascade_is_valid_and_explicit() -> None:
     assert config.margin_credit is False
 
 
+def test_labor_capability_disable_cascades_are_valid_and_explicit() -> None:
+    baseline = NewGameSpec.default().configs()[0]
+    without_fractional_hours = apply_config_treatment(
+        [baseline], field="labor_fractional_hours", value=False
+    )[0]
+    assert without_fractional_hours.labor_second_job is False
+
+    without_relationship_wages = apply_config_treatment(
+        [baseline], field="labor_relationship_wages", value=False
+    )[0]
+    assert without_relationship_wages.labor_job_ladder is False
+
+
 def test_config_experiment_bridge_routes_complete_world_rules() -> None:
     configs = NewGameSpec.default(seed=53).configs()[:2]
     world = build_world_spec_from_configs(
@@ -486,7 +499,7 @@ def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
     payload = build_native_baseline_audit(
         population=1_000, seed=61, countries=2
     )
-    assert payload["field_count"] == 219
+    assert payload["field_count"] == 218
     assert payload["status_counts"].get("projection_missing", 0) == 0
     rows = {row["field_name"]: row for row in payload["rows"]}
     assert rows["K_firm0"]["status"] == "density_scaled"

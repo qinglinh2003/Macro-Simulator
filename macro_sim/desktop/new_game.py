@@ -287,6 +287,12 @@ CAPABILITY_DISABLE_CASCADE: dict[str, dict[str, Any]] = {
         "housing_leave_elasticity": 0.0,
         "housing_fertility_elasticity": 0.0,
     },
+    "labor_fractional_hours": {
+        "labor_second_job": False,
+    },
+    "labor_relationship_wages": {
+        "labor_job_ladder": False,
+    },
     "consumption_strata": {
         "family_transfers": False,
         "sector_switching": False,

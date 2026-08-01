@@ -273,6 +273,60 @@ def test_markup_bound_activation_preserves_the_audited_bound(
     )
 
 
+def test_active_job_ladder_activation_preserves_search_intensity() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=40
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = native_spec.economies[0].domestic_economy.rules
+    expected_intensity = rules.ladder_search_intensity
+    apply_native_activation_scenario(
+        native_spec, scenario="active_job_ladder"
+    )
+    rules = native_spec.economies[0].domestic_economy.rules
+    assert rules.ladder_premium == pytest.approx(0.0)
+    assert rules.ladder_search_intensity == pytest.approx(expected_intensity)
+
+
+def test_binding_labor_reservation_preserves_quit_hazard() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=41
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = native_spec.economies[0].domestic_economy.rules
+    expected_hazard = rules.welfare_quit_hazard
+    apply_native_activation_scenario(
+        native_spec, scenario="binding_labor_reservation"
+    )
+    rules = native_spec.economies[0].domestic_economy.rules
+    assert rules.reservation_markup == pytest.approx(2.5)
+    assert rules.welfare_quit_hazard == pytest.approx(expected_hazard)
+
+
+def test_labor_demand_contraction_preserves_layoff_band() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=42
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    expected_band = native_spec.economies[0].domestic_economy.rules.layoff_band
+    opening_demand = rules.initial_expected_demand
+    apply_native_activation_scenario(
+        native_spec, scenario="labor_demand_contraction"
+    )
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    population_rules = native_spec.economies[0].domestic_economy.rules
+    assert population_rules.layoff_band == pytest.approx(expected_band)
+    assert rules.initial_expected_demand == pytest.approx(opening_demand * 4.0)
+    assert rules.demand_adjustment == pytest.approx(0.10)
+
+
 def test_entry_pressure_activation_preserves_the_daily_entry_cap() -> None:
     baseline = population_scaled_new_game(
         population=100_000, days=90, seed=39

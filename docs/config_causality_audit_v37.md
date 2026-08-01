@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production, firm, and consumption screens complete
+Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, and labor screens complete
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -91,12 +91,12 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 219 |
+| Native route confirmed | 218 |
 | Native route missing or incomplete | 75 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 18 |
-| Deliberately fixed in the native engine | 11 |
+| Deliberately fixed in the native engine | 12 |
 | Superseded compatibility names | 16 |
 | Derived values | 2 |
 | Run control | 1 |
@@ -300,13 +300,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 219
+The native product baseline comparison now projects every one of the 218
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 199 |
+| Exact semantic value | 198 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -592,6 +592,97 @@ Several fields are intentionally not credited with consumption causality.
 routes, and `necessity_share0` reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
+
+### 8.8 Labor-market screen
+
+The labor inventory contains 26 Config fields. Twenty have native causal
+routes and reviewed contracts: 14 neutral-baseline treatments and six
+conditional treatments. Three fields (`efficiency_sigma`,
+`suspension_quit_discount`, and `wage_indexation`) remain blocked native routes.
+The remaining three are deliberate native invariants: persistent labor
+accounting, explicit matching, and person-level efficiency.
+
+`labor_accounting=false` cannot be treated as an ordinary all-module ablation.
+The current energy, payroll, and household projections require persistent
+person-job records, so disabling that vertical while retaining downstream
+modules is not a coherent playable economy. It is now classified as a fixed
+engine architecture choice rather than credited with a causal effect.
+
+The final evidence set covers 168 native worlds at 100,000 persons. The core
+neutral and conditional screens use four paired seeds, 90 days, a 22-day
+burn-in, and eight workers. One-year paired runs resolve the wage-downward-
+adjustment extremes. Every final run passed the native stability gates.
+
+The experiments exposed and repaired a native labor-state defect. A suspended
+employee could leave the labor force through the reservation-wage margin and
+then be recalled despite no longer participating. Payroll subsequently
+reported more household labor sold than participation capacity. Recall now
+requires current participation, the M4 invariant identifies the precise
+invalid projection, and a native regression preserves this rule.
+
+Current findings:
+
+- Annual exogenous churn is strongly live. Moving `churn_annual` from 0.28 to
+  0.14 / 0.42 changes 90-day churn separations by about -54.5% / +66.3%.
+  Search intensity is also monotonic: 0.075 / 0.30 changes cumulative hires by
+  about -1.76% / +5.22%. Removing matching friction raises hires by 13.1%.
+- Fractional hours and second jobs currently form a dependency package.
+  Disabling either removes all roughly 55,168 secondary labor-hours over the
+  screen. The shared capability cascade now closes second jobs whenever the
+  intensive margin is disabled, preventing invalid hybrid configurations.
+- Suspensions are an active retention channel. Disabling them removes all
+  roughly 2,632 suspension events. A one-day recall window lowers the average
+  suspended stock by 78.9%, but increasing the timer from its 30-day baseline
+  to 90 days is exactly silent over this screen. The upper threshold is above
+  the duration of economically relevant suspensions and is not presently a
+  useful ordinary player range.
+- Demand-layoff speeds are highly salient. `lambda_fire=0.015/0.06` changes
+  cumulative demand layoffs by about -68.4% / +112.6%, while
+  `layoff_target_smooth=0.01/0.08` changes them by about -60.7% / +311%. These
+  controls both govern firing adjustment and need a joint response surface
+  before either is exposed as an independent gameplay choice.
+- `layoff_band` is correctly conditional. It is unresolved in the neutral
+  economy, where material contractions are rare. Under a predeclared hiring-
+  boom-and-correction scenario, a 0.50 band lowers layoffs by 643.5 on average,
+  or 86.1%, with a fully resolved paired interval. A zero band raises layoffs
+  by 124.5 on average but remains seed-imprecise. The mechanism works as an
+  employment-hysteresis buffer when the relevant state occurs.
+- The baseline job ladder is effectively disabled by its 5% required wage
+  premium: raising the threshold to 10% remains exactly silent. With a shared
+  zero-premium activation, the baseline search intensity produces about 83,058
+  job-to-job moves over 90 days. Disabling either the ladder or relationship
+  wages removes all moves; moving ladder search intensity to 0.015 / 0.06
+  changes moves by about -46.4% / +72.0%. The machinery is functional, but the
+  default calibration suppresses an important labor-market flow.
+- Raising the welfare-relative reservation markup from 1.0 to 2.5 lowers
+  participation by 2.87 percentage points, creates about 65,351 welfare quits,
+  lowers real output by 6.11%, and raises unemployment by 9.36 percentage
+  points. A 0.5 markup is exactly silent because the reservation threshold no
+  longer binds. Disabling endogenous participation under the same binding
+  setup reverses these effects. This threshold is economically meaningful but
+  too nonlinear to present without the outside option and wage distribution.
+- Under the same binding reservation setup, lowering
+  `welfare_quit_hazard` to 0.01 reduces welfare quits by 46.5%, raises
+  participation by 1.56 percentage points, raises output by 4.26%, and lowers
+  unemployment by 4.36 percentage points. Raising it to 0.08 nearly triples
+  quits, lowers participation by 3.68 percentage points, lowers output by
+  23.3%, and raises unemployment by 19.9 percentage points. The high arm is far
+  too destructive for an ordinary calibration range.
+- Wage adjustment is split between one live and one nearly silent control.
+  Halving/doubling shortage adjustment `omega` changes mean wages by about
+  -0.029% / +0.063%. Changing Calvo reset probability `theta_wage` to
+  0.0055 / 0.022 changes post-burn-in wage volatility by about -48.6% / +106.8%.
+  By contrast, the complete legal range of downward adjustment `delta=0/0.0099`
+  moves one-year mean wages by only +0.031% / -0.011%; the upper interval still
+  crosses zero. `delta` reaches the engine but is gameplay-negligible at its
+  current scale and should be rescaled, combined with wage-reset timing, or
+  hidden as an expert parameter.
+
+The labor screen therefore distinguishes three different problems that a raw
+"changed metric" count would hide: missing routes, functional mechanisms whose
+default thresholds suppress all events, and live coefficients whose accepted
+range is economically too weak or too destructive. Calibration must repair the
+latter two without weakening the native state invariants.
 
 ## 9. Execution gates
 

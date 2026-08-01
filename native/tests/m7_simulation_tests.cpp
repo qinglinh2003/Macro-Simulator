@@ -899,6 +899,35 @@ void test_second_jobs_and_participation_margin() {
     assert(result.get_if()->metrics.nonsearching > 0.0);
 }
 
+void test_nonparticipant_cannot_be_recalled_from_suspension() {
+    auto harness = build();
+    macro_sim::Result<macro_sim::simulation::M7AdvanceResult> result(
+        macro_sim::Status::success());
+    for (std::size_t day = 0;
+         day < 90U && harness.runtime.employment.suspended_count() == 0U; ++day) {
+        result = advance(harness, 1);
+        assert(result.ok());
+    }
+    assert(harness.runtime.employment.suspended_count() > 0U);
+    harness.runtime.rules.reservation_markup = 100.0;
+    result = advance(harness, 1);
+    if (!result.ok()) {
+        std::cerr << "M7 nonparticipant recall regression failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    bool retained_nonparticipant = false;
+    for (const auto &job : harness.runtime.employment.records()) {
+        if (!job.id.valid() || !job.active || !job.suspended) {
+            continue;
+        }
+        const auto *person = harness.runtime.persons.get(job.person);
+        retained_nonparticipant =
+            retained_nonparticipant || (person != nullptr && !person->participating);
+    }
+    assert(retained_nonparticipant);
+}
+
 void test_age_participation_creates_a_stable_labor_force_margin() {
     auto spec = base_spec();
     spec.rules.age_participation = true;
@@ -1069,6 +1098,7 @@ int main() {
     test_pensions_are_consolidated_into_fiscal_metrics();
     test_job_ladder_survives_firm_lifecycle();
     test_second_jobs_and_participation_margin();
+    test_nonparticipant_cannot_be_recalled_from_suspension();
     test_age_participation_creates_a_stable_labor_force_margin();
     test_second_jobs_respect_search_friction();
     test_recovered_demand_restores_incumbent_hours();
