@@ -206,6 +206,8 @@ policy_kind_name(control::PolicyValueKind kind) noexcept {
         {"name", lever.name},
         {"scope", policy_scope_name(lever.scope)},
         {"value_kind", policy_kind_name(lever.kind)},
+        {"nullable", lever.kind == control::PolicyValueKind::nullable_number ||
+                         lever.kind == control::PolicyValueKind::economy_id},
         {"minimum", lever.minimum.has_value() ? Json(*lever.minimum) : Json(nullptr)},
         {"maximum", lever.maximum.has_value() ? Json(*lever.maximum) : Json(nullptr)},
         {"choices", std::move(choices)},
@@ -485,6 +487,10 @@ template <typename Id>
     return result;
 }
 
+template <typename Id> [[nodiscard]] Json nullable_id(Id id) {
+    return id.valid() ? Json(id.value()) : Json(nullptr);
+}
+
 [[nodiscard]] Json entity_row_json(const reporting::HouseholdProbeRow &row,
                                    bool include_relations) {
     return {
@@ -532,7 +538,7 @@ template <typename Id>
         {"shell_days", row.shell_days},
         {"sector_switch_pressure_days", row.sector_switch_pressure_days},
         {"defaulted", row.defaulted},
-        {"equity_id", row.equity.value()},
+        {"equity_id", nullable_id(row.equity)},
         {"outstanding_shares", row.outstanding_shares},
         {"share_price", row.share_price},
         {"last_share_price", row.last_share_price},
@@ -560,7 +566,7 @@ template <typename Id>
         {"leverage_appetite", row.leverage_appetite},
         {"loan_spread", row.loan_spread},
         {"deposit_spread", row.deposit_spread},
-        {"equity_id", row.equity.value()},
+        {"equity_id", nullable_id(row.equity)},
         {"outstanding_shares", row.outstanding_shares},
         {"share_price", row.share_price},
         {"last_share_price", row.last_share_price},
@@ -579,13 +585,13 @@ template <typename Id>
         {"birth_day", row.birth_day},
         {"death_day", row.death_day},
         {"age_days", row.age_days},
-        {"mother_id", row.mother.value()},
-        {"father_id", row.father.value()},
-        {"partner_id", row.partner.value()},
-        {"guardian_id", row.guardian.value()},
-        {"household_id", row.household.value()},
-        {"primary_job_id", row.primary_job.value()},
-        {"secondary_job_id", row.secondary_job.value()},
+        {"mother_id", nullable_id(row.mother)},
+        {"father_id", nullable_id(row.father)},
+        {"partner_id", nullable_id(row.partner)},
+        {"guardian_id", nullable_id(row.guardian)},
+        {"household_id", nullable_id(row.household)},
+        {"primary_job_id", nullable_id(row.primary_job)},
+        {"secondary_job_id", nullable_id(row.secondary_job)},
         {"efficiency", row.efficiency},
         {"cash", row.cash},
         {"debt", row.debt},
@@ -609,6 +615,7 @@ template <typename Id>
         {"firm_id", row.firm.value()},
         {"hire_day", row.hire_day},
         {"separation_day", row.separation_day},
+        {"suspension_day", row.suspension_day},
         {"wage", row.wage},
         {"hours", row.hours},
         {"secondary", row.secondary},
@@ -622,8 +629,8 @@ template <typename Id>
         {"id", row.id.value()},
         {"owner_kind", owner_kind_name(row.owner_kind)},
         {"owner_id", row.owner_id},
-        {"occupant_household_id", row.occupant_household.value()},
-        {"collateral_loan_id", row.collateral_loan.value()},
+        {"occupant_household_id", nullable_id(row.occupant_household)},
+        {"collateral_loan_id", nullable_id(row.collateral_loan)},
         {"floor_area", row.floor_area},
         {"quality", row.quality},
         {"location", row.location},
@@ -1666,31 +1673,66 @@ struct M11ProtocolWorker::Impl final {
             session->engine()
                 .world()
                 .external_policies()[static_cast<std::size_t>(economy)];
+        const auto capabilities_available =
+            [&](const control::PolicyLeverDescriptor &candidate) {
+                std::string_view capabilities = candidate.required_capabilities;
+                while (!capabilities.empty()) {
+                    const auto separator = capabilities.find('|');
+                    const auto capability = capabilities.substr(0U, separator);
+                    if (!capability.empty() &&
+                        !control::m11_world_capability(
+                            session->engine().world(), EconomyId(economy),
+                            capability)) {
+                        return false;
+                    }
+                    if (separator == std::string_view::npos) {
+                        break;
+                    }
+                    capabilities.remove_prefix(separator + 1U);
+                }
+                return true;
+            };
         Json levers = Json::array();
         for (const auto &lever : control::m11_policy_levers()) {
             if (role != "player" && lever.owner_role != role) {
                 continue;
             }
-            bool available = true;
-            std::string_view capabilities = lever.required_capabilities;
-            while (!capabilities.empty()) {
-                const auto separator = capabilities.find('|');
-                const auto capability = capabilities.substr(0U, separator);
-                if (!capability.empty() &&
-                    !control::m11_world_capability(session->engine().world(),
-                                                   EconomyId(economy), capability)) {
-                    available = false;
-                    break;
-                }
+            bool available = capabilities_available(lever);
+            std::string_view prerequisites = lever.enabled_if;
+            while (available && !prerequisites.empty()) {
+                const auto separator = prerequisites.find('|');
+                const auto prerequisite_name =
+                    prerequisites.substr(0U, separator);
+                const auto *prerequisite =
+                    control::find_m11_policy_lever(prerequisite_name);
+                available = prerequisite != nullptr &&
+                            capabilities_available(*prerequisite);
                 if (separator == std::string_view::npos) {
                     break;
                 }
-                capabilities.remove_prefix(separator + 1U);
+                prerequisites.remove_prefix(separator + 1U);
             }
             if (role == "player" && !available) {
                 continue;
             }
             auto descriptor = policy_descriptor_json(lever);
+            if (lever.kind == control::PolicyValueKind::economy_id) {
+                Json valid_economies = Json::array();
+                for (std::size_t candidate = 0U;
+                     candidate < session->engine().world().economy_count();
+                     ++candidate) {
+                    if (candidate == economy) {
+                        continue;
+                    }
+                    if (lever.name == "peg_anchor" &&
+                        session->engine().world().external_policies()[candidate]
+                                .fx_regime != simulation::FxRegime::floating) {
+                        continue;
+                    }
+                    valid_economies.push_back(candidate);
+                }
+                descriptor["choices"] = std::move(valid_economies);
+            }
             auto value =
                 control::m11_policy_value(*domestic.get_if(), external, lever.name);
             const auto *version = session->coordinator().find_policy_version(
@@ -1863,6 +1905,15 @@ struct M11ProtocolWorker::Impl final {
         } else if (kind == "security_position") {
             kind = "security_positions";
         }
+        const bool firm_scoped =
+            kind == "firm_jobs" || kind == "firm_persons";
+        const bool household_scoped =
+            kind == "household_jobs" || kind == "household_persons";
+        if (detail && (firm_scoped || household_scoped)) {
+            throw ProtocolFault{
+                "invalid_argument",
+                "Scoped entity queries are page queries.", false};
+        }
         std::uint64_t economy = new_game.has_value() ? new_game->player_economy : 0U;
         if (request.contains("economy_id")) {
             const auto checked = required_u64(
@@ -1906,6 +1957,23 @@ struct M11ProtocolWorker::Impl final {
         Json result;
         const auto economy_id = EconomyId(economy);
         const auto rows = static_cast<std::size_t>(maximum_rows);
+        std::optional<std::uint64_t> firm_scope;
+        std::optional<std::uint64_t> household_scope;
+        if (firm_scoped) {
+            firm_scope = required_u64(request, "firm_id");
+            if (!firm_scope.has_value() || *firm_scope == 0U) {
+                throw ProtocolFault{"invalid_argument",
+                                    "The firm scope is invalid.", false};
+            }
+        }
+        if (household_scoped) {
+            household_scope = required_u64(request, "household_id");
+            if (!household_scope.has_value() || *household_scope == 0U) {
+                throw ProtocolFault{
+                    "invalid_argument",
+                    "The household scope is invalid.", false};
+            }
+        }
         if (kind == "households") {
             auto page = session->engine().probe_households(economy_id, after_id, rows);
             if (!page.ok()) {
@@ -1936,6 +2004,38 @@ struct M11ProtocolWorker::Impl final {
                 throw status_fault(page.status());
             }
             result = entity_page_json(kind, *page.get_if());
+        } else if (kind == "household_jobs") {
+            auto page = reporting::probe_jobs_for_household(
+                session->engine().world(), economy_id,
+                HouseholdId(*household_scope), after_id, rows);
+            if (!page.ok()) {
+                throw status_fault(page.status());
+            }
+            result = entity_page_json(kind, *page.get_if());
+        } else if (kind == "firm_jobs") {
+            auto page = reporting::probe_jobs_for_firm(
+                session->engine().world(), economy_id, FirmId(*firm_scope),
+                after_id, rows);
+            if (!page.ok()) {
+                throw status_fault(page.status());
+            }
+            result = entity_page_json(kind, *page.get_if());
+        } else if (kind == "firm_persons") {
+            auto page = reporting::probe_persons_for_firm(
+                session->engine().world(), economy_id, FirmId(*firm_scope),
+                after_id, rows);
+            if (!page.ok()) {
+                throw status_fault(page.status());
+            }
+            result = entity_page_json(kind, *page.get_if());
+        } else if (kind == "household_persons") {
+            auto page = reporting::probe_persons_for_household(
+                session->engine().world(), economy_id,
+                HouseholdId(*household_scope), after_id, rows);
+            if (!page.ok()) {
+                throw status_fault(page.status());
+            }
+            result = entity_page_json(kind, *page.get_if());
         } else if (kind == "dwellings") {
             auto page = session->engine().probe_dwellings(economy_id, after_id, rows);
             if (!page.ok()) {
@@ -1958,6 +2058,12 @@ struct M11ProtocolWorker::Impl final {
         } else {
             throw ProtocolFault{"invalid_argument", "The entity kind is not supported.",
                                 false};
+        }
+        if (firm_scope.has_value()) {
+            result["firm_id"] = *firm_scope;
+        }
+        if (household_scope.has_value()) {
+            result["household_id"] = *household_scope;
         }
         if (!detail) {
             return result;

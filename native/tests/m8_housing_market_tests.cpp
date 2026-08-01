@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -190,48 +191,41 @@ void test_mortgage_follows_heir_when_borrower_household_retires() {
         }
     }
     assert(heir.valid());
-    auto *deceased_record =
-        harness.population_runtime.persons.get(deceased);
+    auto *deceased_record = harness.population_runtime.persons.get(deceased);
     deceased_record->mother = heir;
     deceased_record->father = macro_sim::PersonId{};
     assert(harness.population_runtime.relationships
                .register_birth(harness.population_runtime.persons, deceased)
                .ok());
-    const auto heir_household =
-        harness.population_runtime.persons.get(heir)->household;
+    const auto heir_household = harness.population_runtime.persons.get(heir)->household;
     harness.runtime.housing_rules.market_interval_days = 30U;
     M8AdvanceOptions options;
     options.base.force_death = deceased;
-    result = advance_m8_ticks(
-        harness.root, harness.real_runtime, harness.real_scratch,
-        harness.monetary_runtime, harness.monetary_scratch,
-        harness.financial_runtime, harness.financial_scratch,
-        harness.population_runtime, harness.population_scratch, harness.runtime,
-        harness.scratch, harness.tick, 1U, options);
+    result =
+        advance_m8_ticks(harness.root, harness.real_runtime, harness.real_scratch,
+                         harness.monetary_runtime, harness.monetary_scratch,
+                         harness.financial_runtime, harness.financial_scratch,
+                         harness.population_runtime, harness.population_scratch,
+                         harness.runtime, harness.scratch, harness.tick, 1U, options);
     if (!result.ok()) {
-        std::cerr << "mortgage estate transfer failed: "
-                  << result.status().message() << "\n";
+        std::cerr << "mortgage estate transfer failed: " << result.status().message()
+                  << "\n";
     }
     assert(result.ok());
     const auto &inherited = harness.runtime.mortgages.front();
     assert(inherited.active);
     assert(inherited.borrower == heir_household);
-    const auto *dwelling =
-        harness.runtime.properties.get(inherited.collateral);
+    const auto *dwelling = harness.runtime.properties.get(inherited.collateral);
     assert(dwelling != nullptr);
-    assert(dwelling->owner ==
-           macro_sim::core::OwnerId::household(heir_household));
+    assert(dwelling->owner == macro_sim::core::OwnerId::household(heir_household));
     const auto &loan =
         harness.root.loans
             .records()[static_cast<std::size_t>(inherited.loan.value() - 1U)];
     assert(loan.active);
-    assert(loan.borrower ==
-           macro_sim::core::OwnerId::household(heir_household));
+    assert(loan.borrower == macro_sim::core::OwnerId::household(heir_household));
     assert(validate_m8_state(harness.root, harness.real_runtime,
-                             harness.monetary_runtime,
-                             harness.financial_runtime,
-                             harness.population_runtime, harness.runtime,
-                             harness.tick)
+                             harness.monetary_runtime, harness.financial_runtime,
+                             harness.population_runtime, harness.runtime, harness.tick)
                .ok());
 }
 
@@ -241,8 +235,7 @@ void test_mortgaged_resale_discharge_precedes_new_collateral() {
     assert(result.ok());
     assert(!harness.runtime.mortgages.empty());
     const auto original = harness.runtime.mortgages.front();
-    const auto *original_dwelling =
-        harness.runtime.properties.get(original.collateral);
+    const auto *original_dwelling = harness.runtime.properties.get(original.collateral);
     assert(original_dwelling != nullptr);
     assert(original_dwelling->owner ==
            macro_sim::core::OwnerId::household(original.borrower));
@@ -257,17 +250,15 @@ void test_mortgaged_resale_discharge_precedes_new_collateral() {
                 const auto *record = harness.runtime.properties.get(occupied);
                 if (record != nullptr && occupied != original.collateral &&
                     !record->collateral.valid() &&
-                    record->owner ==
-                        macro_sim::core::OwnerId::household(candidate)) {
+                    record->owner == macro_sim::core::OwnerId::household(candidate)) {
+                    assert(
+                        harness.runtime.properties
+                            .set_occupant(occupied, candidate, macro_sim::HouseholdId{})
+                            .ok());
                     assert(harness.runtime.properties
-                               .set_occupant(occupied, candidate,
-                                             macro_sim::HouseholdId{})
-                               .ok());
-                    assert(harness.runtime.properties
-                               .destroy(
-                                   occupied,
-                                   macro_sim::core::OwnerId::household(candidate),
-                                   harness.tick)
+                               .destroy(occupied,
+                                        macro_sim::core::OwnerId::household(candidate),
+                                        harness.tick)
                                .ok());
                     buyer = candidate;
                 }
@@ -288,8 +279,7 @@ void test_mortgaged_resale_discharge_precedes_new_collateral() {
 
     result = advance(harness, 1);
     if (!result.ok()) {
-        std::cerr << "mortgaged resale failed: " << result.status().message()
-                  << "\n";
+        std::cerr << "mortgaged resale failed: " << result.status().message() << "\n";
     }
     assert(result.ok());
     const auto &repaid =
@@ -335,6 +325,210 @@ void test_rent_moves_cash_without_minting_money() {
     assert(harness.root.genesis_money == money_before);
 }
 
+void test_housing_enters_the_integrated_net_wealth_tax_base_once() {
+    auto excluded_spec = market_spec(false, false);
+    excluded_spec.housing_rules.resale_market = false;
+    excluded_spec.housing_policy.transfer_tax_rate = 0.0;
+    excluded_spec.housing_policy.property_tax_rate = 0.0;
+    excluded_spec.housing_policy.include_housing_in_wealth_tax = false;
+    auto &excluded_fiscal =
+        excluded_spec.domestic_economy.financial_economy.monetary_economy.policy;
+    excluded_fiscal.wealth_tax_rate = 0.01;
+    excluded_fiscal.wealth_allowance = 0.0;
+    auto included_spec = excluded_spec;
+    included_spec.housing_policy.include_housing_in_wealth_tax = true;
+    auto excluded = build(excluded_spec);
+    auto included = build(included_spec);
+    const double house_price = included.runtime.house_price;
+    std::vector<double> housing_value(included.real_scratch.household_ids_.size(), 0.0);
+    for (const auto &dwelling : included.runtime.properties.records()) {
+        if (!dwelling.active ||
+            dwelling.owner.kind() != macro_sim::core::OwnerKind::household) {
+            continue;
+        }
+        const auto identity = static_cast<std::size_t>(dwelling.owner.value());
+        assert(identity < included.real_scratch.household_dense_index_.size());
+        const auto index = included.real_scratch.household_dense_index_[identity];
+        assert(index < housing_value.size());
+        housing_value[index] += house_price;
+    }
+    const auto excluded_result = advance(excluded, 1);
+    const auto included_result = advance(included, 1);
+    assert(excluded_result.ok());
+    assert(included_result.ok());
+    assert(excluded.real_scratch.household_net_wealth_.size() ==
+           included.real_scratch.household_net_wealth_.size());
+    double total_housing = 0.0;
+    for (std::size_t index = 0; index < housing_value.size(); ++index) {
+        const double difference = included.real_scratch.household_net_wealth_[index] -
+                                  excluded.real_scratch.household_net_wealth_[index];
+        assert(std::abs(difference - housing_value[index]) < 1.0e-7);
+        total_housing += housing_value[index];
+    }
+    assert(total_housing > 0.0);
+    assert(included_result.get_if()->metrics.economy.economy.economy.economy.tax_total >
+           excluded_result.get_if()->metrics.economy.economy.economy.economy.tax_total);
+}
+
+void test_vacant_rental_is_not_forced_into_resale_market() {
+    auto value = market_spec(false, true);
+    value.housing_rules.market_interval_days = 1;
+    auto harness = build(value);
+    assert(!harness.runtime.tenancies.empty());
+    auto &former_tenancy = harness.runtime.tenancies.front();
+    const auto tenant = former_tenancy.tenant;
+    const auto dwelling = former_tenancy.dwelling;
+    former_tenancy.active = false;
+    former_tenancy.ended_tick = harness.tick;
+    assert(harness.runtime.properties
+               .set_occupant(dwelling, tenant, macro_sim::HouseholdId{})
+               .ok());
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    const auto *record = harness.runtime.properties.get(dwelling);
+    assert(record != nullptr);
+    assert(record->occupant == tenant);
+    assert(std::any_of(harness.runtime.tenancies.begin(),
+                       harness.runtime.tenancies.end(),
+                       [tenant, dwelling](const TenancyRecord &tenancy) {
+                           return tenancy.active && tenancy.tenant == tenant &&
+                                  tenancy.dwelling == dwelling;
+                       }));
+    assert(std::none_of(harness.runtime.housing_listings.begin(),
+                        harness.runtime.housing_listings.end(),
+                        [dwelling](const HousingListing &listing) {
+                            return listing.active && listing.dwelling == dwelling;
+                        }));
+}
+
+void test_rent_declines_when_rental_vacancy_exceeds_deadband() {
+    auto value = market_spec(false, true);
+    value.housing_rules.market_interval_days = 1;
+    value.housing_rules.initial_dwellings_per_household = 1.5;
+    value.housing_rules.rental_vacancy_deadband = 0.0;
+    value.housing_rules.rent_adjustment = 0.10;
+    auto harness = build(value);
+    const double opening_rent = harness.runtime.rent_level;
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(harness.runtime.rent_level < opening_rent);
+    for (const auto &tenancy : harness.runtime.tenancies) {
+        if (tenancy.active) {
+            assert(std::abs(tenancy.daily_rent - harness.runtime.rent_level) < 1.0e-12);
+        }
+    }
+}
+
+void test_failed_bids_do_not_raise_house_price() {
+    auto value = market_spec(false, false);
+    value.housing_rules.market_interval_days = 1;
+    value.housing_rules.house_price_income_years = 100.0;
+    value.housing_rules.demand_price_step = 0.10;
+    auto harness = build(value);
+    const double opening_price = harness.runtime.house_price;
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.housing.session_sales == 0.0);
+    assert(std::abs(harness.runtime.house_price - opening_price) < 1.0e-12);
+}
+
+void test_forced_sale_does_not_rebase_house_price_index() {
+    auto value = market_spec(true, true);
+    value.housing_rules.market_interval_days = 1;
+    auto harness = build(value);
+    const double opening_price = harness.runtime.house_price;
+
+    macro_sim::DwellingId listing_dwelling{};
+    macro_sim::HouseholdId seller{};
+    for (const auto &candidate : harness.runtime.properties.records()) {
+        if (candidate.active &&
+            candidate.owner.kind() == macro_sim::core::OwnerKind::household &&
+            candidate.occupant == macro_sim::HouseholdId(candidate.owner.value())) {
+            listing_dwelling = candidate.id;
+            seller = macro_sim::HouseholdId(candidate.owner.value());
+            break;
+        }
+    }
+    assert(listing_dwelling.valid());
+    assert(harness.runtime.properties
+               .set_occupant(listing_dwelling, seller, macro_sim::HouseholdId{})
+               .ok());
+    harness.runtime.housing_listings.push_back({
+        listing_dwelling,
+        macro_sim::core::OwnerId::household(seller),
+        1.0,
+        harness.tick,
+        true,
+        true,
+    });
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.housing.session_sales == 1.0);
+    assert(std::abs(harness.runtime.house_price - opening_price) < 1.0e-12);
+}
+
+void test_tenant_can_buy_and_end_previous_tenancy() {
+    auto value = market_spec(true, true);
+    value.housing_rules.market_interval_days = 1;
+    auto harness = build(value);
+    assert(!harness.runtime.tenancies.empty());
+    const auto original_tenancies = harness.runtime.tenancies;
+
+    macro_sim::DwellingId listing_dwelling{};
+    macro_sim::HouseholdId seller{};
+    for (const auto &candidate : harness.runtime.properties.records()) {
+        if (candidate.active &&
+            candidate.owner.kind() == macro_sim::core::OwnerKind::household &&
+            candidate.occupant == macro_sim::HouseholdId(candidate.owner.value())) {
+            listing_dwelling = candidate.id;
+            seller = macro_sim::HouseholdId(candidate.owner.value());
+            break;
+        }
+    }
+    assert(listing_dwelling.valid());
+    assert(harness.runtime.properties
+               .set_occupant(listing_dwelling, seller, macro_sim::HouseholdId{})
+               .ok());
+    harness.runtime.housing_listings.push_back({
+        listing_dwelling,
+        macro_sim::core::OwnerId::household(seller),
+        1.0,
+        harness.tick,
+        false,
+        true,
+    });
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.housing.session_sales == 1.0);
+    const auto *sold = harness.runtime.properties.get(listing_dwelling);
+    assert(sold != nullptr);
+    assert(sold->owner.kind() == macro_sim::core::OwnerKind::household);
+    const auto buyer = macro_sim::HouseholdId(sold->owner.value());
+    const auto previous =
+        std::find_if(original_tenancies.begin(), original_tenancies.end(),
+                     [buyer](const TenancyRecord &tenancy) {
+                         return tenancy.active && tenancy.tenant == buyer;
+                     });
+    assert(previous != original_tenancies.end());
+    assert(sold->occupant == buyer);
+    const auto ended =
+        std::find_if(harness.runtime.tenancies.begin(), harness.runtime.tenancies.end(),
+                     [previous](const TenancyRecord &tenancy) {
+                         return tenancy.id == previous->id;
+                     });
+    assert(ended != harness.runtime.tenancies.end());
+    assert(!ended->active);
+    assert(ended->ended_tick == Tick(0));
+    const auto *former_home = harness.runtime.properties.get(previous->dwelling);
+    assert(former_home != nullptr);
+    assert(!former_home->occupant.valid());
+}
+
 void test_price_shock_forecloses_into_bank_title() {
     auto harness = build(market_spec(true, false));
     auto result = advance(harness, 1);
@@ -374,8 +568,7 @@ void test_homeless_owner_does_not_buy_own_listing() {
     for (const auto &candidate : harness.runtime.properties.records()) {
         if (candidate.active &&
             candidate.owner.kind() == macro_sim::core::OwnerKind::household &&
-            candidate.occupant ==
-                macro_sim::HouseholdId(candidate.owner.value())) {
+            candidate.occupant == macro_sim::HouseholdId(candidate.owner.value())) {
             owner = macro_sim::HouseholdId(candidate.owner.value());
             dwelling = candidate.id;
             break;
@@ -390,8 +583,7 @@ void test_homeless_owner_does_not_buy_own_listing() {
         [&](macro_sim::HouseholdId household,
             const macro_sim::core::HouseholdComponent &) {
             if (household == owner ||
-                harness.runtime.properties.dwelling_for_occupant(household)
-                    .valid()) {
+                harness.runtime.properties.dwelling_for_occupant(household).valid()) {
                 return;
             }
             for (const auto &candidate : harness.runtime.properties.records()) {
@@ -399,10 +591,16 @@ void test_homeless_owner_does_not_buy_own_listing() {
                     candidate.occupant.valid()) {
                     continue;
                 }
-                assert(harness.runtime.properties
-                           .set_occupant(candidate.id, macro_sim::HouseholdId{},
-                                         household)
-                           .ok());
+                assert(
+                    harness.runtime.properties
+                        .set_occupant(candidate.id, macro_sim::HouseholdId{}, household)
+                        .ok());
+                assert(
+                    harness.runtime.properties
+                        .transfer_title(candidate.id, candidate.owner,
+                                        macro_sim::core::OwnerId::household(household),
+                                        harness.tick)
+                        .ok());
                 return;
             }
             assert(false);
@@ -458,6 +656,12 @@ int main() {
     test_mortgage_follows_heir_when_borrower_household_retires();
     test_mortgaged_resale_discharge_precedes_new_collateral();
     test_rent_moves_cash_without_minting_money();
+    test_housing_enters_the_integrated_net_wealth_tax_base_once();
+    test_vacant_rental_is_not_forced_into_resale_market();
+    test_rent_declines_when_rental_vacancy_exceeds_deadband();
+    test_failed_bids_do_not_raise_house_price();
+    test_forced_sale_does_not_rebase_house_price_index();
+    test_tenant_can_buy_and_end_previous_tenancy();
     test_price_shock_forecloses_into_bank_title();
     test_homeless_owner_does_not_buy_own_listing();
     test_failed_market_tick_is_atomic();

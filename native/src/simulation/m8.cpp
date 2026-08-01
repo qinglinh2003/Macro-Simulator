@@ -130,8 +130,8 @@ struct GenesisFirmOpening final {
 [[nodiscard]] Status
 create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
                    const EnergyRules &rules, double expected_demand, double capital,
-                   double inventory, bool state_owned, SettlementNodeId settlement_node,
-                   EnergyProducerComponent &producer,
+                   double inventory, double capital_depreciation, bool state_owned,
+                   SettlementNodeId settlement_node, EnergyProducerComponent &producer,
                    std::vector<GenesisFirmOpening> &openings) {
     core::FirmComponent component;
     component.sector = core::FirmSector::energy;
@@ -146,7 +146,7 @@ create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
             ? 1.0 / (rules.capacity_per_capital * rules.initial_utilization)
             : 0.0;
     component.investment_adjustment = 0.0;
-    component.capital_depreciation = 0.0;
+    component.capital_depreciation = capital_depreciation;
     component.demand_adjustment = rules.demand_adjustment;
     component.inventory_ratio = rules.producer_inventory_ratio;
     component.markup_adjustment = rules.markup_adjustment;
@@ -271,11 +271,11 @@ void ensure_runtime_indexes(const core::RootState &state, M8Runtime &runtime) {
     runtime.household_energy.resize(household_slots);
 }
 
-[[nodiscard]] Status
-validate_energy_projection(const core::RootState &state, const M8Runtime &runtime,
-                           bool allow_pending_lifecycle,
-                           std::span<const M6FirmExitCommand> exits = {},
-                           std::span<const M6FirmEntryCommand> entries = {}) noexcept {
+[[nodiscard]] Status validate_energy_projection(
+    const core::RootState &state, const M8Runtime &runtime,
+    bool allow_pending_lifecycle, std::span<const M6FirmExitCommand> exits = {},
+    std::span<const M6FirmEntryCommand> entries = {},
+    std::span<const M6CapitalFirmEntryCommand> capital_entries = {}) noexcept {
     if (!runtime.energy_rules.enabled) {
         return Status::success();
     }
@@ -284,10 +284,15 @@ validate_energy_projection(const core::RootState &state, const M8Runtime &runtim
             exits.begin(), exits.end(),
             [firm](const M6FirmExitCommand &command) { return command.firm == firm; });
     };
-    const auto entering = [entries](FirmId firm) {
-        return std::any_of(
-            entries.begin(), entries.end(),
-            [firm](const M6FirmEntryCommand &command) { return command.firm == firm; });
+    const auto entering = [entries, capital_entries](FirmId firm) {
+        return std::any_of(entries.begin(), entries.end(),
+                           [firm](const M6FirmEntryCommand &command) {
+                               return command.firm == firm;
+                           }) ||
+               std::any_of(capital_entries.begin(), capital_entries.end(),
+                           [firm](const M6CapitalFirmEntryCommand &command) {
+                               return command.firm == firm;
+                           });
     };
     for (std::size_t index = 1; index < runtime.energy_producers.size(); ++index) {
         const auto &producer = runtime.energy_producers[index];
@@ -615,8 +620,8 @@ class M8Extension final : public M7TickExtension {
         bool assigned_state_owned_producer = false;
         for (auto &producer : scratch_.energy_producers_) {
             producer.state_owned = false;
-            if (runtime_.energy_policy.state_owned_first_producer &&
-                producer.active && !assigned_state_owned_producer) {
+            if (runtime_.energy_policy.state_owned_first_producer && producer.active &&
+                !assigned_state_owned_producer) {
                 producer.state_owned = true;
                 assigned_state_owned_producer = true;
             }
@@ -705,11 +710,13 @@ class M8Extension final : public M7TickExtension {
         return validate_housing_input(scratch_.housing_input_);
     }
 
-    Status before_labor(const core::RootState &state, M4Runtime &, M4TickScratch &real,
-                        M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
-                        M7Runtime &, M7TickScratch &, Tick, PhiloxRng &) override {
+    Status before_labor(const core::RootState &state, M4Runtime &real_runtime,
+                        M4TickScratch &real, M5Runtime &monetary,
+                        M5TickScratch &monetary_scratch, M6Runtime &, M6TickScratch &,
+                        M7Runtime &, M7TickScratch &, Tick tick, PhiloxRng &) override {
         if (runtime_.housing_rules.construction) {
-            const auto status = plan_builders(state, real);
+            const auto status = plan_builders(state, real_runtime, real, monetary,
+                                              monetary_scratch, tick);
             if (!status.ok()) {
                 return status;
             }
@@ -750,9 +757,13 @@ class M8Extension final : public M7TickExtension {
                                                                (target - input.stock));
             scratch_.industry_use_need_[static_cast<std::size_t>(input.firm.value())] =
                 use_need;
+            const double planned_energy_cash =
+                demand * scratch_.energy_price_ * (1.0 + policy.excise_rate);
+            static_cast<void>(stage_m5_firm_plan_credit(
+                state, real_runtime, real, monetary, monetary_scratch, dense, tick,
+                options_.base.base.base.credit_supply_multiplier, planned_energy_cash));
             const double balance = projected_balance(real, firm->primary_account);
-            const double reserved_energy_cash = std::min(
-                balance, demand * scratch_.energy_price_ * (1.0 + policy.excise_rate));
+            const double reserved_energy_cash = std::min(balance, planned_energy_cash);
             if (work.posted_wage > kEconomicEpsilon) {
                 work.labor_demand_effective = std::min(
                     work.labor_demand_effective,
@@ -764,7 +775,7 @@ class M8Extension final : public M7TickExtension {
                     input.firm.value(),
                     firm->primary_account,
                     demand,
-                    balance / (1.0 + policy.excise_rate),
+                    reserved_energy_cash / (1.0 + policy.excise_rate),
                     0.0,
                     0.0,
                 });
@@ -828,8 +839,6 @@ class M8Extension final : public M7TickExtension {
             return Status(ErrorCode::invariant_violation,
                           "M8 energy market has no active producer");
         }
-        const double per_producer =
-            total_demand / static_cast<double>(active_producers);
         for (auto &producer : scratch_.energy_producers_) {
             if (!producer.active) {
                 continue;
@@ -844,14 +853,26 @@ class M8Extension final : public M7TickExtension {
             auto &work = real.firm_work_[dense];
             const double target_inventory =
                 rules.producer_inventory_ratio * producer.demand_expected;
-            const double target = std::max(
-                0.0, per_producer + rules.downstream_gap_close *
-                                        (target_inventory - producer.inventory));
+            const double target =
+                std::max(0.0, producer.demand_expected +
+                                  rules.downstream_gap_close *
+                                      (target_inventory - producer.inventory));
             const double capacity = producer.capacity_per_capital *
                                     firm->physical_capital.value() *
                                     input_.capacity_multiplier;
+            const double desired_capital =
+                producer.capacity_per_capital > kEconomicEpsilon &&
+                        input_.capacity_multiplier > kEconomicEpsilon
+                    ? target /
+                          (producer.capacity_per_capital * input_.capacity_multiplier *
+                           std::max(kEconomicEpsilon, rules.initial_utilization))
+                    : firm->physical_capital.value();
             work.target_inventory = target_inventory;
             work.production_target = std::min(target, capacity);
+            work.investment_target = std::max(
+                0.0, rules.demand_adjustment *
+                             (desired_capital - firm->physical_capital.value()) +
+                         firm->capital_depreciation * firm->physical_capital.value());
             work.labor_demand_notional =
                 work.production_target /
                 std::max(kEconomicEpsilon,
@@ -864,6 +885,13 @@ class M8Extension final : public M7TickExtension {
             work.markup = policy.state_owned_price_at_cost && producer.state_owned
                               ? 0.0
                               : firm->markup;
+            // M5's regular credit pass occurs before M8 can derive energy
+            // production and investment from same-day final demand.  Fund the
+            // completed plan here so viable producers do not become
+            // cash-starved despite having spare physical capacity.
+            static_cast<void>(stage_m5_firm_plan_credit(
+                state, real_runtime, real, monetary, monetary_scratch, dense, tick,
+                options_.base.base.base.credit_supply_multiplier));
             const double balance = projected_balance(real, firm->primary_account);
             work.labor_demand_effective =
                 work.posted_wage > kEconomicEpsilon
@@ -879,9 +907,16 @@ class M8Extension final : public M7TickExtension {
         return injected_fault(options_, M8FaultPoint::after_energy_plan);
     }
 
-    Status after_labor(const core::RootState &state, M4Runtime &, M4TickScratch &real,
-                       M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
-                       M7Runtime &, M7TickScratch &, Tick, PhiloxRng &rng) override {
+    Status after_labor(const core::RootState &state, M4Runtime &real_runtime,
+                       M4TickScratch &real, M5Runtime &, M5TickScratch &, M6Runtime &,
+                       M6TickScratch &, M7Runtime &, M7TickScratch &, Tick tick,
+                       PhiloxRng &rng) override {
+        if (runtime_.housing_rules.rentals) {
+            const auto status = collect_rent(state, real, tick);
+            if (!status.ok()) {
+                return status;
+            }
+        }
         if (runtime_.energy_rules.enabled) {
             auto status = produce_and_build_offers(state, real);
             if (!status.ok()) {
@@ -892,7 +927,7 @@ class M8Extension final : public M7TickExtension {
             if (!status.ok()) {
                 return status;
             }
-            status = settle_energy_results(state, real);
+            status = settle_energy_results(state, real_runtime, real);
             if (!status.ok()) {
                 return status;
             }
@@ -905,6 +940,37 @@ class M8Extension final : public M7TickExtension {
                                                    : Status::success();
     }
 
+    Status prepare_household_net_wealth(const core::RootState &, M4Runtime &,
+                                        M4TickScratch &real, M5Runtime &,
+                                        M5TickScratch &, M6Runtime &, M6TickScratch &,
+                                        M7Runtime &, M7TickScratch &, Tick, PhiloxRng &,
+                                        std::span<double> net_wealth) override {
+        if (!runtime_.housing_rules.enabled ||
+            !runtime_.housing_policy.include_housing_in_wealth_tax) {
+            return Status::success();
+        }
+        if (net_wealth.size() != real.household_ids_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M8 household wealth projection is stale");
+        }
+        for (const auto &dwelling : projected_properties().records()) {
+            if (!dwelling.active ||
+                dwelling.owner.kind() != core::OwnerKind::household) {
+                continue;
+            }
+            const auto identity = static_cast<std::size_t>(dwelling.owner.value());
+            const auto household_index = identity < real.household_dense_index_.size()
+                                             ? real.household_dense_index_[identity]
+                                             : kAbsentIndex;
+            if (household_index >= net_wealth.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M8 dwelling owner projection is stale");
+            }
+            net_wealth[household_index] += scratch_.house_price_;
+        }
+        return Status::success();
+    }
+
     Status close_day(const core::RootState &state, M4Runtime &, M4TickScratch &real,
                      M5Runtime &monetary, M5TickScratch &monetary_scratch, M6Runtime &,
                      M6TickScratch &financial, M7Runtime &population,
@@ -914,23 +980,43 @@ class M8Extension final : public M7TickExtension {
             for (const auto &exit : financial.firm_exits_) {
                 const auto index = static_cast<std::size_t>(exit.firm.value());
                 if (index < scratch_.energy_producers_.size()) {
-                    scratch_.energy_producers_[index].active = false;
+                    auto &source = scratch_.energy_producers_[index];
+                    const auto successor_index =
+                        static_cast<std::size_t>(exit.successor.value());
+                    if (source.active && exit.successor.valid() &&
+                        successor_index < scratch_.energy_producers_.size()) {
+                        auto &successor = scratch_.energy_producers_[successor_index];
+                        if (successor.active) {
+                            successor.inventory += source.inventory;
+                            successor.inventory_cost += source.inventory_cost;
+                            successor.demand_expected += source.demand_expected;
+                        }
+                    }
+                    source.active = false;
+                    source.inventory = 0.0;
+                    source.inventory_cost = 0.0;
+                    source.demand_expected = 0.0;
                 }
                 if (index < scratch_.energy_inputs_.size()) {
-                    scratch_.energy_inputs_[index].active = false;
+                    auto &source = scratch_.energy_inputs_[index];
+                    const auto successor_index =
+                        static_cast<std::size_t>(exit.successor.value());
+                    if (source.active && exit.successor.valid() &&
+                        successor_index < scratch_.energy_inputs_.size()) {
+                        auto &successor = scratch_.energy_inputs_[successor_index];
+                        if (successor.active) {
+                            successor.stock += source.stock;
+                            successor.stock_cost += source.stock_cost;
+                            if (successor.stock > kEconomicEpsilon) {
+                                successor.average_cost =
+                                    successor.stock_cost / successor.stock;
+                            }
+                        }
+                    }
+                    source.active = false;
+                    source.stock = 0.0;
+                    source.stock_cost = 0.0;
                 }
-            }
-            for (const auto &entry : financial.firm_entries_) {
-                const auto index = static_cast<std::size_t>(entry.firm.value());
-                if (scratch_.energy_inputs_.size() <= index) {
-                    scratch_.energy_inputs_.resize(index + 1U);
-                }
-                auto &input = scratch_.energy_inputs_[index];
-                input.firm = entry.firm;
-                input.active = true;
-                input.intensity = runtime_.energy_rules.downstream_intensity;
-                input.coverage_days = runtime_.energy_rules.downstream_coverage_days;
-                input.average_cost = scratch_.energy_price_;
             }
             for (const auto household : population_scratch.retired_households_) {
                 const auto index = static_cast<std::size_t>(household.value());
@@ -965,6 +1051,45 @@ class M8Extension final : public M7TickExtension {
                 return status;
             }
         }
+        const auto &energy = scratch_.working_metrics_.energy;
+        const auto &housing = scratch_.working_metrics_.housing;
+        real.supplemental_tax_receipts_ +=
+            energy.excise_paid + energy.windfall_tax_paid + housing.property_tax_paid +
+            housing.housing_wealth_tax_paid + housing.transfer_tax_paid +
+            housing.land_fee_paid;
+        real.supplemental_nontax_receipts_ += energy.strategic_reserve_sale_revenue;
+        real.supplemental_government_consumption_ +=
+            energy.strategic_reserve_purchase_paid;
+        real.supplemental_transfer_payments_ +=
+            energy.subsidy_paid + energy.cap_compensation;
+        return Status::success();
+    }
+
+    Status after_financial_lifecycle(const core::RootState &, M4Runtime &,
+                                     M4TickScratch &, M5Runtime &, M5TickScratch &,
+                                     M6Runtime &, M6TickScratch &financial, M7Runtime &,
+                                     M7TickScratch &, Tick, PhiloxRng &) override {
+        if (!runtime_.energy_rules.enabled) {
+            return Status::success();
+        }
+        const auto attach_input = [this](FirmId firm) {
+            const auto index = static_cast<std::size_t>(firm.value());
+            if (scratch_.energy_inputs_.size() <= index) {
+                scratch_.energy_inputs_.resize(index + 1U);
+            }
+            auto &input = scratch_.energy_inputs_[index];
+            input.firm = firm;
+            input.active = true;
+            input.intensity = runtime_.energy_rules.downstream_intensity;
+            input.coverage_days = runtime_.energy_rules.downstream_coverage_days;
+            input.average_cost = scratch_.energy_price_;
+        };
+        for (const auto &entry : financial.firm_entries_) {
+            attach_input(entry.firm);
+        }
+        for (const auto &entry : financial.capital_firm_entries_) {
+            attach_input(entry.firm);
+        }
         return Status::success();
     }
 
@@ -987,7 +1112,8 @@ class M8Extension final : public M7TickExtension {
         staged.energy_event_counter = scratch_.energy_event_counter_;
         staged.last_metrics = scratch_.working_metrics_;
         auto status = validate_energy_projection(
-            state, staged, true, financial.firm_exits_, financial.firm_entries_);
+            state, staged, true, financial.firm_exits_, financial.firm_entries_,
+            financial.capital_firm_entries_);
         if (!status.ok()) {
             return status;
         }
@@ -1059,8 +1185,7 @@ class M8Extension final : public M7TickExtension {
 
     void commit(core::RootState &state, M4Runtime &, M4TickScratch &,
                 M5Runtime &monetary, M5TickScratch &, M6Runtime &, M6TickScratch &,
-                M7Runtime &,
-                M7TickScratch &population_scratch, Tick,
+                M7Runtime &, M7TickScratch &population_scratch, Tick,
                 const M7Metrics &metrics) noexcept override {
         runtime_.energy_input = input_;
         if (memory_efficient_staging_) {
@@ -1117,8 +1242,7 @@ class M8Extension final : public M7TickExtension {
         scratch_.working_metrics_.economy = metrics;
         runtime_.last_metrics = scratch_.working_metrics_;
         const double core_price =
-            std::max(kEconomicEpsilon,
-                     metrics.economy.economy.economy.price_index);
+            std::max(kEconomicEpsilon, metrics.economy.economy.economy.price_index);
         double energy_weight = 0.0;
         if (runtime_.energy_rules.enabled) {
             if (monetary.policy.fixed_basket_cpi) {
@@ -1126,12 +1250,9 @@ class M8Extension final : public M7TickExtension {
                     std::clamp(runtime_.energy_rules.household_need, 0.0, 1.0);
             } else {
                 const double energy_spending =
-                    std::max(0.0,
-                             runtime_.last_metrics.energy.household_spending);
-                const double other_spending =
-                    std::max(
-                        0.0,
-                        metrics.economy.economy.economy.household_consumption);
+                    std::max(0.0, runtime_.last_metrics.energy.household_spending);
+                const double other_spending = std::max(
+                    0.0, metrics.economy.economy.economy.household_consumption);
                 const double total_spending = energy_spending + other_spending;
                 energy_weight =
                     total_spending > kEconomicEpsilon
@@ -1145,14 +1266,15 @@ class M8Extension final : public M7TickExtension {
                 : core_price;
         monetary.headline_price_index =
             (1.0 - energy_weight) * core_price +
-            energy_weight *
-                std::max(kEconomicEpsilon, runtime_.energy_price);
+            energy_weight * std::max(kEconomicEpsilon, runtime_.energy_price);
         committed_ = true;
     }
 
   private:
     [[nodiscard]] Status plan_builders(const core::RootState &state,
-                                       M4TickScratch &real) {
+                                       const M4Runtime &real_runtime,
+                                       M4TickScratch &real, M5Runtime &monetary,
+                                       M5TickScratch &monetary_scratch, Tick tick) {
         std::size_t houseless = 0;
         for (const auto household : real.household_ids_) {
             houseless +=
@@ -1161,14 +1283,50 @@ class M8Extension final : public M7TickExtension {
         const auto active = static_cast<std::size_t>(std::count_if(
             scratch_.builders_.begin(), scratch_.builders_.end(),
             [](const BuilderComponent &builder) { return builder.active; }));
-        const double per_builder =
-            static_cast<double>(houseless) /
-            static_cast<double>(std::max<std::size_t>(1, active));
+        const auto &properties = projected_properties();
+        const double vacant_stock = static_cast<double>(properties.active_count() -
+                                                        properties.occupied_count());
+        double deliverable_pipeline = 0.0;
+        for (const auto &builder : scratch_.builders_) {
+            if (builder.active) {
+                deliverable_pipeline +=
+                    std::floor(std::max(0.0, builder.work_in_progress));
+            }
+        }
+        const double uncovered_demand = std::max(
+            0.0, static_cast<double>(houseless) - vacant_stock - deliverable_pipeline);
+        const double aggregate_daily_demand =
+            scratch_.housing_input_.buyer_demand_multiplier * uncovered_demand /
+            static_cast<double>(std::max<std::uint32_t>(
+                1U, runtime_.housing_rules.market_interval_days));
+        const auto engaged_builders =
+            uncovered_demand > kEconomicEpsilon
+                ? std::min(active,
+                           std::max<std::size_t>(1U, static_cast<std::size_t>(
+                                                         std::ceil(uncovered_demand))))
+                : 0U;
+        const auto rotation =
+            active > 0U ? static_cast<std::size_t>(
+                              (tick.value() /
+                               std::max<std::uint32_t>(
+                                   1U, runtime_.housing_rules.market_interval_days)) %
+                              active)
+                        : 0U;
+        std::size_t active_ordinal = 0U;
         for (auto &builder : scratch_.builders_) {
             builder.produced_today = 0.0;
             if (!builder.active) {
                 continue;
             }
+            const auto rotated_ordinal =
+                active > 0U ? (active_ordinal + active - rotation) % active : 0U;
+            ++active_ordinal;
+            const double assigned_demand =
+                rotated_ordinal < engaged_builders
+                    ? aggregate_daily_demand /
+                          static_cast<double>(
+                              std::max<std::size_t>(1U, engaged_builders))
+                    : 0.0;
             const auto *firm = state.firms.get(builder.firm);
             const auto dense = firm_index(real, builder.firm);
             if (firm == nullptr || dense == kAbsentIndex ||
@@ -1177,13 +1335,13 @@ class M8Extension final : public M7TickExtension {
                               "M8 builder firm projection is stale");
             }
             auto &work = real.firm_work_[dense];
-            const double signal =
-                runtime_.housing_rules.builder_demand_seed +
-                scratch_.housing_input_.buyer_demand_multiplier * per_builder +
+            const double price_multiplier =
+                1.0 +
                 runtime_.housing_rules.builder_demand_price_gain *
                     std::max(0.0,
                              scratch_.housing_affordability_.price_to_income_ratio -
                                  1.0);
+            const double signal = assigned_demand * price_multiplier;
             builder.demand_expected =
                 std::max(0.0, builder.demand_expected +
                                   0.05 * (signal - builder.demand_expected));
@@ -1194,17 +1352,26 @@ class M8Extension final : public M7TickExtension {
                 std::max(0.0, builder.demand_expected + inventory_gap);
             work.labor_demand_notional =
                 work.production_target / std::max(kEconomicEpsilon, firm->productivity);
+            work.demand_expected = builder.demand_expected;
             work.posted_wage = firm->posted_wage.value();
             work.posted_price = scratch_.house_price_;
             work.markup = firm->markup;
+            work.closing_inventory =
+                builder.work_in_progress + builder.finished_inventory;
+            work.closing_capital = firm->physical_capital.value();
+            // The ordinary M5 credit pass runs before M8 replaces the generic
+            // construction-firm plan with dwelling demand and the current house
+            // price.  Re-underwrite the completed plan here.  Without this pass,
+            // a developer can exhaust its opening equity before one dwelling is
+            // finished, leaving valuable work in progress stranded indefinitely.
+            static_cast<void>(stage_m5_firm_plan_credit(
+                state, real_runtime, real, monetary, monetary_scratch, dense, tick,
+                options_.base.base.base.credit_supply_multiplier));
             const double balance = projected_balance(real, firm->primary_account);
             work.labor_demand_effective =
                 work.posted_wage > kEconomicEpsilon
                     ? std::min(work.labor_demand_notional, balance / work.posted_wage)
                     : 0.0;
-            work.closing_inventory =
-                builder.work_in_progress + builder.finished_inventory;
-            work.closing_capital = firm->physical_capital.value();
         }
         return Status::success();
     }
@@ -1231,7 +1398,7 @@ class M8Extension final : public M7TickExtension {
             work.produced = output;
             work.closing_inventory =
                 builder.work_in_progress + builder.finished_inventory;
-            work.profit = -work.wage_bill;
+            work.profit = -work.wage_bill - work.production_input_cost;
             scratch_.working_metrics_.housing.construction_output += output;
         }
         return Status::success();
@@ -1250,8 +1417,18 @@ class M8Extension final : public M7TickExtension {
                 continue;
             }
             const auto source = core::OwnerId::firm(exit.firm);
-            const auto destination =
-                core::OwnerId::institutional(core::OwnerKind::treasury);
+            auto destination = core::OwnerId::institutional(core::OwnerKind::treasury);
+            auto successor = scratch_.builders_.end();
+            if (exit.successor.valid()) {
+                successor = std::find_if(
+                    scratch_.builders_.begin(), scratch_.builders_.end(),
+                    [&exit](const BuilderComponent &record) {
+                        return record.active && record.firm == exit.successor;
+                    });
+                if (successor != scratch_.builders_.end()) {
+                    destination = core::OwnerId::firm(exit.successor);
+                }
+            }
             std::vector<DwellingId> holdings(
                 projected_properties().dwellings_for_owner(source).begin(),
                 projected_properties().dwellings_for_owner(source).end());
@@ -1268,9 +1445,15 @@ class M8Extension final : public M7TickExtension {
                     listing.seller = destination;
                 }
             }
+            if (successor != scratch_.builders_.end()) {
+                successor->work_in_progress += builder->work_in_progress;
+                successor->finished_inventory += builder->finished_inventory;
+                successor->demand_expected += builder->demand_expected;
+            }
             builder->active = false;
             builder->work_in_progress = 0.0;
             builder->finished_inventory = 0.0;
+            builder->demand_expected = 0.0;
         }
         return Status::success();
     }
@@ -1328,13 +1511,12 @@ class M8Extension final : public M7TickExtension {
                          household) != population.retired_households_.end();
     }
 
-    [[nodiscard]] Status settle_retired_housing(
-        const core::RootState &state, M4TickScratch &real,
-        M5TickScratch &monetary, const M7Runtime &population_runtime,
-        const M7TickScratch &population, Tick tick) {
-        const auto calendar_day =
-            population_runtime.start_calendar_day +
-            static_cast<std::int32_t>(tick.value()) + 1;
+    [[nodiscard]] Status
+    settle_retired_housing(const core::RootState &state, M4TickScratch &real,
+                           M5TickScratch &monetary, const M7Runtime &population_runtime,
+                           const M7TickScratch &population, Tick tick) {
+        const auto calendar_day = population_runtime.start_calendar_day +
+                                  static_cast<std::int32_t>(tick.value()) + 1;
         for (const auto household : population.retired_households_) {
             const auto estate =
                 std::find_if(population.estates_.rbegin(), population.estates_.rend(),
@@ -1343,10 +1525,9 @@ class M8Extension final : public M7TickExtension {
                                         record.settled &&
                                         record.settled_day == calendar_day;
                              });
-            const auto destination_household =
-                estate == population.estates_.rend()
-                    ? HouseholdId{}
-                    : estate->destination_household;
+            const auto destination_household = estate == population.estates_.rend()
+                                                   ? HouseholdId{}
+                                                   : estate->destination_household;
             const auto source = core::OwnerId::household(household);
             const auto destination =
                 destination_household.valid()
@@ -1358,28 +1539,27 @@ class M8Extension final : public M7TickExtension {
             for (const auto dwelling : holdings) {
                 auto &properties = mutable_properties();
                 auto resolved_destination = destination;
-                const auto mortgage = std::find_if(
-                    scratch_.mortgages_.begin(), scratch_.mortgages_.end(),
-                    [household, dwelling](const MortgageRecord &record) {
-                        return record.active && record.borrower == household &&
-                               record.collateral == dwelling;
-                    });
+                const auto mortgage =
+                    std::find_if(scratch_.mortgages_.begin(), scratch_.mortgages_.end(),
+                                 [household, dwelling](const MortgageRecord &record) {
+                                     return record.active &&
+                                            record.borrower == household &&
+                                            record.collateral == dwelling;
+                                 });
                 if (mortgage != scratch_.mortgages_.end()) {
                     if (destination_household.valid()) {
                         mortgage->borrower = destination_household;
                     } else {
-                        auto status = stage_m5_loan_writeoff(
-                            state, real, monetary, mortgage->loan, tick);
+                        auto status = stage_m5_loan_writeoff(state, real, monetary,
+                                                             mortgage->loan, tick);
                         if (!status.ok()) {
                             return status;
                         }
-                        status =
-                            properties.clear_collateral(dwelling, mortgage->loan);
+                        status = properties.clear_collateral(dwelling, mortgage->loan);
                         if (!status.ok()) {
                             return status;
                         }
-                        resolved_destination =
-                            core::OwnerId::bank(mortgage->lender);
+                        resolved_destination = core::OwnerId::bank(mortgage->lender);
                         mortgage->active = false;
                         mortgage->foreclosed = true;
                         ++scratch_.working_metrics_.housing.foreclosures;
@@ -1388,8 +1568,7 @@ class M8Extension final : public M7TickExtension {
                 const auto status = properties.transfer_title(
                     dwelling, source, resolved_destination, tick);
                 if (!status.ok()) {
-                    return Status(status.code(),
-                                  "M8 estate title transfer failed");
+                    return Status(status.code(), "M8 estate title transfer failed");
                 }
                 const auto *record = properties.get(dwelling);
                 if (record != nullptr && record->occupant == household) {
@@ -1438,8 +1617,7 @@ class M8Extension final : public M7TickExtension {
                 if (!listing.active || listing.seller != source) {
                     continue;
                 }
-                const auto *dwelling =
-                    projected_properties().get(listing.dwelling);
+                const auto *dwelling = projected_properties().get(listing.dwelling);
                 if (dwelling == nullptr || !dwelling->active) {
                     listing.active = false;
                 } else {
@@ -1570,8 +1748,7 @@ class M8Extension final : public M7TickExtension {
                 properties.transfer_title(mortgage.collateral, previous_owner,
                                           core::OwnerId::bank(mortgage.lender), tick);
             if (!status.ok()) {
-                return Status(status.code(),
-                              "M8 foreclosure title transfer failed");
+                return Status(status.code(), "M8 foreclosure title transfer failed");
             }
             mortgage.active = false;
             mortgage.foreclosed = true;
@@ -1597,8 +1774,18 @@ class M8Extension final : public M7TickExtension {
     }
 
     void seed_housing_listings(const core::RootState &state, const M4TickScratch &real,
-                               Tick tick) {
+                               const M5Runtime &monetary, Tick tick) {
         const auto &rules = runtime_.housing_rules;
+        const double annual_rental_yield =
+            scratch_.house_price_ > kEconomicEpsilon
+                ? scratch_.rent_level_ * kDaysPerYear / scratch_.house_price_
+                : 0.0;
+        const double annual_deposit_return =
+            kDaysPerYear *
+            std::max(monetary.rules.deposit_rate, monetary.policy.deposit_rate_floor);
+        const bool rental_investment_attractive =
+            rules.rentals && annual_rental_yield + kEconomicEpsilon >=
+                                 annual_deposit_return + rules.rental_investor_premium;
         std::vector<std::uint8_t> listed(projected_properties().minted_count() + 1U,
                                          0U);
         for (const auto &listing : scratch_.housing_listings_) {
@@ -1619,6 +1806,9 @@ class M8Extension final : public M7TickExtension {
                 forced =
                     projected_balance(real, account) <= rules.distress_deposit_floor;
                 list = forced;
+            } else if (list && dwelling.owner.kind() == core::OwnerKind::household &&
+                       rental_investment_attractive) {
+                list = false;
             }
             if (!list) {
                 continue;
@@ -1641,12 +1831,7 @@ class M8Extension final : public M7TickExtension {
                                               M4TickScratch &real) {
         const double property_rate =
             runtime_.housing_policy.property_tax_rate / kDaysPerYear;
-        const double wealth_rate =
-            runtime_.housing_policy.include_housing_in_wealth_tax
-                ? runtime_.housing_policy.wealth_tax_rate / kDaysPerYear
-                : 0.0;
-        if (property_rate <= kEconomicEpsilon &&
-            wealth_rate <= kEconomicEpsilon) {
+        if (property_rate <= kEconomicEpsilon) {
             return Status::success();
         }
         for (const auto &dwelling : projected_properties().records()) {
@@ -1656,10 +1841,8 @@ class M8Extension final : public M7TickExtension {
             }
             const auto source = owner_account(state, dwelling.owner);
             const double property_due = scratch_.house_price_ * property_rate;
-            const double wealth_due = scratch_.house_price_ * wealth_rate;
-            const double due = property_due + wealth_due;
             const double paid =
-                std::min(due, std::max(0.0, projected_balance(real, source)));
+                std::min(property_due, std::max(0.0, projected_balance(real, source)));
             if (paid <= kEconomicEpsilon) {
                 continue;
             }
@@ -1668,10 +1851,7 @@ class M8Extension final : public M7TickExtension {
             if (!status.ok()) {
                 return status;
             }
-            const double property_paid = std::min(paid, property_due);
-            scratch_.working_metrics_.housing.property_tax_paid += property_paid;
-            scratch_.working_metrics_.housing.housing_wealth_tax_paid +=
-                paid - property_paid;
+            scratch_.working_metrics_.housing.property_tax_paid += paid;
         }
         return Status::success();
     }
@@ -1790,7 +1970,8 @@ class M8Extension final : public M7TickExtension {
                                      M5Runtime &monetary,
                                      M5TickScratch &monetary_scratch, HouseholdId buyer,
                                      HousingListing &listing, Tick tick,
-                                     double &session_value, double &session_days) {
+                                     double &session_days, double &reference_value,
+                                     double &reference_sales) {
         const auto *household = state.households.get(buyer);
         const auto *dwelling = projected_properties().get(listing.dwelling);
         if (household == nullptr || dwelling == nullptr || !dwelling->active ||
@@ -1813,8 +1994,7 @@ class M8Extension final : public M7TickExtension {
         const double total = price + tax;
         const auto seller_account = owner_account(state, listing.seller);
         if (!seller_account.valid()) {
-            return Status(ErrorCode::not_found,
-                          "M8 housing seller account is absent");
+            return Status(ErrorCode::not_found, "M8 housing seller account is absent");
         }
         const auto seller_collateral = dwelling->collateral;
         double seller_payoff = 0.0;
@@ -1824,8 +2004,9 @@ class M8Extension final : public M7TickExtension {
                 return Status(ErrorCode::invariant_violation,
                               "M8 housing seller mortgage is absent");
             }
-            const auto &loan = monetary_scratch.loans_[static_cast<std::size_t>(
-                seller_collateral.value() - 1U)];
+            const auto &loan =
+                monetary_scratch
+                    .loans_[static_cast<std::size_t>(seller_collateral.value() - 1U)];
             if (loan.id != seller_collateral || !loan.active ||
                 loan.borrower_account != seller_account ||
                 loan.principal.value() <= kEconomicEpsilon) {
@@ -1883,9 +2064,9 @@ class M8Extension final : public M7TickExtension {
                 return Status(ErrorCode::insufficient_funds,
                               "M8 mortgage DSTI is binding");
             }
-            const auto loan = stage_m5_credit(state, real, monetary, monetary_scratch,
-                                              *quote.get_if(), tick,
-                                              core::LoanPurpose::mortgage);
+            const auto loan =
+                stage_m5_credit(state, real, monetary, monetary_scratch,
+                                *quote.get_if(), tick, core::LoanPurpose::mortgage);
             if (!loan.ok()) {
                 return loan.status();
             }
@@ -1908,23 +2089,20 @@ class M8Extension final : public M7TickExtension {
         }
         auto &properties = mutable_properties();
         if (seller_collateral.valid()) {
-            status = stage_m5_loan_repayment(
-                state, real, monetary_scratch, seller_collateral, seller_account,
-                Money(seller_payoff));
+            status = stage_m5_loan_repayment(state, real, monetary_scratch,
+                                             seller_collateral, seller_account,
+                                             Money(seller_payoff));
             if (!status.ok()) {
                 return status;
             }
-            status = properties.clear_collateral(listing.dwelling,
-                                                 seller_collateral);
+            status = properties.clear_collateral(listing.dwelling, seller_collateral);
             if (!status.ok()) {
                 return status;
             }
             seller_mortgage->active = false;
-            scratch_.working_metrics_.housing.mortgage_principal_outstanding =
-                std::max(
-                    0.0,
-                    scratch_.working_metrics_.housing.mortgage_principal_outstanding -
-                        seller_payoff);
+            scratch_.working_metrics_.housing.mortgage_principal_outstanding = std::max(
+                0.0, scratch_.working_metrics_.housing.mortgage_principal_outstanding -
+                         seller_payoff);
         }
         if (dwelling->occupant.valid()) {
             status = properties.set_occupant(listing.dwelling, dwelling->occupant,
@@ -1933,11 +2111,27 @@ class M8Extension final : public M7TickExtension {
                 return status;
             }
         }
+        const auto current_dwelling = properties.dwelling_for_occupant(buyer);
+        if (current_dwelling.valid() && current_dwelling != listing.dwelling) {
+            const auto found =
+                std::find_if(scratch_.tenancies_.begin(), scratch_.tenancies_.end(),
+                             [buyer, current_dwelling](const TenancyRecord &tenancy) {
+                                 return tenancy.active && tenancy.tenant == buyer &&
+                                        tenancy.dwelling == current_dwelling;
+                             });
+            status = properties.set_occupant(current_dwelling, buyer, HouseholdId{});
+            if (!status.ok()) {
+                return status;
+            }
+            if (found != scratch_.tenancies_.end()) {
+                found->active = false;
+                found->ended_tick = tick;
+            }
+        }
         status = properties.transfer_title(listing.dwelling, listing.seller,
                                            core::OwnerId::household(buyer), tick);
         if (!status.ok()) {
-            return Status(status.code(),
-                          "M8 housing sale title transfer failed");
+            return Status(status.code(), "M8 housing sale title transfer failed");
         }
         status = properties.set_occupant(listing.dwelling, HouseholdId{}, buyer);
         if (!status.ok()) {
@@ -1947,8 +2141,7 @@ class M8Extension final : public M7TickExtension {
             const auto found =
                 std::find_if(scratch_.builders_.begin(), scratch_.builders_.end(),
                              [&listing](const BuilderComponent &builder) {
-                                 return builder.firm ==
-                                        FirmId(listing.seller.value());
+                                 return builder.firm == FirmId(listing.seller.value());
                              });
             if (found != scratch_.builders_.end()) {
                 found->finished_inventory =
@@ -1980,8 +2173,15 @@ class M8Extension final : public M7TickExtension {
         listing.active = false;
         ++scratch_.working_metrics_.housing.session_sales;
         scratch_.working_metrics_.housing.session_volume += price;
-        session_value += price;
         session_days += static_cast<double>(tick.value() - listing.listed_tick.value());
+        // Forced-sale discounts measure distressed liquidity, not the price of
+        // the representative housing stock.  Rebasing the national house-price
+        // index to a thin foreclosure/distress sample creates a mechanical
+        // downward ratchet even when ordinary homes have not repriced.
+        if (!listing.forced) {
+            reference_value += price;
+            reference_sales += 1.0;
+        }
         return Status::success();
     }
 
@@ -1990,7 +2190,7 @@ class M8Extension final : public M7TickExtension {
                                               M5TickScratch &monetary_scratch,
                                               const M7TickScratch &population,
                                               Tick tick) {
-        seed_housing_listings(state, real, tick);
+        seed_housing_listings(state, real, monetary, tick);
         const double ask_floor =
             runtime_.housing_rules.ask_floor_annual_wage_share *
             std::max(kEconomicEpsilon,
@@ -2020,52 +2220,173 @@ class M8Extension final : public M7TickExtension {
                 return a.asking_price < b.asking_price ||
                        (a.asking_price == b.asking_price && a.dwelling < b.dwelling);
             });
+        constexpr std::size_t kNoListing = std::numeric_limits<std::size_t>::max();
+        std::vector<std::size_t> next_active(active.size(), kNoListing);
+        std::vector<std::size_t> previous_active(active.size(), kNoListing);
+        for (std::size_t position = 0; position < active.size(); ++position) {
+            if (position + 1U < active.size()) {
+                next_active[position] = position + 1U;
+            }
+            if (position > 0U) {
+                previous_active[position] = position - 1U;
+            }
+        }
+        std::size_t active_head = active.empty() ? kNoListing : 0U;
+        const auto remove_active = [&](std::size_t position) {
+            const auto previous = previous_active[position];
+            const auto next = next_active[position];
+            if (previous == kNoListing) {
+                active_head = next;
+            } else {
+                next_active[previous] = next;
+            }
+            if (next != kNoListing) {
+                previous_active[next] = previous;
+            }
+            next_active[position] = kNoListing;
+            previous_active[position] = kNoListing;
+        };
         std::vector<HouseholdId> buyers;
         buyers.reserve(real.household_ids_.size());
         for (const auto household : real.household_ids_) {
-            if (!household_retires(household, population) &&
-                !projected_properties().dwelling_for_occupant(household).valid()) {
+            if (household_retires(household, population)) {
+                continue;
+            }
+            const auto occupied =
+                projected_properties().dwelling_for_occupant(household);
+            const auto *dwelling =
+                occupied.valid() ? projected_properties().get(occupied) : nullptr;
+            if (dwelling != nullptr &&
+                dwelling->owner == core::OwnerId::household(household)) {
+                continue;
+            }
+            const auto *component = state.households.get(household);
+            const double liquid =
+                std::max(0.0, projected_balance(real, component->primary_account));
+            const double minimum_equity =
+                runtime_.housing_rules.mortgages
+                    ? scratch_.house_price_ *
+                          (1.0 - runtime_.housing_policy.mortgage_ltv_cap)
+                    : scratch_.house_price_;
+            if (liquid + kTolerance >= minimum_equity) {
                 buyers.push_back(household);
             }
         }
-        double session_value = 0.0;
         double session_days = 0.0;
+        double reference_value = 0.0;
+        double reference_sales = 0.0;
         for (const auto buyer : buyers) {
             std::size_t searched = 0;
-            for (const auto index : active) {
+            auto position = active_head;
+            while (position != kNoListing &&
+                   searched < runtime_.housing_rules.buyer_search_count) {
+                const auto next = next_active[position];
+                const auto index = active[position];
                 auto &listing = scratch_.housing_listings_[index];
                 if (!listing.active ||
-                    listing.seller == core::OwnerId::household(buyer) ||
-                    ++searched > runtime_.housing_rules.buyer_search_count) {
+                    listing.seller == core::OwnerId::household(buyer)) {
+                    if (!listing.active) {
+                        remove_active(position);
+                    }
+                    position = next;
                     continue;
                 }
+                ++searched;
                 const auto status =
                     buy_listing(state, real, monetary, monetary_scratch, buyer, listing,
-                                tick, session_value, session_days);
+                                tick, session_days, reference_value, reference_sales);
                 if (status.ok()) {
+                    remove_active(position);
                     break;
                 }
-                if (status.code() != ErrorCode::insufficient_funds &&
-                    status.code() != ErrorCode::stale_handle) {
+                if (status.code() == ErrorCode::stale_handle) {
+                    listing.active = false;
+                    remove_active(position);
+                } else if (status.code() != ErrorCode::insufficient_funds) {
                     return status;
                 }
+                position = next;
             }
         }
         const auto sales = scratch_.working_metrics_.housing.session_sales;
         if (sales > 0.0) {
-            scratch_.house_price_ = session_value / sales;
             scratch_.working_metrics_.housing.mean_time_on_market_days =
                 session_days / sales;
-        } else if (!active.empty()) {
-            const double pressure =
-                std::max(0.0, static_cast<double>(buyers.size()) /
-                                      static_cast<double>(active.size()) -
-                                  1.0);
-            scratch_.house_price_ *=
-                1.0 + runtime_.housing_rules.demand_price_step * pressure *
-                          scratch_.housing_input_.buyer_demand_multiplier;
+        }
+        if (reference_sales > 0.0) {
+            scratch_.house_price_ = reference_value / reference_sales;
+            if (active_head == kNoListing &&
+                static_cast<double>(buyers.size()) > sales) {
+                scratch_.house_price_ *= 1.0 + runtime_.housing_rules.demand_price_step;
+            }
         }
         return collect_property_tax(state, real);
+    }
+
+    void adjust_rent_level(const core::RootState &state,
+                           const M7TickScratch &population) {
+        if (!runtime_.housing_rules.rentals ||
+            runtime_.housing_rules.rent_adjustment <= algorithms::kEconomicEpsilon) {
+            return;
+        }
+        std::vector<std::uint8_t> listed(projected_properties().minted_count() + 1U,
+                                         0U);
+        for (const auto &listing : scratch_.housing_listings_) {
+            if (listing.active && listing.dwelling.value() < listed.size()) {
+                listed[static_cast<std::size_t>(listing.dwelling.value())] = 1U;
+            }
+        }
+        double occupied_rentals = 0.0;
+        for (const auto &tenancy : scratch_.tenancies_) {
+            occupied_rentals += tenancy.active ? 1.0 : 0.0;
+        }
+        double vacant_rentals = 0.0;
+        for (const auto &dwelling : projected_properties().records()) {
+            if (dwelling.active && !dwelling.occupant.valid() &&
+                dwelling.owner.kind() == core::OwnerKind::household &&
+                listed[static_cast<std::size_t>(dwelling.id.value())] == 0U) {
+                vacant_rentals += 1.0;
+            }
+        }
+        double unhoused = 0.0;
+        state.households.for_each_alive(
+            [this, &population, &unhoused](HouseholdId household,
+                                           const core::HouseholdComponent &) {
+                if (!household_retires(household, population) &&
+                    !projected_properties().dwelling_for_occupant(household).valid()) {
+                    unhoused += 1.0;
+                }
+            });
+        const double rental_stock = occupied_rentals + vacant_rentals;
+        double pressure = 0.0;
+        if (unhoused > vacant_rentals + kEconomicEpsilon) {
+            pressure = std::min(1.0, (unhoused - vacant_rentals) /
+                                         std::max(1.0, rental_stock));
+        } else if (rental_stock > kEconomicEpsilon) {
+            const double vacancy_share = vacant_rentals / rental_stock;
+            const double deadband = runtime_.housing_rules.rental_vacancy_deadband;
+            if (vacancy_share > deadband) {
+                pressure = -std::min(1.0, (vacancy_share - deadband) /
+                                              std::max(0.01, 1.0 - deadband));
+            }
+        }
+        double next_rent = scratch_.rent_level_ *
+                           (1.0 + runtime_.housing_rules.rent_adjustment * pressure);
+        const double wage = runtime_.last_metrics.economy.mean_hourly_wage;
+        if (wage > kEconomicEpsilon) {
+            const double floor = runtime_.housing_rules.rent_floor_wage_share * wage;
+            const double cap = runtime_.housing_rules.rent_burden_cap * wage;
+            next_rent = std::max(floor, next_rent);
+            if (cap > kEconomicEpsilon) {
+                next_rent = std::min(cap, next_rent);
+            }
+        }
+        scratch_.rent_level_ = std::max(0.0, next_rent);
+        for (auto &tenancy : scratch_.tenancies_) {
+            if (tenancy.active) {
+                tenancy.daily_rent = scratch_.rent_level_;
+            }
+        }
     }
 
     [[nodiscard]] Status match_rentals(const core::RootState &state,
@@ -2076,9 +2397,16 @@ class M8Extension final : public M7TickExtension {
         std::vector<HouseholdId> tenants;
         state.households.for_each_alive(
             [this, &population, &tenants](HouseholdId household,
-                                          const core::HouseholdComponent &) {
-                if (!household_retires(household, population) &&
-                    !projected_properties().dwelling_for_occupant(household).valid()) {
+                                          const core::HouseholdComponent &component) {
+                if (household_retires(household, population) ||
+                    projected_properties().dwelling_for_occupant(household).valid()) {
+                    return;
+                }
+                const double income =
+                    std::max(component.income_expected, component.income_realized);
+                if (scratch_.rent_level_ <= runtime_.housing_rules.rent_burden_cap *
+                                                    std::max(kEconomicEpsilon, income) +
+                                                kTolerance) {
                     tenants.push_back(household);
                 }
             });
@@ -2244,9 +2572,8 @@ class M8Extension final : public M7TickExtension {
                                            M5TickScratch &monetary_scratch,
                                            M7Runtime &population_runtime,
                                            const M7TickScratch &population, Tick tick) {
-        auto status =
-            settle_retired_housing(state, real, monetary_scratch,
-                                   population_runtime, population, tick);
+        auto status = settle_retired_housing(state, real, monetary_scratch,
+                                             population_runtime, population, tick);
         if (!status.ok()) {
             return status;
         }
@@ -2259,12 +2586,6 @@ class M8Extension final : public M7TickExtension {
         if (!status.ok()) {
             return status;
         }
-        if (runtime_.housing_rules.rentals) {
-            status = collect_rent(state, real, tick);
-            if (!status.ok()) {
-                return status;
-            }
-        }
         const bool market_day =
             runtime_.housing_rules.resale_market &&
             (tick.value() + 1) % runtime_.housing_rules.market_interval_days == 0;
@@ -2274,6 +2595,7 @@ class M8Extension final : public M7TickExtension {
             if (!status.ok()) {
                 return status;
             }
+            adjust_rent_level(state, population);
             status = match_rentals(state, population, tick);
             if (!status.ok()) {
                 return status;
@@ -2378,6 +2700,10 @@ class M8Extension final : public M7TickExtension {
                                         M4TickScratch &real, EnergyOrder &order,
                                         EnergyOffer &offer, double quantity) {
         const double value = quantity * offer.price;
+        if (value <= algorithms::kEconomicEpsilon) {
+            return Status(ErrorCode::internal_error,
+                          "M8 energy trade is below settlement resolution");
+        }
         auto status =
             stage_m4_transfer(state, real, order.account, offer.account, value);
         if (!status.ok()) {
@@ -2439,6 +2765,17 @@ class M8Extension final : public M7TickExtension {
                     // one, while another buyer may still take this offer.
                     break;
                 }
+                if (quantity * offer.price <= algorithms::kEconomicEpsilon) {
+                    // M4 deliberately ignores transfers at or below its
+                    // settlement resolution.  Do not turn residual account
+                    // dust into a physical allocation or retry it forever.
+                    if (offer.stock * offer.price <= algorithms::kEconomicEpsilon) {
+                        offer.stock = 0.0;
+                        ++seller_cursor;
+                        continue;
+                    }
+                    break;
+                }
                 const auto status = transfer_trade(state, real, order, offer, quantity);
                 if (!status.ok()) {
                     return status;
@@ -2481,7 +2818,8 @@ class M8Extension final : public M7TickExtension {
                     available / offer.price,
                     offer.stock,
                 });
-                if (quantity <= kEconomicEpsilon) {
+                if (quantity <= kEconomicEpsilon ||
+                    quantity * offer.price <= algorithms::kEconomicEpsilon) {
                     continue;
                 }
                 const auto status = transfer_trade(state, real, order, offer, quantity);
@@ -2546,14 +2884,23 @@ class M8Extension final : public M7TickExtension {
     }
 
     [[nodiscard]] Status settle_energy_results(const core::RootState &state,
+                                               const M4Runtime &real_runtime,
                                                M4TickScratch &real) {
         double weighted_value = 0.0;
         double sold = 0.0;
-        double private_sold = 0.0;
+        double private_capacity = 0.0;
         for (const auto &offer : scratch_.offers_) {
             sold += offer.sold;
             weighted_value += offer.revenue;
-            private_sold += offer.strategic_reserve ? 0.0 : offer.sold;
+            if (!offer.strategic_reserve) {
+                const auto *firm = state.firms.get(offer.firm);
+                const auto index = static_cast<std::size_t>(offer.firm.value());
+                if (firm != nullptr && index < scratch_.energy_producers_.size()) {
+                    private_capacity +=
+                        scratch_.energy_producers_[index].capacity_per_capital *
+                        firm->physical_capital.value() * input_.capacity_multiplier;
+                }
+            }
         }
         for (auto &offer : scratch_.offers_) {
             if (offer.strategic_reserve) {
@@ -2595,9 +2942,9 @@ class M8Extension final : public M7TickExtension {
                 const double paid = std::min(
                     due, std::max(0.0, projected_balance(real, offer.account)));
                 if (paid > kEconomicEpsilon) {
-                    const auto status = stage_m4_transfer(
-                        state, real, offer.account,
-                        state.institutions.treasury_account, paid);
+                    const auto status =
+                        stage_m4_transfer(state, real, offer.account,
+                                          state.institutions.treasury_account, paid);
                     if (!status.ok()) {
                         return status;
                     }
@@ -2605,20 +2952,29 @@ class M8Extension final : public M7TickExtension {
                     scratch_.working_metrics_.energy.windfall_tax_paid += paid;
                 }
             }
-            const double unfilled =
-                std::max(0.0, scratch_.working_metrics_.energy.requested_total - sold);
-            const double shortage_share =
-                private_sold > kEconomicEpsilon
-                    ? offer.sold / private_sold
+            const auto *firm = state.firms.get(offer.firm);
+            // System load is observable to every energy producer.  Forecasting
+            // only from firm-level dispatch creates a deterministic
+            // winner-take-all loop in the sorted offer book: a zero-sale firm
+            // forecasts zero demand, loses payroll capacity, and makes the
+            // aggregate shortage worse.  Allocate observed market load by
+            // installed capacity; price and inventory still determine which
+            // producers actually dispatch.
+            const double producer_capacity = producer.capacity_per_capital *
+                                             firm->physical_capital.value() *
+                                             input_.capacity_multiplier;
+            const double market_share =
+                private_capacity > kEconomicEpsilon
+                    ? producer_capacity / private_capacity
                     : 1.0 / static_cast<double>(std::max<std::size_t>(
                                 1, real.energy_firm_indices_.size()));
+            const double demand_signal =
+                market_share * scratch_.working_metrics_.energy.requested_total;
             producer.demand_expected =
                 std::max(0.0, producer.demand_expected +
                                   runtime_.energy_rules.demand_adjustment *
-                                      (offer.sold + shortage_share * unfilled -
-                                       producer.demand_expected));
+                                      (demand_signal - producer.demand_expected));
             work.demand_expected = producer.demand_expected;
-            const auto *firm = state.firms.get(offer.firm);
             const double target_inventory =
                 runtime_.energy_rules.producer_inventory_ratio *
                 producer.demand_expected;
@@ -2678,8 +3034,6 @@ class M8Extension final : public M7TickExtension {
                 if (input.stock > kEconomicEpsilon) {
                     input.average_cost = input.stock_cost / input.stock;
                 }
-                scratch_.working_metrics_.energy.industry_units += order.allocated;
-                scratch_.working_metrics_.energy.industry_spending += order.spending;
             } else if (order.kind == EnergyBuyerKind::household) {
                 auto &record =
                     scratch_.household_energy_[static_cast<std::size_t>(order.owner)];
@@ -2718,31 +3072,77 @@ class M8Extension final : public M7TickExtension {
             }
         }
 
+        const auto &real_options = options_.base.base.base.base;
+        const double daily_growth =
+            std::pow(1.0 + real_runtime.rules.annual_tfp_growth, 1.0 / 365.0);
+        const double technology_index = real_runtime.technology_index * daily_growth;
+        const double public_capital_factor =
+            real_runtime.rules.public_capital_gamma > 0.0
+                ? std::pow(1.0 + real_runtime.public_capital /
+                                     real_runtime.public_capital_reference,
+                           real_runtime.rules.public_capital_gamma)
+                : 1.0;
+        const double production_factor = technology_index * public_capital_factor;
         for (auto &input : scratch_.energy_inputs_) {
             if (!input.active) {
                 continue;
             }
             const auto index = static_cast<std::size_t>(input.firm.value());
-            const double need = index < scratch_.industry_use_need_.size()
-                                    ? scratch_.industry_use_need_[index]
-                                    : 0.0;
+            const auto dense = firm_index(real, input.firm);
+            const auto *firm = state.firms.get(input.firm);
+            if (dense == kAbsentIndex || dense >= real.firm_work_.size() ||
+                firm == nullptr) {
+                continue;
+            }
+            auto &work = real.firm_work_[dense];
+            double potential_output = 0.0;
+            if (firm->sector == core::FirmSector::consumption ||
+                firm->sector == core::FirmSector::capital) {
+                const auto sector =
+                    static_cast<std::size_t>(static_cast<std::uint8_t>(firm->sector));
+                auto produced = algorithms::production({
+                    firm->technology == core::FirmTechnology::cobb_douglas
+                        ? algorithms::ProductionTechnology::cobb_douglas
+                        : algorithms::ProductionTechnology::linear,
+                    work.hired * real_options.labor_availability_multipliers[sector],
+                    firm->productivity * real_options.productivity_multipliers[sector],
+                    firm->total_factor_productivity *
+                        real_options.productivity_multipliers[sector],
+                    firm->physical_capital.value(),
+                    firm->capital_share,
+                    production_factor,
+                });
+                if (!produced.ok()) {
+                    return produced.status();
+                }
+                potential_output = *produced.get_if();
+            } else if (firm->sector == core::FirmSector::construction) {
+                potential_output =
+                    firm->productivity * work.hired *
+                    scratch_.housing_input_.construction_productivity_multiplier;
+            }
+            const double need = input.intensity * std::max(0.0, potential_output) *
+                                input_.industry_demand_multiplier;
+            if (index < scratch_.industry_use_need_.size()) {
+                scratch_.industry_use_need_[index] = need;
+            }
             input.used = std::min(input.stock, need);
             input.unmet = std::max(0.0, need - input.used);
+            double input_cost = 0.0;
             if (input.stock > kEconomicEpsilon) {
                 const double average = input.stock_cost / input.stock;
-                input.stock_cost =
-                    std::max(0.0, input.stock_cost - average * input.used);
+                input_cost = average * input.used;
+                input.stock_cost = std::max(0.0, input.stock_cost - input_cost);
             }
             input.stock = std::max(0.0, input.stock - input.used);
             if (input.stock > kEconomicEpsilon) {
                 input.average_cost = input.stock_cost / input.stock;
             }
-            const auto dense = firm_index(real, input.firm);
-            if (dense != kAbsentIndex && dense < real.firm_work_.size()) {
-                real.firm_work_[dense].production_input_factor =
-                    need > kEconomicEpsilon ? std::clamp(input.used / need, 0.0, 1.0)
-                                            : 1.0;
-            }
+            work.production_input_factor =
+                need > kEconomicEpsilon ? std::clamp(input.used / need, 0.0, 1.0) : 1.0;
+            work.production_input_cost += input_cost;
+            scratch_.working_metrics_.energy.industry_units += input.used;
+            scratch_.working_metrics_.energy.industry_spending += input_cost;
         }
         scratch_.working_metrics_.energy.sold = sold;
         scratch_.working_metrics_.energy.unfilled =
@@ -3309,12 +3709,15 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                                                spec.energy_rules.initial_utilization);
         const double inventory =
             spec.energy_rules.producer_inventory_ratio * per_producer;
+        const double capital_depreciation =
+            spec.domestic_economy.financial_economy.monetary_economy.real_economy.rules
+                .capital_depreciation;
         for (std::uint64_t index = 0; index < spec.energy_rules.producer_count;
              ++index) {
             EnergyProducerComponent producer;
             const auto status = create_energy_firm(
                 base.root, base.financial_runtime, spec.energy_rules, per_producer,
-                capital, inventory,
+                capital, inventory, capital_depreciation,
                 spec.energy_rules.state_owned_first_producer && index == 0,
                 settlement_node, producer, firm_openings);
             if (!status.ok()) {
@@ -3454,8 +3857,7 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                 return minted.status();
             }
             occupied_count += occupant.valid() ? 1U : 0U;
-            if (occupant.valid() &&
-                owner.kind() == core::OwnerKind::household &&
+            if (occupant.valid() && owner.kind() == core::OwnerKind::household &&
                 owner.value() != occupant.value()) {
                 runtime.tenancies.push_back({
                     TenancyId(static_cast<std::uint64_t>(runtime.tenancies.size()) +

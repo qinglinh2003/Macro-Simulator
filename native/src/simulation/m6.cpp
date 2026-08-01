@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <exception>
 #include <limits>
 #include <numeric>
@@ -47,11 +48,15 @@ template <typename Range> [[nodiscard]] bool all_finite(const Range &values) noe
     return index < scratch.balances_.size() ? scratch.balances_[index] : 0.0;
 }
 
-[[nodiscard]] double
-entry_capital_reserved(const M6TickScratch &scratch,
-                       AccountId founder_account) noexcept {
+[[nodiscard]] double entry_capital_reserved(const M6TickScratch &scratch,
+                                            AccountId founder_account) noexcept {
     double reserved = 0.0;
     for (const auto &entry : scratch.firm_entries_) {
+        if (entry.founder_account == founder_account) {
+            reserved += entry.startup_cash;
+        }
+    }
+    for (const auto &entry : scratch.capital_firm_entries_) {
         if (entry.founder_account == founder_account) {
             reserved += entry.startup_cash;
         }
@@ -62,6 +67,20 @@ entry_capital_reserved(const M6TickScratch &scratch,
         }
     }
     return reserved;
+}
+
+[[noreturn]] void fail_lifecycle_commit(const char *stage) noexcept {
+    std::fprintf(stderr, "M6 lifecycle commit failure: %s\n", stage);
+    std::terminate();
+}
+
+[[noreturn]] void fail_lifecycle_commit(const char *stage, Status status) noexcept {
+    const auto code = error_code_name(status.code());
+    const auto message = status.message();
+    std::fprintf(stderr, "M6 lifecycle commit failure: %s (%.*s: %.*s)\n", stage,
+                 static_cast<int>(code.size()), code.data(),
+                 static_cast<int>(message.size()), message.data());
+    std::terminate();
 }
 
 [[nodiscard]] Status move_reserves(M4TickScratch &scratch, SettlementNodeId source,
@@ -321,8 +340,7 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
     const auto holder = core::OwnerId::bank(bank);
     for (const auto &bond : book.bonds()) {
         if (bond.active) {
-            value +=
-                book.units_held(core::SecurityId::bond(bond.id), holder);
+            value += book.units_held(core::SecurityId::bond(bond.id), holder);
         }
     }
     return value;
@@ -398,10 +416,9 @@ void rebuild_debt_views(const core::RootState &state, const M5TickScratch &monet
     }
 }
 
-[[nodiscard]] Status
-rebuild_margin_loan_index(const core::RootState &state,
-                          const M5TickScratch &monetary,
-                          M6TickScratch &scratch) {
+[[nodiscard]] Status rebuild_margin_loan_index(const core::RootState &state,
+                                               const M5TickScratch &monetary,
+                                               M6TickScratch &scratch) {
     if (scratch.margin_loans_.size() >=
         static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
         return Status(ErrorCode::out_of_range,
@@ -410,8 +427,7 @@ rebuild_margin_loan_index(const core::RootState &state,
     scratch.margin_loan_heads_.assign(state.postings.size() + 1U, 0U);
     scratch.margin_loan_tails_.assign(state.postings.size() + 1U, 0U);
     scratch.margin_loan_next_.assign(scratch.margin_loans_.size(), 0U);
-    for (std::size_t ordinal = 0U; ordinal < scratch.margin_loans_.size();
-         ++ordinal) {
+    for (std::size_t ordinal = 0U; ordinal < scratch.margin_loans_.size(); ++ordinal) {
         const auto loan_id = scratch.margin_loans_[ordinal];
         if (!loan_id.valid() || loan_id.value() > monetary.loans_.size()) {
             return Status(ErrorCode::invariant_violation,
@@ -433,16 +449,15 @@ rebuild_margin_loan_index(const core::RootState &state,
         if (tail == 0U) {
             scratch.margin_loan_heads_[account] = encoded;
         } else {
-            scratch.margin_loan_next_[
-                static_cast<std::size_t>(tail - 1U)] = encoded;
+            scratch.margin_loan_next_[static_cast<std::size_t>(tail - 1U)] = encoded;
         }
         scratch.margin_loan_tails_[account] = encoded;
     }
     return Status::success();
 }
 
-void reduce_debt_views(M6TickScratch &scratch, AccountId account,
-                       double principal, bool margin) noexcept {
+void reduce_debt_views(M6TickScratch &scratch, AccountId account, double principal,
+                       bool margin) noexcept {
     const auto index = account_index(account);
     if (index < scratch.debt_by_account_.size()) {
         scratch.debt_by_account_[index] =
@@ -579,9 +594,10 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         statement.capital_value =
             statement.capital_units * statement.capital_unit_price;
         statement.output_inventory_units = std::max(0.0, work.closing_inventory);
-        const double unit_cost = work.produced > kEconomicEpsilon
-                                     ? work.wage_bill / work.produced
-                                     : work.posted_price;
+        const double unit_cost =
+            work.produced > kEconomicEpsilon
+                ? (work.wage_bill + work.production_input_cost) / work.produced
+                : work.posted_price;
         statement.output_inventory_unit_price =
             std::max(0.0, std::min(work.posted_price, std::max(0.0, unit_cost)));
         statement.output_inventory_value =
@@ -733,15 +749,12 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         return 0.0;
     }
     if (scratch.margin_loans_.size() >=
-            static_cast<std::size_t>(
-                std::numeric_limits<std::uint32_t>::max()) ||
+            static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) ||
         monetary.loans_.size() ==
-            static_cast<std::size_t>(
-                std::numeric_limits<std::uint64_t>::max())) {
+            static_cast<std::size_t>(std::numeric_limits<std::uint64_t>::max())) {
         return 0.0;
     }
-    const auto id =
-        LoanId(static_cast<std::uint64_t>(monetary.loans_.size()) + 1U);
+    const auto id = LoanId(static_cast<std::uint64_t>(monetary.loans_.size()) + 1U);
     monetary.loans_.push_back({
         id,
         bank,
@@ -759,15 +772,13 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
     });
     scratch.margin_loans_.push_back(id);
     scratch.margin_loan_next_.push_back(0U);
-    const auto encoded =
-        static_cast<std::uint32_t>(scratch.margin_loans_.size());
-    const auto previous_tail =
-        scratch.margin_loan_tails_[account_position];
+    const auto encoded = static_cast<std::uint32_t>(scratch.margin_loans_.size());
+    const auto previous_tail = scratch.margin_loan_tails_[account_position];
     if (previous_tail == 0U) {
         scratch.margin_loan_heads_[account_position] = encoded;
     } else {
-        scratch.margin_loan_next_[
-            static_cast<std::size_t>(previous_tail - 1U)] = encoded;
+        scratch.margin_loan_next_[static_cast<std::size_t>(previous_tail - 1U)] =
+            encoded;
     }
     scratch.margin_loan_tails_[account_position] = encoded;
     real.balances_[account_position] += granted;
@@ -876,8 +887,7 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
             if (std::abs(delta) > kEconomicEpsilon) {
                 scratch.orders_.push_back({equity_id, household_id, delta, ordinal++});
                 if (delta > 0.0) {
-                    const auto account =
-                        account_index(household.primary_account);
+                    const auto account = account_index(household.primary_account);
                     if (account < scratch.equity_buy_commitments_.size()) {
                         scratch.equity_buy_commitments_[account] +=
                             delta * equity->price.value();
@@ -973,10 +983,9 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             }
         }
         const auto account = account_index(household.primary_account);
-        const double committed =
-            account < scratch.equity_buy_commitments_.size()
-                ? scratch.equity_buy_commitments_[account]
-                : deposits;
+        const double committed = account < scratch.equity_buy_commitments_.size()
+                                     ? scratch.equity_buy_commitments_[account]
+                                     : deposits;
         const double available = std::max(0.0, deposits - committed);
         const double scale =
             buy_cash > kEconomicEpsilon ? std::min(1.0, available / buy_cash) : 1.0;
@@ -994,8 +1003,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             delta = delta > 0.0 ? delta * scale : std::max(delta, -current);
             if (std::abs(delta) > kEconomicEpsilon) {
                 scratch.orders_.push_back({equity_id, household_id, delta, ordinal++});
-                if (delta > 0.0 &&
-                    account < scratch.equity_buy_commitments_.size()) {
+                if (delta > 0.0 && account < scratch.equity_buy_commitments_.size()) {
                     scratch.equity_buy_commitments_[account] +=
                         delta * equity->price.value();
                 }
@@ -1146,8 +1154,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             status = transfer(state, real, clearing, household->primary_account,
                               seller.quantity * price);
             if (!status.ok()) {
-                return Status(status.code(),
-                              "M6 equity sale exceeds clearing cash");
+                return Status(status.code(), "M6 equity sale exceeds clearing cash");
             }
         }
         if (primary_executed > kEconomicEpsilon) {
@@ -1282,9 +1289,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             loan.active = remaining_principal > kEconomicEpsilon;
             reduce_debt_views(
                 scratch, account,
-                opening_principal -
-                    (loan.active ? remaining_principal : 0.0),
-                true);
+                opening_principal - (loan.active ? remaining_principal : 0.0), true);
             real.balances_[account_index(account)] -= paid;
             repayment -= paid;
             call -= paid;
@@ -1350,6 +1355,40 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
     }
     const auto account = firm->primary_account;
     double cash = projected_balance(real, account);
+    std::size_t seller_index = real.firm_ids_.size();
+    std::size_t buyer_index = real.firm_ids_.size();
+    double buyer_score = -std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
+        const auto candidate_id = real.firm_ids_[index];
+        if (candidate_id == firm_id) {
+            seller_index = index;
+            continue;
+        }
+        const auto *candidate = state.firms.get(candidate_id);
+        const auto *candidate_lifecycle = firm_record(scratch.firms_, candidate_id);
+        if (candidate == nullptr || candidate->sector != firm->sector ||
+            candidate_lifecycle == nullptr || !candidate_lifecycle->active) {
+            continue;
+        }
+        if (candidate_lifecycle->statement.book_equity > buyer_score) {
+            buyer_score = candidate_lifecycle->statement.book_equity;
+            buyer_index = index;
+        }
+    }
+    const bool has_successor =
+        seller_index < real.firm_ids_.size() && buyer_index < real.firm_ids_.size();
+    FirmId successor{};
+    AccountId successor_account{};
+    if (has_successor) {
+        successor = real.firm_ids_[buyer_index];
+        successor_account = state.firms.get(successor)->primary_account;
+    }
+
+    // Cash is the first-loss repayment source. Collateral is then realized at
+    // the same conservative haircuts used by the borrowing base. Previously,
+    // every non-cash asset disappeared at exit and the bank booked a 100% loss
+    // on the residual loan. A surviving same-sector firm now assumes the
+    // recoverable debt together with the productive assets.
     for (auto &loan : monetary.loans_) {
         if (!loan.active || loan.borrower_account != account) {
             continue;
@@ -1360,8 +1399,63 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             cash -= paid;
             loan.principal = Money(loan.principal.value() - paid);
             monetary.working_metrics_.principal_repaid += paid;
+            const auto lender_index = bank_index(loan.lender);
+            monetary.debt_by_account_[account_index(account)] =
+                std::max(0.0, monetary.debt_by_account_[account_index(account)] - paid);
+            scratch.debt_by_account_[account_index(account)] =
+                std::max(0.0, scratch.debt_by_account_[account_index(account)] - paid);
+            monetary.exposure_by_bank_[lender_index] =
+                std::max(0.0, monetary.exposure_by_bank_[lender_index] - paid);
         }
-        const double loss = loan.principal.value();
+    }
+    const double residual_debt = std::accumulate(
+        monetary.loans_.begin(), monetary.loans_.end(), 0.0,
+        [account](double total, const core::LoanRecord &loan) {
+            return total + (loan.active && loan.borrower_account == account
+                                ? loan.principal.value()
+                                : 0.0);
+        });
+    const double collateral_recovery =
+        has_successor
+            ? std::min(residual_debt,
+                       std::max(0.0, lifecycle->statement.eligible_collateral_value))
+            : 0.0;
+    if (has_successor) {
+        auto &seller_work = real.firm_work_[seller_index];
+        auto &buyer_work = real.firm_work_[buyer_index];
+        buyer_work.closing_capital += seller_work.closing_capital;
+        buyer_work.closing_inventory += seller_work.closing_inventory;
+        seller_work.closing_capital = 0.0;
+        seller_work.closing_inventory = 0.0;
+
+        auto *buyer_lifecycle = firm_record(scratch.firms_, successor);
+        auto &buyer = buyer_lifecycle->statement;
+        buyer.capital_units += lifecycle->statement.capital_units;
+        buyer.capital_value += lifecycle->statement.capital_value;
+        buyer.output_inventory_units += lifecycle->statement.output_inventory_units;
+        buyer.output_inventory_value += lifecycle->statement.output_inventory_value;
+        buyer.work_in_progress_value += lifecycle->statement.work_in_progress_value;
+        buyer.input_inventory_value += lifecycle->statement.input_inventory_value;
+        buyer.inventory_value += lifecycle->statement.inventory_value;
+        buyer.gross_assets +=
+            lifecycle->statement.capital_value + lifecycle->statement.inventory_value;
+        buyer.debt += collateral_recovery;
+        buyer.book_equity = buyer.gross_assets - buyer.debt - buyer.interest_arrears;
+        buyer.eligible_collateral_value +=
+            lifecycle->statement.eligible_collateral_value;
+        buyer.borrowing_base_proxy = buyer.cash + buyer.eligible_collateral_value;
+        buyer.borrowing_base_headroom =
+            std::max(0.0, buyer.borrowing_base_proxy - buyer.debt);
+    }
+    for (auto &loan : monetary.loans_) {
+        if (!loan.active || loan.borrower_account != account) {
+            continue;
+        }
+        const double principal = loan.principal.value();
+        const double recovered = residual_debt > kEconomicEpsilon
+                                     ? collateral_recovery * principal / residual_debt
+                                     : 0.0;
+        const double loss = std::max(0.0, principal - recovered);
         if (loss > kEconomicEpsilon) {
             auto *pnl = pnl_for(monetary, loan.lender);
             const auto *bank = state.banks.get(loan.lender);
@@ -1372,9 +1466,26 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
                 real.balances_[account_index(bank->cash_account)] -= loss;
             }
             monetary.working_metrics_.realized_credit_losses += loss;
-            loan.principal = Money(0.0);
         }
-        loan.active = false;
+        const auto old_account_index = account_index(account);
+        const auto lender_index = bank_index(loan.lender);
+        monetary.debt_by_account_[old_account_index] =
+            std::max(0.0, monetary.debt_by_account_[old_account_index] - principal);
+        scratch.debt_by_account_[old_account_index] =
+            std::max(0.0, scratch.debt_by_account_[old_account_index] - principal);
+        monetary.exposure_by_bank_[lender_index] =
+            std::max(0.0, monetary.exposure_by_bank_[lender_index] - loss);
+        if (recovered > kEconomicEpsilon) {
+            loan.borrower = core::OwnerId::firm(successor);
+            loan.borrower_account = successor_account;
+            loan.principal = Money(recovered);
+            const auto successor_index = account_index(successor_account);
+            monetary.debt_by_account_[successor_index] += recovered;
+            scratch.debt_by_account_[successor_index] += recovered;
+        } else {
+            loan.principal = Money(0.0);
+            loan.active = false;
+        }
     }
     const auto equity = firm_equity(scratch.securities_, firm_id);
     if (cash > kEconomicEpsilon) {
@@ -1430,7 +1541,7 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
     }
     lifecycle->active = false;
     lifecycle->defaulted = defaulted;
-    scratch.firm_exits_.push_back({firm_id, account});
+    scratch.firm_exits_.push_back({firm_id, account, successor});
     ++scratch.working_metrics_.firm_exits;
     if (defaulted) {
         ++scratch.working_metrics_.firm_defaults;
@@ -1441,7 +1552,8 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
 [[nodiscard]] Status run_firm_exits(const core::RootState &state, M4TickScratch &real,
                                     M5TickScratch &monetary, M6Runtime &runtime,
                                     M6TickScratch &scratch,
-                                    const M6AdvanceOptions &options) {
+                                    const M6AdvanceOptions &options,
+                                    std::uint64_t &lifecycle_counter) {
     if (!runtime.rules.firm_dynamics && !options.force_firm_exit.has_value()) {
         return Status::success();
     }
@@ -1453,7 +1565,9 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             ++active_by_sector[static_cast<std::size_t>(firm->sector)];
         }
     }
-    for (const auto firm_id : real.firm_ids_) {
+    for (std::size_t dense_index = 0; dense_index < real.firm_ids_.size();
+         ++dense_index) {
+        const auto firm_id = real.firm_ids_[dense_index];
         const auto *firm = state.firms.get(firm_id);
         auto *lifecycle = firm_record(scratch.firms_, firm_id);
         if (firm == nullptr || lifecycle == nullptr || !lifecycle->active) {
@@ -1461,15 +1575,42 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
         }
         const bool insolvent = lifecycle->statement.book_equity < -kTolerance;
         lifecycle->insolvent_days = insolvent ? lifecycle->insolvent_days + 1 : 0;
+        // Voluntary shell liquidation is a consumption-firm lifecycle rule.
+        // Capital-goods firms use a linear technology and legitimately carry no
+        // productive-capital stock; selling their current output can also leave
+        // zero closing inventory.  Treating that normal balance sheet as an idle
+        // shell steadily extinguishes the capital-goods sector.
         const bool shell =
+            firm->sector == core::FirmSector::consumption &&
             lifecycle->statement.capital_units <= kEconomicEpsilon &&
             lifecycle->statement.output_inventory_units <= kEconomicEpsilon;
         lifecycle->shell_days = shell ? lifecycle->shell_days + 1 : 0;
+        const bool subscale_sector = firm->sector == core::FirmSector::consumption ||
+                                     firm->sector == core::FirmSector::capital ||
+                                     firm->sector == core::FirmSector::construction;
+        const bool below_viability =
+            runtime.rules.firm_subscale_exit && subscale_sector &&
+            real.firm_work_[dense_index].labor_demand_notional <
+                runtime.rules.subscale_viability_workers;
+        lifecycle->subscale_days = below_viability ? lifecycle->subscale_days + 1U : 0U;
+        const bool subscale_exit =
+            below_viability &&
+            lifecycle->subscale_days >= runtime.rules.subscale_grace_days &&
+            unit_draw(state.seed, lifecycle_counter++, 0x5355425343414c45ULL) <
+                runtime.rules.subscale_exit_hazard;
+        const bool protected_from_exit =
+            std::find(options.protected_firm_exits.begin(),
+                      options.protected_firm_exits.end(),
+                      firm_id) != options.protected_firm_exits.end();
+        if (protected_from_exit) {
+            continue;
+        }
         const bool forced =
             options.force_firm_exit.has_value() && *options.force_firm_exit == firm_id;
         const bool defaulted =
             forced || lifecycle->insolvent_days >= runtime.rules.bankrupt_persistence;
-        const bool voluntary = lifecycle->shell_days >= runtime.rules.shell_exit_days;
+        const bool voluntary =
+            lifecycle->shell_days >= runtime.rules.shell_exit_days || subscale_exit;
         if (!(defaulted || voluntary)) {
             continue;
         }
@@ -1562,23 +1703,73 @@ void run_sector_switching(const core::RootState &state, M4TickScratch &real,
 
 [[nodiscard]] std::optional<HouseholdId>
 pick_founder(const core::RootState &state, const M4TickScratch &real, double need,
-             const M6TickScratch &financial, std::uint64_t seed,
-             std::uint64_t &counter, std::uint64_t stream) {
+             const M6TickScratch &financial, std::uint64_t seed, std::uint64_t &counter,
+             std::uint64_t stream) {
     const auto next_id = state.households.allocator_state().next_id;
     if (next_id <= 1U) {
         return std::nullopt;
     }
     for (std::uint64_t attempt = 0; attempt < 16; ++attempt) {
         const auto candidate = HouseholdId(
-            1U + static_cast<std::uint64_t>(
-                     unit_draw(seed, counter++, stream) *
-                     static_cast<double>(next_id - 1U)));
+            1U + static_cast<std::uint64_t>(unit_draw(seed, counter++, stream) *
+                                            static_cast<double>(next_id - 1U)));
         const auto *household = state.households.get(candidate);
         if (household != nullptr &&
             projected_balance(real, household->primary_account) -
-                    entry_capital_reserved(
-                        financial, household->primary_account) >=
+                    entry_capital_reserved(financial, household->primary_account) >=
                 need) {
+            return candidate;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] double bank_entry_reserves_reserved(const M4TickScratch &real,
+                                                  const M6TickScratch &financial,
+                                                  SettlementNodeId source) noexcept {
+    double reserved = 0.0;
+    for (const auto &entry : financial.bank_entries_) {
+        const auto account = account_index(entry.founder_account);
+        if (account < real.account_nodes_.size() &&
+            real.account_nodes_[account] == source) {
+            reserved += entry.capital;
+        }
+    }
+    return reserved;
+}
+
+[[nodiscard]] std::optional<HouseholdId>
+pick_bank_founder(const core::RootState &state, const M4TickScratch &real, double need,
+                  const M6TickScratch &financial, std::uint64_t seed,
+                  std::uint64_t &counter, std::uint64_t stream) {
+    const auto next_id = state.households.allocator_state().next_id;
+    if (next_id <= 1U) {
+        return std::nullopt;
+    }
+    for (std::uint64_t attempt = 0; attempt < 16; ++attempt) {
+        const auto candidate = HouseholdId(
+            1U + static_cast<std::uint64_t>(unit_draw(seed, counter++, stream) *
+                                            static_cast<double>(next_id - 1U)));
+        const auto *household = state.households.get(candidate);
+        if (household == nullptr) {
+            continue;
+        }
+        const auto account = account_index(household->primary_account);
+        if (account >= real.account_nodes_.size()) {
+            continue;
+        }
+        const auto source = real.account_nodes_[account];
+        const auto reserve = node_index(source);
+        if (reserve >= real.reserve_balances_.size()) {
+            continue;
+        }
+        const double available_deposits =
+            projected_balance(real, household->primary_account) -
+            entry_capital_reserved(financial, household->primary_account);
+        const double available_reserves =
+            real.reserve_balances_[reserve] -
+            bank_entry_reserves_reserved(real, financial, source);
+        if (available_deposits >= need && available_reserves >= need) {
             return candidate;
         }
     }
@@ -1627,8 +1818,7 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     for (std::uint32_t entry = 0; entry < entries; ++entry) {
         const auto founder =
             pick_founder(state, real, runtime.rules.startup_deposits, scratch,
-                         state.seed, lifecycle_counter,
-                         0x464f554e444552ULL);
+                         state.seed, lifecycle_counter, 0x464f554e444552ULL);
         if (!founder.has_value()) {
             break;
         }
@@ -1719,6 +1909,113 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
     return Status::success();
 }
 
+void stage_capital_firm_entry(const core::RootState &state, const M4TickScratch &real,
+                              M6Runtime &runtime, M6TickScratch &scratch,
+                              std::uint64_t &lifecycle_counter) {
+    if (!runtime.rules.firm_dynamics || !runtime.rules.capital_firm_entry) {
+        return;
+    }
+    const double entry_line =
+        runtime.rules.k_entry_demand * runtime.rules.subscale_viability_workers;
+    std::vector<std::size_t> incumbents;
+    incumbents.reserve(real.capital_firm_indices_.size());
+    for (const auto index : real.capital_firm_indices_) {
+        const auto firm_id = real.firm_ids_[index];
+        const auto *firm = state.firms.get(firm_id);
+        const auto *lifecycle = firm_record(scratch.firms_, firm_id);
+        if (firm == nullptr || lifecycle == nullptr || !lifecycle->active) {
+            continue;
+        }
+        if (real.firm_work_[index].labor_demand_notional < entry_line) {
+            return;
+        }
+        incumbents.push_back(index);
+    }
+    if (incumbents.empty() ||
+        unit_draw(state.seed, lifecycle_counter++, 0x4b4649524d454e54ULL) >=
+            runtime.rules.k_entry_hazard) {
+        return;
+    }
+
+    const auto founder_index = *std::max_element(
+        incumbents.begin(), incumbents.end(), [&](std::size_t left, std::size_t right) {
+            const auto *lhs = state.firms.get(real.firm_ids_[left]);
+            const auto *rhs = state.firms.get(real.firm_ids_[right]);
+            return projected_balance(real, lhs->primary_account) -
+                       entry_capital_reserved(scratch, lhs->primary_account) <
+                   projected_balance(real, rhs->primary_account) -
+                       entry_capital_reserved(scratch, rhs->primary_account);
+        });
+    const auto founder_id = real.firm_ids_[founder_index];
+    const auto *founder = state.firms.get(founder_id);
+    const double founder_available =
+        projected_balance(real, founder->primary_account) -
+        entry_capital_reserved(scratch, founder->primary_account);
+    if (founder_available < 2.0 * runtime.rules.startup_deposits) {
+        return;
+    }
+
+    const auto predicted_firm =
+        FirmId(state.firms.allocator_state().next_id + scratch.firm_entries_.size() +
+               scratch.capital_firm_entries_.size());
+    const auto predicted_account = AccountId(
+        static_cast<std::uint64_t>(state.postings.size()) +
+        scratch.firm_entries_.size() + scratch.capital_firm_entries_.size() + 1U);
+    core::FirmComponent component = *founder;
+    component.sector = core::FirmSector::capital;
+    component.primary_account = predicted_account;
+    component.goods_inventory = Goods(0.0);
+    component.physical_capital = Capital(0.0);
+    component.technology = core::FirmTechnology::linear;
+    component.demand_expected = 0.0;
+    component.sales_previous = 0.0;
+    component.target_inventory_previous = 0.0;
+    double posted_price = 0.0;
+    double posted_wage = 0.0;
+    double expected_demand = 0.0;
+    for (const auto index : incumbents) {
+        const auto *firm = state.firms.get(real.firm_ids_[index]);
+        posted_price += firm->posted_price.value();
+        posted_wage += firm->posted_wage.value();
+        expected_demand += firm->demand_expected;
+    }
+    const double denominator = static_cast<double>(incumbents.size());
+    component.posted_price =
+        Price(std::max(kEconomicEpsilon, posted_price / denominator));
+    component.posted_wage =
+        Money(std::max(kEconomicEpsilon, posted_wage / denominator));
+    component.demand_expected =
+        std::max(kEconomicEpsilon, expected_demand / denominator);
+    component.sales_previous = component.demand_expected;
+    component.target_inventory_previous =
+        component.inventory_ratio * component.demand_expected;
+
+    FirmLifecycleRecord lifecycle;
+    lifecycle.firm = predicted_firm;
+    lifecycle.statement.firm = predicted_firm;
+    lifecycle.statement.cash = runtime.rules.startup_deposits;
+    lifecycle.statement.gross_assets = runtime.rules.startup_deposits;
+    lifecycle.statement.book_equity = runtime.rules.startup_deposits;
+    lifecycle.statement.borrowing_base_proxy = runtime.rules.startup_deposits;
+    lifecycle.statement.borrowing_base_headroom = runtime.rules.startup_deposits;
+    lifecycle.active = true;
+    if (scratch.firms_.size() <= predicted_firm.value()) {
+        scratch.firms_.resize(static_cast<std::size_t>(predicted_firm.value()) + 1U);
+    }
+    scratch.firms_[static_cast<std::size_t>(predicted_firm.value())] = lifecycle;
+    scratch.capital_firm_entries_.push_back({
+        predicted_firm,
+        predicted_account,
+        founder_id,
+        founder->primary_account,
+        real.account_nodes_[account_index(founder->primary_account)],
+        runtime.rules.startup_deposits,
+        component,
+        lifecycle,
+    });
+    ++scratch.working_metrics_.firm_births;
+}
+
 [[nodiscard]] Status resolve_dead_bank_equity(const core::RootState &state,
                                               M5TickScratch &monetary,
                                               M6TickScratch &scratch) {
@@ -1790,9 +2087,8 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
             continue;
         }
         const auto founder =
-            pick_founder(state, real, runtime.policy.bank_minimum_capital,
-                         scratch, state.seed, lifecycle_counter,
-                         0x42414e4b464f554eULL);
+            pick_bank_founder(state, real, runtime.policy.bank_minimum_capital, scratch,
+                              state.seed, lifecycle_counter, 0x42414e4b464f554eULL);
         if (!founder.has_value()) {
             break;
         }
@@ -1802,9 +2098,10 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         const auto predicted_node =
             SettlementNodeId(static_cast<std::uint64_t>(state.reserves.size()) +
                              scratch.bank_entries_.size() + 1);
-        const auto predicted_account =
-            AccountId(static_cast<std::uint64_t>(state.postings.size()) +
-                      scratch.firm_entries_.size() + scratch.bank_entries_.size() + 1);
+        const auto predicted_account = AccountId(
+            static_cast<std::uint64_t>(state.postings.size()) +
+            scratch.firm_entries_.size() + scratch.capital_firm_entries_.size() +
+            scratch.bank_entries_.size() + 1);
         core::BankComponent component;
         component.cash_account = predicted_account;
         component.settlement_node = predicted_node;
@@ -1881,10 +2178,8 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         [&](HouseholdId id, const core::HouseholdComponent &household) {
             const auto holder = core::OwnerId::household(id);
             const double deposits = std::max(
-                0.0,
-                projected_balance(real, household.primary_account) -
-                    entry_capital_reserved(
-                        scratch, household.primary_account));
+                0.0, projected_balance(real, household.primary_account) -
+                         entry_capital_reserved(scratch, household.primary_account));
             const double bonds =
                 household_bond_value(scratch.securities_, holder, tick,
                                      runtime.last_metrics.economy.policy_rate);
@@ -1994,8 +2289,7 @@ pick_founder(const core::RootState &state, const M4TickScratch &real, double nee
         }
         status = transfer(state, real, demands[index].account, treasury, amount);
         if (!status.ok()) {
-            return Status(status.code(),
-                          "M6 bond subscription exceeds investor cash");
+            return Status(status.code(), "M6 bond subscription exceeds investor cash");
         }
         status = scratch.securities_.transfer_units(
             core::SecurityId::bond(bond_id), clearing_owner, demands[index].holder,
@@ -2115,9 +2409,8 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     return Status::success();
 }
 
-void append_founder_watchlists(
-    M6Runtime &runtime,
-    std::span<const M6FirmEntryCommand> entries) {
+void append_founder_watchlists(M6Runtime &runtime,
+                               std::span<const M6FirmEntryCommand> entries) {
     if (entries.empty()) {
         return;
     }
@@ -2170,24 +2463,20 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         const auto *account = state.postings.get(exit.account);
         if (account == nullptr || !account->open ||
             std::abs(account->balance.value()) > state.accounting_tolerance) {
-            std::terminate();
+            fail_lifecycle_commit("firm exit account");
         }
         if (account->balance.value() != 0.0) {
             core::SettlementTransaction transaction(state);
             const double residual = account->balance.value();
             const auto transfer_status =
                 residual > 0.0
-                    ? transaction.transfer(
-                          exit.account,
-                          state.institutions.rounding_residual_account,
-                          Money(residual))
-                    : transaction.transfer(
-                          state.institutions.rounding_residual_account,
-                          exit.account,
-                          Money(-residual));
-            if (!transfer_status.ok() ||
-                !transaction.commit_locally_validated().ok()) {
-                std::terminate();
+                    ? transaction.transfer(exit.account,
+                                           state.institutions.rounding_residual_account,
+                                           Money(residual))
+                    : transaction.transfer(state.institutions.rounding_residual_account,
+                                           exit.account, Money(-residual));
+            if (!transfer_status.ok() || !transaction.commit_locally_validated().ok()) {
+                fail_lifecycle_commit("firm exit residual");
             }
         }
         static_cast<void>(state.ownership.retire_asset(core::AssetKey{
@@ -2197,13 +2486,13 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         }));
         if (!state.postings.close_account(exit.account).ok() ||
             !state.firms.remove(exit.firm).ok()) {
-            std::terminate();
+            fail_lifecycle_commit("firm exit removal");
         }
     }
     for (const auto &entry : scratch.firm_entries_) {
         auto created = state.firms.create(entry.component);
         if (!created.ok() || created.get_if()->id != entry.firm) {
-            std::terminate();
+            fail_lifecycle_commit("firm entry identity");
         }
         auto account = state.postings.create_account(
             core::AccountKey{
@@ -2215,28 +2504,54 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
             },
             Money(0.0));
         if (!account.ok() || *account.get_if() != entry.account) {
-            std::terminate();
+            fail_lifecycle_commit("firm entry account");
         }
         state.firms.get(entry.firm)->primary_account = entry.account;
         core::SettlementTransaction transaction(state);
-        const auto transfer = transaction.transfer(
-            entry.founder_account, entry.account, Money(entry.startup_cash));
+        const auto transfer = transaction.transfer(entry.founder_account, entry.account,
+                                                   Money(entry.startup_cash));
         if (!transfer.ok()) {
-            std::terminate();
+            fail_lifecycle_commit("firm entry funding");
         }
-        if (!transaction.commit_locally_validated().ok()) {
-            std::terminate();
+        const auto settlement = transaction.commit_locally_validated();
+        if (!settlement.ok()) {
+            fail_lifecycle_commit("firm entry settlement", settlement);
+        }
+    }
+    for (const auto &entry : scratch.capital_firm_entries_) {
+        auto created = state.firms.create(entry.component);
+        if (!created.ok() || created.get_if()->id != entry.firm) {
+            fail_lifecycle_commit("capital firm entry identity");
+        }
+        auto account = state.postings.create_account(
+            core::AccountKey{
+                core::AccountKind::deposit,
+                state.economy,
+                core::OwnerId::firm(entry.firm),
+                state.currency,
+                entry.settlement_node,
+            },
+            Money(0.0));
+        if (!account.ok() || *account.get_if() != entry.account) {
+            fail_lifecycle_commit("capital firm entry account");
+        }
+        state.firms.get(entry.firm)->primary_account = entry.account;
+        core::SettlementTransaction transaction(state);
+        const auto transfer = transaction.transfer(entry.founder_account, entry.account,
+                                                   Money(entry.startup_cash));
+        if (!transfer.ok() || !transaction.commit_locally_validated().ok()) {
+            fail_lifecycle_commit("capital firm entry funding");
         }
     }
     append_founder_watchlists(runtime, scratch.firm_entries_);
     for (const auto &entry : scratch.bank_entries_) {
         auto created = state.banks.create(entry.component);
         if (!created.ok() || created.get_if()->id != entry.bank) {
-            std::terminate();
+            fail_lifecycle_commit("bank entry identity");
         }
         auto node = state.reserves.create_position(entry.bank, Money(0.0));
         if (!node.ok() || *node.get_if() != entry.settlement_node) {
-            std::terminate();
+            fail_lifecycle_commit("bank entry reserve node");
         }
         auto account = state.postings.create_account(
             core::AccountKey{
@@ -2248,7 +2563,7 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
             },
             Money(0.0), true);
         if (!account.ok() || *account.get_if() != entry.account) {
-            std::terminate();
+            fail_lifecycle_commit("bank entry account");
         }
         auto *bank = state.banks.get(entry.bank);
         bank->cash_account = entry.account;
@@ -2263,10 +2578,10 @@ void commit_lifecycle(core::RootState &state, M5Runtime &monetary_runtime,
         const auto transfer_status = transaction.transfer(
             entry.founder_account, entry.account, Money(entry.capital));
         if (!transfer_status.ok()) {
-            std::terminate();
+            fail_lifecycle_commit("bank entry funding");
         }
         if (!transaction.commit_locally_validated().ok()) {
-            std::terminate();
+            fail_lifecycle_commit("bank entry settlement");
         }
     }
     monetary_runtime.last_metrics.alive_banks = 0;
@@ -2299,8 +2614,7 @@ class M6Extension final : public M5TickExtension {
     Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
                         M4TickScratch &real, M5Runtime &monetary_runtime,
                         M5TickScratch &monetary, Tick tick, PhiloxRng &rng) override {
-        memory_efficient_staging_ =
-            options_.base.base.memory_efficient_staging;
+        memory_efficient_staging_ = options_.base.base.memory_efficient_staging;
         opening_security_version_ = runtime_.securities.version();
         if (memory_efficient_staging_) {
             scratch_.securities_ = std::move(runtime_.securities);
@@ -2311,6 +2625,17 @@ class M6Extension final : public M5TickExtension {
             scratch_.firms_ = runtime_.firms;
             scratch_.margin_loans_ = runtime_.margin_loans;
         }
+        if (real.firm_consumption_strata_.size() != real.firm_ids_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M6 consumption stratum projection is stale");
+        }
+        for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
+            const auto *record = firm_record(scratch_.firms_, real.firm_ids_[index]);
+            if (record != nullptr) {
+                real.firm_consumption_strata_[index] =
+                    record->stratum == ConsumptionStratum::luxury ? 1U : 0U;
+            }
+        }
         auto status = rebuild_margin_loan_index(state, monetary, scratch_);
         if (!status.ok()) {
             return status;
@@ -2319,6 +2644,7 @@ class M6Extension final : public M5TickExtension {
         scratch_.orders_.clear();
         scratch_.firm_exits_.clear();
         scratch_.firm_entries_.clear();
+        scratch_.capital_firm_entries_.clear();
         scratch_.bank_entries_.clear();
         scratch_.working_metrics_ = M6Metrics{};
         lifecycle_counter_ = runtime_.lifecycle_rng_counter;
@@ -2354,6 +2680,152 @@ class M6Extension final : public M5TickExtension {
         return Status::success();
     }
 
+    Status distribute_dividends(const core::RootState &state, M4Runtime &,
+                                M4TickScratch &real, M5Runtime &, M5TickScratch &, Tick,
+                                PhiloxRng &, double dividend_total,
+                                bool &handled) override {
+        handled = runtime_.rules.firm_equity;
+        if (!handled || dividend_total <= kEconomicEpsilon) {
+            return Status::success();
+        }
+        const auto clearing = state.institutions.clearing_account;
+        double distributed = 0.0;
+        double equal_distribution = 0.0;
+        for (std::size_t firm_index = 0; firm_index < real.firm_ids_.size();
+             ++firm_index) {
+            const double dividend = real.firm_work_[firm_index].dividends;
+            if (dividend <= kEconomicEpsilon) {
+                continue;
+            }
+            const auto equity =
+                firm_equity(scratch_.securities_, real.firm_ids_[firm_index]);
+            if (!equity.has_value()) {
+                equal_distribution += dividend;
+                continue;
+            }
+            const auto security = core::SecurityId::equity(*equity);
+            double active_units = 0.0;
+            for (const auto lot_id : scratch_.securities_.lots_for_security(security)) {
+                const auto *lot = scratch_.securities_.get(lot_id);
+                if (lot != nullptr && lot->active()) {
+                    active_units += lot->units;
+                }
+            }
+            if (active_units <= kEconomicEpsilon) {
+                equal_distribution += dividend;
+                continue;
+            }
+            double remaining_units = active_units;
+            double remaining_dividend = dividend;
+            for (const auto lot_id : scratch_.securities_.lots_for_security(security)) {
+                const auto *lot = scratch_.securities_.get(lot_id);
+                if (lot == nullptr || !lot->active()) {
+                    continue;
+                }
+                const auto recipient = owner_account(state, lot->holder);
+                if (!recipient.valid()) {
+                    return Status(ErrorCode::contract_violation,
+                                  "M6 dividend holder account is absent");
+                }
+                const double amount = lot->units + kEconomicEpsilon >= remaining_units
+                                          ? remaining_dividend
+                                          : dividend * lot->units / active_units;
+                const auto status = transfer(state, real, clearing, recipient, amount);
+                if (!status.ok()) {
+                    return Status(status.code(),
+                                  "M6 dividend distribution exceeds clearing cash");
+                }
+                if (lot->holder.kind() == core::OwnerKind::household) {
+                    const auto identity = static_cast<std::size_t>(lot->holder.value());
+                    const auto household_index =
+                        identity < real.household_dense_index_.size()
+                            ? real.household_dense_index_[identity]
+                            : std::numeric_limits<std::size_t>::max();
+                    if (household_index >= real.household_work_.size()) {
+                        return Status(ErrorCode::invariant_violation,
+                                      "M6 dividend household projection is stale");
+                    }
+                    real.household_work_[household_index].income_realized += amount;
+                }
+                remaining_units -= lot->units;
+                remaining_dividend -= amount;
+                distributed += amount;
+            }
+        }
+        equal_distribution +=
+            std::max(0.0, dividend_total - distributed - equal_distribution);
+        if (equal_distribution <= kEconomicEpsilon || real.household_ids_.empty()) {
+            return Status::success();
+        }
+        const double share =
+            equal_distribution / static_cast<double>(real.household_ids_.size());
+        for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
+            const auto *household = state.households.get(real.household_ids_[index]);
+            if (household == nullptr) {
+                return Status(ErrorCode::invariant_violation,
+                              "M6 dividend fallback household is absent");
+            }
+            const double amount =
+                index + 1U == real.household_ids_.size()
+                    ? equal_distribution - share * static_cast<double>(index)
+                    : share;
+            const auto status =
+                transfer(state, real, clearing, household->primary_account, amount);
+            if (!status.ok()) {
+                return Status(status.code(),
+                              "M6 dividend fallback exceeds clearing cash");
+            }
+            real.household_work_[index].income_realized += amount;
+        }
+        return Status::success();
+    }
+
+    Status prepare_household_net_wealth(const core::RootState &state,
+                                        M4Runtime &real_runtime, M4TickScratch &real,
+                                        M5Runtime &monetary_runtime,
+                                        M5TickScratch &monetary, Tick tick,
+                                        PhiloxRng &rng,
+                                        std::span<double> net_wealth) override {
+        if (net_wealth.size() != real.household_ids_.size()) {
+            return Status(ErrorCode::internal_error,
+                          "M6 household wealth projection is stale");
+        }
+        for (const auto &lot : scratch_.securities_.lots()) {
+            if (!lot.active() || lot.holder.kind() != core::OwnerKind::household) {
+                continue;
+            }
+            const auto identity = static_cast<std::size_t>(lot.holder.value());
+            const auto household_index = identity < real.household_dense_index_.size()
+                                             ? real.household_dense_index_[identity]
+                                             : std::numeric_limits<std::size_t>::max();
+            if (household_index >= net_wealth.size()) {
+                return Status(ErrorCode::invariant_violation,
+                              "M6 wealth holder projection is stale");
+            }
+            double market_value = 0.0;
+            if (lot.security.kind() == core::SecurityKind::equity) {
+                const auto *contract =
+                    scratch_.securities_.get(EquityId(lot.security.value()));
+                if (contract != nullptr && contract->active) {
+                    market_value = lot.units * contract->price.value();
+                }
+            } else {
+                const auto *contract =
+                    scratch_.securities_.get(BondId(lot.security.value()));
+                if (contract != nullptr && contract->active) {
+                    market_value = lot.units;
+                }
+            }
+            net_wealth[household_index] += market_value;
+        }
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->prepare_household_net_wealth(
+            state, real_runtime, real, monetary_runtime, monetary, runtime_, scratch_,
+            tick, rng, net_wealth);
+    }
+
     Status after_settlement(const core::RootState &, M4Runtime &, M4TickScratch &,
                             M5Runtime &, M5TickScratch &, Tick, PhiloxRng &) override {
         return Status::success();
@@ -2378,8 +2850,7 @@ class M6Extension final : public M5TickExtension {
                                         options_.base.credit_supply_multiplier);
         }
         if (runtime_.rules.bank_equity && runtime_.rules.bank_equity_trading) {
-            generate_bank_equity_orders(state, real, runtime_, scratch_, tick,
-                                        ordinal);
+            generate_bank_equity_orders(state, real, runtime_, scratch_, tick, ordinal);
         }
         status = clear_equity_orders(state, real, monetary, runtime_, scratch_);
         if (!status.ok()) {
@@ -2394,8 +2865,8 @@ class M6Extension final : public M5TickExtension {
             return status;
         }
         security_batch_open_ = true;
-        status =
-            run_firm_exits(state, real, monetary, runtime_, scratch_, options_);
+        status = run_firm_exits(state, real, monetary, runtime_, scratch_, options_,
+                                lifecycle_counter_);
         return status.ok() ? status : finish_security_batch(status);
     }
 
@@ -2408,17 +2879,6 @@ class M6Extension final : public M5TickExtension {
             return finish_security_batch(status);
         }
         run_sector_switching(state, real, runtime_, scratch_, lifecycle_counter_);
-        status =
-            stage_firm_entries(state, real, runtime_, scratch_, lifecycle_counter_);
-        if (!status.ok()) {
-            return finish_security_batch(status);
-        }
-        status =
-            stage_bank_entries(state, real, monetary_runtime, monetary, runtime_,
-                               scratch_, lifecycle_counter_, options_.force_bank_entry);
-        if (!status.ok()) {
-            return finish_security_batch(status);
-        }
         status = run_bond_issuance(state, real, monetary, runtime_, scratch_, tick);
         if (!status.ok()) {
             return finish_security_batch(status);
@@ -2434,12 +2894,38 @@ class M6Extension final : public M5TickExtension {
         if (!status.ok()) {
             return status;
         }
-        measure_m6(state, monetary, runtime_, scratch_, tick);
-        if (extension_ == nullptr) {
-            return Status::success();
+        if (extension_ != nullptr) {
+            status = extension_->close_day(state, real_runtime, real, monetary_runtime,
+                                           monetary, runtime_, scratch_, tick, rng);
+            if (!status.ok()) {
+                return status;
+            }
         }
-        return extension_->close_day(state, real_runtime, real, monetary_runtime,
-                                     monetary, runtime_, scratch_, tick, rng);
+        // Downstream population, energy, and housing stages can spend household
+        // and firm cash. Choose every founder after those stages so the capital
+        // checked here is still available when lifecycle commands commit.
+        status =
+            stage_firm_entries(state, real, runtime_, scratch_, lifecycle_counter_);
+        if (!status.ok()) {
+            return status;
+        }
+        stage_capital_firm_entry(state, real, runtime_, scratch_, lifecycle_counter_);
+        status =
+            stage_bank_entries(state, real, monetary_runtime, monetary, runtime_,
+                               scratch_, lifecycle_counter_, options_.force_bank_entry);
+        if (!status.ok()) {
+            return status;
+        }
+        if (extension_ != nullptr) {
+            status = extension_->after_financial_lifecycle(
+                state, real_runtime, real, monetary_runtime, monetary, runtime_,
+                scratch_, tick, rng);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        measure_m6(state, monetary, runtime_, scratch_, tick);
+        return Status::success();
     }
 
     Status validate(const core::RootState &state, const M4Runtime &real_runtime,
@@ -2613,8 +3099,7 @@ Status validate_m6_policy(const M6PolicyState &policy) noexcept {
         policy.bank_bond_appetite > 1.0 || policy.bank_bond_duration_limit < 0.0 ||
         policy.margin_ltv < 0.0 || policy.margin_ltv >= 1.0 ||
         policy.margin_max < 1.0 || policy.bank_minimum_capital < 0.0 ||
-        policy.bankrupt_persistence == 0U ||
-        policy.bankrupt_persistence > 3650U ||
+        policy.bankrupt_persistence == 0U || policy.bankrupt_persistence > 3650U ||
         policy.regulatory_capital_haircut < 0.0 ||
         policy.regulatory_capital_haircut > 1.0 ||
         policy.regulatory_inventory_haircut < 0.0 ||
@@ -2649,6 +3134,10 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.entry_beta,
         spec.rules.startup_deposits,
         spec.rules.startup_capital,
+        spec.rules.subscale_viability_workers,
+        spec.rules.subscale_exit_hazard,
+        spec.rules.k_entry_demand,
+        spec.rules.k_entry_hazard,
         spec.rules.switch_return_gap,
         spec.rules.switch_hazard,
         spec.rules.switch_retool_loss,
@@ -2677,13 +3166,17 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.inventory_haircut > 1.0 || spec.rules.bankrupt_persistence == 0 ||
         spec.rules.shell_exit_days == 0 || spec.rules.entry_hurdle < 0.0 ||
         spec.rules.entry_beta < 0.0 || spec.rules.startup_deposits < 0.0 ||
-        spec.rules.startup_capital < 0.0 || spec.rules.switch_return_gap < 0.0 ||
-        spec.rules.switch_pressure_days == 0 || spec.rules.switch_hazard < 0.0 ||
-        spec.rules.switch_hazard > 1.0 || spec.rules.switch_retool_loss < 0.0 ||
-        spec.rules.switch_retool_loss > 1.0 || spec.rules.bank_shares <= 0.0 ||
-        spec.rules.bank_equity_lambda < 0.0 || spec.rules.bank_equity_lambda > 1.0 ||
-        spec.rules.bank_equity_target < 0.0 || spec.rules.bank_equity_target > 1.0 ||
-        spec.rules.bank_entry_beta < 0.0 ||
+        spec.rules.startup_capital < 0.0 ||
+        spec.rules.subscale_viability_workers <= 0.0 ||
+        spec.rules.subscale_grace_days == 0U || spec.rules.subscale_exit_hazard < 0.0 ||
+        spec.rules.subscale_exit_hazard > 1.0 || spec.rules.k_entry_demand <= 0.0 ||
+        spec.rules.k_entry_hazard < 0.0 || spec.rules.k_entry_hazard > 1.0 ||
+        spec.rules.switch_return_gap < 0.0 || spec.rules.switch_pressure_days == 0 ||
+        spec.rules.switch_hazard < 0.0 || spec.rules.switch_hazard > 1.0 ||
+        spec.rules.switch_retool_loss < 0.0 || spec.rules.switch_retool_loss > 1.0 ||
+        spec.rules.bank_shares <= 0.0 || spec.rules.bank_equity_lambda < 0.0 ||
+        spec.rules.bank_equity_lambda > 1.0 || spec.rules.bank_equity_target < 0.0 ||
+        spec.rules.bank_equity_target > 1.0 || spec.rules.bank_entry_beta < 0.0 ||
         (spec.rules.margin_credit && !spec.rules.firm_equity) ||
         (spec.rules.equity_finance && !spec.rules.firm_equity) ||
         (spec.rules.sector_switching && !spec.rules.consumption_strata)) {
@@ -2762,9 +3255,8 @@ Status validate_m6_state_fast(const core::RootState &state,
                 return Status(ErrorCode::invariant_violation,
                               "M6 bank security holder reference is invalid");
             default:
-                return Status(
-                    ErrorCode::invariant_violation,
-                    "M6 institutional security holder reference is invalid");
+                return Status(ErrorCode::invariant_violation,
+                              "M6 institutional security holder reference is invalid");
             }
         }
     }
@@ -2837,8 +3329,7 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     runtime.rules = spec.rules;
     runtime.rules.bankrupt_persistence = runtime.policy.bankrupt_persistence;
     runtime.rules.capital_haircut = runtime.policy.regulatory_capital_haircut;
-    runtime.rules.inventory_haircut =
-        runtime.policy.regulatory_inventory_haircut;
+    runtime.rules.inventory_haircut = runtime.policy.regulatory_inventory_haircut;
     runtime.replacement_capital_price =
         spec.monetary_economy.real_economy.rules.initial_capital_price;
     runtime.firms.resize(
@@ -3066,6 +3557,7 @@ void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runti
         static_cast<std::size_t>(state.firms.allocator_state().next_id));
     firm_exits_.reserve(state.firms.alive_count());
     firm_entries_.reserve(runtime.rules.entry_max);
+    capital_firm_entries_.reserve(1);
     bank_entries_.reserve(runtime.rules.bank_entry_max);
 }
 
@@ -3092,6 +3584,7 @@ std::uint64_t M6TickScratch::capacity_signature() const noexcept {
         firm_return_.capacity(),
         firm_exits_.capacity(),
         firm_entries_.capacity(),
+        capital_firm_entries_.capacity(),
         bank_entries_.capacity(),
     };
     for (const auto capacity : capacities) {
@@ -3114,8 +3607,8 @@ advance_m6_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
         };
     }
     if (options.base.base.validate_preconditions &&
-        !validate_m6_state_fast(state, real_economy_runtime, monetary_runtime,
-                                runtime, tick)
+        !validate_m6_state_fast(state, real_economy_runtime, monetary_runtime, runtime,
+                                tick)
              .ok()) {
         return Status(ErrorCode::invariant_violation,
                       "M6 cannot advance an invalid state");

@@ -178,6 +178,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.deficit_unemployment_reference);
     writer.f64(rules.deficit_unemployment_cap);
     writer.f64(rules.government_investment_share);
+    writer.f64(rules.public_capital_gamma);
+    writer.f64(rules.public_capital_depreciation);
     writer.f64(rules.unemployment_benefit_replacement);
     writer.f64(rules.income_allowance);
     writer.f64(rules.wealth_allowance);
@@ -197,11 +199,15 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.initial_wage);
     writer.f64(rules.initial_markup);
     writer.f64(rules.initial_expected_demand);
+    writer.u8(rules.capital_rationed_signal ? 1U : 0U);
+    writer.u8(rules.consumption_rationed_signal ? 1U : 0U);
     writer.u32(rules.market_sample_size);
 }
 
 [[nodiscard]] bool read_rules(Reader& reader, M4Rules& rules) noexcept {
     std::uint8_t job_guarantee = 0;
+    std::uint8_t capital_rationed_signal = 0;
+    std::uint8_t consumption_rationed_signal = 0;
     std::uint8_t necessity_tax_present = 0;
     std::uint8_t luxury_tax_present = 0;
     double necessity_tax = 0.0;
@@ -241,6 +247,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.deficit_unemployment_reference)
         && reader.f64(rules.deficit_unemployment_cap)
         && reader.f64(rules.government_investment_share)
+        && reader.f64(rules.public_capital_gamma)
+        && reader.f64(rules.public_capital_depreciation)
         && reader.f64(rules.unemployment_benefit_replacement)
         && reader.f64(rules.income_allowance)
         && reader.f64(rules.wealth_allowance)
@@ -260,15 +268,22 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.initial_wage)
         && reader.f64(rules.initial_markup)
         && reader.f64(rules.initial_expected_demand)
+        && reader.u8(capital_rationed_signal)
+        && reader.u8(consumption_rationed_signal)
         && reader.u32(rules.market_sample_size);
     rules.job_guarantee = job_guarantee != 0;
+    rules.capital_rationed_signal = capital_rationed_signal != 0;
+    rules.consumption_rationed_signal =
+        consumption_rationed_signal != 0;
     rules.necessity_consumption_tax_rate =
         necessity_tax_present != 0U ? std::optional<double>(necessity_tax)
                                     : std::nullopt;
     rules.luxury_consumption_tax_rate =
         luxury_tax_present != 0U ? std::optional<double>(luxury_tax)
                                  : std::nullopt;
-    return success && job_guarantee <= 1U;
+    return success && job_guarantee <= 1U &&
+           capital_rationed_signal <= 1U &&
+           consumption_rationed_signal <= 1U;
 }
 
 void write_metrics(Writer& writer, const M4Metrics& metrics) {
@@ -284,6 +299,9 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.wages_paid);
     writer.f64(metrics.firm_profit);
     writer.f64(metrics.tax_total);
+    writer.f64(metrics.tax_profit);
+    writer.f64(metrics.tax_income);
+    writer.f64(metrics.tax_consumption);
     writer.f64(metrics.government_spending);
     writer.f64(metrics.government_deficit);
     writer.f64(metrics.public_capital);
@@ -321,6 +339,9 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.wages_paid)
         && reader.f64(metrics.firm_profit)
         && reader.f64(metrics.tax_total)
+        && reader.f64(metrics.tax_profit)
+        && reader.f64(metrics.tax_income)
+        && reader.f64(metrics.tax_consumption)
         && reader.f64(metrics.government_spending)
         && reader.f64(metrics.government_deficit)
         && reader.f64(metrics.public_capital)
@@ -466,12 +487,13 @@ Result<std::vector<std::uint8_t>> save_m4_checkpoint(
     const M4Runtime& runtime,
     Tick tick
 ) {
-    if (!core::run_invariants(root).ok()
-        || !validate_m4_state(root, runtime, tick).ok()) {
-        return Status(
-            ErrorCode::invariant_violation,
-            "M4 checkpoint root violates an invariant"
-        );
+    const auto invariant_report = core::run_invariants(root);
+    if (!invariant_report.ok()) {
+        return invariant_report.status;
+    }
+    const auto state_status = validate_m4_state(root, runtime, tick);
+    if (!state_status.ok()) {
+        return state_status;
     }
     auto base = core::save_checkpoint(root);
     if (!base.ok()) {
@@ -494,6 +516,7 @@ Result<std::vector<std::uint8_t>> save_m4_checkpoint(
     }
     writer.f64(runtime.technology_index);
     writer.f64(runtime.public_capital);
+    writer.f64(runtime.public_capital_reference);
     writer.f64(runtime.previous_nominal_output);
     write_rules(writer, runtime.rules);
     write_metrics(writer, runtime.last_metrics);
@@ -588,6 +611,7 @@ Result<M4Checkpoint> load_m4_checkpoint(
     }
     if (!reader.f64(runtime.technology_index)
         || !reader.f64(runtime.public_capital)
+        || !reader.f64(runtime.public_capital_reference)
         || !reader.f64(runtime.previous_nominal_output)
         || !read_rules(reader, runtime.rules)
         || !read_metrics(reader, runtime.last_metrics)) {

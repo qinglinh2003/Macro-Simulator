@@ -1,5 +1,7 @@
 #include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <utility>
 
@@ -13,6 +15,14 @@ using namespace macro_sim;
 using namespace macro_sim::control;
 using namespace macro_sim::desktop;
 using namespace macro_sim::simulation;
+
+void assert_close(double left, double right, double tolerance = 1.0e-10) {
+    if (std::abs(left - right) > tolerance) {
+        std::cerr << "assert_close failed: left=" << left << " right=" << right
+                  << " tolerance=" << tolerance << "\n";
+    }
+    assert(std::abs(left - right) <= tolerance);
+}
 
 [[nodiscard]] std::string new_game_document(std::string_view scenario = "sandbox") {
     return std::string(R"JSON({
@@ -86,26 +96,140 @@ void test_default_is_complete_latest_world() {
         const auto &population = economy.domestic_economy;
         const auto &financial = population.financial_economy;
         const auto &monetary = financial.monetary_economy;
+        const auto &real = monetary.real_economy;
         assert(population.rules.fertility);
         assert(population.rules.mortality);
         assert(population.rules.persistent_labor);
         assert(population.rules.frictional_search);
         assert(population.rules.family_transfers);
+        assert(real.stochastic);
         assert(financial.rules.bonds);
         assert(financial.rules.firm_equity);
         assert(financial.rules.bank_equity);
+        assert(financial.rules.firm_subscale_exit);
+        assert(financial.rules.capital_firm_entry);
+        assert(std::abs(monetary.rules.firm_amortization - 1.0 / (365.0 * 2.5)) <
+               1.0e-12);
+        assert(std::abs(monetary.rules.household_amortization - 1.0 / (365.0 * 5.0)) <
+               1.0e-12);
+        assert_close(monetary.initial_policy_rate, 1.34e-4);
+        assert_close(monetary.policy.inflation_target, 5.4e-5);
+        assert_close(monetary.policy.taylor_inflation, 1.20);
+        assert_close(monetary.policy.taylor_unemployment, 0.0014);
+        assert_close(monetary.policy.rate_inertia, 0.9924);
+        assert_close(monetary.policy.neutral_rate, 1.34e-4);
+        assert_close(monetary.policy.maximum_policy_rate, 5.0e-4);
+        assert_close(monetary.policy.inflation_sensor_lambda, 0.0019);
+        assert(monetary.policy.logarithmic_inflation);
+        assert_close(monetary.policy.reserve_gap_close, 0.094);
+        assert(monetary.policy.reserve_target_indexes_deposits);
+        assert_close(monetary.rules.interbank_tightness, 0.0013698630136986301);
+        assert_close(monetary.rules.run_fear_persistence, 0.952);
+        assert_close(financial.policy.bond_coupon_rate, 1.08e-4);
+        assert(financial.policy.bankrupt_persistence == 548U);
+        assert(financial.rules.bankrupt_persistence == 548U);
+        assert(financial.rules.shell_exit_days == 365U);
+        assert_close(financial.rules.entry_hurdle, 1.34e-4);
+        assert_close(financial.rules.equity_price_adjustment, 0.13);
+        assert_close(financial.rules.equity_trend_lambda, 0.023);
+        assert_close(financial.rules.residual_income_lambda, 0.0019);
+        assert_close(financial.rules.portfolio_adjustment, 0.048);
+        assert_close(financial.rules.bank_equity_lambda, 0.0019);
+        assert_close(real.rules.wage_calvo_probability, 0.011);
+        assert_close(real.rules.price_calvo_probability, 0.0037);
+        assert_close(real.rules.public_capital_gamma, 0.10);
+        assert(economy.housing_rules.builder_land_fee_credit);
+        assert_close(economy.housing_rules.initial_builder_cash_buffer, 25.0);
+        assert_close(economy.housing_rules.builder_demand_seed, 0.0);
+        assert_close(economy.housing_rules.ask_floor_annual_wage_share, 2.0);
+        assert_close(economy.housing_rules.ask_decay, 0.005);
+        assert_close(financial.rules.switch_retool_loss, 0.05);
         assert(monetary.rules.interbank);
         assert(monetary.rules.household_credit);
         assert(economy.energy_rules.enabled);
         assert(economy.energy_rules.household_energy);
+        assert_close(economy.energy_rules.initial_price, 1.20);
+        assert_close(economy.energy_rules.producer_inventory_ratio, 14.0);
+        assert_close(economy.energy_rules.household_need, 0.07 / 1.20);
+        assert_close(economy.energy_rules.downstream_coverage_days, 14.0);
+        assert_close(economy.energy_rules.downstream_gap_close, 0.02);
         assert(economy.housing_rules.enabled);
         assert(economy.housing_rules.resale_market);
         assert(economy.housing_rules.mortgages);
         assert(economy.housing_rules.rentals);
         assert(economy.housing_rules.construction);
+        assert_close(real.rules.income_propensity, 0.97);
+        assert_close(real.rules.total_factor_productivity, 0.17033823412749668);
+        assert_close(real.rules.capital_output_ratio, 912.5);
+        assert_close(real.rules.demand_adjustment, 0.0038);
+        assert_close(real.rules.initial_consumption_capital, 7300.0);
+        assert_close(real.rules.initial_price, 0.80);
+        assert(real.rules.capital_rationed_signal);
+        assert(!real.rules.consumption_rationed_signal);
+        assert_close(monetary.policy.government_consumption_share, 0.20);
+        assert_close(monetary.policy.government_deficit_target, 0.03);
+        assert_close(monetary.policy.income_tax_rate, 0.25);
+        assert(monetary.policy.bank_capital_constraint);
+        assert(monetary.policy.unified_bank_rwa);
+        assert(monetary.policy.state_resolution_backstop);
+        assert(monetary.rules.opening_capital_per_bank > 0.0);
+        assert_close(population.policy.pension_replacement, 0.20);
     }
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
+    M9AdvanceOptions baseline_options;
+    baseline_options.worker_count = 8U;
+    auto baseline = world.get_if()->advance(1825U, baseline_options);
+    if (!baseline.ok()) {
+        std::cerr << "native default baseline failed: " << baseline.status().message()
+                  << "\n";
+    }
+    assert(baseline.ok());
+    assert(baseline.get_if()->advanced_ticks == 1825U);
+    assert(baseline.get_if()->metrics.domestic.size() == 3U);
+    for (const auto &metrics : baseline.get_if()->metrics.domestic) {
+        assert(std::isfinite(metrics.economy.economy.economy.economy.real_output));
+        assert(metrics.economy.economy.economy.economy.real_output > 0.0);
+        assert(std::isfinite(metrics.economy.unemployment_rate));
+        assert(metrics.economy.unemployment_rate >= 0.0);
+        assert(metrics.economy.unemployment_rate < 0.20);
+        assert(std::abs(metrics.economy.economy.economy.economy.price_index - 0.80) >
+               1.0e-3);
+    }
+    for (std::size_t economy_index = 0U;
+         economy_index < world.get_if()->economy_count(); ++economy_index) {
+        const auto *root = world.get_if()->economy_root(EconomyId(economy_index));
+        assert(root != nullptr);
+        root->banks.for_each_alive([root, economy_index](
+                                       BankId id,
+                                       const core::BankComponent &bank) {
+            if (!bank.alive) {
+                return;
+            }
+            const auto reserve = root->reserves.balance(bank.settlement_node);
+            assert(reserve.ok());
+            if (reserve.get_if()->value() < -1.0e-9) {
+                std::cerr << "alive bank has negative closing reserves: bank="
+                          << id.value() << " economy=" << economy_index
+                          << " reserve=" << reserve.get_if()->value() << "\n";
+                root->banks.for_each_alive(
+                    [root](BankId candidate,
+                           const core::BankComponent &candidate_bank) {
+                        const auto candidate_reserve =
+                            root->reserves.balance(candidate_bank.settlement_node);
+                        std::cerr << "  bank=" << candidate.value()
+                                  << " alive=" << candidate_bank.alive
+                                  << " reserve="
+                                  << (candidate_reserve.ok()
+                                          ? candidate_reserve.get_if()->value()
+                                          : std::numeric_limits<double>::quiet_NaN())
+                                  << "\n";
+                    });
+            }
+            assert(reserve.get_if()->value() >= -1.0e-9);
+        });
+    }
+    assert(std::isfinite(baseline.get_if()->metrics.world_nfa));
     auto engine = EngineSession::create(std::move(*world.get_if()), 256U);
     assert(engine.ok());
     auto session = M11ControlledSession::create(std::move(*engine.get_if()),
@@ -136,7 +260,15 @@ void test_profiles_counts_policy_and_calendar_are_native() {
     assert(real.settlement_banks == 3U);
     assert(real.rules.linear_productivity == 1.2);
     assert(real.rules.capital_productivity == 2.88);
+    assert_close(real.rules.initial_firm_money, 200.0 * 7.6 / 18.0);
+    assert_close(real.rules.initial_consumption_capital, 7300.0 * 7.6 / 18.0);
+    assert_close(real.rules.initial_expected_demand, 6.25 * 7.6 / 18.0);
+    assert_close(real.rules.initial_consumption_inventory, 87.5 * 7.6 / 18.0);
+    assert_close(real.rules.initial_capital_inventory, 87.5 * 7.6 / 18.0);
     assert(first.energy_rules.producer_productivity == 1.05);
+    assert_close(first.energy_rules.initial_producer_cash, 20.0 * 0.95 / 3.0);
+    assert_close(first.housing_rules.initial_builder_cash_buffer, 25.0 * 2.375 / 4.0);
+    assert(monetary.rules.opening_capital_per_bank > 0.0);
     assert(game.get_if()->initial_policy_actions.size() == 1U);
     assert(game.get_if()->controller.assignments.size() == 6U);
 

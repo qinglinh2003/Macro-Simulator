@@ -56,9 +56,7 @@ def test_policy_schema_distinguishes_integer_nullable_and_dynamic_reference_type
     assert treasury["tax_necessity_rate"]["value_kind"] == "number"
     assert treasury["tax_necessity_rate"]["nullable"] is True
     assert treasury["gov_consumption_share"]["read_point"]
-    assert treasury["gov_consumption_share"]["shadowed_by"] == [
-        "gov_deficit_target>0",
-    ]
+    assert treasury["gov_consumption_share"]["shadowed_by"] == []
     assert "state_notes" in treasury["gov_consumption_share"]
     assert treasury["gov_consumption_share"]["player_help"] == {
         "meaning": POLICY_EXPLANATIONS["gov_consumption_share"].meaning,

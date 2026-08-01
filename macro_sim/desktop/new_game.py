@@ -63,6 +63,33 @@ PLAYABLE_FEATURE_OVERRIDES: dict[str, Any] = {
     "capital_service_min_utilization": 0.1,
     "cpi_item_link_cap": 5.0,
     "a_K": 2.4,
+    # Households consume against a smoothed permanent-income estimate.  A high
+    # propensity is therefore appropriate on the daily clock; 0.90 leaves a
+    # persistent aggregate-demand leakage and 13-15% no-shock unemployment.
+    "alpha1": 0.97,
+    "p_firm0": 0.80,
+    "p_kfirm0": 0.80,
+    # Energy is an intermediate necessity with a different unit technology.
+    # Its cost-consistent opening price is (1 + markup) * wage / productivity,
+    # not the normalized final-goods price.
+    "p_efirm0": 1.20,
+    # Two weeks of downstream energy cover with a gradual replenishment rule
+    # absorbs ordinary delivery noise without turning every stock drawdown into
+    # a month-long hoarding wave.
+    "energy_coverage_ticks": 14.0,
+    "energy_gap_close": 0.02,
+    # Genesis must start near the flow rate the available workforce can
+    # sustain.  The historical ten-unit expectation scales to roughly 0.8
+    # units per person and creates an artificial full-employment inventory
+    # boom followed by mass suspensions.  At 6.25 units the aggregate opening
+    # plan is close to the observed no-shock output rate.
+    "demand_e_firm0": 6.25,
+    # Inventory coverage is a stock measured in days.  Seed the same fourteen
+    # days used by the production rule so firms do not spend their first
+    # quarter manufacturing a missing genesis stock.  Both values scale with
+    # representative-firm size in the native bridge.
+    "inv_firm0": 87.5,
+    "inv_kfirm0": 87.5,
     # Population dynamics, macro feedback and individual stratification.
     "demographics_enabled": True,
     "demographic_lifecycle_consumption": True,
@@ -81,8 +108,23 @@ PLAYABLE_FEATURE_OVERRIDES: dict[str, Any] = {
     "unified_bank_rwa": True,
     "housing_rental_enabled": True,
     "housing_construction_enabled": True,
+    "builder_land_fee_credit": True,
+    # A balanced genesis already owns one dwelling per household.  Seeding
+    # construction demand in that state creates fractional projects and debt
+    # without a corresponding buyer.  New building should start from uncovered
+    # household demand instead.
+    "builder_demand_seed": 0.0,
+    # Listings can become cheaper than replacement cost, but an inhabited
+    # economy should not drive the representative dwelling price toward zero
+    # merely because an old listing remains unsold for several years.
+    "housing_ask_floor_wage_share": 2.0,
+    # A 3% monthly markdown compounds to almost 31% per year and turns normal
+    # listing duration into a synthetic housing crash.  Half a percent per
+    # session preserves price discovery without the mechanical ratchet.
+    "housing_ask_decay": 0.005,
     "rental_vacancy_deadband": 0.15,
     "rental_rent_floor_wage_share": 0.02,
+    "rental_eviction_arrears": 90,
     "housing_demand_step": 0.03,
     "housing_leave_elasticity": 1.0,
     "housing_fertility_elasticity": 0.5,
@@ -98,9 +140,17 @@ PLAYABLE_FEATURE_OVERRIDES: dict[str, Any] = {
     "labor_person_efficiency": True,
     "labor_participation": True,
     "capital_rationed_signal": True,
-    "consumption_rationed_signal": True,
+    # Keep revealed consumer rationing available as an experiment, but do not
+    # enable it in the stable baseline.  With daily ordering, transient genesis
+    # stockouts otherwise become a persistent demand signal and create a
+    # self-induced boom-bust cycle in an economy without an external shock.
+    "consumption_rationed_signal": False,
     "firm_subscale_exit": True,
     "capital_firm_entry": True,
+    # Daily-clock principal schedules: roughly 2.5-year business credit and
+    # 5-year unsecured household credit.
+    "amort": 1.0 / (365.0 * 2.5),
+    "hh_amort": 1.0 / (365.0 * 5.0),
     # Energy, household necessity demand and demographic coupling.
     "energy_enabled": True,
     "energy_household": True,
@@ -111,11 +161,20 @@ PLAYABLE_FEATURE_OVERRIDES: dict[str, Any] = {
     "deprivation_gauges": True,
     "family_transfers": True,
     "sector_switching": True,
+    # Product-line conversion is structural reallocation, not wholesale
+    # destruction of an otherwise serviceable plant.  The historical 30% loss
+    # turned a normal Engel-curve transition into a multi-year investment shock
+    # at large population scale.
+    "switch_retool_loss": 0.05,
     # Technology is live rather than a frozen object.
     "tfp_drift_rate": 0.02,
     # Long-run securities hygiene and the working-poor safety-net closure.
     "bond_maturity_bucket": 30,
-    "benefit_income_floor": 0.6,
+    "gov_consumption_share": 0.20,
+    "tax_income_rate": 0.25,
+    "pension_replacement": 0.20,
+    "benefit_income_floor": 0.0,
+    "job_guarantee": False,
 }
 
 PERFORMANCE_PRESETS: dict[str, dict[str, int]] = {
@@ -384,14 +443,20 @@ class CountrySpec:
                 normalized[key] = raw
             elif key == "demographics_population":
                 normalized[key] = _strict_int(
-                    f"countries[{index}].overrides.{key}", raw, low=0, high=100_000
+                    f"countries[{index}].overrides.{key}",
+                    raw,
+                    low=0,
+                    high=10_000_000,
                 )
             elif key in {
                 "n_households", "n_firms_c", "n_firms_k",
                 "n_firms_e", "n_builders", "n_banks",
             }:
                 normalized[key] = _strict_int(
-                    f"countries[{index}].overrides.{key}", raw, low=1, high=100_000
+                    f"countries[{index}].overrides.{key}",
+                    raw,
+                    low=1,
+                    high=10_000_000,
                 )
             else:
                 normalized[key] = _finite(
@@ -448,7 +513,7 @@ class NewGameSpec:
                 "fx_trade_cap": 0.15,
                 "capital_mobility": 1.0,
                 "capital_adjust": 0.2,
-                "migration_rate": 0.02,
+                "migration_rate": 0.0005,
                 "migration_max_share": 0.25,
                 "remittance_share": 0.2,
                 "wage_smoothing": 0.02,

@@ -45,22 +45,22 @@ func _run() -> void:
 	assert(menu._effective_structure_value(
 		country, "demographics_population") == 150)
 	assert(menu._effective_structure_value(country, "n_firms_c") == 30)
-	assert(menu._effective_structure_value(country, "n_banks") == 2)
+	assert(menu._effective_structure_value(country, "n_banks") == 8)
 
 	menu._profile_mapping_enabled = false
 	menu._select_profile(country, "petrostate")
 	assert(is_equal_approx(
 		float(menu._effective_structure_value(country, "a")), 0.85))
 	assert(menu._effective_structure_value(
-		country, "demographics_population") == 64)
-	assert(menu._effective_structure_value(country, "n_firms_c") == 10)
+		country, "demographics_population") == 80_000)
+	assert(menu._effective_structure_value(country, "n_firms_c") == 1_200)
 
 	menu._toggle_population_mapping()
 	assert(not menu._population_mapping_enabled)
 	menu._select_profile(country, "developing")
 	assert(menu._effective_structure_value(
-		country, "demographics_population") == 120)
-	assert(menu._effective_structure_value(country, "n_firms_c") == 12)
+		country, "demographics_population") == 150_000)
+	assert(menu._effective_structure_value(country, "n_firms_c") == 1_500)
 
 	menu._select_profile(country, "symmetric")
 	menu._toggle_population_mapping()
@@ -68,9 +68,9 @@ func _run() -> void:
 	for population in range(81, 89):
 		menu._set_structure_number(
 			country, "demographics_population", population)
-	assert(menu._effective_structure_value(country, "n_firms_c") == 13)
+	assert(menu._effective_structure_value(country, "n_firms_c") == 2)
 	menu._set_structure_number(country, "demographics_population", 160)
-	assert(menu._effective_structure_value(country, "n_firms_c") == 24)
+	assert(menu._effective_structure_value(country, "n_firms_c") == 2)
 	menu._set_structure_number(country, "n_firms_c", 30)
 	menu._set_structure_number(country, "demographics_population", 80)
 	assert(menu._effective_structure_value(country, "n_firms_c") == 15)

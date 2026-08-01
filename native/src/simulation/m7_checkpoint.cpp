@@ -22,50 +22,35 @@ constexpr std::array<std::uint8_t, 8> kMagic{
     'M', 'S', 'M', '7', 'C', 'P', '0', '1',
 };
 constexpr std::size_t kDigestBytes = 32;
-constexpr std::size_t kMaximumCheckpointBytes =
-    512U * 1024U * 1024U;
+constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
 
-void append_u32(std::vector<std::uint8_t> &bytes,
-                std::uint32_t value) {
+void append_u32(std::vector<std::uint8_t> &bytes, std::uint32_t value) {
     for (int shift = 24; shift >= 0; shift -= 8) {
-        bytes.push_back(
-            static_cast<std::uint8_t>(value >> shift)
-        );
+        bytes.push_back(static_cast<std::uint8_t>(value >> shift));
     }
 }
 
-void append_u64(std::vector<std::uint8_t> &bytes,
-                std::uint64_t value) {
+void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     for (int shift = 56; shift >= 0; shift -= 8) {
-        bytes.push_back(
-            static_cast<std::uint8_t>(value >> shift)
-        );
+        bytes.push_back(static_cast<std::uint8_t>(value >> shift));
     }
 }
 
-[[nodiscard]] bool read_u32(
-    std::span<const std::uint8_t> bytes, std::size_t &position,
-    std::uint32_t &value
-) noexcept {
-    if (position > bytes.size() ||
-        bytes.size() - position < 4U) {
+[[nodiscard]] bool read_u32(std::span<const std::uint8_t> bytes, std::size_t &position,
+                            std::uint32_t &value) noexcept {
+    if (position > bytes.size() || bytes.size() - position < 4U) {
         return false;
     }
     value = 0;
     for (int index = 0; index < 4; ++index) {
-        value = static_cast<std::uint32_t>(
-            (value << 8U) | bytes[position++]
-        );
+        value = static_cast<std::uint32_t>((value << 8U) | bytes[position++]);
     }
     return true;
 }
 
-[[nodiscard]] bool read_u64(
-    std::span<const std::uint8_t> bytes, std::size_t &position,
-    std::uint64_t &value
-) noexcept {
-    if (position > bytes.size() ||
-        bytes.size() - position < 8U) {
+[[nodiscard]] bool read_u64(std::span<const std::uint8_t> bytes, std::size_t &position,
+                            std::uint64_t &value) noexcept {
+    if (position > bytes.size() || bytes.size() - position < 8U) {
         return false;
     }
     value = 0;
@@ -79,9 +64,7 @@ void append_u64(std::vector<std::uint8_t> &bytes,
     return Status(ErrorCode::corrupt_input, message);
 }
 
-[[nodiscard]] Json encode_vital(
-    const algorithms::VitalRates &value
-) {
+[[nodiscard]] Json encode_vital(const algorithms::VitalRates &value) {
     return Json::array({
         value.makeham_a,
         value.gompertz_b,
@@ -96,8 +79,7 @@ void append_u64(std::vector<std::uint8_t> &bytes,
     });
 }
 
-[[nodiscard]] algorithms::VitalRates
-decode_vital(const Json &row) {
+[[nodiscard]] algorithms::VitalRates decode_vital(const Json &row) {
     if (!row.is_array() || row.size() != 10U) {
         throw std::runtime_error("invalid M7 vital rates");
     }
@@ -116,9 +98,7 @@ decode_vital(const Json &row) {
     return value;
 }
 
-[[nodiscard]] Json encode_marriage_rules(
-    const core::MarriageRules &value
-) {
+[[nodiscard]] Json encode_marriage_rules(const core::MarriageRules &value) {
     return Json::array({
         value.minimum_age,
         value.maximum_age,
@@ -131,8 +111,7 @@ decode_vital(const Json &row) {
     });
 }
 
-[[nodiscard]] core::MarriageRules
-decode_marriage_rules(const Json &row) {
+[[nodiscard]] core::MarriageRules decode_marriage_rules(const Json &row) {
     if (!row.is_array() || row.size() != 8U) {
         throw std::runtime_error("invalid M7 marriage rules");
     }
@@ -152,8 +131,7 @@ decode_marriage_rules(const Json &row) {
 [[nodiscard]] Json encode_rules(const M7Rules &value) {
     Json output;
     output["vital"] = encode_vital(value.vital_rates);
-    output["marriage_rules"] =
-        encode_marriage_rules(value.marriage_rules);
+    output["marriage_rules"] = encode_marriage_rules(value.marriage_rules);
     output["values"] = Json::array({
         value.working_age,
         value.retirement_age,
@@ -177,6 +155,10 @@ decode_marriage_rules(const Json &row) {
         value.ladder_search_intensity,
         value.ladder_premium,
         value.participation_margin,
+        value.age_participation,
+        value.young_participation_rate,
+        value.prime_participation_rate,
+        value.older_participation_rate,
         value.reservation_markup,
         value.welfare_quit_hazard,
         value.family_transfers,
@@ -200,10 +182,9 @@ decode_marriage_rules(const Json &row) {
 [[nodiscard]] M7Rules decode_rules(const Json &input) {
     M7Rules value;
     value.vital_rates = decode_vital(input.at("vital"));
-    value.marriage_rules =
-        decode_marriage_rules(input.at("marriage_rules"));
+    value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 38U) {
+    if (!row.is_array() || row.size() != 42U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -221,8 +202,7 @@ decode_marriage_rules(const Json &row) {
     value.firing_adjustment = row[index++].get<double>();
     value.layoff_band = row[index++].get<double>();
     value.target_smoothing = row[index++].get<double>();
-    value.suspension_timeout_days =
-        row[index++].get<std::uint32_t>();
+    value.suspension_timeout_days = row[index++].get<std::uint32_t>();
     value.frictional_search = row[index++].get<bool>();
     value.search_intensity = row[index++].get<double>();
     value.relationship_wages = row[index++].get<bool>();
@@ -230,6 +210,10 @@ decode_marriage_rules(const Json &row) {
     value.ladder_search_intensity = row[index++].get<double>();
     value.ladder_premium = row[index++].get<double>();
     value.participation_margin = row[index++].get<bool>();
+    value.age_participation = row[index++].get<bool>();
+    value.young_participation_rate = row[index++].get<double>();
+    value.prime_participation_rate = row[index++].get<double>();
+    value.older_participation_rate = row[index++].get<double>();
     value.reservation_markup = row[index++].get<double>();
     value.welfare_quit_hazard = row[index++].get<double>();
     value.family_transfers = row[index++].get<bool>();
@@ -239,24 +223,17 @@ decode_marriage_rules(const Json &row) {
     value.divorce = row[index++].get<bool>();
     value.household_lifecycle = row[index++].get<bool>();
     value.leaving_home = row[index++].get<bool>();
-    value.leave_home_min_age =
-        row[index++].get<std::uint32_t>();
-    value.leave_home_peak_end_age =
-        row[index++].get<std::uint32_t>();
-    value.annual_leave_rate_peak =
-        row[index++].get<double>();
-    value.annual_leave_rate_late =
-        row[index++].get<double>();
-    value.marriage_interval_days =
-        row[index++].get<std::uint32_t>();
+    value.leave_home_min_age = row[index++].get<std::uint32_t>();
+    value.leave_home_peak_end_age = row[index++].get<std::uint32_t>();
+    value.annual_leave_rate_peak = row[index++].get<double>();
+    value.annual_leave_rate_late = row[index++].get<double>();
+    value.marriage_interval_days = row[index++].get<std::uint32_t>();
     value.annual_marriage_rate = row[index++].get<double>();
     value.annual_divorce_rate = row[index++].get<double>();
     return value;
 }
 
-[[nodiscard]] Json encode_person(
-    const core::PersonRecord &value
-) {
+[[nodiscard]] Json encode_person(const core::PersonRecord &value) {
     return Json::array({
         value.id.value(),
         static_cast<std::uint8_t>(value.sex),
@@ -278,26 +255,21 @@ decode_marriage_rules(const Json &row) {
     });
 }
 
-[[nodiscard]] core::PersonRecord
-decode_person(const Json &row) {
+[[nodiscard]] core::PersonRecord decode_person(const Json &row) {
     if (!row.is_array() || row.size() != 17U) {
         throw std::runtime_error("invalid M7 person");
     }
     core::PersonRecord value;
     std::size_t index = 0;
     value.id = PersonId(row[index++].get<std::uint64_t>());
-    value.sex =
-        static_cast<core::PersonSex>(
-            row[index++].get<std::uint8_t>()
-        );
+    value.sex = static_cast<core::PersonSex>(row[index++].get<std::uint8_t>());
     value.birth_day = row[index++].get<std::int32_t>();
     value.death_day = row[index++].get<std::int32_t>();
     value.mother = PersonId(row[index++].get<std::uint64_t>());
     value.father = PersonId(row[index++].get<std::uint64_t>());
     value.partner = PersonId(row[index++].get<std::uint64_t>());
     value.guardian = PersonId(row[index++].get<std::uint64_t>());
-    value.household =
-        HouseholdId(row[index++].get<std::uint64_t>());
+    value.household = HouseholdId(row[index++].get<std::uint64_t>());
     value.marriage_start_day = row[index++].get<std::int32_t>();
     value.last_divorce_day = row[index++].get<std::int32_t>();
     value.last_widowed_day = row[index++].get<std::int32_t>();
@@ -309,9 +281,7 @@ decode_person(const Json &row) {
     return value;
 }
 
-[[nodiscard]] Json encode_labor(
-    const core::LaborAccounts &value
-) {
+[[nodiscard]] Json encode_labor(const core::LaborAccounts &value) {
     return Json::array({
         value.employed_fte,
         value.employed_heads,
@@ -347,8 +317,7 @@ decode_person(const Json &row) {
     });
 }
 
-[[nodiscard]] core::LaborAccounts
-decode_labor(const Json &row) {
+[[nodiscard]] core::LaborAccounts decode_labor(const Json &row) {
     if (!row.is_array() || row.size() != 31U) {
         throw std::runtime_error("invalid M7 labor accounts");
     }
@@ -428,6 +397,15 @@ decode_labor(const Json &row) {
         value.family_exposed_households,
         value.hires,
         value.separations,
+        value.churn_separations,
+        value.demand_layoff_separations,
+        value.cash_layoff_separations,
+        value.firm_exit_separations,
+        value.death_separations,
+        value.retirement_separations,
+        value.welfare_quits,
+        value.suspensions_flow,
+        value.recalls,
         value.marriages,
         value.divorces,
         value.widowhoods,
@@ -436,27 +414,24 @@ decode_labor(const Json &row) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 40U) {
+    if (!row.is_array() || row.size() != 49U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
     value.population = row[index++].get<std::uint64_t>();
     value.births = row[index++].get<std::uint64_t>();
     value.deaths = row[index++].get<std::uint64_t>();
-    value.households_with_members =
-        row[index++].get<std::uint64_t>();
+    value.households_with_members = row[index++].get<std::uint64_t>();
     value.mean_household_size = row[index++].get<double>();
     value.working_age_share = row[index++].get<double>();
     value.dependency_ratio = row[index++].get<double>();
     value.participation_rate = row[index++].get<double>();
     value.estates_settled = row[index++].get<std::uint64_t>();
-    value.beneficial_lots_transferred =
-        row[index++].get<std::uint64_t>();
+    value.beneficial_lots_transferred = row[index++].get<std::uint64_t>();
     value.inheritance_tax_share = row[index++].get<double>();
     value.inheritance_tax_paid = row[index++].get<double>();
     value.pension_paid = row[index++].get<double>();
-    value.beneficial_projection_error =
-        row[index++].get<double>();
+    value.beneficial_projection_error = row[index++].get<double>();
     value.employed_fte = row[index++].get<double>();
     value.employed_heads = row[index++].get<double>();
     value.unemployment = row[index++].get<double>();
@@ -475,17 +450,23 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.job_to_job_moves = row[index++].get<double>();
     value.mean_hourly_wage = row[index++].get<double>();
     value.family_transfer_total = row[index++].get<double>();
-    value.family_transfer_recipients =
-        row[index++].get<double>();
-    value.family_exposed_households =
-        row[index++].get<double>();
+    value.family_transfer_recipients = row[index++].get<double>();
+    value.family_exposed_households = row[index++].get<double>();
     value.hires = row[index++].get<double>();
     value.separations = row[index++].get<double>();
+    value.churn_separations = row[index++].get<double>();
+    value.demand_layoff_separations = row[index++].get<double>();
+    value.cash_layoff_separations = row[index++].get<double>();
+    value.firm_exit_separations = row[index++].get<double>();
+    value.death_separations = row[index++].get<double>();
+    value.retirement_separations = row[index++].get<double>();
+    value.welfare_quits = row[index++].get<double>();
+    value.suspensions_flow = row[index++].get<double>();
+    value.recalls = row[index++].get<double>();
     value.marriages = row[index++].get<std::uint64_t>();
     value.divorces = row[index++].get<std::uint64_t>();
     value.widowhoods = row[index++].get<std::uint64_t>();
-    value.leaving_home_events =
-        row[index++].get<std::uint64_t>();
+    value.leaving_home_events = row[index++].get<std::uint64_t>();
 }
 
 [[nodiscard]] Json encode_runtime(const M7Runtime &runtime) {
@@ -510,8 +491,7 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     }
     output["beneficial"] = Json::array();
     std::uint32_t beneficial_lot_id = 1U;
-    for (const auto &lot :
-         runtime.beneficial_ownership.records()) {
+    for (const auto &lot : runtime.beneficial_ownership.records()) {
         output["beneficial"].push_back(Json::array({
             beneficial_lot_id++,
             static_cast<std::uint8_t>(lot.asset.kind),
@@ -591,10 +571,8 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     if (!policy.is_array() || policy.size() != 2U) {
         throw std::runtime_error("invalid M7 policy");
     }
-    runtime.policy.inheritance_tax_rate =
-        policy[0].get<double>();
-    runtime.policy.pension_replacement =
-        policy[1].get<double>();
+    runtime.policy.inheritance_tax_rate = policy[0].get<double>();
+    runtime.policy.pension_replacement = policy[1].get<double>();
     runtime.rules = decode_rules(input.at("rules"));
     const auto &state = input.at("state");
     if (!state.is_array() || state.size() != 4U) {
@@ -603,20 +581,16 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     runtime.start_calendar_day = state[0].get<std::int32_t>();
     runtime.current_calendar_day = state[1].get<std::int32_t>();
     runtime.next_event_id = state[2].get<std::uint64_t>();
-    runtime.population_rng_counter =
-        state[3].get<std::uint64_t>();
+    runtime.population_rng_counter = state[3].get<std::uint64_t>();
     decode_metrics(input.at("metrics"), runtime.last_metrics);
     runtime.labor_accounts = decode_labor(input.at("labor"));
-    runtime.firm_target_ema =
-        input.at("firm_target_ema").get<std::vector<double>>();
+    runtime.firm_target_ema = input.at("firm_target_ema").get<std::vector<double>>();
 
     std::vector<core::PersonRecord> persons;
     for (const auto &row : input.at("persons")) {
         persons.push_back(decode_person(row));
     }
-    auto status = runtime.persons.replace_records(
-        std::move(persons)
-    );
+    auto status = runtime.persons.replace_records(std::move(persons));
     if (!status.ok()) {
         throw std::runtime_error("invalid M7 person store");
     }
@@ -630,19 +604,15 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
         if (!row.is_array() || row.size() != 7U) {
             throw std::runtime_error("invalid M7 beneficial lot");
         }
-        const auto expected_id =
-            static_cast<std::uint64_t>(beneficial.size()) + 1U;
+        const auto expected_id = static_cast<std::uint64_t>(beneficial.size()) + 1U;
         const auto share = row[5].get<double>();
         const auto active = row[6].get<bool>();
-        if (row[0].get<std::uint64_t>() != expected_id ||
-            active != (share > 0.0)) {
+        if (row[0].get<std::uint64_t>() != expected_id || active != (share > 0.0)) {
             throw std::runtime_error("invalid M7 beneficial lot");
         }
         beneficial.push_back({
             {
-                static_cast<core::BeneficialAssetKind>(
-                    row[1].get<std::uint8_t>()
-                ),
+                static_cast<core::BeneficialAssetKind>(row[1].get<std::uint8_t>()),
                 HouseholdId(row[2].get<std::uint64_t>()),
                 row[3].get<std::uint32_t>(),
             },
@@ -650,13 +620,9 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
             share,
         });
     }
-    status = runtime.beneficial_ownership.replace_records(
-        std::move(beneficial)
-    );
+    status = runtime.beneficial_ownership.replace_records(std::move(beneficial));
     if (!status.ok()) {
-        throw std::runtime_error(
-            "invalid M7 beneficial ownership store"
-        );
+        throw std::runtime_error("invalid M7 beneficial ownership store");
     }
 
     std::vector<core::JobRecord> jobs;
@@ -676,9 +642,7 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
             row[8].get<bool>(),
             row[9].get<bool>(),
             row[10].get<bool>(),
-            static_cast<core::SeparationKind>(
-                row[11].get<std::uint8_t>()
-            ),
+            static_cast<core::SeparationKind>(row[11].get<std::uint8_t>()),
         });
     }
     status = runtime.employment.replace_records(std::move(jobs));
@@ -699,15 +663,11 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
             HouseholdId(row[4].get<std::uint64_t>()),
             row[5].get<std::int32_t>(),
             row[6].get<std::int32_t>(),
-            static_cast<core::UnionEndKind>(
-                row[7].get<std::uint8_t>()
-            ),
+            static_cast<core::UnionEndKind>(row[7].get<std::uint8_t>()),
             row[8].get<bool>(),
         });
     }
-    status = runtime.relationships.replace_unions(
-        runtime.persons, std::move(unions)
-    );
+    status = runtime.relationships.replace_unions(runtime.persons, std::move(unions));
     if (!status.ok()) {
         throw std::runtime_error("invalid M7 relationship store");
     }
@@ -736,9 +696,7 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     }
     for (const auto &row : input.at("leaving_home")) {
         if (!row.is_array() || row.size() != 5U) {
-            throw std::runtime_error(
-                "invalid M7 leaving-home event"
-            );
+            throw std::runtime_error("invalid M7 leaving-home event");
         }
         runtime.leaving_home.push_back({
             EventId(row[0].get<std::uint64_t>()),
@@ -752,78 +710,56 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
 
 } // namespace
 
-bool is_m7_checkpoint(
-    std::span<const std::uint8_t> bytes
-) noexcept {
+bool is_m7_checkpoint(std::span<const std::uint8_t> bytes) noexcept {
     return bytes.size() >= kMagic.size() &&
            std::equal(kMagic.begin(), kMagic.end(), bytes.begin());
 }
 
 Result<std::vector<std::uint8_t>>
-save_m7_checkpoint(const core::RootState &root,
-                   const M4Runtime &real_economy_runtime,
+save_m7_checkpoint(const core::RootState &root, const M4Runtime &real_economy_runtime,
                    const M5Runtime &monetary_runtime,
-                   const M6Runtime &financial_runtime,
-                   const M7Runtime &runtime, Tick tick) {
-    if (!validate_m7_state(
-             root, real_economy_runtime, monetary_runtime,
-             financial_runtime, runtime, tick
-         )
+                   const M6Runtime &financial_runtime, const M7Runtime &runtime,
+                   Tick tick) {
+    if (!validate_m7_state(root, real_economy_runtime, monetary_runtime,
+                           financial_runtime, runtime, tick)
              .ok()) {
-        return Status(
-            ErrorCode::invariant_violation,
-            "M7 checkpoint state violates an invariant"
-        );
+        return Status(ErrorCode::invariant_violation,
+                      "M7 checkpoint state violates an invariant");
     }
-    auto base = save_m6_checkpoint(
-        root, real_economy_runtime, monetary_runtime,
-        financial_runtime, tick
-    );
+    auto base = save_m6_checkpoint(root, real_economy_runtime, monetary_runtime,
+                                   financial_runtime, tick);
     if (!base.ok()) {
         return base.status();
     }
     const std::string encoded = encode_runtime(runtime).dump();
     std::vector<std::uint8_t> bytes;
-    bytes.reserve(
-        kMagic.size() + 4U + 8U + base.get_if()->size() +
-        8U + encoded.size() + kDigestBytes
-    );
+    bytes.reserve(kMagic.size() + 4U + 8U + base.get_if()->size() + 8U +
+                  encoded.size() + kDigestBytes);
     bytes.insert(bytes.end(), kMagic.begin(), kMagic.end());
     append_u32(bytes, kM7CheckpointSchemaVersion);
     append_u64(bytes, base.get_if()->size());
-    bytes.insert(
-        bytes.end(), base.get_if()->begin(), base.get_if()->end()
-    );
+    bytes.insert(bytes.end(), base.get_if()->begin(), base.get_if()->end());
     append_u64(bytes, encoded.size());
     bytes.insert(bytes.end(), encoded.begin(), encoded.end());
     const auto digest = core::sha256_digest(bytes);
-    bytes.insert(
-        bytes.end(), digest.bytes.begin(), digest.bytes.end()
-    );
+    bytes.insert(bytes.end(), digest.bytes.begin(), digest.bytes.end());
     if (bytes.size() > kMaximumCheckpointBytes) {
-        return Status(
-            ErrorCode::out_of_range,
-            "M7 checkpoint exceeds the supported size"
-        );
+        return Status(ErrorCode::out_of_range,
+                      "M7 checkpoint exceeds the supported size");
     }
     return bytes;
 }
 
-Result<M7Checkpoint>
-load_m7_checkpoint(std::span<const std::uint8_t> bytes) {
+Result<M7Checkpoint> load_m7_checkpoint(std::span<const std::uint8_t> bytes) {
     if (bytes.size() > kMaximumCheckpointBytes ||
-        bytes.size() <
-            kMagic.size() + 4U + 8U + 8U + kDigestBytes ||
+        bytes.size() < kMagic.size() + 4U + 8U + 8U + kDigestBytes ||
         !is_m7_checkpoint(bytes)) {
         return corrupt("M7 checkpoint identity or size is invalid");
     }
     const auto payload = bytes.first(bytes.size() - kDigestBytes);
     const auto digest = core::sha256_digest(payload);
-    if (!std::equal(
-            digest.bytes.begin(), digest.bytes.end(),
-            bytes.end() -
-                static_cast<std::ptrdiff_t>(kDigestBytes)
-        )) {
+    if (!std::equal(digest.bytes.begin(), digest.bytes.end(),
+                    bytes.end() - static_cast<std::ptrdiff_t>(kDigestBytes))) {
         return corrupt("M7 checkpoint checksum does not match");
     }
     std::size_t position = kMagic.size();
@@ -835,9 +771,7 @@ load_m7_checkpoint(std::span<const std::uint8_t> bytes) {
         base_size > payload.size() - position) {
         return corrupt("M7 checkpoint header is invalid");
     }
-    const auto base = payload.subspan(
-        position, static_cast<std::size_t>(base_size)
-    );
+    const auto base = payload.subspan(position, static_cast<std::size_t>(base_size));
     position += static_cast<std::size_t>(base_size);
     std::uint64_t json_size = 0;
     if (!read_u64(payload, position, json_size) ||
@@ -851,26 +785,18 @@ load_m7_checkpoint(std::span<const std::uint8_t> bytes) {
     }
     try {
         const std::string encoded(
-            reinterpret_cast<const char *>(
-                payload.data() + position
-            ),
-            static_cast<std::size_t>(json_size)
-        );
+            reinterpret_cast<const char *>(payload.data() + position),
+            static_cast<std::size_t>(json_size));
         const auto json = Json::parse(encoded);
         auto value = std::move(*loaded.get_if());
         M7Runtime runtime;
         decode_runtime(json, runtime);
-        runtime.last_metrics.economy =
-            value.runtime.last_metrics;
-        if (!validate_m7_state(
-                 value.root, value.real_economy_runtime,
-                 value.monetary_runtime, value.runtime,
-                 runtime, value.tick
-             )
+        runtime.last_metrics.economy = value.runtime.last_metrics;
+        if (!validate_m7_state(value.root, value.real_economy_runtime,
+                               value.monetary_runtime, value.runtime, runtime,
+                               value.tick)
                  .ok()) {
-            return corrupt(
-                "M7 checkpoint restored state is invalid"
-            );
+            return corrupt("M7 checkpoint restored state is invalid");
         }
         return M7Checkpoint{
             std::move(value.root),
@@ -885,16 +811,13 @@ load_m7_checkpoint(std::span<const std::uint8_t> bytes) {
     }
 }
 
-Result<core::StateDigest>
-m7_state_digest(const core::RootState &root,
-                const M4Runtime &real_economy_runtime,
-                const M5Runtime &monetary_runtime,
-                const M6Runtime &financial_runtime,
-                const M7Runtime &runtime, Tick tick) {
-    auto checkpoint = save_m7_checkpoint(
-        root, real_economy_runtime, monetary_runtime,
-        financial_runtime, runtime, tick
-    );
+Result<core::StateDigest> m7_state_digest(const core::RootState &root,
+                                          const M4Runtime &real_economy_runtime,
+                                          const M5Runtime &monetary_runtime,
+                                          const M6Runtime &financial_runtime,
+                                          const M7Runtime &runtime, Tick tick) {
+    auto checkpoint = save_m7_checkpoint(root, real_economy_runtime, monetary_runtime,
+                                         financial_runtime, runtime, tick);
     if (!checkpoint.ok()) {
         return checkpoint.status();
     }

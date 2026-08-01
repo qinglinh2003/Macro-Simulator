@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
 from datetime import date
 
 import pytest
@@ -15,6 +15,7 @@ from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.desktop.new_game import NewGameSpec
 from macro_sim.desktop.runtime import PROTOCOL_VERSION, SimulationRuntime
 from macro_sim.economy import Economy
+from macro_sim.native_backend import build_world_spec, build_world_spec_from_configs
 
 
 def _automatic_spec(*, seed: int = 41) -> dict:
@@ -202,7 +203,70 @@ def test_playable_preset_does_not_regress_any_enabled_v124_feature() -> None:
         item.name for item in fields(Config)
         if getattr(historical, item.name) is True
         and getattr(playable, item.name) is False
+        and item.name not in {"job_guarantee"}
     ] == []
+    assert playable.job_guarantee is False
+    assert playable.alpha1 == pytest.approx(0.97)
+    assert playable.gov_consumption_share == pytest.approx(0.20)
+    assert playable.tax_income_rate == pytest.approx(0.25)
+    assert playable.pension_replacement == pytest.approx(0.20)
+    assert playable.benefit_income_floor == 0.0
+    assert playable.p_firm0 == pytest.approx(0.80)
+    assert playable.switch_retool_loss == pytest.approx(0.05)
+
+
+def test_representative_entities_preserve_population_scaled_genesis_capacity() -> None:
+    raw = NewGameSpec.default().to_dict()
+    raw["countries"] = raw["countries"][:1]
+    raw["countries"][0]["overrides"] = {
+        "demographics_population": 1_000,
+        "n_households": 1_000,
+        "n_firms_c": 15,
+        "n_firms_k": 5,
+        "n_firms_e": 3,
+        "n_builders": 6,
+        "n_banks": 2,
+    }
+    spec = NewGameSpec.from_mapping(raw)
+    cfg = replace(spec.configs()[0], rho=0.73)
+    economy = build_world_spec_from_configs([cfg]).economies[0]
+    real = (
+        economy.domestic_economy.financial_economy
+        .monetary_economy.real_economy
+    )
+
+    assert real.rules.initial_firm_money == pytest.approx(
+        cfg.d_firm0 * 4.0
+    )
+    assert real.rules.initial_consumption_capital == pytest.approx(
+        cfg.K_firm0 * 4.0
+    )
+    assert real.rules.capital_output_ratio == pytest.approx(cfg.v)
+    assert real.rules.dividend_payout == pytest.approx(0.73)
+    assert real.rules.initial_expected_demand == pytest.approx(
+        cfg.demand_e_firm0 * 4.0
+    )
+    assert economy.energy_rules.initial_producer_cash == pytest.approx(
+        cfg.d_efirm0 * (10.0 / 3.0)
+    )
+    assert economy.housing_rules.initial_builder_cash_buffer == pytest.approx(
+        25.0 * (25.0 / 6.0)
+    )
+    private_opening_money = (
+        400 * real.rules.initial_household_money
+        + 20 * real.rules.initial_firm_money
+        + 3 * economy.energy_rules.initial_producer_cash
+        + 6 * economy.housing_rules.initial_builder_cash_buffer
+    )
+    monetary = (
+        economy.domestic_economy.financial_economy.monetary_economy
+    )
+    assert monetary.rules.opening_capital_per_bank == pytest.approx(
+        (
+            cfg.d_bank0
+            + cfg.bank_capital_frac * private_opening_money
+        ) / 2
+    )
 
 
 def test_new_game_constructs_selected_profiles_world_and_player() -> None:

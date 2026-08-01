@@ -67,6 +67,13 @@ struct M6Rules final {
     std::uint32_t entry_max{1};
     double startup_deposits{10.0};
     double startup_capital{2.0};
+    bool firm_subscale_exit{false};
+    bool capital_firm_entry{false};
+    double subscale_viability_workers{0.5};
+    std::uint32_t subscale_grace_days{180};
+    double subscale_exit_hazard{1.0 / 90.0};
+    double k_entry_demand{2.0};
+    double k_entry_hazard{1.0 / 60.0};
     bool consumption_strata{true};
     bool sector_switching{true};
     double switch_return_gap{0.10};
@@ -115,6 +122,7 @@ struct FirmLifecycleRecord final {
     ConsumptionStratum stratum{ConsumptionStratum::necessity};
     std::uint32_t insolvent_days{0};
     std::uint32_t shell_days{0};
+    std::uint32_t subscale_days{0};
     std::uint32_t switch_pressure_days{0};
     double residual_income_ema{0.0};
     double tobin_q_ema{1.0};
@@ -171,6 +179,7 @@ struct M6SimulationSpec final {
 struct M6AdvanceOptions final {
     M5AdvanceOptions base{};
     std::optional<FirmId> force_firm_exit{};
+    std::vector<FirmId> protected_firm_exits;
     bool force_bank_entry{false};
 };
 
@@ -201,6 +210,7 @@ struct M6Runtime final {
 struct M6FirmExitCommand final {
     FirmId firm{};
     AccountId account{};
+    FirmId successor{};
 };
 
 struct M6FirmEntryCommand final {
@@ -213,6 +223,17 @@ struct M6FirmEntryCommand final {
     core::FirmComponent component{};
     FirmLifecycleRecord lifecycle{};
     EquityId equity{};
+};
+
+struct M6CapitalFirmEntryCommand final {
+    FirmId firm{};
+    AccountId account{};
+    FirmId founder{};
+    AccountId founder_account{};
+    SettlementNodeId settlement_node{};
+    double startup_cash{0.0};
+    core::FirmComponent component{};
+    FirmLifecycleRecord lifecycle{};
 };
 
 struct M6BankEntryCommand final {
@@ -266,6 +287,7 @@ class M6TickScratch final {
     std::vector<double> firm_return_;
     std::vector<M6FirmExitCommand> firm_exits_;
     std::vector<M6FirmEntryCommand> firm_entries_;
+    std::vector<M6CapitalFirmEntryCommand> capital_firm_entries_;
     std::vector<M6BankEntryCommand> bank_entries_;
     M6Metrics working_metrics_{};
 };
@@ -283,18 +305,29 @@ class M6TickExtension {
                  M5TickScratch &monetary_scratch, M6Runtime &runtime,
                  M6TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
     [[nodiscard]] virtual Status
-    run_labor(const core::RootState &state,
-              M4Runtime &real_economy_runtime,
-              M4TickScratch &real_economy_scratch,
-              M5Runtime &monetary_runtime,
+    run_labor(const core::RootState &state, M4Runtime &real_economy_runtime,
+              M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
               M5TickScratch &monetary_scratch, M6Runtime &runtime,
-              M6TickScratch &scratch, Tick tick, PhiloxRng &rng,
-              bool &handled) = 0;
+              M6TickScratch &scratch, Tick tick, PhiloxRng &rng, bool &handled) = 0;
+    [[nodiscard]] virtual Status
+    prepare_household_net_wealth(const core::RootState &, M4Runtime &, M4TickScratch &,
+                                 M5Runtime &, M5TickScratch &, M6Runtime &,
+                                 M6TickScratch &, Tick, PhiloxRng &,
+                                 std::span<double>) {
+        return Status::success();
+    }
     [[nodiscard]] virtual Status
     close_day(const core::RootState &state, M4Runtime &real_economy_runtime,
               M4TickScratch &real_economy_scratch, M5Runtime &monetary_runtime,
               M5TickScratch &monetary_scratch, M6Runtime &runtime,
               M6TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    [[nodiscard]] virtual Status after_financial_lifecycle(const core::RootState &,
+                                                           M4Runtime &, M4TickScratch &,
+                                                           M5Runtime &, M5TickScratch &,
+                                                           M6Runtime &, M6TickScratch &,
+                                                           Tick, PhiloxRng &) {
+        return Status::success();
+    }
     [[nodiscard]] virtual Status
     validate(const core::RootState &state, const M4Runtime &real_economy_runtime,
              const M4TickScratch &real_economy_scratch,
@@ -325,11 +358,11 @@ struct M6Initialization final {
 [[nodiscard]] Status validate_m6_policy(const M6PolicyState &policy) noexcept;
 [[nodiscard]] Status validate_m6_rules(const M6Rules &rules) noexcept;
 [[nodiscard]] Status validate_m6_spec(const M6SimulationSpec &spec) noexcept;
-[[nodiscard]] Status
-validate_m6_state_fast(const core::RootState &state,
-                       const M4Runtime &real_economy_runtime,
-                       const M5Runtime &monetary_runtime,
-                       const M6Runtime &runtime, Tick tick) noexcept;
+[[nodiscard]] Status validate_m6_state_fast(const core::RootState &state,
+                                            const M4Runtime &real_economy_runtime,
+                                            const M5Runtime &monetary_runtime,
+                                            const M6Runtime &runtime,
+                                            Tick tick) noexcept;
 [[nodiscard]] Status validate_m6_state(const core::RootState &state,
                                        const M4Runtime &real_economy_runtime,
                                        const M5Runtime &monetary_runtime,

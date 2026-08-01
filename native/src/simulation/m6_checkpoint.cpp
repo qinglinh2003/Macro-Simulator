@@ -139,6 +139,13 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"entry_max", value.entry_max},
         {"startup_deposits", value.startup_deposits},
         {"startup_capital", value.startup_capital},
+        {"firm_subscale_exit", value.firm_subscale_exit},
+        {"capital_firm_entry", value.capital_firm_entry},
+        {"subscale_viability_workers", value.subscale_viability_workers},
+        {"subscale_grace_days", value.subscale_grace_days},
+        {"subscale_exit_hazard", value.subscale_exit_hazard},
+        {"k_entry_demand", value.k_entry_demand},
+        {"k_entry_hazard", value.k_entry_hazard},
         {"consumption_strata", value.consumption_strata},
         {"sector_switching", value.sector_switching},
         {"switch_return_gap", value.switch_return_gap},
@@ -190,6 +197,13 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(entry_max, std::uint32_t);
     M6_RULE(startup_deposits, double);
     M6_RULE(startup_capital, double);
+    M6_RULE(firm_subscale_exit, bool);
+    M6_RULE(capital_firm_entry, bool);
+    M6_RULE(subscale_viability_workers, double);
+    M6_RULE(subscale_grace_days, std::uint32_t);
+    M6_RULE(subscale_exit_hazard, double);
+    M6_RULE(k_entry_demand, double);
+    M6_RULE(k_entry_hazard, double);
     M6_RULE(consumption_strata, bool);
     M6_RULE(sector_switching, bool);
     M6_RULE(switch_return_gap, double);
@@ -390,6 +404,7 @@ void decode_metrics(const Json &row, M6Metrics &value) {
             static_cast<std::uint8_t>(row.stratum),
             row.insolvent_days,
             row.shell_days,
+            row.subscale_days,
             row.switch_pressure_days,
             row.residual_income_ema,
             row.tobin_q_ema,
@@ -511,7 +526,7 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
                                        std::move(lots), security_version);
 
     for (const auto &row : input.at("firms")) {
-        if (!row.is_array() || row.size() != 10) {
+        if (!row.is_array() || row.size() != 11) {
             throw std::runtime_error("invalid M6 firm lifecycle");
         }
         FirmLifecycleRecord value;
@@ -520,11 +535,12 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
         value.stratum = static_cast<ConsumptionStratum>(row[2].get<std::uint8_t>());
         value.insolvent_days = row[3].get<std::uint32_t>();
         value.shell_days = row[4].get<std::uint32_t>();
-        value.switch_pressure_days = row[5].get<std::uint32_t>();
-        value.residual_income_ema = row[6].get<double>();
-        value.tobin_q_ema = row[7].get<double>();
-        value.active = row[8].get<bool>();
-        value.defaulted = row[9].get<bool>();
+        value.subscale_days = row[5].get<std::uint32_t>();
+        value.switch_pressure_days = row[6].get<std::uint32_t>();
+        value.residual_income_ema = row[7].get<double>();
+        value.tobin_q_ema = row[8].get<double>();
+        value.active = row[9].get<bool>();
+        value.defaulted = row[10].get<bool>();
         runtime.firms.push_back(value);
     }
     for (const auto &row : input.at("watchlist_rows")) {

@@ -20,7 +20,10 @@ constexpr std::uint64_t kSexStream = 0x4249525448534558ULL;
 constexpr std::uint64_t kAgeStream = 0x47454e4553495341ULL;
 constexpr std::uint64_t kOffsetStream = 0x47454e455349534fULL;
 constexpr std::uint64_t kChurnStream = 0x4c41424f52434855ULL;
+constexpr std::uint64_t kLayoffStream = 0x4c41594f46463031ULL;
 constexpr std::uint64_t kWelfareStream = 0x57454c4641524551ULL;
+constexpr std::uint64_t kParticipationStream = 0x5041525449434950ULL;
+constexpr std::uint64_t kSecondJobStream = 0x5345434f4e444a42ULL;
 constexpr std::uint64_t kLadderStream = 0x4c41444445523031ULL;
 constexpr std::uint64_t kLadderFirmStream = 0x4c41444445523032ULL;
 constexpr std::uint64_t kDivorceStream = 0x4449564f52434530ULL;
@@ -48,6 +51,48 @@ constexpr double kLaborTolerance = 1.0e-8;
 [[nodiscard]] double completed_age(const core::PersonRecord &person,
                                    std::int32_t day) noexcept {
     return std::max(0.0, static_cast<double>(day - person.birth_day) / kDaysPerYear);
+}
+
+struct FirmLaborTotals final {
+    double effective_labor{0.0};
+    double payroll{0.0};
+};
+
+[[nodiscard]] FirmLaborTotals firm_labor_totals(const core::EmploymentBook &employment,
+                                                const core::PersonStore &persons,
+                                                FirmId firm) noexcept {
+    FirmLaborTotals totals;
+    for (const auto job_id : employment.roster(firm)) {
+        const auto *job = employment.get(job_id);
+        if (job == nullptr || !job->active || job->suspended) {
+            continue;
+        }
+        const auto *person = persons.get(job->person);
+        if (person != nullptr && person->alive) {
+            const double effective_labor = job->hours * person->efficiency;
+            totals.effective_labor += effective_labor;
+            totals.payroll += effective_labor * job->wage;
+        }
+    }
+    return totals;
+}
+
+[[nodiscard]] double structural_participation_rate(const M7Rules &rules,
+                                                   double age) noexcept {
+    if (age < 25.0) {
+        return rules.young_participation_rate;
+    }
+    if (age < 55.0) {
+        return rules.prime_participation_rate;
+    }
+    return rules.older_participation_rate;
+}
+
+[[nodiscard]] bool structurally_participates(const M7Rules &rules, std::uint64_t seed,
+                                             PersonId person, double age) noexcept {
+    return !rules.age_participation ||
+           unit_draw(seed, person.value(), 0, kParticipationStream) <
+               structural_participation_rate(rules, age);
 }
 
 [[nodiscard]] Status
@@ -116,10 +161,10 @@ first_alive_member(const core::HouseholdMembershipBook &membership,
     return selected;
 }
 
-[[nodiscard]] PersonId first_alive_beneficial_owner(
-    const core::BeneficialOwnershipBook &ownership,
-    const core::PersonStore &persons, core::BeneficialAssetKey asset,
-    PersonId excluded) {
+[[nodiscard]] PersonId
+first_alive_beneficial_owner(const core::BeneficialOwnershipBook &ownership,
+                             const core::PersonStore &persons,
+                             core::BeneficialAssetKey asset, PersonId excluded) {
     PersonId selected{};
     for (const auto lot_id : ownership.lots_for_asset(asset)) {
         const auto *lot = ownership.get(lot_id);
@@ -147,8 +192,9 @@ security_from_token(std::uint64_t token) noexcept {
     };
 }
 
-[[nodiscard]] bool household_has_security_portfolio(
-    const core::SecurityBook &securities, HouseholdId household) noexcept {
+[[nodiscard]] bool
+household_has_security_portfolio(const core::SecurityBook &securities,
+                                 HouseholdId household) noexcept {
     for (const auto lot_id :
          securities.lots_for_holder(core::OwnerId::household(household))) {
         const auto *lot = securities.get(lot_id);
@@ -159,8 +205,9 @@ security_from_token(std::uint64_t token) noexcept {
     return false;
 }
 
-[[nodiscard]] double household_security_portfolio_value(
-    const core::SecurityBook &securities, HouseholdId household) noexcept {
+[[nodiscard]] double
+household_security_portfolio_value(const core::SecurityBook &securities,
+                                   HouseholdId household) noexcept {
     double value = 0.0;
     for (const auto lot_id :
          securities.lots_for_holder(core::OwnerId::household(household))) {
@@ -169,8 +216,7 @@ security_from_token(std::uint64_t token) noexcept {
             continue;
         }
         if (lot->security.kind() == core::SecurityKind::equity) {
-            const auto *contract =
-                securities.get(EquityId(lot->security.value()));
+            const auto *contract = securities.get(EquityId(lot->security.value()));
             if (contract != nullptr && contract->active) {
                 value += lot->units * contract->price.value();
             }
@@ -185,9 +231,8 @@ security_from_token(std::uint64_t token) noexcept {
     core::BeneficialAssetKey asset, const core::HouseholdMembershipBook &membership,
     const core::PersonStore &persons, core::BeneficialOwnershipBook &ownership,
     bool refresh_presence = false) {
-    const bool present =
-        refresh_presence ? ownership.touch_asset_presence(asset)
-                         : ownership.contains_asset(asset);
+    const bool present = refresh_presence ? ownership.touch_asset_presence(asset)
+                                          : ownership.contains_asset(asset);
     if (present) {
         return Status::success();
     }
@@ -204,8 +249,7 @@ security_from_token(std::uint64_t token) noexcept {
         double projected = 0.0;
         for (const auto lot_id : ownership.lots_for_asset(cash)) {
             const auto *lot = ownership.get(lot_id);
-            if (lot == nullptr || !lot->is_active() ||
-                !persons.alive(lot->owner)) {
+            if (lot == nullptr || !lot->is_active() || !persons.alive(lot->owner)) {
                 continue;
             }
             const auto owner = lot->owner;
@@ -317,8 +361,7 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
                        asset_buffer.end());
     for (const auto asset : asset_buffer) {
         if (household_has_security_portfolio(securities, asset.household)) {
-            status = create_equal_claims(
-                asset, membership, persons, ownership);
+            status = create_equal_claims(asset, membership, persons, ownership);
         } else if (ownership.contains_asset(asset)) {
             status = ownership.retire_asset(asset);
         }
@@ -343,8 +386,8 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
         }
     }
 
-    ownership.active_assets_except(
-        core::BeneficialAssetKind::security_position, asset_buffer);
+    ownership.active_assets_except(core::BeneficialAssetKind::security_position,
+                                   asset_buffer);
     for (const auto asset : asset_buffer) {
         if (canonical_claim_exists(state, real, loans, securities, asset)) {
             continue;
@@ -402,8 +445,7 @@ find_loan(const std::vector<core::LoanRecord> &loans, LoanId id) noexcept {
     }
     case core::BeneficialAssetKind::security_position: {
         if (asset.value == 0U) {
-            return household_security_portfolio_value(securities,
-                                                      asset.household);
+            return household_security_portfolio_value(securities, asset.household);
         }
         const auto security = security_from_token(asset.value);
         const double units =
@@ -604,21 +646,18 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
                : ownership.retire_household(source_household);
 }
 
-[[nodiscard]] Status
-settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &monetary,
-             M6TickScratch &financial, core::PersonStore &persons,
-             core::HouseholdMembershipBook &membership,
-             core::BeneficialOwnershipBook &ownership, core::EmploymentBook &employment,
-             core::RelationshipBook &relationships, core::LaborAccounts &labor_accounts,
-             std::vector<EstateRecord> &estates,
-             std::vector<HouseholdId> &retired_households,
-             std::uint64_t &next_event_id,
-             PersonId deceased, std::int32_t day, const M7PolicyState &policy,
-             const M7Rules &rules, M7Metrics &metrics,
-             std::vector<std::uint32_t> &guardian_heads,
-             std::vector<std::uint32_t> &guardian_next,
-             std::vector<BeneficialLotId> &lot_buffer,
-             std::vector<core::SecurityId> &security_buffer) {
+[[nodiscard]] Status settle_death(
+    const core::RootState &state, M4TickScratch &real, M5TickScratch &monetary,
+    M6TickScratch &financial, core::PersonStore &persons,
+    core::HouseholdMembershipBook &membership, core::BeneficialOwnershipBook &ownership,
+    core::EmploymentBook &employment, core::RelationshipBook &relationships,
+    core::LaborAccounts &labor_accounts, std::vector<EstateRecord> &estates,
+    std::vector<HouseholdId> &retired_households, std::uint64_t &next_event_id,
+    PersonId deceased, std::int32_t day, const M7PolicyState &policy,
+    const M7Rules &rules, M7Metrics &metrics,
+    std::vector<std::uint32_t> &guardian_heads,
+    std::vector<std::uint32_t> &guardian_next, std::vector<BeneficialLotId> &lot_buffer,
+    std::vector<core::SecurityId> &security_buffer) {
     auto *record = persons.get(deceased);
     if (record == nullptr || !record->alive) {
         return Status(ErrorCode::contract_violation, "death target is not alive");
@@ -636,10 +675,9 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
     if (was_partnered) {
         ++metrics.widowhoods;
     }
-    auto encoded_ward =
-        deceased.value() < guardian_heads.size()
-            ? guardian_heads[static_cast<std::size_t>(deceased.value())]
-            : 0U;
+    auto encoded_ward = deceased.value() < guardian_heads.size()
+                            ? guardian_heads[static_cast<std::size_t>(deceased.value())]
+                            : 0U;
     if (deceased.value() < guardian_heads.size()) {
         guardian_heads[static_cast<std::size_t>(deceased.value())] = 0U;
     }
@@ -718,8 +756,8 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
         }
         PersonId beneficiary = heir;
         if (!beneficiary.valid()) {
-            beneficiary = first_alive_beneficial_owner(
-                ownership, persons, lot->asset, deceased);
+            beneficiary =
+                first_alive_beneficial_owner(ownership, persons, lot->asset, deceased);
         }
         if (!beneficiary.valid() &&
             lot->asset.kind != core::BeneficialAssetKind::household_cash) {
@@ -728,12 +766,12 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
                 lot->asset.household,
                 lot->asset.household.value(),
             };
-            beneficiary = first_alive_beneficial_owner(
-                ownership, persons, cash, deceased);
+            beneficiary =
+                first_alive_beneficial_owner(ownership, persons, cash, deceased);
         }
         if (!beneficiary.valid()) {
-            beneficiary = first_alive_member(
-                membership, persons, lot->asset.household, deceased);
+            beneficiary =
+                first_alive_member(membership, persons, lot->asset.household, deceased);
         }
         if (!beneficiary.valid() && lot->asset.household != household &&
             membership.members(lot->asset.household).empty() &&
@@ -742,21 +780,20 @@ settle_death(const core::RootState &state, M4TickScratch &real, M5TickScratch &m
                       lot->asset.household) == retired_households.end()) {
             retired_households.push_back(lot->asset.household);
         }
-        const auto status =
-            beneficiary.valid()
-                ? ownership.transfer(lot_id, beneficiary, lot->share)
-                : ownership.retire(lot_id);
+        const auto status = beneficiary.valid()
+                                ? ownership.transfer(lot_id, beneficiary, lot->share)
+                                : ownership.retire(lot_id);
         if (!status.ok()) {
             return status;
         }
         ++estate.transferred_lots;
     }
-    for (auto index = first_orphan_household;
-         index < retired_households.size(); ++index) {
+    for (auto index = first_orphan_household; index < retired_households.size();
+         ++index) {
         const auto orphan = retired_households[index];
-        const auto residual_status = transfer_household_residual(
-            state, real, monetary, financial, ownership, orphan, HouseholdId{},
-            security_buffer);
+        const auto residual_status =
+            transfer_household_residual(state, real, monetary, financial, ownership,
+                                        orphan, HouseholdId{}, security_buffer);
         if (!residual_status.ok()) {
             return residual_status;
         }
@@ -968,6 +1005,7 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
         working_age_total += working_age ? 1.0 : 0.0;
         if (!working_age || !person->participating) {
             accounts.out_of_labor_force += 1.0;
+            accounts.nonsearching += working_age && !person->searching ? 1.0 : 0.0;
             continue;
         }
         accounts.labor_supply += 1.0;
@@ -1015,9 +1053,10 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
         }
     }
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
-        accounts.vacancies +=
-            std::max(0.0, real.firm_work_[index].labor_demand_effective -
-                              employment.active_hours(real.firm_ids_[index]));
+        accounts.vacancies += std::max(
+            0.0, real.firm_work_[index].labor_demand_effective -
+                     firm_labor_totals(employment, persons, real.firm_ids_[index])
+                         .effective_labor);
     }
     const double head_flow_balance =
         accounts.hires_total + accounts.recalls_total -
@@ -1054,10 +1093,14 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
 
     metrics.employed_fte = accounts.employed_fte;
     metrics.employed_heads = accounts.employed_heads;
-    metrics.unemployment = accounts.unemployed;
+    // A suspended contract carries a recall option, but it provides no hours,
+    // pay, or output. Workers on temporary layoff therefore remain part of
+    // headline labor slack while the separate suspended stock preserves the
+    // useful recall-state decomposition.
+    metrics.unemployment = accounts.unemployed + accounts.suspended;
     metrics.unemployment_rate = accounts.labor_supply <= 0.0
                                     ? 0.0
-                                    : accounts.unemployed / accounts.labor_supply;
+                                    : metrics.unemployment / accounts.labor_supply;
     metrics.suspended = accounts.suspended;
     metrics.job_guarantee = accounts.job_guarantee;
     metrics.out_of_labor_force = accounts.out_of_labor_force;
@@ -1069,7 +1112,6 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
     metrics.second_job_heads = accounts.second_job_heads;
     metrics.second_job_hours = accounts.second_job_hours;
     metrics.nonsearching = accounts.nonsearching;
-    metrics.job_to_job_moves = accounts.job_to_job_moves_total;
     metrics.mean_hourly_wage =
         wage_hours > kLaborTolerance ? wage_bill / wage_hours : 0.0;
     metrics.participation_rate =
@@ -1088,8 +1130,7 @@ class M7Extension final : public M6TickExtension {
         if (memory_efficient_staging_ && !committed_) {
             runtime_.persons = std::move(scratch_.persons_);
             runtime_.membership = std::move(scratch_.membership_);
-            runtime_.beneficial_ownership =
-                std::move(scratch_.beneficial_ownership_);
+            runtime_.beneficial_ownership = std::move(scratch_.beneficial_ownership_);
             runtime_.employment = std::move(scratch_.employment_);
             runtime_.relationships = std::move(scratch_.relationships_);
             runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
@@ -1117,13 +1158,11 @@ class M7Extension final : public M6TickExtension {
             return Status(ErrorCode::contract_violation,
                           "forced leaving-home target is not alive");
         }
-        memory_efficient_staging_ =
-            options_.base.base.base.memory_efficient_staging;
+        memory_efficient_staging_ = options_.base.base.base.memory_efficient_staging;
         if (memory_efficient_staging_) {
             scratch_.persons_ = std::move(runtime_.persons);
             scratch_.membership_ = std::move(runtime_.membership);
-            scratch_.beneficial_ownership_ =
-                std::move(runtime_.beneficial_ownership);
+            scratch_.beneficial_ownership_ = std::move(runtime_.beneficial_ownership);
             scratch_.employment_ = std::move(runtime_.employment);
             scratch_.relationships_ = std::move(runtime_.relationships);
             scratch_.firm_target_ema_ = std::move(runtime_.firm_target_ema);
@@ -1153,8 +1192,7 @@ class M7Extension final : public M6TickExtension {
             if (person == nullptr || !scratch_.persons_.alive(person->guardian)) {
                 continue;
             }
-            const auto person_index =
-                static_cast<std::size_t>(person_id.value());
+            const auto person_index = static_cast<std::size_t>(person_id.value());
             const auto guardian_index =
                 static_cast<std::size_t>(person->guardian.value());
             scratch_.guardian_next_[person_index] =
@@ -1199,17 +1237,16 @@ class M7Extension final : public M6TickExtension {
                 }
             }
             if (dies) {
-                const auto status = settle_death(
-                    state, real, monetary, financial, scratch_.persons_,
-                    scratch_.membership_, scratch_.beneficial_ownership_,
-                    scratch_.employment_, scratch_.relationships_,
-                    scratch_.labor_accounts_, scratch_.estates_,
-                    scratch_.retired_households_,
-                    scratch_.next_event_id_, person_id, calendar_day, runtime_.policy,
-                    runtime_.rules, scratch_.working_metrics_,
-                    scratch_.guardian_heads_, scratch_.guardian_next_,
-                    scratch_.deceased_lots_,
-                    scratch_.estate_securities_);
+                const auto status =
+                    settle_death(state, real, monetary, financial, scratch_.persons_,
+                                 scratch_.membership_, scratch_.beneficial_ownership_,
+                                 scratch_.employment_, scratch_.relationships_,
+                                 scratch_.labor_accounts_, scratch_.estates_,
+                                 scratch_.retired_households_, scratch_.next_event_id_,
+                                 person_id, calendar_day, runtime_.policy,
+                                 runtime_.rules, scratch_.working_metrics_,
+                                 scratch_.guardian_heads_, scratch_.guardian_next_,
+                                 scratch_.deceased_lots_, scratch_.estate_securities_);
                 if (!status.ok()) {
                     return status;
                 }
@@ -1384,9 +1421,28 @@ class M7Extension final : public M6TickExtension {
             const bool working_age =
                 age >= static_cast<double>(runtime_.rules.working_age) &&
                 age < static_cast<double>(runtime_.rules.retirement_age);
-            person->participating = working_age;
-            person->searching = working_age;
-            if (working_age) {
+            const auto *primary_job =
+                scratch_.employment_.get(scratch_.employment_.primary_job(person_id));
+            const auto *secondary_job =
+                scratch_.employment_.get(scratch_.employment_.secondary_job(person_id));
+            const bool attached =
+                scratch_.employment_.active_hours(person_id) > kLaborTolerance ||
+                (primary_job != nullptr && primary_job->active &&
+                 primary_job->suspended) ||
+                (secondary_job != nullptr && secondary_job->active &&
+                 secondary_job->suspended);
+            person->participating =
+                working_age &&
+                (attached ||
+                 structurally_participates(runtime_.rules, state.seed, person_id, age));
+            person->searching = person->participating;
+            // M4 settles taxes and unemployment benefits from the household
+            // labor projection.  Its capacity must therefore be the active
+            // labor force, not every working-age resident.  Counting structural
+            // non-participants here made them appear unemployed to the fiscal
+            // system even though M7 correctly classified them as out of the
+            // labor force.
+            if (person->participating) {
                 const auto household_index =
                     scratch_.household_work_index_[static_cast<std::size_t>(
                         person->household.value())];
@@ -1467,6 +1523,18 @@ class M7Extension final : public M6TickExtension {
                     person->searching = false;
                     continue;
                 }
+                const auto household_index =
+                    scratch_.household_work_index_[static_cast<std::size_t>(
+                        person->household.value())];
+                const auto withdraw = [&]() {
+                    person->participating = false;
+                    person->searching = false;
+                    if (household_index < real.household_work_.size()) {
+                        real.household_work_[household_index].labor_capacity = std::max(
+                            0.0,
+                            real.household_work_[household_index].labor_capacity - 1.0);
+                    }
+                };
                 const auto *primary = scratch_.employment_.get(
                     scratch_.employment_.primary_job(person_id));
                 if (primary != nullptr && primary->active && !primary->suspended &&
@@ -1480,10 +1548,17 @@ class M7Extension final : public M6TickExtension {
                         return status;
                     }
                     scratch_.working_metrics_.separations += 1.0;
+                    withdraw();
+                    continue;
                 }
+                const double active_hours =
+                    scratch_.employment_.active_hours(person_id);
                 person->searching =
-                    scratch_.employment_.active_hours(person_id) > kLaborTolerance ||
+                    active_hours > kLaborTolerance ||
                     mean_posted_wage * person->efficiency >= reservation;
+                if (active_hours <= kLaborTolerance && !person->searching) {
+                    withdraw();
+                }
             }
         }
 
@@ -1526,49 +1601,88 @@ class M7Extension final : public M6TickExtension {
                           }
                           return left > right;
                       });
-            double active_hours = scratch_.employment_.active_hours(firm_id);
-            const double layoff_threshold =
-                firing_target * (1.0 + runtime_.rules.layoff_band);
+            const auto opening_labor =
+                firm_labor_totals(scratch_.employment_, scratch_.persons_, firm_id);
+            double active_labor = opening_labor.effective_labor;
+            double payroll = opening_labor.payroll;
+            // Hiring responds to the live target, while layoffs close only a
+            // fraction of a persistent shortfall. The one-effective-worker
+            // floor prevents small firms from repeatedly firing and rehiring
+            // around a fractional target.
+            const double layoff_band =
+                std::max(1.0, firing_target * runtime_.rules.layoff_band);
+            const double layoff_gap =
+                std::max(0.0, active_labor - firing_target - layoff_band);
+            double planned_reduction = runtime_.rules.firing_adjustment * layoff_gap;
+            if (!runtime_.rules.fractional_hours) {
+                const double whole = std::floor(planned_reduction);
+                const double fractional = planned_reduction - whole;
+                planned_reduction =
+                    whole + (unit_draw(state.seed, firm_id.value(), calendar_day,
+                                       kLayoffStream) < fractional
+                                 ? 1.0
+                                 : 0.0);
+            }
             for (const auto job_id : scratch_.roster_buffer_) {
-                if (active_hours <= layoff_threshold + kLaborTolerance) {
+                if (planned_reduction <= kLaborTolerance) {
                     break;
                 }
                 const auto *job = scratch_.employment_.get(job_id);
                 if (job == nullptr || !job->active || job->suspended) {
                     continue;
                 }
-                const double excess = active_hours - firing_target;
-                if (runtime_.rules.fractional_hours && job->hours - excess > 1.0e-6) {
+                const auto *person = scratch_.persons_.get(job->person);
+                if (person == nullptr || !person->alive ||
+                    person->efficiency <= kLaborTolerance) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "layoff job references invalid worker efficiency");
+                }
+                const double job_labor = job->hours * person->efficiency;
+                if (runtime_.rules.fractional_hours &&
+                    job_labor - planned_reduction > kLaborTolerance) {
                     const double old_hours = job->hours;
-                    const auto status =
-                        set_job_hours(scratch_.employment_, job_id, old_hours - excess,
-                                      scratch_.labor_accounts_);
+                    const double hours_reduction =
+                        planned_reduction / person->efficiency;
+                    const auto status = set_job_hours(scratch_.employment_, job_id,
+                                                      old_hours - hours_reduction,
+                                                      scratch_.labor_accounts_);
                     if (!status.ok()) {
                         return status;
                     }
-                    active_hours -= excess;
+                    active_labor -= planned_reduction;
+                    payroll -= planned_reduction * job->wage;
+                    planned_reduction = 0.0;
                     break;
                 }
-                const double hours = job->hours;
                 const auto status = separate_job(
                     scratch_.employment_, job_id, calendar_day,
                     core::SeparationKind::demand_layoff, scratch_.labor_accounts_);
                 if (!status.ok()) {
                     return status;
                 }
-                active_hours -= hours;
+                active_labor -= job_labor;
+                payroll -= job_labor * job->wage;
+                planned_reduction = std::max(0.0, planned_reduction - job_labor);
                 scratch_.working_metrics_.separations += 1.0;
             }
 
             const auto firm_account_index =
                 static_cast<std::size_t>(firm->primary_account.value());
-            const double affordable_hours = real.balances_[firm_account_index] /
-                                            std::max(work.posted_wage, 1.0e-12);
+            const double budget = std::max(0.0, real.balances_[firm_account_index]);
             for (const auto job_id : scratch_.employment_.roster(firm_id)) {
                 auto *job = scratch_.employment_.get(job_id);
-                if (job == nullptr || !job->active || !job->suspended ||
-                    active_hours + job->hours >
-                        std::min(target, affordable_hours) + kLaborTolerance) {
+                if (job == nullptr || !job->active || !job->suspended) {
+                    continue;
+                }
+                const auto *person = scratch_.persons_.get(job->person);
+                if (person == nullptr || !person->alive) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "recall job references an absent person");
+                }
+                const double job_labor = job->hours * person->efficiency;
+                const double job_cost = job_labor * job->wage;
+                if (active_labor + job_labor > target + kLaborTolerance ||
+                    payroll + job_cost > budget + kLaborTolerance) {
                     continue;
                 }
                 const auto status =
@@ -1576,7 +1690,50 @@ class M7Extension final : public M6TickExtension {
                 if (!status.ok()) {
                     return status;
                 }
-                active_hours += job->hours;
+                active_labor += job_labor;
+                payroll += job_cost;
+            }
+
+            // Restore an incumbent's reduced primary hours before opening another
+            // vacancy. Otherwise a temporary demand reduction permanently fragments
+            // jobs into small contracts and recovery creates unnecessary new hires.
+            for (const auto job_id : scratch_.employment_.roster(firm_id)) {
+                if (active_labor >= target - kLaborTolerance ||
+                    payroll >= budget - kLaborTolerance) {
+                    break;
+                }
+                const auto *job = scratch_.employment_.get(job_id);
+                if (job == nullptr || !job->active || job->suspended ||
+                    job->secondary) {
+                    continue;
+                }
+                const auto *person = scratch_.persons_.get(job->person);
+                if (person == nullptr || !person->alive ||
+                    person->efficiency <= kLaborTolerance) {
+                    return Status(
+                        ErrorCode::invariant_violation,
+                        "hours restoration references invalid worker efficiency");
+                }
+                const double person_hours =
+                    scratch_.employment_.active_hours(job->person);
+                const double hourly_cost = job->wage * person->efficiency;
+                const double expansion = std::min({
+                    std::max(0.0, 1.0 - person_hours),
+                    (target - active_labor) / person->efficiency,
+                    hourly_cost > kLaborTolerance ? (budget - payroll) / hourly_cost
+                                                  : 0.0,
+                });
+                if (expansion <= kLaborTolerance) {
+                    continue;
+                }
+                const auto status =
+                    set_job_hours(scratch_.employment_, job_id, job->hours + expansion,
+                                  scratch_.labor_accounts_);
+                if (!status.ok()) {
+                    return status;
+                }
+                active_labor += expansion * person->efficiency;
+                payroll += expansion * hourly_cost;
             }
         }
 
@@ -1593,7 +1750,13 @@ class M7Extension final : public M6TickExtension {
             const auto *secondary =
                 scratch_.employment_.get(scratch_.employment_.secondary_job(person_id));
             const double active_hours = scratch_.employment_.active_hours(person_id);
-            if (primary == nullptr && secondary == nullptr) {
+            // A zero-hour suspended contract preserves a recall option, but it
+            // must not lock its worker out of the rest of the labor market for
+            // the entire suspension timeout.  Treat that worker as an ordinary
+            // job seeker; a successful outside match closes the stale recall
+            // option immediately before the new contract is opened.
+            if ((primary == nullptr || (primary->active && primary->suspended)) &&
+                secondary == nullptr) {
                 scratch_.labor_candidates_.push_back(person_id);
             }
             if (runtime_.rules.second_jobs && primary != nullptr && primary->active &&
@@ -1609,15 +1772,29 @@ class M7Extension final : public M6TickExtension {
         std::sort(scratch_.labor_candidates_.begin(), scratch_.labor_candidates_.end());
         std::sort(scratch_.ladder_candidates_.begin(),
                   scratch_.ladder_candidates_.end());
+        real.firm_order_.resize(real.firm_ids_.size());
+        std::iota(real.firm_order_.begin(), real.firm_order_.end(), std::size_t{0});
+        const auto search_order_status = rng.shuffle(std::span(real.firm_order_));
+        if (!search_order_status.ok()) {
+            return search_order_status;
+        }
         std::size_t candidate_cursor = 0;
         std::size_t second_job_cursor = 0;
-        for (std::size_t firm_index = 0; firm_index < real.firm_ids_.size();
-             ++firm_index) {
+        for (const auto firm_index : real.firm_order_) {
             const auto firm_id = real.firm_ids_[firm_index];
             const auto *firm = state.firms.get(firm_id);
             auto &work = real.firm_work_[firm_index];
-            double active_hours = scratch_.employment_.active_hours(firm_id);
-            double need = std::max(0.0, work.labor_demand_effective - active_hours);
+            const auto opening_labor =
+                firm_labor_totals(scratch_.employment_, scratch_.persons_, firm_id);
+            double active_labor = opening_labor.effective_labor;
+            double payroll = opening_labor.payroll;
+            const auto firm_account_index =
+                static_cast<std::size_t>(firm->primary_account.value());
+            const double payroll_budget =
+                std::max(0.0, real.balances_[firm_account_index]);
+            double need = std::max(0.0, work.labor_demand_effective - active_labor);
+            const std::size_t second_job_eligible_end =
+                scratch_.second_job_candidates_.size();
             while (need > kLaborTolerance &&
                    candidate_cursor < scratch_.labor_candidates_.size()) {
                 const auto person_id = scratch_.labor_candidates_[candidate_cursor++];
@@ -1628,11 +1805,38 @@ class M7Extension final : public M6TickExtension {
                 }
                 const double residual_hours =
                     std::max(0.0, 1.0 - scratch_.employment_.active_hours(person_id));
-                const double hours = runtime_.rules.fractional_hours
-                                         ? std::min(residual_hours, need)
-                                         : 1.0;
+                const auto *person = scratch_.persons_.get(person_id);
+                if (person == nullptr || !person->alive ||
+                    person->efficiency <= kLaborTolerance) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "hiring candidate has invalid worker efficiency");
+                }
+                const double hourly_cost = work.posted_wage * person->efficiency;
+                const double affordable_hours =
+                    hourly_cost > kLaborTolerance
+                        ? std::max(0.0, payroll_budget - payroll) / hourly_cost
+                        : 0.0;
+                const double hours =
+                    runtime_.rules.fractional_hours
+                        ? std::min({residual_hours, need / person->efficiency,
+                                    affordable_hours})
+                        : (affordable_hours + kLaborTolerance >= 1.0 ? 1.0 : 0.0);
                 if (hours <= kLaborTolerance) {
                     continue;
+                }
+                const auto existing_primary_id =
+                    scratch_.employment_.primary_job(person_id);
+                const auto *existing_primary =
+                    scratch_.employment_.get(existing_primary_id);
+                if (existing_primary != nullptr && existing_primary->active &&
+                    existing_primary->suspended) {
+                    const auto separated = separate_job(
+                        scratch_.employment_, existing_primary_id, calendar_day,
+                        core::SeparationKind::cash_layoff, scratch_.labor_accounts_);
+                    if (!separated.ok()) {
+                        return separated;
+                    }
+                    scratch_.working_metrics_.separations += 1.0;
                 }
                 const auto hired =
                     hire_job(scratch_.employment_, person_id, firm_id, calendar_day,
@@ -1640,8 +1844,10 @@ class M7Extension final : public M6TickExtension {
                 if (!hired.ok()) {
                     return hired.status();
                 }
-                need = std::max(0.0, need - hours);
-                active_hours += hours;
+                const double hired_labor = hours * person->efficiency;
+                need = std::max(0.0, need - hired_labor);
+                active_labor += hired_labor;
+                payroll += hours * hourly_cost;
                 scratch_.working_metrics_.hires += 1.0;
                 if (runtime_.rules.second_jobs && hours < 1.0 - kLaborTolerance) {
                     scratch_.second_job_candidates_.push_back(person_id);
@@ -1649,19 +1855,40 @@ class M7Extension final : public M6TickExtension {
             }
 
             while (runtime_.rules.second_jobs && need > kLaborTolerance &&
-                   second_job_cursor < scratch_.second_job_candidates_.size()) {
+                   second_job_cursor < second_job_eligible_end) {
                 const auto person_id =
                     scratch_.second_job_candidates_[second_job_cursor++];
                 const auto *primary = scratch_.employment_.get(
                     scratch_.employment_.primary_job(person_id));
                 if (primary == nullptr || !primary->active || primary->suspended ||
-                    primary->firm == firm_id ||
                     scratch_.employment_.secondary_job(person_id).valid()) {
+                    continue;
+                }
+                if (runtime_.rules.frictional_search &&
+                    unit_draw(state.seed, person_id.value(), calendar_day,
+                              firm_id.value() ^ kSecondJobStream) >=
+                        runtime_.rules.search_intensity) {
+                    continue;
+                }
+                if (primary->firm == firm_id) {
+                    scratch_.second_job_candidates_.push_back(person_id);
                     continue;
                 }
                 const double residual_hours =
                     std::max(0.0, 1.0 - scratch_.employment_.active_hours(person_id));
-                const double hours = std::min(residual_hours, need);
+                const auto *person = scratch_.persons_.get(person_id);
+                if (person == nullptr || !person->alive ||
+                    person->efficiency <= kLaborTolerance) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "second-job candidate has invalid worker efficiency");
+                }
+                const double hourly_cost = work.posted_wage * person->efficiency;
+                const double affordable_hours =
+                    hourly_cost > kLaborTolerance
+                        ? std::max(0.0, payroll_budget - payroll) / hourly_cost
+                        : 0.0;
+                const double hours = std::min(
+                    {residual_hours, need / person->efficiency, affordable_hours});
                 if (hours <= kLaborTolerance) {
                     continue;
                 }
@@ -1671,51 +1898,10 @@ class M7Extension final : public M6TickExtension {
                 if (!hired.ok()) {
                     return hired.status();
                 }
-                need = std::max(0.0, need - hours);
-                active_hours += hours;
-            }
-
-            const auto firm_account_index =
-                static_cast<std::size_t>(firm->primary_account.value());
-            double affordable_hours = real.balances_[firm_account_index] /
-                                      std::max(work.posted_wage, 1.0e-12);
-            if (active_hours > affordable_hours + kLaborTolerance) {
-                scratch_.roster_buffer_.assign(
-                    scratch_.employment_.roster(firm_id).begin(),
-                    scratch_.employment_.roster(firm_id).end());
-                std::sort(scratch_.roster_buffer_.begin(),
-                          scratch_.roster_buffer_.end(), [&](JobId left, JobId right) {
-                              const auto *left_job = scratch_.employment_.get(left);
-                              const auto *right_job = scratch_.employment_.get(right);
-                              if (left_job->hire_day != right_job->hire_day) {
-                                  return left_job->hire_day > right_job->hire_day;
-                              }
-                              return left > right;
-                          });
-                for (const auto job_id : scratch_.roster_buffer_) {
-                    if (active_hours <= affordable_hours + kLaborTolerance) {
-                        break;
-                    }
-                    const auto *job = scratch_.employment_.get(job_id);
-                    if (job == nullptr || !job->active || job->suspended) {
-                        continue;
-                    }
-                    const double hours = job->hours;
-                    Status status;
-                    if (runtime_.rules.suspensions && !job->secondary) {
-                        status = suspend_job(scratch_.employment_, job_id, calendar_day,
-                                             scratch_.labor_accounts_);
-                    } else {
-                        status =
-                            separate_job(scratch_.employment_, job_id, calendar_day,
-                                         core::SeparationKind::cash_layoff,
-                                         scratch_.labor_accounts_);
-                    }
-                    if (!status.ok()) {
-                        return status;
-                    }
-                    active_hours -= hours;
-                }
+                const double hired_labor = hours * person->efficiency;
+                need = std::max(0.0, need - hired_labor);
+                active_labor += hired_labor;
+                payroll += hours * hourly_cost;
             }
         }
 
@@ -1725,7 +1911,9 @@ class M7Extension final : public M6TickExtension {
                  ++firm_index) {
                 const auto firm_id = real.firm_ids_[firm_index];
                 if (real.firm_work_[firm_index].labor_demand_effective -
-                        scratch_.employment_.active_hours(firm_id) >
+                        firm_labor_totals(scratch_.employment_, scratch_.persons_,
+                                          firm_id)
+                            .effective_labor >
                     kLaborTolerance) {
                     scratch_.ladder_firms_.push_back(firm_id);
                 }
@@ -1760,10 +1948,31 @@ class M7Extension final : public M6TickExtension {
                     continue;
                 }
                 const auto &destination_work = real.firm_work_[destination_index];
+                const auto destination_labor = firm_labor_totals(
+                    scratch_.employment_, scratch_.persons_, destination);
                 const double need =
                     std::max(0.0, destination_work.labor_demand_effective -
-                                      scratch_.employment_.active_hours(destination));
-                if (primary->hours > need + kLaborTolerance ||
+                                      destination_labor.effective_labor);
+                const auto *person = scratch_.persons_.get(person_id);
+                if (person == nullptr || !person->alive) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "job ladder candidate is absent");
+                }
+                const double effective_labor = primary->hours * person->efficiency;
+                const auto *destination_firm = state.firms.get(destination);
+                if (destination_firm == nullptr) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "job ladder destination is absent");
+                }
+                const auto destination_account =
+                    static_cast<std::size_t>(destination_firm->primary_account.value());
+                const double destination_budget =
+                    std::max(0.0, real.balances_[destination_account]);
+                const double new_payroll =
+                    primary->hours * destination_work.posted_wage * person->efficiency;
+                if (effective_labor > need + kLaborTolerance ||
+                    destination_labor.payroll + new_payroll >
+                        destination_budget + kLaborTolerance ||
                     destination_work.posted_wage <
                         primary->wage * (1.0 + runtime_.rules.ladder_premium)) {
                     continue;
@@ -1817,11 +2026,10 @@ class M7Extension final : public M6TickExtension {
             if (payroll <= budget + kLaborTolerance) {
                 continue;
             }
-            scratch_.roster_buffer_.assign(
-                scratch_.employment_.roster(firm_id).begin(),
-                scratch_.employment_.roster(firm_id).end());
-            std::sort(scratch_.roster_buffer_.begin(),
-                      scratch_.roster_buffer_.end(), [&](JobId left, JobId right) {
+            scratch_.roster_buffer_.assign(scratch_.employment_.roster(firm_id).begin(),
+                                           scratch_.employment_.roster(firm_id).end());
+            std::sort(scratch_.roster_buffer_.begin(), scratch_.roster_buffer_.end(),
+                      [&](JobId left, JobId right) {
                           const auto *left_job = scratch_.employment_.get(left);
                           const auto *right_job = scratch_.employment_.get(right);
                           if (left_job->hire_day != right_job->hire_day) {
@@ -1845,8 +2053,7 @@ class M7Extension final : public M6TickExtension {
                 const double hourly_cost = job->wage * person->efficiency;
                 const double job_cost = job->hours * hourly_cost;
                 const double excess = std::max(0.0, payroll - budget);
-                if (runtime_.rules.fractional_hours &&
-                    hourly_cost > kLaborTolerance &&
+                if (runtime_.rules.fractional_hours && hourly_cost > kLaborTolerance &&
                     job_cost > excess + kLaborTolerance) {
                     const double new_hours =
                         std::max(0.0, job->hours - excess / hourly_cost);
@@ -1866,10 +2073,9 @@ class M7Extension final : public M6TickExtension {
                     status = suspend_job(scratch_.employment_, job_id, calendar_day,
                                          scratch_.labor_accounts_);
                 } else {
-                    status =
-                        separate_job(scratch_.employment_, job_id, calendar_day,
-                                     core::SeparationKind::cash_layoff,
-                                     scratch_.labor_accounts_);
+                    status = separate_job(scratch_.employment_, job_id, calendar_day,
+                                          core::SeparationKind::cash_layoff,
+                                          scratch_.labor_accounts_);
                 }
                 if (!status.ok()) {
                     return status;
@@ -1926,6 +2132,19 @@ class M7Extension final : public M6TickExtension {
                 financial_runtime, financial_scratch, runtime_, scratch_, tick, rng);
         }
         return Status::success();
+    }
+
+    Status prepare_household_net_wealth(
+        const core::RootState &state, M4Runtime &real_runtime, M4TickScratch &real,
+        M5Runtime &monetary, M5TickScratch &monetary_scratch,
+        M6Runtime &financial_runtime, M6TickScratch &financial, Tick tick,
+        PhiloxRng &rng, std::span<double> net_wealth) override {
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->prepare_household_net_wealth(
+            state, real_runtime, real, monetary, monetary_scratch, financial_runtime,
+            financial, runtime_, scratch_, tick, rng, net_wealth);
     }
 
     Status close_day(const core::RootState &state, M4Runtime &real_runtime,
@@ -2204,24 +2423,24 @@ class M7Extension final : public M6TickExtension {
                                         estate.settled &&
                                         estate.settled_day == calendar_day;
                              });
-            const auto destination =
-                found == scratch_.estates_.rend()
-                    ? HouseholdId{}
-                    : found->destination_household;
-            const auto residual_status = transfer_household_residual(
-                state, real, monetary_scratch, financial,
-                scratch_.beneficial_ownership_, household, destination,
-                scratch_.estate_securities_);
+            const auto destination = found == scratch_.estates_.rend()
+                                         ? HouseholdId{}
+                                         : found->destination_household;
+            const auto residual_status =
+                transfer_household_residual(state, real, monetary_scratch, financial,
+                                            scratch_.beneficial_ownership_, household,
+                                            destination, scratch_.estate_securities_);
             if (!residual_status.ok()) {
                 return residual_status;
             }
         }
+        real.supplemental_tax_receipts_ +=
+            scratch_.working_metrics_.inheritance_tax_paid;
         if (runtime_.policy.pension_replacement > kLaborTolerance) {
-            const double wage_reference = std::max(
-                scratch_.working_metrics_.mean_hourly_wage,
-                runtime_.last_metrics.mean_hourly_wage);
-            const double pension =
-                runtime_.policy.pension_replacement * wage_reference;
+            const double wage_reference =
+                std::max(scratch_.working_metrics_.mean_hourly_wage,
+                         runtime_.last_metrics.mean_hourly_wage);
+            const double pension = runtime_.policy.pension_replacement * wage_reference;
             if (pension > kLaborTolerance) {
                 for (const auto person_id : scratch_.persons_.alive_ids()) {
                     const auto *person = scratch_.persons_.get(person_id);
@@ -2230,12 +2449,10 @@ class M7Extension final : public M6TickExtension {
                             static_cast<double>(runtime_.rules.retirement_age)) {
                         continue;
                     }
-                    const auto *household =
-                        state.households.get(person->household);
+                    const auto *household = state.households.get(person->household);
                     if (household == nullptr) {
-                        return Status(
-                            ErrorCode::invariant_violation,
-                            "pension recipient household is absent");
+                        return Status(ErrorCode::invariant_violation,
+                                      "pension recipient household is absent");
                     }
                     const auto status = stage_m4_transfer(
                         state, real, state.institutions.treasury_account,
@@ -2244,6 +2461,7 @@ class M7Extension final : public M6TickExtension {
                         return status;
                     }
                     scratch_.working_metrics_.pension_paid += pension;
+                    real.supplemental_transfer_payments_ += pension;
                 }
             }
         }
@@ -2272,6 +2490,36 @@ class M7Extension final : public M6TickExtension {
             measure_labor(state, runtime_.rules, monetary.policy, scratch_.persons_,
                           scratch_.employment_, real, calendar_day,
                           scratch_.labor_accounts_, scratch_.working_metrics_);
+            const auto flow_delta = [](double closing, double opening) {
+                return std::max(0.0, closing - opening);
+            };
+            const auto &opening = runtime_.labor_accounts;
+            const auto &closing = scratch_.labor_accounts_;
+            scratch_.working_metrics_.churn_separations = flow_delta(
+                closing.churn_separations_total, opening.churn_separations_total);
+            const double layoff_separations = flow_delta(
+                closing.layoff_separations_total, opening.layoff_separations_total);
+            scratch_.working_metrics_.cash_layoff_separations =
+                flow_delta(closing.cash_layoffs_total, opening.cash_layoffs_total);
+            scratch_.working_metrics_.demand_layoff_separations =
+                std::max(0.0, layoff_separations -
+                                  scratch_.working_metrics_.cash_layoff_separations);
+            scratch_.working_metrics_.firm_exit_separations =
+                flow_delta(closing.firm_exit_separations_total,
+                           opening.firm_exit_separations_total);
+            scratch_.working_metrics_.death_separations = flow_delta(
+                closing.death_separations_total, opening.death_separations_total);
+            scratch_.working_metrics_.retirement_separations =
+                flow_delta(closing.retirement_separations_total,
+                           opening.retirement_separations_total);
+            scratch_.working_metrics_.welfare_quits =
+                flow_delta(closing.welfare_quits_total, opening.welfare_quits_total);
+            scratch_.working_metrics_.suspensions_flow =
+                flow_delta(closing.suspensions_total, opening.suspensions_total);
+            scratch_.working_metrics_.recalls =
+                flow_delta(closing.recalls_total, opening.recalls_total);
+            scratch_.working_metrics_.job_to_job_moves = flow_delta(
+                closing.job_to_job_moves_total, opening.job_to_job_moves_total);
             const auto job_records = scratch_.employment_.records().size();
             const auto active_jobs = scratch_.employment_.active_count();
             const auto inactive_jobs =
@@ -2290,6 +2538,21 @@ class M7Extension final : public M6TickExtension {
         scratch_.working_metrics_.beneficial_projection_error =
             beneficial_projection_error(scratch_.beneficial_ownership_);
         return Status::success();
+    }
+
+    Status after_financial_lifecycle(const core::RootState &state,
+                                     M4Runtime &real_runtime, M4TickScratch &real,
+                                     M5Runtime &monetary_runtime,
+                                     M5TickScratch &monetary,
+                                     M6Runtime &financial_runtime,
+                                     M6TickScratch &financial, Tick tick,
+                                     PhiloxRng &rng) override {
+        if (extension_ == nullptr) {
+            return Status::success();
+        }
+        return extension_->after_financial_lifecycle(
+            state, real_runtime, real, monetary_runtime, monetary, financial_runtime,
+            financial, runtime_, scratch_, tick, rng);
     }
 
     Status validate(const core::RootState &state, const M4Runtime &real_runtime,
@@ -2346,8 +2609,7 @@ class M7Extension final : public M6TickExtension {
         if (memory_efficient_staging_) {
             runtime_.persons = std::move(scratch_.persons_);
             runtime_.membership = std::move(scratch_.membership_);
-            runtime_.beneficial_ownership =
-                std::move(scratch_.beneficial_ownership_);
+            runtime_.beneficial_ownership = std::move(scratch_.beneficial_ownership_);
             runtime_.employment = std::move(scratch_.employment_);
             runtime_.relationships = std::move(scratch_.relationships_);
             runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
@@ -2367,8 +2629,7 @@ class M7Extension final : public M6TickExtension {
         runtime_.next_event_id = scratch_.next_event_id_;
         runtime_.population_rng_counter = scratch_.population_rng_counter_;
         const auto calendar_day =
-            runtime_.start_calendar_day +
-            static_cast<std::int32_t>(tick.value()) + 1;
+            runtime_.start_calendar_day + static_cast<std::int32_t>(tick.value()) + 1;
         for (const auto household : scratch_.retired_households_) {
             const auto *component = state.households.get(household);
             if (component == nullptr) {
@@ -2435,14 +2696,14 @@ class M7Extension final : public M6TickExtension {
                 std::terminate();
             }
             const auto account = state.postings.create_account(
-                    {
-                        core::AccountKind::deposit,
-                        state.economy,
-                        core::OwnerId::household(event.destination),
-                        state.currency,
-                        origin_settlement_node,
-                    },
-                    Money(0.0));
+                {
+                    core::AccountKind::deposit,
+                    state.economy,
+                    core::OwnerId::household(event.destination),
+                    state.currency,
+                    origin_settlement_node,
+                },
+                Money(0.0));
             if (!account.ok()) {
                 std::terminate();
             }
@@ -2459,8 +2720,7 @@ class M7Extension final : public M6TickExtension {
             for (const auto lot_id :
                  runtime_.beneficial_ownership.lots_for_person(event.person)) {
                 const auto *lot = runtime_.beneficial_ownership.get(lot_id);
-                if (lot != nullptr && lot->is_active() &&
-                    lot->asset == origin_cash) {
+                if (lot != nullptr && lot->is_active() && lot->asset == origin_cash) {
                     person_cash_lots.push_back(lot_id);
                     cash_share += lot->share;
                 }
@@ -2507,10 +2767,8 @@ class M7Extension final : public M6TickExtension {
             }
             person->household = event.destination;
 
-            const auto origin_index =
-                static_cast<std::size_t>(event.origin.value());
-            if (financial_runtime.watchlist_rows.size() <=
-                event.destination.value()) {
+            const auto origin_index = static_cast<std::size_t>(event.origin.value());
+            if (financial_runtime.watchlist_rows.size() <= event.destination.value()) {
                 financial_runtime.watchlist_rows.resize(
                     static_cast<std::size_t>(event.destination.value() + 1U));
             }
@@ -2518,25 +2776,19 @@ class M7Extension final : public M6TickExtension {
                 financial_runtime.watchlist_rows[static_cast<std::size_t>(
                     event.destination.value())];
             destination_row.household = event.destination;
-            const auto destination_offset =
-                financial_runtime.watchlist_equities.size();
+            const auto destination_offset = financial_runtime.watchlist_equities.size();
             if (destination_offset > std::numeric_limits<std::uint32_t>::max()) {
                 std::terminate();
             }
-            destination_row.offset =
-                static_cast<std::uint32_t>(destination_offset);
+            destination_row.offset = static_cast<std::uint32_t>(destination_offset);
             if (origin_index < financial_runtime.watchlist_rows.size()) {
-                const auto origin_row =
-                    financial_runtime.watchlist_rows[origin_index];
+                const auto origin_row = financial_runtime.watchlist_rows[origin_index];
                 destination_row.count = origin_row.count;
-                const auto source_offset =
-                    static_cast<std::size_t>(origin_row.offset);
-                const auto source_count =
-                    static_cast<std::size_t>(origin_row.count);
+                const auto source_offset = static_cast<std::size_t>(origin_row.offset);
+                const auto source_count = static_cast<std::size_t>(origin_row.count);
                 if (source_offset > financial_runtime.watchlist_equities.size() ||
                     source_count >
-                        financial_runtime.watchlist_equities.size() -
-                            source_offset) {
+                        financial_runtime.watchlist_equities.size() - source_offset) {
                     std::terminate();
                 }
                 const std::vector<EquityId> inherited_watchlist(
@@ -2574,10 +2826,8 @@ class M7Extension final : public M6TickExtension {
 
 void M7TickScratch::reserve(const M7Runtime &runtime) {
     opening_alive_.reserve(runtime.persons.alive_count());
-    guardian_heads_.reserve(
-        static_cast<std::size_t>(runtime.persons.next_id()));
-    guardian_next_.reserve(
-        static_cast<std::size_t>(runtime.persons.next_id()));
+    guardian_heads_.reserve(static_cast<std::size_t>(runtime.persons.next_id()));
+    guardian_next_.reserve(static_cast<std::size_t>(runtime.persons.next_id()));
     deceased_lots_.reserve(8);
     estate_securities_.reserve(16);
     estates_.reserve(runtime.estates.size() + 8U);
@@ -2616,12 +2866,9 @@ std::uint64_t M7TickScratch::capacity_signature() const noexcept {
 }
 
 Status validate_m7_policy(const M7PolicyState &policy) noexcept {
-    if (!finite(policy.inheritance_tax_rate) ||
-        !finite(policy.pension_replacement) ||
-        policy.inheritance_tax_rate < 0.0 ||
-        policy.inheritance_tax_rate > 1.0 ||
-        policy.pension_replacement < 0.0 ||
-        policy.pension_replacement > 1.5) {
+    if (!finite(policy.inheritance_tax_rate) || !finite(policy.pension_replacement) ||
+        policy.inheritance_tax_rate < 0.0 || policy.inheritance_tax_rate > 1.0 ||
+        policy.pension_replacement < 0.0 || policy.pension_replacement > 1.5) {
         return Status(ErrorCode::invalid_argument, "M7 policy is invalid");
     }
     return Status::success();
@@ -2636,6 +2883,9 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.search_intensity,
         rules.ladder_search_intensity,
         rules.ladder_premium,
+        rules.young_participation_rate,
+        rules.prime_participation_rate,
+        rules.older_participation_rate,
         rules.reservation_markup,
         rules.welfare_quit_hazard,
         rules.family_transfer_buffer,
@@ -2655,7 +2905,10 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.target_smoothing > 1.0 || rules.suspension_timeout_days == 0 ||
         rules.search_intensity < 0.0 || rules.search_intensity > 1.0 ||
         rules.ladder_search_intensity < 0.0 || rules.ladder_search_intensity > 1.0 ||
-        rules.ladder_premium < 0.0 || rules.reservation_markup < 0.0 ||
+        rules.ladder_premium < 0.0 || rules.young_participation_rate < 0.0 ||
+        rules.young_participation_rate > 1.0 || rules.prime_participation_rate < 0.0 ||
+        rules.prime_participation_rate > 1.0 || rules.older_participation_rate < 0.0 ||
+        rules.older_participation_rate > 1.0 || rules.reservation_markup < 0.0 ||
         rules.welfare_quit_hazard < 0.0 || rules.welfare_quit_hazard > 1.0 ||
         rules.family_transfer_buffer < 1.0 ||
         (rules.family_transfers && !rules.relationships) ||
@@ -2734,8 +2987,8 @@ Status validate_m7_state_impl(const core::RootState &state,
     status = full_index_validation
                  ? validate_m6_state(state, real_economy_runtime, monetary_runtime,
                                      financial_runtime, tick)
-                 : validate_m6_state_fast(state, real_economy_runtime,
-                                          monetary_runtime, financial_runtime, tick);
+                 : validate_m6_state_fast(state, real_economy_runtime, monetary_runtime,
+                                          financial_runtime, tick);
     if (!status.ok()) {
         return status;
     }
@@ -2749,8 +3002,8 @@ Status validate_m7_state_impl(const core::RootState &state,
     }
     if (runtime.rules.beneficial_ownership) {
         status = full_index_validation
-                     ? runtime.beneficial_ownership.validate(
-                           runtime.persons, state.accounting_tolerance)
+                     ? runtime.beneficial_ownership.validate(runtime.persons,
+                                                             state.accounting_tolerance)
                      : runtime.beneficial_ownership.validate_fast(
                            runtime.persons, state.accounting_tolerance);
         if (!status.ok()) {
@@ -2867,7 +3120,15 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         if (!created.ok()) {
             return created.status();
         }
-        (age >= spec.rules.working_age ? adults : minors).push_back(*created.get_if());
+        const auto person_id = *created.get_if();
+        auto *stored = runtime.persons.get(person_id);
+        const bool working_age =
+            age >= spec.rules.working_age && age < spec.rules.retirement_age;
+        stored->participating = working_age && structurally_participates(
+                                                   spec.rules, financial.root.seed,
+                                                   person_id, static_cast<double>(age));
+        stored->searching = stored->participating;
+        (age >= spec.rules.working_age ? adults : minors).push_back(person_id);
     }
     std::vector<PersonId> assignment_order;
     assignment_order.reserve(spec.population.initial_persons);
@@ -2881,6 +3142,28 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         if (!membership.ok()) {
             return membership;
         }
+    }
+    for (const auto household_id : households) {
+        double opening_income = 0.0;
+        for (const auto person_id : runtime.membership.members(household_id)) {
+            const auto *person = runtime.persons.get(person_id);
+            const double age =
+                completed_age(*person, spec.population.start_calendar_day);
+            if (person->participating) {
+                opening_income += real.rules.initial_wage;
+            } else if (age >= static_cast<double>(spec.rules.retirement_age) &&
+                       spec.policy.pension_replacement > 0.0) {
+                opening_income +=
+                    spec.policy.pension_replacement * real.rules.initial_wage;
+            }
+        }
+        auto *household = financial.root.households.get(household_id);
+        if (household == nullptr) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 genesis household projection is absent");
+        }
+        household->income_expected = opening_income;
+        household->income_realized = opening_income;
     }
 
     if (runtime.rules.relationships) {
@@ -2970,8 +3253,7 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         std::vector<HouseholdId> security_households;
         security_households.reserve(financial.root.households.alive_count());
         for (const auto &lot : financial.runtime.securities.lots()) {
-            if (!lot.active() ||
-                lot.holder.kind() != core::OwnerKind::household) {
+            if (!lot.active() || lot.holder.kind() != core::OwnerKind::household) {
                 continue;
             }
             security_households.push_back(HouseholdId(lot.holder.value()));

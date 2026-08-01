@@ -212,8 +212,8 @@ struct HousingRules final {
     bool rentals{false};
     bool construction{false};
     double house_price_income_years{3.5};
-    double initial_dwellings_per_household{1.0};
-    double initial_homeownership_share{1.0};
+    double initial_dwellings_per_household{1.05};
+    double initial_homeownership_share{0.65};
     double initial_floor_area{80.0};
     double initial_quality{1.0};
     std::uint32_t location_count{1};
@@ -233,7 +233,10 @@ struct HousingRules final {
     double rental_vacancy_deadband{0.0};
     double rent_floor_wage_share{0.0};
     std::uint64_t builder_count{5};
-    double initial_builder_cash_buffer{5.0};
+    // Developer equity must be large enough to carry a representative project
+    // through the construction-loan borrowing base.  Five monetary units strand
+    // every builder below one completed dwelling at playable scale.
+    double initial_builder_cash_buffer{25.0};
     double builder_productivity{0.002};
     double builder_demand_seed{0.005};
     double builder_demand_price_gain{0.0};

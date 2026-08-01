@@ -1207,19 +1207,43 @@ Status SecurityBook::validate_indexes() const {
     if (!status.ok()) {
         return status;
     }
-    if (rebuilt.holder_chains_ != holder_chains_ ||
-        rebuilt.contract_chains_ != contract_chains_ ||
-        rebuilt.holder_next_ != holder_next_ ||
-        rebuilt.contract_next_ != contract_next_ ||
-        rebuilt.indexed_lot_count_ != indexed_lot_count_ ||
-        rebuilt.issuer_index_ != issuer_index_ ||
-        rebuilt.issuer_securities_ != issuer_securities_ ||
-        rebuilt.maturity_index_ != maturity_index_ ||
-        rebuilt.maturity_bonds_ != maturity_bonds_ ||
-        rebuilt.pair_slots_ != pair_slots_ || rebuilt.pair_count_ != pair_count_ ||
-        rebuilt.duplicate_active_pairs_ != duplicate_active_pairs_) {
+    if (rebuilt.holder_chains_ != holder_chains_) {
         return Status(ErrorCode::invariant_violation,
-                      "security indexes are inconsistent");
+                      "security holder chains are inconsistent");
+    }
+    if (rebuilt.contract_chains_ != contract_chains_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security contract chains are inconsistent");
+    }
+    if (rebuilt.holder_next_ != holder_next_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security holder links are inconsistent");
+    }
+    if (rebuilt.contract_next_ != contract_next_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security contract links are inconsistent");
+    }
+    if (rebuilt.indexed_lot_count_ != indexed_lot_count_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security indexed lot count is inconsistent");
+    }
+    if (rebuilt.issuer_index_ != issuer_index_ ||
+        rebuilt.issuer_securities_ != issuer_securities_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security issuer index is inconsistent");
+    }
+    if (rebuilt.maturity_index_ != maturity_index_ ||
+        rebuilt.maturity_bonds_ != maturity_bonds_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security maturity index is inconsistent");
+    }
+    if (rebuilt.pair_count_ != pair_count_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security holder-contract pair count is inconsistent");
+    }
+    if (rebuilt.duplicate_active_pairs_ != duplicate_active_pairs_) {
+        return Status(ErrorCode::invariant_violation,
+                      "security duplicate holder-contract pair flag is inconsistent");
     }
     for (std::size_t index = 0U; index < lots_.size(); ++index) {
         const auto &lot = lots_[index];

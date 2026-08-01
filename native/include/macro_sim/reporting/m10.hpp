@@ -12,11 +12,19 @@
 
 namespace macro_sim::reporting {
 
-// Forty-one native source series back the forty-two institutional observation
-// series.  ``oracle_daily_output`` deliberately aliases the same committed
+// Public metrics include the causal dashboard series and native distribution
+// statistics. ``oracle_daily_output`` deliberately aliases the same committed
 // ``real_output`` source; access control belongs to the release layer rather
 // than to a duplicate economic measurement.
-inline constexpr std::size_t kM10PublicMetricCount = 41U;
+inline constexpr std::size_t kM10BasePublicMetricCount = 76U;
+inline constexpr std::size_t kM10DashboardMetricCount =
+    0U
+#define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule) +1U
+#include "macro_sim/reporting/m10_dashboard_metrics.inc"
+#undef MACRO_SIM_DASHBOARD_METRIC
+    ;
+inline constexpr std::size_t kM10PublicMetricCount =
+    kM10BasePublicMetricCount + kM10DashboardMetricCount;
 inline constexpr std::size_t kM10NativeSourceMetricCount =
     0U
 // The replacement lists below are additive fragments of one accumulating sum,

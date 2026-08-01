@@ -43,6 +43,32 @@ namespace {
     return false;
 }
 
+[[nodiscard]] double accumulation_roundoff_bound(
+    double absolute_sum,
+    std::size_t operation_count,
+    double accounting_tolerance
+) noexcept {
+    // Commands are economically balanced by construction, but their deltas are
+    // first accumulated by account. A large fan-out payment therefore performs
+    // many same-sign additions on the source account before the compensated
+    // cross-account sum below. Bound that first-stage forward error as well as
+    // the final reduction. This remains a relative floating-point tolerance;
+    // any material economic imbalance is still rejected.
+    constexpr double kReductionGuardOperations = 64.0;
+    const double operations =
+        kReductionGuardOperations + static_cast<double>(operation_count);
+    const double relative_error =
+        operations * std::numeric_limits<double>::epsilon();
+    if (relative_error >= 0.5) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double gamma = relative_error / (1.0 - relative_error);
+    return std::max(
+        accounting_tolerance,
+        gamma * std::max(1.0, absolute_sum)
+    );
+}
+
 }  // namespace
 
 void TransactionWorkspace::reserve(const RootState& state) {
@@ -670,10 +696,10 @@ Result<TransactionReceipt> SettlementTransaction::commit_impl(
     const double existing_loan_sum = neumaier_sum(loan_totals);
     const double economic_residual =
         posting_sum - existing_loan_sum - new_loan_total;
-    const double allowed_residual = std::max(
-        root_->accounting_tolerance,
-        32.0 * std::numeric_limits<double>::epsilon() *
-            std::max(1.0, absolute_economic_sum)
+    const double allowed_residual = accumulation_roundoff_bound(
+        absolute_economic_sum,
+        transfers_.size() * 2U + originations_.size() + repayments_.size(),
+        root_->accounting_tolerance
     );
     if (std::abs(economic_residual) > allowed_residual) {
         return reject(
@@ -698,13 +724,11 @@ Result<TransactionReceipt> SettlementTransaction::commit_impl(
         ] -= economic_residual;
     }
 
-    const double reserve_residual_bound = std::max(
-        root_->accounting_tolerance,
-        32.0 * std::numeric_limits<double>::epsilon() *
-            std::max(
-                1.0,
-                absolute_reserve_sum + std::abs(reserve_stock_delta)
-            )
+    const double reserve_residual_bound = accumulation_roundoff_bound(
+        absolute_reserve_sum + std::abs(reserve_stock_delta),
+        transfers_.size() * 2U + reserve_transfers_.size() * 2U +
+            reserve_issues_.size(),
+        root_->accounting_tolerance
     );
     if (std::abs(neumaier_sum(reserve_totals) - reserve_stock_delta)
         > reserve_residual_bound) {

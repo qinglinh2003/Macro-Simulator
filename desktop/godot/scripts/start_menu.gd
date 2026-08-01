@@ -107,8 +107,8 @@ const STRUCT_GROUPS := [
 
 const POLICY_PREVIEW := {
 	"treasury": [
-		{"group": "@policy_group.fiscal_stance", "id": "fiscal_stance", "levers": [["@policy.gov_consumption_share", "gov_consumption_share", "number", 0.18, 0.005], ["@policy.gov_deficit_target", "gov_deficit_target", "percent", 0.03, 0.005]]},
-		{"group": "@policy_group.tax_transfers", "id": "tax_and_transfers", "levers": [["@policy.tax_income_rate", "tax_income_rate", "percent", 0.22, 0.01], ["@policy.tax_consumption_rate", "tax_consumption_rate", "percent", 0.15, 0.01], ["@policy.energy_subsidy_rate", "energy_subsidy_rate", "percent", 0.08, 0.01]]},
+		{"group": "@policy_group.fiscal_stance", "id": "fiscal_stance", "levers": [["@policy.gov_consumption_share", "gov_consumption_share", "number", 0.20, 0.005], ["@policy.gov_deficit_target", "gov_deficit_target", "percent", 0.03, 0.005]]},
+		{"group": "@policy_group.tax_transfers", "id": "tax_and_transfers", "levers": [["@policy.tax_income_rate", "tax_income_rate", "percent", 0.25, 0.01], ["@policy.tax_consumption_rate", "tax_consumption_rate", "percent", 0.15, 0.01], ["@policy.energy_subsidy_rate", "energy_subsidy_rate", "percent", 0.08, 0.01]]},
 		{"group": "@policy_group.debt_management", "id": "debt_management", "levers": [["@policy.bond_finance_frac", "bond_finance_frac", "percent", 0.60, 0.05], ["@policy.bond_maturity", "bond_maturity", "integer", 20, 1.0]]},
 	],
 	"labor_social": [
@@ -118,8 +118,8 @@ const POLICY_PREVIEW := {
 			["@policy.jg_wage_ratio", "jg_wage_ratio", "percent", 0.80, 0.05],
 			["@policy.jg_public_works_share", "jg_public_works_share", "percent", 0.50, 0.05],
 			["@policy.benefit_replacement", "benefit_replacement", "percent", 0.40, 0.05],
-			["@policy.benefit_income_floor", "benefit_income_floor", "number", 0.60, 0.05],
-			["@policy.pension_replacement", "pension_replacement", "percent", 0.40, 0.05],
+			["@policy.benefit_income_floor", "benefit_income_floor", "number", 0.00, 0.05],
+			["@policy.pension_replacement", "pension_replacement", "percent", 0.20, 0.05],
 		]},
 	],
 	"cb": [
@@ -158,7 +158,7 @@ var _migration := true
 var _cross_open := false
 var _cross_values := {"fx_lambda": 0.05, "fx_friction": 0.03,
 	"fx_trade_cap": 0.15, "capital_mobility": 1.0,
-	"capital_adjust": 0.2, "migration_rate": 0.02,
+	"capital_adjust": 0.2, "migration_rate": 0.0005,
 	"migration_max_share": 0.25, "remittance_share": 0.2,
 	"wage_smoothing": 0.02, "peg_reserves0": 5000.0}
 var _countries: Array = []
@@ -513,7 +513,7 @@ func _step_world(parent: VBoxContainer) -> void:
 	if _cross_open:
 		var ap := _panel(PANEL, LINE2, 11, 8); parent.add_child(ap)
 		var grid := GridContainer.new(); grid.columns = 2; grid.add_theme_constant_override("h_separation", 6); grid.add_theme_constant_override("v_separation", 6); ap.add_child(grid)
-		for field: Array in [["@wizard.field.fx_lambda", "fx_lambda", "0.05"], ["@wizard.field.fx_friction", "fx_friction", "0.03"], ["@wizard.field.fx_trade_cap", "fx_trade_cap", "0.15"], ["@wizard.field.capital_mobility", "capital_mobility", "1.00"], ["@wizard.field.capital_adjust", "capital_adjust", "0.20"], ["@wizard.field.migration_rate", "migration_rate", "0.02"], ["@wizard.field.migration_max_share", "migration_max_share", "0.25"], ["@wizard.field.remittance_share", "remittance_share", "0.20"], ["@wizard.field.wage_smoothing", "wage_smoothing", "0.02"], ["@wizard.field.peg_reserves0", "peg_reserves0", "5,000"]]:
+		for field: Array in [["@wizard.field.fx_lambda", "fx_lambda", "0.05"], ["@wizard.field.fx_friction", "fx_friction", "0.03"], ["@wizard.field.fx_trade_cap", "fx_trade_cap", "0.15"], ["@wizard.field.capital_mobility", "capital_mobility", "1.00"], ["@wizard.field.capital_adjust", "capital_adjust", "0.20"], ["@wizard.field.migration_rate", "migration_rate", "0.0005"], ["@wizard.field.migration_max_share", "migration_max_share", "0.25"], ["@wizard.field.remittance_share", "remittance_share", "0.20"], ["@wizard.field.wage_smoothing", "wage_smoothing", "0.02"], ["@wizard.field.peg_reserves0", "peg_reserves0", "5,000"]]:
 			grid.add_child(_mini_field(str(field[0]), str(field[1]), str(field[2])))
 
 
@@ -832,7 +832,7 @@ func _normalize_structure_number(key: String, value: float) -> Variant:
 	var minimum := 2.0 if key == "n_firms_c" \
 		else (1.0 if _is_structure_integer(key) \
 		else (0.05 if key in ["a", "alpha", "necessity_share0"] else 0.0))
-	var maximum := 100_000.0 if _is_structure_integer(key) \
+	var maximum := 10_000_000.0 if _is_structure_integer(key) \
 		else (0.95 if key in ["alpha", "necessity_share0"] else INF)
 	var normalized := clampf(value, minimum, maximum)
 	return roundi(normalized) if _is_structure_integer(key) else normalized
@@ -883,12 +883,12 @@ func _apply_structure_number(country: Dictionary, key: String, text: String) -> 
 
 func _structure_default(key: String, profile: String = "symmetric") -> float:
 	var counts := {
-		"demographics_population": 80.0 * float(PROFILES.get(profile, PROFILES["symmetric"])["scale"]),
-		"n_firms_c": 12.0,
-		"n_firms_k": 4.0,
-		"n_firms_e": 2.0,
-		"n_builders": 5.0,
-		"n_banks": 2.0,
+		"demographics_population": 100_000.0 * float(PROFILES.get(profile, PROFILES["symmetric"])["scale"]),
+		"n_firms_c": 1_500.0,
+		"n_firms_k": 500.0,
+		"n_firms_e": 250.0,
+		"n_builders": 625.0,
+		"n_banks": 8.0,
 	}
 	if counts.has(key):
 		return float(counts[key])

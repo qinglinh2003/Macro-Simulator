@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <utility>
 
+#include "macro_sim/core/invariants.hpp"
 #include "macro_sim/core/root_state.hpp"
 
 namespace {
@@ -179,6 +180,38 @@ void test_ownership_owner_rekey_merges_assets() {
     assert(active == 1);
 }
 
+void test_reserve_invariant_scales_roundoff_by_gross_positions() {
+    const GenesisSpec spec{
+        GenesisVertical::m4_v0_cash_loop,
+        EconomyId(1),
+        macro_sim::CurrencyId(1),
+        2,
+        1,
+        0,
+        2,
+        false,
+        Money(100.0),
+        Capital(0.0),
+        19,
+        {},
+    };
+    auto state = take_state(macro_sim::core::build_genesis(spec));
+    auto &reserves = state.reserves.records();
+    assert(reserves.size() == 2);
+
+    reserves[0].balance = Money(1.0e9);
+    reserves[1].balance = Money(-999'999'900.00001);
+    assert(macro_sim::core::run_invariants(state).ok());
+
+    reserves[1].balance = Money(-999'999'899.0);
+    const auto report = macro_sim::core::run_invariants(state);
+    assert(!report.ok());
+    assert(
+        report.failed
+        == macro_sim::core::InvariantId::reserve_conservation
+    );
+}
+
 } // namespace
 
 int main() {
@@ -187,5 +220,6 @@ int main() {
     test_invalid_vertical_capabilities_publish_no_state();
     test_posting_account_index_growth_and_reuse();
     test_ownership_owner_rekey_merges_assets();
+    test_reserve_invariant_scales_roundoff_by_gross_positions();
     return 0;
 }
