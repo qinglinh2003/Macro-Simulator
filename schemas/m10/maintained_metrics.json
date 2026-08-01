@@ -1,9 +1,10 @@
 {
   "counts": {
-    "national_accounts": 59,
-    "native_stage_sources": 200,
+    "national_accounts": 63,
+    "native_dashboard_analytics": 120,
+    "native_stage_sources": 220,
     "public_sources": 41,
-    "total": 300
+    "total": 444
   },
   "metrics": [
     {
@@ -377,6 +378,1086 @@
     },
     {
       "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.hh_wealth_gini",
+      "parity_rule": "gini(nonnegative household deposits + securities + housing - debt)",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wage_p90_p10_ratio",
+      "parity_rule": "weighted_p90(active hourly wage) / weighted_p10(active hourly wage)",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 30,
+      "id": "metric.economy.welfare_log",
+      "parity_rule": "person-weighted mean log equivalized real household consumption",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "log_real_consumption"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.savings_rate",
+      "parity_rule": "(live household realized income - consumption) / realized income",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "mean",
+      "cadence_ticks": 30,
+      "id": "metric.economy.bottom10_consumption",
+      "parity_rule": "mean equivalized real consumption of the bottom population decile",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "real_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_1_share",
+      "parity_rule": "bottom household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_2_share",
+      "parity_rule": "second household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_3_share",
+      "parity_rule": "third household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_4_share",
+      "parity_rule": "fourth household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_5_share",
+      "parity_rule": "fifth household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_6_share",
+      "parity_rule": "sixth household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_7_share",
+      "parity_rule": "seventh household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_8_share",
+      "parity_rule": "eighth household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_9_share",
+      "parity_rule": "ninth household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.income_decile_10_share",
+      "parity_rule": "top household income decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_1_share",
+      "parity_rule": "bottom household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_2_share",
+      "parity_rule": "second household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_3_share",
+      "parity_rule": "third household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_4_share",
+      "parity_rule": "fourth household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_5_share",
+      "parity_rule": "fifth household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_6_share",
+      "parity_rule": "sixth household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_7_share",
+      "parity_rule": "seventh household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_8_share",
+      "parity_rule": "eighth household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_9_share",
+      "parity_rule": "ninth household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wealth_decile_10_share",
+      "parity_rule": "top household net-wealth decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_1_share",
+      "parity_rule": "bottom population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_2_share",
+      "parity_rule": "second population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_3_share",
+      "parity_rule": "third population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_4_share",
+      "parity_rule": "fourth population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_5_share",
+      "parity_rule": "fifth population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_6_share",
+      "parity_rule": "sixth population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_7_share",
+      "parity_rule": "seventh population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_8_share",
+      "parity_rule": "eighth population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_9_share",
+      "parity_rule": "ninth population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.consumption_decile_10_share",
+      "parity_rule": "top population equivalized-consumption decile share",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.inventory_to_sales",
+      "parity_rule": "firm inventory / trailing firm sales",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.production_realization_rate",
+      "parity_rule": "realized real output / gross real output",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.underemployed_share",
+      "parity_rule": "underemployed heads / participating labor force",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.wage_inflation",
+      "parity_rule": "mean wage / previous published mean wage - 1",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.avg_markup",
+      "parity_rule": "mean markup of active firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.gov_debt",
+      "parity_rule": "government bond face less treasury cash",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.bank_deposit_total",
+      "parity_rule": "positive open deposit-account balances",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.household_debt_total",
+      "parity_rule": "active loan principal owed by households",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.household_debt_total_observed",
+      "parity_rule": "active loan principal owed by households",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_debt_total",
+      "parity_rule": "active loan principal owed by firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.household_debt_gini",
+      "parity_rule": "Gini of household active loan principal",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.household_debt_top10_share",
+      "parity_rule": "top household debt decile / household debt",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_debt_gini",
+      "parity_rule": "Gini of active-firm loan principal",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_debt_top10_share",
+      "parity_rule": "top active-firm debt decile / firm debt",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.equity_market_cap",
+      "parity_rule": "firm plus bank equity market capitalization",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.tobin_q_mean",
+      "parity_rule": "mean active-firm smoothed Tobin Q",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.tobin_q_dispersion",
+      "parity_rule": "standard deviation of active-firm smoothed Tobin Q",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.equity_wealth_share",
+      "parity_rule": "household equity value / household gross financial assets",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.equity_ownership_gini",
+      "parity_rule": "Gini of household equity market value",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.hh_wealth_gini_incl_equity",
+      "parity_rule": "Gini of household net wealth including securities",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.mortgage_count",
+      "parity_rule": "active mortgage contracts",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "loans"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.tenant_share",
+      "parity_rule": "tenant households / occupied households",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.rental_vacancies",
+      "parity_rule": "unoccupied household-owned dwellings",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.landlord_count",
+      "parity_rule": "households owning a dwelling occupied by another household",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "households"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.builder_wip_units",
+      "parity_rule": "builder work in progress",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.builder_inventory_units",
+      "parity_rule": "builder finished dwelling inventory",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.builder_employment",
+      "parity_rule": "active hours at construction firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.energy_cost_share",
+      "parity_rule": "household energy spending / household consumption",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.energy_coverage_mean",
+      "parity_rule": "energy stocks / current energy use",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.net_population_growth_rate_annualized",
+      "parity_rule": "365 * (births - deaths) / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "per_year"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.birth_rate_per_1000_annualized",
+      "parity_rule": "365000 * births / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons_per_thousand_year"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.death_rate_per_1000_annualized",
+      "parity_rule": "365000 * deaths / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons_per_thousand_year"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_count_c",
+      "parity_rule": "active consumption firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_count_k",
+      "parity_rule": "active capital firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_count_e",
+      "parity_rule": "active energy firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_count_construction",
+      "parity_rule": "active construction firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.n_firms_producing",
+      "parity_rule": "active firms with current production or labor input",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.n_firms_selling",
+      "parity_rule": "active firms with trailing sales",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.n_firms_borrowing",
+      "parity_rule": "active firms with loan principal",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_size_gini_output",
+      "parity_rule": "Gini of active-firm trailing nominal sales",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_size_top_share_output",
+      "parity_rule": "top active-firm output decile / firm output",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.firm_size_pareto_slope",
+      "parity_rule": "Pareto alpha fitted to the upper active-firm output decile",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.working_age_population",
+      "parity_rule": "living persons between working and retirement ages",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.child_population",
+      "parity_rule": "living persons younger than 18",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.child_share",
+      "parity_rule": "children / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.adult_share",
+      "parity_rule": "working-age adults / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.elder_population",
+      "parity_rule": "living persons at or above retirement age",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.elder_share",
+      "parity_rule": "retirement-age persons / population",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.child_median_consumption",
+      "parity_rule": "person-weighted median equivalized consumption of children",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "real_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.adult_median_consumption",
+      "parity_rule": "person-weighted median equivalized consumption of working-age adults",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "real_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.elder_median_consumption",
+      "parity_rule": "person-weighted median equivalized consumption of retirement-age persons",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "real_currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.labor_sector_consumption_fte",
+      "parity_rule": "active hours at consumption firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.labor_sector_capital_fte",
+      "parity_rule": "active hours at capital firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.labor_sector_energy_fte",
+      "parity_rule": "active hours at energy firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.labor_sector_construction_fte",
+      "parity_rule": "active hours at construction firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.sector_consumption_sales",
+      "parity_rule": "trailing sales of consumption firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.sector_capital_sales",
+      "parity_rule": "trailing sales of capital firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.sector_energy_sales",
+      "parity_rule": "trailing sales of energy firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.sector_construction_sales",
+      "parity_rule": "trailing sales of construction firms",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_15_24_participation",
+      "parity_rule": "participating persons age 15-24 / persons age 15-24",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_25_34_participation",
+      "parity_rule": "participating persons age 25-34 / persons age 25-34",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_35_44_participation",
+      "parity_rule": "participating persons age 35-44 / persons age 35-44",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_45_54_participation",
+      "parity_rule": "participating persons age 45-54 / persons age 45-54",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_55_64_participation",
+      "parity_rule": "participating persons age 55-64 / persons age 55-64",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_65_plus_participation",
+      "parity_rule": "participating persons age 65+ / persons age 65+",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_15_24_employment",
+      "parity_rule": "employed persons age 15-24 / persons age 15-24",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_25_34_employment",
+      "parity_rule": "employed persons age 25-34 / persons age 25-34",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_35_44_employment",
+      "parity_rule": "employed persons age 35-44 / persons age 35-44",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_45_54_employment",
+      "parity_rule": "employed persons age 45-54 / persons age 45-54",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_55_64_employment",
+      "parity_rule": "employed persons age 55-64 / persons age 55-64",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.age_65_plus_employment",
+      "parity_rule": "employed persons age 65+ / persons age 65+",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_0_14",
+      "parity_rule": "living male persons age 0-14",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_0_14",
+      "parity_rule": "living female persons age 0-14",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_15_24",
+      "parity_rule": "living male persons age 15-24",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_15_24",
+      "parity_rule": "living female persons age 15-24",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_25_34",
+      "parity_rule": "living male persons age 25-34",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_25_34",
+      "parity_rule": "living female persons age 25-34",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_35_44",
+      "parity_rule": "living male persons age 35-44",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_35_44",
+      "parity_rule": "living female persons age 35-44",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_45_54",
+      "parity_rule": "living male persons age 45-54",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_45_54",
+      "parity_rule": "living female persons age 45-54",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_55_64",
+      "parity_rule": "living male persons age 55-64",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_55_64",
+      "parity_rule": "living female persons age 55-64",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_male_65_plus",
+      "parity_rule": "living male persons age 65+",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 30,
+      "id": "metric.economy.pyramid_female_65_plus",
+      "parity_rule": "living female persons age 65+",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "persons"
+    },
+    {
+      "aggregation": "last",
       "cadence_ticks": 1,
       "id": "metric.source.m4.real_output",
       "parity_rule": "simulation::M4Metrics::real_output",
@@ -470,6 +1551,33 @@
       "cadence_ticks": 1,
       "id": "metric.source.m4.tax_total",
       "parity_rule": "simulation::M4Metrics::tax_total",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tax_profit",
+      "parity_rule": "simulation::M4Metrics::tax_profit",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tax_income",
+      "parity_rule": "simulation::M4Metrics::tax_income",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tax_consumption",
+      "parity_rule": "simulation::M4Metrics::tax_consumption",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
@@ -675,6 +1783,15 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m5.deposit_interest_arrears",
+      "parity_rule": "simulation::M5Metrics::deposit_interest_arrears",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.total_loan_principal",
       "parity_rule": "simulation::M5Metrics::total_loan_principal",
       "source_kind": "committed_native_stage",
@@ -729,6 +1846,15 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m5.lolr_outstanding",
+      "parity_rule": "simulation::M5Metrics::lolr_outstanding",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.interbank_volume",
       "parity_rule": "simulation::M5Metrics::interbank_volume",
       "source_kind": "committed_native_stage",
@@ -767,6 +1893,15 @@
       "cadence_ticks": 1,
       "id": "metric.source.m5.realized_credit_losses",
       "parity_rule": "simulation::M5Metrics::realized_credit_losses",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.realized_interbank_losses",
+      "parity_rule": "simulation::M5Metrics::realized_interbank_losses",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
@@ -1071,6 +2206,51 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_person_efficiency",
+      "parity_rule": "simulation::M7Metrics::mean_person_efficiency",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "efficiency_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.person_efficiency_stddev",
+      "parity_rule": "simulation::M7Metrics::person_efficiency_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "efficiency_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.active_unions",
+      "parity_rule": "simulation::M7Metrics::active_unions",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "unions"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_partner_age_gap",
+      "parity_rule": "simulation::M7Metrics::mean_partner_age_gap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "years"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_partner_log_efficiency_gap",
+      "parity_rule": "simulation::M7Metrics::mean_partner_log_efficiency_gap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "log_points"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m7.participation_rate",
       "parity_rule": "simulation::M7Metrics::participation_rate",
       "source_kind": "committed_native_stage",
@@ -1325,6 +2505,87 @@
       "cadence_ticks": 1,
       "id": "metric.source.m7.separations",
       "parity_rule": "simulation::M7Metrics::separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.churn_separations",
+      "parity_rule": "simulation::M7Metrics::churn_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.demand_layoff_separations",
+      "parity_rule": "simulation::M7Metrics::demand_layoff_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.cash_layoff_separations",
+      "parity_rule": "simulation::M7Metrics::cash_layoff_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.firm_exit_separations",
+      "parity_rule": "simulation::M7Metrics::firm_exit_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.death_separations",
+      "parity_rule": "simulation::M7Metrics::death_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.retirement_separations",
+      "parity_rule": "simulation::M7Metrics::retirement_separations",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.welfare_quits",
+      "parity_rule": "simulation::M7Metrics::welfare_quits",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.suspensions_flow",
+      "parity_rule": "simulation::M7Metrics::suspensions_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.recalls",
+      "parity_rule": "simulation::M7Metrics::recalls",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "jobs_per_tick"
@@ -2349,6 +3610,15 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.economy.na.household_consumption_real",
+      "parity_rule": "native_national_accounts::household_consumption_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.economy.na.government_consumption_nominal",
       "parity_rule": "native_national_accounts::government_consumption_nominal",
       "source_kind": "native_national_account",
@@ -2358,11 +3628,29 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.economy.na.government_consumption_real",
+      "parity_rule": "native_national_accounts::government_consumption_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.economy.na.fixed_capital_formation_nominal",
       "parity_rule": "native_national_accounts::fixed_capital_formation_nominal",
       "source_kind": "native_national_account",
       "tier": "analytic",
       "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.fixed_capital_formation_real",
+      "parity_rule": "native_national_accounts::fixed_capital_formation_real",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
     },
     {
       "aggregation": "last",
@@ -2549,6 +3837,15 @@
       "cadence_ticks": 1,
       "id": "metric.economy.na.cash_operating_surplus_nominal",
       "parity_rule": "native_national_accounts::cash_operating_surplus_nominal",
+      "source_kind": "native_national_account",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.economy.na.net_product_taxes_observed",
+      "parity_rule": "native_national_accounts::net_product_taxes_observed",
       "source_kind": "native_national_account",
       "tier": "analytic",
       "unit": "currency_per_tick"

@@ -282,6 +282,7 @@ typedef struct macro_sim_m5_metrics {
     double loan_interest_paid;
     double household_interest_paid;
     double deposit_interest_paid;
+    double deposit_interest_arrears;
     double total_loan_principal;
     double total_bank_capital;
     double total_reserves;

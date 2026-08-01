@@ -207,6 +207,16 @@ void test_realized_and_legacy_bank_pnl_paths() {
         legacy_distributions += pnl.distributions;
     }
     assert(legacy_distributions > 0.0);
+
+    auto arrears_spec = realized_spec;
+    arrears_spec.rules.deposit_rate = 1.0;
+    arrears_spec.rules.deposit_interest_arrears = true;
+    auto arrears = build(arrears_spec);
+    const auto arrears_result = macro_sim::simulation::advance_m5_ticks(
+        arrears.root, arrears.real_runtime, arrears.real_scratch, arrears.runtime,
+        arrears.scratch, arrears.tick, 1);
+    assert(arrears_result.ok());
+    assert(arrears_result.get_if()->metrics.deposit_interest_arrears > 0.0);
 }
 
 void test_phase_fault_is_atomic() {

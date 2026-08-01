@@ -13,9 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG = (
     ROOT / "native/include/macro_sim/reporting/m10_metric_sources.inc"
 )
+DASHBOARD = (
+    ROOT / "native/include/macro_sim/reporting/m10_dashboard_metrics.inc"
+)
 NATIONAL_ACCOUNTS = (
     ROOT / "native/include/macro_sim/reporting/m10_national_accounts.inc"
 )
+IMPLEMENTATION = ROOT / "native/src/reporting/m10.cpp"
 PUBLIC = ROOT / "schemas/m10/public_metrics.json"
 OUTPUT = ROOT / "schemas/m10/maintained_metrics.json"
 
@@ -27,6 +31,16 @@ _SOURCE = re.compile(
 _NATIONAL_ACCOUNT = re.compile(
     r'^MACRO_SIM_NATIONAL_ACCOUNT'
     r'\(([a-z0-9_]+), "([^"]+)"\)$'
+)
+_LITERAL_DESCRIPTOR = re.compile(
+    r'\{"([^"]+)",\s*"([^"]+)",\s*(\d+)U,\s*'
+    r'MetricTier::[a-z]+,\s*MetricAggregation::([a-z]+),\s*'
+    r'"([^"]*)"\}'
+)
+_DASHBOARD = re.compile(
+    r'MACRO_SIM_DASHBOARD_METRIC\(\s*([a-z0-9_]+),\s*'
+    r'"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"\s*\)',
+    re.MULTILINE,
 )
 _PREFIX = {
     "M4": ("metric.source.m4.", "simulation::M4Metrics::"),
@@ -63,6 +77,35 @@ def build_contract() -> dict:
         "parity_rule": item["parity_rule"],
         "source_kind": "derived_or_release",
     } for item in public["metrics"]]
+    public_ids = {row["id"] for row in rows}
+    literal_rows = _LITERAL_DESCRIPTOR.findall(
+        IMPLEMENTATION.read_text(encoding="utf-8")
+    )
+    extra_literal_rows = [
+        item for item in literal_rows if item[0] not in public_ids
+    ]
+    for metric_id, unit, cadence, aggregation, parity_rule in extra_literal_rows:
+        rows.append({
+            "id": metric_id,
+            "unit": unit,
+            "cadence_ticks": int(cadence),
+            "tier": "analytic",
+            "aggregation": aggregation,
+            "parity_rule": parity_rule,
+            "source_kind": "derived_or_release",
+        })
+    dashboard_rows = _DASHBOARD.findall(DASHBOARD.read_text(encoding="utf-8"))
+    for _, metric_id, unit, parity_rule in dashboard_rows:
+        rows.append({
+            "id": metric_id,
+            "unit": unit,
+            "cadence_ticks": 30,
+            "tier": "analytic",
+            "aggregation": "last",
+            "parity_rule": parity_rule,
+            "source_kind": "derived_or_release",
+        })
+    dashboard_count = len(extra_literal_rows) + len(dashboard_rows)
     source_count = 0
     for line_number, line in enumerate(
         CATALOG.read_text(encoding="utf-8").splitlines(), start=1,
@@ -118,8 +161,10 @@ def build_contract() -> dict:
         raise ValueError("M10 maintained metric IDs are not unique")
     if (
         len(public["metrics"]) != 41
-        or source_count != 200
-        or national_account_count != 59
+        or len(extra_literal_rows) != 35
+        or len(dashboard_rows) != 85
+        or source_count != 220
+        or national_account_count != 63
     ):
         raise ValueError("M10 metric catalog width changed unexpectedly")
     return {
@@ -127,6 +172,7 @@ def build_contract() -> dict:
         "snapshot_epoch": "committed_boundary",
         "counts": {
             "public_sources": len(public["metrics"]),
+            "native_dashboard_analytics": dashboard_count,
             "native_stage_sources": source_count,
             "national_accounts": national_account_count,
             "total": len(rows),

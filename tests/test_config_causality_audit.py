@@ -21,8 +21,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 19,
-        "mapped_native": 215,
-        "missing_native_route": 77,
+        "mapped_native": 212,
+        "missing_native_route": 80,
         "native_fixed": 12,
         "planned_removal": 1,
         "run_control": 1,
@@ -48,6 +48,11 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         if row["declaring_type"] == "Config"
     }
     expected = {
+        "bank_bond_appetite": "securities_and_capital_markets",
+        "bank_equity": "securities_and_capital_markets",
+        "bank_equity_lambda": "securities_and_capital_markets",
+        "bank_equity_trading": "securities_and_capital_markets",
+        "bank_theta_equity": "securities_and_capital_markets",
         "alpha1": "consumption_prices_and_expectations",
         "bank_relationship_lock_in": "banking_and_credit",
         "delta": "labor_market",
@@ -56,6 +61,7 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         "hh_subsistence": "banking_and_credit",
         "labor_relationship_wages": "labor_market",
         "lambda_p": "securities_and_capital_markets",
+        "margin_credit": "securities_and_capital_markets",
         "monetary_direct_transmission": "banking_and_credit",
         "house_price_income_years": "housing",
         "rho": "firms_and_industrial_dynamics",
@@ -83,6 +89,15 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     necessity = rows["config.necessity_share0"]
     assert necessity["route_status"] == "missing_native_route"
     assert "per-need-unit necessity quantity" in necessity["route_note"]
+    bank_assignment = rows["config.bank_assignment"]
+    assert bank_assignment["route_status"] == "missing_native_route"
+    assert "round-robin" in bank_assignment["route_note"]
+    bank_enabled = rows["config.bank_enabled"]
+    assert bank_enabled["route_status"] == "missing_native_route"
+    assert "ordinary firm credit" in bank_enabled["route_note"]
+    direct = rows["config.monetary_direct_transmission"]
+    assert direct["route_status"] == "missing_native_route"
+    assert "investment user-cost" in direct["route_note"]
 
 
 def test_observation_gate_is_not_credited_with_economic_causality() -> None:

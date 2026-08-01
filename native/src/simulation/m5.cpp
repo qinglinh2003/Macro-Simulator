@@ -1839,6 +1839,8 @@ class M5Extension final : public M4TickExtension {
             });
         for (const auto &capital : scratch_.bank_capital_) {
             scratch_.working_metrics_.total_bank_capital += capital.closing_capital;
+            scratch_.working_metrics_.deposit_interest_arrears +=
+                capital.deposit_interest_arrears;
             if (capital.alive) {
                 ++scratch_.working_metrics_.alive_banks;
             }

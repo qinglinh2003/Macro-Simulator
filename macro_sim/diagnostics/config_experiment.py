@@ -467,7 +467,7 @@ def _apply_native_root_field(
         real.seed = int(value)
         matched = True
     elif field == "bank_assignment":
-        monetary_rules.assign_banks_by_size = value == "size"
+        monetary_rules.assign_banks_by_size = value == "by_size"
         matched = True
     elif field == "demographics_tfr":
         vital = population_rules.vital_rates
@@ -598,8 +598,11 @@ def apply_native_activation_scenario(
     population = economy.domestic_economy
     population_rules = population.rules
     financial = population.financial_economy
+    financial_policy = financial.policy
     financial_rules = financial.rules
     monetary = financial.monetary_economy
+    monetary_policy = monetary.policy
+    monetary_rules = monetary.rules
     real = monetary.real_economy
     rules = real.rules
     if scenario == "positive_capital_gap":
@@ -652,10 +655,42 @@ def apply_native_activation_scenario(
     elif scenario == "eligible_late_leaving_home":
         population_rules.leave_home_min_age = 18
         population_rules.leave_home_peak_end_age = 18
+    elif scenario == "bank_entry_eligible_founders":
+        financial_policy.bank_minimum_capital = 0.1
+        monetary_rules.opening_capital_per_bank = 250.0
+    elif scenario == "bank_entry_cap_pressure":
+        financial_policy.bank_minimum_capital = 0.1
+        financial_rules.bank_entry_beta = 0.50
+        monetary_rules.opening_capital_per_bank = 250.0
+    elif scenario == "binding_bank_capital":
+        monetary_policy.bank_capital_constraint = True
+        monetary_rules.opening_capital_per_bank = 250.0
+    elif scenario == "positive_deposit_carry":
+        monetary_rules.deposit_rate = 1.0e-4
+    elif scenario == "bank_run_pressure":
+        monetary_policy.bank_capital_constraint = True
+        monetary_rules.opening_capital_per_bank = 250.0
+        monetary_rules.run_health_reference = 0.22
+    elif scenario == "bank_run_fear_pressure":
+        monetary_rules.run_health_reference = 100.0
+        monetary_rules.run_sensitivity = 0.50
+    elif scenario == "bank_run_health_screen":
+        monetary_rules.bank_runs = True
+        monetary_rules.interbank = True
+        monetary_policy.bank_capital_constraint = True
+        monetary_rules.opening_capital_per_bank = 250.0
+        monetary_rules.bank_leverage_mean = 100.0
+    elif scenario == "deposit_arrears_pressure":
+        monetary_rules.deposit_rate = 0.005
+    elif scenario == "deposit_spread_competition":
+        monetary_rules.deposit_spread_dispersion = 1.0e-4
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules
+    monetary.policy = monetary_policy
+    monetary.rules = monetary_rules
     monetary.real_economy = real
+    financial.policy = financial_policy
     financial.rules = financial_rules
     financial.monetary_economy = monetary
     population.rules = population_rules

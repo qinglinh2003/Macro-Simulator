@@ -125,6 +125,7 @@ struct M5Metrics final {
     double loan_interest_paid{0.0};
     double household_interest_paid{0.0};
     double deposit_interest_paid{0.0};
+    double deposit_interest_arrears{0.0};
     double total_loan_principal{0.0};
     double total_bank_capital{0.0};
     double total_reserves{0.0};

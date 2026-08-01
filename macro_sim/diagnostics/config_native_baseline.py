@@ -48,7 +48,7 @@ def _native_root_values(native_spec: Any, economy_id: int = 0) -> dict[str, Any]
         "n_banks": monetary.rules.bank_count,
         "seed": real.seed,
         "bank_assignment": (
-            "size" if monetary.rules.assign_banks_by_size else "random"
+            "by_size" if monetary.rules.assign_banks_by_size else "random"
         ),
         "demographics_tfr": population.rules.vital_rates.total_fertility_rate,
         "demographics_population": population.population.initial_persons,

@@ -97,6 +97,7 @@ void fill_m5_metrics(macro_sim_m5_metrics &output,
     output.loan_interest_paid = metrics.loan_interest_paid;
     output.household_interest_paid = metrics.household_interest_paid;
     output.deposit_interest_paid = metrics.deposit_interest_paid;
+    output.deposit_interest_arrears = metrics.deposit_interest_arrears;
     output.total_loan_principal = metrics.total_loan_principal;
     output.total_bank_capital = metrics.total_bank_capital;
     output.total_reserves = metrics.total_reserves;

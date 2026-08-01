@@ -445,3 +445,163 @@ def test_sector_activation_preserves_the_audited_field(
     apply_native_activation_scenario(native_spec, scenario=scenario)
     after = native_spec.economies[0].domestic_economy.financial_economy.rules
     assert getattr(after, unchanged_field) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "ruleset", "audited_field", "shared_field", "shared_value"),
+    [
+        (
+            "bank_entry_eligible_founders",
+            "financial",
+            "bank_dynamics",
+            "bank_minimum_capital",
+            0.1,
+        ),
+        (
+            "bank_entry_eligible_founders",
+            "financial",
+            "bank_entry_beta",
+            "bank_minimum_capital",
+            0.1,
+        ),
+        (
+            "bank_entry_cap_pressure",
+            "financial",
+            "bank_entry_max",
+            "bank_entry_beta",
+            0.50,
+        ),
+        (
+            "bank_run_pressure",
+            "monetary",
+            "bank_runs",
+            "run_health_reference",
+            0.22,
+        ),
+        (
+            "bank_run_pressure",
+            "monetary",
+            "run_sensitivity",
+            "run_health_reference",
+            0.22,
+        ),
+        (
+            "bank_run_fear_pressure",
+            "monetary",
+            "run_fear_persistence",
+            "run_sensitivity",
+            0.50,
+        ),
+        (
+            "bank_run_health_screen",
+            "monetary",
+            "run_health_reference",
+            "bank_runs",
+            True,
+        ),
+        (
+            "deposit_arrears_pressure",
+            "monetary",
+            "deposit_interest_arrears",
+            "deposit_rate",
+            0.005,
+        ),
+        (
+            "deposit_spread_competition",
+            "monetary",
+            "deposit_search_count",
+            "deposit_spread_dispersion",
+            1.0e-4,
+        ),
+        (
+            "deposit_spread_competition",
+            "monetary",
+            "interbank",
+            "deposit_spread_dispersion",
+            1.0e-4,
+        ),
+        (
+            "deposit_spread_competition",
+            "monetary",
+            "interbank_rate_base",
+            "deposit_spread_dispersion",
+            1.0e-4,
+        ),
+        (
+            "deposit_spread_competition",
+            "monetary",
+            "interbank_tightness",
+            "deposit_spread_dispersion",
+            1.0e-4,
+        ),
+        (
+            "positive_deposit_carry",
+            "monetary",
+            "realized_bank_pnl",
+            "deposit_rate",
+            1.0e-4,
+        ),
+    ],
+)
+def test_banking_activation_preserves_the_audited_field(
+    scenario: str,
+    ruleset: str,
+    audited_field: str,
+    shared_field: str,
+    shared_value: float | bool,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=47
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    financial = native_spec.economies[0].domestic_economy.financial_economy
+    if ruleset == "financial":
+        rules = financial.rules
+        shared = financial.policy
+    else:
+        rules = financial.monetary_economy.rules
+        shared = rules
+    expected = getattr(rules, audited_field)
+
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+
+    financial = native_spec.economies[0].domestic_economy.financial_economy
+    if ruleset == "financial":
+        rules = financial.rules
+        shared = financial.policy if scenario.endswith("founders") else rules
+    else:
+        rules = financial.monetary_economy.rules
+        shared = rules
+    actual = getattr(rules, audited_field)
+    if isinstance(expected, bool):
+        assert actual is expected
+    else:
+        assert actual == pytest.approx(expected)
+    assert getattr(shared, shared_field) == pytest.approx(shared_value)
+
+
+@pytest.mark.parametrize(
+    "audited_field", ["bank_leverage_mean", "bank_leverage_dispersion"]
+)
+def test_binding_bank_capital_preserves_the_audited_leverage_field(
+    audited_field: str,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=49
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    financial = native_spec.economies[0].domestic_economy.financial_economy
+    expected = getattr(financial.monetary_economy.rules, audited_field)
+
+    apply_native_activation_scenario(
+        native_spec, scenario="binding_bank_capital"
+    )
+
+    financial = native_spec.economies[0].domestic_economy.financial_economy
+    assert financial.monetary_economy.policy.bank_capital_constraint is True
+    assert financial.monetary_economy.rules.opening_capital_per_bank == (
+        pytest.approx(250.0)
+    )
+    assert getattr(financial.monetary_economy.rules, audited_field) == (
+        pytest.approx(expected)
+    )

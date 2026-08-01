@@ -76,11 +76,15 @@ MILESTONE_COVERAGE = {
 }
 
 PLAYABLE_OVERRIDE_OWNERS = {
+    "alpha1": "m4",
     "a_K": "m4",
+    "amort": "m5",
     "bank_realized_pnl": "m5",
     "bank_relationship_lock_in": "m5",
     "benefit_income_floor": "m5",
     "bond_maturity_bucket": "m6",
+    "builder_demand_seed": "m8",
+    "builder_land_fee_credit": "m8",
     "capital_annual_clock": "m6",
     "capital_clock_demand_smoothing": "m6",
     "capital_firm_entry": "m6",
@@ -95,7 +99,10 @@ PLAYABLE_OVERRIDE_OWNERS = {
     "demographic_lifecycle_consumption": "m7",
     "demographics_enabled": "m7",
     "deprivation_gauges": "m7",
+    "demand_e_firm0": "m8",
+    "energy_coverage_ticks": "m8",
     "energy_enabled": "m8",
+    "energy_gap_close": "m8",
     "energy_hoarding_beta": "m8",
     "energy_household": "m8",
     "energy_mortality_gamma": "m8",
@@ -105,8 +112,12 @@ PLAYABLE_OVERRIDE_OWNERS = {
     "firm_full_pnl": "m6",
     "firm_subscale_exit": "m6",
     "fiscal_uses_national_accounts_gdp": "m5",
+    "gov_consumption_share": "m5",
+    "hh_amort": "m5",
     "household_interest_arrears": "m5",
     "housing_construction_enabled": "m8",
+    "housing_ask_decay": "m8",
+    "housing_ask_floor_wage_share": "m8",
     "housing_demand_step": "m8",
     "housing_enabled": "m8",
     "housing_fertility_elasticity": "m8",
@@ -124,6 +135,9 @@ PLAYABLE_OVERRIDE_OWNERS = {
     "labor_second_job": "m7",
     "labor_suspension": "m7",
     "ledger_rel_tol": "m2",
+    "inv_firm0": "m4",
+    "inv_kfirm0": "m4",
+    "job_guarantee": "m5",
     "marriage_assortativity": "m7",
     "monetary_direct_transmission": "m5",
     "mortality_income_elasticity": "m7",
@@ -132,9 +146,16 @@ PLAYABLE_OVERRIDE_OWNERS = {
     "mortgage_underwriting": "m8",
     "national_accounts_metrics": "m10",
     "priced_firm_balance_sheet": "m6",
+    "p_efirm0": "m8",
+    "p_firm0": "m4",
+    "p_kfirm0": "m4",
+    "pension_replacement": "m5",
+    "rental_eviction_arrears": "m8",
     "rental_rent_floor_wage_share": "m8",
     "rental_vacancy_deadband": "m8",
     "sector_switching": "m7",
+    "switch_retool_loss": "m7",
+    "tax_income_rate": "m5",
     "tfp_drift_rate": "m4",
     "unified_bank_rwa": "m5",
 }
@@ -197,6 +218,46 @@ def target_source_paths() -> tuple[str, ...]:
     )
 
 
+def _constant_value(node: ast.AST) -> Any:
+    """Evaluate a restricted literal expression without executing source."""
+    try:
+        return ast.literal_eval(node)
+    except (TypeError, ValueError):
+        pass
+    if isinstance(node, ast.Dict):
+        return {
+            _constant_value(key): _constant_value(value)
+            for key, value in zip(node.keys, node.values, strict=True)
+        }
+    if isinstance(node, ast.UnaryOp) and isinstance(
+        node.op, (ast.UAdd, ast.USub)
+    ):
+        operand = _constant_value(node.operand)
+        if isinstance(operand, bool) or not isinstance(operand, (int, float)):
+            raise ValueError("constant unary operand must be numeric")
+        return operand if isinstance(node.op, ast.UAdd) else -operand
+    if isinstance(node, ast.BinOp) and isinstance(
+        node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)
+    ):
+        left = _constant_value(node.left)
+        right = _constant_value(node.right)
+        if (
+            isinstance(left, bool)
+            or isinstance(right, bool)
+            or not isinstance(left, (int, float))
+            or not isinstance(right, (int, float))
+        ):
+            raise ValueError("constant binary operands must be numeric")
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        return left / right
+    raise ValueError(f"unsupported constant expression: {ast.dump(node)}")
+
+
 def assigned_literal(module: ast.Module, name: str) -> Any:
     for statement in module.body:
         if isinstance(statement, (ast.Assign, ast.AnnAssign)):
@@ -211,7 +272,7 @@ def assigned_literal(module: ast.Module, name: str) -> Any:
             elif isinstance(statement.target, ast.Name):
                 names = [statement.target.id]
             if name in names and value is not None:
-                return ast.literal_eval(value)
+                return _constant_value(value)
     raise RuntimeError(f"cannot find literal assignment {name}")
 
 

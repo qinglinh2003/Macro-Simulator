@@ -12,7 +12,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 455
     assert len(payload["contracts"]) == 455
     assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 77
+    assert payload["status_counts"]["blocked_native_route"] == 80
 
 
 def test_production_screening_contracts_are_curated_and_routed() -> None:
@@ -222,3 +222,51 @@ def test_distribution_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in neutral
     )
+
+
+def test_banking_contracts_cover_every_mapped_causal_field() -> None:
+    neutral = screening_contracts(module="banking_and_credit")
+    activated = activation_contracts(module="banking_and_credit")
+    assert len(neutral) == 11
+    assert len(activated) == 15
+    assert {contract.field_name for contract in (*neutral, *activated)} == {
+        "amort",
+        "bank_dynamics",
+        "bank_entry_beta",
+        "bank_entry_max",
+        "bank_leverage_disp",
+        "bank_leverage_mean",
+        "bank_rate_competition",
+        "bank_realized_pnl",
+        "bank_relationship_lock_in",
+        "bank_runs",
+        "bank_search_m",
+        "bank_spread_disp",
+        "deposit_interest_arrears",
+        "deposit_rate",
+        "deposit_rate_disp",
+        "deposit_search_m",
+        "hh_amort",
+        "hh_subsistence",
+        "household_credit",
+        "interbank",
+        "interbank_rate_base",
+        "interbank_tightness",
+        "interest_by_deposits",
+        "run_fear_persistence",
+        "run_health_ref",
+        "run_sensitivity",
+    }
+    assert all(
+        set(contract.expected_directions) <= set(contract.primary_metrics)
+        for contract in (*neutral, *activated)
+    )
+
+
+def test_bank_assignment_draft_uses_the_canonical_enum_spelling() -> None:
+    contract = next(
+        row
+        for row in build_contract_registry()["contracts"]
+        if row["field_id"] == "config.bank_assignment"
+    )
+    assert contract["treatment_values"] == ("by_size",)

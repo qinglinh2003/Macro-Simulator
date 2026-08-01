@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, and labor screens complete
+Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, and banking screens complete
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -91,8 +91,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 215 |
-| Native route missing or incomplete | 77 |
+| Native route confirmed | 212 |
+| Native route missing or incomplete | 80 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 19 |
@@ -102,7 +102,7 @@ The adjudicated P0 inventory reports:
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 77 missing or incomplete routes are real implementation work; they are not
+The 80 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -300,13 +300,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 215
+The native product baseline comparison now projects every one of the 212
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 195 |
+| Exact semantic value | 192 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -588,7 +588,7 @@ Current findings:
   household goods-quantity observable is required before final calibration.
 
 Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` remain among the 77 blocked native
+`pref_attach_beta` and `pref_price_elasticity` remain among the 80 blocked native
 routes, and `necessity_share0` reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
@@ -798,6 +798,106 @@ necessity producers. Both are now blocked as semantic gaps instead of receiving
 credit for unrelated effects. Together with missing MPC dispersion, MPC wealth
 curvature, firm-share normalization, and stratum multipliers, this means the
 full distribution-to-demand feedback loop is not yet native-complete.
+
+### 8.11 Banking and credit screen
+
+The banking inventory contains 26 executable causal Config contracts and one
+genesis-only capitalization field. Nine additional fields are blocked by
+semantic native gaps. The final causal screen covers 200 native worlds at
+100,000 persons: four paired seeds, 365 days, and eight native workers. Eleven
+contracts run against the neutral product baseline; fifteen conditional
+contracts use shared capital, entry, deposit-migration, or run-pressure states.
+
+Static review found three routes that had previously received false credit.
+`bank_enabled` does not yet behave as the master credit capability promised by
+Config: its bridge closes selected dependent features while settlement banks
+and ordinary firm lending remain active. `monetary_direct_transmission` promises
+investment user-cost, household debt-budget, and firm debt-service channels,
+but native currently implements only the firm debt-service screen.
+`bank_assignment="random"` is actually deterministic round-robin assignment;
+the canonical `"by_size"` spelling was also incorrectly compared with
+`"size"` in two native bridges. The spelling defect is fixed, while all three
+fields remain blocked until their full semantics are implemented. The other
+blocked fields are household interest arrears, the four investment-user-cost
+parameters, and the market-information weight in run behavior.
+
+Current causal findings are:
+
+- Firm-loan amortization is clean and monotonic. Halving/doubling its daily
+  rate changes cumulative principal repayment by about -39.9% / +65.9% and
+  the post-burn-in loan stock by about +6.0% / -8.8%. Household amortization
+  has the expected direct repayment effect (-6.4% / +12.4%); only the faster
+  arm produces a resolved debt-stock reduction, about 2.2%, because household
+  refinancing and liquidity constraints weaken the low-arm stock response.
+- Credit competition is live but uneven. Disabling lender-rate competition
+  raises cumulative loan interest by about 4.4%, while the aggregate
+  origination effect is unresolved. Removing relationship lock-in first
+  diverges after roughly two months but its one-year credit and interest
+  effects remain seed-imprecise. Increasing lender search breadth from two to
+  eight lowers cumulative interest by about 6.8%; reducing it from two to one
+  is exactly silent. The lower search range should not be exposed as a
+  meaningful player choice.
+- Loan-spread dispersion is highly salient through borrower selection. Moving
+  it from 4.47e-5 to zero / 1e-4 changes cumulative interest by about +38.4% /
+  -50.1%. This is not a generic claim that volatility is beneficial: with
+  active search and an unchanged mean, greater dispersion gives borrowers a
+  lower tail from which to select.
+- A 0.000134 daily deposit rate raises annual deposit interest by about 174,530
+  currency units and lowers mean bank capital by about 34.7%. A shared positive
+  carry scenario confirms that disabling realized bank P&L removes all deposit
+  interest and drives the legacy payout path to roughly 99.6% lower mean bank
+  capital. The accounting regime is therefore consequential and should not be
+  presented as an innocuous numerical option.
+- Deposit-offer dispersion activates account migration and approximately
+  272 million currency units of cumulative interbank funding in this screen.
+  With that shared reserve mismatch, disabling interbank settlement removes all
+  funding; adding a 0.000134 base spread raises the realized interbank rate by
+  about 50.7%; moving tightness from 0.00137 to zero / 0.005 changes it by about
+  -1.6% / +4.3%. Deposit search from two to one / eight changes cumulative
+  interbank volume by about -100% / +118%.
+- Household credit is a strong extensive-margin capability. Disabling it cuts
+  the post-burn-in household debt stock by about 50.2% and cumulative total
+  originations by about 23.0%, while firm credit remains active. Moving the
+  underwriting subsistence share from 0.5 to zero / one changes household debt
+  by about -1.4% / +3.5%; its aggregate-origination effect is too noisy to
+  resolve. Allocating bank interest equally rather than by deposits moves mean
+  income Gini by only about -0.0005 with an interval crossing zero.
+- Bank-entry controls require low shared incumbent capitalization and an
+  affordable founder stake. Under that predeclared state, disabling bank
+  dynamics removes all entries. Moving entry sensitivity from 0.02 to 0.005 /
+  0.08 changes cumulative births by about -71% / +65%. Moving the daily entry
+  cap from one to zero removes first-window births; raising it to four increases
+  first-window entry intensity by about 242%, although the market later
+  converges to a similar saturation count. It is an adjustment-speed ceiling,
+  not a long-run bank-count target.
+- Bank leverage matters only when capital capacity binds. Reducing appetite
+  from ten to five lowers first-window new credit by about 5.0% and the loan
+  stock by about 3.8%. Raising it to fifteen is unresolved and economically
+  negligible, indicating saturation above the product baseline. Raising
+  cross-bank leverage dispersion from 0.6 to one lowers the post-burn-in
+  aggregate loan stock by about 7.0%; removing dispersion is unresolved. These
+  coefficients change allocation and risk capacity, so their long-run
+  aggregate sign must not be hard-coded from the immediate lending channel.
+- Runs are functional conditional mechanisms. Disabling them removes all
+  flight. Under a moderate capital-pressure state, lowering run sensitivity
+  from eight to 0.5 reduces cumulative flight by about 41.8%; raising it to
+  sixteen adds only about 5.2% and is unresolved, showing upper-range
+  saturation. The first difference occurs around day 241. Raising the bank
+  health reference from 0.1 to 0.3 increases flight by about 331%, while 0.05
+  removes it. Raising fear persistence from 0.952 to 0.99 increases flight by
+  about 94%; the lower arm is directionally negative but unresolved.
+- Deposit-interest arrears now have their own maintained native observable.
+  Under a deliberately extreme 0.5% daily funding-cost stress, enabling the
+  memo account produces a mean unpaid stock of about 3.96 million instead of
+  silently discarding the obligation. This proves the accounting route; the
+  activation rate is a stress instrument, not a plausible calibration target.
+
+The banking screen therefore finds a largely functional core, but it also
+identifies several gameplay problems: flat upper or lower ranges, rare-state
+controls that need explicit context, and capability labels whose native
+semantics are incomplete. Calibration should narrow the ordinary search,
+leverage, and run-sensitivity ranges and keep entry, arrears, and run controls
+in expert or scenario setup surfaces unless their triggering state is visible.
 
 ## 9. Execution gates
 

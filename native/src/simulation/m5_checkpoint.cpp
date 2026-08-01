@@ -280,6 +280,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.loan_interest_paid,
         value.household_interest_paid,
         value.deposit_interest_paid,
+        value.deposit_interest_arrears,
         value.total_loan_principal,
         value.total_bank_capital,
         value.total_reserves,
@@ -299,7 +300,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M5Metrics &value) {
-    if (!row.is_array() || row.size() != 22) {
+    if (!row.is_array() || row.size() != 23) {
         throw std::runtime_error("invalid M5 metrics");
     }
     std::size_t i = 0;
@@ -310,6 +311,7 @@ void decode_metrics(const Json &row, M5Metrics &value) {
     value.loan_interest_paid = row[i++].get<double>();
     value.household_interest_paid = row[i++].get<double>();
     value.deposit_interest_paid = row[i++].get<double>();
+    value.deposit_interest_arrears = row[i++].get<double>();
     value.total_loan_principal = row[i++].get<double>();
     value.total_bank_capital = row[i++].get<double>();
     value.total_reserves = row[i++].get<double>();

@@ -130,6 +130,32 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.welfare_log",
         "metric.economy.na.household_consumption_real",
     ),
+    "banking_and_credit": (
+        "metric.source.m5.new_credit",
+        "metric.source.m5.principal_repaid",
+        "metric.source.m5.loan_interest_paid",
+        "metric.source.m5.household_interest_paid",
+        "metric.source.m5.deposit_interest_paid",
+        "metric.source.m5.deposit_interest_arrears",
+        "metric.source.m5.total_loan_principal",
+        "metric.source.m5.total_bank_capital",
+        "metric.source.m5.total_reserves",
+        "metric.source.m5.interbank_volume",
+        "metric.source.m5.interbank_rate",
+        "metric.source.m5.run_flight_volume",
+        "metric.source.m5.realized_credit_losses",
+        "metric.source.m5.realized_interbank_losses",
+        "metric.source.m5.alive_banks",
+        "metric.source.m5.bank_failures",
+        "metric.source.m6.bank_births",
+        "metric.economy.household_debt_total",
+        "metric.economy.firm_debt_total",
+        "metric.economy.credit_to_gdp",
+        "metric.economy.income_gini",
+        "metric.economy.na.household_consumption_real",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+    ),
     "open_economy": (
         "metric.source.m9.country.exports_volume",
         "metric.source.m9.country.imports_volume",
@@ -189,7 +215,7 @@ def _draft_treatment(row: Mapping[str, Any]) -> tuple[str, tuple[Any, ...]]:
         return "numeric_levels", _suggested_numeric_levels(baseline)
     if row["field_name"] == "bank_assignment":
         return "categorical_alternative", (
-            "size" if baseline == "random" else "random",
+            "by_size" if baseline == "random" else "random",
         )
     if row["field_name"] == "simulation_start_date":
         start = date.fromisoformat(str(baseline))
@@ -871,6 +897,218 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
+    new_credit = "metric.source.m5.new_credit"
+    principal_repaid = "metric.source.m5.principal_repaid"
+    loan_interest = "metric.source.m5.loan_interest_paid"
+    deposit_paid = "metric.source.m5.deposit_interest_paid"
+    deposit_arrears = "metric.source.m5.deposit_interest_arrears"
+    loan_stock = "metric.source.m5.total_loan_principal"
+    bank_capital = "metric.source.m5.total_bank_capital"
+    interbank_volume = "metric.source.m5.interbank_volume"
+    interbank_rate = "metric.source.m5.interbank_rate"
+    run_flight = "metric.source.m5.run_flight_volume"
+    bank_births = "metric.source.m6.bank_births"
+    household_debt = "metric.economy.household_debt_total"
+    return {
+        "config.amort": {
+            "status": "screening_ready",
+            "values": (1.0 / (365.0 * 5.0), 1.0 / (365.0 * 1.25)),
+            "directions": {principal_repaid: "increase", loan_stock: "decrease"},
+            "statistics": {principal_repaid: "cumulative"},
+            "rationale": "Faster contractual firm-loan amortization should raise principal repayments and shorten the outstanding loan stock, subject to borrower cash constraints.",
+        },
+        "config.bank_dynamics": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {bank_births: "decrease"},
+            "statistics": {bank_births: "cumulative"},
+            "activation": "bank_entry_eligible_founders",
+            "rationale": "Disabling bank demographics should remove de-novo bank births when profitable incumbents and eligible founders are present.",
+        },
+        "config.bank_entry_beta": {
+            "status": "activation_scenario_required",
+            "values": (0.005, 0.08),
+            "directions": {bank_births: "increase"},
+            "statistics": {bank_births: "cumulative"},
+            "activation": "bank_entry_eligible_founders",
+            "rationale": "Entry sensitivity should scale the probability that excess bank ROE produces a de-novo bank, holding founder eligibility fixed.",
+        },
+        "config.bank_entry_max": {
+            "status": "activation_scenario_required",
+            "values": (0, 4),
+            "directions": {bank_births: "increase"},
+            "statistics": {bank_births: "first_window_mean"},
+            "activation": "bank_entry_cap_pressure",
+            "rationale": "The per-day bank-entry cap is identified only when shared entry pressure requests more than one entrant. It changes the speed of entry in the first response window, while the long-run number of banks can converge to the same market-saturation level.",
+        },
+        "config.bank_leverage_disp": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 1.0),
+            "directions": {loan_stock: "nonzero"},
+            "activation": "binding_bank_capital",
+            "rationale": "Cross-bank risk-appetite dispersion should change the allocation and aggregate quantity of credit under a shared binding capital constraint; the equilibrium aggregate sign is not imposed.",
+        },
+        "config.bank_leverage_mean": {
+            "status": "activation_scenario_required",
+            "values": (5.0, 15.0),
+            "directions": {new_credit: "increase", loan_stock: "increase"},
+            "statistics": {
+                new_credit: "first_window_mean",
+                loan_stock: "first_window_mean",
+            },
+            "activation": "binding_bank_capital",
+            "rationale": "A larger bank leverage appetite relaxes the capital-based lending ceiling and should expand credit in the first response window when capacity binds. Longer-run credit stocks are equilibrium outcomes because easier initial finance changes output, employment, and subsequent liquidity demand.",
+        },
+        "config.bank_rate_competition": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {loan_interest: "nonzero", new_credit: "nonzero"},
+            "statistics": {loan_interest: "cumulative", new_credit: "cumulative"},
+            "rationale": "Borrower shopping across heterogeneous loan spreads should alter realized funding cost and credit allocation without assigning an equilibrium output sign.",
+        },
+        "config.bank_realized_pnl": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {bank_capital: "nonzero", deposit_paid: "decrease"},
+            "statistics": {deposit_paid: "cumulative"},
+            "activation": "positive_deposit_carry",
+            "rationale": "The realized income statement books funding expense and losses before payout; the legacy gross-interest path should therefore change bank capital and omit contractual deposit expense.",
+        },
+        "config.bank_relationship_lock_in": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {new_credit: "nonzero", loan_interest: "nonzero"},
+            "statistics": {new_credit: "cumulative", loan_interest: "cumulative"},
+            "rationale": "Keeping an active loan with its creditor prevents costless relationship reassignment and should alter refinancing, origination, and interest flows.",
+        },
+        "config.bank_runs": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {run_flight: "decrease"},
+            "statistics": {run_flight: "cumulative"},
+            "activation": "bank_run_pressure",
+            "rationale": "A shared weak-bank health state creates depositor flight; disabling runs must remove that flow while retaining ordinary interbank settlement.",
+        },
+        "config.bank_search_m": {
+            "status": "screening_ready",
+            "values": (1, 8),
+            "directions": {loan_interest: "decrease"},
+            "statistics": {loan_interest: "cumulative"},
+            "rationale": "Sampling more rival lenders should weakly lower the rate selected by borrowers when bank spreads differ.",
+        },
+        "config.bank_spread_disp": {
+            "status": "screening_ready",
+            "values": (0.0, 1.0e-4),
+            "directions": {loan_interest: "decrease"},
+            "statistics": {loan_interest: "cumulative"},
+            "rationale": "With rate competition active, greater mean-zero loan-spread dispersion gives searching borrowers access to cheaper lenders, while concentration and credit spillovers remain empirical.",
+        },
+        "config.deposit_interest_arrears": {
+            "status": "activation_scenario_required",
+            "values": (True,),
+            "directions": {deposit_arrears: "increase"},
+            "activation": "deposit_arrears_pressure",
+            "rationale": "When contractual deposit interest exceeds current bank cash, enabling the memo account must preserve the unpaid obligation instead of silently discarding it.",
+        },
+        "config.deposit_rate": {
+            "status": "screening_ready",
+            "values": (1.34e-4,),
+            "directions": {deposit_paid: "increase", bank_capital: "decrease"},
+            "statistics": {deposit_paid: "cumulative"},
+            "rationale": "A positive contractual deposit rate raises bank funding expense and depositor income, reducing bank capital before general-equilibrium feedbacks.",
+        },
+        "config.deposit_rate_disp": {
+            "status": "screening_ready",
+            "values": (1.0e-4,),
+            "directions": {interbank_volume: "nonzero"},
+            "statistics": {interbank_volume: "cumulative"},
+            "rationale": "Heterogeneous deposit offers cause households to migrate across banks and therefore alter reserve settlement and interbank funding needs.",
+        },
+        "config.deposit_search_m": {
+            "status": "activation_scenario_required",
+            "values": (1, 8),
+            "directions": {interbank_volume: "nonzero"},
+            "statistics": {interbank_volume: "cumulative"},
+            "activation": "deposit_spread_competition",
+            "rationale": "Deposit search breadth is silent when all banks offer the same spread; shared dispersion identifies its effect on account migration and reserve flows.",
+        },
+        "config.hh_amort": {
+            "status": "screening_ready",
+            "values": (1.0 / (365.0 * 10.0), 1.0 / (365.0 * 2.5)),
+            "directions": {principal_repaid: "increase", household_debt: "decrease"},
+            "statistics": {principal_repaid: "cumulative"},
+            "rationale": "Faster unsecured household-loan amortization should raise principal repayment and reduce the household debt stock, conditional on available cash.",
+        },
+        "config.hh_subsistence": {
+            "status": "screening_ready",
+            "values": (0.0, 1.0),
+            "directions": {household_debt: "increase", new_credit: "increase"},
+            "statistics": {new_credit: "cumulative"},
+            "rationale": "A higher underwriting income floor gives liquidity-constrained households more room to borrow toward their planned consumption budget.",
+        },
+        "config.household_credit": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {household_debt: "decrease", new_credit: "decrease"},
+            "statistics": {new_credit: "cumulative"},
+            "rationale": "Disabling unsecured household credit should remove household loan balances and reduce aggregate originations while leaving firm credit active.",
+        },
+        "config.interbank": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {interbank_volume: "decrease"},
+            "statistics": {interbank_volume: "cumulative"},
+            "activation": "deposit_spread_competition",
+            "rationale": "Disabling reserve settlement and interbank funding should remove interbank loan volume; dependent runs and central-bank liquidity facilities close as a documented capability package.",
+        },
+        "config.interbank_rate_base": {
+            "status": "activation_scenario_required",
+            "values": (1.34e-4,),
+            "directions": {interbank_rate: "increase"},
+            "activation": "deposit_spread_competition",
+            "rationale": "A larger exogenous money-market spread should raise the realized interbank rate whenever reserve deficits are funded.",
+        },
+        "config.interbank_tightness": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.005),
+            "directions": {interbank_rate: "increase"},
+            "activation": "deposit_spread_competition",
+            "rationale": "A stronger tightness coefficient should raise the interbank rate in sessions with aggregate reserve demand relative to available surplus.",
+        },
+        "config.interest_by_deposits": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {"metric.economy.income_gini": "nonzero"},
+            "rationale": "Allocating bank payout equally rather than in proportion to deposits changes who receives financial income; distribution, consumption, and output are equilibrium consequences.",
+        },
+        "config.run_fear_persistence": {
+            "status": "activation_scenario_required",
+            "values": (0.50, 0.99),
+            "directions": {run_flight: "increase"},
+            "statistics": {run_flight: "cumulative"},
+            "activation": "bank_run_fear_pressure",
+            "rationale": "More persistent system-wide fear should sustain depositor flight after weak-bank withdrawals begin.",
+        },
+        "config.run_health_ref": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.30),
+            "directions": {run_flight: "increase"},
+            "statistics": {run_flight: "cumulative"},
+            "activation": "bank_run_health_screen",
+            "rationale": "A higher reference capital ratio makes the same bank balance sheet appear less healthy and should increase run pressure.",
+        },
+        "config.run_sensitivity": {
+            "status": "activation_scenario_required",
+            "values": (0.5, 16.0),
+            "directions": {run_flight: "increase"},
+            "statistics": {run_flight: "cumulative"},
+            "activation": "bank_run_pressure",
+            "rationale": "Conditional on weak bank health, a steeper depositor response should raise cumulative flight volume.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
@@ -878,6 +1116,7 @@ CURATED_CONTRACTS = {
     **_labor_contracts(),
     **_demography_contracts(),
     **_distribution_contracts(),
+    **_banking_contracts(),
 }
 
 

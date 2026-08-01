@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
+import json
 from pathlib import Path
 import sys
 
@@ -69,7 +70,15 @@ def main() -> int:
     assert session.bridge.policy_generation == generation
     maintained = session.maintained_metrics()
     assert maintained["tick"] == session.tick
-    assert all(len(row) == 300 for row in maintained["economies"])
+    maintained_contract = json.loads(
+        (args.source_dir / "schemas/m10/maintained_metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected_metric_count = maintained_contract["counts"]["total"]
+    assert all(
+        len(row) == expected_metric_count for row in maintained["economies"]
+    )
     assert (
         maintained["economies"][0]["metric.source.m4.real_output"]
         == maintained["economies"][0]["metric.economy.real_output"]

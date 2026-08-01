@@ -525,7 +525,7 @@ def _m8_spec(
         "manual": native.MonetaryRegime.MANUAL,
     }[policy.monetary_regime]
     _assign(monetary.rules, cfg, M5_RULE_FIELDS)
-    monetary.rules.assign_banks_by_size = cfg.bank_assignment == "size"
+    monetary.rules.assign_banks_by_size = cfg.bank_assignment == "by_size"
 
     financial = native.M6SimulationSpec()
     financial.monetary_economy = monetary

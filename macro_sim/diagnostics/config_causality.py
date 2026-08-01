@@ -172,6 +172,16 @@ PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
 # syntactic assignment is not sufficient evidence of an implemented Config
 # route, so they remain repair work until the intended mechanism exists.
 INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
+    "config.bank_assignment": (
+        "Config defines random or borrower-size bank assignment, while the "
+        "native false branch currently uses deterministic round-robin genesis "
+        "assignment rather than the requested seeded random assignment"
+    ),
+    "config.bank_enabled": (
+        "Config defines the master bank-credit capability, while the native "
+        "bridge only disables selected dependent features and still creates "
+        "settlement banks and originates ordinary firm credit"
+    ),
     "config.consumption_strata": (
         "Config defines a two-stage necessity/luxury goods market, while the "
         "native member only gates sector switching and preserves a firm tag for "
@@ -181,6 +191,11 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "Config defines a finite-life consumption budget, while the native "
         "member currently controls household moves after marriage, divorce, "
         "and leaving home"
+    ),
+    "config.monetary_direct_transmission": (
+        "Config defines direct investment user-cost, household debt-budget, "
+        "and firm debt-service transmission, while the native member currently "
+        "only applies the firm debt-service-coverage constraint"
     ),
     "config.necessity_share0": (
         "Config defines a fixed per-need-unit necessity quantity, while the "
@@ -212,6 +227,11 @@ SCALE_FIELDS = frozenset(
 # assigned reliably with token matching. Keep their economic owner explicit so
 # a field is reviewed with the mechanism that actually reads it in C++.
 FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
+    "bank_bond_appetite": "securities_and_capital_markets",
+    "bank_equity": "securities_and_capital_markets",
+    "bank_equity_lambda": "securities_and_capital_markets",
+    "bank_equity_trading": "securities_and_capital_markets",
+    "bank_theta_equity": "securities_and_capital_markets",
     "bank_relationship_lock_in": "banking_and_credit",
     "alpha1": "consumption_prices_and_expectations",
     "alpha2": "consumption_prices_and_expectations",
@@ -240,6 +260,7 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "founder_owned_genesis": "securities_and_capital_markets",
     "index_startup": "securities_and_capital_markets",
     "lambda_p": "securities_and_capital_markets",
+    "margin_credit": "securities_and_capital_markets",
     "lambda_q": "securities_and_capital_markets",
     "pro_rata_dividends": "securities_and_capital_markets",
     "resid_income_lambda": "securities_and_capital_markets",

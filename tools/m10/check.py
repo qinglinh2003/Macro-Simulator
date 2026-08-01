@@ -163,10 +163,11 @@ def validate_contracts() -> None:
     if maintained["schema_version"] != "m10-maintained-metrics-v1":
         raise AssertionError("M10 maintained metric contract changed")
     if maintained["counts"] != {
-        "national_accounts": 59,
-        "native_stage_sources": 200,
+        "national_accounts": 63,
+        "native_dashboard_analytics": 120,
+        "native_stage_sources": 220,
         "public_sources": 41,
-        "total": 300,
+        "total": 444,
     }:
         raise AssertionError("M10 maintained metric coverage is incomplete")
     maintained_ids = [item["id"] for item in maintained["metrics"]]

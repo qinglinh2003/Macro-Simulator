@@ -313,6 +313,16 @@ def test_config_experiment_bridge_routes_security_targets_and_switches() -> None
     assert without_capital_market.rules.margin_credit is False
 
 
+def test_config_bridge_recognizes_canonical_by_size_bank_assignment() -> None:
+    baseline = NewGameSpec.default().configs()[0]
+    economy = build_world_spec_from_configs(
+        [replace(baseline, bank_assignment="by_size")]
+    ).economies[0]
+    monetary = economy.domestic_economy.financial_economy.monetary_economy
+
+    assert monetary.rules.assign_banks_by_size is True
+
+
 def test_config_experiment_bridge_matches_bank_disable_cascade() -> None:
     config = apply_config_treatment(
         [NewGameSpec.default().configs()[0]],
@@ -511,7 +521,7 @@ def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
     payload = build_native_baseline_audit(
         population=1_000, seed=61, countries=2
     )
-    assert payload["field_count"] == 215
+    assert payload["field_count"] == 212
     assert payload["status_counts"].get("projection_missing", 0) == 0
     rows = {row["field_name"]: row for row in payload["rows"]}
     assert rows["K_firm0"]["status"] == "density_scaled"
