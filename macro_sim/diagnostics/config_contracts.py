@@ -156,6 +156,19 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.real_output",
         "metric.economy.unemployment_rate",
     ),
+    "government_and_public_sector": (
+        "metric.source.m4.public_capital",
+        "metric.source.m4.public_fixed_capital_formation",
+        "metric.source.m4.government_spending",
+        "metric.source.m4.government_deficit",
+        "metric.economy.na.real_gdp_per_capita",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+        "metric.economy.avg_wage",
+        "metric.economy.price_index",
+        "metric.economy.na.public_fixed_capital_formation_nominal",
+        "metric.economy.na.government_consumption_real",
+    ),
     "open_economy": (
         "metric.source.m9.country.exports_volume",
         "metric.source.m9.country.imports_volume",
@@ -873,7 +886,23 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
 def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
     transfer_total = "metric.source.m7.family_transfer_total"
     transfer_recipients = "metric.source.m7.family_transfer_recipients"
+    deprivation = "metric.source.m8.energy.deprivation_below_100_share"
+    output = "metric.economy.real_output"
+    unemployment = "metric.economy.unemployment_rate"
+    consumption = "metric.economy.na.household_consumption_real"
     return {
+        "config.deprivation_gauges": {
+            "status": "invariance_activation_required",
+            "values": (False,),
+            "directions": {
+                deprivation: "decrease",
+                output: "invariance",
+                unemployment: "invariance",
+                consumption: "invariance",
+            },
+            "activation": "deprivation_measurement_active",
+            "rationale": "The deprivation switch controls a measurement state only. Turning it off should remove the published deprivation gauge while leaving production, employment, and household consumption exactly unchanged.",
+        },
         "config.family_transfer_buffer": {
             "status": "screening_ready",
             "values": (1.0, 3.0),
@@ -893,6 +922,18 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
                 transfer_recipients: "cumulative",
             },
             "rationale": "Disabling the private kin safety net should remove conserving household-to-household transfers and their recipients; poverty, consumption, and public support are equilibrium spillovers.",
+        },
+        "config.subsistence_share": {
+            "status": "invariance_activation_required",
+            "values": (0.25, 0.75),
+            "directions": {
+                deprivation: "increase",
+                output: "invariance",
+                unemployment: "invariance",
+                consumption: "invariance",
+            },
+            "activation": "deprivation_measurement_active",
+            "rationale": "The subsistence share defines the external consumption standard used by the deprivation gauge. A higher line should classify more people as deprived, but it must not feed back into behavior or alter the economy being measured.",
         },
     }
 
@@ -1109,6 +1150,35 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
+    public_capital = "metric.source.m4.public_capital"
+    output = "metric.economy.na.real_gdp_per_capita"
+    unemployment = "metric.economy.unemployment_rate"
+    return {
+        "config.public_capital_depreciation": {
+            "status": "screening_ready",
+            "values": (5.7e-5, 9.12e-4),
+            "horizon_days": 1095,
+            "directions": {
+                public_capital: "decrease",
+                output: "ambiguous",
+                unemployment: "ambiguous",
+            },
+            "rationale": "Faster physical decay should reduce the public-capital stock accumulated from the same investment rule. Output and employment remain general-equilibrium outcomes because public capital raises productivity while demand determines planned production.",
+        },
+        "config.public_capital_gamma": {
+            "status": "screening_ready",
+            "values": (0.0, 0.20),
+            "horizon_days": 1095,
+            "directions": {
+                output: "nonzero",
+                unemployment: "nonzero",
+            },
+            "rationale": "The public-capital elasticity scales the economy-wide productivity service produced by a given infrastructure stock. It should alter real activity without directly changing the law of motion for the stock itself.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
@@ -1117,6 +1187,7 @@ CURATED_CONTRACTS = {
     **_demography_contracts(),
     **_distribution_contracts(),
     **_banking_contracts(),
+    **_government_contracts(),
 }
 
 
@@ -1165,8 +1236,14 @@ def build_contract_registry() -> dict[str, Any]:
         if contract.status in {
             "screening_ready",
             "activation_scenario_required",
+            "invariance_activation_required",
         }:
-            if contract.route_status != "mapped_native":
+            allowed_routes = (
+                {"infrastructure_invariance"}
+                if contract.status == "invariance_activation_required"
+                else {"mapped_native"}
+            )
+            if contract.route_status not in allowed_routes:
                 raise ValueError(f"ready contract lacks a native route: {contract.field_id}")
             if not contract.treatment_values or not contract.primary_metrics:
                 raise ValueError(f"ready contract is incomplete: {contract.field_id}")
@@ -1205,6 +1282,19 @@ def activation_contracts(*, module: str | None = None) -> tuple[TreatmentContrac
     output = []
     for raw in payload["contracts"]:
         if raw["status"] != "activation_scenario_required":
+            continue
+        if module is not None and raw["module"] != module:
+            continue
+        output.append(TreatmentContract(**raw))
+    return tuple(output)
+
+
+def invariance_contracts(*, module: str | None = None) -> tuple[TreatmentContract, ...]:
+    """Return reviewed measurement contracts with no economic feedback."""
+    payload = build_contract_registry()
+    output = []
+    for raw in payload["contracts"]:
+        if raw["status"] != "invariance_activation_required":
             continue
         if module is not None and raw["module"] != module:
             continue

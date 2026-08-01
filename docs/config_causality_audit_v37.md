@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, and banking screens complete
+Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, banking, and public-sector screens complete
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -91,18 +91,18 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 212 |
-| Native route missing or incomplete | 80 |
+| Native route confirmed | 210 |
+| Native route missing or incomplete | 81 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
-| Numerical or observability invariance | 19 |
+| Numerical or observability invariance | 20 |
 | Deliberately fixed in the native engine | 12 |
 | Superseded compatibility names | 16 |
 | Derived values | 2 |
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 80 missing or incomplete routes are real implementation work; they are not
+The 81 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -300,13 +300,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 212
+The native product baseline comparison now projects every one of the 210
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 192 |
+| Exact semantic value | 190 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -588,7 +588,7 @@ Current findings:
   household goods-quantity observable is required before final calibration.
 
 Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` remain among the 80 blocked native
+`pref_attach_beta` and `pref_price_elasticity` remain among the 81 blocked native
 routes, and `necessity_share0` reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
@@ -758,8 +758,9 @@ unrelated assignment as an implemented route.
 ### 8.10 Distribution and private household support screen
 
 The distribution inventory contains only two executable economic Config
-contracts: the family-transfer capability and its donor reserve buffer. One
-additional field, `deprivation_gauges`, is an observation-only switch. The
+contracts: the family-transfer capability and its donor reserve buffer. Two
+additional inputs, the `deprivation_gauges` switch and the `subsistence_share`
+poverty-line standard, are observation-only. The
 remaining seven fields are blocked until their intended native mechanisms are
 implemented.
 
@@ -781,13 +782,19 @@ seeds, 365 days, and eight native workers. Its current findings are:
   it to 3.0 lowers those measures by about 0.59% and 0.63%, but the four-seed
   intervals cross zero. The coefficient has the intended sign but is too weak
   and noisy to deserve a prominent gameplay control at its present scale.
-- `deprivation_gauges` is correctly classified as observability, not economic
-  structure. A five-year 100,000-person paired run shows that disabling it zeros
-  the deprivation thresholds, spell stocks, and boundary signal. All ordinary
-  economic state remains the same apart from sub-millionth reporter reduction
-  noise in wealth-distribution summaries; output, consumption, employment, and
-  poverty are unchanged. It belongs in diagnostics settings rather than the
-  economy setup screen.
+- A separate 16-world measurement screen uses a shared zero-year measurement
+  burn-in for identification over 90 days; it does not change the product
+  calibration. Disabling `deprivation_gauges` removes an 18.6% below-
+  subsistence reading and all related spell stocks. Real output, unemployment,
+  and household consumption remain exactly bit-identical across all four paired
+  seeds.
+- `subsistence_share` had previously been mis-owned by the securities module
+  because of the generic word "share." It is the external poverty-line anchor,
+  not a portfolio parameter or behavioral input. Moving it from 0.50 to 0.25
+  lowers the classified below-subsistence share by 5.72 percentage points;
+  moving it to 0.75 raises it by 17.96 percentage points. The same three
+  economic series remain exactly invariant. Both measurement controls belong
+  in diagnostics or methodology settings rather than the economy setup screen.
 
 Static review also found two false-positive native routes. `consumption_strata`
 is defined by Config as a sequenced necessity/luxury goods market, but the
@@ -898,6 +905,57 @@ controls that need explicit context, and capability labels whose native
 semantics are incomplete. Calibration should narrow the ordinary search,
 leverage, and run-sensitivity ranges and keep entry, arrears, and run controls
 in expert or scenario setup surfaces unless their triggering state is visible.
+
+### 8.12 Government and public-capital screen
+
+The public-sector inventory contains two executable causal Config fields and
+two blocked structural fields. The formal dynamic screen covers 20 native
+worlds at 100,000 persons, four paired seeds, 1,095 days, and eight native
+workers. A preceding one-year screen was retained as horizon-selection evidence
+but is not used for the final slow-stock conclusions.
+
+Static execution review revoked false route credit from `government`. Config
+defines it as the master fiscal-sector capability, and both the diagnostic and
+desktop bridges can clear the capability bit, but the only current physical-
+capital vertical requires that bit and rejects the resulting specification
+before genesis. A government-off economy is therefore not executable.
+`jg_productivity` is also blocked: the Config contract says job-guarantee public
+works add public capital, while no native member or equation receives it.
+
+The two working public-capital parameters behave as follows:
+
+- The baseline daily public-capital depreciation rate of 0.000228 is about 8.0%
+  compounded annually. Moving it to 0.000057 (about 2.1% annually) raises the
+  three-year post-burn-in public-capital stock by about 5.5%; moving it to
+  0.000912 (about 28.3% annually) lowers the stock by about 19.6%. Both stock
+  directions are resolved, while public investment flow is unchanged. This is
+  clean evidence that the stock law, rather than procurement, causes the
+  contrast.
+- Despite that large stock range, the same depreciation treatments do not
+  resolve changes in real GDP per person, output, unemployment, prices, fiscal
+  spending, or the deficit over three years. The largest point estimate for GDP
+  per person is only +0.25%. At the present public-investment path and elasticity,
+  depreciation is physically active but nearly silent in the playable macro
+  economy.
+- Moving the public-capital output elasticity from 0.10 to 0.20 raises
+  post-burn-in real GDP per person by about 1.14%, real output by 1.19%, and
+  lowers unemployment by about 0.32 percentage points. Mean wages rise about
+  0.14%. Government spending rises about 1.21% and real government consumption
+  about 2.69% through the endogenous fiscal-output reference; the public-capital
+  stock itself has no resolved change.
+- Setting the elasticity to zero produces the expected negative point response:
+  GDP per person falls about 0.59% and output about 0.60%. Its four-seed interval
+  narrowly includes zero, so this lower arm is directionally consistent but not
+  formally resolved. The one-year panel was weaker still, confirming that this
+  mechanism must be assessed as a slow stock-productivity channel.
+
+The current calibration is economically coherent but weak as gameplay. Public-
+capital elasticity is live and modestly salient at the upper arm; depreciation
+mostly changes an invisible stock. The later interaction stage must estimate
+`gov_investment_share x public_capital_gamma x public_capital_depreciation`.
+Until that response surface is known, the depreciation rate belongs in expert
+setup rather than a prominent player control, and it should not be made salient
+by adding an artificial direct GDP effect.
 
 ## 9. Execution gates
 

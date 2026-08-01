@@ -605,3 +605,28 @@ def test_binding_bank_capital_preserves_the_audited_leverage_field(
     assert getattr(financial.monetary_economy.rules, audited_field) == (
         pytest.approx(expected)
     )
+
+
+@pytest.mark.parametrize(
+    "audited_field", ["deprivation", "deprivation_subsistence_share"]
+)
+def test_deprivation_activation_preserves_the_audited_measurement_field(
+    audited_field: str,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=53
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = native_spec.economies[0].energy_rules
+    expected = getattr(rules, audited_field)
+
+    apply_native_activation_scenario(
+        native_spec, scenario="deprivation_measurement_active"
+    )
+
+    rules = native_spec.economies[0].energy_rules
+    assert rules.deprivation_burnin_years == 0
+    if isinstance(expected, bool):
+        assert getattr(rules, audited_field) is expected
+    else:
+        assert getattr(rules, audited_field) == pytest.approx(expected)

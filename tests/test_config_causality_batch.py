@@ -13,6 +13,7 @@ from macro_sim.diagnostics.config_batch import (
 )
 from macro_sim.diagnostics.config_contracts import (
     activation_contracts,
+    invariance_contracts,
     screening_contracts,
 )
 
@@ -128,6 +129,16 @@ def test_only_reviewed_contracts_can_enter_a_neutral_batch() -> None:
             module="production_and_technology"
         )
     )
+
+
+def test_measurement_invariance_contracts_are_executable_but_separate() -> None:
+    contracts = invariance_contracts(module="distribution_and_welfare")
+    assert {contract.status for contract in contracts} == {
+        "invariance_activation_required"
+    }
+    assert {contract.route_status for contract in contracts} == {
+        "infrastructure_invariance"
+    }
 
 
 def test_contracts_with_the_same_activation_share_one_control(

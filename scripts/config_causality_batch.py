@@ -18,6 +18,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from macro_sim.diagnostics.config_batch import run_contract_batch
 from macro_sim.diagnostics.config_contracts import (
     activation_contracts,
+    invariance_contracts,
     screening_contracts,
 )
 
@@ -47,10 +48,16 @@ def _source_revision() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--module", required=True)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--activation",
         action="store_true",
         help="run reviewed contracts that require a shared activation scenario",
+    )
+    mode.add_argument(
+        "--invariance",
+        action="store_true",
+        help="run reviewed measurement contracts and verify no economic feedback",
     )
     parser.add_argument("--field", action="append", dest="fields")
     parser.add_argument("--seed", type=int, action="append", dest="seeds")
@@ -62,11 +69,12 @@ def main() -> int:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--no-resume", action="store_true")
     args = parser.parse_args()
-    contracts = (
-        activation_contracts(module=args.module)
-        if args.activation
-        else screening_contracts(module=args.module)
-    )
+    if args.activation:
+        contracts = activation_contracts(module=args.module)
+    elif args.invariance:
+        contracts = invariance_contracts(module=args.module)
+    else:
+        contracts = screening_contracts(module=args.module)
     if args.fields:
         requested = set(args.fields)
         contracts = tuple(

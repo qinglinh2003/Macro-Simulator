@@ -3,6 +3,7 @@ from __future__ import annotations
 from macro_sim.diagnostics.config_contracts import (
     activation_contracts,
     build_contract_registry,
+    invariance_contracts,
     screening_contracts,
 )
 
@@ -12,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 455
     assert len(payload["contracts"]) == 455
     assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 80
+    assert payload["status_counts"]["blocked_native_route"] == 81
 
 
 def test_production_screening_contracts_are_curated_and_routed() -> None:
@@ -222,6 +223,15 @@ def test_distribution_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in neutral
     )
+    measurement = invariance_contracts(module="distribution_and_welfare")
+    assert {contract.field_name for contract in measurement} == {
+        "deprivation_gauges",
+        "subsistence_share",
+    }
+    assert all(
+        contract.activation_scenario == "deprivation_measurement_active"
+        for contract in measurement
+    )
 
 
 def test_banking_contracts_cover_every_mapped_causal_field() -> None:
@@ -270,3 +280,23 @@ def test_bank_assignment_draft_uses_the_canonical_enum_spelling() -> None:
         if row["field_id"] == "config.bank_assignment"
     )
     assert contract["treatment_values"] == ("by_size",)
+
+
+def test_government_contracts_cover_every_executable_causal_field() -> None:
+    neutral = screening_contracts(module="government_and_public_sector")
+    activated = activation_contracts(module="government_and_public_sector")
+    assert activated == ()
+    assert {contract.field_name for contract in neutral} == {
+        "public_capital_depreciation",
+        "public_capital_gamma",
+    }
+    assert all(
+        set(contract.expected_directions) <= set(contract.primary_metrics)
+        for contract in neutral
+    )
+    government = next(
+        row
+        for row in build_contract_registry()["contracts"]
+        if row["field_id"] == "config.government"
+    )
+    assert government["status"] == "blocked_native_route"

@@ -684,6 +684,10 @@ def apply_native_activation_scenario(
         monetary_rules.deposit_rate = 0.005
     elif scenario == "deposit_spread_competition":
         monetary_rules.deposit_spread_dispersion = 1.0e-4
+    elif scenario == "deprivation_measurement_active":
+        energy_rules = economy.energy_rules
+        energy_rules.deprivation_burnin_years = 0
+        economy.energy_rules = energy_rules
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules

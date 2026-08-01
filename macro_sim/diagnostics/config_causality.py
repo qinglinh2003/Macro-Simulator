@@ -192,6 +192,12 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "member currently controls household moves after marriage, divorce, "
         "and leaving home"
     ),
+    "config.government": (
+        "Config defines a master fiscal-sector capability, while the current "
+        "native capital-fiscal vertical rejects a specification after that "
+        "capability bit is removed and therefore cannot execute the requested "
+        "government-off economy"
+    ),
     "config.monetary_direct_transmission": (
         "Config defines direct investment user-cost, household debt-budget, "
         "and firm debt-service transmission, while the native member currently "
@@ -206,7 +212,9 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
 
 # Measurement gates may change published observables but must not receive credit
 # for changing the economy they observe.
-OBSERVATION_ONLY_FIELDS = frozenset({"config.deprivation_gauges"})
+OBSERVATION_ONLY_FIELDS = frozenset(
+    {"config.deprivation_gauges", "config.subsistence_share"}
+)
 
 
 SCALE_FIELDS = frozenset(
@@ -270,6 +278,7 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "dis_slope": "firms_and_industrial_dynamics",
     "rho": "firms_and_industrial_dynamics",
     "sector_switching": "firms_and_industrial_dynamics",
+    "subsistence_share": "distribution_and_welfare",
     "house_price_income_years": "housing",
     "household_interest_arrears": "banking_and_credit",
     "investment_user_cost_elasticity": "banking_and_credit",

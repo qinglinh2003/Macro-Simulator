@@ -20,9 +20,9 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "derived": 2,
         "excluded_policy": 108,
         "excluded_shock": 4,
-        "infrastructure_invariance": 19,
-        "mapped_native": 212,
-        "missing_native_route": 80,
+        "infrastructure_invariance": 20,
+        "mapped_native": 210,
+        "missing_native_route": 81,
         "native_fixed": 12,
         "planned_removal": 1,
         "run_control": 1,
@@ -65,6 +65,7 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         "monetary_direct_transmission": "banking_and_credit",
         "house_price_income_years": "housing",
         "rho": "firms_and_industrial_dynamics",
+        "subsistence_share": "distribution_and_welfare",
         "symmetric_k": "production_and_technology",
         "seed": "scale_and_genesis",
         "ticks_per_year": "numerics_and_observability",
@@ -98,6 +99,9 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     direct = rows["config.monetary_direct_transmission"]
     assert direct["route_status"] == "missing_native_route"
     assert "investment user-cost" in direct["route_note"]
+    government = rows["config.government"]
+    assert government["route_status"] == "missing_native_route"
+    assert "rejects a specification" in government["route_note"]
 
 
 def test_observation_gate_is_not_credited_with_economic_causality() -> None:
@@ -105,3 +109,6 @@ def test_observation_gate_is_not_credited_with_economic_causality() -> None:
     deprivation = rows["config.deprivation_gauges"]
     assert deprivation["route_status"] == "infrastructure_invariance"
     assert deprivation["experiment_role"] == "invariance_only"
+    standard = rows["config.subsistence_share"]
+    assert standard["route_status"] == "infrastructure_invariance"
+    assert standard["experiment_role"] == "invariance_only"

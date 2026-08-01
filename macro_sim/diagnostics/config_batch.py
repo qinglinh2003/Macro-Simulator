@@ -251,6 +251,7 @@ def run_contract_batch(
     executable_statuses = {
         "screening_ready",
         "activation_scenario_required",
+        "invariance_activation_required",
     }
     if any(contract.status not in executable_statuses for contract in contracts):
         raise ValueError("batch contains an unreviewed treatment contract")
