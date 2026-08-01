@@ -315,6 +315,13 @@ CAPABILITY_DISABLE_CASCADE: dict[str, dict[str, Any]] = {
         "founder_owned_genesis": False,
         "household_bankruptcy": False,
     },
+    "margin_credit": {
+        "household_bankruptcy": False,
+    },
+    "bank_equity": {
+        "bank_equity_trading": False,
+        "bank_dynamics": False,
+    },
     "firm_dynamics": {
         "per_firm_equity": False,
     },

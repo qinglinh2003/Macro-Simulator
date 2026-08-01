@@ -9,9 +9,9 @@
   },
   "metrics": {
     "nominal_output": {
-      "maximum": [35.0, 40.0],
-      "mean": [35.0, 40.0],
-      "minimum": [35.0, 40.0]
+      "maximum": [76.5, 77.6],
+      "mean": [76.8, 77.3],
+      "minimum": [76.5, 77.2]
     },
     "price_index": {
       "maximum": [1.19, 1.21],
@@ -19,16 +19,16 @@
       "minimum": [1.19, 1.21]
     },
     "tax_total": {
-      "maximum": [11.0, 13.0],
-      "mean": [11.0, 13.0],
-      "minimum": [11.0, 13.0]
+      "maximum": [28.0, 30.0],
+      "mean": [26.5, 27.7],
+      "minimum": [25.5, 26.8]
     },
     "unemployment_rate": {
-      "maximum": [0.7, 0.82],
-      "mean": [0.7, 0.82],
-      "minimum": [0.7, 0.82]
+      "maximum": [0.3, 0.33],
+      "mean": [0.285, 0.31],
+      "minimum": [0.26, 0.29]
     }
   },
   "minimum_distinct_digests": 24,
-  "schema_version": "m4-stochastic-envelopes-v1"
+  "schema_version": "m4-stochastic-envelopes-v2"
 }

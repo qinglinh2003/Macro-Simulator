@@ -980,6 +980,11 @@ EmploymentBook::roster(FirmId firm) const noexcept {
         static_cast<std::size_t>(firm.value())];
 }
 
+const std::vector<std::vector<JobId>> &
+EmploymentBook::firm_rosters() const noexcept {
+    return roster_by_firm_;
+}
+
 const std::vector<JobRecord> &EmploymentBook::records() const noexcept {
     return jobs_;
 }
@@ -1030,6 +1035,49 @@ Status EmploymentBook::replace_records(
         suspended_count_ += job.suspended ? 1U : 0U;
     }
     next_id_ = jobs_.size();
+    return Status::success();
+}
+
+Status EmploymentBook::restore_firm_rosters(
+    std::vector<std::vector<JobId>> rosters
+) {
+    if (rosters.empty() || !rosters.front().empty()) {
+        return Status(ErrorCode::corrupt_input,
+                      "employment checkpoint firm rosters are invalid");
+    }
+    std::vector<bool> seen(jobs_.size(), false);
+    std::vector<std::uint32_t> positions(jobs_.size(), kNoRoster);
+    for (std::size_t firm_index = 1; firm_index < rosters.size(); ++firm_index) {
+        const auto &firm_roster = rosters[firm_index];
+        if (firm_roster.size() >= std::numeric_limits<std::uint32_t>::max()) {
+            return Status(ErrorCode::out_of_range,
+                          "employment checkpoint roster exceeds compact position range");
+        }
+        for (std::size_t position = 0; position < firm_roster.size(); ++position) {
+            const auto job_id = firm_roster[position];
+            const auto job_index = static_cast<std::size_t>(job_id.value());
+            if (!job_id.valid() || job_index == 0 || job_index >= jobs_.size() ||
+                seen[job_index]) {
+                return Status(ErrorCode::corrupt_input,
+                              "employment checkpoint roster identity is invalid");
+            }
+            const auto &job = jobs_[job_index];
+            if (!job.active || job.firm.value() != firm_index) {
+                return Status(ErrorCode::corrupt_input,
+                              "employment checkpoint roster membership is invalid");
+            }
+            seen[job_index] = true;
+            positions[job_index] = static_cast<std::uint32_t>(position);
+        }
+    }
+    for (std::size_t index = 1; index < jobs_.size(); ++index) {
+        if (jobs_[index].active != seen[index]) {
+            return Status(ErrorCode::corrupt_input,
+                          "employment checkpoint roster coverage is invalid");
+        }
+    }
+    roster_by_firm_ = std::move(rosters);
+    roster_position_by_job_ = std::move(positions);
     return Status::success();
 }
 

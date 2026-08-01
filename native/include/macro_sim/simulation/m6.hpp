@@ -148,9 +148,17 @@ struct M6Metrics final {
     double bond_issuance{0.0};
     double bond_redemption{0.0};
     double bond_coupon_paid{0.0};
+    double household_bond_market_value{0.0};
+    double bank_bond_market_value{0.0};
     double firm_equity_market_cap{0.0};
     double bank_equity_market_cap{0.0};
+    double household_firm_equity_market_value{0.0};
+    double household_bank_equity_market_value{0.0};
     double equity_turnover{0.0};
+    double firm_equity_turnover{0.0};
+    double bank_equity_turnover{0.0};
+    double firm_equity_fundamental_value{0.0};
+    double bank_equity_fundamental_value{0.0};
     double primary_equity_raised{0.0};
     double margin_principal{0.0};
     double margin_originated{0.0};

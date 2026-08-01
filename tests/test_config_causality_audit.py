@@ -21,8 +21,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 210,
-        "missing_native_route": 81,
+        "mapped_native": 209,
+        "missing_native_route": 82,
         "native_fixed": 12,
         "planned_removal": 1,
         "run_control": 1,
@@ -87,6 +87,22 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     strata = rows["config.consumption_strata"]
     assert strata["route_status"] == "missing_native_route"
     assert "two-stage necessity/luxury" in strata["route_note"]
+    q_sensitivity = rows["config.lambda_q"]
+    assert q_sensitivity["route_status"] == "missing_native_route"
+    assert "real investment" in q_sensitivity["route_note"]
+
+
+def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> None:
+    rows = {row["id"]: row for row in build_audit_inventory()["rows"]}
+    assert rows["config.founder_owned_genesis"]["experiment_role"] == (
+        "causal_treatment"
+    )
+    assert rows["config.watchlist_size"]["experiment_role"] == (
+        "causal_treatment"
+    )
+    assert rows["config.shares_per_firm"]["experiment_role"] == (
+        "invariance_only"
+    )
     necessity = rows["config.necessity_share0"]
     assert necessity["route_status"] == "missing_native_route"
     assert "per-need-unit necessity quantity" in necessity["route_note"]

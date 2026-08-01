@@ -680,9 +680,17 @@ nb::dict m6_metrics_to_python(const macro_sim::simulation::M6Metrics &metrics) {
     MACRO_SIM_M6_METRIC(bond_issuance);
     MACRO_SIM_M6_METRIC(bond_redemption);
     MACRO_SIM_M6_METRIC(bond_coupon_paid);
+    MACRO_SIM_M6_METRIC(household_bond_market_value);
+    MACRO_SIM_M6_METRIC(bank_bond_market_value);
     MACRO_SIM_M6_METRIC(firm_equity_market_cap);
     MACRO_SIM_M6_METRIC(bank_equity_market_cap);
+    MACRO_SIM_M6_METRIC(household_firm_equity_market_value);
+    MACRO_SIM_M6_METRIC(household_bank_equity_market_value);
     MACRO_SIM_M6_METRIC(equity_turnover);
+    MACRO_SIM_M6_METRIC(firm_equity_turnover);
+    MACRO_SIM_M6_METRIC(bank_equity_turnover);
+    MACRO_SIM_M6_METRIC(firm_equity_fundamental_value);
+    MACRO_SIM_M6_METRIC(bank_equity_fundamental_value);
     MACRO_SIM_M6_METRIC(primary_equity_raised);
     MACRO_SIM_M6_METRIC(margin_principal);
     MACRO_SIM_M6_METRIC(margin_originated);

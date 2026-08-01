@@ -531,6 +531,14 @@ void decode_metrics(const Json &row, M7Metrics &value) {
             static_cast<std::uint8_t>(job.separation_kind),
         }));
     }
+    output["job_rosters"] = Json::array();
+    for (const auto &firm_roster : runtime.employment.firm_rosters()) {
+        auto encoded_roster = Json::array();
+        for (const auto job_id : firm_roster) {
+            encoded_roster.push_back(job_id.value());
+        }
+        output["job_rosters"].push_back(std::move(encoded_roster));
+    }
     output["unions"] = Json::array();
     for (const auto &record : runtime.relationships.unions()) {
         output["unions"].push_back(Json::array({
@@ -660,6 +668,22 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     status = runtime.employment.replace_records(std::move(jobs));
     if (!status.ok()) {
         throw std::runtime_error("invalid M7 employment store");
+    }
+    std::vector<std::vector<JobId>> job_rosters;
+    for (const auto &encoded_roster : input.at("job_rosters")) {
+        if (!encoded_roster.is_array()) {
+            throw std::runtime_error("invalid M7 employment roster");
+        }
+        std::vector<JobId> roster;
+        roster.reserve(encoded_roster.size());
+        for (const auto &job_id : encoded_roster) {
+            roster.emplace_back(job_id.get<std::uint64_t>());
+        }
+        job_rosters.push_back(std::move(roster));
+    }
+    status = runtime.employment.restore_firm_rosters(std::move(job_rosters));
+    if (!status.ok()) {
+        throw std::runtime_error("invalid M7 employment roster store");
     }
 
     std::vector<core::UnionRecord> unions;

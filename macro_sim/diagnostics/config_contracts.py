@@ -169,6 +169,31 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.na.public_fixed_capital_formation_nominal",
         "metric.economy.na.government_consumption_real",
     ),
+    "securities_and_capital_markets": (
+        "metric.source.m6.bond_outstanding_face",
+        "metric.source.m6.bond_market_value",
+        "metric.source.m6.bond_issuance",
+        "metric.source.m6.household_bond_market_value",
+        "metric.source.m6.bank_bond_market_value",
+        "metric.source.m6.firm_equity_market_cap",
+        "metric.source.m6.bank_equity_market_cap",
+        "metric.source.m6.household_firm_equity_market_value",
+        "metric.source.m6.household_bank_equity_market_value",
+        "metric.source.m6.firm_equity_turnover",
+        "metric.source.m6.bank_equity_turnover",
+        "metric.source.m6.firm_equity_fundamental_value",
+        "metric.source.m6.bank_equity_fundamental_value",
+        "metric.source.m6.primary_equity_raised",
+        "metric.source.m6.margin_principal",
+        "metric.source.m6.margin_originated",
+        "metric.source.m6.margin_repaid",
+        "metric.economy.tobin_q_mean",
+        "metric.economy.equity_ownership_gini",
+        "metric.economy.hh_wealth_gini_incl_equity",
+        "metric.source.m4.fixed_capital_formation_real",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+    ),
     "open_economy": (
         "metric.source.m9.country.exports_volume",
         "metric.source.m9.country.imports_volume",
@@ -1179,6 +1204,183 @@ def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
+    household_bonds = "metric.source.m6.household_bond_market_value"
+    bank_bonds = "metric.source.m6.bank_bond_market_value"
+    firm_cap = "metric.source.m6.firm_equity_market_cap"
+    bank_cap = "metric.source.m6.bank_equity_market_cap"
+    firm_turnover = "metric.source.m6.firm_equity_turnover"
+    bank_turnover = "metric.source.m6.bank_equity_turnover"
+    firm_fundamental = "metric.source.m6.firm_equity_fundamental_value"
+    bank_fundamental = "metric.source.m6.bank_equity_fundamental_value"
+    issuance = "metric.source.m6.primary_equity_raised"
+    margin = "metric.source.m6.margin_principal"
+    margin_flow = "metric.source.m6.margin_originated"
+    equity_gini = "metric.economy.equity_ownership_gini"
+    return {
+        "config.bank_bond_appetite": {
+            "status": "screening_ready",
+            "values": (0.0, 0.15),
+            "directions": {bank_bonds: "increase"},
+            "rationale": "A larger bank appetite should shift more of the active government-bond book onto bank balance sheets. Household holdings and aggregate issuance remain equilibrium outcomes because investors compete for the same supply.",
+        },
+        "config.bank_equity": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {
+                bank_cap: "decrease",
+                bank_turnover: "decrease",
+                "metric.source.m6.household_bank_equity_market_value": "decrease",
+            },
+            "rationale": "Removing bank ownership should eliminate bank-stock contracts, their household claims, and their secondary-market turnover. The valid capability closure also disables bank-equity trading and de-novo bank entry.",
+        },
+        "config.bank_equity_lambda": {
+            "status": "screening_ready",
+            "values": (0.0005, 0.01),
+            "directions": {bank_fundamental: "nonzero"},
+            "statistics": {bank_fundamental: "post_burnin_volatility"},
+            "rationale": "The bank earnings-signal gain controls how quickly stock fundamentals absorb realized bank income. A faster gain should change the variability of aggregate fundamental value; its level sign depends on the income path.",
+        },
+        "config.bank_equity_trading": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {bank_turnover: "decrease"},
+            "rationale": "Disabling the secondary bank-stock market should remove household bank-equity turnover while retaining bank ownership and mark-to-model fundamentals.",
+        },
+        "config.bank_theta_equity": {
+            "status": "screening_ready",
+            "values": (0.02, 0.25),
+            "directions": {bank_turnover: "nonzero", bank_cap: "increase"},
+            "statistics": {bank_turnover: "first_window_mean"},
+            "rationale": "A larger desired bank-equity wealth share should create additional net demand, turnover, and upward price pressure during portfolio adjustment.",
+        },
+        "config.bond_theta": {
+            "status": "screening_ready",
+            "values": (0.02, 0.40),
+            "directions": {household_bonds: "increase"},
+            "rationale": "A larger household bond target should increase household government-bond holdings when deficit-financed supply is active.",
+        },
+        "config.bonds": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {
+                "metric.source.m6.bond_outstanding_face": "decrease",
+                household_bonds: "decrease",
+                bank_bonds: "decrease",
+            },
+            "rationale": "Removing the bond capability should eliminate issuance and both household and bank government-bond positions. Dependent central-bank quantity facilities close with the capability.",
+        },
+        "config.equity_finance": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {issuance: "decrease"},
+            "statistics": {issuance: "cumulative"},
+            "rationale": "Disabling primary equity finance should remove firms' sale of new shares while preserving the secondary stock market.",
+        },
+        "config.founder_owned_genesis": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {equity_gini: "decrease"},
+            "rationale": "Diffuse genesis ownership should reduce concentration relative to vesting each initial firm in a small founder class. This is a persistent ownership institution, not a shock expected to wash out mechanically.",
+        },
+        "config.lambda_p": {
+            "status": "screening_ready",
+            "values": (0.03, 0.25),
+            "directions": {firm_cap: "nonzero"},
+            "statistics": {firm_cap: "post_burnin_volatility"},
+            "rationale": "The market-impact gain controls how strongly a given order imbalance moves prices. A larger gain should alter market-cap volatility, while the equilibrium price level is not assigned a sign.",
+        },
+        "config.margin_credit": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {margin: "decrease", margin_flow: "decrease"},
+            "statistics": {margin_flow: "cumulative"},
+            "rationale": "Removing margin lending should eliminate equity-backed household credit balances and originations. The dependent bankruptcy rule closes because there is no margin debt to discharge.",
+        },
+        "config.per_firm_equity": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {firm_cap: "decrease", firm_turnover: "decrease"},
+            "rationale": "Removing per-firm stock contracts should eliminate firm market capitalization and trading. Equity finance, margin lending, founder vesting, and pro-rata dividends close as a documented capability package.",
+        },
+        "config.portfolio_adjust": {
+            "status": "screening_ready",
+            "values": (0.01, 0.20),
+            "directions": {firm_turnover: "increase"},
+            "statistics": {firm_turnover: "first_window_mean"},
+            "rationale": "A faster partial-adjustment coefficient should move a larger fraction of each household's portfolio gap during the initial rebalancing window.",
+        },
+        "config.resid_income_lambda": {
+            "status": "screening_ready",
+            "values": (0.0005, 0.01),
+            "directions": {firm_fundamental: "nonzero"},
+            "statistics": {firm_fundamental: "post_burnin_volatility"},
+            "rationale": "The residual-income gain controls how quickly firm fundamentals incorporate earnings surprises. Its effect on the fundamental level is state-dependent, but its dynamic effect must be observable.",
+        },
+        "config.shares_per_firm": {
+            "status": "invariance_activation_required",
+            "values": (50.0, 200.0),
+            "directions": {
+                firm_cap: "invariance",
+                firm_fundamental: "invariance",
+                "metric.economy.real_output": "invariance",
+            },
+            "rationale": "Shares per firm is a denomination choice. Splitting the same corporate claim into more units should rescale price per share but leave aggregate market value, fundamentals, and the real economy unchanged.",
+        },
+        "config.theta_equity": {
+            "status": "screening_ready",
+            "values": (0.10, 0.60),
+            "directions": {firm_cap: "increase", firm_turnover: "nonzero"},
+            "statistics": {
+                firm_cap: "first_window_mean",
+                firm_turnover: "first_window_mean",
+            },
+            "rationale": "A larger desired household equity share should create additional demand and upward price pressure while portfolios move toward the new allocation.",
+        },
+        "config.trend_lambda": {
+            "status": "activation_scenario_required",
+            "values": (0.005, 0.10),
+            "directions": {firm_cap: "nonzero"},
+            "statistics": {firm_cap: "post_burnin_volatility"},
+            "activation": "active_chartist_demand",
+            "rationale": "Faster trend learning changes the momentum signal seen by chartist demand. The stable product baseline deliberately keeps chartist demand weak, so the learning-speed mechanism is identified under a shared high-chartist activation rather than expected to manufacture a bubble on its own.",
+        },
+        "config.valuation_discount_floor": {
+            "status": "screening_ready",
+            "values": (0.001,),
+            "directions": {firm_fundamental: "decrease", bank_fundamental: "decrease"},
+            "rationale": "A binding higher required-return floor reduces the present value of residual firm income and bank earnings, holding book values fixed.",
+        },
+        "config.valuation_risk_premium": {
+            "status": "screening_ready",
+            "values": (0.00005, 0.00050),
+            "directions": {firm_fundamental: "decrease", bank_fundamental: "decrease"},
+            "rationale": "A larger valuation risk premium raises the required return and should lower capitalized firm residual income and bank earnings.",
+        },
+        "config.w_chartist": {
+            "status": "screening_ready",
+            "values": (0.0, 20.0),
+            "directions": {firm_cap: "nonzero"},
+            "statistics": {firm_cap: "post_burnin_volatility"},
+            "rationale": "Chartist weight scales momentum-following demand. The upper treatment uses the repository's established bubble-regime dose so the experiment compares a stable market with an economically material momentum-feedback regime.",
+        },
+        "config.w_fundamental": {
+            "status": "screening_ready",
+            "values": (0.25, 2.0),
+            "directions": {firm_cap: "nonzero"},
+            "statistics": {firm_cap: "post_burnin_volatility"},
+            "rationale": "Fundamentalist weight scales the demand response to value-price gaps. It should change price correction dynamics without imposing a one-sided market-cap level effect.",
+        },
+        "config.watchlist_size": {
+            "status": "screening_ready",
+            "values": (1, 16),
+            "directions": {equity_gini: "decrease", firm_turnover: "nonzero"},
+            "statistics": {firm_turnover: "first_window_mean"},
+            "rationale": "A broader permanent investment opportunity set should diversify household firm ownership and alter secondary-market turnover. It is a persistent market-structure treatment, not a transient opening shock.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
@@ -1188,6 +1390,7 @@ CURATED_CONTRACTS = {
     **_distribution_contracts(),
     **_banking_contracts(),
     **_government_contracts(),
+    **_securities_contracts(),
 }
 
 
@@ -1239,7 +1442,7 @@ def build_contract_registry() -> dict[str, Any]:
             "invariance_activation_required",
         }:
             allowed_routes = (
-                {"infrastructure_invariance"}
+                {"infrastructure_invariance", "mapped_native"}
                 if contract.status == "invariance_activation_required"
                 else {"mapped_native"}
             )

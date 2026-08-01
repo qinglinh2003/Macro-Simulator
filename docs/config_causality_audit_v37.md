@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, banking, and public-sector screens complete
+Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, banking, public-sector, and securities-market screens complete
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -91,8 +91,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 210 |
-| Native route missing or incomplete | 81 |
+| Native route confirmed | 209 |
+| Native route missing or incomplete | 82 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -102,7 +102,7 @@ The adjudicated P0 inventory reports:
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 81 missing or incomplete routes are real implementation work; they are not
+The 82 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -190,6 +190,10 @@ For outcome `Y`, treatment `x`, seed `s`, and horizon window `h`, the audit stor
 - relative effect for positive level variables;
 - local elasticity: `d log(Y) / d log(x)` where defined;
 - semi-elasticity for rates and bounded outcomes;
+- for directionally heterogeneous market mechanisms, the paired absolute
+  relative effect and the share of seed pairs above the predeclared materiality
+  floor; this prevents opposite but material path responses from cancelling in
+  a signed average;
 - cumulative effect and area under the response curve;
 - peak effect, time to peak, time to half-decay, and terminal effect;
 - volatility and downside-tail effects;
@@ -300,13 +304,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 210
+The native product baseline comparison now projects every one of the 209
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 190 |
+| Exact semantic value | 189 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -588,7 +592,7 @@ Current findings:
   household goods-quantity observable is required before final calibration.
 
 Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` remain among the 81 blocked native
+`pref_attach_beta` and `pref_price_elasticity` remain among the 82 blocked native
 routes, and `necessity_share0` reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
@@ -956,6 +960,113 @@ mostly changes an invisible stock. The later interaction stage must estimate
 Until that response surface is known, the depreciation rate belongs in expert
 setup rather than a prominent player control, and it should not be made salient
 by adding an artificial direct GDP effect.
+
+### 8.13 Securities and capital-market screen
+
+The securities inventory has 21 executable causal fields, one denomination
+invariance field, two deliberately fixed invariance choices, one superseded
+compatibility name, and six genuine native route gaps. The gaps are
+`equity_ema_lambda`, `lambda_q`, `q_invest_cap`, `q_invest_floor`,
+`q_invest_smooth`, and `wealth_effect`. In particular, `lambda_q` is not
+credited merely because C++ uses a similarly named equity-price smoother: its
+Config definition is a Tobin-q-to-real-investment sensitivity and no native
+real-investment equation consumes it.
+
+The working fields were evaluated in four paired 100,000-person seeds with
+eight native workers. Eighteen direct mechanisms use a 90-day screen (116
+worlds); `w_chartist` and `w_fundamental` use a 365-day price-dynamics screen
+(20 worlds); `trend_lambda` uses a 365-day high-chartist activation shared by
+control and treatment (12 worlds); and `shares_per_firm` uses a 90-day
+denomination-invariance screen (12 worlds). Every direct direction check
+passes. The three directionally heterogeneous price-feedback fields pass the
+separate practical gate: at least 75% of paired paths move by at least 0.1% in
+absolute relative volatility, while their signed average remains explicitly
+reported as state-dependent rather than being given a false universal sign.
+
+Two implementation defects were found and repaired before the final screens:
+
+1. Bank equity valuation read the current day's scratch P&L before that P&L
+   was closed, resetting the income signal to zero every tick. It now reads the
+   prior committed bank P&L, and `bank_equity_lambda` moves bank fundamental
+   value by about -72% at 0.0005 and +273% at 0.01 relative to the product
+   baseline.
+2. C++ household equity demand normalized fundamental and trend signals only
+   across a watchlist. Common valuation or momentum signals therefore changed
+   relative weights but cancelled from the household's aggregate equity target.
+   The native engine now applies average signal pressure to the total target
+   equity share, with a bounded unlevered cap and a safe zero-attractiveness
+   sell path. This restores the stabilising fundamentalist and momentum
+   feedback channels without adding a new market loop.
+
+The new maintained observables separate stocks and flows that aggregate market
+value concealed: household and bank bond market values; household firm- and
+bank-equity market values; firm and bank equity turnover; and firm and bank
+fundamental values. They make it possible to test ownership, market activity,
+and valuation independently.
+
+The principal causal results are:
+
+- Government bonds are live. Removing `bonds` eliminates household holdings,
+  bank holdings, and outstanding face value. Moving `bond_theta` from 0.15 to
+  0.02 lowers household holdings by about 44.9%; moving it to 0.40 raises them
+  by about 13.1%. Removing bank bond appetite removes all bank bond holdings,
+  but increasing appetite from 0.03 to 0.15 adds only about 0.27%, a real
+  supply-cap saturation rather than a silent route.
+- Bank equity is fully modular: disabling the capability removes capitalization,
+  household positions, and turnover; disabling only trading removes turnover.
+  Moving `bank_theta_equity` from 0.10 to 0.02 or 0.25 changes bank market
+  value by about -1.28% or +2.31% and turnover by about -80% or +148%.
+- Firm equity has distinct funding, ownership, leverage, and trading channels.
+  Disabling equity finance removes primary issuance; disabling per-firm equity
+  removes market capitalization and turnover; disabling margin credit removes
+  margin originations and balances. Diffuse rather than founder ownership cuts
+  the equity-ownership Gini by about 96.4% at genesis.
+- `lambda_p`, `portfolio_adjust`, `resid_income_lambda`, and `theta_equity`
+  are all materially live. The price-adjustment gain changes market-cap
+  volatility by about -81% and +86% at the low and high arms; portfolio
+  adjustment changes first-window turnover by about -78% and +259%; residual
+  income learning changes fundamental-value volatility by about -17% and
+  +91%; and a 0.10/0.60 household equity target changes first-window turnover
+  by about -65%/+89% while moving initial market capitalization by
+  -0.049%/+0.064%.
+- The valuation discount floor lowers firm and bank fundamentals when binding.
+  The risk-premium treatment moves the same fundamentals in the expected
+  inverse direction at both low and high arms. A broader watchlist changes
+  turnover by roughly -3.7%/+3.7% and slightly diversifies ownership; it is a
+  market-structure choice, not a macro-growth lever.
+- Price-feedback controls are causal but path-dependent. Relative to the
+  stable product setting, `w_chartist=20` produces a mean absolute 2.41%
+  market-cap-volatility response across seeds; `w_fundamental=2` produces
+  3.42%; and, conditional on active chartist demand,
+  `trend_lambda=0.10` produces 3.59%. Their signed effects can reverse with
+  the endogenous price path, so they belong in a clearly labelled market-regime
+  or advanced setup surface rather than being presented as monotonic growth
+  controls.
+- `shares_per_firm` is exact denomination invariance. Changing it to either 50
+  or 200 leaves real output, aggregate firm fundamental value, and aggregate
+  firm market capitalization bitwise unchanged across all four seeds. It
+  should remain an internal technical parameter, not a gameplay setting.
+
+The screen closes the observable and route defects in the implemented
+securities core, but not the six semantic gaps above. The next interaction
+stage should estimate `theta_equity x portfolio_adjust`,
+`lambda_p x w_chartist x trend_lambda`, and
+`margin_credit x bank_theta_equity x bank_equity_lambda`; it should also test
+whether the bank-bond appetite saturation is calibrated to a plausible supply
+elasticity. These are model and calibration questions, not reasons to inflate
+individual coefficients blindly.
+
+The full native acceptance run also exposed two regression fixtures rather
+than two economic-route failures. M7 checkpoints previously serialized job
+contracts but not each firm's live roster order. Because separations use an
+O(1) swap erase, restoring the contracts in identifier order changed payroll
+summation at the last binary digit and broke exact continuation in M9. The
+checkpoint schema now preserves roster order, retaining the fast runtime data
+structure while restoring byte-exact continuation. Separately, the M4
+stochastic envelope still represented the pre-fix fallback-dividend clearing
+path. Its v2 ranges were re-estimated from 256 deterministic native seeds after
+the clearing fix; the frozen 32-seed panel and all fresh-process checkpoint
+tests now pass.
 
 ## 9. Execution gates
 

@@ -148,6 +148,17 @@ def test_small_paired_interval_uses_student_t() -> None:
     # df=1: 1 +/- 12.706 * (sqrt(2) / sqrt(2)).
     assert effect.confidence_low == pytest.approx(-11.706)
     assert effect.confidence_high == pytest.approx(13.706)
+    assert effect.mean_absolute_difference == pytest.approx(1.0)
+    assert effect.mean_absolute_relative_difference is None
+    assert effect.pathwise_material_share is None
+
+
+def test_paired_effect_preserves_pathwise_materiality_when_signs_cancel() -> None:
+    effect = paired_effect([100.0, 100.0], [98.0, 102.0])
+    assert effect.mean_difference == pytest.approx(0.0)
+    assert effect.mean_absolute_difference == pytest.approx(2.0)
+    assert effect.mean_absolute_relative_difference == pytest.approx(0.02)
+    assert effect.pathwise_material_share == pytest.approx(1.0)
 
 
 def test_world_treatment_uses_the_product_new_game_contract() -> None:

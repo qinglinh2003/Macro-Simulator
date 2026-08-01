@@ -22,6 +22,7 @@ namespace {
 
 constexpr double kTolerance = 1.0e-8;
 constexpr double kEconomicEpsilon = 1.0e-12;
+constexpr double kMaximumUnleveredEquityShare = 0.95;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
@@ -669,7 +670,13 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         } else {
             const auto bank = BankId(contract.issuer.value());
             const auto *capital = capital_for(monetary, bank);
-            const auto *pnl = pnl_for(monetary, bank);
+            // Equity valuation must use information that was available when the
+            // market opened. The scratch P&L is reset at the start of this tick
+            // and is not closed until after equity clearing, so reading its
+            // net_income here made the bank earnings signal identically zero.
+            // The committed journal contains the previous day's closed result
+            // and therefore supplies the economically correct one-day lag.
+            const auto *pnl = state.bank_pnl.get(bank);
             if (capital == nullptr || pnl == nullptr || !capital->alive) {
                 continue;
             }
@@ -690,7 +697,6 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
             return status;
         }
     }
-    static_cast<void>(state);
     return scratch.securities_.finish_batch();
 }
 
@@ -809,6 +815,7 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
         const double deposits = projected_balance(real, household.primary_account);
         double equity_value = 0.0;
         double attractiveness_total = 0.0;
+        std::size_t eligible_equities = 0U;
         scratch.watch_current_.assign(watch.size(), 0.0);
         scratch.watch_attractiveness_.assign(watch.size(), 0.0);
         for (std::size_t index = 0; index < watch.size(); ++index) {
@@ -830,16 +837,26 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
             const double attractiveness = std::max(0.0, 1.0 + response);
             scratch.watch_attractiveness_[index] = attractiveness;
             attractiveness_total += attractiveness;
+            ++eligible_equities;
         }
-        if (attractiveness_total <= kEconomicEpsilon) {
+        if (eligible_equities == 0U) {
             return;
         }
         const double margin = outstanding_margin(scratch, household.primary_account);
         const double net_worth = deposits + equity_value - margin;
-        double target_share = runtime.rules.household_equity_target;
-        if (runtime.rules.margin_credit) {
-            target_share = std::min(runtime.policy.margin_max, target_share);
-        }
+        // A market-wide valuation or momentum signal must change aggregate
+        // equity demand, not merely redistribute a fixed target among the
+        // securities in the household's watchlist.  This preserves the
+        // stabilising fundamentalist and destabilising chartist channels
+        // represented by the configuration weights, with or without margin.
+        const double average_pressure =
+            attractiveness_total / static_cast<double>(eligible_equities) - 1.0;
+        const double maximum_share = runtime.rules.margin_credit
+                                         ? runtime.policy.margin_max
+                                         : kMaximumUnleveredEquityShare;
+        const double target_share = std::clamp(
+            runtime.rules.household_equity_target * (1.0 + average_pressure),
+            0.0, maximum_share);
         const double target_equity = std::max(0.0, target_share * net_worth);
         double buy_cash = 0.0;
         for (std::size_t index = 0; index < watch.size(); ++index) {
@@ -849,9 +866,12 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
                 equity->price.value() <= kEconomicEpsilon) {
                 continue;
             }
-            const double desired = target_equity *
-                                   scratch.watch_attractiveness_[index] /
-                                   attractiveness_total / equity->price.value();
+            const double weight = attractiveness_total > kEconomicEpsilon
+                                      ? scratch.watch_attractiveness_[index] /
+                                            attractiveness_total
+                                      : 1.0 / static_cast<double>(eligible_equities);
+            const double desired =
+                target_equity * weight / equity->price.value();
             const double current = scratch.watch_current_[index];
             const double delta =
                 (desired - current) * runtime.rules.portfolio_adjustment;
@@ -878,9 +898,12 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
                 equity->price.value() <= kEconomicEpsilon) {
                 continue;
             }
-            const double desired = target_equity *
-                                   scratch.watch_attractiveness_[index] /
-                                   attractiveness_total / equity->price.value();
+            const double weight = attractiveness_total > kEconomicEpsilon
+                                      ? scratch.watch_attractiveness_[index] /
+                                            attractiveness_total
+                                      : 1.0 / static_cast<double>(eligible_equities);
+            const double desired =
+                target_equity * weight / equity->price.value();
             const double current = scratch.watch_current_[index];
             double delta = (desired - current) * runtime.rules.portfolio_adjustment;
             delta = delta > 0.0 ? delta * scale : std::max(delta, -current);
@@ -1225,6 +1248,11 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             }
         }
         scratch.working_metrics_.equity_turnover += executed;
+        if (contract->issuer_kind == core::EquityIssuerKind::firm) {
+            scratch.working_metrics_.firm_equity_turnover += executed;
+        } else {
+            scratch.working_metrics_.bank_equity_turnover += executed;
+        }
         const double excess = contract->outstanding_shares > kEconomicEpsilon
                                   ? (buy - sell_total) / contract->outstanding_shares
                                   : 0.0;
@@ -2311,12 +2339,52 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     scratch.working_metrics_.bond_outstanding_face =
         scratch.securities_.total_bond_face().value();
     scratch.working_metrics_.bond_market_value = 0.0;
+    scratch.working_metrics_.household_bond_market_value = 0.0;
+    scratch.working_metrics_.bank_bond_market_value = 0.0;
     scratch.working_metrics_.firm_equity_market_cap = 0.0;
     scratch.working_metrics_.bank_equity_market_cap = 0.0;
+    scratch.working_metrics_.household_firm_equity_market_value = 0.0;
+    scratch.working_metrics_.household_bank_equity_market_value = 0.0;
+    scratch.working_metrics_.firm_equity_fundamental_value = 0.0;
+    scratch.working_metrics_.bank_equity_fundamental_value = 0.0;
     scratch.working_metrics_.active_security_lots = 0;
     for (const auto &lot : scratch.securities_.lots()) {
-        if (lot.active()) {
-            ++scratch.working_metrics_.active_security_lots;
+        if (!lot.active()) {
+            continue;
+        }
+        ++scratch.working_metrics_.active_security_lots;
+        if (lot.security.kind() == core::SecurityKind::bond) {
+            const auto *contract =
+                scratch.securities_.get(BondId(lot.security.value()));
+            if (contract == nullptr || !contract->active) {
+                continue;
+            }
+            const auto remaining = contract->maturity_tick.value() > tick.value()
+                                       ? contract->maturity_tick.value() - tick.value()
+                                       : 0;
+            const double market_value = bond_price(
+                lot.units, remaining, runtime.last_metrics.economy.policy_rate,
+                contract->coupon_rate.value());
+            if (lot.holder.kind() == core::OwnerKind::household) {
+                scratch.working_metrics_.household_bond_market_value += market_value;
+            } else if (lot.holder.kind() == core::OwnerKind::bank) {
+                scratch.working_metrics_.bank_bond_market_value += market_value;
+            }
+            continue;
+        }
+        const auto *contract =
+            scratch.securities_.get(EquityId(lot.security.value()));
+        if (contract == nullptr || !contract->active ||
+            lot.holder.kind() != core::OwnerKind::household) {
+            continue;
+        }
+        const double market_value = lot.units * contract->price.value();
+        if (contract->issuer_kind == core::EquityIssuerKind::firm) {
+            scratch.working_metrics_.household_firm_equity_market_value +=
+                market_value;
+        } else {
+            scratch.working_metrics_.household_bank_equity_market_value +=
+                market_value;
         }
     }
     for (const auto &bond : scratch.securities_.bonds()) {
@@ -2337,8 +2405,12 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
         const double market_cap = equity.outstanding_shares * equity.price.value();
         if (equity.issuer_kind == core::EquityIssuerKind::firm) {
             scratch.working_metrics_.firm_equity_market_cap += market_cap;
+            scratch.working_metrics_.firm_equity_fundamental_value +=
+                equity.outstanding_shares * equity.fundamental.value();
         } else {
             scratch.working_metrics_.bank_equity_market_cap += market_cap;
+            scratch.working_metrics_.bank_equity_fundamental_value +=
+                equity.outstanding_shares * equity.fundamental.value();
         }
     }
     scratch.working_metrics_.margin_principal = 0.0;
@@ -2359,6 +2431,32 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     scratch.working_metrics_.equity_turnover =
         shares > kEconomicEpsilon ? scratch.working_metrics_.equity_turnover / shares
                                   : 0.0;
+    const double firm_shares = std::accumulate(
+        scratch.securities_.equities().begin(), scratch.securities_.equities().end(),
+        0.0, [](double sum, const core::EquityContract &equity) {
+            return sum +
+                   (equity.active &&
+                            equity.issuer_kind == core::EquityIssuerKind::firm
+                        ? equity.outstanding_shares
+                        : 0.0);
+        });
+    const double bank_shares = std::accumulate(
+        scratch.securities_.equities().begin(), scratch.securities_.equities().end(),
+        0.0, [](double sum, const core::EquityContract &equity) {
+            return sum +
+                   (equity.active &&
+                            equity.issuer_kind == core::EquityIssuerKind::bank
+                        ? equity.outstanding_shares
+                        : 0.0);
+        });
+    scratch.working_metrics_.firm_equity_turnover =
+        firm_shares > kEconomicEpsilon
+            ? scratch.working_metrics_.firm_equity_turnover / firm_shares
+            : 0.0;
+    scratch.working_metrics_.bank_equity_turnover =
+        bank_shares > kEconomicEpsilon
+            ? scratch.working_metrics_.bank_equity_turnover / bank_shares
+            : 0.0;
     static_cast<void>(state);
 }
 

@@ -64,10 +64,10 @@ void test_descriptors_are_stable_and_complete() {
     assert(public_descriptors.size() == kM10PublicMetricCount);
     const auto descriptors = metric_descriptors();
     assert(descriptors.size() == kM10MetricCount);
-    assert(kM10NativeSourceMetricCount == 220U);
+    assert(kM10NativeSourceMetricCount == 228U);
     assert(kM10DashboardMetricCount == 85U);
     assert(kM10NationalAccountMetricCount == 63U);
-    assert(kM10MetricCount == 444U);
+    assert(kM10MetricCount == 452U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());

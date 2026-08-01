@@ -229,9 +229,17 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.bond_issuance,
         value.bond_redemption,
         value.bond_coupon_paid,
+        value.household_bond_market_value,
+        value.bank_bond_market_value,
         value.firm_equity_market_cap,
         value.bank_equity_market_cap,
+        value.household_firm_equity_market_value,
+        value.household_bank_equity_market_value,
         value.equity_turnover,
+        value.firm_equity_turnover,
+        value.bank_equity_turnover,
+        value.firm_equity_fundamental_value,
+        value.bank_equity_fundamental_value,
         value.primary_equity_raised,
         value.margin_principal,
         value.margin_originated,
@@ -252,7 +260,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M6Metrics &value) {
-    if (!row.is_array() || row.size() != 24) {
+    if (!row.is_array() || row.size() != 32) {
         throw std::runtime_error("invalid M6 metrics");
     }
     std::size_t i = 0;
@@ -261,9 +269,17 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.bond_issuance = row[i++].get<double>();
     value.bond_redemption = row[i++].get<double>();
     value.bond_coupon_paid = row[i++].get<double>();
+    value.household_bond_market_value = row[i++].get<double>();
+    value.bank_bond_market_value = row[i++].get<double>();
     value.firm_equity_market_cap = row[i++].get<double>();
     value.bank_equity_market_cap = row[i++].get<double>();
+    value.household_firm_equity_market_value = row[i++].get<double>();
+    value.household_bank_equity_market_value = row[i++].get<double>();
     value.equity_turnover = row[i++].get<double>();
+    value.firm_equity_turnover = row[i++].get<double>();
+    value.bank_equity_turnover = row[i++].get<double>();
+    value.firm_equity_fundamental_value = row[i++].get<double>();
+    value.bank_equity_fundamental_value = row[i++].get<double>();
     value.primary_equity_raised = row[i++].get<double>();
     value.margin_principal = row[i++].get<double>();
     value.margin_originated = row[i++].get<double>();

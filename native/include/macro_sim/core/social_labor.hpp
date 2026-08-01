@@ -148,9 +148,13 @@ class EmploymentBook final {
     [[nodiscard]] JobId secondary_job(PersonId person) const noexcept;
     [[nodiscard]] std::span<const JobId>
     roster(FirmId firm) const noexcept;
+    [[nodiscard]] const std::vector<std::vector<JobId>> &
+    firm_rosters() const noexcept;
     [[nodiscard]] const std::vector<JobRecord> &records() const noexcept;
     [[nodiscard]] Status
     replace_records(std::vector<JobRecord> records);
+    [[nodiscard]] Status
+    restore_firm_rosters(std::vector<std::vector<JobId>> rosters);
     [[nodiscard]] std::uint64_t next_id() const noexcept;
     [[nodiscard]] std::size_t active_count() const noexcept;
     [[nodiscard]] std::size_t suspended_count() const noexcept;

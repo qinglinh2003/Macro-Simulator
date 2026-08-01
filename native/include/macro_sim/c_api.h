@@ -360,9 +360,17 @@ typedef struct macro_sim_m6_metrics {
     double bond_issuance;
     double bond_redemption;
     double bond_coupon_paid;
+    double household_bond_market_value;
+    double bank_bond_market_value;
     double firm_equity_market_cap;
     double bank_equity_market_cap;
+    double household_firm_equity_market_value;
+    double household_bank_equity_market_value;
     double equity_turnover;
+    double firm_equity_turnover;
+    double bank_equity_turnover;
+    double firm_equity_fundamental_value;
+    double bank_equity_fundamental_value;
     double primary_equity_raised;
     double margin_principal;
     double margin_originated;

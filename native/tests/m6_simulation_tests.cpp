@@ -231,6 +231,12 @@ void test_genesis_and_multiday_advance() {
     assert(result.get_if()->metrics.active_security_lots > 0);
     assert(result.get_if()->metrics.firm_equity_market_cap >= 0.0);
     assert(result.get_if()->metrics.bank_equity_market_cap >= 0.0);
+    assert(result.get_if()->metrics.household_bond_market_value >= 0.0);
+    assert(result.get_if()->metrics.bank_bond_market_value >= 0.0);
+    assert(result.get_if()->metrics.household_firm_equity_market_value >= 0.0);
+    assert(result.get_if()->metrics.household_bank_equity_market_value >= 0.0);
+    assert(result.get_if()->metrics.firm_equity_turnover >= 0.0);
+    assert(result.get_if()->metrics.bank_equity_turnover >= 0.0);
     assert(result.get_if()->metrics.margin_principal >= 0.0);
     assert(std::abs(result.get_if()->metrics.clearing_residual) < 1.0e-7);
     const auto closing_validation = macro_sim::simulation::validate_m6_state(
@@ -241,6 +247,27 @@ void test_genesis_and_multiday_advance() {
                   << "\n";
     }
     assert(closing_validation.ok());
+}
+
+void test_bank_equity_uses_lagged_closed_income() {
+    auto slow_spec = base_spec();
+    slow_spec.rules.bank_equity_lambda = 0.001;
+    auto fast_spec = slow_spec;
+    fast_spec.rules.bank_equity_lambda = 1.0;
+    auto slow = build(slow_spec);
+    auto fast = build(fast_spec);
+
+    const auto slow_result = advance(slow, 20);
+    const auto fast_result = advance(fast, 20);
+    assert(slow_result.ok());
+    assert(fast_result.ok());
+    const double slow_value =
+        slow_result.get_if()->metrics.bank_equity_fundamental_value;
+    const double fast_value =
+        fast_result.get_if()->metrics.bank_equity_fundamental_value;
+    assert(slow_value > 0.0);
+    assert(fast_value > 0.0);
+    assert(std::abs(slow_value - fast_value) > 1.0e-6);
 }
 
 void test_fault_is_atomic() {
@@ -739,6 +766,7 @@ void test_checkpoint_and_split_determinism() {
 int main() {
     test_validation_and_prices();
     test_genesis_and_multiday_advance();
+    test_bank_equity_uses_lagged_closed_income();
     test_fault_is_atomic();
     test_forced_firm_exit_and_bank_entry();
     test_unsettled_trade_protects_firm_from_exit();

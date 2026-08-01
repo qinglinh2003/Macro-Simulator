@@ -136,6 +136,34 @@ void test_swap_erase_suspension_and_stable_ids() {
     assert(employment.validate(value.persons, value.root, 1.0e-12).ok());
 }
 
+void test_checkpoint_roster_order_restoration() {
+    auto value = fixture();
+    EmploymentBook employment;
+    std::vector<JobId> jobs;
+    for (std::uint64_t person = 1; person <= 6; ++person) {
+        const auto hired = employment.hire(
+            PersonId(person), FirmId(1), static_cast<std::int32_t>(person),
+            1.0 + static_cast<double>(person) * 0.1, 1.0
+        );
+        assert(hired.ok());
+        jobs.push_back(*hired.get_if());
+    }
+    assert(employment.separate(jobs[1], 10, SeparationKind::churn).ok());
+    assert(employment.separate(jobs[3], 11, SeparationKind::churn).ok());
+    const auto expected = employment.firm_rosters();
+
+    EmploymentBook restored;
+    assert(restored.replace_records(employment.records()).ok());
+    assert(restored.firm_rosters() != expected);
+    assert(restored.restore_firm_rosters(expected).ok());
+    assert(restored.firm_rosters() == expected);
+    assert(restored.validate(value.persons, value.root, 1.0e-12).ok());
+
+    auto invalid = expected;
+    invalid[1].push_back(invalid[1].front());
+    assert(!restored.restore_firm_rosters(std::move(invalid)).ok());
+}
+
 void test_labor_partition_gate() {
     LaborAccounts accounts;
     accounts.employed_fte = 4.5;
@@ -351,6 +379,7 @@ int main() {
     test_primary_second_and_roster_indexes();
     test_inactive_job_compaction_rebuilds_live_indexes();
     test_swap_erase_suspension_and_stable_ids();
+    test_checkpoint_roster_order_restoration();
     test_labor_partition_gate();
     test_relationship_symmetry_and_lineage();
     test_exact_marriage_order();

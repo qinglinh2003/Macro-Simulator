@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 220,
+    "native_stage_sources": 228,
     "public_sources": 41,
-    "total": 444
+    "total": 452
   },
   "metrics": [
     {
@@ -1972,6 +1972,24 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m6.household_bond_market_value",
+      "parity_rule": "simulation::M6Metrics::household_bond_market_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_bond_market_value",
+      "parity_rule": "simulation::M6Metrics::bank_bond_market_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m6.firm_equity_market_cap",
       "parity_rule": "simulation::M6Metrics::firm_equity_market_cap",
       "source_kind": "committed_native_stage",
@@ -1990,11 +2008,65 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m6.household_firm_equity_market_value",
+      "parity_rule": "simulation::M6Metrics::household_firm_equity_market_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_bank_equity_market_value",
+      "parity_rule": "simulation::M6Metrics::household_bank_equity_market_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m6.equity_turnover",
       "parity_rule": "simulation::M6Metrics::equity_turnover",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
-      "unit": "currency_per_tick"
+      "unit": "share_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_equity_turnover",
+      "parity_rule": "simulation::M6Metrics::firm_equity_turnover",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_equity_turnover",
+      "parity_rule": "simulation::M6Metrics::bank_equity_turnover",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_equity_fundamental_value",
+      "parity_rule": "simulation::M6Metrics::firm_equity_fundamental_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bank_equity_fundamental_value",
+      "parity_rule": "simulation::M6Metrics::bank_equity_fundamental_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
     },
     {
       "aggregation": "last",

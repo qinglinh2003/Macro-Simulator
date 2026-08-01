@@ -198,6 +198,11 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "capability bit is removed and therefore cannot execute the requested "
         "government-off economy"
     ),
+    "config.lambda_q": (
+        "Config defines the sensitivity of real investment to Tobin's q, while "
+        "the native member currently wired to it only smooths the q signal used "
+        "by primary equity issuance; real investment does not consume this value"
+    ),
     "config.monetary_direct_transmission": (
         "Config defines direct investment user-cost, household debt-budget, "
         "and firm debt-service transmission, while the native member currently "
@@ -215,6 +220,16 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
 OBSERVATION_ONLY_FIELDS = frozenset(
     {"config.deprivation_gauges", "config.subsistence_share"}
 )
+
+
+# Most historical ``structure`` fields are opening conditions, but these
+# securities fields define a persistent market choice set or a pure unit of
+# account.  Treating all three as transient genesis shocks would erase their
+# actual economic contract.
+STRUCTURAL_CAUSAL_FIELDS = frozenset(
+    {"config.founder_owned_genesis", "config.watchlist_size"}
+)
+STRUCTURAL_INVARIANCE_FIELDS = frozenset({"config.shares_per_firm"})
 
 
 SCALE_FIELDS = frozenset(
@@ -607,6 +622,10 @@ def _experiment_role(row: Mapping[str, Any], route: Route) -> str:
         return "excluded_non_treatment"
     if route.status == "missing_native_route":
         return "repair_before_experiment"
+    if str(row["id"]) in STRUCTURAL_CAUSAL_FIELDS:
+        return "causal_treatment"
+    if str(row["id"]) in STRUCTURAL_INVARIANCE_FIELDS:
+        return "invariance_only"
     if name in SCALE_FIELDS:
         return "scale_invariance"
     if classification == "structure":

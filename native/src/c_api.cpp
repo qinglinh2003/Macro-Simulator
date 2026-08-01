@@ -125,9 +125,17 @@ void fill_m6_metrics(macro_sim_m6_metrics &output,
     MACRO_SIM_FILL_M6(bond_issuance);
     MACRO_SIM_FILL_M6(bond_redemption);
     MACRO_SIM_FILL_M6(bond_coupon_paid);
+    MACRO_SIM_FILL_M6(household_bond_market_value);
+    MACRO_SIM_FILL_M6(bank_bond_market_value);
     MACRO_SIM_FILL_M6(firm_equity_market_cap);
     MACRO_SIM_FILL_M6(bank_equity_market_cap);
+    MACRO_SIM_FILL_M6(household_firm_equity_market_value);
+    MACRO_SIM_FILL_M6(household_bank_equity_market_value);
     MACRO_SIM_FILL_M6(equity_turnover);
+    MACRO_SIM_FILL_M6(firm_equity_turnover);
+    MACRO_SIM_FILL_M6(bank_equity_turnover);
+    MACRO_SIM_FILL_M6(firm_equity_fundamental_value);
+    MACRO_SIM_FILL_M6(bank_equity_fundamental_value);
     MACRO_SIM_FILL_M6(primary_equity_raised);
     MACRO_SIM_FILL_M6(margin_principal);
     MACRO_SIM_FILL_M6(margin_originated);

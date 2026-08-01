@@ -19,6 +19,7 @@ from macro_sim.diagnostics.config_contracts import TreatmentContract
 from macro_sim.diagnostics.config_experiment import (
     DEFAULT_POPULATION,
     DEFAULT_WORKERS,
+    PATHWISE_MATERIAL_RELATIVE_THRESHOLD,
     apply_native_activation_scenario,
     changed_metrics,
     effect_scales,
@@ -29,6 +30,9 @@ from macro_sim.diagnostics.config_experiment import (
     summarize_paired_runs,
     summarize_time_responses,
 )
+
+
+PATHWISE_MATERIAL_SHARE_THRESHOLD = 0.75
 
 
 def _canonical_hash(value: Any) -> str:
@@ -118,9 +122,18 @@ def _direction_result(
     if expected == "ambiguous":
         return "not_directional"
     if expected == "nonzero":
-        if abs(difference) <= tolerance:
+        mean_absolute = float(effect.get("mean_absolute_difference", abs(difference)))
+        if abs(difference) <= tolerance and mean_absolute <= tolerance:
             return "fail"
-        return "inconclusive" if interval_unresolved else "pass"
+        if not interval_unresolved:
+            return "pass"
+        pathwise_share = effect.get("pathwise_material_share")
+        if (
+            pathwise_share is not None
+            and float(pathwise_share) >= PATHWISE_MATERIAL_SHARE_THRESHOLD
+        ):
+            return "pass_heterogeneous"
+        return "inconclusive"
     if expected == "washout":
         if time_response is None:
             return "missing_time_path"
@@ -198,7 +211,7 @@ def _arm_report(
             "statistic": statistic,
             "result": result,
         }
-        if result == "pass":
+        if result in {"pass", "pass_heterogeneous"}:
             resolved_expected.append(metric_id)
     changed_primary = sorted(set(changed) & set(contract.primary_metrics))
     resolved_primary = sorted(
@@ -432,6 +445,10 @@ def run_contract_batch(
     payload = {
         "schema_version": "config-causality-batch-v1",
         **run_metadata,
+        "decision_thresholds": {
+            "pathwise_material_relative": PATHWISE_MATERIAL_RELATIVE_THRESHOLD,
+            "pathwise_material_share": PATHWISE_MATERIAL_SHARE_THRESHOLD,
+        },
         "cache_hits": cache_hits,
         "executed_runs": executed_runs,
         "contract_count": len(contracts),

@@ -13,7 +13,49 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 455
     assert len(payload["contracts"]) == 455
     assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 81
+    assert payload["status_counts"]["blocked_native_route"] == 82
+
+
+def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
+    contracts = screening_contracts(module="securities_and_capital_markets")
+    assert len(contracts) == 20
+    assert {contract.field_name for contract in contracts} == {
+        "bank_bond_appetite",
+        "bank_equity",
+        "bank_equity_lambda",
+        "bank_equity_trading",
+        "bank_theta_equity",
+        "bond_theta",
+        "bonds",
+        "equity_finance",
+        "founder_owned_genesis",
+        "lambda_p",
+        "margin_credit",
+        "per_firm_equity",
+        "portfolio_adjust",
+        "resid_income_lambda",
+        "theta_equity",
+        "valuation_discount_floor",
+        "valuation_risk_premium",
+        "w_chartist",
+        "w_fundamental",
+        "watchlist_size",
+    }
+    chartist = next(
+        contract for contract in contracts if contract.field_name == "w_chartist"
+    )
+    assert chartist.treatment_values == (0.0, 20.0)
+    activated = activation_contracts(
+        module="securities_and_capital_markets"
+    )
+    assert {contract.field_name for contract in activated} == {"trend_lambda"}
+    assert activated[0].activation_scenario == "active_chartist_demand"
+    invariance = invariance_contracts(
+        module="securities_and_capital_markets"
+    )
+    assert {contract.field_name for contract in invariance} == {
+        "shares_per_firm"
+    }
 
 
 def test_production_screening_contracts_are_curated_and_routed() -> None:

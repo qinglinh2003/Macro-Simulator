@@ -81,6 +81,23 @@ def test_direction_result_marks_a_crossing_interval_inconclusive() -> None:
     ) == "inconclusive"
 
 
+def test_nondirectional_effect_can_be_material_across_paired_paths() -> None:
+    assert _direction_result(
+        expected="nonzero",
+        effect={
+            "mean_difference": 0.0,
+            "mean_absolute_difference": 2.5,
+            "mean_absolute_relative_difference": 0.03,
+            "pathwise_material_share": 0.75,
+            "confidence_low": -3.0,
+            "confidence_high": 3.0,
+        },
+        baseline_value=1.0,
+        treatment_value=2.0,
+        time_response=None,
+    ) == "pass_heterogeneous"
+
+
 def test_washout_requires_observed_half_decay() -> None:
     effect = {
         "mean_difference": 1.0,

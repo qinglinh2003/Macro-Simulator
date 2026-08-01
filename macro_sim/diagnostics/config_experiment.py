@@ -21,6 +21,7 @@ from macro_sim import native_backend
 
 DEFAULT_WORKERS = 8
 DEFAULT_POPULATION = 100_000
+PATHWISE_MATERIAL_RELATIVE_THRESHOLD = 1.0e-3
 
 WORLD_NATIVE_FIELDS: Mapping[str, str] = {
     "trade": "trade",
@@ -82,6 +83,9 @@ class EffectSummary:
     confidence_high: float | None
     paired_standard_deviation: float
     mean_relative_difference: float | None
+    mean_absolute_difference: float
+    mean_absolute_relative_difference: float | None
+    pathwise_material_share: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -684,6 +688,8 @@ def apply_native_activation_scenario(
         monetary_rules.deposit_rate = 0.005
     elif scenario == "deposit_spread_competition":
         monetary_rules.deposit_spread_dispersion = 1.0e-4
+    elif scenario == "active_chartist_demand":
+        financial_rules.chartist_weight = 20.0
     elif scenario == "deprivation_measurement_active":
         energy_rules = economy.energy_rules
         energy_rules.deprivation_burnin_years = 0
@@ -798,6 +804,7 @@ def paired_effect(
         for baseline, treated in zip(control, treatment, strict=True)
         if abs(baseline) > 1.0e-12
     ]
+    absolute_relative = [abs(value) for value in relative]
     return EffectSummary(
         pairs=len(differences),
         mean_difference=mean_difference,
@@ -805,6 +812,19 @@ def paired_effect(
         confidence_high=confidence_high,
         paired_standard_deviation=paired_sd,
         mean_relative_difference=fmean(relative) if relative else None,
+        mean_absolute_difference=fmean(abs(value) for value in differences),
+        mean_absolute_relative_difference=(
+            fmean(absolute_relative) if absolute_relative else None
+        ),
+        pathwise_material_share=(
+            sum(
+                value >= PATHWISE_MATERIAL_RELATIVE_THRESHOLD
+                for value in absolute_relative
+            )
+            / len(absolute_relative)
+            if absolute_relative
+            else None
+        ),
     )
 
 
