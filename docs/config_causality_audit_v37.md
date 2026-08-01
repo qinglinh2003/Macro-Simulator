@@ -91,18 +91,18 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 218 |
-| Native route missing or incomplete | 75 |
+| Native route confirmed | 215 |
+| Native route missing or incomplete | 77 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
-| Numerical or observability invariance | 18 |
+| Numerical or observability invariance | 19 |
 | Deliberately fixed in the native engine | 12 |
 | Superseded compatibility names | 16 |
 | Derived values | 2 |
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 75 missing or incomplete routes are real implementation work; they are not
+The 77 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -300,13 +300,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 218
+The native product baseline comparison now projects every one of the 215
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 198 |
+| Exact semantic value | 195 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -588,7 +588,7 @@ Current findings:
   household goods-quantity observable is required before final calibration.
 
 Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` remain among the 75 blocked native
+`pref_attach_beta` and `pref_price_elasticity` remain among the 77 blocked native
 routes, and `necessity_share0` reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
@@ -754,6 +754,50 @@ Python Config defines finite-life consumption budgeting, while its historical
 native assignment only toggled household moves after marriage, divorce, and
 leaving home. The audit now blocks this field instead of falsely crediting that
 unrelated assignment as an implemented route.
+
+### 8.10 Distribution and private household support screen
+
+The distribution inventory contains only two executable economic Config
+contracts: the family-transfer capability and its donor reserve buffer. One
+additional field, `deprivation_gauges`, is an observation-only switch. The
+remaining seven fields are blocked until their intended native mechanisms are
+implemented.
+
+The family screen covers 16 native worlds at 100,000 persons: four paired
+seeds, 365 days, and eight native workers. Its current findings are:
+
+- Disabling `family_transfers` removes the private kin safety net exactly.
+  Cumulative transfer value falls by 17,434.7 currency units and cumulative
+  recipient-days by 54,649.3, both -100%, with four-seed confidence intervals
+  excluding zero. The direct mechanism is therefore fully live.
+- The macro effect is small at the current scale. Disabling the mechanism raises
+  mean post-burn-in relative poverty by 0.047 percentage points (about 0.25%
+  relative). Real household consumption falls by about 0.14%, but its
+  confidence interval crosses zero; income-Gini changes are also unresolved.
+  Private transfers currently insure individual liquidity shortfalls without
+  materially moving aggregate demand or measured inequality.
+- Lowering `family_transfer_buffer` from 1.5 to 1.0 raises cumulative transfer
+  value by about 0.33% and recipient-days by about 0.68%, both resolved. Raising
+  it to 3.0 lowers those measures by about 0.59% and 0.63%, but the four-seed
+  intervals cross zero. The coefficient has the intended sign but is too weak
+  and noisy to deserve a prominent gameplay control at its present scale.
+- `deprivation_gauges` is correctly classified as observability, not economic
+  structure. A five-year 100,000-person paired run shows that disabling it zeros
+  the deprivation thresholds, spell stocks, and boundary signal. All ordinary
+  economic state remains the same apart from sub-millionth reporter reduction
+  noise in wealth-distribution summaries; output, consumption, employment, and
+  poverty are unchanged. It belongs in diagnostics settings rather than the
+  economy setup screen.
+
+Static review also found two false-positive native routes. `consumption_strata`
+is defined by Config as a sequenced necessity/luxury goods market, but the
+native member currently only gates sector switching and preserves a tax tag.
+`necessity_share0` is defined as a fixed per-need-unit necessity quantity, while
+the native member controls the fraction of consumption firms tagged as
+necessity producers. Both are now blocked as semantic gaps instead of receiving
+credit for unrelated effects. Together with missing MPC dispersion, MPC wealth
+curvature, firm-share normalization, and stratum multipliers, this means the
+full distribution-to-demand feedback loop is not yet native-complete.
 
 ## 9. Execution gates
 

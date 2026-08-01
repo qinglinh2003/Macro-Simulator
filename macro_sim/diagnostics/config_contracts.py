@@ -113,6 +113,15 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.unemployment_rate",
     ),
     "distribution_and_welfare": (
+        "metric.source.m7.family_transfer_total",
+        "metric.source.m7.family_transfer_recipients",
+        "metric.source.m7.family_exposed_households",
+        "metric.source.m8.energy.deprivation_below_100_share",
+        "metric.source.m8.energy.deprivation_below_60_share",
+        "metric.source.m8.energy.deprivation_below_30_share",
+        "metric.source.m8.energy.deprivation_destitute_share",
+        "metric.source.m8.energy.deprivation_acute_stock",
+        "metric.source.m8.energy.deprivation_chronic_stock",
         "metric.economy.poverty_rate",
         "metric.economy.income_gini",
         "metric.economy.hh_wealth_gini_incl_equity",
@@ -835,12 +844,40 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
+    transfer_total = "metric.source.m7.family_transfer_total"
+    transfer_recipients = "metric.source.m7.family_transfer_recipients"
+    return {
+        "config.family_transfer_buffer": {
+            "status": "screening_ready",
+            "values": (1.0, 3.0),
+            "directions": {transfer_total: "decrease"},
+            "statistics": {transfer_total: "cumulative"},
+            "rationale": "A larger donor reserve buffer protects more of each kin household's own consumption need and should reduce the amount privately transferred to liquidity-constrained relatives.",
+        },
+        "config.family_transfers": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {
+                transfer_total: "decrease",
+                transfer_recipients: "decrease",
+            },
+            "statistics": {
+                transfer_total: "cumulative",
+                transfer_recipients: "cumulative",
+            },
+            "rationale": "Disabling the private kin safety net should remove conserving household-to-household transfers and their recipients; poverty, consumption, and public support are equilibrium spillovers.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
     **_consumption_contracts(),
     **_labor_contracts(),
     **_demography_contracts(),
+    **_distribution_contracts(),
 }
 
 

@@ -172,12 +172,26 @@ PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
 # syntactic assignment is not sufficient evidence of an implemented Config
 # route, so they remain repair work until the intended mechanism exists.
 INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
+    "config.consumption_strata": (
+        "Config defines a two-stage necessity/luxury goods market, while the "
+        "native member only gates sector switching and preserves a firm tag for "
+        "differential tax accounting"
+    ),
     "config.demographic_lifecycle_consumption": (
         "Config defines a finite-life consumption budget, while the native "
         "member currently controls household moves after marriage, divorce, "
         "and leaving home"
     ),
+    "config.necessity_share0": (
+        "Config defines a fixed per-need-unit necessity quantity, while the "
+        "native member currently controls the fraction of consumption firms "
+        "tagged as necessity producers"
+    ),
 }
+
+# Measurement gates may change published observables but must not receive credit
+# for changing the economy they observe.
+OBSERVATION_ONLY_FIELDS = frozenset({"config.deprivation_gauges"})
 
 
 SCALE_FIELDS = frozenset(
@@ -222,6 +236,7 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "housing_fertility_elasticity": "housing",
     "housing_fertility_mult_hi": "housing",
     "housing_fertility_mult_lo": "housing",
+    "hh_subsistence": "banking_and_credit",
     "founder_owned_genesis": "securities_and_capital_markets",
     "index_startup": "securities_and_capital_markets",
     "lambda_p": "securities_and_capital_markets",
@@ -371,6 +386,14 @@ def _route_for(row: Mapping[str, Any]) -> Route:
     if field_id in PLANNED_REMOVAL_FIELDS:
         return Route(
             "planned_removal", note=PLANNED_REMOVAL_FIELDS[field_id]
+        )
+    if field_id in OBSERVATION_ONLY_FIELDS:
+        targets = _source_routes(name, NATIVE_RULE_MAPS)
+        targets += MANUAL_CONFIG_ROUTES.get(name, ())
+        return Route(
+            "infrastructure_invariance",
+            tuple(sorted(set(targets))),
+            "observation-only measurement gate",
         )
     if field_id in INCOMPLETE_NATIVE_ROUTE_FIELDS:
         targets = _source_routes(name, NATIVE_RULE_MAPS)

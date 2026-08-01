@@ -20,9 +20,9 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "derived": 2,
         "excluded_policy": 108,
         "excluded_shock": 4,
-        "infrastructure_invariance": 18,
-        "mapped_native": 218,
-        "missing_native_route": 75,
+        "infrastructure_invariance": 19,
+        "mapped_native": 215,
+        "missing_native_route": 77,
         "native_fixed": 12,
         "planned_removal": 1,
         "run_control": 1,
@@ -53,6 +53,7 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         "delta": "labor_market",
         "energy_mortality_gamma": "energy",
         "housing_fertility_elasticity": "housing",
+        "hh_subsistence": "banking_and_credit",
         "labor_relationship_wages": "labor_market",
         "lambda_p": "securities_and_capital_markets",
         "monetary_direct_transmission": "banking_and_credit",
@@ -76,3 +77,16 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     assert lifecycle["route_status"] == "missing_native_route"
     assert lifecycle["experiment_role"] == "repair_before_experiment"
     assert "finite-life consumption" in lifecycle["route_note"]
+    strata = rows["config.consumption_strata"]
+    assert strata["route_status"] == "missing_native_route"
+    assert "two-stage necessity/luxury" in strata["route_note"]
+    necessity = rows["config.necessity_share0"]
+    assert necessity["route_status"] == "missing_native_route"
+    assert "per-need-unit necessity quantity" in necessity["route_note"]
+
+
+def test_observation_gate_is_not_credited_with_economic_causality() -> None:
+    rows = {row["id"]: row for row in build_audit_inventory()["rows"]}
+    deprivation = rows["config.deprivation_gauges"]
+    assert deprivation["route_status"] == "infrastructure_invariance"
+    assert deprivation["experiment_role"] == "invariance_only"
