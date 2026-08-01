@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production complete and firm screen in progress  
+Status: P0 inventory and P1 harness complete; P2 production, firm, and consumption screens complete
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -521,6 +521,77 @@ therefore isolate each switching input with a shared return-differential setup:
 The switching machinery is functional, but the default 50% return gap plus a
 60-day uninterrupted pressure requirement effectively disables it. That is a
 calibration and gameplay-salience failure even though stress activation passes.
+
+### 8.7 Consumption, inventories, and prices screen
+
+All 12 routed causal fields owned by this module now have reviewed contracts:
+nine neutral-baseline contracts and three conditional contracts. The core
+one-year batches completed 108 native runs at 100,000 persons; range and price-
+proxy probes added 40 runs. All runs passed the native stability gates.
+
+Before measurement, explicit module ownership was added for short mathematical
+names and cross-module fields. Token fallthrough had incorrectly assigned, for
+example, `delta` to consumption instead of labor and `lambda_p` to consumption
+instead of securities. This did not change native routing, but it prevented
+fields from being reviewed against the wrong economic outcomes.
+
+Current findings:
+
+- Moving the expected-income propensity `alpha1` from 0.95 to 0.90 / 0.99
+  changes post-burn-in real household consumption by about -5.88% / +1.60%.
+  Both intervals resolve, but the asymmetry means this is a strong behavioral
+  assumption rather than a cosmetic household preference.
+- The baseline wealth propensity `alpha2=5.5e-5` is weak over the ordinary
+  half/double range: consumption moves only about -0.25% / +0.22%, with both
+  intervals crossing zero. At `5e-4`, consumption rises 2.86% and the savings
+  rate falls about 2.96 percentage points. The mechanism is live, but a useful
+  player range must be materially wider than a local calibration interval and
+  must expose the savings trade-off.
+- Halving/doubling markup adjustment `eta` changes average markups about
+  -18.4% / +37.2%. This is exceptionally strong and asymmetric. `eta` also
+  controls energy-producer markup adjustment, so the current Config field is a
+  cross-sector pricing regime rather than a consumption-only coefficient.
+- `inventory_gap_close` and demand-learning speed `lambda_d` both have large,
+  non-monotonic inventory effects. Their tested arms raise inventory-to-sales
+  by roughly 40% to 174% relative to control. Faster permanent-income learning
+  `lambda_y` changes consumption by +2.77% at the lower arm and -2.05% at the
+  upper arm. These are adjustment-speed controls: a permanent level sign is not
+  a valid contract, and the response surface needs calibration before exposure
+  to ordinary players.
+- Raising target inventory days `phi` from 14 to 17.5 raises inventory-to-sales
+  about 72.2%, lowers real output about 3.73%, and raises unemployment about
+  1.02 percentage points. Lowering it to 10.5 has a smaller and imprecise direct
+  inventory effect but improves output and employment. `phi` also sets the
+  energy-producer inventory target. The effect is salient, but probably too
+  strong and too overloaded for one player-facing Config.
+- A high Calvo repricing probability (`theta_price=0.0074`) raises post-burn-in
+  inflation volatility about 588%; the lower arm remains inconclusive. The
+  mechanism is live but highly nonlinear around the playable baseline.
+- Markup ceilings and floors are valid conditional mechanisms. Under opening
+  shortage pressure, `mu_max=0.20/0.22` changes average margins monotonically;
+  under excess opening inventory, `mu_min=0.18/0.20` raises margins about
+  5.0% / 9.9%. Both bounds also control energy producers, so they should be
+  presented as economy-wide pricing institutions unless the fields are split.
+- Enabling `consumption_rationed_signal` during a shared opening stockout raises
+  inventory-to-sales about 70.1% and realized household consumption about
+  0.31%, but lowers real output about 2.01%, lowers the price level about 0.87%,
+  and raises unemployment about 1.48 percentage points. The signal is wired,
+  but it over-amplifies stock rebuilding and remains a stress-only option rather
+  than an all-on baseline capability.
+- Increasing seller search from one offer to 2 / 8 offers changes the maintained
+  household-spending-to-sector-sales price proxy by about -1.06% / -2.15%; only
+  the eight-offer interval resolves. Samples of 2, 8, 16, and 64 raise native
+  runtime by roughly 25%, 30%, 42%, and 166%, respectively, while measured price
+  gains flatten. The ordinary range is therefore capped at eight. This proxy is
+  not a true household unit value because the engine does not yet publish
+  household goods quantity separately from total sector sales. A native
+  household goods-quantity observable is required before final calibration.
+
+Several fields are intentionally not credited with consumption causality.
+`pref_attach_beta` and `pref_price_elasticity` remain among the 75 blocked native
+routes, and `necessity_share0` reaches genesis but remains economically silent
+because the native goods market has no two-stage necessity/discretionary Engel
+allocation. These are implementation gaps, not small elasticities.
 
 ## 9. Execution gates
 

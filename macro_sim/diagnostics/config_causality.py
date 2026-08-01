@@ -182,6 +182,56 @@ SCALE_FIELDS = frozenset(
 )
 
 
+# Short mathematical names and cross-module compatibility names cannot be
+# assigned reliably with token matching. Keep their economic owner explicit so
+# a field is reviewed with the mechanism that actually reads it in C++.
+FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
+    "alpha1": "consumption_prices_and_expectations",
+    "alpha2": "consumption_prices_and_expectations",
+    "consumption_rationed_signal": "consumption_prices_and_expectations",
+    "eta": "consumption_prices_and_expectations",
+    "inventory_gap_close": "consumption_prices_and_expectations",
+    "lambda_d": "consumption_prices_and_expectations",
+    "lambda_y": "consumption_prices_and_expectations",
+    "mu_max": "consumption_prices_and_expectations",
+    "mu_min": "consumption_prices_and_expectations",
+    "phi": "consumption_prices_and_expectations",
+    "pref_attach_beta": "consumption_prices_and_expectations",
+    "pref_price_elasticity": "consumption_prices_and_expectations",
+    "search_m": "consumption_prices_and_expectations",
+    "theta_price": "consumption_prices_and_expectations",
+    "delta": "labor_market",
+    "lambda_fire": "labor_market",
+    "omega": "labor_market",
+    "founder_owned_genesis": "securities_and_capital_markets",
+    "index_startup": "securities_and_capital_markets",
+    "lambda_p": "securities_and_capital_markets",
+    "lambda_q": "securities_and_capital_markets",
+    "pro_rata_dividends": "securities_and_capital_markets",
+    "resid_income_lambda": "securities_and_capital_markets",
+    "trend_lambda": "securities_and_capital_markets",
+    "watchlist_size": "securities_and_capital_markets",
+    "wealth_effect": "securities_and_capital_markets",
+    "dis_slope": "firms_and_industrial_dynamics",
+    "rho": "firms_and_industrial_dynamics",
+    "sector_switching": "firms_and_industrial_dynamics",
+    "house_price_income_years": "housing",
+    "household_interest_arrears": "banking_and_credit",
+    "investment_user_cost_elasticity": "banking_and_credit",
+    "investment_user_cost_floor": "banking_and_credit",
+    "investment_user_cost_multiplier_max": "banking_and_credit",
+    "investment_user_cost_multiplier_min": "banking_and_credit",
+    "monetary_direct_transmission": "banking_and_credit",
+    "k_replacement_floor": "production_and_technology",
+    "symmetric_k": "production_and_technology",
+    "n_ticks": "numerics_and_observability",
+    "national_accounts_metrics": "numerics_and_observability",
+    "ticks_per_year": "numerics_and_observability",
+    "seed": "scale_and_genesis",
+    "simulation_start_date": "scale_and_genesis",
+}
+
+
 MODULE_CHECKS: Mapping[str, Mapping[str, Any]] = {
     "firm_accounts": {
         "firm_full_pnl": True,
@@ -333,6 +383,8 @@ def _module_for(row: Mapping[str, Any]) -> str:
         return "open_economy"
     if declaring_type != "Config":
         return "demography_and_households"
+    if name in FIELD_MODULE_OVERRIDES:
+        return FIELD_MODULE_OVERRIDES[name]
     if name in {
         "necessity_share0",
         "n_firm_share",

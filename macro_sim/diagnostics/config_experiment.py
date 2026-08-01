@@ -204,13 +204,35 @@ def _history_rows(
         for frame in page["frames"]:
             if int(frame["tick"]) <= 0:
                 continue
-            row = dict(frame["economies"][economy_id])
+            row = derive_analysis_metrics(frame["economies"][economy_id])
             row["_tick"] = int(frame["tick"])
             output.append(row)
         next_cursor = int(page["next_sequence"])
         if next_cursor <= cursor:
             raise RuntimeError("native metric history cursor did not advance")
         cursor = next_cursor
+    return output
+
+
+def derive_analysis_metrics(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Add transparent ratios derived only from maintained native metrics."""
+    output = dict(row)
+    spending = output.get(
+        "metric.economy.na.household_consumption_goods_nominal"
+    )
+    units = output.get("metric.economy.sector_consumption_sales")
+    if (
+        isinstance(spending, (int, float))
+        and not isinstance(spending, bool)
+        and isinstance(units, (int, float))
+        and not isinstance(units, bool)
+        and math.isfinite(float(spending))
+        and math.isfinite(float(units))
+    ):
+        if float(units) > 1.0e-12:
+            output["metric.analysis.goods_transaction_price_proxy"] = (
+                float(spending) / float(units)
+            )
     return output
 
 
@@ -581,6 +603,12 @@ def apply_native_activation_scenario(
     rules = real.rules
     if scenario == "positive_capital_gap":
         rules.initial_consumption_capital *= 0.5
+    elif scenario == "opening_consumption_stockout":
+        rules.initial_consumption_inventory = 0.0
+    elif scenario == "markup_ceiling_pressure":
+        rules.initial_consumption_inventory = 0.0
+    elif scenario == "markup_floor_pressure":
+        rules.initial_consumption_inventory *= 4.0
     elif scenario == "idle_consumption_firms":
         rules.initial_consumption_capital = 1.0e-12
         rules.initial_consumption_inventory = 0.0

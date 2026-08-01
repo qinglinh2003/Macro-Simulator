@@ -6,6 +6,7 @@ from macro_sim import native_backend
 from macro_sim.diagnostics.config_experiment import (
     apply_native_activation_scenario,
     apply_config_treatment,
+    derive_analysis_metrics,
     effect_scales,
     native_world_treatment_spec,
     paired_effect,
@@ -65,6 +66,25 @@ def test_metric_reduction_and_paired_effect_preserve_pairing() -> None:
     effect = paired_effect([1.0, 10.0], [2.0, 11.0])
     assert effect.mean_difference == pytest.approx(1.0)
     assert effect.paired_standard_deviation == pytest.approx(0.0)
+
+
+def test_analysis_metric_derives_the_goods_transaction_price_proxy() -> None:
+    row = derive_analysis_metrics(
+        {
+            "metric.economy.na.household_consumption_goods_nominal": 80.0,
+            "metric.economy.sector_consumption_sales": 100.0,
+        }
+    )
+    assert row["metric.analysis.goods_transaction_price_proxy"] == pytest.approx(
+        0.8
+    )
+    missing = derive_analysis_metrics(
+        {
+            "metric.economy.na.household_consumption_goods_nominal": 80.0,
+            "metric.economy.sector_consumption_sales": 0.0,
+        }
+    )
+    assert "metric.analysis.goods_transaction_price_proxy" not in missing
 
 
 def test_paired_run_summary_uses_common_metrics_only() -> None:
@@ -197,6 +217,60 @@ def test_idle_firm_activation_isolates_shell_exit() -> None:
     assert real_rules.initial_consumption_inventory == pytest.approx(0.0)
     assert real_rules.investment_adjustment == pytest.approx(0.0)
     assert financial.rules.firm_subscale_exit is False
+
+
+def test_opening_stockout_activation_preserves_the_rationing_signal() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=38
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    expected_signal = rules.consumption_rationed_signal
+    apply_native_activation_scenario(
+        native_spec, scenario="opening_consumption_stockout"
+    )
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    assert rules.initial_consumption_inventory == pytest.approx(0.0)
+    assert rules.consumption_rationed_signal is expected_signal
+
+
+@pytest.mark.parametrize(
+    ("scenario", "bound_name", "inventory_ratio"),
+    [
+        ("markup_ceiling_pressure", "markup_maximum", 0.0),
+        ("markup_floor_pressure", "markup_minimum", 4.0),
+    ],
+)
+def test_markup_bound_activation_preserves_the_audited_bound(
+    scenario: str,
+    bound_name: str,
+    inventory_ratio: float,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=39
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    expected_bound = getattr(rules, bound_name)
+    opening_inventory = rules.initial_consumption_inventory
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    assert getattr(rules, bound_name) == pytest.approx(expected_bound)
+    assert rules.initial_consumption_inventory == pytest.approx(
+        opening_inventory * inventory_ratio
+    )
 
 
 def test_entry_pressure_activation_preserves_the_daily_entry_cap() -> None:

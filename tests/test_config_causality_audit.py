@@ -39,3 +39,26 @@ def test_missing_routes_cannot_be_misreported_as_causal_treatments() -> None:
     for row in payload["rows"]:
         if row["route_status"] == "missing_native_route":
             assert row["experiment_role"] == "repair_before_experiment"
+
+
+def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
+    rows = {
+        row["field_name"]: row
+        for row in build_audit_inventory()["rows"]
+        if row["declaring_type"] == "Config"
+    }
+    expected = {
+        "alpha1": "consumption_prices_and_expectations",
+        "delta": "labor_market",
+        "lambda_p": "securities_and_capital_markets",
+        "monetary_direct_transmission": "banking_and_credit",
+        "house_price_income_years": "housing",
+        "rho": "firms_and_industrial_dynamics",
+        "symmetric_k": "production_and_technology",
+        "seed": "scale_and_genesis",
+        "ticks_per_year": "numerics_and_observability",
+    }
+    assert {
+        field_name: rows[field_name]["module"]
+        for field_name in expected
+    } == expected

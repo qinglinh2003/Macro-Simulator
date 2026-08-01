@@ -88,3 +88,36 @@ def test_firm_contracts_cover_every_mapped_causal_or_genesis_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+
+
+def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
+    neutral = screening_contracts(
+        module="consumption_prices_and_expectations"
+    )
+    activated = activation_contracts(
+        module="consumption_prices_and_expectations"
+    )
+    assert len(neutral) == 9
+    assert {contract.field_name for contract in activated} == {
+        "consumption_rationed_signal",
+        "mu_max",
+        "mu_min",
+    }
+    assert {contract.field_name for contract in (*neutral, *activated)} == {
+        "alpha1",
+        "alpha2",
+        "consumption_rationed_signal",
+        "eta",
+        "inventory_gap_close",
+        "lambda_d",
+        "lambda_y",
+        "mu_max",
+        "mu_min",
+        "phi",
+        "search_m",
+        "theta_price",
+    }
+    assert all(
+        set(contract.expected_directions) <= set(contract.primary_metrics)
+        for contract in (*neutral, *activated)
+    )

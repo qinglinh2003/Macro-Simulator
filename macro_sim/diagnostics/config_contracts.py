@@ -56,6 +56,7 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
     ),
     "consumption_prices_and_expectations": (
         "metric.economy.na.household_consumption_real",
+        "metric.analysis.goods_transaction_price_proxy",
         "metric.economy.inventory_to_sales",
         "metric.economy.avg_markup",
         "metric.economy.price_index",
@@ -431,9 +432,97 @@ def _firm_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _consumption_contracts() -> Mapping[str, Mapping[str, Any]]:
+    consumption = "metric.economy.na.household_consumption_real"
+    inventory = "metric.economy.inventory_to_sales"
+    markup = "metric.economy.avg_markup"
+    inflation = "metric.economy.inflation"
+    return {
+        "config.alpha1": {
+            "status": "screening_ready",
+            "values": (0.90, 0.99),
+            "directions": {consumption: "increase"},
+            "rationale": "A higher marginal propensity out of expected income should raise household consumption demand, holding income, wealth, taxes, and credit rules fixed.",
+        },
+        "config.alpha2": {
+            "status": "screening_ready",
+            "values": (1.0e-6, 5.0e-4),
+            "directions": {consumption: "increase"},
+            "rationale": "A higher propensity out of liquid wealth should raise consumption for a given expected income and opening balance sheet.",
+        },
+        "config.consumption_rationed_signal": {
+            "status": "activation_scenario_required",
+            "values": (True,),
+            "directions": {inventory: "increase"},
+            "activation": "opening_consumption_stockout",
+            "rationale": "A shared opening stockout exposes whether unfilled consumer and government orders enter seller demand expectations and raise the subsequent inventory response; output, employment, prices, and realized consumption remain unconstrained trade-offs.",
+        },
+        "config.eta": {
+            "status": "screening_ready",
+            "values": (3.35e-4, 1.34e-3),
+            "directions": {markup: "nonzero"},
+            "rationale": "Markup adjustment speed must change the response of price-cost margins to inventory imbalance; the equilibrium sign depends on whether shortages or excess stocks dominate.",
+        },
+        "config.inventory_gap_close": {
+            "status": "screening_ready",
+            "values": (0.025, 0.10),
+            "directions": {inventory: "nonzero"},
+            "rationale": "The fraction of the target inventory gap closed each day should alter realized inventory coverage and production volatility without changing the long-run inventory target itself.",
+        },
+        "config.lambda_d": {
+            "status": "screening_ready",
+            "values": (0.0019, 0.0076),
+            "directions": {inventory: "nonzero"},
+            "rationale": "Faster seller demand learning should change the inventory and sales path after daily demand surprises; its long-run level sign is not imposed.",
+        },
+        "config.lambda_y": {
+            "status": "screening_ready",
+            "values": (0.0038, 0.0152),
+            "directions": {consumption: "nonzero"},
+            "rationale": "Faster permanent-income updating should change consumption when realized labor and transfer income differs from prior expectations.",
+        },
+        "config.mu_max": {
+            "status": "activation_scenario_required",
+            "values": (0.20, 0.22),
+            "directions": {markup: "increase"},
+            "activation": "markup_ceiling_pressure",
+            "rationale": "A higher markup ceiling should permit higher price-cost margins when shortage pressure would otherwise bind the cap.",
+        },
+        "config.mu_min": {
+            "status": "activation_scenario_required",
+            "values": (0.18, 0.20),
+            "directions": {markup: "increase"},
+            "activation": "markup_floor_pressure",
+            "rationale": "A higher markup floor should prevent competitive or excess-inventory pressure from compressing margins below the configured bound.",
+        },
+        "config.phi": {
+            "status": "screening_ready",
+            "values": (10.5, 17.5),
+            "directions": {inventory: "increase"},
+            "rationale": "A higher target number of inventory days should raise inventory coverage and create a larger working-stock buffer against demand surprises.",
+        },
+        "config.search_m": {
+            "status": "screening_ready",
+            "values": (2, 8),
+            "directions": {
+                "metric.analysis.goods_transaction_price_proxy": "nonzero"
+            },
+            "rationale": "Comparing more sampled sellers increases consumer price transparency. The partial-equilibrium selection effect favors cheaper offers, but inventory depletion, seller learning, and the current mixed household/sector price proxy leave the long-run equilibrium sign unconstrained. The ordinary range stops at eight because larger samples add little measured benefit while increasing matching cost materially.",
+        },
+        "config.theta_price": {
+            "status": "screening_ready",
+            "values": (0.00185, 0.00740),
+            "directions": {inflation: "nonzero"},
+            "statistics": {inflation: "post_burnin_volatility"},
+            "rationale": "The daily Calvo repricing probability should alter inflation dynamics and the speed at which desired markups pass into posted prices; the volatility sign is an empirical model result.",
+        },
+    }
+
+
 CURATED_CONTRACTS = {
     **_production_contracts(),
     **_firm_contracts(),
+    **_consumption_contracts(),
 }
 
 
