@@ -58,7 +58,8 @@ def test_matched_finite_size_comparison_reports_sign_and_ratio() -> None:
     )
     metric = payload["fields"][0]["arms"][0]["metrics"][0]
     assert metric["sign_preserved"] is True
-    assert metric["confirmation_to_reference_ratio"] == pytest.approx(1.5)
+    assert metric["raw_confirmation_to_reference_ratio"] == pytest.approx(1.5)
+    assert metric["per_person_confirmation_to_reference_ratio"] == pytest.approx(0.15)
     assert metric["confirmation_interval_excludes_zero"] is True
 
 

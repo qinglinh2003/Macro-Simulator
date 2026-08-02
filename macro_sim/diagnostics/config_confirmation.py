@@ -152,12 +152,24 @@ def compare_batch_reports(
                         small_difference == 0.0 == large_difference
                         or small_difference * large_difference > 0.0
                     )
-                    ratio = (
+                    raw_ratio = (
                         large_difference / small_difference
                         if small_difference != 0.0
                         else None
                     )
+                    reference_per_person = small_difference / small_population
+                    confirmation_per_person = large_difference / large_population
+                    per_person_ratio = (
+                        confirmation_per_person / reference_per_person
+                        if reference_per_person != 0.0
+                        else None
+                    )
                     status = "matched"
+                if status != "matched":
+                    raw_ratio = None
+                    reference_per_person = None
+                    confirmation_per_person = None
+                    per_person_ratio = None
                 metrics.append(
                     {
                         "metric_id": metric_id,
@@ -165,7 +177,10 @@ def compare_batch_reports(
                         "status": status,
                         "reference_mean_difference": small_difference,
                         "confirmation_mean_difference": large_difference,
-                        "confirmation_to_reference_ratio": ratio,
+                        "raw_confirmation_to_reference_ratio": raw_ratio,
+                        "reference_difference_per_person": reference_per_person,
+                        "confirmation_difference_per_person": confirmation_per_person,
+                        "per_person_confirmation_to_reference_ratio": per_person_ratio,
                         "sign_preserved": sign_preserved,
                         "reference_interval_excludes_zero": _interval_excludes_zero(
                             small_effect
