@@ -629,6 +629,52 @@ void test_homeless_owner_does_not_buy_own_listing() {
     assert(harness.runtime.properties.validate().ok());
 }
 
+void test_broader_housing_search_changes_the_observed_opportunity_set() {
+    auto narrow_spec = market_spec(true, false);
+    narrow_spec.housing_rules.initial_dwellings_per_household = 2.0;
+    narrow_spec.housing_rules.initial_homeownership_share = 0.2;
+    narrow_spec.housing_rules.buyer_search_count = 1U;
+    auto broad_spec = narrow_spec;
+    broad_spec.housing_rules.buyer_search_count = 8U;
+    auto narrow = build(narrow_spec);
+    auto broad = build(broad_spec);
+
+    const auto seed_heterogeneous_listings = [](Harness &harness) {
+        harness.runtime.housing_listings.clear();
+        for (const auto &dwelling : harness.runtime.properties.records()) {
+            if (!dwelling.active || dwelling.occupant.valid()) {
+                continue;
+            }
+            const double relative_ask =
+                0.75 + 0.05 * static_cast<double>(dwelling.id.value() % 7U);
+            harness.runtime.housing_listings.push_back({
+                dwelling.id,
+                dwelling.owner,
+                harness.runtime.house_price * relative_ask,
+                harness.tick,
+                false,
+                true,
+            });
+        }
+        assert(harness.runtime.housing_listings.size() > 8U);
+    };
+    seed_heterogeneous_listings(narrow);
+    seed_heterogeneous_listings(broad);
+
+    const auto narrow_result = advance(narrow, 1);
+    const auto broad_result = advance(broad, 1);
+    assert(narrow_result.ok());
+    assert(broad_result.ok());
+    assert(narrow_result.get_if()->metrics.housing.session_sales > 0.0);
+    assert(broad_result.get_if()->metrics.housing.session_sales > 0.0);
+    assert(
+        std::abs(
+            narrow_result.get_if()->metrics.housing.session_volume -
+            broad_result.get_if()->metrics.housing.session_volume
+        ) > 1.0e-9
+    );
+}
+
 void test_failed_market_tick_is_atomic() {
     auto harness = build(market_spec(false, false));
     const auto root = base_checkpoint(harness);
@@ -664,6 +710,7 @@ int main() {
     test_tenant_can_buy_and_end_previous_tenancy();
     test_price_shock_forecloses_into_bank_title();
     test_homeless_owner_does_not_buy_own_listing();
+    test_broader_housing_search_changes_the_observed_opportunity_set();
     test_failed_market_tick_is_atomic();
     return 0;
 }

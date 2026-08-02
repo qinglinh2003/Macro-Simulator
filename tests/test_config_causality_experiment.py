@@ -177,6 +177,36 @@ def test_world_treatment_uses_the_product_new_game_contract() -> None:
     assert spread.rules.fx_spread == pytest.approx(0.004)
 
 
+def test_zero_baseline_builder_seed_uses_the_product_density_scale() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=24
+    )
+    assert baseline.configs()[0].builder_demand_seed == pytest.approx(0.0)
+    treated = native_treatment_spec(
+        baseline, field="builder_demand_seed", value=0.01
+    )
+    rules = treated.economies[0].housing_rules
+    assert rules.builder_count == 625
+    assert rules.builder_demand_seed == pytest.approx(0.04)
+
+
+def test_housing_search_activation_preserves_the_audited_search_count() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=180, seed=25
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="housing_search_k", value=1
+    )
+    apply_native_activation_scenario(
+        native_spec, scenario="housing_search_friction"
+    )
+    economy = native_spec.economies[0]
+    assert economy.housing_rules.buyer_search_count == 1
+    assert economy.housing_rules.initial_dwellings_per_household == pytest.approx(
+        1.20
+    )
+
+
 @pytest.mark.parametrize(
     ("scenario", "attribute", "ratio"),
     [

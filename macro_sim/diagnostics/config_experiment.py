@@ -373,15 +373,30 @@ def _apply_native_root_field(
                         / max(1.0e-12, float(energy_rules.initial_price))
                     )
                 elif field in PROFILE_DENSITY_SCALED_FIELDS:
-                    if baseline_value is None or float(baseline_value) == 0.0:
+                    if baseline_value is None:
+                        raise ValueError(
+                            f"Config field {field!r} requires its baseline value"
+                        )
+                    if float(baseline_value) != 0.0:
+                        resolved_value = (
+                            float(getattr(target, target_name))
+                            * float(value)
+                            / float(baseline_value)
+                        )
+                    elif field == "builder_demand_seed":
+                        population_count = int(
+                            population.population.initial_persons
+                        )
+                        builder_count = max(1, int(housing_rules.builder_count))
+                        builder_scale = max(
+                            1.0e-6,
+                            0.025 * float(population_count) / builder_count,
+                        )
+                        resolved_value = float(value) * builder_scale
+                    else:
                         raise ValueError(
                             f"Config field {field!r} requires a nonzero baseline"
                         )
-                    resolved_value = (
-                        float(getattr(target, target_name))
-                        * float(value)
-                        / float(baseline_value)
-                    )
                 setattr(target, target_name, resolved_value)
                 matched = True
 
@@ -609,6 +624,8 @@ def apply_native_activation_scenario(
     monetary_rules = monetary.rules
     real = monetary.real_economy
     rules = real.rules
+    energy_rules = economy.energy_rules
+    housing_rules = economy.housing_rules
     if scenario == "positive_capital_gap":
         rules.initial_consumption_capital *= 0.5
     elif scenario == "opening_consumption_stockout":
@@ -691,9 +708,49 @@ def apply_native_activation_scenario(
     elif scenario == "active_chartist_demand":
         financial_rules.chartist_weight = 20.0
     elif scenario == "deprivation_measurement_active":
-        energy_rules = economy.energy_rules
         energy_rules.deprivation_burnin_years = 0
-        economy.energy_rules = energy_rules
+    elif scenario == "housing_shortage":
+        housing_rules.initial_dwellings_per_household = 0.80
+    elif scenario == "housing_liquid_market":
+        housing_rules.initial_dwellings_per_household = 1.20
+        housing_rules.initial_homeownership_share = 0.40
+        housing_rules.location_count = 8
+        housing_rules.distress_deposit_floor = 0.0
+        monetary_rules.deposit_rate = 1.5e-4
+        rules.initial_household_money = 500.0
+    elif scenario == "housing_investor_choice":
+        housing_rules.initial_dwellings_per_household = 1.20
+        housing_rules.initial_homeownership_share = 0.40
+        housing_rules.distress_deposit_floor = 0.0
+        monetary_rules.deposit_rate = 8.2e-5
+    elif scenario == "housing_search_friction":
+        housing_rules.initial_dwellings_per_household = 1.20
+        housing_rules.initial_homeownership_share = 0.40
+        housing_rules.location_count = 8
+        housing_rules.distress_deposit_floor = 0.0
+        housing_rules.voluntary_ask_markup = 0.20
+        housing_rules.ask_decay = 0.05
+        housing_rules.buyer_liquidity_buffer = 0.10
+        monetary_rules.deposit_rate = 1.5e-4
+        rules.initial_household_money = 260.0
+    elif scenario == "housing_distressed_market":
+        housing_rules.initial_dwellings_per_household = 1.10
+        housing_rules.location_count = 8
+        housing_rules.distress_deposit_floor = 2_000.0
+        rules.initial_household_money = 1_000.0
+    elif scenario == "housing_rental_pressure":
+        housing_rules.initial_dwellings_per_household = 0.90
+        housing_rules.rental_vacancy_deadband = 0.0
+    elif scenario == "housing_affordability_pressure":
+        housing_rules.initial_dwellings_per_household = 0.80
+        housing_rules.affordability_burnin_years = 0
+        housing_rules.demand_price_step = 0.15
+    elif scenario == "housing_affordability_relief":
+        housing_rules.initial_dwellings_per_household = 1.50
+        housing_rules.affordability_burnin_years = 0
+        housing_rules.ask_decay = 0.05
+        housing_rules.rent_adjustment = 0.25
+        housing_rules.rental_vacancy_deadband = 0.0
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules
@@ -706,6 +763,8 @@ def apply_native_activation_scenario(
     population.rules = population_rules
     population.financial_economy = financial
     economy.domestic_economy = population
+    economy.energy_rules = energy_rules
+    economy.housing_rules = housing_rules
     economies[target_economy] = economy
     native_spec.economies = economies
     return native_spec

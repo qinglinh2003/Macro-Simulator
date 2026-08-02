@@ -1068,6 +1068,85 @@ path. Its v2 ranges were re-estimated from 256 deterministic native seeds after
 the clearing fix; the frozen 32-seed panel and all fresh-process checkpoint
 tests now pass.
 
+### 8.14 Housing and construction screen
+
+The housing inventory contains 29 immutable Config fields. Twenty-eight have
+an executable native route and now have reviewed contracts; the remaining
+`housing_wealth_effect` is correctly blocked because the current C++
+consumption equation has no housing-wealth term. Six fields are identifiable
+on the neutral product baseline, sixteen use a shared market, rental-pressure,
+distress, construction-shortage, or investor-choice activation, and six annual
+affordability-feedback fields require a multi-year activation. Conditional
+mechanisms are never credited from an inactive balanced genesis.
+
+The final short-horizon screens use four paired seeds, 100,000 persons, 90
+days, and eight native workers. The neutral block executes 40 worlds and the
+activated block executes 132 worlds. The annual feedback block adds 40 worlds
+at 800 days so that an affordability baseline is formed before the treatment
+is judged. All maintained values remain finite and all native state invariants
+hold.
+
+One genuinely silent implementation was found and repaired. Housing listings
+were globally sorted by asking price and every buyer walked from the cheapest
+listing. Consequently `housing_search_k >= 1` could never change a purchase:
+if the cheapest listing was unaffordable, every later listing was at least as
+expensive. Buyers now receive a deterministic household-specific opportunity
+set of K active listings and choose its cheapest member. This keeps exact
+replay and O(K) search while giving search frictions economic content. Under a
+shared heterogeneous-listing activation, reducing K from five to one lowers
+90-day sales by about 0.85%; the four paired paths agree on the direction.
+
+The principal causal results are:
+
+- The price and rent genesis anchors are exact and strong. Moving the opening
+  price-to-income multiple from 3.5 to 2.0/6.0 changes the first-window house
+  price by -42.9%/+71.4%. Moving the opening rental yield from 5% to 2%/10%
+  changes first-window rent by -60%/+100%.
+- In a liquid voluntary market, a 0.1%/5% listing markdown changes the house
+  price by about +0.36%/-4.10% relative to the 0.5% baseline; a 0%/20% asking
+  markup changes it by about -4.29%/+12.89%. Raising the buyer liquidity buffer
+  from 25% to 50% reduces both sales and mortgage originations by about 1.26%,
+  while lowering it to 5% raises both by about 1.19%.
+- Capability boundaries are complete. Disabling resale eliminates sales,
+  transfer volume, and purchase mortgages; disabling mortgages eliminates
+  mortgage originations and principal; disabling rentals eliminates rent
+  settlement; disabling housing removes the dwelling stock and its dependent
+  flows. A seven-day market interval raises 90-day sales about 38.1% relative
+  to monthly clearing, while a 90-day interval removes the control window's
+  transactions.
+- Rental adjustment is conditional rather than silent. Under a common rental
+  shortage, setting the adjustment speed to zero removes rent movement and a
+  0.20 speed materially amplifies it. The rent-burden ceiling is intentionally
+  nonlinear: lowering it to 10% binds and reduces rent, while raising an
+  already slack ceiling is not credited as a causal failure. The investor
+  premium changes vacant-owner listings only when rental and deposit returns
+  straddle the decision threshold.
+- Under a common dwelling shortage, construction and land-fee credit are live.
+  Disabling construction removes all 90-day construction output and 50 permit-
+  capped completions; disabling land-fee credit removes the same 50
+  completions. Halving builder productivity reduces construction output about
+  83.6%, while quadrupling it raises output about 1,330%. The demand-price gain
+  changes output by roughly +6.6%/+22.5% at 0.5/2.0. A 0.25 finished-unit
+  buffer raises output about 24.7%, whereas a buffer of one per developer
+  overexpands planned inventory, exhausts financing against a tight permit
+  cap, and collapses output by about 95.9%. That non-monotonicity is retained
+  as a real leverage-and-capacity trade-off rather than forced into a false
+  monotonic contract.
+- Annual affordability feedback is both delayed and material. Under worsening
+  affordability, removing versus strengthening the elasticity changes the
+  final-window fertility multiplier by +4.36%/-12.01% and the leaving-home
+  multiplier by +8.90%/-15.68%. Raising the lower clamps to 0.99 limits those
+  declines by about 3.31% and 7.82%. Under improving affordability, lowering
+  each upper clamp to one cuts the corresponding positive response by about
+  15.5% and 28.6%. All eight directional checks have confidence intervals that
+  exclude zero across four paired seeds.
+
+Balanced genesis intentionally has no uncovered housing demand, so zero
+construction in the neutral first year is not evidence that the construction
+module is disconnected. Conversely, the audit does not hide the missing
+housing wealth-to-consumption route: it remains explicit native backlog work
+and cannot be presented as a weak elasticity.
+
 ## 9. Execution gates
 
 ### P0 - Static ownership and routing

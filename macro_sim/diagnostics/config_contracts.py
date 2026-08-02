@@ -194,6 +194,37 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.real_output",
         "metric.economy.unemployment_rate",
     ),
+    "housing": (
+        "metric.source.m8.housing.house_price",
+        "metric.source.m8.housing.rent_level",
+        "metric.source.m8.housing.housing_stock",
+        "metric.source.m8.housing.homeownership_share",
+        "metric.source.m8.housing.vacancy_share",
+        "metric.source.m8.housing.active_listings",
+        "metric.source.m8.housing.forced_listing_share",
+        "metric.source.m8.housing.session_sales",
+        "metric.source.m8.housing.session_volume",
+        "metric.source.m8.housing.mean_time_on_market_days",
+        "metric.source.m8.housing.mortgage_originations",
+        "metric.source.m8.housing.mortgage_principal_originated",
+        "metric.source.m8.housing.mortgage_principal_outstanding",
+        "metric.source.m8.housing.foreclosures",
+        "metric.source.m8.housing.rent_paid",
+        "metric.source.m8.housing.rent_unpaid",
+        "metric.source.m8.housing.evictions",
+        "metric.source.m8.housing.land_fee_paid",
+        "metric.source.m8.housing.construction_output",
+        "metric.source.m8.housing.dwellings_completed",
+        "metric.source.m8.housing.price_to_income_ratio",
+        "metric.source.m8.housing.rent_burden_ratio",
+        "metric.source.m8.housing.leave_home_multiplier",
+        "metric.source.m8.housing.fertility_multiplier",
+        "metric.source.m7.births",
+        "metric.source.m7.leaving_home_events",
+        "metric.economy.na.household_consumption_real",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+    ),
     "open_economy": (
         "metric.source.m9.country.exports_volume",
         "metric.source.m9.country.imports_volume",
@@ -1204,6 +1235,242 @@ def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _housing_contracts() -> Mapping[str, Mapping[str, Any]]:
+    price = "metric.source.m8.housing.house_price"
+    rent = "metric.source.m8.housing.rent_level"
+    stock = "metric.source.m8.housing.housing_stock"
+    listings = "metric.source.m8.housing.active_listings"
+    forced = "metric.source.m8.housing.forced_listing_share"
+    sales = "metric.source.m8.housing.session_sales"
+    volume = "metric.source.m8.housing.session_volume"
+    mortgages = "metric.source.m8.housing.mortgage_originations"
+    mortgage_principal = (
+        "metric.source.m8.housing.mortgage_principal_outstanding"
+    )
+    rent_paid = "metric.source.m8.housing.rent_paid"
+    evictions = "metric.source.m8.housing.evictions"
+    construction = "metric.source.m8.housing.construction_output"
+    completions = "metric.source.m8.housing.dwellings_completed"
+    leave_multiplier = "metric.source.m8.housing.leave_home_multiplier"
+    fertility_multiplier = "metric.source.m8.housing.fertility_multiplier"
+    common_construction = {
+        "status": "activation_scenario_required",
+        "activation": "housing_shortage",
+    }
+    return {
+        "config.builder_demand_price_gain": {
+            **common_construction,
+            "values": (0.5, 2.0),
+            "directions": {construction: "nonzero"},
+            "rationale": "When households face an uncovered dwelling shortage, a larger price-to-income demand gain should raise developers' expected sales and construction rather than leave supply disconnected from scarcity.",
+        },
+        "config.builder_demand_seed": {
+            **common_construction,
+            "values": (0.02,),
+            "directions": {construction: "nonzero"},
+            "statistics": {construction: "cumulative"},
+            "rationale": "The cold-start demand seed should move early developer production under the same housing shortage. It is screened as an initialization channel, not interpreted as permanent autonomous demand.",
+        },
+        "config.builder_inventory_buffer": {
+            **common_construction,
+            "values": (0.25, 1.0),
+            "directions": {construction: "nonzero"},
+            "rationale": "Allowing developers to carry a larger finished-unit buffer should support more construction before sales arrive, at the cost of a larger vacant inventory exposure.",
+        },
+        "config.builder_land_fee_credit": {
+            **common_construction,
+            "values": (False,),
+            "directions": {completions: "decrease"},
+            "statistics": {completions: "cumulative"},
+            "rationale": "Disabling development credit for the land fee should reduce completed dwellings when otherwise viable builders cannot fund the fee from cash alone.",
+        },
+        "config.builder_productivity": {
+            **common_construction,
+            "values": (0.001, 0.008),
+            "directions": {construction: "increase"},
+            "rationale": "Higher construction labor productivity should turn the same builder workforce into more work in progress and completed dwellings.",
+        },
+        "config.house_price_income_years": {
+            "status": "screening_ready",
+            "values": (2.0, 6.0),
+            "directions": {price: "increase"},
+            "statistics": {price: "first_window_mean"},
+            "rationale": "The opening price-to-income multiple anchors the initial dwelling valuation. A higher multiple must raise the opening house-price path; persistence is measured separately rather than assumed to wash out.",
+        },
+        "config.housing_ask_decay": {
+            "status": "activation_scenario_required",
+            "values": (0.001, 0.05),
+            "activation": "housing_liquid_market",
+            "directions": {price: "decrease"},
+            "rationale": "Faster markdown of stale listings should lower transaction prices and shorten the distance between sellers and constrained buyers.",
+        },
+        "config.housing_ask_markup": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.20),
+            "activation": "housing_liquid_market",
+            "directions": {price: "increase"},
+            "rationale": "A larger voluntary asking markup should raise the transaction-price path conditional on sales, while turnover remains an equilibrium response.",
+        },
+        "config.housing_buyer_buffer": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.50),
+            "activation": "housing_liquid_market",
+            "directions": {sales: "decrease", mortgages: "decrease"},
+            "statistics": {sales: "cumulative", mortgages: "cumulative"},
+            "rationale": "A larger post-purchase liquidity reserve makes fewer households able to bid and borrow, so transactions and mortgage originations should fall.",
+        },
+        "config.housing_construction_enabled": {
+            **common_construction,
+            "values": (False,),
+            "directions": {construction: "decrease", completions: "decrease"},
+            "statistics": {construction: "cumulative", completions: "cumulative"},
+            "rationale": "Disabling residential construction must eliminate construction output and new completions even when a common dwelling shortage creates demand.",
+        },
+        "config.housing_distress_floor": {
+            "status": "screening_ready",
+            "values": (0.0,),
+            "directions": {forced: "increase", listings: "increase"},
+            "rationale": "A higher deposit distress threshold should force more owner-occupiers to list and therefore expand the distressed share of active supply.",
+        },
+        "config.housing_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {stock: "decrease", rent_paid: "decrease"},
+            "statistics": {rent_paid: "cumulative"},
+            "rationale": "The parent housing capability should remove the dwelling registry and every dependent resale, mortgage, rental, and construction flow through the validated closure.",
+        },
+        "config.housing_fertility_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 2.0),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_pressure",
+            "directions": {fertility_multiplier: "decrease"},
+            "statistics": {fertility_multiplier: "last_window_mean"},
+            "rationale": "After a common affordability baseline is established, a larger fertility elasticity should translate worsening housing costs into a lower fertility multiplier.",
+        },
+        "config.housing_fertility_mult_hi": {
+            "status": "activation_scenario_required",
+            "values": (1.0,),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_relief",
+            "directions": {fertility_multiplier: "increase"},
+            "statistics": {fertility_multiplier: "last_window_mean"},
+            "rationale": "Under improving affordability, lowering the upper clamp to one should prevent the fertility multiplier from rising above neutrality.",
+        },
+        "config.housing_fertility_mult_lo": {
+            "status": "activation_scenario_required",
+            "values": (0.99,),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_pressure",
+            "directions": {fertility_multiplier: "increase"},
+            "statistics": {fertility_multiplier: "last_window_mean"},
+            "rationale": "Under worsening affordability, raising the lower clamp should bound the maximum fertility penalty and lift the resulting multiplier.",
+        },
+        "config.housing_forced_discount": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.30),
+            "activation": "housing_distressed_market",
+            "directions": {volume: "nonzero"},
+            "statistics": {volume: "cumulative"},
+            "rationale": "The forced-sale discount must change distressed transaction value. Its aggregate-volume sign is not fixed because a lower price also lets more constrained buyers clear; forced trades deliberately do not rebase the representative house-price index.",
+        },
+        "config.housing_leave_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 3.0),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_pressure",
+            "directions": {leave_multiplier: "decrease"},
+            "statistics": {leave_multiplier: "last_window_mean"},
+            "rationale": "A larger leaving-home elasticity should translate worsening rent and price affordability into a lower rate multiplier for household formation.",
+        },
+        "config.housing_leave_mult_hi": {
+            "status": "activation_scenario_required",
+            "values": (1.0,),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_relief",
+            "directions": {leave_multiplier: "increase"},
+            "statistics": {leave_multiplier: "last_window_mean"},
+            "rationale": "Under improving affordability, lowering the upper clamp to one should remove the positive leaving-home response above neutrality.",
+        },
+        "config.housing_leave_mult_lo": {
+            "status": "activation_scenario_required",
+            "values": (0.99,),
+            "horizon_days": 1095,
+            "activation": "housing_affordability_pressure",
+            "directions": {leave_multiplier: "increase"},
+            "statistics": {leave_multiplier: "last_window_mean"},
+            "rationale": "Under worsening affordability, raising the lower clamp should bound the reduction in household formation.",
+        },
+        "config.housing_market_enabled": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "housing_liquid_market",
+            "directions": {sales: "decrease", volume: "decrease", mortgages: "decrease"},
+            "statistics": {sales: "cumulative", volume: "cumulative", mortgages: "cumulative"},
+            "rationale": "Disabling resale clearing should eliminate sales, transfer value, and purchase-mortgage originations while leaving the housing stock itself intact.",
+        },
+        "config.housing_rental_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {rent_paid: "decrease"},
+            "statistics": {rent_paid: "cumulative"},
+            "rationale": "Disabling the rental institution should eliminate rent settlements and rental evictions without deleting dwellings.",
+        },
+        "config.housing_search_k": {
+            "status": "activation_scenario_required",
+            "values": (1,),
+            "activation": "housing_search_friction",
+            "directions": {sales: "increase"},
+            "statistics": {sales: "cumulative"},
+            "rationale": "A broader buyer search set should weakly increase successful matches by exposing each buyer to more active listings.",
+        },
+        "config.housing_session_interval": {
+            "status": "activation_scenario_required",
+            "values": (7, 90),
+            "activation": "housing_liquid_market",
+            "directions": {sales: "decrease"},
+            "statistics": {sales: "cumulative"},
+            "rationale": "Less frequent market sessions should reduce the number of opportunities to transact within a fixed calendar horizon.",
+        },
+        "config.mortgage_enabled": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "housing_liquid_market",
+            "directions": {mortgages: "decrease", mortgage_principal: "decrease"},
+            "statistics": {mortgages: "cumulative"},
+            "rationale": "Disabling mortgage finance should eliminate originations and mortgage principal while retaining cash purchases.",
+        },
+        "config.rent_adjust": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.20),
+            "activation": "housing_rental_pressure",
+            "directions": {rent: "nonzero"},
+            "statistics": {rent: "post_burnin_volatility"},
+            "rationale": "The partial rent-adjustment coefficient should change rent dynamics when vacancies or unmet tenant demand create pressure; the level sign depends on that pressure.",
+        },
+        "config.rent_burden_cap": {
+            "status": "screening_ready",
+            "values": (0.10,),
+            "directions": {rent: "increase"},
+            "rationale": "A higher wage-relative rent ceiling relaxes the affordability cap and should permit a higher rent path when the ceiling binds.",
+        },
+        "config.rent_yield0": {
+            "status": "screening_ready",
+            "values": (0.02, 0.10),
+            "directions": {rent: "increase"},
+            "statistics": {rent: "first_window_mean"},
+            "rationale": "The opening rental yield maps the house-price anchor into initial daily rent, so a higher yield must raise the first rent window.",
+        },
+        "config.rental_investor_premium": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.10),
+            "activation": "housing_investor_choice",
+            "directions": {listings: "increase"},
+            "rationale": "A larger return premium makes holding a vacant rental less attractive relative to deposits, causing more investor-owned vacancies to be offered for sale.",
+        },
+    }
+
+
 def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
     household_bonds = "metric.source.m6.household_bond_market_value"
     bank_bonds = "metric.source.m6.bank_bond_market_value"
@@ -1390,6 +1657,7 @@ CURATED_CONTRACTS = {
     **_distribution_contracts(),
     **_banking_contracts(),
     **_government_contracts(),
+    **_housing_contracts(),
     **_securities_contracts(),
 }
 

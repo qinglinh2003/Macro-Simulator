@@ -24,6 +24,13 @@ constexpr std::size_t kAbsentIndex = std::numeric_limits<std::size_t>::max();
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
+[[nodiscard]] std::uint64_t housing_mix(std::uint64_t value) noexcept {
+    value += 0x9e3779b97f4a7c15ULL;
+    value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
+    value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
+    return value ^ (value >> 31U);
+}
+
 template <std::size_t Size>
 [[nodiscard]] bool all_finite(const std::array<double, Size> &values) noexcept {
     return std::all_of(values.begin(), values.end(), finite);
@@ -2219,32 +2226,11 @@ class M8Extension final : public M7TickExtension {
                 const auto &b = scratch_.housing_listings_[right];
                 return a.asking_price < b.asking_price ||
                        (a.asking_price == b.asking_price && a.dwelling < b.dwelling);
-            });
+        });
         constexpr std::size_t kNoListing = std::numeric_limits<std::size_t>::max();
-        std::vector<std::size_t> next_active(active.size(), kNoListing);
-        std::vector<std::size_t> previous_active(active.size(), kNoListing);
-        for (std::size_t position = 0; position < active.size(); ++position) {
-            if (position + 1U < active.size()) {
-                next_active[position] = position + 1U;
-            }
-            if (position > 0U) {
-                previous_active[position] = position - 1U;
-            }
-        }
-        std::size_t active_head = active.empty() ? kNoListing : 0U;
-        const auto remove_active = [&](std::size_t position) {
-            const auto previous = previous_active[position];
-            const auto next = next_active[position];
-            if (previous == kNoListing) {
-                active_head = next;
-            } else {
-                next_active[previous] = next;
-            }
-            if (next != kNoListing) {
-                previous_active[next] = previous;
-            }
-            next_active[position] = kNoListing;
-            previous_active[position] = kNoListing;
+        const auto remove_active = [&active](std::size_t position) {
+            active[position] = active.back();
+            active.pop_back();
         };
         std::vector<HouseholdId> buyers;
         buyers.reserve(real.household_ids_.size());
@@ -2276,36 +2262,50 @@ class M8Extension final : public M7TickExtension {
         double reference_value = 0.0;
         double reference_sales = 0.0;
         for (const auto buyer : buyers) {
+            if (active.empty()) {
+                break;
+            }
+            // Search is a household-specific information friction. Sampling a
+            // deterministic rotated window keeps replay exact while ensuring
+            // that increasing K broadens the buyer's opportunity set. The
+            // previous globally sorted walk made every K >= 1 equivalent.
+            const auto search_start = static_cast<std::size_t>(
+                housing_mix(buyer.value() ^
+                            housing_mix(tick.value() + 1U) ^
+                            housing_mix(scratch_.housing_event_counter_ + 1U)) %
+                active.size());
             std::size_t searched = 0;
-            auto position = active_head;
-            while (position != kNoListing &&
+            std::size_t inspected = 0;
+            std::size_t best_position = kNoListing;
+            double best_ask = std::numeric_limits<double>::infinity();
+            while (inspected < active.size() &&
                    searched < runtime_.housing_rules.buyer_search_count) {
-                const auto next = next_active[position];
-                const auto index = active[position];
-                auto &listing = scratch_.housing_listings_[index];
-                if (!listing.active ||
-                    listing.seller == core::OwnerId::household(buyer)) {
-                    if (!listing.active) {
-                        remove_active(position);
-                    }
-                    position = next;
+                const auto position = (search_start + inspected) % active.size();
+                ++inspected;
+                const auto &listing = scratch_.housing_listings_[active[position]];
+                if (listing.seller == core::OwnerId::household(buyer)) {
                     continue;
                 }
                 ++searched;
-                const auto status =
-                    buy_listing(state, real, monetary, monetary_scratch, buyer, listing,
-                                tick, session_days, reference_value, reference_sales);
-                if (status.ok()) {
-                    remove_active(position);
-                    break;
+                if (listing.asking_price < best_ask) {
+                    best_ask = listing.asking_price;
+                    best_position = position;
                 }
-                if (status.code() == ErrorCode::stale_handle) {
-                    listing.active = false;
-                    remove_active(position);
-                } else if (status.code() != ErrorCode::insufficient_funds) {
-                    return status;
-                }
-                position = next;
+            }
+            if (best_position == kNoListing) {
+                continue;
+            }
+            auto &listing = scratch_.housing_listings_[active[best_position]];
+            const auto status =
+                buy_listing(state, real, monetary, monetary_scratch, buyer, listing,
+                            tick, session_days, reference_value, reference_sales);
+            if (status.ok()) {
+                remove_active(best_position);
+            } else if (status.code() == ErrorCode::stale_handle) {
+                listing.active = false;
+                remove_active(best_position);
+            } else if (status.code() != ErrorCode::insufficient_funds) {
+                return status;
             }
         }
         const auto sales = scratch_.working_metrics_.housing.session_sales;
@@ -2315,7 +2315,7 @@ class M8Extension final : public M7TickExtension {
         }
         if (reference_sales > 0.0) {
             scratch_.house_price_ = reference_value / reference_sales;
-            if (active_head == kNoListing &&
+            if (active.empty() &&
                 static_cast<double>(buyers.size()) > sales) {
                 scratch_.house_price_ *= 1.0 + runtime_.housing_rules.demand_price_step;
             }
