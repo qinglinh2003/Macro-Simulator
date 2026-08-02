@@ -182,3 +182,7 @@ def test_all_seven_packages_use_reviewed_fields_and_valid_activations() -> None:
             apply_native_activation_scenario(
                 native_spec, scenario=package.activation_scenario
             )
+
+
+def test_housing_combination_spans_second_annual_feedback() -> None:
+    assert COMBINATION_PACKAGES["housing_family"].days >= 800

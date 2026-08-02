@@ -438,7 +438,7 @@ COMBINATION_PACKAGES: Mapping[str, CombinationPackage] = {
     ),
     "housing_family": CombinationPackage(
         "housing_family", "Housing and family formation", "root",
-        "housing_joint_pressure", 730, 1,
+        "housing_joint_pressure", 800, 1,
         (
             FactorSpec("builder_productivity", 0.001, 0.008),
             FactorSpec("builder_demand_price_gain", 0.5, 2.0),
@@ -523,4 +523,3 @@ COMBINATION_PACKAGES: Mapping[str, CombinationPackage] = {
         ),
     ),
 }
-
