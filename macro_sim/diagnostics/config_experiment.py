@@ -193,6 +193,36 @@ def apply_config_treatment(
     return tuple(output)
 
 
+def apply_config_treatments(
+    configs: Sequence[Config],
+    *,
+    treatments: Mapping[str, Any],
+    target_economy: int = 0,
+) -> tuple[Config, ...]:
+    """Apply one valid joint Config treatment with capability closure."""
+    if not treatments:
+        raise ValueError("joint Config treatment must not be empty")
+    if not 0 <= target_economy < len(configs):
+        raise IndexError("target_economy is outside the Config sequence")
+    unknown = sorted(set(treatments) - set(Config.__dataclass_fields__))
+    if unknown:
+        raise ValueError("unknown root Config fields: " + ", ".join(unknown))
+    changes = dict(treatments)
+    changed = True
+    while changed:
+        changed = False
+        for parent, dependants in CAPABILITY_DISABLE_CASCADE.items():
+            if changes.get(parent) is not False:
+                continue
+            for name, dependant_value in dependants.items():
+                if changes.get(name, object()) != dependant_value:
+                    changes[name] = dependant_value
+                    changed = True
+    output = list(configs)
+    output[target_economy] = replace(output[target_economy], **changes)
+    return tuple(output)
+
+
 def _history_rows(
     session: NativeSimulationSession,
     economy_id: int,
@@ -347,10 +377,14 @@ def _apply_native_root_field(
     real = monetary.real_economy
     real_rules = real.rules
     monetary_rules = monetary.rules
+    monetary_policy = monetary.policy
     financial_policy = financial.policy
     financial_rules = financial.rules
+    population_policy = population.policy
     population_rules = population.rules
+    energy_policy = economy.energy_policy
     energy_rules = economy.energy_rules
+    housing_policy = economy.housing_policy
     housing_rules = economy.housing_rules
     sections = (
         (real_rules, native_backend.M4_RULE_FIELDS),
@@ -359,6 +393,13 @@ def _apply_native_root_field(
         (population_rules, native_backend.M7_RULE_FIELDS),
         (energy_rules, native_backend.ENERGY_RULE_FIELDS),
         (housing_rules, native_backend.HOUSING_RULE_FIELDS),
+    )
+    policy_sections = (
+        (monetary_policy, native_backend.M5_POLICY_FIELDS),
+        (financial_policy, native_backend.M6_POLICY_FIELDS),
+        (population_policy, native_backend.M7_POLICY_FIELDS),
+        (energy_policy, native_backend.ENERGY_POLICY_FIELDS),
+        (housing_policy, native_backend.HOUSING_POLICY_FIELDS),
     )
     matched = False
     bridge_computed_fields = {"bank_capital_frac", "d_bank0"}
@@ -398,6 +439,17 @@ def _apply_native_root_field(
                             f"Config field {field!r} requires a nonzero baseline"
                         )
                 setattr(target, target_name, resolved_value)
+                matched = True
+
+    # Capability closure can disable policy seeds as a consequence of a
+    # structural Config treatment (for example interbank -> OMO/LOLR or
+    # mortgages -> underwriting).  Apply those dependent writes to the native
+    # policy contract as well; otherwise the experiment would no longer match
+    # the validated Config produced by the start-menu cascade.
+    for target, mapping in policy_sections:
+        for target_name, source_name in mapping.items():
+            if source_name == field:
+                setattr(target, target_name, value)
                 matched = True
 
     if field == "bond_theta":
@@ -521,14 +573,18 @@ def _apply_native_root_field(
         )
     real.rules = real_rules
     monetary.rules = monetary_rules
+    monetary.policy = monetary_policy
     monetary.real_economy = real
     financial.policy = financial_policy
     financial.rules = financial_rules
     financial.monetary_economy = monetary
     population.rules = population_rules
+    population.policy = population_policy
     population.financial_economy = financial
     economy.domestic_economy = population
+    economy.energy_policy = energy_policy
     economy.energy_rules = energy_rules
+    economy.housing_policy = housing_policy
     economy.housing_rules = housing_rules
     economies[economy_id] = economy
     native_spec.economies = economies
@@ -572,6 +628,37 @@ def native_treatment_spec(
     return native_spec
 
 
+def native_joint_treatment_spec(
+    baseline: NewGameSpec,
+    *,
+    treatments: Mapping[str, Any],
+    target_economy: int = 0,
+) -> Any:
+    """Overlay a capability-valid joint root Config treatment."""
+    baseline_configs = tuple(baseline.configs())
+    treated_configs = apply_config_treatments(
+        baseline_configs,
+        treatments=treatments,
+        target_economy=target_economy,
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    before = baseline_configs[target_economy]
+    after = treated_configs[target_economy]
+    for changed_field in Config.__dataclass_fields__:
+        before_value = getattr(before, changed_field)
+        after_value = getattr(after, changed_field)
+        if before_value == after_value:
+            continue
+        _apply_native_root_field(
+            native_spec,
+            field=changed_field,
+            value=after_value,
+            economy_id=target_economy,
+            baseline_value=before_value,
+        )
+    return native_spec
+
+
 def native_world_treatment_spec(
     baseline: NewGameSpec,
     *,
@@ -586,6 +673,28 @@ def native_world_treatment_spec(
     rules = native_spec.rules
     setattr(rules, target, value)
     if field == "trade" and not bool(value):
+        rules.capital = False
+        rules.migration = False
+    native_spec.rules = rules
+    return native_spec
+
+
+def native_joint_world_treatment_spec(
+    baseline: NewGameSpec,
+    *,
+    treatments: Mapping[str, Any],
+) -> Any:
+    """Overlay several World Config fields on one product baseline."""
+    if not treatments:
+        raise ValueError("joint World treatment must not be empty")
+    unknown = sorted(set(treatments) - set(WORLD_NATIVE_FIELDS))
+    if unknown:
+        raise ValueError("unknown World Config fields: " + ", ".join(unknown))
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    rules = native_spec.rules
+    for field, value in treatments.items():
+        setattr(rules, WORLD_NATIVE_FIELDS[field], value)
+    if treatments.get("trade") is False:
         rules.capital = False
         rules.migration = False
     native_spec.rules = rules
@@ -622,6 +731,7 @@ def apply_native_activation_scenario(
         "world_migration_cap_pressure",
         "world_peg_pressure",
         "world_dealer_loss",
+        "world_joint_integration",
     }
     if scenario in world_scenarios:
         if len(economies) < 2:
@@ -637,6 +747,7 @@ def apply_native_activation_scenario(
                 "world_trade_friction",
                 "world_peg_pressure",
                 "world_dealer_loss",
+                "world_joint_integration",
             }:
                 if scenario == "world_trade_friction" and economy_id == 0:
                     rules.initial_consumption_inventory *= 4.0
@@ -658,9 +769,13 @@ def apply_native_activation_scenario(
             if scenario in {
                 "world_migration_wage_gap",
                 "world_migration_cap_pressure",
+                "world_joint_integration",
             }:
                 rules.initial_wage = 2.0 if economy_id == 0 else 0.70
-            if scenario == "world_capital_rate_gap":
+            if scenario in {
+                "world_capital_rate_gap",
+                "world_joint_integration",
+            }:
                 monetary.initial_policy_rate = (0.00030, 0.00005, 0.000134)[
                     min(economy_id, 2)
                 ]
@@ -774,6 +889,11 @@ def apply_native_activation_scenario(
         monetary_policy.bank_capital_constraint = True
         monetary_rules.opening_capital_per_bank = 250.0
         monetary_rules.bank_leverage_mean = 100.0
+    elif scenario == "credit_joint_pressure":
+        monetary_policy.bank_capital_constraint = True
+        monetary_rules.opening_capital_per_bank = 250.0
+        monetary_rules.deposit_spread_dispersion = 1.0e-4
+        monetary_rules.run_health_reference = 0.22
     elif scenario == "deposit_arrears_pressure":
         monetary_rules.deposit_rate = 0.005
     elif scenario == "deposit_spread_competition":
@@ -805,6 +925,12 @@ def apply_native_activation_scenario(
         energy_rules.downstream_intensity = 0.10
         energy_rules.producer_productivity = 0.50
         energy_rules.fuel_poverty_mortality_gamma = 10.0
+    elif scenario == "energy_joint_pressure":
+        rules.initial_consumption_inventory = 0.0
+        rules.initial_capital_inventory = 0.0
+        energy_rules.deprivation_burnin_years = 0
+        energy_rules.producer_productivity = 0.50
+        energy_rules.fuel_poverty_mortality_cap = 5.0
     elif scenario == "housing_shortage":
         housing_rules.initial_dwellings_per_household = 0.80
     elif scenario == "housing_liquid_market":
@@ -847,6 +973,21 @@ def apply_native_activation_scenario(
         housing_rules.ask_decay = 0.05
         housing_rules.rent_adjustment = 0.25
         housing_rules.rental_vacancy_deadband = 0.0
+    elif scenario == "housing_joint_pressure":
+        housing_rules.initial_dwellings_per_household = 0.80
+        housing_rules.initial_homeownership_share = 0.40
+        housing_rules.location_count = 8
+        housing_rules.distress_deposit_floor = 0.0
+        housing_rules.affordability_burnin_years = 0
+        housing_rules.demand_price_step = 0.15
+        housing_rules.rental_vacancy_deadband = 0.0
+        monetary_rules.deposit_rate = 1.5e-4
+        rules.initial_household_money = 500.0
+    elif scenario == "firm_joint_dynamism":
+        financial_rules.entry_max = 6
+        financial_rules.switch_return_gap = 0.0
+        financial_rules.switch_pressure_days = 5
+        financial_rules.switch_hazard = 0.05
     else:
         raise ValueError(f"unknown native activation scenario {scenario!r}")
     real.rules = rules
