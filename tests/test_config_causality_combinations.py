@@ -6,6 +6,7 @@ import pytest
 
 from macro_sim.diagnostics.config_combinations import (
     COMBINATION_PACKAGES,
+    INTERACTION_FOLLOWUPS,
     CombinationPackage,
     FactorSpec,
     OutcomeSpec,
@@ -186,3 +187,17 @@ def test_all_seven_packages_use_reviewed_fields_and_valid_activations() -> None:
 
 def test_housing_combination_spans_second_annual_feedback() -> None:
     assert COMBINATION_PACKAGES["housing_family"].days >= 800
+
+
+def test_interaction_followups_are_unaliased_full_factorials() -> None:
+    assert len(INTERACTION_FOLLOWUPS) == len(COMBINATION_PACKAGES)
+    for package in INTERACTION_FOLLOWUPS.values():
+        assert len(package.factors) == 2
+        arms = fractional_factorial_design(package.factors)
+        assert len(arms) == 4
+        assert all(
+            aliases == (interaction,)
+            for interaction, aliases in interaction_alias_groups(
+                package.factors
+            ).items()
+        )

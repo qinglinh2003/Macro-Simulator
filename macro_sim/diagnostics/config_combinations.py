@@ -523,3 +523,78 @@ COMBINATION_PACKAGES: Mapping[str, CombinationPackage] = {
         ),
     ),
 }
+
+
+def _interaction_followup(
+    package_id: str,
+    title: str,
+    source_package_id: str,
+    fields: tuple[str, str],
+) -> CombinationPackage:
+    source = COMBINATION_PACKAGES[source_package_id]
+    by_field = {factor.field: factor for factor in source.factors}
+    return CombinationPackage(
+        package_id=package_id,
+        title=title,
+        scope=source.scope,
+        activation_scenario=source.activation_scenario,
+        days=source.days,
+        countries=source.countries,
+        factors=tuple(by_field[field] for field in fields),
+        outcomes=source.outcomes,
+    )
+
+
+# Resolution-IV screens identify interaction alias groups, not individual
+# two-factor terms.  These predeclared 2x2 follow-ups isolate the economically
+# important pair from the strongest alias group in each package.
+INTERACTION_FOLLOWUPS: Mapping[str, CombinationPackage] = {
+    "productive_alpha_v": _interaction_followup(
+        "productive_alpha_v",
+        "Capital share and accelerator",
+        "productive_capacity",
+        ("alpha", "v"),
+    ),
+    "labor_search_friction": _interaction_followup(
+        "labor_search_friction",
+        "Search intensity and matching friction",
+        "labor_institutions",
+        ("labor_matching_friction", "job_search_intensity"),
+    ),
+    "credit_interbank_runs": _interaction_followup(
+        "credit_interbank_runs",
+        "Interbank liquidity and run sensitivity",
+        "credit_architecture",
+        ("interbank", "run_sensitivity"),
+    ),
+    "housing_productivity_mortgages": _interaction_followup(
+        "housing_productivity_mortgages",
+        "Builder productivity and mortgage availability",
+        "housing_family",
+        ("builder_productivity", "mortgage_enabled"),
+    ),
+    "energy_household_industry": _interaction_followup(
+        "energy_household_industry",
+        "Household and industrial energy dependence",
+        "energy_dependence",
+        ("energy_hh_share", "energy_intensity"),
+    ),
+    "firm_switch_retool": _interaction_followup(
+        "firm_switch_retool",
+        "Sector switching and retooling loss",
+        "firm_dynamism",
+        ("sector_switching", "switch_retool_loss"),
+    ),
+    "open_migration_remittances": _interaction_followup(
+        "open_migration_remittances",
+        "Migration and remittance intensity",
+        "open_economy",
+        ("migration_rate", "remittance_share"),
+    ),
+}
+
+
+ALL_COMBINATION_PACKAGES: Mapping[str, CombinationPackage] = {
+    **COMBINATION_PACKAGES,
+    **INTERACTION_FOLLOWUPS,
+}

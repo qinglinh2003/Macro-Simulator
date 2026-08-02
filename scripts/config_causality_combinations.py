@@ -16,7 +16,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from macro_sim.diagnostics.config_combinations import (
-    COMBINATION_PACKAGES,
+    ALL_COMBINATION_PACKAGES,
     run_combination_package,
 )
 
@@ -44,7 +44,9 @@ def _source_revision() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--package", required=True, choices=COMBINATION_PACKAGES)
+    parser.add_argument(
+        "--package", required=True, choices=ALL_COMBINATION_PACKAGES
+    )
     parser.add_argument("--seed", type=int, action="append", dest="seeds")
     parser.add_argument("--population", type=int, default=100_000)
     parser.add_argument("--workers", type=int, default=8)
@@ -53,7 +55,7 @@ def main() -> int:
     parser.add_argument("--no-resume", action="store_true")
     arguments = parser.parse_args()
     report = run_combination_package(
-        COMBINATION_PACKAGES[arguments.package],
+        ALL_COMBINATION_PACKAGES[arguments.package],
         seeds=arguments.seeds or [101, 211, 307, 401],
         artifact_dir=arguments.output_dir,
         source_revision=_source_revision(),
@@ -74,4 +76,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
