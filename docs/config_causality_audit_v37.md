@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 reviewed contracts complete for every executable Config field, with module screens complete through the open economy
+Status: P0-P3 complete; every executable Config field has a reviewed contract, all module and package screens are complete, and P4 million-person confirmation is in progress
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -1317,6 +1317,84 @@ silent mechanism. No executable immutable open-economy Config remains unrouted
 or causally silent. The next interaction stage should combine trade friction,
 capital mobility, migration, and peg defense under persistent productivity and
 energy differences, then calibrate ranges against external empirical evidence.
+
+### 8.17 Interaction and package screen
+
+P3 is complete. The accepted screen contains seven predeclared structural
+packages, each evaluated with a regular resolution-IV, 16-arm two-level design,
+four independent paired seeds, 100,000 persons per country, and eight native
+workers. Each package also has a product-reference run for every seed. The
+accepted matrix therefore contains 476 native paths. All paths completed
+without a stability, finite-value, checkpoint, or Config-contract failure.
+
+The resolution-IV design estimates every main effect without contamination
+from a two-factor interaction, but it deliberately aliases two-factor terms.
+The strongest economically interpretable alias in each package was therefore
+registered before inspection as a separate 2x2 full-factorial follow-up. Those
+seven follow-ups add 140 native paths and identify the selected interaction
+without aliases. A first 730-day housing matrix is retained only as a rejected
+artifact: it ended immediately before the second annual affordability update
+and incorrectly made the fertility and leaving-home multipliers look silent.
+The accepted housing matrix spans 800 days and has a regression test preventing
+the horizon from falling below that threshold.
+
+All 46 package factors resolve at least one maintained mechanism or outcome in
+the accepted matrix:
+
+| Package | Resolved factors | Principal high-minus-low effects | Isolated interaction |
+|---|---:|---|---|
+| Productive capacity | 6 / 6 | `A` raises real GDP per capita about 37.8%; `alpha` raises it about 53.0%; a high capital coefficient `v` raises unemployment about 30.4 percentage points and lowers real GDP per capita about 19.6% | high `alpha` buffers the unemployment effect of high `v` by about 15.0 percentage points; the interaction also changes prices and investment |
+| Labor institutions | 7 / 7 | search intensity lowers unemployment about 2.37 percentage points; matching friction raises it about 2.94 points; the tested reservation-markup range lowers participation about 45.5 points | search intensity offsets the unemployment effect of matching friction by about 3.16 percentage points and raises employment and hires |
+| Credit architecture | 7 / 7 | interbank availability and run sensitivity dominate flight and interbank volumes under the common stress state; household credit raises loan principal and new lending | interbank availability strongly amplifies the transmission of run sensitivity to flight volume, bank capital, loan principal, and new lending |
+| Housing and family formation | 7 / 7 | builder productivity raises cumulative construction about 190%; mortgages create the entire purchase-mortgage flow; rent adjustment raises cumulative rent about 69%; fertility and leaving-home elasticities lower their stressed final-window multipliers about 10.9% and 12.7% | productive builders generate about 149 additional mortgage originations when mortgage finance is available beyond the sum of the separate effects |
+| Energy dependence | 6 / 6 | household need and industrial intensity materially raise requested energy; mortality sensitivity adds about 768 deaths in the stressed two-year window; coverage and hoarding change unfilled demand and fuel poverty | joint household and industrial dependence induces additional production, leaving about 733,000 fewer unfilled units and 18.7 percentage points less fuel poverty than a linear sum predicts |
+| Firm dynamism | 6 / 6 | the entry hurdle and response change births; exit hazard and grace duration change exits; switching creates all observed switches and retool destruction | retool loss only operates when switching is enabled; their interaction destroys about 9.97 million capital units, lowers firm profit about 545,000, and lowers mean real output about 3,696 |
+| Open economy | 7 / 7 | trade caps, friction, capital mobility, FX adjustment, migration, remittance intensity, and wage smoothing all resolve on their direct flows; migration and remittance shares have the largest flow effects | high migration and high remittance intensity are complementary, adding about 8.72 million remittances beyond the additive prediction |
+
+Several outcomes are intentionally not accepted as evidence of a universally
+plausible magnitude. Capability switches naturally produce +/-200% relative
+effects when the low arm removes a flow. The credit package is a run-pressure
+scenario, not a neutral forecast. Conversely, zero bank failures in that
+one-year stress matrix means the rare failure tail still requires its dedicated
+many-seed experiment; large deposit flight is not a substitute for observing a
+failure.
+
+The package screen also sharpens the gameplay disposition:
+
+- `alpha`, `v`, `reservation_markup`, and `suspension_timer` are highly salient
+  but the tested ranges are too wide for an ordinary start-menu slider. They
+  need narrower presets or expert-only exposure, not additional amplification.
+- `run_sensitivity`, interbank capability, energy demand intensity, and the
+  housing affordability elasticities are regime-dependent structural choices.
+  Their descriptions must state the activation state and delay rather than
+  promising a constant marginal effect.
+- no package factor is now classified as mechanically or observationally
+  silent. Weak neutral-baseline fields retain their conditional contract instead
+  of being made artificially stronger.
+- large interactions reject one-knob-at-a-time balance decisions. Product
+  presets must be validated as packages, especially capital formation, labor
+  search, bank liquidity, housing finance, energy dependence, firm switching,
+  and migration/remittances.
+
+### 8.18 External calibration crosswalk
+
+Structural coefficients are not calibrated by forcing them to equal an
+observable national statistic. Calibration instead targets the maintained
+model outcomes generated by a package and uses common statistical definitions:
+
+| Model family | External target and definition |
+|---|---|
+| Production and investment | World Bank WDI gross capital formation as a share of GDP, sourced from national accounts, for investment and capital-accumulation envelopes ([metadata](https://databank.worldbank.org/metadataglossary/world-development-indicators/series/NE.GDI.TOTL.ZS)) |
+| Labor | ILOSTAT labor-force participation, employment, unemployment, and underemployment definitions; unemployment alone is not treated as welfare ([methods](https://ilostat.ilo.org/methods/concepts-and-definitions/description-labour-force-statistics/)) |
+| Credit | BIS household and non-financial-corporation core debt, split by borrower and expressed relative to GDP; total credit and domestic-bank credit are kept distinct ([methodology](https://data.bis.org/topics/TOTAL_CREDIT?m=6_380_66)) |
+| Housing | OECD nominal and real house prices plus price-to-income and price-to-rent ratios; price-to-income is the affordability anchor rather than the raw simulated house-price unit ([definition](https://www.oecd.org/en/data/indicators/housing-prices.html)) |
+| Energy | IEA primary-energy intensity in energy per unit of PPP GDP, supplemented by the engine's physical shortage and deprivation measures ([definition](https://www.iea.org/reports/sdg7-data-and-projections/energy-intensity)) |
+| Migration and remittances | World Bank bilateral migration/remittance estimates, with explicit undercounting and informal-flow caveats, plus IMF balance-of-payments concepts for external flows ([methodology](https://blogs.worldbank.org/en/peoplemove/bilateral-remittance-matrix-new), [IMF EBA](https://www.imf.org/en/publications/wp/issues/2023/03/02/2022-update-of-the-external-balance-assessment-methodology-530509)) |
+
+These sources define comparable outcome envelopes. They do not justify a single
+global default: country profiles should draw internally coherent targets from
+the same period and institutional regime. The million-person confirmation stage
+tests finite-size robustness before any final range is frozen.
 
 ## 9. Execution gates
 
