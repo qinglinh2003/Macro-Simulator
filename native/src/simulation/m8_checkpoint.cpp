@@ -163,6 +163,7 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
 #define M8_ENERGY_METRIC_FIELDS(X)                                                     \
     X(production)                                                                      \
     X(capacity)                                                                        \
+    X(producer_capital)                                                                \
     X(utilization)                                                                     \
     X(opening_supply)                                                                  \
     X(requested_total)                                                                 \

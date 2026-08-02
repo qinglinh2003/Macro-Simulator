@@ -48,6 +48,17 @@ def test_config_treatment_changes_only_the_target_economy() -> None:
     assert treated[1].lambda_y == baseline[1].lambda_y
 
 
+def test_household_energy_capability_closes_dependent_mortality_channel() -> None:
+    baseline = population_scaled_configs(
+        population=100_000, days=90, seed=20
+    )
+    treated = apply_config_treatment(
+        baseline, field="energy_household", value=False
+    )
+    assert treated[0].energy_household is False
+    assert treated[0].energy_mortality_gamma == pytest.approx(0.0)
+
+
 def test_metric_reduction_and_paired_effect_preserve_pairing() -> None:
     summary = summarize_metric_series(
         [
@@ -671,3 +682,73 @@ def test_deprivation_activation_preserves_the_audited_measurement_field(
         assert getattr(rules, audited_field) is expected
     else:
         assert getattr(rules, audited_field) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("scenario", "field", "value", "shared_field", "shared_value"),
+    [
+        (
+            "energy_inventory_gap",
+            "energy_gap_close",
+            0.20,
+            "downstream_coverage_days",
+            30.0,
+        ),
+        (
+            "energy_rising_price",
+            "energy_hoarding_beta",
+            5.0,
+            "producer_productivity",
+            0.50,
+        ),
+        (
+            "energy_mortality_pressure",
+            "energy_mortality_gamma",
+            4.0,
+            "fuel_poverty_mortality_cap",
+            5.0,
+        ),
+        (
+            "energy_mortality_cap_binding",
+            "energy_mortality_mult_hi",
+            2.0,
+            "fuel_poverty_mortality_gamma",
+            10.0,
+        ),
+    ],
+)
+def test_energy_activation_preserves_the_audited_field(
+    scenario: str,
+    field: str,
+    value: float,
+    shared_field: str,
+    shared_value: float,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=1095, seed=59
+    )
+    native_spec = native_treatment_spec(baseline, field=field, value=value)
+    rules = native_spec.economies[0].energy_rules
+    expected = getattr(
+        rules,
+        {
+            "energy_gap_close": "downstream_gap_close",
+            "energy_hoarding_beta": "hoarding_beta",
+            "energy_mortality_gamma": "fuel_poverty_mortality_gamma",
+            "energy_mortality_mult_hi": "fuel_poverty_mortality_cap",
+        }[field],
+    )
+
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+
+    rules = native_spec.economies[0].energy_rules
+    assert getattr(
+        rules,
+        {
+            "energy_gap_close": "downstream_gap_close",
+            "energy_hoarding_beta": "hoarding_beta",
+            "energy_mortality_gamma": "fuel_poverty_mortality_gamma",
+            "energy_mortality_mult_hi": "fuel_poverty_mortality_cap",
+        }[field],
+    ) == pytest.approx(expected)
+    assert getattr(rules, shared_field) == pytest.approx(shared_value)

@@ -245,6 +245,7 @@ class M7TickScratch final {
     std::vector<JobId> roster_buffer_;
     double external_leave_home_multiplier_{1.0};
     double external_fertility_multiplier_{1.0};
+    double external_mortality_multiplier_{1.0};
     std::uint64_t next_event_id_{1};
     std::uint64_t population_rng_counter_{0};
     M7Metrics working_metrics_{};

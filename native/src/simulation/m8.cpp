@@ -656,6 +656,10 @@ class M8Extension final : public M7TickExtension {
             runtime_.housing_rules.enabled
                 ? runtime_.housing_affordability.fertility_multiplier
                 : 1.0;
+        population.external_mortality_multiplier_ =
+            runtime_.energy_rules.enabled
+                ? runtime_.last_metrics.energy.fuel_poverty_mortality_multiplier
+                : 1.0;
         scratch_.working_metrics_ = M8Metrics{};
         scratch_.working_metrics_.housing.house_price = scratch_.house_price_;
         scratch_.working_metrics_.housing.rent_level = scratch_.rent_level_;
@@ -2614,6 +2618,7 @@ class M8Extension final : public M7TickExtension {
         double private_supply = 0.0;
         double production = 0.0;
         double capacity_total = 0.0;
+        double producer_capital = 0.0;
         for (auto &producer : scratch_.energy_producers_) {
             if (!producer.active) {
                 continue;
@@ -2655,10 +2660,12 @@ class M8Extension final : public M7TickExtension {
             });
             production += produced;
             capacity_total += capacity;
+            producer_capital += firm->physical_capital.value();
             private_supply += producer.inventory;
         }
         scratch_.working_metrics_.energy.production = production;
         scratch_.working_metrics_.energy.capacity = capacity_total;
+        scratch_.working_metrics_.energy.producer_capital = producer_capital;
         scratch_.working_metrics_.energy.utilization =
             capacity_total > kEconomicEpsilon ? production / capacity_total : 0.0;
         scratch_.working_metrics_.energy.opening_supply = private_supply;

@@ -1147,6 +1147,85 @@ module is disconnected. Conversely, the audit does not hide the missing
 housing wealth-to-consumption route: it remains explicit native backlog work
 and cannot be presented as a weak elasticity.
 
+### 8.15 Energy production, inventories, and deprivation screen
+
+All twelve immutable energy Config fields have an executable native route and
+now have reviewed causal contracts. Eight are identified on the neutral
+product baseline; inventory-gap and price-trend controls use shared 90-day
+activations; and the two fuel-poverty mortality controls use a shared two-year
+activation so that the calibration period ends before the hazard response is
+estimated. The final screens use four paired seeds, 100,000 persons, and eight
+native workers. The direct block executes 60 worlds, the short activated block
+24 worlds, and the mortality block 24 worlds. Every declared check passes or
+passes the predeclared heterogeneous-path criterion.
+
+The screen found one real causal defect and one observability gap:
+
+- `energy_mortality_gamma` and `energy_mortality_mult_hi` previously changed
+  the published fuel-poverty mortality multiplier but never changed a person's
+  death draw. The M8 signal now enters the next day's M7 age-specific death
+  hazard. A native extension-seam regression proves that the same population
+  and random stream realizes more deaths under a larger external multiplier.
+  Disabling household energy also closes this dependent mortality channel, so
+  the Config capability cascade always remains valid.
+- `kappa_E` changed the amount of physical capital needed by energy producers,
+  but the maintained metrics exposed only capacity, which is deliberately
+  close to invariant because genesis rescales capital against capital
+  productivity. The native analytic catalog now publishes
+  `metric.source.m8.energy.producer_capital`. Raising `kappa_E` from 1.05 to
+  1.60 reduces sector capital about 34.35%; lowering it to 0.60 raises sector
+  capital about 75.04%. Its aggregate investment spillover is smaller and
+  seed-dependent, as expected for a sector that is a minority of total firms.
+
+The principal causal results are:
+
+- Energy labor productivity is strongly live. Lowering `a_E` to 0.70 raises
+  energy-sector labor requirements about 48.2% and changes production about
+  -5.1%; raising it to 1.40 lowers labor requirements about 23.2% and changes
+  production about +2.1%. Production is demand-cleared and therefore treated
+  as a nonzero equilibrium response rather than forced to be monotonic.
+- The downstream inventory target has the intended stock meaning. Moving
+  `energy_coverage_ticks` from 14 to 3/30 changes observed coverage about
+  -36.6%/+59.9%, with industry orders moving in the same direction during the
+  accumulation window. Disabling the parent energy capability removes
+  production and industry energy orders exactly.
+- Household and industrial demand scales are material and transparent.
+  Moving the household budget share from 7% to 3%/14% changes requested units
+  about -57.1%/+100% and cumulative spending about -57.2%/+87.5%; disabling
+  household energy removes both flows. Moving industrial energy intensity
+  from 0.05 to 0.01/0.12 changes first-window industry orders about
+  -79.9%/+138.1% and cumulative input spending about -79.2%/+120.4%.
+- `energy_util0` is not merely an opening seed: the producer planning rule
+  reuses it as desired utilization. Moving it from 0.85 to 0.55/1.00 changes
+  first-window capacity about +54.6%/-14.9% and utilization about
+  -35.6%/+11.7%. It belongs among structural calibration controls, not among
+  disposable genesis noise.
+- Inventory adjustment is nonlinear. Under a shared stock-gap activation,
+  both a nearly frozen 0.001 gap-close speed and an aggressive 0.20 speed raise
+  first-window industry orders relative to the calibrated 0.02 value, while
+  reducing production about 2.0% and 31.2%. The baseline sits near a local
+  balance between replenishment, financing, and production overshoot; this
+  control is therefore judged by a nonzero dynamic contract rather than a
+  false larger-is-better rule.
+- Hoarding behaves conditionally as designed. During a shared rising-price
+  episode, setting `energy_hoarding_beta` to zero cuts first-window industry
+  orders about 6.9% and unmet demand about 14.1%; raising it from one to five
+  increases them about 29.1% and 72.9%. It is silent in a flat-price regime by
+  economic construction, not because the route is missing.
+- The repaired mortality channel is quantitatively material. Under common
+  persistent fuel poverty, removing the elasticity lowers two-year deaths by
+  about 12.6%, while raising it from two to four raises deaths about 12.0%.
+  Tightening the mortality cap from 1.3 to 1.0 lowers deaths about 11.7%; a cap
+  of two raises them about 25.9%. All death and multiplier confidence intervals
+  exclude zero across the four paired seeds.
+
+The energy module therefore has no remaining unrouted or observationally
+silent immutable Config field. The next interaction stage should estimate the
+joint response of household need, industrial intensity, inventory coverage,
+and hoarding under supply loss; it should also calibrate the mortality channel
+against empirical excess-mortality evidence before exposing wide ranges in a
+player-facing setup screen.
+
 ## 9. Execution gates
 
 ### P0 - Static ownership and routing

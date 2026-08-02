@@ -1258,6 +1258,7 @@ class M7Extension final : public M6TickExtension {
         scratch_.retired_households_.clear();
         scratch_.external_leave_home_multiplier_ = 1.0;
         scratch_.external_fertility_multiplier_ = 1.0;
+        scratch_.external_mortality_multiplier_ = 1.0;
         scratch_.next_event_id_ = runtime_.next_event_id;
         scratch_.population_rng_counter_ = runtime_.population_rng_counter;
         scratch_.working_metrics_ = M7Metrics{};
@@ -1269,6 +1270,14 @@ class M7Extension final : public M6TickExtension {
                           "M7 calendar day exceeds storage range");
         }
         const auto calendar_day = static_cast<std::int32_t>(day);
+        if (extension_ != nullptr) {
+            const auto status = extension_->prepare_tick(
+                state, real_runtime, real, monetary_runtime, monetary,
+                financial_runtime, financial, runtime_, scratch_, tick, rng);
+            if (!status.ok()) {
+                return status;
+            }
+        }
         for (const auto person_id : scratch_.opening_alive_) {
             const auto *person = scratch_.persons_.get(person_id);
             if (person == nullptr || !person->alive) {
@@ -1287,8 +1296,13 @@ class M7Extension final : public M6TickExtension {
                     if (!survival.ok()) {
                         return survival.status();
                     }
+                    const double base_mortality = 1.0 - *survival.get_if();
+                    const double adjusted_survival = std::clamp(
+                        1.0 - scratch_.external_mortality_multiplier_ *
+                                  base_mortality,
+                        0.0, 1.0);
                     dies = unit_draw(state.seed, person_id.value(), calendar_day,
-                                     kMortalityStream) > *survival.get_if();
+                                     kMortalityStream) > adjusted_survival;
                 }
             }
             if (dies) {
@@ -1314,11 +1328,6 @@ class M7Extension final : public M6TickExtension {
             scratch_.persons_.alive(*options_.force_death)) {
             return Status(ErrorCode::contract_violation,
                           "forced death target was not settled");
-        }
-        if (extension_ != nullptr) {
-            return extension_->prepare_tick(state, real_runtime, real, monetary_runtime,
-                                            monetary, financial_runtime, financial,
-                                            runtime_, scratch_, tick, rng);
         }
         return Status::success();
     }
@@ -2642,7 +2651,9 @@ class M7Extension final : public M6TickExtension {
         if (status.ok() && (!std::isfinite(scratch_.external_leave_home_multiplier_) ||
                             scratch_.external_leave_home_multiplier_ <= 0.0 ||
                             !std::isfinite(scratch_.external_fertility_multiplier_) ||
-                            scratch_.external_fertility_multiplier_ <= 0.0)) {
+                            scratch_.external_fertility_multiplier_ <= 0.0 ||
+                            !std::isfinite(scratch_.external_mortality_multiplier_) ||
+                            scratch_.external_mortality_multiplier_ <= 0.0)) {
             status = Status(ErrorCode::invariant_violation,
                             "M7 external demographic multiplier is invalid");
         }

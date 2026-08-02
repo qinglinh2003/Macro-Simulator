@@ -70,8 +70,8 @@ struct Harness final {
     Tick tick{};
 };
 
-[[nodiscard]] Harness build() {
-    auto initialization = build_m7_genesis(spec());
+[[nodiscard]] Harness build(M7SimulationSpec input_spec = spec()) {
+    auto initialization = build_m7_genesis(input_spec);
     assert(initialization.ok());
     auto value = std::move(*initialization.get_if());
     Harness result{
@@ -95,13 +95,15 @@ struct Harness final {
 
 class ProbeExtension final : public M7TickExtension {
   public:
-    explicit ProbeExtension(std::optional<std::size_t> fail_at = {})
-        : fail_at_(fail_at) {}
+    explicit ProbeExtension(std::optional<std::size_t> fail_at = {},
+                            double mortality_multiplier = 1.0)
+        : fail_at_(fail_at), mortality_multiplier_(mortality_multiplier) {}
 
     Status prepare_tick(const RootState &, M4Runtime &, M4TickScratch &,
                         M5Runtime &, M5TickScratch &, M6Runtime &,
-                        M6TickScratch &, M7Runtime &, M7TickScratch &, Tick,
+                        M6TickScratch &, M7Runtime &, M7TickScratch &scratch, Tick,
                         PhiloxRng &) override {
+        scratch.external_mortality_multiplier_ = mortality_multiplier_;
         return visit(0);
     }
 
@@ -153,6 +155,7 @@ class ProbeExtension final : public M7TickExtension {
     }
 
     std::optional<std::size_t> fail_at_;
+    double mortality_multiplier_{1.0};
 };
 
 [[nodiscard]] std::vector<std::uint8_t> checkpoint(const Harness &harness) {
@@ -215,11 +218,35 @@ void test_noop_extension_preserves_m7() {
     assert(extension.phases.size() == 20 * 6);
 }
 
+void test_extension_mortality_multiplier_changes_realized_deaths() {
+    auto mortality_spec = spec();
+    mortality_spec.population.initial_persons = 5'000;
+    mortality_spec.rules.mortality = true;
+    mortality_spec.rules.vital_rates.makeham_a = 0.05;
+    mortality_spec.rules.vital_rates.gompertz_b = 0.0;
+    mortality_spec.rules.vital_rates.infant_extra = 0.0;
+    auto control = build(mortality_spec);
+    auto treatment = build(mortality_spec);
+    ProbeExtension neutral;
+    ProbeExtension amplified({}, 3.0);
+    const auto control_result = advance_extended(control, 365, neutral);
+    const auto treatment_result = advance_extended(treatment, 365, amplified);
+    assert(control_result.ok());
+    assert(treatment_result.ok());
+    const auto control_deaths = mortality_spec.population.initial_persons -
+                                control.runtime.last_metrics.population;
+    const auto treatment_deaths = mortality_spec.population.initial_persons -
+                                  treatment.runtime.last_metrics.population;
+    assert(control_deaths > 0);
+    assert(treatment_deaths > control_deaths);
+}
+
 } // namespace
 
 int main() {
     test_phase_order();
     test_failure_is_atomic_at_every_fallible_boundary();
     test_noop_extension_preserves_m7();
+    test_extension_mortality_multiplier_changes_realized_deaths();
     return 0;
 }

@@ -866,6 +866,7 @@ typedef struct macro_sim_m8_energy_metrics {
     double deprivation_acute_stock;
     double deprivation_chronic_stock;
     double deprivation_max_spell_days;
+    double producer_capital;
 } macro_sim_m8_energy_metrics;
 
 typedef struct macro_sim_m8_housing_metrics {

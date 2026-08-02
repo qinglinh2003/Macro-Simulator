@@ -750,6 +750,7 @@ void fill_m8_metrics(macro_sim_m8_metrics &output,
     MACRO_SIM_FILL_M8_ENERGY(deprivation_acute_stock);
     MACRO_SIM_FILL_M8_ENERGY(deprivation_chronic_stock);
     MACRO_SIM_FILL_M8_ENERGY(deprivation_max_spell_days);
+    MACRO_SIM_FILL_M8_ENERGY(producer_capital);
 #undef MACRO_SIM_FILL_M8_ENERGY
     output.housing.reserved = 0;
 #define MACRO_SIM_FILL_M8_HOUSING(field) output.housing.field = value.housing.field

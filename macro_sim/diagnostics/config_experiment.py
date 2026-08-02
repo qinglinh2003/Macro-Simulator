@@ -709,6 +709,29 @@ def apply_native_activation_scenario(
         financial_rules.chartist_weight = 20.0
     elif scenario == "deprivation_measurement_active":
         energy_rules.deprivation_burnin_years = 0
+    elif scenario == "energy_inventory_gap":
+        rules.initial_consumption_inventory = 0.0
+        rules.initial_capital_inventory = 0.0
+        rules.demand_adjustment = 0.10
+        energy_rules.downstream_coverage_days = 30.0
+    elif scenario == "energy_rising_price":
+        rules.initial_consumption_inventory = 0.0
+        rules.initial_capital_inventory = 0.0
+        energy_rules.producer_productivity = 0.50
+        energy_rules.household_need = 0.12
+        energy_rules.downstream_intensity = 0.10
+    elif scenario == "energy_mortality_pressure":
+        energy_rules.deprivation_burnin_years = 0
+        energy_rules.household_need = 0.15
+        energy_rules.downstream_intensity = 0.10
+        energy_rules.producer_productivity = 0.50
+        energy_rules.fuel_poverty_mortality_cap = 5.0
+    elif scenario == "energy_mortality_cap_binding":
+        energy_rules.deprivation_burnin_years = 0
+        energy_rules.household_need = 0.15
+        energy_rules.downstream_intensity = 0.10
+        energy_rules.producer_productivity = 0.50
+        energy_rules.fuel_poverty_mortality_gamma = 10.0
     elif scenario == "housing_shortage":
         housing_rules.initial_dwellings_per_household = 0.80
     elif scenario == "housing_liquid_market":

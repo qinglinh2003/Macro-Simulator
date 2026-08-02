@@ -173,6 +173,7 @@ void test_energy_day_conserves_and_constrains() {
     assert(harness.tick == Tick(1));
     const auto &energy = result.get_if()->metrics.energy;
     assert(energy.production > 0.0);
+    assert(energy.producer_capital > 0.0);
     assert(energy.sold > 0.0);
     assert(energy.household_units > 0.0);
     assert(energy.industry_units > 0.0);
@@ -554,6 +555,25 @@ void test_validation_rejects_invalid_contracts() {
     assert(!validate_m8_spec(value).ok());
 }
 
+void test_energy_mortality_signal_enters_population_hazard() {
+    auto value = spec();
+    value.domestic_economy.population.initial_persons = 5'000;
+    value.domestic_economy.rules.mortality = true;
+    value.domestic_economy.rules.vital_rates.makeham_a = 0.50;
+    value.domestic_economy.rules.vital_rates.gompertz_b = 0.0;
+    value.domestic_economy.rules.vital_rates.infant_extra = 0.0;
+    auto control = build(value);
+    auto treatment = build(value);
+    control.runtime.last_metrics.energy.fuel_poverty_mortality_multiplier = 1.0;
+    treatment.runtime.last_metrics.energy.fuel_poverty_mortality_multiplier = 100.0;
+    const auto control_result = advance(control, 1);
+    const auto treatment_result = advance(treatment, 1);
+    assert(control_result.ok());
+    assert(treatment_result.ok());
+    assert(treatment_result.get_if()->metrics.economy.deaths >
+           control_result.get_if()->metrics.economy.deaths);
+}
+
 } // namespace
 
 int main() {
@@ -571,5 +591,6 @@ int main() {
     test_all_fallible_boundaries_are_atomic();
     test_batch_and_split_are_exact();
     test_validation_rejects_invalid_contracts();
+    test_energy_mortality_signal_enters_population_hazard();
     return 0;
 }

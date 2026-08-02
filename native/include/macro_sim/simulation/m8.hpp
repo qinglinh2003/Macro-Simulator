@@ -149,6 +149,7 @@ struct DeprivationState final {
 struct EnergyMetrics final {
     double production{0.0};
     double capacity{0.0};
+    double producer_capital{0.0};
     double utilization{0.0};
     double opening_supply{0.0};
     double requested_total{0.0};

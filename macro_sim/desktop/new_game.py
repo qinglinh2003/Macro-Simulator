@@ -308,6 +308,9 @@ CAPABILITY_DISABLE_CASCADE: dict[str, dict[str, Any]] = {
         "soe_price_at_cost": False,
         "energy_mortality_gamma": 0.0,
     },
+    "energy_household": {
+        "energy_mortality_gamma": 0.0,
+    },
     "per_firm_equity": {
         "equity_finance": False,
         "margin_credit": False,

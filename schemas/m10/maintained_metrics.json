@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 228,
+    "native_stage_sources": 229,
     "public_sources": 41,
-    "total": 452
+    "total": 453
   },
   "metrics": [
     {
@@ -2715,6 +2715,15 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "energy_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.energy.producer_capital",
+      "parity_rule": "simulation::EnergyMetrics::producer_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units"
     },
     {
       "aggregation": "last",

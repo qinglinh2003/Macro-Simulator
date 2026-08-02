@@ -803,6 +803,7 @@ m8_energy_metrics_to_python(const macro_sim::simulation::EnergyMetrics &metrics)
 #define MACRO_SIM_M8_ENERGY_METRIC(field) output[#field] = metrics.field
     MACRO_SIM_M8_ENERGY_METRIC(production);
     MACRO_SIM_M8_ENERGY_METRIC(capacity);
+    MACRO_SIM_M8_ENERGY_METRIC(producer_capital);
     MACRO_SIM_M8_ENERGY_METRIC(utilization);
     MACRO_SIM_M8_ENERGY_METRIC(opening_supply);
     MACRO_SIM_M8_ENERGY_METRIC(requested_total);

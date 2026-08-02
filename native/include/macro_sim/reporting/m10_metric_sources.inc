@@ -156,6 +156,7 @@ MACRO_SIM_M7_SOURCE(leaving_home_events, "events_per_tick")
 /* EnergyMetrics */
 MACRO_SIM_M8_ENERGY_SOURCE(production, "energy_units_per_tick")
 MACRO_SIM_M8_ENERGY_SOURCE(capacity, "energy_units_per_tick")
+MACRO_SIM_M8_ENERGY_SOURCE(producer_capital, "capital_units")
 MACRO_SIM_M8_ENERGY_SOURCE(utilization, "share")
 MACRO_SIM_M8_ENERGY_SOURCE(opening_supply, "energy_units")
 MACRO_SIM_M8_ENERGY_SOURCE(requested_total, "energy_units_per_tick")

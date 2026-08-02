@@ -225,6 +225,41 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.real_output",
         "metric.economy.unemployment_rate",
     ),
+    "energy": (
+        "metric.source.m8.energy.production",
+        "metric.source.m8.energy.capacity",
+        "metric.source.m8.energy.producer_capital",
+        "metric.source.m8.energy.utilization",
+        "metric.source.m8.energy.opening_supply",
+        "metric.source.m8.energy.requested_total",
+        "metric.source.m8.energy.requested_households",
+        "metric.source.m8.energy.requested_industry",
+        "metric.source.m8.energy.sold",
+        "metric.source.m8.energy.unfilled",
+        "metric.source.m8.energy.transaction_price",
+        "metric.source.m8.energy.household_units",
+        "metric.source.m8.energy.household_spending",
+        "metric.source.m8.energy.industry_units",
+        "metric.source.m8.energy.industry_spending",
+        "metric.source.m8.energy.fuel_poverty_share",
+        "metric.source.m8.energy.fuel_poverty_mortality_multiplier",
+        "metric.source.m8.energy.deprivation_below_100_share",
+        "metric.source.m8.energy.deprivation_below_60_share",
+        "metric.source.m8.energy.deprivation_below_30_share",
+        "metric.source.m8.energy.deprivation_acute_stock",
+        "metric.source.m8.energy.deprivation_chronic_stock",
+        "metric.economy.energy_coverage_mean",
+        "metric.economy.energy_stock_total",
+        "metric.economy.labor_sector_energy_fte",
+        "metric.economy.sector_energy_sales",
+        "metric.source.m4.fixed_capital_formation_real",
+        "metric.source.m4.aggregate_capital",
+        "metric.source.m7.deaths",
+        "metric.economy.na.household_consumption_real",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+        "metric.economy.price_index",
+    ),
     "open_economy": (
         "metric.source.m9.country.exports_volume",
         "metric.source.m9.country.imports_volume",
@@ -1471,6 +1506,148 @@ def _housing_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _energy_contracts() -> Mapping[str, Mapping[str, Any]]:
+    production = "metric.source.m8.energy.production"
+    capacity = "metric.source.m8.energy.capacity"
+    producer_capital = "metric.source.m8.energy.producer_capital"
+    utilization = "metric.source.m8.energy.utilization"
+    requested_households = "metric.source.m8.energy.requested_households"
+    requested_industry = "metric.source.m8.energy.requested_industry"
+    household_spending = "metric.source.m8.energy.household_spending"
+    industry_spending = "metric.source.m8.energy.industry_spending"
+    unfilled = "metric.source.m8.energy.unfilled"
+    mortality_multiplier = (
+        "metric.source.m8.energy.fuel_poverty_mortality_multiplier"
+    )
+    coverage = "metric.economy.energy_coverage_mean"
+    energy_labor = "metric.economy.labor_sector_energy_fte"
+    investment = "metric.source.m4.fixed_capital_formation_real"
+    deaths = "metric.source.m7.deaths"
+    return {
+        "config.case-a_e": {
+            "status": "screening_ready",
+            "values": (0.70, 1.40),
+            "directions": {energy_labor: "decrease", production: "nonzero"},
+            "rationale": "Energy-sector labor productivity determines how much output each effective worker can produce. Higher productivity should reduce the labor required for a given production plan and relax labor-side supply constraints; the realized production response remains a market-clearing outcome.",
+        },
+        "config.case-kappa_e": {
+            "status": "screening_ready",
+            "values": (0.60, 1.60),
+            "directions": {
+                producer_capital: "decrease",
+                investment: "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "Energy capital productivity maps installed physical capital into capacity. A higher coefficient should require less physical investment to support a given capacity path, while demand and producer adjustment determine the equilibrium capacity response.",
+        },
+        "config.energy_coverage_ticks": {
+            "status": "screening_ready",
+            "values": (3, 30),
+            "directions": {coverage: "increase", requested_industry: "increase"},
+            "statistics": {requested_industry: "first_window_mean"},
+            "rationale": "The downstream coverage target is the number of production days that firms aim to hold as energy inputs. A larger buffer should raise desired industry purchases and eventually increase observed input coverage, especially while stocks are being accumulated.",
+        },
+        "config.energy_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {production: "decrease", requested_industry: "decrease"},
+            "rationale": "The parent capability removes the explicit energy-producing sector, energy input orders, household energy purchases, and deprivation accounting. It is a structural model switch rather than an ordinary policy lever.",
+        },
+        "config.energy_gap_close": {
+            "status": "activation_scenario_required",
+            "values": (0.001, 0.20),
+            "activation": "energy_inventory_gap",
+            "directions": {requested_industry: "nonzero", production: "nonzero"},
+            "statistics": {
+                requested_industry: "first_window_mean",
+                production: "first_window_mean",
+            },
+            "rationale": "The gap-closing speed determines how aggressively downstream firms and producers rebuild energy stocks toward their targets. Under a shared inventory disturbance it must change both input orders and replenishment production, but a larger coefficient can either close shortages faster or create overshoot and financing pressure, so the equilibrium level sign is not imposed.",
+        },
+        "config.energy_hh_share": {
+            "status": "screening_ready",
+            "values": (0.03, 0.14),
+            "directions": {
+                requested_households: "increase",
+                household_spending: "increase",
+            },
+            "statistics": {
+                requested_households: "first_window_mean",
+                household_spending: "cumulative",
+            },
+            "rationale": "This Config value is the representative household energy budget share. The native bridge converts it into physical need at the opening wage and energy price, so a larger share should raise household energy orders and spending before affordability and rationing feedbacks.",
+        },
+        "config.energy_hoarding_beta": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 5.0),
+            "activation": "energy_rising_price",
+            "directions": {requested_industry: "increase", unfilled: "nonzero"},
+            "statistics": {
+                requested_industry: "first_window_mean",
+                unfilled: "first_window_mean",
+            },
+            "rationale": "The hoarding coefficient amplifies firms' desired coverage only when the current energy price exceeds its slow reference. Under a shared rising-price episode, a larger coefficient should raise precautionary industry orders and can intensify unmet demand.",
+        },
+        "config.energy_household": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {
+                requested_households: "decrease",
+                household_spending: "decrease",
+            },
+            "statistics": {household_spending: "cumulative"},
+            "rationale": "This capability decides whether households directly purchase the explicit energy good. Disabling it should eliminate household energy orders and payments while leaving industrial energy use active.",
+        },
+        "config.energy_intensity": {
+            "status": "screening_ready",
+            "values": (0.01, 0.12),
+            "directions": {
+                requested_industry: "increase",
+                industry_spending: "increase",
+            },
+            "statistics": {
+                requested_industry: "first_window_mean",
+                industry_spending: "cumulative",
+            },
+            "rationale": "Energy intensity is the physical energy input required per unit of planned downstream production. Raising it should increase firms' energy orders and input expenditure, with output and employment effects determined by supply availability and financing.",
+        },
+        "config.energy_mortality_gamma": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 4.0),
+            "activation": "energy_mortality_pressure",
+            "horizon_days": 730,
+            "directions": {mortality_multiplier: "increase", deaths: "increase"},
+            "statistics": {
+                mortality_multiplier: "last_window_mean",
+                deaths: "cumulative",
+            },
+            "rationale": "This elasticity translates the share of people receiving less than the fuel-poverty energy threshold into an excess mortality hazard. Under a common persistent energy-access shortfall, a larger elasticity should raise both the published hazard multiplier and realized deaths, subject to the safety cap.",
+        },
+        "config.energy_mortality_mult_hi": {
+            "status": "activation_scenario_required",
+            "values": (1.0, 2.0),
+            "activation": "energy_mortality_cap_binding",
+            "horizon_days": 730,
+            "directions": {mortality_multiplier: "increase", deaths: "increase"},
+            "statistics": {
+                mortality_multiplier: "last_window_mean",
+                deaths: "cumulative",
+            },
+            "rationale": "The mortality ceiling limits how strongly fuel poverty can amplify ordinary age-specific death hazards. When a shared energy crisis makes the unconstrained multiplier exceed the baseline cap, relaxing the ceiling should raise the effective hazard and cumulative deaths.",
+        },
+        "config.energy_util0": {
+            "status": "screening_ready",
+            "values": (0.55, 1.0),
+            "directions": {utilization: "increase", capacity: "decrease"},
+            "statistics": {
+                utilization: "first_window_mean",
+                capacity: "first_window_mean",
+            },
+            "rationale": "Despite its legacy name, this value is reused as the producer's desired capacity-utilization target, not merely as an opening seed. A higher target should support the same planned supply with less reserve capacity and therefore raise realized utilization while lowering required capacity in the initial adjustment window.",
+        },
+    }
+
+
 def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
     household_bonds = "metric.source.m6.household_bond_market_value"
     bank_bonds = "metric.source.m6.bank_bond_market_value"
@@ -1658,6 +1835,7 @@ CURATED_CONTRACTS = {
     **_banking_contracts(),
     **_government_contracts(),
     **_housing_contracts(),
+    **_energy_contracts(),
     **_securities_contracts(),
 }
 
