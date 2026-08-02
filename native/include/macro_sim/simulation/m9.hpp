@@ -228,6 +228,7 @@ struct CountryExternalMetrics final {
     double remittances_received{0.0};
     double remittances_sent{0.0};
     double remittance_tax_revenue{0.0};
+    double fx_mutualization_paid{0.0};
     double capital_destroyed{0.0};
     std::uint64_t active_shocks{0};
 
@@ -429,6 +430,7 @@ class M9World final {
     std::vector<ShockEvent> shock_events_;
     std::vector<TradeReservation> trade_reservations_;
     std::vector<double> smoothed_real_wages_;
+    std::vector<double> conversion_volume_;
     double dealer_valuation_{0.0};
     std::uint64_t event_counter_{0};
     std::uint64_t policy_generation_{0};

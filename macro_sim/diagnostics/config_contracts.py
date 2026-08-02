@@ -49,6 +49,7 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m6.sector_switches",
         "metric.source.m6.sector_retool_capital",
         "metric.source.m4.firm_profit",
+        "metric.source.m4.dividends_paid",
         "metric.economy.avg_markup",
         "metric.economy.firm_size_gini_output",
         "metric.economy.real_output",
@@ -261,14 +262,34 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.price_index",
     ),
     "open_economy": (
-        "metric.source.m9.country.exports_volume",
-        "metric.source.m9.country.imports_volume",
-        "metric.source.m9.country.current_account",
         "metric.source.m9.country.exchange_rate",
-        "metric.source.m9.country.net_foreign_assets",
+        "metric.source.m9.country.imports_value",
+        "metric.source.m9.country.imports_volume",
+        "metric.source.m9.country.exports_value",
+        "metric.source.m9.country.exports_volume",
+        "metric.source.m9.country.iceberg_loss",
+        "metric.source.m9.country.current_account",
         "metric.source.m9.country.capital_flow",
+        "metric.source.m9.country.net_foreign_assets",
+        "metric.source.m9.country.factor_income_accrued",
+        "metric.source.m9.country.factor_income_cash",
+        "metric.source.m9.country.factor_income_arrears",
+        "metric.source.m9.country.peg_reserves",
+        "metric.source.m9.country.migrant_stock_abroad",
         "metric.source.m9.country.migrant_stock_hosted",
+        "metric.source.m9.country.remittances_received",
+        "metric.source.m9.country.remittances_sent",
+        "metric.source.m9.country.fx_mutualization_paid",
+        "metric.source.m9.world.dealer_flow",
+        "metric.source.m9.world.dealer_spread_revenue",
+        "metric.source.m9.world.dealer_valuation",
+        "metric.source.m9.world.world_nfa",
+        "metric.source.m9.world.trade_routes",
+        "metric.source.m9.world.migration_routes",
         "metric.economy.real_output",
+        "metric.economy.avg_wage",
+        "metric.economy.price_index",
+        "metric.economy.unemployment_rate",
     ),
 }
 
@@ -534,6 +555,31 @@ def _firm_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {"metric.economy.avg_markup": "washout"},
             "horizon_days": 1825,
             "rationale": "Opening markup is a quote seed; it should affect early prices and margins but converge under endogenous price adjustment.",
+        },
+        "config.rho": {
+            "status": "screening_ready",
+            "values": (0.1, 0.9),
+            "directions": {
+                "metric.source.m4.dividends_paid": "increase",
+            },
+            "statistics": {
+                "metric.source.m4.dividends_paid": "cumulative",
+            },
+            "rationale": "The profit-distribution ratio allocates after-tax positive firm earnings between shareholder dividends and retained earnings. A higher ratio must increase the directly reported dividend flow, holding operating profitability and all other rules fixed.",
+        },
+        "config.sector_switching": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {
+                switches: "decrease",
+                retool: "decrease",
+            },
+            "statistics": {
+                switches: "cumulative",
+                retool: "cumulative",
+            },
+            "activation": "sector_returns_retool",
+            "rationale": "This is the master capability gate for endogenous firm movement between sectors. Disabling it under a shared return-gap activation must eliminate both switch events and the physical capital destroyed during retooling.",
         },
         "config.shell_exit_ticks": {
             "status": "activation_scenario_required",
@@ -1648,6 +1694,164 @@ def _energy_contracts() -> Mapping[str, Mapping[str, Any]]:
     }
 
 
+def _open_economy_contracts() -> Mapping[str, Mapping[str, Any]]:
+    imports = "metric.source.m9.country.imports_volume"
+    iceberg = "metric.source.m9.country.iceberg_loss"
+    exchange_rate = "metric.source.m9.country.exchange_rate"
+    capital_flow = "metric.source.m9.country.capital_flow"
+    hosted = "metric.source.m9.country.migrant_stock_hosted"
+    remittances_sent = "metric.source.m9.country.remittances_sent"
+    peg_reserves = "metric.source.m9.country.peg_reserves"
+    mutualization = "metric.source.m9.country.fx_mutualization_paid"
+    spread_revenue = "metric.source.m9.world.dealer_spread_revenue"
+    trade_routes = "metric.source.m9.world.trade_routes"
+    return {
+        "config.world.capital": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "world_capital_rate_gap",
+            "directions": {capital_flow: "decrease"},
+            "statistics": {capital_flow: "cumulative"},
+            "rationale": "The capital-account capability allows funds to move from lower-yield economies toward higher-yield borrowers. With a shared cross-country policy-rate gap, disabling it should eliminate the resulting gross external lending flow and the associated foreign-asset positions.",
+        },
+        "config.world.capital_adjust": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.50),
+            "activation": "world_capital_rate_gap",
+            "directions": {capital_flow: "increase"},
+            "statistics": {capital_flow: "cumulative"},
+            "rationale": "Capital adjustment is the speed at which investors close the gap between the current and desired cross-border position. A larger value should produce a larger cumulative inflow into the common high-rate economy over a fixed horizon.",
+        },
+        "config.world.capital_mobility": {
+            "status": "activation_scenario_required",
+            "values": (0.20, 0.80),
+            "activation": "world_capital_rate_gap",
+            "directions": {capital_flow: "increase"},
+            "statistics": {capital_flow: "cumulative"},
+            "rationale": "Capital mobility is the structural openness of the international financial account. Conditional on the same interest-rate differential and capital controls, greater mobility should scale up cross-border lending and borrowing.",
+        },
+        "config.world.fx_friction": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.15),
+            "activation": "world_trade_friction",
+            "directions": {iceberg: "increase"},
+            "statistics": {iceberg: "cumulative"},
+            "rationale": "The FX/trade friction is an iceberg transport cost: exporters must ship more physical goods than importers receive. Raising it should destroy more goods in transit and reduce delivered import volume, all else equal.",
+        },
+        "config.world.fx_lambda": {
+            "status": "activation_scenario_required",
+            "values": (0.01, 0.20),
+            "activation": "world_trade_integration",
+            "directions": {exchange_rate: "nonzero"},
+            "statistics": {exchange_rate: "post_burnin_volatility"},
+            "rationale": "The exchange-rate adjustment coefficient controls how quickly currencies respond to the FX dealer's accumulated inventory imbalance. It should change exchange-rate dynamics under active trade, although the level sign depends on whether a country is initially a net importer or exporter.",
+        },
+        "config.world.fx_loss_mutualization": {
+            "status": "activation_scenario_required",
+            "values": (True,),
+            "activation": "world_dealer_loss",
+            "horizon_days": 730,
+            "directions": {mutualization: "increase"},
+            "statistics": {mutualization: "cumulative"},
+            "rationale": "Dealer-loss mutualization makes member treasuries explicitly recapitalize a loss-making common FX clearing facility at the annual boundary. Enabling it should create observable fiscal levies when dealer valuation is negative instead of leaving that loss indefinitely unowned.",
+        },
+        "config.world.fx_spread": {
+            "status": "activation_scenario_required",
+            "values": (0.01,),
+            "activation": "world_trade_integration",
+            "directions": {spread_revenue: "increase"},
+            "statistics": {spread_revenue: "cumulative"},
+            "rationale": "The FX spread is the dealer's conversion wedge on imports and remittances. A positive spread should generate dealer revenue whenever cross-border conversions occur, while also making foreign transactions more expensive for residents.",
+        },
+        "config.world.fx_trade_cap": {
+            "status": "activation_scenario_required",
+            "values": (0.03, 0.30),
+            "activation": "world_trade_integration",
+            "directions": {imports: "increase", trade_routes: "increase"},
+            "statistics": {
+                imports: "cumulative",
+                trade_routes: "cumulative",
+            },
+            "rationale": "The trade cap limits each economy's daily import reservation relative to domestic output. Relaxing it should allow more foreign goods to be delivered and more bilateral lots to clear while demand and export inventories remain available.",
+        },
+        "config.world.migration": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "world_migration_wage_gap",
+            "directions": {hosted: "decrease", remittances_sent: "decrease"},
+            "statistics": {
+                hosted: "last_window_mean",
+                remittances_sent: "cumulative",
+            },
+            "rationale": "The migration capability permits workers to relocate toward economies offering higher real wages. Disabling it should eliminate migrant stocks and the remittance payments generated by those workers under a shared wage gradient.",
+        },
+        "config.world.migration_max_share": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.40),
+            "activation": "world_migration_cap_pressure",
+            "directions": {hosted: "increase"},
+            "statistics": {hosted: "last_window_mean"},
+            "rationale": "This ceiling limits the fraction of an origin population that can remain abroad. Under a persistent wage gap and fast common migration response, a higher ceiling should permit a larger hosted migrant stock.",
+        },
+        "config.world.migration_rate": {
+            "status": "activation_scenario_required",
+            "values": (0.0001, 0.005),
+            "activation": "world_migration_wage_gap",
+            "directions": {hosted: "increase", remittances_sent: "increase"},
+            "statistics": {
+                hosted: "last_window_mean",
+                remittances_sent: "cumulative",
+            },
+            "rationale": "The migration rate is the daily speed at which a real-wage advantage becomes an actual migrant stock. A faster response should raise both migrant employment hosted by the destination and the associated remittance outflow over a fixed horizon.",
+        },
+        "config.world.peg_reserves0": {
+            "status": "activation_scenario_required",
+            "values": (1_000.0, 20_000.0),
+            "activation": "world_peg_pressure",
+            "horizon_days": 180,
+            "directions": {peg_reserves: "increase"},
+            "statistics": {peg_reserves: "first_window_mean"},
+            "rationale": "Initial peg reserves are the anchor-currency buffer available to defend a fixed exchange rate. Under identical external pressure, a larger opening reserve stock should leave more reserves after intervention and allow the peg to absorb a larger cumulative imbalance before breaking.",
+        },
+        "config.world.periods_per_year": {
+            "status": "excluded_non_treatment",
+            "values": (),
+            "directions": {},
+            "rationale": "The current product has an invariant civil calendar of 365 one-day ticks per year. The legacy twelve-period seed is deliberately replaced by 365 at the native bridge and is not a playable structural treatment.",
+        },
+        "config.world.remittance_share": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.50),
+            "activation": "world_migration_wage_gap",
+            "directions": {remittances_sent: "increase"},
+            "statistics": {remittances_sent: "cumulative"},
+            "rationale": "The remittance share is the fraction of migrant labor income workers attempt to send back to their origin economy. Raising it should increase gross remittance outflows from the host, subject to available household cash and conversion taxes.",
+        },
+        "config.world.trade": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "world_trade_integration",
+            "directions": {
+                imports: "decrease",
+                trade_routes: "decrease",
+            },
+            "statistics": {
+                imports: "cumulative",
+                trade_routes: "cumulative",
+            },
+            "rationale": "The trade capability connects domestic goods markets through cross-border reservation and settlement. Disabling it should eliminate imports, exports, iceberg losses, and trade routes while leaving each domestic economy operational.",
+        },
+        "config.world.wage_smoothing": {
+            "status": "activation_scenario_required",
+            "values": (0.005, 0.20),
+            "activation": "world_migration_wage_gap",
+            "directions": {hosted: "increase"},
+            "statistics": {hosted: "first_window_mean"},
+            "rationale": "Migration responds to a smoothed cross-country real-wage signal. A larger smoothing gain incorporates a newly present wage gap faster and should therefore accelerate early migration toward the common high-wage destination.",
+        },
+    }
+
+
 def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
     household_bonds = "metric.source.m6.household_bond_market_value"
     bank_bonds = "metric.source.m6.bank_bond_market_value"
@@ -1836,6 +2040,7 @@ CURATED_CONTRACTS = {
     **_government_contracts(),
     **_housing_contracts(),
     **_energy_contracts(),
+    **_open_economy_contracts(),
     **_securities_contracts(),
 }
 

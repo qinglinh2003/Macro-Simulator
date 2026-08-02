@@ -544,6 +544,26 @@ void test_capital_and_migration_paths_are_live() {
     assert(world.validate().ok());
 }
 
+void test_dealer_loss_mutualization_posts_an_explicit_fiscal_levy() {
+    WorldRules rules;
+    rules.trade = true;
+    rules.fx_trade_cap = 0.50;
+    rules.fx_adjustment = 0.50;
+    rules.fx_loss_mutualization = true;
+    rules.periods_per_year = 1.0;
+    auto world = build_world(2, rules);
+
+    const auto opening = world.advance(1);
+    assert(opening.ok());
+    const auto settlement = world.advance(1);
+    assert(settlement.ok());
+    const auto &external = settlement.get_if()->metrics.external;
+    const double paid = external[0].fx_mutualization_paid +
+                        external[1].fx_mutualization_paid;
+    assert(paid > 0.0);
+    assert(world.validate().ok());
+}
+
 void test_checkpoint_round_trip_and_continuation_are_exact() {
     WorldRules rules;
     rules.trade = true;
@@ -619,6 +639,7 @@ int main() {
     test_shock_lifecycle_events_are_ordered_and_checkpointed();
     test_packaged_crisis_scenarios_match_the_native_shock_contract();
     test_capital_and_migration_paths_are_live();
+    test_dealer_loss_mutualization_posts_an_explicit_fiscal_levy();
     test_checkpoint_round_trip_and_continuation_are_exact();
     test_worker_count_does_not_change_semantics();
     std::cout << "M9 World tests passed\n";

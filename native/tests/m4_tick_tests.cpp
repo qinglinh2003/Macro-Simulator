@@ -119,6 +119,27 @@ void test_v1_fiscal_and_capital_tick() {
     assert(core::run_invariants(*session.root()).ok());
 }
 
+void test_dividend_payout_is_reported_directly() {
+    const auto run = [](double payout) {
+        auto spec = v1_spec(4821);
+        spec.rules.dividend_payout = payout;
+        EngineSession session(31);
+        assert(session.initialize_simulation(spec).ok());
+        double total = 0.0;
+        for (int day = 0; day < 5; ++day) {
+            const auto result = session.advance_tick();
+            assert(result.ok());
+            total += result.get_if()->metrics.dividends_paid;
+        }
+        return total;
+    };
+
+    const double retained = run(0.0);
+    const double distributed = run(1.0);
+    assert_close(retained, 0.0);
+    assert(distributed > 0.0);
+}
+
 void test_fiscal_quantity_and_deficit_regimes_are_distinct() {
     auto quantity = v1_spec(207);
     quantity.rules.government_investment_share = 0.0;
@@ -408,6 +429,7 @@ int main() {
     test_capability_boundary();
     test_v0_genesis_and_tick();
     test_v1_fiscal_and_capital_tick();
+    test_dividend_payout_is_reported_directly();
     test_fiscal_quantity_and_deficit_regimes_are_distinct();
     test_fiscal_deficit_responds_to_unemployment();
     test_deficit_envelope_includes_transfer_spending();

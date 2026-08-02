@@ -532,6 +532,7 @@ nb::dict m4_metrics_to_python(const macro_sim::simulation::M4Metrics &metrics) {
     output["household_consumption"] = metrics.household_consumption;
     output["wages_paid"] = metrics.wages_paid;
     output["firm_profit"] = metrics.firm_profit;
+    output["dividends_paid"] = metrics.dividends_paid;
     output["tax_total"] = metrics.tax_total;
     output["tax_profit"] = metrics.tax_profit;
     output["tax_income"] = metrics.tax_income;
@@ -920,6 +921,7 @@ nb::dict m9_country_metrics_to_python(
     MACRO_SIM_M9_COUNTRY_METRIC(remittances_received);
     MACRO_SIM_M9_COUNTRY_METRIC(remittances_sent);
     MACRO_SIM_M9_COUNTRY_METRIC(remittance_tax_revenue);
+    MACRO_SIM_M9_COUNTRY_METRIC(fx_mutualization_paid);
     MACRO_SIM_M9_COUNTRY_METRIC(capital_destroyed);
     MACRO_SIM_M9_COUNTRY_METRIC(active_shocks);
 #undef MACRO_SIM_M9_COUNTRY_METRIC

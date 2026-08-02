@@ -1483,6 +1483,7 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
         }
         metrics.wages_paid += firm.wage_bill;
         metrics.firm_profit += firm.profit;
+        metrics.dividends_paid += firm.dividends;
         metrics.aggregate_capital += firm.closing_capital;
     }
     double labor_capacity = 0.0;
@@ -2101,6 +2102,7 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
         runtime.last_metrics.household_consumption,
         runtime.last_metrics.wages_paid,
         runtime.last_metrics.firm_profit,
+        runtime.last_metrics.dividends_paid,
         runtime.last_metrics.tax_total,
         runtime.last_metrics.government_spending,
         runtime.last_metrics.government_deficit,

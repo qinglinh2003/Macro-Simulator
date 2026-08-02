@@ -84,6 +84,7 @@ void fill_m4_metrics(macro_sim_m4_metrics &output,
     output.government_spending = metrics.government_spending;
     output.government_deficit = metrics.government_deficit;
     output.public_capital = metrics.public_capital;
+    output.dividends_paid = metrics.dividends_paid;
 }
 
 void fill_m5_metrics(macro_sim_m5_metrics &output,
@@ -2913,6 +2914,7 @@ macro_sim_m9_world_country_metrics(const macro_sim_m9_world *world, size_t offse
         MACRO_SIM_FILL_M9_COUNTRY(remittances_received);
         MACRO_SIM_FILL_M9_COUNTRY(remittances_sent);
         MACRO_SIM_FILL_M9_COUNTRY(remittance_tax_revenue);
+        MACRO_SIM_FILL_M9_COUNTRY(fx_mutualization_paid);
         MACRO_SIM_FILL_M9_COUNTRY(capital_destroyed);
 #undef MACRO_SIM_FILL_M9_COUNTRY
     }

@@ -267,6 +267,7 @@ void test_round_trip_and_continuation_are_exact() {
         REPORT_M4_FIELD(household_consumption)
         REPORT_M4_FIELD(wages_paid)
         REPORT_M4_FIELD(firm_profit)
+        REPORT_M4_FIELD(dividends_paid)
         REPORT_M4_FIELD(tax_total)
         REPORT_M4_FIELD(government_spending)
         REPORT_M4_FIELD(government_deficit)

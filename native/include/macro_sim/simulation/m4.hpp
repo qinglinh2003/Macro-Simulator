@@ -132,6 +132,7 @@ struct M4Metrics final {
     double household_consumption{0.0};
     double wages_paid{0.0};
     double firm_profit{0.0};
+    double dividends_paid{0.0};
     double tax_total{0.0};
     double tax_profit{0.0};
     double tax_income{0.0};

@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 229,
+    "native_stage_sources": 231,
     "public_sources": 41,
-    "total": 453
+    "total": 455
   },
   "metrics": [
     {
@@ -1542,6 +1542,15 @@
       "cadence_ticks": 1,
       "id": "metric.source.m4.firm_profit",
       "parity_rule": "simulation::M4Metrics::firm_profit",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.dividends_paid",
+      "parity_rule": "simulation::M4Metrics::dividends_paid",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
@@ -3432,6 +3441,15 @@
       "cadence_ticks": 1,
       "id": "metric.source.m9.country.remittance_tax_revenue",
       "parity_rule": "simulation::CountryExternalMetrics::remittance_tax_revenue",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m9.country.fx_mutualization_paid",
+      "parity_rule": "simulation::CountryExternalMetrics::fx_mutualization_paid",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"

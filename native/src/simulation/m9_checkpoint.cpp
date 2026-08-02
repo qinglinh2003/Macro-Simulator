@@ -24,7 +24,7 @@ using Json = nlohmann::json;
 constexpr std::array<std::uint8_t, 8> kMagic{
     'M', 'S', 'M', '9', 'C', 'P', '0', '1',
 };
-constexpr std::uint32_t kSchemaVersion = 1U;
+constexpr std::uint32_t kSchemaVersion = 2U;
 constexpr std::size_t kDigestBytes = 32U;
 constexpr std::size_t kMaximumCheckpointBytes = 2U * 1024U * 1024U * 1024U;
 
@@ -227,12 +227,13 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.peg_reserves,         value.migrant_stock_abroad,
         value.migrant_stock_hosted, value.remittances_received,
         value.remittances_sent,     value.remittance_tax_revenue,
-        value.capital_destroyed,    value.active_shocks,
+        value.fx_mutualization_paid, value.capital_destroyed,
+        value.active_shocks,
     });
 }
 
 [[nodiscard]] CountryExternalMetrics decode_country_metrics(const Json &input) {
-    if (!input.is_array() || input.size() != 22U) {
+    if (!input.is_array() || input.size() != 23U) {
         throw std::runtime_error("invalid country metrics");
     }
     CountryExternalMetrics value;
@@ -256,8 +257,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.remittances_received = input[17].get<double>();
     value.remittances_sent = input[18].get<double>();
     value.remittance_tax_revenue = input[19].get<double>();
-    value.capital_destroyed = input[20].get<double>();
-    value.active_shocks = input[21].get<std::uint64_t>();
+    value.fx_mutualization_paid = input[20].get<double>();
+    value.capital_destroyed = input[21].get<double>();
+    value.active_shocks = input[22].get<std::uint64_t>();
     return value;
 }
 
@@ -276,6 +278,7 @@ Result<std::vector<std::uint8_t>> M9World::checkpoint() const {
     metadata["principal"] = external_principal_;
     metadata["arrears"] = interest_arrears_;
     metadata["smoothed_wages"] = smoothed_real_wages_;
+    metadata["conversion_volume"] = conversion_volume_;
     metadata["dealer_valuation"] = dealer_valuation_;
     metadata["event_counter"] = event_counter_;
     metadata["policy_generation"] = policy_generation_;
@@ -428,6 +431,8 @@ Result<M9World> M9World::restore(std::span<const std::uint8_t> checkpoint) {
             metadata.at("arrears").get<std::vector<std::vector<double>>>();
         world.smoothed_real_wages_ =
             metadata.at("smoothed_wages").get<std::vector<double>>();
+        world.conversion_volume_ =
+            metadata.at("conversion_volume").get<std::vector<double>>();
         world.dealer_valuation_ = metadata.at("dealer_valuation").get<double>();
         world.event_counter_ = metadata.at("event_counter").get<std::uint64_t>();
         world.policy_generation_ =

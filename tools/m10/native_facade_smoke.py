@@ -42,9 +42,16 @@ def main() -> int:
     session = NativeSimulationSession.create(spec)
     assert session.tick == 0
     assert session.history_bounds()["capacity"] == 2048
+    performance_budget = json.loads(
+        (args.source_dir / "schemas/m10/performance_budget.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    economy_count = int(session.maintained_metrics()["economy_count"])
     assert (
         session.history_bounds()["retained_bytes"]
-        <= 8 * 1024 * 1024 * int(session.maintained_metrics()["economy_count"])
+        <= int(performance_budget["maximum_history_bytes_per_economy"])
+        * economy_count
     )
     assert set(NATIVE_POLICY_LEVERS) == set(REGISTRY)
     opening_policy = Policy.from_config(spec.configs()[0])

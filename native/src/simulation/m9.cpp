@@ -622,6 +622,7 @@ Result<M9World> M9World::create(const M9WorldSpec &spec) {
     world.rules_ = spec.rules;
     world.rates_.log_rates.assign(spec.economies.size(), 0.0);
     world.dealer_inventory_.assign(spec.economies.size(), 0.0);
+    world.conversion_volume_.assign(spec.economies.size(), 0.0);
     world.external_principal_.assign(spec.economies.size(),
                                      std::vector<double>(spec.economies.size(), 0.0));
     world.interest_arrears_ = world.external_principal_;
@@ -926,6 +927,7 @@ M9MemoryUsage M9World::memory_usage() const noexcept {
         capacity_bytes(announced_shock_ids_) + capacity_bytes(active_shock_ids_) +
         capacity_bytes(realized_shock_ids_) + capacity_bytes(shock_events_) +
         capacity_bytes(trade_reservations_) + capacity_bytes(smoothed_real_wages_) +
+        capacity_bytes(conversion_volume_) +
         capacity_bytes(last_metrics_.domestic) + capacity_bytes(last_metrics_.external);
     return usage;
 }
@@ -1200,6 +1202,52 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
     staged.trade_reservations_.clear();
     const std::uint64_t opening_event_counter = staged.event_counter_;
 
+    const auto periods_per_year = static_cast<std::uint64_t>(
+        std::max(1.0, std::round(staged.rules_.periods_per_year)));
+    if (staged.rules_.fx_loss_mutualization && staged.tick_.value() > 0U &&
+        staged.tick_.value() % periods_per_year == 0U) {
+        double dealer_net_worth = 0.0;
+        for (std::size_t index = 0; index < count; ++index) {
+            dealer_net_worth += staged.rates_.to_numeraire(
+                staged.dealer_inventory_[index],
+                EconomyId(static_cast<std::uint64_t>(index)));
+        }
+        if (dealer_net_worth < -kEpsilon) {
+            const double loss = -dealer_net_worth;
+            const double total_volume =
+                std::accumulate(staged.conversion_volume_.begin(),
+                                staged.conversion_volume_.end(), 0.0);
+            for (std::size_t index = 0; index < count; ++index) {
+                const double share = total_volume > kEpsilon
+                                         ? staged.conversion_volume_[index] / total_volume
+                                         : 1.0 / static_cast<double>(count);
+                const double local_levy =
+                    loss * share * staged.rates_.rate(
+                                       EconomyId(static_cast<std::uint64_t>(index)));
+                if (local_levy <= kEpsilon) {
+                    continue;
+                }
+                core::SettlementTransaction levy(staged.economies_[index].root);
+                auto status = levy.transfer(
+                    staged.economies_[index].root.institutions.treasury_account,
+                    staged.economies_[index].root.institutions.dealer_account,
+                    Money(local_levy));
+                if (!status.ok()) {
+                    return status;
+                }
+                status = levy.commit_locally_validated();
+                if (!status.ok()) {
+                    return status;
+                }
+                staged.dealer_inventory_[index] += local_levy;
+                staged.last_metrics_.external[index].fx_mutualization_paid =
+                    local_levy;
+            }
+        }
+        std::fill(staged.conversion_volume_.begin(),
+                  staged.conversion_volume_.end(), 0.0);
+    }
+
     std::vector<std::uint64_t> next_active;
     for (const auto &shock : staged.shocks_) {
         const Tick announcement = shock.announcement.value_or(shock.start);
@@ -1262,6 +1310,13 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             staged.rates_.rate(EconomyId(static_cast<std::uint64_t>(index)));
     }
     const auto opening_dealer = staged.dealer_inventory_;
+    const auto record_conversion = [&staged](std::size_t economy,
+                                              double local_amount) {
+        staged.conversion_volume_[economy] += std::abs(
+            staged.rates_.to_numeraire(
+                local_amount,
+                EconomyId(static_cast<std::uint64_t>(economy))));
+    };
 
     std::vector<double> import_factor(count, 1.0);
     std::vector<double> export_factor(count, 1.0);
@@ -1659,6 +1714,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
 
         staged.dealer_inventory_[importer] += importer_basic;
         staged.dealer_inventory_[exporter] -= exporter_basic;
+        record_conversion(importer, importer_basic);
+        record_conversion(exporter, exporter_basic);
         declared_spread +=
             staged.rates_.to_numeraire(importer_basic, reservation.importer) -
             staged.rates_.to_numeraire(exporter_basic, reservation.exporter);
@@ -1714,6 +1771,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                                EconomyId(static_cast<std::uint64_t>(debtor)),
                                EconomyId(static_cast<std::uint64_t>(creditor)));
                 staged.dealer_inventory_[creditor] -= creditor_cash;
+                record_conversion(debtor, cash);
+                record_conversion(creditor, creditor_cash);
                 staged.last_metrics_.external[debtor].factor_income_accrued -= due;
                 staged.last_metrics_.external[creditor].factor_income_accrued +=
                     creditor_cash;
@@ -1758,6 +1817,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             staged.external_principal_[best_debtor][investor] += debtor_cash;
             staged.dealer_inventory_[investor] += flow;
             staged.dealer_inventory_[best_debtor] -= debtor_cash;
+            record_conversion(investor, flow);
+            record_conversion(best_debtor, debtor_cash);
             staged.last_metrics_.external[best_debtor].capital_flow += debtor_cash;
             staged.last_metrics_.external[investor].capital_flow -= flow;
         }
@@ -1929,6 +1990,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             }
             staged.dealer_inventory_[host] += after_host_tax;
             staged.dealer_inventory_[origin] -= converted_gross;
+            record_conversion(host, after_host_tax);
+            record_conversion(origin, converted_gross);
             declared_spread +=
                 staged.rates_.to_numeraire(
                     after_host_tax, EconomyId(static_cast<std::uint64_t>(host))) -
@@ -2020,7 +2083,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         metrics.current_account = metrics.exports_value - metrics.imports_value +
                                   metrics.factor_income_accrued +
                                   metrics.remittances_received -
-                                  metrics.remittances_sent;
+                                  metrics.remittances_sent -
+                                  metrics.fx_mutualization_paid;
         double arrears = 0.0;
         for (std::size_t other = 0; other < count; ++other) {
             arrears += staged.interest_arrears_[index][other];
@@ -2063,6 +2127,7 @@ Status M9World::validate_impl(bool validate_domestic) const noexcept {
     if (economies_.empty() || external_policies_.size() != economies_.size() ||
         rates_.size() != economies_.size() ||
         dealer_inventory_.size() != economies_.size() ||
+        conversion_volume_.size() != economies_.size() ||
         external_principal_.size() != economies_.size() ||
         interest_arrears_.size() != economies_.size() ||
         smoothed_real_wages_.size() != economies_.size()) {
@@ -2118,6 +2183,7 @@ Status M9World::validate_impl(bool validate_domestic) const noexcept {
     double mean_log_rate = 0.0;
     for (std::size_t index = 0; index < economies_.size(); ++index) {
         if (!finite(rates_.log_rates[index]) || !finite(dealer_inventory_[index]) ||
+            !finite(conversion_volume_[index]) || conversion_volume_[index] < 0.0 ||
             !finite(smoothed_real_wages_[index]) || smoothed_real_wages_[index] < 0.0 ||
             external_principal_[index].size() != economies_.size() ||
             interest_arrears_[index].size() != economies_.size() ||
@@ -2183,6 +2249,7 @@ std::uint64_t M9World::digest() const noexcept {
     for (std::size_t index = 0; index < economies_.size(); ++index) {
         hash_mix(hash, rates_.log_rates[index]);
         hash_mix(hash, dealer_inventory_[index]);
+        hash_mix(hash, conversion_volume_[index]);
         hash_mix(hash, smoothed_real_wages_[index]);
         hash_mix(hash, external_policies_[index].tariff);
         hash_mix(hash, external_policies_[index].capital_control);

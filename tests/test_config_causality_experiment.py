@@ -187,6 +187,79 @@ def test_world_treatment_uses_the_product_new_game_contract() -> None:
     )
     assert spread.rules.fx_spread == pytest.approx(0.004)
 
+    autarky = native_world_treatment_spec(
+        baseline, field="trade", value=False
+    )
+    assert autarky.rules.trade is False
+    assert autarky.rules.capital is False
+    assert autarky.rules.migration is False
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected"),
+    [
+        ("world_trade_integration", "trade"),
+        ("world_trade_friction", "trade_friction"),
+        ("world_capital_rate_gap", "capital"),
+        ("world_migration_wage_gap", "migration"),
+        ("world_migration_cap_pressure", "migration_cap"),
+        ("world_peg_pressure", "peg"),
+        ("world_dealer_loss", "dealer"),
+    ],
+)
+def test_world_activation_scenarios_create_the_shared_identification_state(
+    scenario: str, expected: str
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=730, seed=24, countries=3
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+
+    if expected in {"trade", "peg", "dealer"}:
+        real0 = (
+            native_spec.economies[0]
+            .domestic_economy.financial_economy.monetary_economy.real_economy
+        )
+        real1 = (
+            native_spec.economies[1]
+            .domestic_economy.financial_economy.monetary_economy.real_economy
+        )
+        assert real0.rules.initial_consumption_inventory == pytest.approx(0.0)
+        assert real1.rules.initial_consumption_inventory > 0.0
+    if expected == "trade_friction":
+        real0 = (
+            native_spec.economies[0]
+            .domestic_economy.financial_economy.monetary_economy.real_economy
+        )
+        real1 = (
+            native_spec.economies[1]
+            .domestic_economy.financial_economy.monetary_economy.real_economy
+        )
+        assert real0.rules.initial_consumption_inventory > 0.0
+        assert real1.rules.initial_consumption_inventory == pytest.approx(0.0)
+    if expected == "capital":
+        rates = [
+            economy.domestic_economy.financial_economy.monetary_economy.initial_policy_rate
+            for economy in native_spec.economies
+        ]
+        assert rates == pytest.approx([0.00030, 0.00005, 0.000134])
+    if expected in {"migration", "migration_cap"}:
+        wages = [
+            economy.domestic_economy.financial_economy.monetary_economy.real_economy.rules.initial_wage
+            for economy in native_spec.economies
+        ]
+        assert wages == pytest.approx([2.0, 0.70, 0.70])
+    if expected == "migration_cap":
+        assert native_spec.rules.migration_rate == pytest.approx(0.05)
+        assert native_spec.rules.wage_smoothing == pytest.approx(0.20)
+    if expected == "peg":
+        assert native_spec.external_policies[0].peg_anchor == 1
+        assert str(native_spec.external_policies[0].fx_regime).endswith("PEG")
+    if expected in {"peg", "dealer"}:
+        assert native_spec.rules.fx_adjustment == pytest.approx(0.25)
+
 
 def test_zero_baseline_builder_seed_uses_the_product_density_scale() -> None:
     baseline = population_scaled_new_game(

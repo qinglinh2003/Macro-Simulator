@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0 inventory and P1 harness complete; P2 production, firm, consumption, labor, demography, distribution, banking, public-sector, and securities-market screens complete
+Status: P0 inventory and P1 harness complete; P2 reviewed contracts complete for every executable Config field, with module screens complete through the open economy
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -454,10 +454,11 @@ The targeted five-year batch completed 20 additional native runs, covering
 
 ### 8.6 Firms and industrial dynamics screen
 
-All 19 mapped causal or genesis fields in this module now have reviewed
-contracts: 13 neutral-baseline contracts and six conditional contracts. The
+All 21 mapped causal or genesis fields in this module now have reviewed
+contracts: 14 neutral-baseline contracts and seven conditional contracts. The
 one-year neutral batch completed 104 native runs; the conditional screens added
-72 runs. No run failed a native stability gate.
+72 runs. A final four-seed, 90-day closure for the two previously omitted
+fields added 20 native runs. No run failed a native stability gate.
 
 One invalid dependency closure was repaired before measurement. Disabling
 `firm_dynamics` while founder-owned per-firm equity remained enabled violated
@@ -507,12 +508,23 @@ Current findings:
 - Opening expected energy demand does decay, although its lower arm rebounds
   after first crossing half-decay. Washout acceptance now requires both an
   observed half-decay and a terminal effect no larger than half the peak.
+- `rho` was already wired into firm settlement but lacked a direct maintained
+  observable. The engine now publishes `metric.source.m4.dividends_paid` and
+  persists it through checkpoints. Relative to the 0.5 control, lowering the
+  payout ratio to 0.1 cuts cumulative 90-day dividends by about 60.3%, while
+  raising it to 0.9 increases them by about 60.5%. Both four-seed intervals
+  exclude zero, so the retained-earnings versus shareholder-distribution
+  channel is no longer hidden behind indirect household outcomes.
 
 The neutral baseline produces no sector switches at all. Conditional tests
 therefore isolate each switching input with a shared return-differential setup:
 
 - `switch_hazard` and `switch_retool_loss` pass their direct event and destroyed-
   capital metrics;
+- disabling the `sector_switching` master capability removes all 927.5 mean
+  switch events and all 1.325 million mean capital units destroyed by retooling
+  over the activated 90-day screen; both effects are -100%, with four-seed
+  intervals excluding zero;
 - lowering `switch_return_gap` to zero raises 90-day switches by about 812 on
   average, while 0.10 remains imprecise relative to the 0.50 control;
 - shortening `switch_pressure_days` from the default 60 to 2/10 days raises
@@ -1225,6 +1237,86 @@ joint response of household need, industrial intensity, inventory coverage,
 and hoarding under supply loss; it should also calibrate the mortality channel
 against empirical excess-mortality evidence before exposing wide ranges in a
 player-facing setup screen.
+
+### 8.16 Open-economy coupling screen
+
+All eighteen World Config entries have now been adjudicated. Fifteen are
+executable structural treatments spanning trade, FX adjustment, capital
+mobility, migration, remittances, peg reserves, and clearing-union loss
+sharing. `base_seed` and `couple` are derived construction metadata rather than
+independent treatments. `periods_per_year` is also excluded: the current
+product has an invariant civil calendar of 365 one-day ticks and deliberately
+replaces the obsolete twelve-period seed at the native bridge.
+
+The accepted experiments use three heterogeneous economies, 100,000 persons
+per economy, four paired seeds, and eight native workers. Trade, capital, and
+migration are estimated over 90 days; peg reserves over 180 days; and dealer
+loss sharing over 730 days so that two annual boundaries are crossed. A World
+contract is always judged under a shared cross-country identification state:
+an importer configuration for trade capacity, an exporter configuration for
+iceberg friction, a realistic daily interest-rate gradient for capital flows,
+a persistent real-wage gradient for migration, and a stressed imbalance for
+peg and clearing-union mechanisms.
+
+The audit found one genuinely silent implementation. The
+`fx_loss_mutualization` rule was mapped through Config, bindings, C ABI, and
+checkpoints but was never read by the C++ World advance. The native engine now
+accumulates conversion volume, measures dealer net worth at each annual
+boundary, and—only when that net worth is negative—allocates the loss across
+member treasuries in proportion to their conversion volume. The transfer is
+posted to each domestic ledger and FX inventory, enters the current account,
+survives checkpoint continuation, and is published as
+`metric.source.m9.country.fx_mutualization_paid`. In the four-seed two-year
+stress screen, enabling the rule produces an average cumulative player-country
+levy of about 26,133 currency units; the confidence interval is roughly
+21,524–30,741, while the disabled control remains exactly zero.
+
+The principal causal results are:
+
+- The parent trade capability is complete. Disabling it, together with the
+  required dependent capital and migration capabilities, removes player-country
+  imports and World trade routes exactly. Moving the daily import cap from 15%
+  of output to 3% lowers cumulative imports about 74.3% and route count about
+  58.0%; raising it to 30% increases them about 62.2% and 71.1%.
+- Iceberg friction has a direct physical interpretation. In the common
+  exporter scenario, eliminating the baseline 3% friction eliminates transit
+  loss, while raising friction to 15% increases cumulative destroyed goods
+  about 383.5%. A separate exporter scenario is necessary because the loss is
+  correctly recorded by origin, not by the importing player country.
+- FX dynamics and intermediation are live. Reducing the dealer-inventory
+  adjustment coefficient from 0.05 to 0.01 cuts exchange-rate volatility about
+  79.5%; raising it to 0.20 increases volatility about 324.6%. Introducing a
+  1% conversion spread creates about 654 units of cumulative dealer spread
+  revenue over the 90-day screen from a zero-spread control.
+- Capital-account responses remain clear at realistic daily interest rates.
+  The shared 0.030%, 0.005%, and 0.0134% daily rates correspond roughly to
+  11.6%, 1.8%, and 5.0% effective annual rates. Disabling capital mobility
+  removes the high-rate country's cumulative inflow of about 396 units.
+  Moving the adjustment speed from 0.20 to 0.05/0.50 changes that inflow about
+  -75.0%/+149.9%; moving structural mobility from 1.0 to 0.2/0.8 changes it
+  about -80.0%/-20.0%. All intervals exclude zero without an extreme-rate
+  activation.
+- Migration and remittances are quantitatively material. Disabling migration
+  removes hosted migrants and remittance outflows. Moving the daily migration
+  rate from 0.0005 to 0.0001/0.005 changes hosted stock about -80.0%/+821.2%
+  and cumulative remittances about -80.0%/+846.1%. Under a binding common
+  pressure, moving the population ceiling from 25% to 5%/40% changes hosted
+  stock about -80.0%/+24.7%. Faster wage-signal updating accelerates first-
+  window migration, and a 5%/50% remittance share changes host outflows about
+  -75.0%/+146.7% relative to the 20% baseline.
+- Peg seed reserves have the expected buffer meaning. Under identical defense
+  pressure, reducing opening reserves from 5,000 to 1,000 lowers the first-
+  window remaining stock by about 2,609; raising them to 20,000 increases it by
+  about 14,996. Both four-seed intervals are narrow and exclude zero.
+
+The World screen also corrected an experimental-framework trap: country-level
+trade journals cannot all be interpreted from economy zero. Player-country
+imports, exporter-country iceberg loss, and World route/dealer metrics now use
+separate predeclared scenarios instead of treating an inapplicable zero as a
+silent mechanism. No executable immutable open-economy Config remains unrouted
+or causally silent. The next interaction stage should combine trade friction,
+capital mobility, migration, and peg defense under persistent productivity and
+energy differences, then calibrate ranges against external empirical evidence.
 
 ## 9. Execution gates
 

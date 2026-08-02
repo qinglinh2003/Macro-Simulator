@@ -179,6 +179,7 @@ typedef struct macro_sim_m4_metrics {
     double government_spending;
     double government_deficit;
     double public_capital;
+    double dividends_paid;
 } macro_sim_m4_metrics;
 
 typedef struct macro_sim_m4_advance_result {
@@ -1155,6 +1156,7 @@ typedef struct macro_sim_m9_country_metrics {
     double remittances_sent;
     double remittance_tax_revenue;
     double capital_destroyed;
+    double fx_mutualization_paid;
 } macro_sim_m9_country_metrics;
 
 typedef struct macro_sim_m9_advance_result {

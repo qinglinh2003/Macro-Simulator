@@ -298,6 +298,7 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.household_consumption);
     writer.f64(metrics.wages_paid);
     writer.f64(metrics.firm_profit);
+    writer.f64(metrics.dividends_paid);
     writer.f64(metrics.tax_total);
     writer.f64(metrics.tax_profit);
     writer.f64(metrics.tax_income);
@@ -338,6 +339,7 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.household_consumption)
         && reader.f64(metrics.wages_paid)
         && reader.f64(metrics.firm_profit)
+        && reader.f64(metrics.dividends_paid)
         && reader.f64(metrics.tax_total)
         && reader.f64(metrics.tax_profit)
         && reader.f64(metrics.tax_income)

@@ -585,6 +585,9 @@ def native_world_treatment_spec(
     native_spec = native_backend.build_native_new_game_spec(baseline)
     rules = native_spec.rules
     setattr(rules, target, value)
+    if field == "trade" and not bool(value):
+        rules.capital = False
+        rules.migration = False
     native_spec.rules = rules
     return native_spec
 
@@ -611,6 +614,76 @@ def apply_native_activation_scenario(
     if scenario in {"neutral_baseline", "neutral_baseline_q_above_one"}:
         return native_spec
     economies = list(native_spec.economies)
+    world_scenarios = {
+        "world_trade_integration",
+        "world_trade_friction",
+        "world_capital_rate_gap",
+        "world_migration_wage_gap",
+        "world_migration_cap_pressure",
+        "world_peg_pressure",
+        "world_dealer_loss",
+    }
+    if scenario in world_scenarios:
+        if len(economies) < 2:
+            raise ValueError(f"native activation scenario {scenario!r} needs a World")
+        for economy_id, economy in enumerate(economies):
+            population = economy.domestic_economy
+            financial = population.financial_economy
+            monetary = financial.monetary_economy
+            real = monetary.real_economy
+            rules = real.rules
+            if scenario in {
+                "world_trade_integration",
+                "world_trade_friction",
+                "world_peg_pressure",
+                "world_dealer_loss",
+            }:
+                if scenario == "world_trade_friction" and economy_id == 0:
+                    rules.initial_consumption_inventory *= 4.0
+                    rules.initial_price = 0.60
+                elif scenario == "world_trade_friction":
+                    rules.initial_consumption_inventory = 0.0
+                    rules.initial_price = 1.20
+                    rules.initial_expected_demand *= 2.0
+                elif economy_id == 0:
+                    rules.initial_consumption_inventory = 0.0
+                    rules.initial_price = 1.20
+                    rules.initial_expected_demand *= 2.0
+                elif economy_id == 1:
+                    rules.initial_consumption_inventory *= 4.0
+                    rules.initial_price = 0.60
+                else:
+                    rules.initial_consumption_inventory *= 2.0
+                    rules.initial_price = 0.80
+            if scenario in {
+                "world_migration_wage_gap",
+                "world_migration_cap_pressure",
+            }:
+                rules.initial_wage = 2.0 if economy_id == 0 else 0.70
+            if scenario == "world_capital_rate_gap":
+                monetary.initial_policy_rate = (0.00030, 0.00005, 0.000134)[
+                    min(economy_id, 2)
+                ]
+            real.rules = rules
+            monetary.real_economy = real
+            financial.monetary_economy = monetary
+            population.financial_economy = financial
+            economy.domestic_economy = population
+            economies[economy_id] = economy
+        native_spec.economies = economies
+        world_rules = native_spec.rules
+        if scenario == "world_migration_cap_pressure":
+            world_rules.migration_rate = 0.05
+            world_rules.wage_smoothing = 0.20
+        elif scenario in {"world_peg_pressure", "world_dealer_loss"}:
+            world_rules.fx_adjustment = 0.25
+        native_spec.rules = world_rules
+        if scenario == "world_peg_pressure":
+            external = list(native_spec.external_policies)
+            external[0].fx_regime = native_backend._load_native().FxRegime.PEG
+            external[0].peg_anchor = 1
+            native_spec.external_policies = external
+        return native_spec
     if not 0 <= target_economy < len(economies):
         raise IndexError("target_economy is outside the native experiment spec")
     economy = economies[target_economy]

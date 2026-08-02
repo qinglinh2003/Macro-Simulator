@@ -89,8 +89,14 @@ def validate_contracts() -> None:
         raise AssertionError("M10 performance contract changed")
     if budget["history_capacity_frames"] <= 0:
         raise AssertionError("M10 history must be bounded")
+    maintained = json.loads(
+        (ROOT / "schemas/m10/maintained_metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    metric_count = int(maintained["counts"]["total"])
     dense_history_bytes = budget["history_capacity_frames"] * (
-        300 * (8 + 1) + 8
+        metric_count * (8 + 1) + 8
     )
     if dense_history_bytes > budget["maximum_history_bytes_per_economy"]:
         raise AssertionError("M10 default history exceeds its memory budget")
@@ -165,9 +171,9 @@ def validate_contracts() -> None:
     if maintained["counts"] != {
         "national_accounts": 63,
         "native_dashboard_analytics": 120,
-        "native_stage_sources": 229,
+        "native_stage_sources": 231,
         "public_sources": 41,
-        "total": 453,
+        "total": 455,
     }:
         raise AssertionError("M10 maintained metric coverage is incomplete")
     maintained_ids = [item["id"] for item in maintained["metrics"]]
