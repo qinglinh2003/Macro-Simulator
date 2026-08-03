@@ -154,6 +154,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.job_ladder,
         value.ladder_search_intensity,
         value.ladder_premium,
+        value.person_efficiency,
+        value.efficiency_sigma,
+        value.genesis_employment_rate,
         value.participation_margin,
         value.age_participation,
         value.young_participation_rate,
@@ -184,7 +187,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 42U) {
+    if (!row.is_array() || row.size() != 45U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -209,6 +212,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.job_ladder = row[index++].get<bool>();
     value.ladder_search_intensity = row[index++].get<double>();
     value.ladder_premium = row[index++].get<double>();
+    value.person_efficiency = row[index++].get<bool>();
+    value.efficiency_sigma = row[index++].get<double>();
+    value.genesis_employment_rate = row[index++].get<double>();
     value.participation_margin = row[index++].get<bool>();
     value.age_participation = row[index++].get<bool>();
     value.young_participation_rate = row[index++].get<double>();

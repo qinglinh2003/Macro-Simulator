@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <numeric>
@@ -161,6 +162,49 @@ void test_genesis_owns_energy_components() {
                              harness.monetary_runtime, harness.financial_runtime,
                              harness.population_runtime, harness.runtime, harness.tick)
                .ok());
+}
+
+void test_genesis_seeds_configured_employment_stock() {
+    auto value = spec();
+    value.domestic_economy.rules.genesis_employment_rate = 0.95;
+    auto harness = build(value);
+
+    std::size_t participants = 0U;
+    double employed_efficiency = 0.0;
+    for (const auto person_id : harness.population_runtime.persons.alive_ids()) {
+        const auto *person = harness.population_runtime.persons.get(person_id);
+        participants += person->participating ? 1U : 0U;
+    }
+    assert(harness.population_runtime.employment.active_count() ==
+           static_cast<std::size_t>(
+               std::llround(0.95 * static_cast<double>(participants))));
+    const auto &jobs = harness.population_runtime.employment.records();
+    for (std::size_t index = 1U; index < jobs.size(); ++index) {
+        const auto *job = &jobs[index];
+        assert(job->active);
+        assert(job->hours == 1.0);
+        assert(job->hire_day == harness.population_runtime.start_calendar_day - 365);
+        const auto *person = harness.population_runtime.persons.get(job->person);
+        assert(person != nullptr);
+        employed_efficiency += person->efficiency;
+    }
+
+    double firm_hires = 0.0;
+    harness.root.firms.for_each_alive(
+        [&firm_hires](macro_sim::FirmId, const macro_sim::core::FirmComponent &firm) {
+            firm_hires += firm.hired_previous;
+        });
+    assert(std::abs(firm_hires - employed_efficiency) < 1.0e-9);
+    const auto first_day = advance(harness, 1U);
+    if (!first_day.ok()) {
+        std::cerr << "genesis employment first day failed: "
+                  << first_day.status().message() << "\n";
+    }
+    assert(first_day.ok());
+
+    value.domestic_economy.rules.genesis_employment_rate = 0.0;
+    auto disabled = build(value);
+    assert(disabled.population_runtime.employment.active_count() == 0U);
 }
 
 void test_energy_day_conserves_and_constrains() {
@@ -558,6 +602,7 @@ void test_validation_rejects_invalid_contracts() {
 
 int main() {
     test_genesis_owns_energy_components();
+    test_genesis_seeds_configured_employment_stock();
     test_energy_day_conserves_and_constrains();
     test_firm_exit_transfers_physical_energy_stocks();
     test_energy_profits_enter_common_income_settlement();

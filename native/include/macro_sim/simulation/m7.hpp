@@ -43,6 +43,9 @@ struct M7Rules final {
     bool job_ladder{true};
     double ladder_search_intensity{0.03};
     double ladder_premium{0.05};
+    bool person_efficiency{false};
+    double efficiency_sigma{0.35};
+    double genesis_employment_rate{0.0};
     bool participation_margin{true};
     bool age_participation{false};
     double young_participation_rate{0.65};

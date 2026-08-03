@@ -372,6 +372,8 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.frictional_search = true;
     population.rules.relationship_wages = true;
     population.rules.job_ladder = true;
+    population.rules.person_efficiency = true;
+    population.rules.genesis_employment_rate = 0.95;
     population.rules.participation_margin = true;
     population.rules.age_participation = true;
     population.rules.family_transfers = true;

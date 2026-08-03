@@ -29,6 +29,9 @@ constexpr std::uint64_t kLadderFirmStream = 0x4c41444445523032ULL;
 constexpr std::uint64_t kDivorceStream = 0x4449564f52434530ULL;
 constexpr std::uint64_t kMarriageStream = 0x4d41525249414745ULL;
 constexpr std::uint64_t kLeavingHomeStream = 0x4c45415645484f4dULL;
+constexpr std::uint64_t kEfficiencyNormalStream = 0x454646494349454eULL;
+constexpr std::uint64_t kEfficiencyAngleStream = 0x454646494349414eULL;
+constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr double kLaborTolerance = 1.0e-8;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
@@ -46,6 +49,23 @@ constexpr double kLaborTolerance = 1.0e-8;
     const auto bits =
         splitmix64(seed ^ splitmix64(identity) ^ splitmix64(day_bits) ^ stream);
     return static_cast<double>(bits >> 11U) * 0x1.0p-53;
+}
+
+[[nodiscard]] double person_efficiency_draw(const M7Rules &rules, std::uint64_t seed,
+                                            PersonId person,
+                                            std::int32_t birth_day) noexcept {
+    if (!rules.person_efficiency || rules.efficiency_sigma <= 0.0) {
+        return 1.0;
+    }
+    const double radial_draw =
+        std::max(unit_draw(seed, person.value(), birth_day, kEfficiencyNormalStream),
+                 std::numeric_limits<double>::min());
+    const double angle_draw =
+        unit_draw(seed, person.value(), birth_day, kEfficiencyAngleStream);
+    const double standard_normal =
+        std::sqrt(-2.0 * std::log(radial_draw)) * std::cos(kTwoPi * angle_draw);
+    const double sigma = rules.efficiency_sigma;
+    return std::exp(sigma * standard_normal - 0.5 * sigma * sigma);
 }
 
 [[nodiscard]] double completed_age(const core::PersonRecord &person,
@@ -1557,6 +1577,21 @@ class M7Extension final : public M6TickExtension {
                     active_hours > kLaborTolerance ||
                     mean_posted_wage * person->efficiency >= reservation;
                 if (active_hours <= kLaborTolerance && !person->searching) {
+                    const auto *secondary = scratch_.employment_.get(
+                        scratch_.employment_.secondary_job(person_id));
+                    const bool retained_contract =
+                        (primary != nullptr && primary->active) ||
+                        (secondary != nullptr && secondary->active);
+                    if (retained_contract) {
+                        const auto status = separate_person(
+                            scratch_.employment_, person_id, calendar_day,
+                            core::SeparationKind::welfare_quit,
+                            scratch_.labor_accounts_);
+                        if (!status.ok()) {
+                            return status;
+                        }
+                        scratch_.working_metrics_.separations += 1.0;
+                    }
                     withdraw();
                 }
             }
@@ -1678,6 +1713,9 @@ class M7Extension final : public M6TickExtension {
                 if (person == nullptr || !person->alive) {
                     return Status(ErrorCode::invariant_violation,
                                   "recall job references an absent person");
+                }
+                if (!person->participating) {
+                    continue;
                 }
                 const double job_labor = job->hours * person->efficiency;
                 const double job_cost = job_labor * job->wage;
@@ -2402,6 +2440,9 @@ class M7Extension final : public M6TickExtension {
                 if (!created.ok()) {
                     return created.status();
                 }
+                scratch_.persons_.get(*created.get_if())->efficiency =
+                    person_efficiency_draw(runtime_.rules, state.seed,
+                                           *created.get_if(), calendar_day);
                 const auto status =
                     scratch_.membership_.add(*created.get_if(), baby.household);
                 if (!status.ok()) {
@@ -2883,6 +2924,8 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.search_intensity,
         rules.ladder_search_intensity,
         rules.ladder_premium,
+        rules.efficiency_sigma,
+        rules.genesis_employment_rate,
         rules.young_participation_rate,
         rules.prime_participation_rate,
         rules.older_participation_rate,
@@ -2905,12 +2948,13 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.target_smoothing > 1.0 || rules.suspension_timeout_days == 0 ||
         rules.search_intensity < 0.0 || rules.search_intensity > 1.0 ||
         rules.ladder_search_intensity < 0.0 || rules.ladder_search_intensity > 1.0 ||
-        rules.ladder_premium < 0.0 || rules.young_participation_rate < 0.0 ||
-        rules.young_participation_rate > 1.0 || rules.prime_participation_rate < 0.0 ||
-        rules.prime_participation_rate > 1.0 || rules.older_participation_rate < 0.0 ||
-        rules.older_participation_rate > 1.0 || rules.reservation_markup < 0.0 ||
-        rules.welfare_quit_hazard < 0.0 || rules.welfare_quit_hazard > 1.0 ||
-        rules.family_transfer_buffer < 1.0 ||
+        rules.ladder_premium < 0.0 || rules.efficiency_sigma < 0.0 ||
+        rules.genesis_employment_rate < 0.0 || rules.genesis_employment_rate > 1.0 ||
+        rules.young_participation_rate < 0.0 || rules.young_participation_rate > 1.0 ||
+        rules.prime_participation_rate < 0.0 || rules.prime_participation_rate > 1.0 ||
+        rules.older_participation_rate < 0.0 || rules.older_participation_rate > 1.0 ||
+        rules.reservation_markup < 0.0 || rules.welfare_quit_hazard < 0.0 ||
+        rules.welfare_quit_hazard > 1.0 || rules.family_transfer_buffer < 1.0 ||
         (rules.family_transfers && !rules.relationships) ||
         rules.marriage_interval_days == 0 || rules.annual_marriage_rate < 0.0 ||
         rules.annual_marriage_rate > 1.0 || rules.annual_divorce_rate < 0.0 ||
@@ -3122,6 +3166,8 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
         }
         const auto person_id = *created.get_if();
         auto *stored = runtime.persons.get(person_id);
+        stored->efficiency = person_efficiency_draw(spec.rules, financial.root.seed,
+                                                    person_id, stored->birth_day);
         const bool working_age =
             age >= spec.rules.working_age && age < spec.rules.retirement_age;
         stored->participating = working_age && structurally_participates(

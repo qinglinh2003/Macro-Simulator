@@ -127,6 +127,68 @@ struct GenesisFirmOpening final {
     double amount{0.0};
 };
 
+[[nodiscard]] Status seed_genesis_employment(core::RootState &state,
+                                             M7Runtime &population) {
+    const double employment_rate = population.rules.genesis_employment_rate;
+    if (employment_rate <= 0.0) {
+        return Status::success();
+    }
+    if (population.employment.active_count() != 0U) {
+        return Status(ErrorCode::invalid_transaction_state,
+                      "M8 genesis employment must start from an empty book");
+    }
+
+    std::vector<PersonId> workers;
+    workers.reserve(population.persons.alive_count());
+    for (const auto person_id : population.persons.alive_ids()) {
+        const auto *person = population.persons.get(person_id);
+        if (person->participating) {
+            workers.push_back(person_id);
+        }
+    }
+    const auto target = std::min(
+        workers.size(), static_cast<std::size_t>(std::llround(
+                            employment_rate * static_cast<double>(workers.size()))));
+    if (target == 0U) {
+        return Status::success();
+    }
+
+    std::vector<FirmId> employers;
+    employers.reserve(state.firms.alive_count());
+    state.firms.for_each_alive(
+        [&employers](FirmId firm_id, const core::FirmComponent &firm) {
+            if (firm.sector == core::FirmSector::consumption ||
+                firm.sector == core::FirmSector::capital ||
+                firm.sector == core::FirmSector::energy) {
+                employers.push_back(firm_id);
+            }
+        });
+    std::sort(employers.begin(), employers.end());
+    if (employers.empty()) {
+        return Status(ErrorCode::invariant_violation,
+                      "M8 genesis employment has no eligible firms");
+    }
+
+    const auto hire_day = static_cast<std::int32_t>(std::max<std::int64_t>(
+        std::numeric_limits<std::int32_t>::min(),
+        static_cast<std::int64_t>(population.start_calendar_day) - 365));
+    for (std::size_t index = 0; index < target; ++index) {
+        const auto worker_index = index * workers.size() / target;
+        const auto person_id = workers[worker_index];
+        const auto firm_id = employers[index % employers.size()];
+        auto *firm = state.firms.get(firm_id);
+        const auto hired = population.employment.hire(
+            person_id, firm_id, hire_day, firm->posted_wage.value(), 1.0, false);
+        if (!hired.ok()) {
+            return hired.status();
+        }
+        const auto *person = population.persons.get(person_id);
+        firm->hired_previous += person->efficiency;
+        firm->labor_demand_previous += person->efficiency;
+    }
+    return population.employment.validate(population.persons, state, kTolerance);
+}
+
 [[nodiscard]] Status
 create_energy_firm(core::RootState &state, M6Runtime &financial_runtime,
                    const EnergyRules &rules, double expected_demand, double capital,
@@ -3906,6 +3968,10 @@ Result<M8Initialization> build_m8_genesis(const M8SimulationSpec &spec) {
                 lifecycle_for_energy_firm(base.root, base.financial_runtime,
                                           opening.firm);
         }
+    }
+    const auto employment_status = seed_genesis_employment(base.root, base.runtime);
+    if (!employment_status.ok()) {
+        return employment_status;
     }
     runtime.last_metrics.energy.transaction_price = runtime.energy_price;
     runtime.last_metrics.energy.fuel_poverty_mortality_multiplier = 1.0;

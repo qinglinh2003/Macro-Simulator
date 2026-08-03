@@ -520,6 +520,50 @@ void test_firm_dividends_follow_equity_ownership() {
     }
 }
 
+void test_large_fallback_dividend_distribution_reconciles() {
+    auto spec = base_spec();
+    auto &real = spec.monetary_economy.real_economy;
+    real.households = 40'000;
+    real.consumption_firms = 1;
+    real.capital_firms = 1;
+    real.rules.initial_household_money = 40.0;
+    real.rules.initial_firm_money = 100'000.0;
+    real.rules.initial_consumption_inventory = 100'000.0;
+    real.rules.initial_expected_demand = 50'000.0;
+    real.rules.initial_price = 1.3;
+    auto &fiscal = spec.monetary_economy.policy;
+    fiscal.government_consumption_share = 0.0;
+    fiscal.government_investment_share = 0.0;
+    fiscal.profit_tax_rate = 0.0;
+    fiscal.income_tax_rate = 0.0;
+    fiscal.consumption_tax_rate = 0.0;
+    fiscal.wealth_tax_rate = 0.0;
+    fiscal.unemployment_benefit_replacement = 0.0;
+    spec.rules.founder_owned_genesis = false;
+    spec.rules.household_equity_target = 0.0;
+    spec.rules.portfolio_adjustment = 0.0;
+    spec.rules.equity_finance = false;
+    spec.rules.margin_credit = false;
+    spec.rules.bank_equity = false;
+    spec.rules.bank_dynamics = false;
+    spec.rules.firm_dynamics = false;
+    auto harness = build(spec);
+    harness.root.firms.for_each_alive(
+        [&](macro_sim::FirmId id, const macro_sim::core::FirmComponent &firm) {
+            auto *mutable_firm = harness.root.firms.get(id);
+            mutable_firm->dividend_payout =
+                firm.sector == macro_sim::core::FirmSector::consumption ? 1.0 : 0.0;
+        });
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(std::abs(result.get_if()->metrics.clearing_residual) < 1.0e-7);
+    const auto clearing =
+        harness.root.postings.balance(harness.root.institutions.clearing_account);
+    assert(clearing.ok());
+    assert(std::abs(clearing.get_if()->value()) < 1.0e-7);
+}
+
 void test_wealth_tax_base_includes_securities_and_subtracts_debt() {
     auto spec = base_spec();
     auto &fiscal = spec.monetary_economy.policy;
@@ -721,6 +765,7 @@ int main() {
     test_firm_entry_uses_post_extension_founder_cash();
     test_capital_firms_are_not_idle_consumption_shells();
     test_firm_dividends_follow_equity_ownership();
+    test_large_fallback_dividend_distribution_reconciles();
     test_wealth_tax_base_includes_securities_and_subtracts_debt();
     test_capital_firm_entry_responds_to_sector_capacity_pressure();
     test_subscale_exit_consolidates_without_extinguishing_a_sector();

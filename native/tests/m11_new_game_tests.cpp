@@ -101,6 +101,9 @@ void test_default_is_complete_latest_world() {
         assert(population.rules.mortality);
         assert(population.rules.persistent_labor);
         assert(population.rules.frictional_search);
+        assert(population.rules.person_efficiency);
+        assert_close(population.rules.efficiency_sigma, 0.35);
+        assert_close(population.rules.genesis_employment_rate, 0.95);
         assert(population.rules.family_transfers);
         assert(real.stochastic);
         assert(financial.rules.bonds);
@@ -177,6 +180,20 @@ void test_default_is_complete_latest_world() {
     }
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
+    for (std::size_t economy_index = 0U;
+         economy_index < world.get_if()->economy_count(); ++economy_index) {
+        const auto *population =
+            world.get_if()->economy_population_runtime(EconomyId(economy_index));
+        assert(population != nullptr);
+        std::size_t participants = 0U;
+        for (const auto person_id : population->persons.alive_ids()) {
+            participants += population->persons.get(person_id)->participating ? 1U : 0U;
+        }
+        assert(population->employment.active_count() ==
+               static_cast<std::size_t>(
+                   std::llround(population->rules.genesis_employment_rate *
+                                static_cast<double>(participants))));
+    }
     M9AdvanceOptions baseline_options;
     baseline_options.worker_count = 8U;
     auto baseline = world.get_if()->advance(1825U, baseline_options);
@@ -201,8 +218,7 @@ void test_default_is_complete_latest_world() {
         const auto *root = world.get_if()->economy_root(EconomyId(economy_index));
         assert(root != nullptr);
         root->banks.for_each_alive([root, economy_index](
-                                       BankId id,
-                                       const core::BankComponent &bank) {
+                                       BankId id, const core::BankComponent &bank) {
             if (!bank.alive) {
                 return;
             }
@@ -218,8 +234,7 @@ void test_default_is_complete_latest_world() {
                         const auto candidate_reserve =
                             root->reserves.balance(candidate_bank.settlement_node);
                         std::cerr << "  bank=" << candidate.value()
-                                  << " alive=" << candidate_bank.alive
-                                  << " reserve="
+                                  << " alive=" << candidate_bank.alive << " reserve="
                                   << (candidate_reserve.ok()
                                           ? candidate_reserve.get_if()->value()
                                           : std::numeric_limits<double>::quiet_NaN())

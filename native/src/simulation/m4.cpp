@@ -295,17 +295,36 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
             household.necessity_spent,    household.luxury_spent,
             household.labor_sold,         household.labor_capacity,
         };
-        if (!all_finite(values) || household.income_expected < 0.0 ||
-            household.income_realized < -kTolerance ||
-            household.consumption_budget < 0.0 || household.spent < 0.0 ||
-            household.necessity_spent < 0.0 || household.luxury_spent < 0.0 ||
-            household.necessity_spent + household.luxury_spent >
-                household.spent + kTolerance ||
-            household.labor_sold < -kTolerance ||
-            household.labor_capacity < -kTolerance ||
-            household.labor_sold > household.labor_capacity + kTolerance) {
+        if (!all_finite(values)) {
             return Status(ErrorCode::invariant_violation,
-                          "M4 household state is invalid");
+                          "M4 household state contains a nonfinite value");
+        }
+        if (household.income_expected < 0.0) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household expected income is negative");
+        }
+        if (household.income_realized < -kTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household realized income is negative");
+        }
+        if (household.consumption_budget < 0.0 || household.spent < 0.0 ||
+            household.necessity_spent < 0.0 || household.luxury_spent < 0.0) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household consumption state is negative");
+        }
+        if (household.necessity_spent + household.luxury_spent >
+            household.spent + kTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household spending categories exceed spending");
+        }
+        if (household.labor_sold < -kTolerance ||
+            household.labor_capacity < -kTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household labor projection is negative");
+        }
+        if (household.labor_sold > household.labor_capacity + kTolerance) {
+            return Status(ErrorCode::invariant_violation,
+                          "M4 household sold labor exceeds capacity");
         }
     }
     for (const auto &firm : scratch.firm_work_) {
