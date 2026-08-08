@@ -1778,6 +1778,7 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     MACRO_SIM_M7_RULE_FLAG(frictional_search);
     MACRO_SIM_M7_RULE_FLAG(relationship_wages);
     MACRO_SIM_M7_RULE_FLAG(job_ladder);
+    MACRO_SIM_M7_RULE_FLAG(person_efficiency);
     MACRO_SIM_M7_RULE_FLAG(participation_margin);
     MACRO_SIM_M7_RULE_FLAG(age_participation);
     MACRO_SIM_M7_RULE_FLAG(family_transfers);
@@ -1806,7 +1807,6 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->fertility_width = value.vital_rates.fertility_width;
     output->sex_ratio_at_birth = value.vital_rates.sex_ratio_at_birth;
     output->vital_interval = value.vital_rates.interval;
-    output->efficiency_sigma = value.efficiency_sigma;
     output->annual_churn = value.annual_churn;
     output->firing_adjustment = value.firing_adjustment;
     output->layoff_band = value.layoff_band;
@@ -1814,6 +1814,8 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->search_intensity = value.search_intensity;
     output->ladder_search_intensity = value.ladder_search_intensity;
     output->ladder_premium = value.ladder_premium;
+    output->efficiency_sigma = value.efficiency_sigma;
+    output->genesis_employment_rate = value.genesis_employment_rate;
     output->young_participation_rate = value.young_participation_rate;
     output->prime_participation_rate = value.prime_participation_rate;
     output->older_participation_rate = value.older_participation_rate;
@@ -1840,6 +1842,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
         !valid_flag(rules->second_jobs) || !valid_flag(rules->suspensions) ||
         !valid_flag(rules->frictional_search) ||
         !valid_flag(rules->relationship_wages) || !valid_flag(rules->job_ladder) ||
+        !valid_flag(rules->person_efficiency) ||
         !valid_flag(rules->participation_margin) ||
         !valid_flag(rules->age_participation) || !valid_flag(rules->family_transfers) ||
         !valid_flag(rules->relationships) || !valid_flag(rules->marriage) ||
@@ -1865,6 +1868,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     MACRO_SIM_COPY_M7_FLAG(frictional_search);
     MACRO_SIM_COPY_M7_FLAG(relationship_wages);
     MACRO_SIM_COPY_M7_FLAG(job_ladder);
+    MACRO_SIM_COPY_M7_FLAG(person_efficiency);
     MACRO_SIM_COPY_M7_FLAG(participation_margin);
     MACRO_SIM_COPY_M7_FLAG(age_participation);
     MACRO_SIM_COPY_M7_FLAG(family_transfers);
@@ -1892,7 +1896,6 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.vital_rates.fertility_width = rules->fertility_width;
     value.vital_rates.sex_ratio_at_birth = rules->sex_ratio_at_birth;
     value.vital_rates.interval = rules->vital_interval;
-    value.efficiency_sigma = rules->efficiency_sigma;
     value.annual_churn = rules->annual_churn;
     value.firing_adjustment = rules->firing_adjustment;
     value.layoff_band = rules->layoff_band;
@@ -1900,6 +1903,8 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.search_intensity = rules->search_intensity;
     value.ladder_search_intensity = rules->ladder_search_intensity;
     value.ladder_premium = rules->ladder_premium;
+    value.efficiency_sigma = rules->efficiency_sigma;
+    value.genesis_employment_rate = rules->genesis_employment_rate;
     value.young_participation_rate = rules->young_participation_rate;
     value.prime_participation_rate = rules->prime_participation_rate;
     value.older_participation_rate = rules->older_participation_rate;

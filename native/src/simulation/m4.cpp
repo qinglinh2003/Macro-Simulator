@@ -296,7 +296,7 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
         };
         if (!all_finite(values)) {
             return Status(ErrorCode::invariant_violation,
-                          "M4 household state is not finite");
+                          "M4 household state contains a nonfinite value");
         }
         if (household.income_expected < 0.0) {
             return Status(ErrorCode::invariant_violation,
@@ -306,15 +306,15 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
             return Status(ErrorCode::invariant_violation,
                           "M4 household realized income is negative");
         }
-        if (household.consumption_budget < 0.0 || household.spent < 0.0) {
+        if (household.consumption_budget < 0.0 || household.spent < 0.0 ||
+            household.necessity_spent < 0.0 || household.luxury_spent < 0.0) {
             return Status(ErrorCode::invariant_violation,
-                          "M4 household consumption flow is negative");
+                          "M4 household consumption state is negative");
         }
-        if (household.necessity_spent < 0.0 || household.luxury_spent < 0.0 ||
-            household.necessity_spent + household.luxury_spent >
-                household.spent + kTolerance) {
+        if (household.necessity_spent + household.luxury_spent >
+            household.spent + kTolerance) {
             return Status(ErrorCode::invariant_violation,
-                          "M4 household consumption strata do not reconcile");
+                          "M4 household spending categories exceed spending");
         }
         if (household.labor_sold < -kTolerance ||
             household.labor_capacity < -kTolerance) {
@@ -323,7 +323,7 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
         }
         if (household.labor_sold > household.labor_capacity + kTolerance) {
             return Status(ErrorCode::invariant_violation,
-                          "M4 household labor sold exceeds participation capacity");
+                          "M4 household sold labor exceeds capacity");
         }
     }
     for (const auto &firm : scratch.firm_work_) {

@@ -102,6 +102,9 @@ void test_default_is_complete_latest_world() {
         assert(population.rules.mortality);
         assert(population.rules.persistent_labor);
         assert(population.rules.frictional_search);
+        assert(population.rules.person_efficiency);
+        assert_close(population.rules.efficiency_sigma, 0.35);
+        assert_close(population.rules.genesis_employment_rate, 0.95);
         assert(population.rules.family_transfers);
         assert(real.stochastic);
         assert(financial.rules.bonds);
@@ -180,6 +183,20 @@ void test_default_is_complete_latest_world() {
     }
     auto world = M9World::create(game.get_if()->world);
     assert(world.ok());
+    for (std::size_t economy_index = 0U;
+         economy_index < world.get_if()->economy_count(); ++economy_index) {
+        const auto *population =
+            world.get_if()->economy_population_runtime(EconomyId(economy_index));
+        assert(population != nullptr);
+        std::size_t participants = 0U;
+        for (const auto person_id : population->persons.alive_ids()) {
+            participants += population->persons.get(person_id)->participating ? 1U : 0U;
+        }
+        assert(population->employment.active_count() ==
+               static_cast<std::size_t>(
+                   std::llround(population->rules.genesis_employment_rate *
+                                static_cast<double>(participants))));
+    }
     M9AdvanceOptions baseline_options;
     baseline_options.worker_count = 8U;
     auto baseline = world.get_if()->advance(1825U, baseline_options);
@@ -190,14 +207,21 @@ void test_default_is_complete_latest_world() {
     assert(baseline.ok());
     assert(baseline.get_if()->advanced_ticks == 1825U);
     assert(baseline.get_if()->metrics.domestic.size() == 3U);
+    std::size_t metric_economy_index = 0U;
     for (const auto &metrics : baseline.get_if()->metrics.domestic) {
         assert(std::isfinite(metrics.economy.economy.economy.economy.real_output));
         assert(metrics.economy.economy.economy.economy.real_output > 0.0);
         assert(std::isfinite(metrics.economy.unemployment_rate));
         assert(metrics.economy.unemployment_rate >= 0.0);
+        if (metrics.economy.unemployment_rate >= 0.20) {
+            std::cerr << "native default unemployment exceeds calibration bound: "
+                      << metrics.economy.unemployment_rate
+                      << " economy=" << metric_economy_index << "\n";
+        }
         assert(metrics.economy.unemployment_rate < 0.20);
         assert(std::abs(metrics.economy.economy.economy.economy.price_index - 0.80) >
                1.0e-3);
+        ++metric_economy_index;
     }
     for (std::size_t economy_index = 0U;
          economy_index < world.get_if()->economy_count(); ++economy_index) {

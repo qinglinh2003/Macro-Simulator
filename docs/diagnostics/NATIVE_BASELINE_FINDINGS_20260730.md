@@ -1,7 +1,8 @@
 # Native no-shock baseline findings
 
 Date: 2026-07-30  
-Branch: `fix/native-baseline-v36`  
+Updated: 2026-08-03
+Branch: `fix/native-calibration-v38`
 Starting revision: `79a60e949e3b1b69f323f8564af844dd5b646303`
 
 ## 1. Decision
@@ -22,6 +23,11 @@ After the repairs in this branch:
   8.1% unemployment;
 - the actual Godot new-game contract at its reported day 514 now records 4.9%,
   5.0%, and 5.8% unemployment instead of 30.1%, 35.8%, and 38.0%;
+- deterministic genesis matching now opens with approximately 95% of the
+  participating labor force employed, removing the artificial 85.7% day-one
+  unemployment release;
+- a post-matcher 1,000,000-person run starts at 5.60% unemployment, averages
+  3.16% in year one, and ends at 3.33%;
 - no healthy bank ends a tested day with negative reserves;
 - lender-of-last-resort advances have a repayment lifecycle instead of becoming
   permanent reserve creation;
@@ -30,9 +36,8 @@ After the repairs in this branch:
 - the 49-test pure-native release suite passes with eight workers.
 
 This is now a credible simulation baseline, but it is not an empirical
-calibration claim. Energy affordability, the creation transient, long-run
-capital replacement, housing repricing, and labor suspensions remain explicit
-calibration frontiers.
+calibration claim. Energy affordability, long-run capital replacement, housing
+repricing, and labor-cycle amplitude remain explicit calibration frontiers.
 
 ## 2. What a no-shock path should do
 
@@ -72,6 +77,10 @@ money or physical assets forever.
 | Labor measurement | Suspended zero-hour workers were omitted from headline unemployment even though they produced no labor or income. | Included them in headline slack while retaining a separate suspended stock. |
 | Labor demand | Notional vacancies could survive without finance and overstate usable demand. | Matching and reporting now distinguish effective funded labor demand. |
 | Labor adjustment | Firing and suspension adjustment was too abrupt for a daily persistent-job model. | Recalibrated the M7 adjustment path and exposed the open/suspended decomposition. |
+| Genesis labor stock | Genesis created an empty employment book, so the first published day showed approximately 85.7% unemployment even though the configured economy was not in a depression. | Deterministically seed 95% of participating people into full-hour consumption, capital, and energy jobs before the first tick; initialize firm labor history from worker efficiency. |
+| Worker productivity | The playable native path left every person's labor efficiency at exactly one even when individual efficiency was enabled in `Config`. | Add deterministic, mean-preserving lognormal efficiency draws for genesis persons and births, and carry the rule through C++, C ABI, Python bindings, and checkpoints. |
+| Suspended-worker participation | A worker could leave the labor force while retaining a suspended recall option; a later recall then sold labor above the household's reported capacity. | Close retained contracts on participation withdrawal and forbid recall for non-participants. |
+| Large-population dividends | Independently accumulated dividend totals could differ from clearing cash by a few floating-point ulps, overdrawing the final household in a large equal distribution. | Distribute the projected clearing balance recursively and give the exact remaining balance to the last recipient. |
 | Bank day-end order | Energy, housing, and other extension payments could occur after the first interbank close. | Added a final domestic interbank/LoLR liquidity close after extension settlement. |
 | World settlement order | Trade, tariff, and remittance cash posted after domestic banks had already closed, leaving final reserve overdrafts. | Added a world-settlement liquidity close with explicit interbank loans and LoLR fallback. |
 | LoLR lifecycle | LoLR advances accumulated indefinitely and permanently inflated reserves. | Added maturity servicing, principal retirement, interest payment, outstanding metrics, and operation-record reuse. |
@@ -106,6 +115,9 @@ versions:
 - stale housing ask decay: `0.005` per market session;
 - housing ask floor: two annual wages;
 - firm subscale exit and capital-firm entry: enabled.
+- person-level labor efficiency: enabled, with lognormal sigma `0.35` and a
+  mean-preserving correction;
+- genesis employment coverage: `0.95` of the participating labor force.
 
 Population overrides scale representative firm cash, inventory, capital, energy
 cash, builder cash, and opening bank capital. This is necessary for a
@@ -120,7 +132,8 @@ Sections 5.2-5.4 were collected before product-construction parity was enforced:
 they exercise the same C++ dynamics through the Config bridge, but should not be
 mistaken for byte-for-byte Godot new-game contracts. Section 5.5 is the direct
 desktop contract and is the authoritative reproduction of the reported UI
-failure.
+failure. Sections 5.2-5.5 predate the explicit genesis employment matcher;
+section 5.6 is the current post-matcher acceptance evidence.
 
 ### 5.1 Pure-native release regression
 
@@ -239,14 +252,55 @@ The product path was also rerun through the unified diagnostic session with
 three 100,000-person economies to day 545. Unemployment ended at 4.27%, 5.63%,
 and 5.46%, while all three price indexes moved to approximately 1.09-1.11.
 
+### 5.6 Post-matcher native acceptance, 2026-08-03
+
+The current product-construction path was rerun after genesis employment and
+person efficiency were wired into the native engine. Every run used eight
+workers and the C++ `_native` engine; Python was only the command-line driver
+and JSON summarizer.
+
+Three independent 100,000-person, two-year closed-economy seeds produced:
+
+| Seed | Day-one unemployment | Year-one mean | Year-two mean | Day-730 unemployment | Open / suspended at day 730 |
+|---:|---:|---:|---:|---:|---:|
+| 7 | 5.64% | 3.28% | 5.80% | 10.82% | 6.73% / 4.10% |
+| 23 | 5.64% | 3.25% | 6.09% | 11.59% | 6.08% / 5.51% |
+| 101 | 5.60% | 3.17% | 5.78% | 8.95% | 5.45% / 3.50% |
+
+All three runs completed without bank failure or invariant violation. A repeated
+30-day, seed-7 run produced the identical state digest
+`11079879754119722460`; the complete summaries were byte-identical after
+removing timing and module-path metadata.
+
+The 1,000,000-person, one-year seed-23 run produced:
+
+| Measure | Result |
+|---|---:|
+| Runtime / time per simulated day | 195.6 s / 0.536 s |
+| Known retained memory | 1.10 GB |
+| Day-one / year-mean / year-end unemployment | 5.60% / 3.16% / 3.33% |
+| End open unemployment / suspended share | 1.32% / 2.01% |
+| End participation | 79.71% |
+| Mean poverty / end price index | 17.31% / 1.062 |
+| Healthy banks / failures / negative reserves | 80 / 0 / 0 |
+| LoLR advances | 0 |
+
+Finally, the three-country product path with 100,000 people per economy ran to
+day 545. Unemployment started at 5.64%, 5.25%, and 5.80%, and ended at 4.89%,
+5.16%, and 5.59%. All three price levels and exchange rates moved, and no bank
+failed or ended with negative reserves. This is the current authoritative
+answer to the reported 30-40% unemployment failure.
+
 ## 6. Remaining model limitations
 
 These findings did not justify another emergency bug fix, but they should guide
 the next calibration round:
 
-1. **Genesis labor network.** The first month is not presentation-ready. Add a
-   deterministic initial employment matcher or suppress public releases until
-   the labor network has reached a declared coverage threshold.
+1. **Labor-cycle amplitude.** The genesis discontinuity is resolved, but the
+   100,000-person two-year seeds can finish near 9-12% unemployment as vacancies
+   collapse late in the second year. This is an endogenous cycle rather than a
+   30-40% steady-state failure, but hiring, suspension, and recall parameters
+   still need observed-data calibration over longer multi-seed panels.
 2. **Energy affordability.** Physical shortage is low in the ten-year closed
    run, yet desired energy demand remains materially unfilled and mature energy
    markups can reach the cap. Entry, price competition, affordability, and
@@ -288,22 +342,22 @@ ctest --test-dir build/native/m11-release \
   --output-on-failure -LE python-binding -j8
 
 PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
-  /Users/qinglinh/workspace/macro-simulator-worktrees/free-sandbox/.venv/bin/python \
+  .venv/bin/python \
   scripts/native_baseline_profile.py \
-  --population 100000 --countries 1 --days 3650 \
-  --seed 23 --workers 8 --chunk-days 365
-
-PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
-  /Users/qinglinh/workspace/macro-simulator-worktrees/free-sandbox/.venv/bin/python \
-  scripts/native_baseline_profile.py \
-  --population 1000000 --countries 1 --days 365 \
+  --population 100000 --countries 1 --days 730 \
   --seed 23 --workers 8 --chunk-days 30
 
 PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
-  /Users/qinglinh/workspace/macro-simulator-worktrees/free-sandbox/.venv/bin/python \
+  .venv/bin/python \
   scripts/native_baseline_profile.py \
-  --population 100000 --countries 3 --days 1825 \
-  --seed 23 --workers 8 --chunk-days 365
+  --population 1000000 --countries 1 --days 365 \
+  --seed 23 --workers 8 --chunk-days 15
+
+PYTHONPATH="$PWD/build/native/m11-release/native:$PWD" \
+  .venv/bin/python \
+  scripts/native_baseline_profile.py \
+  --population 100000 --countries 3 --days 545 \
+  --seed 7 --workers 8 --chunk-days 15
 ```
 
 The diagnostic driver stores bounded metric history and reads only public

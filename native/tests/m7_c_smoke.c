@@ -58,8 +58,13 @@ int main(void) {
 
     macro_sim_m7_rules rules;
     require_ok(macro_sim_m7_rules_defaults(&rules));
+    CHECK(rules.person_efficiency == 0);
+    CHECK(rules.efficiency_sigma == 0.35);
+    CHECK(rules.genesis_employment_rate == 0.0);
     rules.fertility = 0;
     rules.mortality = 0;
+    rules.person_efficiency = 1;
+    rules.efficiency_sigma = 0.2;
     rules.annual_churn = 0.0;
     rules.annual_marriage_rate = 1.0;
     require_ok(macro_sim_m7_update_rules(session, &rules));

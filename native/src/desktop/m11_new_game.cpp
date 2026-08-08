@@ -40,7 +40,7 @@ struct Profile final {
 [[nodiscard]] const Profile *profile(std::string_view name) noexcept {
     static constexpr Profile symmetric{};
     static constexpr Profile advanced{1.20, 1.0, 0.012, 1.6, 0.85, 1.05, 0.50};
-    static constexpr Profile developing{0.75, 1.5, 0.030, 2.4, 1.20, 1.0, 0.65};
+    static constexpr Profile developing{0.75, 1.5, 0.030, 2.4, 1.20, 1.0, 0.60};
     static constexpr Profile entrepot{1.15, 0.4, 0.018, 1.3, 0.80, 0.85, 0.50};
     static constexpr Profile petrostate{0.85, 0.8, 0.010, 2.2, 0.90, 1.40, 0.50};
     if (name == "symmetric" || name == "custom") {
@@ -374,6 +374,8 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.frictional_search = true;
     population.rules.relationship_wages = true;
     population.rules.job_ladder = true;
+    population.rules.person_efficiency = true;
+    population.rules.genesis_employment_rate = 0.95;
     population.rules.participation_margin = true;
     population.rules.age_participation = true;
     population.rules.family_transfers = true;

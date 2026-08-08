@@ -2862,28 +2862,33 @@ class M6Extension final : public M5TickExtension {
         const auto clearing_index = account_index(clearing);
         if (clearing_index >= real.balances_.size()) {
             return Status(ErrorCode::internal_error,
-                          "M6 dividend clearing projection is absent");
+                          "M6 dividend clearing projection is stale");
         }
-        const double available = std::max(0.0, real.balances_[clearing_index]);
-        const double shortfall = std::max(0.0, equal_distribution - available);
-        const double rounding_tolerance =
-            1.0e-10 * std::max(1.0, std::abs(dividend_total));
-        if (shortfall > rounding_tolerance) {
+        const double clearing_cash = std::max(0.0, real.balances_[clearing_index]);
+        const double reconciliation_tolerance =
+            kTolerance * std::max(1.0, dividend_total);
+        if (std::abs(clearing_cash - equal_distribution) > reconciliation_tolerance) {
             return Status(ErrorCode::invariant_violation,
-                          "M6 dividend ownership distribution is inconsistent");
+                          "M6 dividend fallback does not reconcile to clearing cash");
         }
-        double remaining_distribution = std::min(equal_distribution, available);
-        const double share =
-            remaining_distribution / static_cast<double>(real.household_ids_.size());
+        // Use the projected clearing balance as the authoritative remainder.
+        // Summing thousands of firm payments and then subtracting thousands of
+        // holder distributions follows a different floating-point order than
+        // the scalar dividend accumulator.  Dividing a separately accumulated
+        // total can therefore overdraw the final household by a few ulps at
+        // large population scales.
+        double remaining = clearing_cash;
+        std::size_t recipients_remaining = real.household_ids_.size();
         for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
             const auto *household = state.households.get(real.household_ids_[index]);
             if (household == nullptr) {
                 return Status(ErrorCode::invariant_violation,
                               "M6 dividend fallback household is absent");
             }
-            const double amount = index + 1U == real.household_ids_.size()
-                                      ? remaining_distribution
-                                      : std::min(share, remaining_distribution);
+            const double amount =
+                recipients_remaining == 1U
+                    ? remaining
+                    : remaining / static_cast<double>(recipients_remaining);
             const auto status =
                 transfer(state, real, clearing, household->primary_account, amount);
             if (!status.ok()) {
@@ -2891,7 +2896,8 @@ class M6Extension final : public M5TickExtension {
                               "M6 dividend fallback exceeds clearing cash");
             }
             real.household_work_[index].income_realized += amount;
-            remaining_distribution -= amount;
+            remaining -= amount;
+            --recipients_remaining;
         }
         return Status::success();
     }

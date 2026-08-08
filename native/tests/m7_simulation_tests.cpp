@@ -184,32 +184,33 @@ void test_genesis_derives_households_from_population() {
         });
 }
 
-void test_genesis_person_efficiency_is_deterministic_and_configurable() {
-    auto heterogeneous = build();
-    double sum = 0.0;
-    double square_sum = 0.0;
-    for (const auto person_id : heterogeneous.runtime.persons.alive_ids()) {
-        const double value = heterogeneous.runtime.persons.get(person_id)->efficiency;
-        assert(std::isfinite(value) && value > 0.0);
-        sum += value;
-        square_sum += value * value;
-    }
-    const double count =
-        static_cast<double>(heterogeneous.runtime.persons.alive_count());
-    const double variance = square_sum / count - (sum / count) * (sum / count);
-    assert(variance > 0.01);
+void test_genesis_person_efficiency_is_mean_preserving_and_deterministic() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 4'096;
+    spec.rules.person_efficiency = true;
+    spec.rules.efficiency_sigma = 0.35;
+    auto first = build(spec);
+    auto second = build(spec);
 
-    auto repeated = build();
-    for (const auto person_id : heterogeneous.runtime.persons.alive_ids()) {
-        assert(heterogeneous.runtime.persons.get(person_id)->efficiency ==
-               repeated.runtime.persons.get(person_id)->efficiency);
+    double total = 0.0;
+    bool heterogeneous = false;
+    for (const auto person_id : first.runtime.persons.alive_ids()) {
+        const double efficiency = first.runtime.persons.get(person_id)->efficiency;
+        assert(std::isfinite(efficiency));
+        assert(efficiency > 0.0);
+        assert(efficiency == second.runtime.persons.get(person_id)->efficiency);
+        total += efficiency;
+        heterogeneous = heterogeneous || std::abs(efficiency - 1.0) > 1.0e-9;
     }
+    const double mean =
+        total / static_cast<double>(first.runtime.persons.alive_count());
+    assert(mean > 0.97 && mean < 1.03);
+    assert(heterogeneous);
 
-    auto homogeneous_spec = base_spec();
-    homogeneous_spec.rules.efficiency_sigma = 0.0;
-    auto homogeneous = build(homogeneous_spec);
-    for (const auto person_id : homogeneous.runtime.persons.alive_ids()) {
-        assert(homogeneous.runtime.persons.get(person_id)->efficiency == 1.0);
+    spec.rules.person_efficiency = false;
+    auto disabled = build(spec);
+    for (const auto person_id : disabled.runtime.persons.alive_ids()) {
+        assert(disabled.runtime.persons.get(person_id)->efficiency == 1.0);
     }
 }
 
@@ -271,7 +272,11 @@ void test_population_fault_is_atomic() {
 }
 
 void test_forced_birth_and_split_determinism() {
-    auto direct = build();
+    auto efficiency_spec = base_spec();
+    efficiency_spec.rules.person_efficiency = true;
+    efficiency_spec.rules.efficiency_sigma = 0.35;
+    auto direct = build(efficiency_spec);
+    auto repeated_birth = build(efficiency_spec);
     PersonId mother{};
     for (const auto id : direct.runtime.persons.alive_ids()) {
         const auto *person = direct.runtime.persons.get(id);
@@ -288,11 +293,17 @@ void test_forced_birth_and_split_determinism() {
     birth.force_birth = mother;
     const auto born = advance(direct, 1, birth);
     assert(born.ok());
+    const auto repeated = advance(repeated_birth, 1, birth);
+    assert(repeated.ok());
     assert(direct.runtime.persons.alive_count() == 101);
     assert(born.get_if()->metrics.births == 1);
     const auto *baby = direct.runtime.persons.get(PersonId(101));
     assert(baby != nullptr);
     assert(baby->mother == mother);
+    assert(std::isfinite(baby->efficiency));
+    assert(baby->efficiency > 0.0);
+    assert(baby->efficiency ==
+           repeated_birth.runtime.persons.get(PersonId(101))->efficiency);
     assert(direct.runtime.membership.household_of(PersonId(101)) ==
            direct.runtime.persons.get(mother)->household);
 
@@ -931,33 +942,45 @@ void test_second_jobs_and_participation_margin() {
     assert(result.get_if()->metrics.nonsearching > 0.0);
 }
 
-void test_nonparticipant_cannot_be_recalled_from_suspension() {
+void test_participation_exit_closes_suspended_recall_option() {
     auto harness = build();
-    macro_sim::Result<macro_sim::simulation::M7AdvanceResult> result(
-        macro_sim::Status::success());
-    for (std::size_t day = 0;
-         day < 90U && harness.runtime.employment.suspended_count() == 0U; ++day) {
-        result = advance(harness, 1);
-        assert(result.ok());
+    auto result = advance(harness, 1);
+    assert(result.ok());
+
+    PersonId worker{};
+    macro_sim::JobId suspended_job{};
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto job_id = harness.runtime.employment.primary_job(person_id);
+        const auto *job = harness.runtime.employment.get(job_id);
+        if (job != nullptr && job->active && !job->suspended) {
+            worker = person_id;
+            suspended_job = job_id;
+            break;
+        }
     }
-    assert(harness.runtime.employment.suspended_count() > 0U);
+    assert(worker.valid());
+    const double before_hours = harness.runtime.employment.active_hours(worker);
+    assert(harness.runtime.employment
+               .suspend(suspended_job, harness.runtime.current_calendar_day)
+               .ok());
+    const double after_hours = harness.runtime.employment.active_hours(worker);
+    harness.runtime.labor_accounts.private_fte_outflows_total +=
+        before_hours - after_hours;
+    harness.runtime.labor_accounts.suspensions_total += 1.0;
     harness.runtime.rules.reservation_markup = 100.0;
+    harness.runtime.rules.welfare_quit_hazard = 1.0;
+
     result = advance(harness, 1);
     if (!result.ok()) {
-        std::cerr << "M7 nonparticipant recall regression failed: "
+        std::cerr << "suspended participation exit failed: "
                   << result.status().message() << "\n";
     }
     assert(result.ok());
-    bool retained_nonparticipant = false;
-    for (const auto &job : harness.runtime.employment.records()) {
-        if (!job.id.valid() || !job.active || !job.suspended) {
-            continue;
-        }
-        const auto *person = harness.runtime.persons.get(job.person);
-        retained_nonparticipant =
-            retained_nonparticipant || (person != nullptr && !person->participating);
-    }
-    assert(retained_nonparticipant);
+    assert(!harness.runtime.persons.get(worker)->participating);
+    const auto *closed = harness.runtime.employment.get(suspended_job);
+    assert(closed != nullptr);
+    assert(!closed->active);
+    assert(!harness.runtime.employment.primary_job(worker).valid());
 }
 
 void test_age_participation_creates_a_stable_labor_force_margin() {
@@ -1109,7 +1132,13 @@ void test_validation_rejects_invalid_population() {
     spec.rules.estates = true;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
     spec = base_spec();
-    spec.rules.efficiency_sigma = -0.1;
+    spec.rules.efficiency_sigma = -0.01;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.genesis_employment_rate = -0.01;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.genesis_employment_rate = 1.01;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
 }
 
@@ -1117,7 +1146,7 @@ void test_validation_rejects_invalid_population() {
 
 int main() {
     test_genesis_derives_households_from_population();
-    test_genesis_person_efficiency_is_deterministic_and_configurable();
+    test_genesis_person_efficiency_is_mean_preserving_and_deterministic();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();
@@ -1134,7 +1163,7 @@ int main() {
     test_pensions_are_consolidated_into_fiscal_metrics();
     test_job_ladder_survives_firm_lifecycle();
     test_second_jobs_and_participation_margin();
-    test_nonparticipant_cannot_be_recalled_from_suspension();
+    test_participation_exit_closes_suspended_recall_option();
     test_age_participation_creates_a_stable_labor_force_margin();
     test_second_jobs_respect_search_friction();
     test_recovered_demand_restores_incumbent_hours();

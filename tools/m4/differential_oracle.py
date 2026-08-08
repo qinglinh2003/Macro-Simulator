@@ -41,7 +41,7 @@ def production_target(inventory: float) -> float:
 
 
 def reference_v0() -> dict[str, Any]:
-    budget = 100.0 * 5.5e-5
+    budget = 0.8 * 1.0 + 100.0 * 5.5e-5
     quantity = budget / 1.2
     produced = DAILY_GROWTH
     balances = [0.0, 0.0, 0.0, 0.0, 0.0, 101.0 - budget, 199.0 + budget]
@@ -49,7 +49,7 @@ def reference_v0() -> dict[str, Any]:
     return {
         "balances": balances,
         "household": {
-            "income_expected": 0.0,
+            "income_expected": 1.0,
             "income_realized": 1.0,
             "consumption_budget": budget,
             "spent": budget,
@@ -88,7 +88,7 @@ def reference_v0() -> dict[str, Any]:
 
 
 def reference_v1() -> dict[str, Any]:
-    gross_budget = 100.0 * 5.5e-5
+    gross_budget = 0.8 * 1.0 + 100.0 * 5.5e-5
     household_spend = gross_budget / 1.15
     consumption_tax = household_spend * 0.15
     household_quantity = household_spend / 1.2
@@ -153,7 +153,7 @@ def reference_v1() -> dict[str, Any]:
             capital_balance,
         ],
         "household": {
-            "income_expected": 0.0,
+            "income_expected": 1.0,
             "income_realized": income_before_tax - income_tax,
             "consumption_budget": gross_budget,
             "spent": household_spend,

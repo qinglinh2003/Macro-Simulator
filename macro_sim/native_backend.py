@@ -266,7 +266,6 @@ M7_RULE_FIELDS = {
     "fractional_hours": "labor_fractional_hours",
     "second_jobs": "labor_second_job",
     "suspensions": "labor_suspension",
-    "efficiency_sigma": "efficiency_sigma",
     "annual_churn": "churn_annual",
     "firing_adjustment": "lambda_fire",
     "layoff_band": "layoff_band",
@@ -278,6 +277,8 @@ M7_RULE_FIELDS = {
     "job_ladder": "labor_job_ladder",
     "ladder_search_intensity": "ladder_search_intensity",
     "ladder_premium": "ladder_premium",
+    "person_efficiency": "labor_person_efficiency",
+    "efficiency_sigma": "efficiency_sigma",
     "participation_margin": "labor_participation",
     "reservation_markup": "reservation_markup",
     "welfare_quit_hazard": "welfare_quit_hazard",
@@ -555,6 +556,9 @@ def _m8_spec(
     _assign(population.policy, policy, M7_POLICY_FIELDS)
     _assign(population.rules, cfg, M7_RULE_FIELDS)
     population.rules.age_participation = bool(cfg.labor_participation)
+    population.rules.genesis_employment_rate = (
+        0.95 if cfg.labor_matching == "persistent" else 0.0
+    )
     vital = population.rules.vital_rates
     vital.total_fertility_rate = float(cfg.demographics_tfr)
     vital.makeham_a *= float(cfg.demographics_mortality_scale)

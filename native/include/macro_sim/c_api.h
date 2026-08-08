@@ -492,6 +492,7 @@ typedef struct macro_sim_m7_rules {
     uint32_t frictional_search;
     uint32_t relationship_wages;
     uint32_t job_ladder;
+    uint32_t person_efficiency;
     uint32_t participation_margin;
     uint32_t age_participation;
     uint32_t family_transfers;
@@ -518,7 +519,6 @@ typedef struct macro_sim_m7_rules {
     double fertility_width;
     double sex_ratio_at_birth;
     double vital_interval;
-    double efficiency_sigma;
     double annual_churn;
     double firing_adjustment;
     double layoff_band;
@@ -526,6 +526,8 @@ typedef struct macro_sim_m7_rules {
     double search_intensity;
     double ladder_search_intensity;
     double ladder_premium;
+    double efficiency_sigma;
+    double genesis_employment_rate;
     double young_participation_rate;
     double prime_participation_rate;
     double older_participation_rate;

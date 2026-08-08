@@ -1931,7 +1931,6 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(fractional_hours);
     MACRO_SIM_BIND_M7_RULE(second_jobs);
     MACRO_SIM_BIND_M7_RULE(suspensions);
-    MACRO_SIM_BIND_M7_RULE(efficiency_sigma);
     MACRO_SIM_BIND_M7_RULE(annual_churn);
     MACRO_SIM_BIND_M7_RULE(firing_adjustment);
     MACRO_SIM_BIND_M7_RULE(layoff_band);
@@ -1943,6 +1942,9 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(job_ladder);
     MACRO_SIM_BIND_M7_RULE(ladder_search_intensity);
     MACRO_SIM_BIND_M7_RULE(ladder_premium);
+    MACRO_SIM_BIND_M7_RULE(person_efficiency);
+    MACRO_SIM_BIND_M7_RULE(efficiency_sigma);
+    MACRO_SIM_BIND_M7_RULE(genesis_employment_rate);
     MACRO_SIM_BIND_M7_RULE(participation_margin);
     MACRO_SIM_BIND_M7_RULE(age_participation);
     MACRO_SIM_BIND_M7_RULE(young_participation_rate);
