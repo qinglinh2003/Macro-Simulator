@@ -2117,6 +2117,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_HOUSING_RULE(rental_investor_premium);
     MACRO_SIM_BIND_HOUSING_RULE(rental_vacancy_deadband);
     MACRO_SIM_BIND_HOUSING_RULE(rent_floor_wage_share);
+    MACRO_SIM_BIND_HOUSING_RULE(wealth_effect);
     MACRO_SIM_BIND_HOUSING_RULE(builder_count);
     MACRO_SIM_BIND_HOUSING_RULE(initial_builder_cash_buffer);
     MACRO_SIM_BIND_HOUSING_RULE(builder_productivity);

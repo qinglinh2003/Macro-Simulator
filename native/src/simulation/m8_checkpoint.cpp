@@ -123,6 +123,7 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(rental_investor_premium)                                                         \
     X(rental_vacancy_deadband)                                                         \
     X(rent_floor_wage_share)                                                           \
+    X(wealth_effect)                                                                   \
     X(builder_count)                                                                   \
     X(initial_builder_cash_buffer)                                                     \
     X(builder_productivity)                                                            \

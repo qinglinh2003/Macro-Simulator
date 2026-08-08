@@ -663,7 +663,8 @@ class M8Extension final : public M7TickExtension {
         }
     }
 
-    Status prepare_tick(const core::RootState &state, M4Runtime &, M4TickScratch &real,
+    Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
+                        M4TickScratch &real,
                         M5Runtime &, M5TickScratch &, M6Runtime &, M6TickScratch &,
                         M7Runtime &, M7TickScratch &population, Tick,
                         PhiloxRng &) override {
@@ -739,6 +740,29 @@ class M8Extension final : public M7TickExtension {
             runtime_.housing_affordability.leave_home_multiplier;
         scratch_.working_metrics_.housing.fertility_multiplier =
             runtime_.housing_affordability.fertility_multiplier;
+        if (runtime_.housing_rules.enabled &&
+            runtime_.housing_rules.wealth_effect > algorithms::kEconomicEpsilon) {
+            const double marginal_propensity = real_runtime.rules.wealth_propensity;
+            for (const auto &dwelling : runtime_.properties.records()) {
+                if (!dwelling.active ||
+                    dwelling.owner.kind() != core::OwnerKind::household) {
+                    continue;
+                }
+                const auto identity =
+                    static_cast<std::size_t>(dwelling.owner.value());
+                const auto household_index =
+                    identity < real.household_dense_index_.size()
+                        ? real.household_dense_index_[identity]
+                        : kAbsentIndex;
+                if (household_index >= real.household_work_.size()) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "M8 housing wealth owner projection is stale");
+                }
+                real.household_work_[household_index].consumption_budget +=
+                    runtime_.housing_rules.wealth_effect * marginal_propensity *
+                    scratch_.house_price_;
+            }
+        }
         scratch_.orders_.clear();
         scratch_.offers_.clear();
         scratch_.buyer_order_.clear();
@@ -3551,6 +3575,7 @@ Status validate_housing_rules(const HousingRules &rules) noexcept {
         rules.rental_investor_premium,
         rules.rental_vacancy_deadband,
         rules.rent_floor_wage_share,
+        rules.wealth_effect,
         rules.initial_builder_cash_buffer,
         rules.builder_productivity,
         rules.builder_demand_seed,
@@ -3580,6 +3605,7 @@ Status validate_housing_rules(const HousingRules &rules) noexcept {
         rules.rent_adjustment > 1.0 || rules.rent_burden_cap < 0.0 ||
         rules.rental_investor_premium < 0.0 || rules.rental_vacancy_deadband < 0.0 ||
         rules.rental_vacancy_deadband > 1.0 || rules.rent_floor_wage_share < 0.0 ||
+        rules.wealth_effect < 0.0 || rules.wealth_effect > 1.0 ||
         (rules.construction &&
          (rules.builder_count == 0 || rules.builder_productivity <= 0.0)) ||
         rules.builder_count > 10'000'000 || rules.initial_builder_cash_buffer < 0.0 ||

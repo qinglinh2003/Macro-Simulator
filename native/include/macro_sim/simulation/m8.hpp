@@ -233,6 +233,7 @@ struct HousingRules final {
     double rental_investor_premium{0.02};
     double rental_vacancy_deadband{0.0};
     double rent_floor_wage_share{0.0};
+    double wealth_effect{0.0};
     std::uint64_t builder_count{5};
     // Developer equity must be large enough to carry a representative project
     // through the construction-loan borrowing base.  Five monetary units strand

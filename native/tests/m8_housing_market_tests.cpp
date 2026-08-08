@@ -675,6 +675,27 @@ void test_broader_housing_search_changes_the_observed_opportunity_set() {
     );
 }
 
+void test_housing_wealth_effect_adds_owner_consumption_budget() {
+    auto neutral_spec = market_spec(false, false);
+    neutral_spec.housing_rules.resale_market = false;
+    neutral_spec.housing_rules.wealth_effect = 0.0;
+    auto treatment_spec = neutral_spec;
+    treatment_spec.housing_rules.wealth_effect = 0.10;
+    auto neutral = build(neutral_spec);
+    auto treatment = build(treatment_spec);
+
+    assert(advance(neutral, 1).ok());
+    assert(advance(treatment, 1).ok());
+    const auto total_budget = [](const Harness &harness) {
+        double total = 0.0;
+        for (const auto &household : harness.real_scratch.household_work_) {
+            total += household.consumption_budget;
+        }
+        return total;
+    };
+    assert(total_budget(treatment) > total_budget(neutral));
+}
+
 void test_failed_market_tick_is_atomic() {
     auto harness = build(market_spec(false, false));
     const auto root = base_checkpoint(harness);
@@ -711,6 +732,7 @@ int main() {
     test_price_shock_forecloses_into_bank_title();
     test_homeless_owner_does_not_buy_own_listing();
     test_broader_housing_search_changes_the_observed_opportunity_set();
+    test_housing_wealth_effect_adds_owner_consumption_budget();
     test_failed_market_tick_is_atomic();
     return 0;
 }

@@ -383,6 +383,7 @@ HOUSING_RULE_FIELDS = {
     "rental_investor_premium": "rental_investor_premium",
     "rental_vacancy_deadband": "rental_vacancy_deadband",
     "rent_floor_wage_share": "rental_rent_floor_wage_share",
+    "wealth_effect": "housing_wealth_effect",
     "demand_price_step": "housing_demand_step",
     "ask_floor_annual_wage_share": "housing_ask_floor_wage_share",
     "affordability_burnin_years": "housing_signal_burnin_years",
