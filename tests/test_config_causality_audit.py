@@ -24,8 +24,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 243,
-        "missing_native_route": 49,
+        "mapped_native": 247,
+        "missing_native_route": 45,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -121,6 +121,13 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
     )
     necessity = rows["config.necessity_share0"]
     assert necessity["route_status"] == "mapped_native"
+    for field_name in (
+        "fertility_rank_gradient",
+        "mortality_rank_gradient",
+        "strat_mult_hi",
+        "strat_mult_lo",
+    ):
+        assert rows[f"config.{field_name}"]["route_status"] == "mapped_native"
     bank_assignment = rows["config.bank_assignment"]
     assert bank_assignment["route_status"] == "missing_native_route"
     assert "round-robin" in bank_assignment["route_note"]

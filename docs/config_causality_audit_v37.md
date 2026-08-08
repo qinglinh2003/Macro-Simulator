@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 243 |
-| Native route missing or incomplete | 49 |
+| Native route confirmed | 247 |
+| Native route missing or incomplete | 45 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 49 missing or incomplete routes are real implementation work; they are not
+The 45 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,13 +306,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 243
+The native product baseline comparison now projects every one of the 247
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 223 |
+| Exact semantic value | 227 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -842,13 +842,13 @@ unrelated assignment as an implemented route.
 
 ### 8.10 Distribution and private household support screen
 
-The distribution inventory contains seven executable economic Config
-contracts. Five now own native demand or industrial-structure mechanisms:
+The distribution inventory contains nine executable economic Config
+contracts. Five own native demand or industrial-structure mechanisms:
 `consumption_strata`, `mpc_dispersion`, `mpc_wealth_curvature`,
 `n_firm_share`, and `necessity_share0`. The other two govern the private
-family-transfer safety net. `deprivation_gauges` and `subsistence_share` are
-observation-only. Only `strat_mult_lo` and `strat_mult_hi` remain blocked; the
-native engine still lacks their intended demographic rank gradient.
+family-transfer safety net, while `strat_mult_lo` and `strat_mult_hi` bound the
+wealth-rank vital-risk schedules. `deprivation_gauges` and `subsistence_share`
+are observation-only. No distribution field remains blocked.
 
 The family screen covers 16 native worlds at 100,000 persons: four paired
 seeds, 365 days, and eight native workers. Its current findings are:
@@ -924,9 +924,33 @@ The engine also publishes separate planned consumption, wealth-financed
 consumption, both propensity dispersions, requested necessity quantity,
 realized necessity and luxury spending, their spending share, and both firm
 counts. This prevents general-equilibrium sales outcomes from masking or
-falsely crediting the direct distribution mechanism. The remaining rank
-gradient fields require a per-demographic-group propensity assignment before
-this module can be declared native-complete.
+falsely crediting the direct distribution mechanism.
+
+The wealth-rank extension adds 36 native worlds at 100,000 persons, four paired
+seeds, 90 days, and eight workers. Net wealth per demographic need unit is
+ranked annually into quintiles; households formed between snapshots remain
+neutral until the next refresh, avoiding a daily `O(H log H)` sort. Mortality
+and fertility exposures are separately mean-normalized before the configured
+shared bounds are applied. The formal screen finds:
+
+- Setting `mortality_rank_gradient` from 0.8 to zero removes mortality-risk
+  dispersion exactly, lowers bottom-quintile deaths by 6.5 and raises
+  top-quintile deaths by 20.75 over 90 days on average. Raising the gradient to
+  1.6 roughly doubles multiplier dispersion, raises bottom-quintile deaths by
+  8.25, and lowers top-quintile deaths by 13.0. All directional event
+  intervals exclude zero.
+- Setting `fertility_rank_gradient` from 0.5 to zero removes fertility-risk
+  dispersion exactly, lowers bottom-quintile births by 11.25 and raises
+  top-quintile births by 6.75. Raising the gradient to 1.0 raises bottom-
+  quintile births by 11.5 and lowers top-quintile births by 6.25. All four
+  directional intervals exclude zero.
+- Raising `strat_mult_lo` from 0.5 to 0.9 compresses mortality and fertility
+  multiplier dispersion by about 12.5% and 23.2%. Lowering `strat_mult_hi`
+  from 2.0 to 1.05 compresses them by about 54.0% and 24.5%. These are shared
+  tail safeguards rather than aggregate fertility or mortality targets.
+
+The module is now native-complete: all nine economic Config fields are
+executable and both methodological fields are covered by invariance contracts.
 
 ### 8.11 Banking and credit screen
 

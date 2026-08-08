@@ -1,6 +1,7 @@
 #ifndef MACRO_SIM_SIMULATION_M7_HPP
 #define MACRO_SIM_SIMULATION_M7_HPP
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -68,6 +69,10 @@ struct M7Rules final {
     std::uint32_t marriage_interval_days{30};
     double annual_marriage_rate{0.08};
     double annual_divorce_rate{0.02};
+    double mortality_rank_gradient{0.0};
+    double fertility_rank_gradient{0.0};
+    double stratification_multiplier_minimum{0.5};
+    double stratification_multiplier_maximum{2.0};
     core::MarriageRules marriage_rules{};
 
     bool operator==(const M7Rules &) const = default;
@@ -123,6 +128,12 @@ struct M7Metrics final {
     std::uint64_t population{0};
     std::uint64_t births{0};
     std::uint64_t deaths{0};
+    double wealth_rank_mortality_multiplier_stddev{0.0};
+    double wealth_rank_fertility_multiplier_stddev{0.0};
+    std::uint64_t bottom_wealth_quintile_deaths{0};
+    std::uint64_t top_wealth_quintile_deaths{0};
+    std::uint64_t bottom_wealth_quintile_births{0};
+    std::uint64_t top_wealth_quintile_births{0};
     std::uint64_t households_with_members{0};
     double mean_household_size{0.0};
     double working_age_share{0.0};
@@ -193,6 +204,14 @@ struct M7Runtime final {
     std::vector<double> firm_target_ema;
     std::vector<EstateRecord> estates;
     std::vector<LeavingHomeRecord> leaving_home;
+    std::int32_t stratification_snapshot_day{0};
+    std::vector<std::uint8_t> household_wealth_quintile;
+    std::vector<double> household_mortality_multiplier;
+    std::vector<double> household_fertility_multiplier;
+    std::array<double, 5> mortality_quintile_multiplier{1.0, 1.0, 1.0, 1.0,
+                                                        1.0};
+    std::array<double, 5> fertility_quintile_multiplier{1.0, 1.0, 1.0, 1.0,
+                                                        1.0};
     std::uint64_t next_event_id{1};
     std::uint64_t population_rng_counter{0};
     M7Metrics last_metrics{};
@@ -243,6 +262,14 @@ class M7TickScratch final {
     std::vector<FirmId> ladder_firms_;
     std::vector<PersonId> divorce_candidates_;
     std::vector<PersonId> fertility_candidates_;
+    std::int32_t stratification_snapshot_day_{0};
+    std::vector<std::uint8_t> household_wealth_quintile_;
+    std::vector<double> household_mortality_multiplier_;
+    std::vector<double> household_fertility_multiplier_;
+    std::array<double, 5> mortality_quintile_multiplier_{1.0, 1.0, 1.0, 1.0,
+                                                         1.0};
+    std::array<double, 5> fertility_quintile_multiplier_{1.0, 1.0, 1.0, 1.0,
+                                                         1.0};
     std::vector<HouseholdId> kin_households_;
     std::vector<HouseholdId> retired_households_;
     std::vector<std::size_t> household_work_index_;

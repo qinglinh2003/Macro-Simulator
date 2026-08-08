@@ -254,6 +254,68 @@ void test_demography_projects_age_weighted_consumption_needs() {
     assert(differs_from_household_count);
 }
 
+void test_wealth_rank_gradients_apply_bounded_vital_risk() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 2'000;
+    spec.rules.mortality_rank_gradient = 0.8;
+    spec.rules.fertility_rank_gradient = 0.5;
+    auto harness = build(spec);
+    auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.wealth_rank_mortality_multiplier_stddev > 0.0);
+    assert(result.get_if()->metrics.wealth_rank_fertility_multiplier_stddev > 0.0);
+    const double unbounded_mortality_stddev =
+        result.get_if()->metrics.wealth_rank_mortality_multiplier_stddev;
+    assert(harness.runtime.household_wealth_quintile.size() ==
+           harness.real_scratch.household_dense_index_.size());
+
+    PersonId bottom_member{};
+    PersonId top_fertile_woman{};
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(person_id);
+        const auto household = static_cast<std::size_t>(person->household.value());
+        if (household >= harness.runtime.household_wealth_quintile.size()) {
+            continue;
+        }
+        const auto quintile = harness.runtime.household_wealth_quintile[household];
+        if (quintile == 0U && !bottom_member.valid()) {
+            bottom_member = person_id;
+        }
+        const double age = static_cast<double>(harness.runtime.current_calendar_day -
+                                               person->birth_day) /
+                           365.2425;
+        if (quintile == 4U && person->sex == PersonSex::female && age >= 15.0 &&
+            age <= 49.0 && !top_fertile_woman.valid()) {
+            top_fertile_woman = person_id;
+        }
+    }
+    assert(bottom_member.valid());
+    assert(top_fertile_woman.valid());
+    M7AdvanceOptions forced_death;
+    forced_death.force_death = bottom_member;
+    result = advance(harness, 1, forced_death);
+    assert(result.ok());
+    assert(result.get_if()->metrics.bottom_wealth_quintile_deaths == 1U);
+    M7AdvanceOptions forced_birth;
+    forced_birth.force_birth = top_fertile_woman;
+    result = advance(harness, 1, forced_birth);
+    assert(result.ok());
+    assert(result.get_if()->metrics.top_wealth_quintile_births == 1U);
+
+    auto bounded = spec;
+    bounded.rules.stratification_multiplier_minimum = 0.9;
+    bounded.rules.stratification_multiplier_maximum = 1.05;
+    auto bounded_harness = build(bounded);
+    result = advance(bounded_harness, 1);
+    assert(result.ok());
+    assert(*std::ranges::min_element(
+               bounded_harness.runtime.mortality_quintile_multiplier) >= 0.9);
+    assert(*std::ranges::max_element(
+               bounded_harness.runtime.fertility_quintile_multiplier) <= 1.05);
+    assert(result.get_if()->metrics.wealth_rank_mortality_multiplier_stddev <
+           unbounded_mortality_stddev);
+}
+
 void test_death_and_estate_settle_exactly_once() {
     auto harness = build();
     const auto household = harness.runtime.persons.get(PersonId(1))->household;
@@ -1190,6 +1252,12 @@ void test_validation_rejects_invalid_population() {
     spec = base_spec();
     spec.rules.suspension_quit_discount = 1.51;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.stratification_multiplier_minimum = 1.01;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.stratification_multiplier_maximum = 0.99;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
 }
 
 } // namespace
@@ -1198,6 +1266,7 @@ int main() {
     test_genesis_derives_households_from_population();
     test_genesis_person_efficiency_is_mean_preserving_and_deterministic();
     test_demography_projects_age_weighted_consumption_needs();
+    test_wealth_rank_gradients_apply_bounded_vital_risk();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();

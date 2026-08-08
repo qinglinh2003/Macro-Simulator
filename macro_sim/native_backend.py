@@ -323,6 +323,10 @@ M7_RULE_FIELDS = {
     "marriage_interval_days": "demographic_marriage_market_interval_days",
     "annual_marriage_rate": "demographic_annual_marriage_rate_peak",
     "annual_divorce_rate": "demographic_annual_divorce_rate_base",
+    "mortality_rank_gradient": "mortality_rank_gradient",
+    "fertility_rank_gradient": "fertility_rank_gradient",
+    "stratification_multiplier_minimum": "strat_mult_lo",
+    "stratification_multiplier_maximum": "strat_mult_hi",
 }
 
 ENERGY_POLICY_FIELDS = {

@@ -33,6 +33,8 @@ constexpr std::uint64_t kEfficiencyNormalStream = 0x454646494349454eULL;
 constexpr std::uint64_t kEfficiencyAngleStream = 0x454646494349414eULL;
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr double kLaborTolerance = 1.0e-8;
+constexpr std::size_t kWealthQuintiles = 5U;
+constexpr std::uint8_t kUnrankedWealthQuintile = 5U;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
@@ -245,6 +247,215 @@ household_security_portfolio_value(const core::SecurityBook &securities,
         }
     }
     return value;
+}
+
+[[nodiscard]] std::array<double, kWealthQuintiles>
+wealth_rank_multipliers(double gradient,
+                        const std::array<double, kWealthQuintiles> &exposure,
+                        double minimum, double maximum) noexcept {
+    std::array<double, kWealthQuintiles> multipliers{1.0, 1.0, 1.0, 1.0, 1.0};
+    if (gradient == 0.0) {
+        return multipliers;
+    }
+    const double total_exposure =
+        std::accumulate(exposure.begin(), exposure.end(), 0.0);
+    if (total_exposure <= 0.0) {
+        return multipliers;
+    }
+    std::array<double, kWealthQuintiles> raw{};
+    double weighted_total = 0.0;
+    for (std::size_t bucket = 0; bucket < kWealthQuintiles; ++bucket) {
+        const double rank =
+            (static_cast<double>(bucket) + 0.5) /
+            static_cast<double>(kWealthQuintiles);
+        raw[bucket] = std::exp(gradient * (0.5 - rank));
+        weighted_total += exposure[bucket] * raw[bucket];
+    }
+    const double weighted_mean = weighted_total / total_exposure;
+    if (!finite(weighted_mean) || weighted_mean <= 0.0) {
+        return multipliers;
+    }
+    for (std::size_t bucket = 0; bucket < kWealthQuintiles; ++bucket) {
+        multipliers[bucket] =
+            std::clamp(raw[bucket] / weighted_mean, minimum, maximum);
+    }
+    return multipliers;
+}
+
+[[nodiscard]] double
+quintile_multiplier_stddev(
+    const std::array<double, kWealthQuintiles> &multipliers) noexcept {
+    const double mean =
+        std::accumulate(multipliers.begin(), multipliers.end(), 0.0) /
+        static_cast<double>(kWealthQuintiles);
+    double variance = 0.0;
+    for (const double value : multipliers) {
+        variance += (value - mean) * (value - mean);
+    }
+    return std::sqrt(variance / static_cast<double>(kWealthQuintiles));
+}
+
+[[nodiscard]] Status refresh_wealth_stratification(
+    const core::RootState &state, const M7Rules &rules,
+    const core::PersonStore &persons, const M4TickScratch &real,
+    const M5TickScratch &monetary, const M6TickScratch &financial,
+    std::int32_t calendar_day, M7TickScratch &scratch) {
+    const auto identity_count = real.household_dense_index_.size();
+    scratch.household_wealth_quintile_.assign(identity_count,
+                                              kUnrankedWealthQuintile);
+    scratch.household_mortality_multiplier_.assign(identity_count, 1.0);
+    scratch.household_fertility_multiplier_.assign(identity_count, 1.0);
+
+    std::vector<double> net_wealth(real.household_ids_.size(), 0.0);
+    std::vector<double> need_units(real.household_ids_.size(), 0.0);
+    for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
+        const auto *household = state.households.get(real.household_ids_[index]);
+        if (household == nullptr) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 wealth-rank household is absent");
+        }
+        const auto account =
+            static_cast<std::size_t>(household->primary_account.value());
+        if (account >= real.balances_.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 wealth-rank account is stale");
+        }
+        net_wealth[index] = real.balances_[account];
+        if (account < monetary.debt_by_account_.size()) {
+            net_wealth[index] -= monetary.debt_by_account_[account];
+        }
+    }
+    for (const auto &lot : financial.securities_.lots()) {
+        if (!lot.active() || lot.holder.kind() != core::OwnerKind::household) {
+            continue;
+        }
+        const auto identity = static_cast<std::size_t>(lot.holder.value());
+        const auto index = identity < real.household_dense_index_.size()
+                               ? real.household_dense_index_[identity]
+                               : std::numeric_limits<std::size_t>::max();
+        if (index >= net_wealth.size()) {
+            continue;
+        }
+        if (lot.security.kind() == core::SecurityKind::equity) {
+            const auto *contract =
+                financial.securities_.get(EquityId(lot.security.value()));
+            if (contract != nullptr && contract->active) {
+                net_wealth[index] += lot.units * contract->price.value();
+            }
+        } else {
+            const auto *contract =
+                financial.securities_.get(BondId(lot.security.value()));
+            if (contract != nullptr && contract->active) {
+                net_wealth[index] += lot.units;
+            }
+        }
+    }
+    for (const auto person_id : persons.alive_ids()) {
+        const auto *person = persons.get(person_id);
+        const auto identity = static_cast<std::size_t>(person->household.value());
+        const auto index = identity < real.household_dense_index_.size()
+                               ? real.household_dense_index_[identity]
+                               : std::numeric_limits<std::size_t>::max();
+        if (index >= need_units.size()) {
+            continue;
+        }
+        const double age = completed_age(*person, calendar_day);
+        need_units[index] += age < 18.0 ? 0.65 : (age >= 65.0 ? 0.90 : 1.0);
+    }
+
+    struct RankedHousehold final {
+        double wealth_per_need{0.0};
+        HouseholdId household{};
+        std::size_t dense_index{0};
+    };
+    std::vector<RankedHousehold> ranked;
+    ranked.reserve(real.household_ids_.size());
+    for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
+        if (need_units[index] <= 0.0) {
+            continue;
+        }
+        ranked.push_back({net_wealth[index] / need_units[index],
+                          real.household_ids_[index], index});
+    }
+    std::sort(ranked.begin(), ranked.end(),
+              [](const RankedHousehold &left, const RankedHousehold &right) {
+                  if (left.wealth_per_need != right.wealth_per_need) {
+                      return left.wealth_per_need < right.wealth_per_need;
+                  }
+                  return left.household < right.household;
+              });
+    for (std::size_t rank = 0; rank < ranked.size(); ++rank) {
+        const auto bucket = static_cast<std::uint8_t>(std::min<std::size_t>(
+            kWealthQuintiles - 1U, rank * kWealthQuintiles / ranked.size()));
+        const auto identity =
+            static_cast<std::size_t>(ranked[rank].household.value());
+        if (identity < scratch.household_wealth_quintile_.size()) {
+            scratch.household_wealth_quintile_[identity] = bucket;
+        }
+    }
+
+    std::array<double, kWealthQuintiles> mortality_exposure{};
+    std::array<double, kWealthQuintiles> fertility_exposure{};
+    for (const auto person_id : persons.alive_ids()) {
+        const auto *person = persons.get(person_id);
+        const auto identity = static_cast<std::size_t>(person->household.value());
+        if (identity >= scratch.household_wealth_quintile_.size()) {
+            continue;
+        }
+        const auto bucket = scratch.household_wealth_quintile_[identity];
+        if (bucket >= kWealthQuintiles) {
+            continue;
+        }
+        const double age = completed_age(*person, calendar_day);
+        if (age >= static_cast<double>(rules.vital_rates.maximum_age)) {
+            mortality_exposure[bucket] += 1.0;
+        } else {
+            const auto survival = algorithms::survival_probability(
+                rules.vital_rates, age, kDailyYear);
+            if (!survival.ok()) {
+                return survival.status();
+            }
+            mortality_exposure[bucket] += 1.0 - *survival.get_if();
+        }
+        if (person->sex == core::PersonSex::female && age >= 15.0 && age <= 49.0) {
+            const auto fertility = algorithms::fertility_rate(rules.vital_rates, age);
+            if (!fertility.ok()) {
+                return fertility.status();
+            }
+            fertility_exposure[bucket] += *fertility.get_if();
+        }
+    }
+    scratch.mortality_quintile_multiplier_ = wealth_rank_multipliers(
+        rules.mortality_rank_gradient, mortality_exposure,
+        rules.stratification_multiplier_minimum,
+        rules.stratification_multiplier_maximum);
+    scratch.fertility_quintile_multiplier_ = wealth_rank_multipliers(
+        rules.fertility_rank_gradient, fertility_exposure,
+        rules.stratification_multiplier_minimum,
+        rules.stratification_multiplier_maximum);
+    for (const auto &entry : ranked) {
+        const auto identity = static_cast<std::size_t>(entry.household.value());
+        const auto bucket = scratch.household_wealth_quintile_[identity];
+        scratch.household_mortality_multiplier_[identity] =
+            scratch.mortality_quintile_multiplier_[bucket];
+        scratch.household_fertility_multiplier_[identity] =
+            scratch.fertility_quintile_multiplier_[bucket];
+    }
+    scratch.stratification_snapshot_day_ = calendar_day;
+    return Status::success();
+}
+
+[[nodiscard]] double household_rank_multiplier(
+    HouseholdId household, std::span<const double> multipliers) noexcept {
+    const auto identity = static_cast<std::size_t>(household.value());
+    return identity < multipliers.size() ? multipliers[identity] : 1.0;
+}
+
+[[nodiscard]] std::uint8_t household_wealth_quintile(
+    HouseholdId household, std::span<const std::uint8_t> quintiles) noexcept {
+    const auto identity = static_cast<std::size_t>(household.value());
+    return identity < quintiles.size() ? quintiles[identity]
+                                       : kUnrankedWealthQuintile;
 }
 
 [[nodiscard]] Status create_equal_claims(
@@ -1196,6 +1407,12 @@ class M7Extension final : public M6TickExtension {
             runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
             runtime_.estates = std::move(scratch_.estates_);
             runtime_.leaving_home = std::move(scratch_.leaving_home_);
+            runtime_.household_wealth_quintile =
+                std::move(scratch_.household_wealth_quintile_);
+            runtime_.household_mortality_multiplier =
+                std::move(scratch_.household_mortality_multiplier_);
+            runtime_.household_fertility_multiplier =
+                std::move(scratch_.household_fertility_multiplier_);
         }
     }
 
@@ -1228,6 +1445,12 @@ class M7Extension final : public M6TickExtension {
             scratch_.firm_target_ema_ = std::move(runtime_.firm_target_ema);
             scratch_.estates_ = std::move(runtime_.estates);
             scratch_.leaving_home_ = std::move(runtime_.leaving_home);
+            scratch_.household_wealth_quintile_ =
+                std::move(runtime_.household_wealth_quintile);
+            scratch_.household_mortality_multiplier_ =
+                std::move(runtime_.household_mortality_multiplier);
+            scratch_.household_fertility_multiplier_ =
+                std::move(runtime_.household_fertility_multiplier);
         } else {
             scratch_.persons_ = runtime_.persons;
             scratch_.membership_ = runtime_.membership;
@@ -1237,7 +1460,19 @@ class M7Extension final : public M6TickExtension {
             scratch_.firm_target_ema_ = runtime_.firm_target_ema;
             scratch_.estates_ = runtime_.estates;
             scratch_.leaving_home_ = runtime_.leaving_home;
+            scratch_.household_wealth_quintile_ =
+                runtime_.household_wealth_quintile;
+            scratch_.household_mortality_multiplier_ =
+                runtime_.household_mortality_multiplier;
+            scratch_.household_fertility_multiplier_ =
+                runtime_.household_fertility_multiplier;
         }
+        scratch_.stratification_snapshot_day_ =
+            runtime_.stratification_snapshot_day;
+        scratch_.mortality_quintile_multiplier_ =
+            runtime_.mortality_quintile_multiplier;
+        scratch_.fertility_quintile_multiplier_ =
+            runtime_.fertility_quintile_multiplier;
         scratch_.labor_accounts_ = runtime_.labor_accounts;
         scratch_.pending_leaving_home_.clear();
         scratch_.opening_alive_.assign(scratch_.persons_.alive_ids().begin(),
@@ -1283,6 +1518,36 @@ class M7Extension final : public M6TickExtension {
                 return status;
             }
         }
+        const auto household_identity_count = real.household_dense_index_.size();
+        const bool refresh_stratification =
+            scratch_.household_wealth_quintile_.empty() ||
+            calendar_day < scratch_.stratification_snapshot_day_ ||
+            calendar_day - scratch_.stratification_snapshot_day_ >= 365;
+        if (refresh_stratification) {
+            const auto status = refresh_wealth_stratification(
+                state, runtime_.rules, scratch_.persons_, real, monetary, financial,
+                calendar_day, scratch_);
+            if (!status.ok()) {
+                return status;
+            }
+        } else if (scratch_.household_wealth_quintile_.size() <
+                   household_identity_count) {
+            // Households formed between annual snapshots are deliberately neutral
+            // until the next rank refresh. This preserves the historical contract
+            // and avoids an O(H log H) sort after every daily household event.
+            scratch_.household_wealth_quintile_.resize(
+                household_identity_count, kUnrankedWealthQuintile);
+            scratch_.household_mortality_multiplier_.resize(
+                household_identity_count, 1.0);
+            scratch_.household_fertility_multiplier_.resize(
+                household_identity_count, 1.0);
+        }
+        scratch_.working_metrics_.wealth_rank_mortality_multiplier_stddev =
+            quintile_multiplier_stddev(
+                scratch_.mortality_quintile_multiplier_);
+        scratch_.working_metrics_.wealth_rank_fertility_multiplier_stddev =
+            quintile_multiplier_stddev(
+                scratch_.fertility_quintile_multiplier_);
         if (real_runtime.rules.consumption_strata) {
             std::fill(real.household_need_units_.begin(),
                       real.household_need_units_.end(), 0.0);
@@ -1306,15 +1571,28 @@ class M7Extension final : public M6TickExtension {
                         return survival.status();
                     }
                     const double base_mortality = 1.0 - *survival.get_if();
+                    const double rank_multiplier = household_rank_multiplier(
+                        person->household,
+                        std::span<const double>(
+                            scratch_.household_mortality_multiplier_));
                     const double adjusted_survival = std::clamp(
                         1.0 - scratch_.external_mortality_multiplier_ *
-                                  base_mortality,
+                                  rank_multiplier * base_mortality,
                         0.0, 1.0);
                     dies = unit_draw(state.seed, person_id.value(), calendar_day,
                                      kMortalityStream) > adjusted_survival;
                 }
             }
             if (dies) {
+                const auto wealth_quintile = household_wealth_quintile(
+                    person->household,
+                    std::span<const std::uint8_t>(
+                        scratch_.household_wealth_quintile_));
+                if (wealth_quintile == 0U) {
+                    ++scratch_.working_metrics_.bottom_wealth_quintile_deaths;
+                } else if (wealth_quintile == kWealthQuintiles - 1U) {
+                    ++scratch_.working_metrics_.top_wealth_quintile_deaths;
+                }
                 const auto status =
                     settle_death(state, real, monetary, financial, scratch_.persons_,
                                  scratch_.membership_, scratch_.beneficial_ownership_,
@@ -2484,6 +2762,11 @@ class M7Extension final : public M6TickExtension {
                     runtime_.rules.fertility
                         ? 1.0 - std::exp(-*annual_rate.get_if() *
                                          scratch_.external_fertility_multiplier_ *
+                                         household_rank_multiplier(
+                                             person->household,
+                                             std::span<const double>(
+                                                 scratch_
+                                                     .household_fertility_multiplier_)) *
                                          kDailyYear)
                         : 0.0;
                 if (forced || unit_draw(state.seed, person_id.value(), calendar_day,
@@ -2532,6 +2815,15 @@ class M7Extension final : public M6TickExtension {
                     return lineage;
                 }
                 ++scratch_.working_metrics_.births;
+                const auto wealth_quintile = household_wealth_quintile(
+                    mother->household,
+                    std::span<const std::uint8_t>(
+                        scratch_.household_wealth_quintile_));
+                if (wealth_quintile == 0U) {
+                    ++scratch_.working_metrics_.bottom_wealth_quintile_births;
+                } else if (wealth_quintile == kWealthQuintiles - 1U) {
+                    ++scratch_.working_metrics_.top_wealth_quintile_births;
+                }
             }
         }
         for (const auto household : scratch_.retired_households_) {
@@ -2739,6 +3031,12 @@ class M7Extension final : public M6TickExtension {
             runtime_.firm_target_ema = std::move(scratch_.firm_target_ema_);
             runtime_.estates = std::move(scratch_.estates_);
             runtime_.leaving_home = std::move(scratch_.leaving_home_);
+            runtime_.household_wealth_quintile =
+                std::move(scratch_.household_wealth_quintile_);
+            runtime_.household_mortality_multiplier =
+                std::move(scratch_.household_mortality_multiplier_);
+            runtime_.household_fertility_multiplier =
+                std::move(scratch_.household_fertility_multiplier_);
         } else {
             std::swap(runtime_.persons, scratch_.persons_);
             std::swap(runtime_.membership, scratch_.membership_);
@@ -2748,7 +3046,19 @@ class M7Extension final : public M6TickExtension {
             std::swap(runtime_.firm_target_ema, scratch_.firm_target_ema_);
             std::swap(runtime_.estates, scratch_.estates_);
             std::swap(runtime_.leaving_home, scratch_.leaving_home_);
+            std::swap(runtime_.household_wealth_quintile,
+                      scratch_.household_wealth_quintile_);
+            std::swap(runtime_.household_mortality_multiplier,
+                      scratch_.household_mortality_multiplier_);
+            std::swap(runtime_.household_fertility_multiplier,
+                      scratch_.household_fertility_multiplier_);
         }
+        runtime_.stratification_snapshot_day =
+            scratch_.stratification_snapshot_day_;
+        runtime_.mortality_quintile_multiplier =
+            scratch_.mortality_quintile_multiplier_;
+        runtime_.fertility_quintile_multiplier =
+            scratch_.fertility_quintile_multiplier_;
         runtime_.labor_accounts = scratch_.labor_accounts_;
         runtime_.next_event_id = scratch_.next_event_id_;
         runtime_.population_rng_counter = scratch_.population_rng_counter_;
@@ -2970,6 +3280,11 @@ void M7TickScratch::reserve(const M7Runtime &runtime) {
     ladder_firms_.reserve(runtime.firm_target_ema.size());
     divorce_candidates_.reserve(runtime.relationships.unions().size());
     fertility_candidates_.reserve(runtime.persons.alive_count() / 4U);
+    household_wealth_quintile_.reserve(runtime.household_wealth_quintile.size());
+    household_mortality_multiplier_.reserve(
+        runtime.household_mortality_multiplier.size());
+    household_fertility_multiplier_.reserve(
+        runtime.household_fertility_multiplier.size());
     kin_households_.reserve(16);
     retired_households_.reserve(4);
     firm_target_ema_.reserve(runtime.firm_target_ema.size());
@@ -2988,6 +3303,11 @@ std::uint64_t M7TickScratch::capacity_signature() const noexcept {
            (static_cast<std::uint64_t>(roster_buffer_.capacity()) << 24U) ^
            (static_cast<std::uint64_t>(divorce_candidates_.capacity()) << 40U) ^
            (static_cast<std::uint64_t>(fertility_candidates_.capacity()) << 52U) ^
+           (static_cast<std::uint64_t>(household_wealth_quintile_.capacity()) << 10U) ^
+           (static_cast<std::uint64_t>(household_mortality_multiplier_.capacity())
+            << 14U) ^
+           (static_cast<std::uint64_t>(household_fertility_multiplier_.capacity())
+            << 18U) ^
            (static_cast<std::uint64_t>(beneficial_assets_.capacity()) << 48U) ^
            (static_cast<std::uint64_t>(estate_securities_.capacity()) << 56U) ^
            (static_cast<std::uint64_t>(kin_households_.capacity()) << 4U) ^
@@ -3028,6 +3348,10 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.annual_leave_rate_peak,
         rules.annual_leave_rate_late,
         rules.efficiency_sigma,
+        rules.mortality_rank_gradient,
+        rules.fertility_rank_gradient,
+        rules.stratification_multiplier_minimum,
+        rules.stratification_multiplier_maximum,
     };
     if (rules.working_age < 1U || rules.retirement_age <= rules.working_age ||
         rules.retirement_age > rules.vital_rates.maximum_age ||
@@ -3057,6 +3381,10 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.leave_home_peak_end_age < rules.leave_home_min_age ||
         rules.annual_leave_rate_peak < 0.0 || rules.annual_leave_rate_peak > 1.0 ||
         rules.annual_leave_rate_late < 0.0 || rules.annual_leave_rate_late > 1.0 ||
+        rules.mortality_rank_gradient < 0.0 ||
+        rules.stratification_multiplier_minimum <= 0.0 ||
+        rules.stratification_multiplier_minimum > 1.0 ||
+        rules.stratification_multiplier_maximum < 1.0 ||
         (rules.second_jobs && !rules.fractional_hours) ||
         (rules.job_ladder && !rules.relationship_wages) ||
         rules.marriage_rules.minimum_age == 0 ||

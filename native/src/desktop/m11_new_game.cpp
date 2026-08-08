@@ -405,6 +405,10 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.leaving_home = true;
     population.rules.annual_marriage_rate = 0.30;
     population.rules.annual_divorce_rate = 0.012;
+    population.rules.mortality_rank_gradient = 0.8;
+    population.rules.fertility_rank_gradient = 0.5;
+    population.rules.stratification_multiplier_minimum = 0.5;
+    population.rules.stratification_multiplier_maximum = 2.0;
     population.rules.marriage_rules.assortativity = 1.0;
     spec.energy_rules.enabled = true;
     spec.energy_rules.household_energy = true;
@@ -492,7 +496,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
 [[nodiscard]] Status apply_country_overrides(const Json &overrides,
                                              simulation::M8SimulationSpec &spec,
                                              std::uint64_t &population_count) {
-    static constexpr std::array<std::string_view, 43> allowed{{
+    static constexpr std::array<std::string_view, 47> allowed{{
         "n_households",
         "n_firms_c",
         "n_firms_k",
@@ -520,6 +524,10 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         "n_firm_share",
         "mpc_dispersion",
         "mpc_wealth_curvature",
+        "mortality_rank_gradient",
+        "fertility_rank_gradient",
+        "strat_mult_lo",
+        "strat_mult_hi",
         "energy_enabled",
         "government",
         "national_accounts_metrics",
@@ -605,6 +613,14 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !assign_number("mpc_dispersion", real.rules.mpc_dispersion) ||
         !assign_number("mpc_wealth_curvature",
                        real.rules.mpc_wealth_curvature) ||
+        !assign_number("mortality_rank_gradient",
+                       population.rules.mortality_rank_gradient) ||
+        !assign_number("fertility_rank_gradient",
+                       population.rules.fertility_rank_gradient) ||
+        !assign_number("strat_mult_lo",
+                       population.rules.stratification_multiplier_minimum) ||
+        !assign_number("strat_mult_hi",
+                       population.rules.stratification_multiplier_maximum) ||
         !assign_number("tfp_drift_rate", real.rules.annual_tfp_growth) ||
         !assign_number("tfp_drift_sigma", real.rules.annual_tfp_volatility) ||
         !assign_number("tfp_learning_theta", real.rules.tfp_learning_theta) ||

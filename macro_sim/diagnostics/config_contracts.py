@@ -104,6 +104,12 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m7.person_efficiency_stddev",
         "metric.source.m7.births",
         "metric.source.m7.deaths",
+        "metric.source.m7.wealth_rank_mortality_multiplier_stddev",
+        "metric.source.m7.wealth_rank_fertility_multiplier_stddev",
+        "metric.source.m7.bottom_wealth_quintile_deaths",
+        "metric.source.m7.top_wealth_quintile_deaths",
+        "metric.source.m7.bottom_wealth_quintile_births",
+        "metric.source.m7.top_wealth_quintile_births",
         "metric.source.m7.households_with_members",
         "metric.source.m7.mean_household_size",
         "metric.source.m7.working_age_share",
@@ -133,6 +139,12 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m7.family_transfer_total",
         "metric.source.m7.family_transfer_recipients",
         "metric.source.m7.family_exposed_households",
+        "metric.source.m7.wealth_rank_mortality_multiplier_stddev",
+        "metric.source.m7.wealth_rank_fertility_multiplier_stddev",
+        "metric.source.m7.bottom_wealth_quintile_deaths",
+        "metric.source.m7.top_wealth_quintile_deaths",
+        "metric.source.m7.bottom_wealth_quintile_births",
+        "metric.source.m7.top_wealth_quintile_births",
         "metric.source.m8.energy.deprivation_below_100_share",
         "metric.source.m8.energy.deprivation_below_60_share",
         "metric.source.m8.energy.deprivation_below_30_share",
@@ -1005,6 +1017,16 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
     partner_efficiency_gap = (
         "metric.source.m7.mean_partner_log_efficiency_gap"
     )
+    mortality_rank_stddev = (
+        "metric.source.m7.wealth_rank_mortality_multiplier_stddev"
+    )
+    fertility_rank_stddev = (
+        "metric.source.m7.wealth_rank_fertility_multiplier_stddev"
+    )
+    bottom_deaths = "metric.source.m7.bottom_wealth_quintile_deaths"
+    top_deaths = "metric.source.m7.top_wealth_quintile_deaths"
+    bottom_births = "metric.source.m7.bottom_wealth_quintile_births"
+    top_births = "metric.source.m7.top_wealth_quintile_births"
     return {
         "config.demographic_adult_leaving_home_enabled": {
             "status": "activation_scenario_required",
@@ -1103,12 +1125,40 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "statistics": {births: "cumulative"},
             "rationale": "A higher total fertility rate should raise cumulative births, with population and dependency effects emerging over longer horizons.",
         },
+        "config.fertility_rank_gradient": {
+            "status": "screening_ready",
+            "values": (0.0, 1.0),
+            "directions": {
+                fertility_rank_stddev: "increase",
+                bottom_births: "increase",
+                top_births: "decrease",
+            },
+            "statistics": {
+                bottom_births: "cumulative",
+                top_births: "cumulative",
+            },
+            "rationale": "A steeper positive wealth-rank fertility gradient must widen the mean-normalized birth-hazard multipliers across wealth quintiles, assigning higher fertility pressure to poorer households while leaving aggregate fertility exposure approximately anchored.",
+        },
         "config.marriage_assortativity": {
             "status": "activation_scenario_required",
             "values": (0.0, 4.0),
             "directions": {partner_efficiency_gap: "decrease"},
             "activation": "unpartnered_marriage_market",
             "rationale": "A shared one-person-household genesis removes pre-existing unions and activates a common marriage market. A higher efficiency-similarity weight should reduce the mean absolute log-efficiency gap within active couples, potentially trading off against age similarity.",
+        },
+        "config.mortality_rank_gradient": {
+            "status": "screening_ready",
+            "values": (0.0, 1.6),
+            "directions": {
+                mortality_rank_stddev: "increase",
+                bottom_deaths: "increase",
+                top_deaths: "decrease",
+            },
+            "statistics": {
+                bottom_deaths: "cumulative",
+                top_deaths: "cumulative",
+            },
+            "rationale": "A steeper nonnegative wealth-rank mortality gradient must widen the mean-normalized death-hazard multipliers across wealth quintiles, assigning higher mortality pressure to poorer households while preserving the aggregate exposure anchor before clipping.",
         },
     }
 
@@ -1126,6 +1176,12 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
     luxury_firms = "metric.source.m4.luxury_firm_count"
     transfer_total = "metric.source.m7.family_transfer_total"
     transfer_recipients = "metric.source.m7.family_transfer_recipients"
+    mortality_rank_stddev = (
+        "metric.source.m7.wealth_rank_mortality_multiplier_stddev"
+    )
+    fertility_rank_stddev = (
+        "metric.source.m7.wealth_rank_fertility_multiplier_stddev"
+    )
     deprivation = "metric.source.m8.energy.deprivation_below_100_share"
     output = "metric.economy.real_output"
     unemployment = "metric.economy.unemployment_rate"
@@ -1214,6 +1270,24 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
                 luxury_spending: "ambiguous",
             },
             "rationale": "A larger fixed per-need-unit necessity basket must increase requested necessity quantity before residual luxury demand is admitted. Realized spending and its share remain equilibrium outcomes because sector capacity, prices, income, and stock-outs can move endogenously. It must not change the number of firms assigned to either sector.",
+        },
+        "config.strat_mult_hi": {
+            "status": "screening_ready",
+            "values": (1.05,),
+            "directions": {
+                mortality_rank_stddev: "increase",
+                fertility_rank_stddev: "increase",
+            },
+            "rationale": "Tightening the upper wealth-stratum multiplier cap toward one must compress the high-risk tail of both mortality and fertility rank schedules. The cap changes who experiences vital events rather than directly setting their aggregate number.",
+        },
+        "config.strat_mult_lo": {
+            "status": "screening_ready",
+            "values": (0.90,),
+            "directions": {
+                mortality_rank_stddev: "decrease",
+                fertility_rank_stddev: "decrease",
+            },
+            "rationale": "Raising the lower wealth-stratum multiplier floor toward one must compress the protected tail of both mortality and fertility rank schedules. The floor changes the cross-quintile allocation of vital risk rather than directly setting aggregate fertility or mortality.",
         },
         "config.subsistence_share": {
             "status": "invariance_activation_required",

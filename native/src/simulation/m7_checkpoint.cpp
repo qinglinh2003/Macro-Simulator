@@ -19,9 +19,10 @@ namespace {
 using Json = nlohmann::json;
 
 constexpr std::array<std::uint8_t, 8> kMagic{
-    'M', 'S', 'M', '7', 'C', 'P', '0', '1',
+    'M', 'S', 'M', '7', 'C', 'P', '0', '2',
 };
 constexpr std::size_t kDigestBytes = 32;
+constexpr std::size_t kWealthQuintiles = 5U;
 constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
 
 void append_u32(std::vector<std::uint8_t> &bytes, std::uint32_t value) {
@@ -179,6 +180,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.marriage_interval_days,
         value.annual_marriage_rate,
         value.annual_divorce_rate,
+        value.mortality_rank_gradient,
+        value.fertility_rank_gradient,
+        value.stratification_multiplier_minimum,
+        value.stratification_multiplier_maximum,
     });
     return output;
 }
@@ -188,7 +193,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 46U) {
+    if (!row.is_array() || row.size() != 50U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -238,6 +243,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.marriage_interval_days = row[index++].get<std::uint32_t>();
     value.annual_marriage_rate = row[index++].get<double>();
     value.annual_divorce_rate = row[index++].get<double>();
+    value.mortality_rank_gradient = row[index++].get<double>();
+    value.fertility_rank_gradient = row[index++].get<double>();
+    value.stratification_multiplier_minimum = row[index++].get<double>();
+    value.stratification_multiplier_maximum = row[index++].get<double>();
     return value;
 }
 
@@ -374,6 +383,12 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.population,
         value.births,
         value.deaths,
+        value.wealth_rank_mortality_multiplier_stddev,
+        value.wealth_rank_fertility_multiplier_stddev,
+        value.bottom_wealth_quintile_deaths,
+        value.top_wealth_quintile_deaths,
+        value.bottom_wealth_quintile_births,
+        value.top_wealth_quintile_births,
         value.households_with_members,
         value.mean_household_size,
         value.working_age_share,
@@ -430,13 +445,19 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 55U) {
+    if (!row.is_array() || row.size() != 61U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
     value.population = row[index++].get<std::uint64_t>();
     value.births = row[index++].get<std::uint64_t>();
     value.deaths = row[index++].get<std::uint64_t>();
+    value.wealth_rank_mortality_multiplier_stddev = row[index++].get<double>();
+    value.wealth_rank_fertility_multiplier_stddev = row[index++].get<double>();
+    value.bottom_wealth_quintile_deaths = row[index++].get<std::uint64_t>();
+    value.top_wealth_quintile_deaths = row[index++].get<std::uint64_t>();
+    value.bottom_wealth_quintile_births = row[index++].get<std::uint64_t>();
+    value.top_wealth_quintile_births = row[index++].get<std::uint64_t>();
     value.households_with_members = row[index++].get<std::uint64_t>();
     value.mean_household_size = row[index++].get<double>();
     value.working_age_share = row[index++].get<double>();
@@ -507,6 +528,14 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     output["metrics"] = encode_metrics(runtime.last_metrics);
     output["labor"] = encode_labor(runtime.labor_accounts);
     output["firm_target_ema"] = runtime.firm_target_ema;
+    output["stratification"] = Json{
+        {"snapshot_day", runtime.stratification_snapshot_day},
+        {"household_quintile", runtime.household_wealth_quintile},
+        {"mortality_multiplier", runtime.household_mortality_multiplier},
+        {"fertility_multiplier", runtime.household_fertility_multiplier},
+        {"mortality_quintile", runtime.mortality_quintile_multiplier},
+        {"fertility_quintile", runtime.fertility_quintile_multiplier},
+    };
     output["persons"] = Json::array();
     for (const auto &person : runtime.persons.records()) {
         output["persons"].push_back(encode_person(person));
@@ -615,6 +644,21 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     decode_metrics(input.at("metrics"), runtime.last_metrics);
     runtime.labor_accounts = decode_labor(input.at("labor"));
     runtime.firm_target_ema = input.at("firm_target_ema").get<std::vector<double>>();
+    const auto &stratification = input.at("stratification");
+    runtime.stratification_snapshot_day =
+        stratification.at("snapshot_day").get<std::int32_t>();
+    runtime.household_wealth_quintile =
+        stratification.at("household_quintile").get<std::vector<std::uint8_t>>();
+    runtime.household_mortality_multiplier =
+        stratification.at("mortality_multiplier").get<std::vector<double>>();
+    runtime.household_fertility_multiplier =
+        stratification.at("fertility_multiplier").get<std::vector<double>>();
+    runtime.mortality_quintile_multiplier =
+        stratification.at("mortality_quintile")
+            .get<std::array<double, kWealthQuintiles>>();
+    runtime.fertility_quintile_multiplier =
+        stratification.at("fertility_quintile")
+            .get<std::array<double, kWealthQuintiles>>();
 
     std::vector<core::PersonRecord> persons;
     for (const auto &row : input.at("persons")) {

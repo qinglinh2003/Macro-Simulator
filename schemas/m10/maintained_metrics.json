@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 264,
+    "native_stage_sources": 270,
     "public_sources": 41,
-    "total": 488
+    "total": 494
   },
   "metrics": [
     {
@@ -2532,6 +2532,60 @@
       "cadence_ticks": 1,
       "id": "metric.source.m7.deaths",
       "parity_rule": "simulation::M7Metrics::deaths",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.wealth_rank_mortality_multiplier_stddev",
+      "parity_rule": "simulation::M7Metrics::wealth_rank_mortality_multiplier_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.wealth_rank_fertility_multiplier_stddev",
+      "parity_rule": "simulation::M7Metrics::wealth_rank_fertility_multiplier_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.bottom_wealth_quintile_deaths",
+      "parity_rule": "simulation::M7Metrics::bottom_wealth_quintile_deaths",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.top_wealth_quintile_deaths",
+      "parity_rule": "simulation::M7Metrics::top_wealth_quintile_deaths",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.bottom_wealth_quintile_births",
+      "parity_rule": "simulation::M7Metrics::bottom_wealth_quintile_births",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.top_wealth_quintile_births",
+      "parity_rule": "simulation::M7Metrics::top_wealth_quintile_births",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "persons_per_tick"

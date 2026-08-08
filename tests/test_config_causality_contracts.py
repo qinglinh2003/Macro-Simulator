@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 49
+    assert payload["status_counts"]["blocked_native_route"] == 45
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -254,9 +254,11 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "demographics_enabled",
         "demographics_mortality_scale",
         "demographics_tfr",
+        "fertility_rank_gradient",
         "marriage_assortativity",
+        "mortality_rank_gradient",
     }
-    assert len(neutral) == 9
+    assert len(neutral) == 11
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
@@ -278,6 +280,8 @@ def test_distribution_contracts_cover_every_mapped_causal_field() -> None:
         "mpc_dispersion",
         "n_firm_share",
         "necessity_share0",
+        "strat_mult_hi",
+        "strat_mult_lo",
     }
     assert {contract.field_name for contract in activated} == {
         "consumption_strata",

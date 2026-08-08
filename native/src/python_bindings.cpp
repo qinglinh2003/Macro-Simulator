@@ -772,6 +772,12 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(population);
     MACRO_SIM_M7_METRIC(births);
     MACRO_SIM_M7_METRIC(deaths);
+    MACRO_SIM_M7_METRIC(wealth_rank_mortality_multiplier_stddev);
+    MACRO_SIM_M7_METRIC(wealth_rank_fertility_multiplier_stddev);
+    MACRO_SIM_M7_METRIC(bottom_wealth_quintile_deaths);
+    MACRO_SIM_M7_METRIC(top_wealth_quintile_deaths);
+    MACRO_SIM_M7_METRIC(bottom_wealth_quintile_births);
+    MACRO_SIM_M7_METRIC(top_wealth_quintile_births);
     MACRO_SIM_M7_METRIC(households_with_members);
     MACRO_SIM_M7_METRIC(mean_household_size);
     MACRO_SIM_M7_METRIC(working_age_share);
@@ -2046,6 +2052,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(marriage_interval_days);
     MACRO_SIM_BIND_M7_RULE(annual_marriage_rate);
     MACRO_SIM_BIND_M7_RULE(annual_divorce_rate);
+    MACRO_SIM_BIND_M7_RULE(mortality_rank_gradient);
+    MACRO_SIM_BIND_M7_RULE(fertility_rank_gradient);
+    MACRO_SIM_BIND_M7_RULE(stratification_multiplier_minimum);
+    MACRO_SIM_BIND_M7_RULE(stratification_multiplier_maximum);
     MACRO_SIM_BIND_M7_RULE(marriage_rules);
 #undef MACRO_SIM_BIND_M7_RULE
     nb::class_<macro_sim::simulation::M7PopulationSpec>(module, "M7PopulationSpec")
