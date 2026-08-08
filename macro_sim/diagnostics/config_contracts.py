@@ -190,6 +190,8 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.unemployment_rate",
     ),
     "government_and_public_sector": (
+        "metric.source.m4.tax_total",
+        "metric.source.m4.transfer_payments",
         "metric.source.m4.public_capital",
         "metric.source.m4.public_fixed_capital_formation",
         "metric.source.m4.job_guarantee_spending",
@@ -198,6 +200,7 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m4.job_guarantee_realized_productivity",
         "metric.source.m4.government_spending",
         "metric.source.m4.government_deficit",
+        "metric.source.m7.pension_paid",
         "metric.economy.na.real_gdp_per_capita",
         "metric.economy.real_output",
         "metric.economy.unemployment_rate",
@@ -1624,6 +1627,10 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
 
 
 def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
+    tax_total = "metric.source.m4.tax_total"
+    government_spending = "metric.source.m4.government_spending"
+    transfers = "metric.source.m4.transfer_payments"
+    pension = "metric.source.m7.pension_paid"
     public_capital = "metric.source.m4.public_capital"
     jg_capital = (
         "metric.source.m4.job_guarantee_public_capital_formation"
@@ -1632,6 +1639,24 @@ def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
     output = "metric.economy.na.real_gdp_per_capita"
     unemployment = "metric.economy.unemployment_rate"
     return {
+        "config.government": {
+            "status": "screening_ready",
+            "values": (False,),
+            "horizon_days": 365,
+            "directions": {
+                tax_total: "decrease",
+                government_spending: "decrease",
+                transfers: "decrease",
+                pension: "decrease",
+            },
+            "statistics": {
+                tax_total: "cumulative",
+                government_spending: "cumulative",
+                transfers: "cumulative",
+                pension: "cumulative",
+            },
+            "rationale": "Removing the Treasury capability must eliminate domestic taxes, procurement, public investment, social transfers, and pensions while retaining a passive settlement account for accounting continuity. Private production, finance, energy, and household exchange remain active.",
+        },
         "config.jg_productivity": {
             "status": "activation_scenario_required",
             "values": (0.25, 0.75),

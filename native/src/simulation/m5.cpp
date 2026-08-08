@@ -20,11 +20,16 @@ namespace {
 
 constexpr double kTolerance = 1.0e-8;
 constexpr std::size_t kNoIndex = std::numeric_limits<std::size_t>::max();
-constexpr std::uint64_t kM4FiscalCapabilities =
-    capability_bit(M4Capability::physical_capital) |
-    capability_bit(M4Capability::government);
+constexpr std::uint64_t kM4RequiredCapabilities =
+    capability_bit(M4Capability::physical_capital);
+constexpr std::uint64_t kM4AllowedCapabilities =
+    kM4RequiredCapabilities | capability_bit(M4Capability::government);
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
+
+[[nodiscard]] bool government_enabled(const M4Runtime &runtime) noexcept {
+    return (runtime.capability_mask & capability_bit(M4Capability::government)) != 0U;
+}
 
 [[nodiscard]] constexpr bool valid_loan_purpose(core::LoanPurpose purpose) noexcept {
     switch (purpose) {
@@ -1280,7 +1285,7 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
 
 [[nodiscard]] Status resolve_bank(const core::RootState &state, M5Runtime &runtime,
                                   M4TickScratch &real, M5TickScratch &scratch,
-                                  BankId failed) {
+                                  BankId failed, bool allow_state_support) {
     const auto failed_index = bank_index(failed);
     if (scratch.bank_alive_[failed_index] == 0U) {
         return Status::success();
@@ -1377,7 +1382,7 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
         }
     }
     double hole = std::max(0.0, -real.balances_[failed_account]);
-    if (hole > algorithms::kEconomicEpsilon &&
+    if (hole > algorithms::kEconomicEpsilon && allow_state_support &&
         runtime.policy.state_resolution_backstop &&
         state.institutions.treasury_account.valid()) {
         status = transfer(state, real, state.institutions.treasury_account,
@@ -1439,7 +1444,8 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
 [[nodiscard]] Status run_bank_runs(const core::RootState &state, M5Runtime &runtime,
                                    M4TickScratch &real, M5TickScratch &scratch,
                                    Tick tick, PhiloxRng &rng,
-                                   std::optional<BankId> forced) {
+                                   std::optional<BankId> forced,
+                                   bool allow_state_support) {
     if (!runtime.rules.banking_enabled ||
         (!runtime.rules.bank_runs && !forced.has_value()) || !runtime.rules.interbank ||
         state.banks.alive_count() <= 1) {
@@ -1465,7 +1471,8 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
     }
     scratch.failed_banks_.clear();
     state.banks.for_each_alive([&state, &runtime, &real, &scratch, tick, &rng, forced,
-                                safe](BankId id, const core::BankComponent &bank) {
+                                safe, allow_state_support](
+                                   BankId id, const core::BankComponent &bank) {
         if (id == safe || !bank.alive || scratch.bank_alive_[bank_index(id)] == 0U) {
             return;
         }
@@ -1495,7 +1502,7 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
             const auto account = account_index(household->primary_account);
             const double withdrawal = std::max(0.0, real.balances_[account]);
             auto &reserves = real.reserve_balances_[node_index(bank.settlement_node)];
-            if (reserves + kTolerance < withdrawal &&
+            if (reserves + kTolerance < withdrawal && allow_state_support &&
                 runtime.policy.lender_of_last_resort &&
                 scratch.bank_capital_live_[bank_index(id)] > 0.0) {
                 add_lolr(runtime, scratch, real, bank, id, withdrawal - reserves, tick);
@@ -1521,7 +1528,8 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
         }
     });
     for (const auto bank : scratch.failed_banks_) {
-        const auto status = resolve_bank(state, runtime, real, scratch, bank);
+        const auto status =
+            resolve_bank(state, runtime, real, scratch, bank, allow_state_support);
         if (!status.ok()) {
             return status;
         }
@@ -1531,7 +1539,8 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
 
 [[nodiscard]] Status resolve_insolvent_banks(const core::RootState &state,
                                              M5Runtime &runtime, M4TickScratch &real,
-                                             M5TickScratch &scratch) {
+                                             M5TickScratch &scratch,
+                                             bool allow_state_support) {
     bool changed = true;
     while (changed) {
         changed = false;
@@ -1544,7 +1553,8 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
                 }
             });
         for (const auto bank : scratch.failed_banks_) {
-            const auto status = resolve_bank(state, runtime, real, scratch, bank);
+            const auto status =
+                resolve_bank(state, runtime, real, scratch, bank, allow_state_support);
             if (!status.ok()) {
                 return status;
             }
@@ -1881,7 +1891,9 @@ class M5Extension final : public M4TickExtension {
         }
         apply_fiscal_policy(real_runtime, runtime_);
         open_financial_books(state, real, runtime_, scratch_, tick);
-        auto status = service_lolr(state, real, scratch_, tick);
+        auto status = government_enabled(real_runtime)
+                          ? service_lolr(state, real, scratch_, tick)
+                          : Status::success();
         if (!status.ok()) {
             return status;
         }
@@ -2004,7 +2016,8 @@ class M5Extension final : public M4TickExtension {
             return status;
         }
         status = run_bank_runs(state, runtime_, real, scratch_, tick, rng,
-                               options_.force_run_bank);
+                               options_.force_run_bank,
+                               government_enabled(real_runtime));
         if (!status.ok()) {
             return status;
         }
@@ -2022,7 +2035,8 @@ class M5Extension final : public M4TickExtension {
                 return status;
             }
         }
-        status = resolve_insolvent_banks(state, runtime_, real, scratch_);
+        status = resolve_insolvent_banks(state, runtime_, real, scratch_,
+                                         government_enabled(real_runtime));
         if (!status.ok()) {
             return status;
         }
@@ -2924,7 +2938,9 @@ Status validate_m5_spec(const M5SimulationSpec &spec) noexcept {
         spec.initial_policy_rate,
     };
     if (spec.real_economy.vertical != M4Vertical::capital_fiscal ||
-        spec.real_economy.requested_capabilities != kM4FiscalCapabilities ||
+        (spec.real_economy.requested_capabilities & kM4RequiredCapabilities) !=
+            kM4RequiredCapabilities ||
+        (spec.real_economy.requested_capabilities & ~kM4AllowedCapabilities) != 0U ||
         spec.rules.bank_count == 0 || spec.rules.bank_count > 100'000 ||
         !all_finite(rule_values) || spec.rules.opening_capital_per_bank < 0.0 ||
         spec.rules.bank_leverage_mean < 1.0 ||

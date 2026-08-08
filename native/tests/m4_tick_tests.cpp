@@ -124,6 +124,24 @@ void test_v1_fiscal_and_capital_tick() {
     assert(core::run_invariants(*session.root()).ok());
 }
 
+void test_v1_without_government_retains_private_capital_economy() {
+    auto spec = v1_spec(2070);
+    spec.requested_capabilities = capability_bit(M4Capability::physical_capital);
+    EngineSession session(20);
+    assert(session.initialize_simulation(spec).ok());
+    assert(session.root()->institutions.treasury_account.valid());
+    const auto result = session.advance_ticks(3);
+    assert(result.ok());
+    const auto &metrics = result.get_if()->metrics;
+    assert(metrics.real_output > 0.0);
+    assert(metrics.fixed_capital_formation_real >= 0.0);
+    assert_close(metrics.tax_total, 0.0);
+    assert_close(metrics.government_spending, 0.0);
+    assert_close(metrics.transfer_payments, 0.0);
+    assert_close(metrics.public_fixed_capital_formation, 0.0);
+    assert(core::run_invariants(*session.root()).ok());
+}
+
 void test_sector_specific_firm_opening_cash() {
     auto spec = v1_spec(2071);
     spec.rules.initial_firm_money = 200.0;
@@ -897,6 +915,7 @@ int main() {
     test_capability_boundary();
     test_v0_genesis_and_tick();
     test_v1_fiscal_and_capital_tick();
+    test_v1_without_government_retains_private_capital_economy();
     test_sector_specific_firm_opening_cash();
     test_dividend_payout_is_reported_directly();
     test_capital_clock_demand_smoothing_scales_the_source_ema();

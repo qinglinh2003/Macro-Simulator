@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 41
+    assert payload["status_counts"]["blocked_native_route"] == 40
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -380,6 +380,7 @@ def test_government_contracts_cover_every_executable_causal_field() -> None:
         "jg_productivity"
     }
     assert {contract.field_name for contract in neutral} == {
+        "government",
         "public_capital_depreciation",
         "public_capital_gamma",
     }
@@ -392,4 +393,4 @@ def test_government_contracts_cover_every_executable_causal_field() -> None:
         for row in build_contract_registry()["contracts"]
         if row["field_id"] == "config.government"
     )
-    assert government["status"] == "blocked_native_route"
+    assert government["status"] == "screening_ready"

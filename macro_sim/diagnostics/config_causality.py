@@ -176,12 +176,6 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "member currently controls household moves after marriage, divorce, "
         "and leaving home"
     ),
-    "config.government": (
-        "Config defines a master fiscal-sector capability, while the current "
-        "native capital-fiscal vertical rejects a specification after that "
-        "capability bit is removed and therefore cannot execute the requested "
-        "government-off economy"
-    ),
 }
 
 # Measurement gates may change published observables but must not receive credit

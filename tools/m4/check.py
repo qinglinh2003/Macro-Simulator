@@ -26,7 +26,7 @@ def validate_contracts() -> None:
     )
     if target["playable_model_id"] != "current_playable_v1":
         raise AssertionError("M4 target is not the current playable engine")
-    if target["config_field_count"] != 370:
+    if target["config_field_count"] != 368:
         raise AssertionError("M4 target config inventory is incomplete")
     target_sources = {
         item["path"]

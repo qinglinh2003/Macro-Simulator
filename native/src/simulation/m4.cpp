@@ -100,9 +100,10 @@ enum class GoodsSession : std::uint8_t {
     necessity = 1,
     luxury = 2,
 };
-constexpr std::uint64_t kV1Capabilities =
-    capability_bit(M4Capability::physical_capital) |
-    capability_bit(M4Capability::government);
+constexpr std::uint64_t kV1RequiredCapabilities =
+    capability_bit(M4Capability::physical_capital);
+constexpr std::uint64_t kV1AllowedCapabilities =
+    kV1RequiredCapabilities | capability_bit(M4Capability::government);
 constexpr std::uint64_t kUnsupportedCapabilities =
     capability_bit(M4Capability::credit) |
     capability_bit(M4Capability::commercial_banks) |
@@ -119,6 +120,10 @@ constexpr std::uint64_t kUnsupportedCapabilities =
 [[nodiscard]] bool all_finite(std::span<const double> values) noexcept {
     return std::all_of(values.begin(), values.end(),
                        [](double value) { return std::isfinite(value); });
+}
+
+[[nodiscard]] bool government_enabled(const M4Runtime &runtime) noexcept {
+    return (runtime.capability_mask & capability_bit(M4Capability::government)) != 0U;
 }
 
 [[nodiscard]] std::uint64_t splitmix64(std::uint64_t value) noexcept {
@@ -314,7 +319,8 @@ void record_consumption_purchase(M4TickScratch &scratch, std::size_t household_i
 
 [[nodiscard]] double consumption_session_tax_rate(
     const M4Runtime &runtime, GoodsSession session) noexcept {
-    if (runtime.vertical != M4Vertical::capital_fiscal) {
+    if (runtime.vertical != M4Vertical::capital_fiscal ||
+        !government_enabled(runtime)) {
         return 0.0;
     }
     if (session == GoodsSession::necessity) {
@@ -1288,6 +1294,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                          M4TickScratch &scratch, double &tax_total,
                                          double &consumption_tax) noexcept {
     if (runtime.vertical != M4Vertical::capital_fiscal ||
+        !government_enabled(runtime) ||
         (runtime.rules.consumption_tax_rate <= 0.0 &&
          !runtime.rules.necessity_consumption_tax_rate.has_value() &&
          !runtime.rules.luxury_consumption_tax_rate.has_value())) {
@@ -1325,7 +1332,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                                 const M4Runtime &runtime,
                                                 M4TickScratch &scratch,
                                                 double &government_spending) {
-    if (runtime.vertical != M4Vertical::capital_fiscal) {
+    if (runtime.vertical != M4Vertical::capital_fiscal ||
+        !government_enabled(runtime)) {
         return Status::success();
     }
     scratch.firm_order_.assign(scratch.consumption_firm_indices_.begin(),
@@ -1410,6 +1418,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                            double &public_capital_addition,
                                            double &public_investment_spending) {
     if (runtime.vertical != M4Vertical::capital_fiscal ||
+        !government_enabled(runtime) ||
         runtime.rules.government_investment_share <= 0.0) {
         return Status::success();
     }
@@ -1465,7 +1474,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                     double &job_guarantee_spending,
                                     double &job_guarantee_labor,
                                     double &job_guarantee_capital_addition) {
-    const bool fiscal = runtime.vertical == M4Vertical::capital_fiscal;
+    const bool fiscal =
+        runtime.vertical == M4Vertical::capital_fiscal && government_enabled(runtime);
     const auto treasury = state.institutions.treasury_account;
     const auto clearing = state.institutions.clearing_account;
     double dividend_total = 0.0;
@@ -2246,10 +2256,12 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
                           "M4 V0 supports only the basic cash-loop capability set");
         }
     } else if (spec.capital_firms == 0 ||
-               spec.requested_capabilities != kV1Capabilities) {
+               (spec.requested_capabilities & kV1RequiredCapabilities) !=
+                   kV1RequiredCapabilities ||
+               (spec.requested_capabilities & ~kV1AllowedCapabilities) != 0U) {
         return Status(
             ErrorCode::unsupported,
-            "M4 V1 requires exactly physical-capital and government capabilities");
+            "M4 V1 requires physical capital and optionally supports government");
     }
     const auto &rules = spec.rules;
     const std::array values{

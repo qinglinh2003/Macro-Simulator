@@ -96,6 +96,30 @@ def test_bank_disable_treatment_retains_native_fiscal_settlement_vertical() -> N
     assert monetary.real_economy.requested_capabilities == (1 << 0) | (1 << 1)
 
 
+def test_government_disable_treatment_runs_without_fiscal_flows() -> None:
+    baseline = population_scaled_new_game(
+        population=1_000, days=5, seed=22, countries=1
+    )
+    treated = native_treatment_spec(
+        baseline, field="government", value=False
+    )
+    real = (
+        treated.economies[0].domestic_economy.financial_economy
+        .monetary_economy.real_economy
+    )
+    assert real.requested_capabilities == 1 << 0
+    session = native_backend.NativeSimulationSession.create_from_native_spec(
+        treated, worker_count=8
+    )
+    session.advance(5)
+    metrics = session.maintained_metrics()["economies"][0]
+    assert metrics["metric.source.m4.tax_total"] == pytest.approx(0.0)
+    assert metrics["metric.source.m4.government_spending"] == pytest.approx(0.0)
+    assert metrics["metric.source.m4.transfer_payments"] == pytest.approx(0.0)
+    assert metrics["metric.source.m7.pension_paid"] == pytest.approx(0.0)
+    assert metrics["metric.economy.gov_debt"] == pytest.approx(0.0)
+
+
 def test_metric_reduction_and_paired_effect_preserve_pairing() -> None:
     summary = summarize_metric_series(
         [

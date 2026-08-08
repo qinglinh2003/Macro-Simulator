@@ -518,8 +518,10 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
     output.capital_firms = max(1, int(cfg.n_firms_k))
     output.settlement_banks = max(1, int(cfg.n_banks))
     output.seed = int(cfg.seed)
-    # M4 V1 owns only the physical-capital and government capability bits.
-    output.requested_capabilities = (1 << 0) | (1 << 1)
+    # Physical capital defines the V1 production vertical. The Treasury is an
+    # optional structural capability; its settlement account remains present
+    # even when fiscal activity is disabled.
+    output.requested_capabilities = (1 << 0) | ((1 << 1) if cfg.government else 0)
     output.stochastic = bool(
         cfg.tfp_drift_sigma or (cfg.gibrat_growth and cfg.gibrat_sigma)
     )

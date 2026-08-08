@@ -24,8 +24,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 251,
-        "missing_native_route": 41,
+        "mapped_native": 252,
+        "missing_native_route": 40,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -155,8 +155,10 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
         "m5.monetary_rules.direct_monetary_transmission"
     ]
     government = rows["config.government"]
-    assert government["route_status"] == "missing_native_route"
-    assert "rejects a specification" in government["route_note"]
+    assert government["route_status"] == "mapped_native"
+    assert government["native_targets"] == [
+        "m4.spec.requested_capabilities.government"
+    ]
 
 
 def test_observation_gate_is_not_credited_with_economic_causality() -> None:

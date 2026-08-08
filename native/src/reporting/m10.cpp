@@ -1051,6 +1051,8 @@ build_metric_frame(const simulation::M9World &world,
         const auto &population = m7(domestic);
         const auto *root = world.economy_root(
             EconomyId(static_cast<std::uint64_t>(economy)));
+        const auto *real_runtime = world.economy_real_runtime(
+            EconomyId(static_cast<std::uint64_t>(economy)));
         const auto *financial = world.economy_financial_runtime(
             EconomyId(static_cast<std::uint64_t>(economy)));
         const auto *population_runtime = world.economy_population_runtime(
@@ -1059,7 +1061,7 @@ build_metric_frame(const simulation::M9World &world,
             EconomyId(static_cast<std::uint64_t>(economy)));
         const auto domestic_policy = world.domestic_policy(
             EconomyId(static_cast<std::uint64_t>(economy)));
-        if (root == nullptr || financial == nullptr ||
+        if (root == nullptr || real_runtime == nullptr || financial == nullptr ||
             population_runtime == nullptr || runtime == nullptr) {
             return Status(ErrorCode::invariant_violation,
                           "M10 metric source economy is unavailable");
@@ -1288,9 +1290,14 @@ build_metric_frame(const simulation::M9World &world,
         if (!treasury_balance.ok()) {
             return treasury_balance.status();
         }
+        const bool has_government =
+            (real_runtime->capability_mask &
+             simulation::capability_bit(simulation::M4Capability::government)) != 0U;
         const double government_debt =
-            financial->securities.total_bond_face().value() -
-            treasury_balance.get_if()->value();
+            has_government
+                ? financial->securities.total_bond_face().value() -
+                      treasury_balance.get_if()->value()
+                : 0.0;
         const auto national_accounts =
             build_national_accounts(domestic, external, government_debt);
 

@@ -670,6 +670,9 @@ class M8Extension final : public M7TickExtension {
                         PhiloxRng &) override {
         memory_efficient_staging_ =
             options_.base.base.base.base.memory_efficient_staging;
+        government_enabled_ =
+            (real_runtime.capability_mask &
+             capability_bit(M4Capability::government)) != 0U;
         if (memory_efficient_staging_) {
             scratch_.energy_producers_ = std::move(runtime_.energy_producers);
             scratch_.energy_inputs_ = std::move(runtime_.energy_inputs);
@@ -690,7 +693,8 @@ class M8Extension final : public M7TickExtension {
         bool assigned_state_owned_producer = false;
         for (auto &producer : scratch_.energy_producers_) {
             producer.state_owned = false;
-            if (runtime_.energy_policy.state_owned_first_producer && producer.active &&
+            if (government_enabled_ &&
+                runtime_.energy_policy.state_owned_first_producer && producer.active &&
                 !assigned_state_owned_producer) {
                 producer.state_owned = true;
                 assigned_state_owned_producer = true;
@@ -823,6 +827,7 @@ class M8Extension final : public M7TickExtension {
         }
         const auto &rules = runtime_.energy_rules;
         const auto &policy = runtime_.energy_policy;
+        const double excise_rate = government_enabled_ ? policy.excise_rate : 0.0;
         const double slow_weight = 1.0 / std::max(1.0, rules.slow_price_days);
         scratch_.slow_energy_price_ +=
             slow_weight * (scratch_.energy_price_ - scratch_.slow_energy_price_);
@@ -855,7 +860,7 @@ class M8Extension final : public M7TickExtension {
             scratch_.industry_use_need_[static_cast<std::size_t>(input.firm.value())] =
                 use_need;
             const double planned_energy_cash =
-                demand * scratch_.energy_price_ * (1.0 + policy.excise_rate);
+                demand * scratch_.energy_price_ * (1.0 + excise_rate);
             static_cast<void>(stage_m5_firm_plan_credit(
                 state, real_runtime, real, monetary, monetary_scratch, dense, tick,
                 options_.base.base.base.credit_supply_multiplier, planned_energy_cash));
@@ -872,7 +877,7 @@ class M8Extension final : public M7TickExtension {
                     input.firm.value(),
                     firm->primary_account,
                     demand,
-                    reserved_energy_cash / (1.0 + policy.excise_rate),
+                    reserved_energy_cash / (1.0 + excise_rate),
                     0.0,
                     0.0,
                 });
@@ -900,7 +905,7 @@ class M8Extension final : public M7TickExtension {
                         household_id.value(),
                         household->primary_account,
                         need,
-                        balance / (1.0 + policy.excise_rate),
+                        balance / (1.0 + excise_rate),
                         0.0,
                         0.0,
                     });
@@ -910,7 +915,8 @@ class M8Extension final : public M7TickExtension {
         }
 
         double public_demand = 0.0;
-        if (policy.strategic_reserve_flow_cap > kEconomicEpsilon &&
+        if (government_enabled_ &&
+            policy.strategic_reserve_flow_cap > kEconomicEpsilon &&
             scratch_.strategic_reserve_stock_ + kEconomicEpsilon <
                 policy.strategic_reserve_target) {
             public_demand = std::min(policy.strategic_reserve_flow_cap,
@@ -976,10 +982,12 @@ class M8Extension final : public M7TickExtension {
                          firm->productivity * input_.labor_availability_multiplier);
             work.posted_wage = firm->posted_wage.value();
             work.posted_price =
-                policy.state_owned_price_at_cost && producer.state_owned
+                government_enabled_ && policy.state_owned_price_at_cost &&
+                        producer.state_owned
                     ? work.posted_wage / std::max(kEconomicEpsilon, firm->productivity)
                     : firm->posted_price.value();
-            work.markup = policy.state_owned_price_at_cost && producer.state_owned
+            work.markup = government_enabled_ && policy.state_owned_price_at_cost &&
+                                  producer.state_owned
                               ? 0.0
                               : firm->markup;
             // M5's regular credit pass occurs before M8 can derive energy
@@ -1934,7 +1942,7 @@ class M8Extension final : public M7TickExtension {
                                               M4TickScratch &real) {
         const double property_rate =
             runtime_.housing_policy.property_tax_rate / kDaysPerYear;
-        if (property_rate <= kEconomicEpsilon) {
+        if (!government_enabled_ || property_rate <= kEconomicEpsilon) {
             return Status::success();
         }
         for (const auto &dwelling : projected_properties().records()) {
@@ -1986,8 +1994,10 @@ class M8Extension final : public M7TickExtension {
             std::pow(genesis / std::max(1.0, stock),
                      runtime_.housing_policy.land_fee_stock_elasticity);
         const double land_fee =
-            scratch_.house_price_ * runtime_.housing_policy.land_fee_share *
-            stock_pressure * scratch_.housing_input_.land_cost_multiplier;
+            government_enabled_
+                ? scratch_.house_price_ * runtime_.housing_policy.land_fee_share *
+                      stock_pressure * scratch_.housing_input_.land_cost_multiplier
+                : 0.0;
         for (auto &builder : scratch_.builders_) {
             if (!builder.active || scratch_.permits_used_ >= permit_cap) {
                 continue;
@@ -2086,7 +2096,10 @@ class M8Extension final : public M7TickExtension {
                           "M8 buyer already owns the listed dwelling");
         }
         const double price = listing.asking_price;
-        const double tax = price * runtime_.housing_policy.transfer_tax_rate;
+        const double tax =
+            government_enabled_
+                ? price * runtime_.housing_policy.transfer_tax_rate
+                : 0.0;
         const double income = std::max(
             {household->income_expected, household->income_realized, kEconomicEpsilon});
         const double buffer =
@@ -2738,9 +2751,10 @@ class M8Extension final : public M7TickExtension {
             work.produced = produced;
             work.closing_inventory = producer.inventory;
             const double posted = work.posted_price * input_.reference_price_multiplier;
-            const double price = policy.price_cap > kEconomicEpsilon
-                                     ? std::min(posted, policy.price_cap)
-                                     : posted;
+            const double price =
+                government_enabled_ && policy.price_cap > kEconomicEpsilon
+                    ? std::min(posted, policy.price_cap)
+                    : posted;
             scratch_.offers_.push_back({
                 producer.firm,
                 firm->primary_account,
@@ -2768,7 +2782,8 @@ class M8Extension final : public M7TickExtension {
 
     void build_strategic_reserve_offer(const core::RootState &state) {
         const auto &policy = runtime_.energy_policy;
-        if (policy.strategic_reserve_flow_cap <= kEconomicEpsilon ||
+        if (!government_enabled_ ||
+            policy.strategic_reserve_flow_cap <= kEconomicEpsilon ||
             scratch_.strategic_reserve_stock_ <=
                 policy.strategic_reserve_target + kEconomicEpsilon ||
             scratch_.offers_.empty()) {
@@ -2810,7 +2825,8 @@ class M8Extension final : public M7TickExtension {
             return status;
         }
         double excise = 0.0;
-        if (order.kind != EnergyBuyerKind::strategic_reserve &&
+        if (government_enabled_ &&
+            order.kind != EnergyBuyerKind::strategic_reserve &&
             runtime_.energy_policy.excise_rate > kEconomicEpsilon) {
             excise = value * runtime_.energy_policy.excise_rate;
             status = stage_m4_transfer(state, real, order.account,
@@ -2833,6 +2849,8 @@ class M8Extension final : public M7TickExtension {
     [[nodiscard]] Status clear_buyer_sequence(const core::RootState &state,
                                               M4TickScratch &real,
                                               std::span<const std::size_t> buyers) {
+        const double excise_rate =
+            government_enabled_ ? runtime_.energy_policy.excise_rate : 0.0;
         std::size_t seller_cursor = 0;
         for (const auto buyer_index : buyers) {
             auto &order = scratch_.orders_[buyer_index];
@@ -2852,7 +2870,7 @@ class M8Extension final : public M7TickExtension {
                     order.kind == EnergyBuyerKind::strategic_reserve
                         ? std::numeric_limits<double>::infinity()
                         : projected_balance(real, order.account) /
-                              (1.0 + runtime_.energy_policy.excise_rate);
+                              (1.0 + excise_rate);
                 const double quantity = std::min({
                     remaining,
                     offer.stock,
@@ -2891,6 +2909,8 @@ class M8Extension final : public M7TickExtension {
 
     [[nodiscard]] Status clear_proportional(const core::RootState &state,
                                             M4TickScratch &real) {
+        const double excise_rate =
+            government_enabled_ ? runtime_.energy_policy.excise_rate : 0.0;
         double total_demand = 0.0;
         for (const auto &order : scratch_.orders_) {
             total_demand += order.demand;
@@ -2910,7 +2930,7 @@ class M8Extension final : public M7TickExtension {
                     order.kind == EnergyBuyerKind::strategic_reserve
                         ? std::numeric_limits<double>::infinity()
                         : projected_balance(real, order.account) /
-                              (1.0 + runtime_.energy_policy.excise_rate);
+                              (1.0 + excise_rate);
                 const double quantity = std::min({
                     base * share,
                     order.demand - order.allocated,
@@ -2951,7 +2971,9 @@ class M8Extension final : public M7TickExtension {
         scratch_.buyer_order_.resize(scratch_.orders_.size());
         std::iota(scratch_.buyer_order_.begin(), scratch_.buyer_order_.end(),
                   std::size_t{0});
-        const auto rationing = runtime_.energy_policy.rationing;
+        const auto rationing = government_enabled_
+                                   ? runtime_.energy_policy.rationing
+                                   : EnergyRationing::market;
         if (rationing == EnergyRationing::proportional) {
             return clear_proportional(state, real);
         }
@@ -3035,7 +3057,7 @@ class M8Extension final : public M7TickExtension {
             work.revenue = offer.revenue;
             work.closing_inventory = producer.inventory;
             work.profit = work.revenue - work.wage_bill;
-            if (work.profit > kEconomicEpsilon &&
+            if (government_enabled_ && work.profit > kEconomicEpsilon &&
                 runtime_.energy_policy.windfall_tax_rate > kEconomicEpsilon) {
                 const double due =
                     work.profit * runtime_.energy_policy.windfall_tax_rate;
@@ -3082,7 +3104,8 @@ class M8Extension final : public M7TickExtension {
                 target_inventory > kEconomicEpsilon
                     ? (target_inventory - producer.inventory) / target_inventory
                     : 0.0;
-            if (runtime_.energy_policy.state_owned_price_at_cost &&
+            if (government_enabled_ &&
+                runtime_.energy_policy.state_owned_price_at_cost &&
                 producer.state_owned) {
                 work.markup = 0.0;
             } else {
@@ -3095,7 +3118,8 @@ class M8Extension final : public M7TickExtension {
                 work.posted_wage / std::max(kEconomicEpsilon, firm->productivity);
             work.posted_price =
                 std::max(kEconomicEpsilon, (1.0 + work.markup) * unit_cost);
-            if (runtime_.energy_policy.price_cap > kEconomicEpsilon &&
+            if (government_enabled_ &&
+                runtime_.energy_policy.price_cap > kEconomicEpsilon &&
                 offer.posted_price > runtime_.energy_policy.price_cap &&
                 runtime_.energy_policy.price_cap_compensation &&
                 offer.sold > kEconomicEpsilon) {
@@ -3147,7 +3171,7 @@ class M8Extension final : public M7TickExtension {
                     runtime_.energy_policy.subsidy_deposit_threshold <= 0.0 ||
                     projected_balance(real, household->primary_account) <
                         runtime_.energy_policy.subsidy_deposit_threshold * mean_deposit;
-                if (targeted &&
+                if (government_enabled_ && targeted &&
                     runtime_.energy_policy.household_subsidy_rate > kEconomicEpsilon &&
                     order.spending > kEconomicEpsilon) {
                     record.subsidy =
@@ -3379,6 +3403,7 @@ class M8Extension final : public M7TickExtension {
     const M8AdvanceOptions &options_;
     bool memory_efficient_staging_{false};
     bool committed_{false};
+    bool government_enabled_{true};
     EnergyExogenousInput input_{};
 };
 

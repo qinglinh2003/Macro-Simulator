@@ -38,6 +38,10 @@ constexpr std::uint8_t kUnrankedWealthQuintile = 5U;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
 
+[[nodiscard]] bool government_enabled(const M4Runtime &runtime) noexcept {
+    return (runtime.capability_mask & capability_bit(M4Capability::government)) != 0U;
+}
+
 [[nodiscard]] std::uint64_t splitmix64(std::uint64_t value) noexcept {
     value += 0x9e3779b97f4a7c15ULL;
     value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
@@ -1552,6 +1556,11 @@ class M7Extension final : public M6TickExtension {
             std::fill(real.household_need_units_.begin(),
                       real.household_need_units_.end(), 0.0);
         }
+        auto effective_policy = runtime_.policy;
+        if (!government_enabled(real_runtime)) {
+            effective_policy.inheritance_tax_rate = 0.0;
+            effective_policy.pension_replacement = 0.0;
+        }
         for (const auto person_id : scratch_.opening_alive_) {
             const auto *person = scratch_.persons_.get(person_id);
             if (person == nullptr || !person->alive) {
@@ -1599,7 +1608,7 @@ class M7Extension final : public M6TickExtension {
                                  scratch_.employment_, scratch_.relationships_,
                                  scratch_.labor_accounts_, scratch_.estates_,
                                  scratch_.retired_households_, scratch_.next_event_id_,
-                                 person_id, calendar_day, runtime_.policy,
+                                 person_id, calendar_day, effective_policy,
                                  runtime_.rules, scratch_.working_metrics_,
                                  scratch_.guardian_heads_, scratch_.guardian_next_,
                                  scratch_.deceased_lots_, scratch_.estate_securities_);
@@ -2847,7 +2856,8 @@ class M7Extension final : public M6TickExtension {
         }
         real.supplemental_tax_receipts_ +=
             scratch_.working_metrics_.inheritance_tax_paid;
-        if (runtime_.policy.pension_replacement > kLaborTolerance) {
+        if (government_enabled(real_runtime) &&
+            runtime_.policy.pension_replacement > kLaborTolerance) {
             const double wage_reference =
                 std::max(scratch_.working_metrics_.mean_hourly_wage,
                          runtime_.last_metrics.mean_hourly_wage);
@@ -3627,6 +3637,7 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
             if (person->participating) {
                 opening_income += real.rules.initial_wage;
             } else if (age >= static_cast<double>(spec.rules.retirement_age) &&
+                       government_enabled(financial.real_economy_runtime) &&
                        spec.policy.pension_replacement > 0.0) {
                 opening_income +=
                     spec.policy.pension_replacement * real.rules.initial_wage;

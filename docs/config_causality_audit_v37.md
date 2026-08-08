@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 251 |
-| Native route missing or incomplete | 41 |
+| Native route confirmed | 252 |
+| Native route missing or incomplete | 40 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 41 missing or incomplete routes are real implementation work; they are not
+The 40 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,13 +306,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 251
+The native product baseline comparison now projects every one of the 252
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 231 |
+| Exact semantic value | 232 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -1093,18 +1093,31 @@ visible.
 
 ### 8.12 Government and public-capital screen
 
-The public-sector inventory contains three executable causal Config fields and
-one blocked structural field. The slow-stock screen covers 20 native worlds at
+The public-sector inventory contains four executable causal Config fields and
+no blocked structural field. The slow-stock screen covers 20 native worlds at
 100,000 persons, four paired seeds, 1,095 days, and eight native workers. The
 active job-guarantee screen adds 12 one-year native worlds. A preceding
 one-year public-capital screen is retained as horizon-selection evidence but is
 not used for the final slow-stock conclusions.
 
-Static execution review revoked false route credit from `government`. Config
-defines it as the master fiscal-sector capability, and both the diagnostic and
-desktop bridges can clear the capability bit, but the only current physical-
-capital vertical requires that bit and rejects the resulting specification
-before genesis. A government-off economy is therefore not executable.
+`government` now owns the master fiscal-sector capability without owning the
+physical-capital production vertical. The engine accepts a private
+physical-capital economy with the capability disabled and retains only a
+passive Treasury settlement account for accounting continuity. Consumption,
+profit, income, and wealth taxation; procurement; public investment; job
+guarantee and income support; pensions; fiscal bank backstops; housing taxes
+and land fees; and fiscal energy instruments all test the capability before
+changing economic state. Government debt reporting also returns zero when the
+capability is absent, so private genesis endowments routed through the passive
+account are not mislabeled as public debt.
+
+At 100,000 persons and four paired seeds, disabling `government` for one year
+reduces cumulative tax receipts by 5.142 million, government spending by 5.458
+million, transfers by 1.877 million, and pensions by 1.484 million. Every flow
+falls exactly 100%, and every paired 95% interval excludes zero. Private output
+and market exchange continue, so this is a capability test rather than an
+economy-wide shutdown. The structural route is therefore mapped and causally
+resolved.
 
 `jg_productivity` is no longer blocked. Native public works now record residual
 labor, physical capital formation, wage-valued own-account construction, and
