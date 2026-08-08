@@ -28,6 +28,9 @@ namespace {
         || spec.household_opening_money.value() < 0.0
         || !std::isfinite(spec.firm_opening_money.value())
         || spec.firm_opening_money.value() < 0.0
+        || (spec.capital_firm_opening_money.has_value()
+            && (!std::isfinite(spec.capital_firm_opening_money->value())
+                || spec.capital_firm_opening_money->value() < 0.0))
         || !std::isfinite(spec.bank_opening_money.value())
         || spec.bank_opening_money.value() < 0.0) {
         return Status(
@@ -41,11 +44,15 @@ namespace {
         return Status(ErrorCode::out_of_range, "firm count overflows");
     }
     if (spec.use_per_agent_endowments) {
+        const double capital_firm_opening =
+            spec.capital_firm_opening_money.value_or(spec.firm_opening_money).value();
         const double expected =
             static_cast<double>(spec.households)
                 * spec.household_opening_money.value()
-            + static_cast<double>(firm_count)
+            + static_cast<double>(spec.consumption_firms)
                 * spec.firm_opening_money.value()
+            + static_cast<double>(spec.capital_firms)
+                * capital_firm_opening
             + static_cast<double>(spec.settlement_banks)
                 * spec.bank_opening_money.value();
         const double scale = std::max(
@@ -351,11 +358,15 @@ Result<RootState> build_genesis(const GenesisSpec& spec) {
         const auto* bank = state.banks.get(bank_ids[bank_index]);
         double opening_money = 0.0;
         if (spec.use_per_agent_endowments) {
+            const double sector_opening =
+                is_capital && spec.capital_firm_opening_money.has_value()
+                    ? spec.capital_firm_opening_money->value()
+                    : spec.firm_opening_money.value();
             opening_money =
                 index + 1 == firm_count
                 ? non_bank_total
                     - household_total - assigned_firm_money
-                : spec.firm_opening_money.value();
+                : sector_opening;
             assigned_firm_money += opening_money;
         }
         auto account_result = state.postings.create_account(

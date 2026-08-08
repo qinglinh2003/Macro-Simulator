@@ -194,6 +194,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.job_guarantee_public_works_share);
     writer.f64(rules.initial_household_money);
     writer.f64(rules.initial_firm_money);
+    writer.f64(rules.initial_capital_firm_money);
     writer.f64(rules.initial_bank_capital);
     writer.f64(rules.initial_consumption_inventory);
     writer.f64(rules.initial_capital_inventory);
@@ -267,6 +268,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.job_guarantee_public_works_share)
         && reader.f64(rules.initial_household_money)
         && reader.f64(rules.initial_firm_money)
+        && reader.f64(rules.initial_capital_firm_money)
         && reader.f64(rules.initial_bank_capital)
         && reader.f64(rules.initial_consumption_inventory)
         && reader.f64(rules.initial_capital_inventory)

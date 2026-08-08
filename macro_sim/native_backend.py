@@ -90,6 +90,7 @@ M4_RULE_FIELDS = {
     "job_guarantee_wage_ratio": "jg_wage_ratio",
     "initial_household_money": "d_household0",
     "initial_firm_money": "d_cfirm0",
+    "initial_capital_firm_money": "d_kfirm0",
     "initial_bank_capital": "d_bank0",
     "initial_consumption_inventory": "inv_firm0",
     "initial_capital_inventory": "inv_kfirm0",
@@ -496,6 +497,7 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
     )
     for field_name in (
         "initial_firm_money",
+        "initial_capital_firm_money",
         "initial_consumption_inventory",
         "initial_capital_inventory",
         "initial_consumption_capital",
@@ -625,10 +627,10 @@ def _m8_spec(
         real_rules = monetary.real_economy.rules
         private_opening_money = (
             household_count * float(real_rules.initial_household_money)
-            + (
-                int(monetary.real_economy.consumption_firms)
-                + int(monetary.real_economy.capital_firms)
-            ) * float(real_rules.initial_firm_money)
+            + int(monetary.real_economy.consumption_firms)
+            * float(real_rules.initial_firm_money)
+            + int(monetary.real_economy.capital_firms)
+            * float(real_rules.initial_capital_firm_money)
             + int(output.energy_rules.producer_count)
             * float(output.energy_rules.initial_producer_cash)
             + int(output.housing_rules.builder_count)

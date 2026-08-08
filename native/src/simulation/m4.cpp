@@ -1939,6 +1939,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.job_guarantee_public_works_share,
         rules.initial_household_money,
         rules.initial_firm_money,
+        rules.initial_capital_firm_money,
         rules.initial_bank_capital,
         rules.initial_consumption_inventory,
         rules.initial_capital_inventory,
@@ -1995,6 +1996,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.government_investment_share > 1.0 || rules.initial_price <= 0.0 ||
         rules.initial_capital_price <= 0.0 || rules.initial_wage <= 0.0 ||
         rules.initial_household_money < 0.0 || rules.initial_firm_money < 0.0 ||
+        rules.initial_capital_firm_money < 0.0 ||
         rules.initial_bank_capital < 0.0 || rules.initial_consumption_inventory < 0.0 ||
         rules.initial_capital_inventory < 0.0 ||
         rules.initial_consumption_capital < 0.0 ||
@@ -2170,10 +2172,12 @@ Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec) {
     if (!validation.ok()) {
         return validation;
     }
-    const auto firm_count = spec.consumption_firms + spec.capital_firms;
     const double opening_money =
         static_cast<double>(spec.households) * spec.rules.initial_household_money +
-        static_cast<double>(firm_count) * spec.rules.initial_firm_money +
+        static_cast<double>(spec.consumption_firms) *
+            spec.rules.initial_firm_money +
+        static_cast<double>(spec.capital_firms) *
+            spec.rules.initial_capital_firm_money +
         static_cast<double>(spec.settlement_banks) * spec.rules.initial_bank_capital;
     const double opening_capital = spec.vertical == M4Vertical::capital_fiscal
                                        ? static_cast<double>(spec.consumption_firms) *
@@ -2196,6 +2200,8 @@ Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec) {
     genesis.use_per_agent_endowments = true;
     genesis.household_opening_money = Money(spec.rules.initial_household_money);
     genesis.firm_opening_money = Money(spec.rules.initial_firm_money);
+    genesis.capital_firm_opening_money =
+        Money(spec.rules.initial_capital_firm_money);
     genesis.bank_opening_money = Money(spec.rules.initial_bank_capital);
     genesis.opening_capital_to_consumption_firms = true;
     auto state = core::build_genesis(genesis);

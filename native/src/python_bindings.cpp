@@ -1604,6 +1604,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(job_guarantee_public_works_share);
     MACRO_SIM_BIND_M4_RULE(initial_household_money);
     MACRO_SIM_BIND_M4_RULE(initial_firm_money);
+    MACRO_SIM_BIND_M4_RULE(initial_capital_firm_money);
     MACRO_SIM_BIND_M4_RULE(initial_bank_capital);
     MACRO_SIM_BIND_M4_RULE(initial_consumption_inventory);
     MACRO_SIM_BIND_M4_RULE(initial_capital_inventory);

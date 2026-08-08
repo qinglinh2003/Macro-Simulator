@@ -123,6 +123,23 @@ void test_v1_fiscal_and_capital_tick() {
     assert(core::run_invariants(*session.root()).ok());
 }
 
+void test_sector_specific_firm_opening_cash() {
+    auto spec = v1_spec(2071);
+    spec.rules.initial_firm_money = 200.0;
+    spec.rules.initial_capital_firm_money = 350.0;
+    auto initialization = build_m4_genesis(spec);
+    assert(initialization.ok());
+    auto value = std::move(initialization).take();
+    assert_close(value.root.genesis_money.value(), 3500.0);
+    value.root.firms.for_each_alive(
+        [&value](FirmId, const core::FirmComponent &firm) {
+            const auto *account = value.root.postings.get(firm.primary_account);
+            assert(account != nullptr);
+            assert_close(account->balance.value(),
+                         firm.sector == core::FirmSector::capital ? 350.0 : 200.0);
+        });
+}
+
 void test_dividend_payout_is_reported_directly() {
     const auto run = [](double payout) {
         auto spec = v1_spec(4821);
@@ -473,6 +490,7 @@ void test_checkpoint_round_trip_and_corruption() {
     spec.stochastic = true;
     spec.rules.capital_clock_demand_smoothing = 0.5;
     spec.rules.diseconomy_slope = 0.01;
+    spec.rules.initial_capital_firm_money = 350.0;
     spec.rules.wage_indexation = 0.75;
     spec.rules.wage_expected_inflation = 0.001;
     EngineSession source(7);
@@ -521,6 +539,7 @@ int main() {
     test_capability_boundary();
     test_v0_genesis_and_tick();
     test_v1_fiscal_and_capital_tick();
+    test_sector_specific_firm_opening_cash();
     test_dividend_payout_is_reported_directly();
     test_capital_clock_demand_smoothing_scales_the_source_ema();
     test_wage_indexation_uses_committed_expected_inflation();

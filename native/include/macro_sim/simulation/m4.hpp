@@ -96,6 +96,7 @@ struct M4Rules final {
     double job_guarantee_public_works_share{1.0};
     double initial_household_money{100.0};
     double initial_firm_money{200.0};
+    double initial_capital_firm_money{200.0};
     double initial_bank_capital{0.0};
     double initial_consumption_inventory{10.0};
     double initial_capital_inventory{5.0};

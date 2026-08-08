@@ -1,6 +1,7 @@
 #ifndef MACRO_SIM_CORE_ROOT_STATE_HPP
 #define MACRO_SIM_CORE_ROOT_STATE_HPP
 
+#include <optional>
 #include <vector>
 
 #include "macro_sim/core/accounting.hpp"
@@ -62,6 +63,7 @@ struct GenesisSpec final {
     bool use_per_agent_endowments{false};
     Money household_opening_money{};
     Money firm_opening_money{};
+    std::optional<Money> capital_firm_opening_money{};
     Money bank_opening_money{};
     bool opening_capital_to_consumption_firms{false};
 };
