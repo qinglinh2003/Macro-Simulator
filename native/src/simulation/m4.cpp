@@ -565,7 +565,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             work.labor_demand_notional,
             0.0,
             0.0,
-            0.0,
+            runtime.rules.diseconomy_slope,
             0.0,
             true,
         });
@@ -1906,6 +1906,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.markup_adjustment,
         rules.markup_minimum,
         rules.markup_maximum,
+        rules.diseconomy_slope,
         rules.wage_shortage_adjustment,
         rules.wage_downward_drift,
         rules.wage_calvo_probability,
@@ -1959,7 +1960,8 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.capital_clock_demand_smoothing > 1.0 ||
         rules.income_adjustment > 1.0 || rules.inventory_ratio < 0.0 ||
         rules.inventory_gap_close < 0.0 || rules.inventory_gap_close > 1.0 ||
-        rules.markup_adjustment < 0.0 || rules.wage_shortage_adjustment < 0.0 ||
+        rules.markup_adjustment < 0.0 || rules.diseconomy_slope < 0.0 ||
+        rules.wage_shortage_adjustment < 0.0 ||
         rules.wage_downward_drift < 0.0 || rules.income_propensity < 0.0 ||
         rules.wealth_propensity < 0.0 || rules.dividend_payout < 0.0 ||
         rules.dividend_payout > 1.0 || rules.investment_adjustment < 0.0 ||

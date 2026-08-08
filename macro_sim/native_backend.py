@@ -58,6 +58,7 @@ M4_RULE_FIELDS = {
     "markup_adjustment": "eta",
     "markup_minimum": "mu_min",
     "markup_maximum": "mu_max",
+    "diseconomy_slope": "dis_slope",
     "wage_shortage_adjustment": "omega",
     "wage_downward_drift": "delta",
     "wage_calvo_probability": "theta_wage",

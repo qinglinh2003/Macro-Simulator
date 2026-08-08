@@ -204,6 +204,30 @@ void test_wage_indexation_uses_committed_expected_inflation() {
     assert_close(run(1.0), 1.01);
 }
 
+void test_diseconomy_slope_raises_large_firm_unit_cost() {
+    const auto run = [](double slope) {
+        auto spec = v0_spec(4824);
+        spec.stochastic = true;
+        spec.rules.price_calvo_probability = 1.0;
+        spec.rules.diseconomy_slope = slope;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        M4TickScratch scratch;
+        Tick tick(0);
+        const auto advanced =
+            advance_tick(value.root, value.runtime, scratch, tick);
+        assert(advanced.ok());
+        const auto *firm = value.root.firms.get(FirmId(1));
+        assert(firm != nullptr);
+        return firm->posted_price.value();
+    };
+
+    const double constant_returns = run(0.0);
+    const double coordination_costs = run(0.05);
+    assert(coordination_costs > constant_returns);
+}
+
 void test_fiscal_quantity_and_deficit_regimes_are_distinct() {
     auto quantity = v1_spec(207);
     quantity.rules.government_investment_share = 0.0;
@@ -448,6 +472,7 @@ void test_checkpoint_round_trip_and_corruption() {
     auto spec = v1_spec(412);
     spec.stochastic = true;
     spec.rules.capital_clock_demand_smoothing = 0.5;
+    spec.rules.diseconomy_slope = 0.01;
     spec.rules.wage_indexation = 0.75;
     spec.rules.wage_expected_inflation = 0.001;
     EngineSession source(7);
@@ -499,6 +524,7 @@ int main() {
     test_dividend_payout_is_reported_directly();
     test_capital_clock_demand_smoothing_scales_the_source_ema();
     test_wage_indexation_uses_committed_expected_inflation();
+    test_diseconomy_slope_raises_large_firm_unit_cost();
     test_fiscal_quantity_and_deficit_regimes_are_distinct();
     test_fiscal_deficit_responds_to_unemployment();
     test_deficit_envelope_includes_transfer_spending();

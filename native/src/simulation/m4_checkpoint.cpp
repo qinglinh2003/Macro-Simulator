@@ -156,6 +156,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.markup_adjustment);
     writer.f64(rules.markup_minimum);
     writer.f64(rules.markup_maximum);
+    writer.f64(rules.diseconomy_slope);
     writer.f64(rules.wage_shortage_adjustment);
     writer.f64(rules.wage_downward_drift);
     writer.f64(rules.wage_calvo_probability);
@@ -228,6 +229,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.markup_adjustment)
         && reader.f64(rules.markup_minimum)
         && reader.f64(rules.markup_maximum)
+        && reader.f64(rules.diseconomy_slope)
         && reader.f64(rules.wage_shortage_adjustment)
         && reader.f64(rules.wage_downward_drift)
         && reader.f64(rules.wage_calvo_probability)

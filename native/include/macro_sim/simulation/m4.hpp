@@ -57,6 +57,7 @@ struct M4Rules final {
     double markup_adjustment{6.7e-4};
     double markup_minimum{0.0};
     double markup_maximum{1.0};
+    double diseconomy_slope{0.0};
     double wage_shortage_adjustment{0.0075};
     double wage_downward_drift{0.0075};
     double wage_calvo_probability{0.0};

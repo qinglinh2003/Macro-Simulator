@@ -1568,6 +1568,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(markup_adjustment);
     MACRO_SIM_BIND_M4_RULE(markup_minimum);
     MACRO_SIM_BIND_M4_RULE(markup_maximum);
+    MACRO_SIM_BIND_M4_RULE(diseconomy_slope);
     MACRO_SIM_BIND_M4_RULE(wage_shortage_adjustment);
     MACRO_SIM_BIND_M4_RULE(wage_downward_drift);
     MACRO_SIM_BIND_M4_RULE(wage_calvo_probability);
