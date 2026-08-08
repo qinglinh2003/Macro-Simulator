@@ -521,7 +521,7 @@ def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
     payload = build_native_baseline_audit(
         population=1_000, seed=61, countries=2
     )
-    assert payload["field_count"] == 247
+    assert payload["field_count"] == 251
     assert payload["status_counts"].get("projection_missing", 0) == 0
     assert payload["status_counts"].get("product_baseline_divergence", 0) == 0
     rows = {row["field_name"]: row for row in payload["rows"]}
@@ -540,6 +540,10 @@ def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
     assert rows["fertility_rank_gradient"]["status"] == "exact"
     assert rows["strat_mult_lo"]["status"] == "exact"
     assert rows["strat_mult_hi"]["status"] == "exact"
+    assert rows["bank_assignment"]["status"] == "exact"
+    assert rows["bank_enabled"]["status"] == "exact"
+    assert rows["household_interest_arrears"]["status"] == "exact"
+    assert rows["run_market_weight"]["status"] == "exact"
 
 
 def test_new_game_constructs_selected_profiles_world_and_player() -> None:

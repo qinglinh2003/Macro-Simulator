@@ -327,6 +327,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     monetary.rules.relationship_lock_in = true;
     monetary.rules.interbank = true;
     monetary.rules.deposit_interest_arrears = false;
+    monetary.rules.household_interest_arrears = true;
     monetary.rules.direct_monetary_transmission = true;
     monetary.rules.investment_user_cost_elasticity = 0.5;
     monetary.rules.investment_user_cost_multiplier_min = 0.5;
@@ -693,10 +694,12 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
                           "new-game bank switch is invalid");
         }
         if (!overrides.at("bank_enabled").get<bool>()) {
+            monetary.rules.banking_enabled = false;
             monetary.rules.household_credit = false;
             monetary.rules.interbank = false;
             monetary.rules.rate_competition = false;
             monetary.rules.relationship_lock_in = false;
+            monetary.rules.household_interest_arrears = false;
             financial.rules.bank_equity = false;
             financial.rules.bank_equity_trading = false;
             financial.rules.bank_dynamics = false;

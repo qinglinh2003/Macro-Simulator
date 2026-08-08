@@ -181,6 +181,20 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
             scratch.exposure_by_bank_[bank] += loan.principal.value();
         }
     }
+    double household_interest_arrears = 0.0;
+    for (const auto &loan : scratch.loans_) {
+        if (loan.borrower.kind() == core::OwnerKind::household) {
+            household_interest_arrears += std::max(0.0, loan.interest_arrears);
+        }
+    }
+    scratch.working_metrics_.household_interest_arrears_closing =
+        household_interest_arrears;
+    scratch.working_metrics_.household_interest_arrears_stock_flow_residual =
+        scratch.working_metrics_.household_interest_arrears_opening +
+        scratch.working_metrics_.household_interest_accrued -
+        scratch.working_metrics_.household_interest_arrears_cash_paid -
+        scratch.working_metrics_.household_interest_arrears_extinguished -
+        household_interest_arrears;
     std::fill(scratch.deposits_by_bank_.begin(), scratch.deposits_by_bank_.end(), 0.0);
     state.households.for_each_alive(
         [&real, &scratch](HouseholdId, const core::HouseholdComponent &item) {
@@ -319,12 +333,15 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
 void reserve_household_debt_service(const core::RootState &state, M4TickScratch &real,
                                     const M5Runtime &runtime,
                                     M5TickScratch &scratch) noexcept {
-    if (!runtime.rules.direct_monetary_transmission) {
+    if (!runtime.rules.direct_monetary_transmission &&
+        !runtime.rules.household_interest_arrears) {
         return;
     }
     scratch.scheduled_service_by_account_.assign(real.balances_.size(), 0.0);
     for (const auto &loan : scratch.loans_) {
-        if (!loan.active || loan.principal.value() <= algorithms::kEconomicEpsilon) {
+        if (!loan.active ||
+            (loan.principal.value() <= algorithms::kEconomicEpsilon &&
+             loan.interest_arrears <= algorithms::kEconomicEpsilon)) {
             continue;
         }
         const auto *account = state.postings.get(loan.borrower_account);
@@ -334,10 +351,21 @@ void reserve_household_debt_service(const core::RootState &state, M4TickScratch 
             slot >= scratch.scheduled_service_by_account_.size()) {
             continue;
         }
+        const double carried = runtime.rules.household_interest_arrears
+                                   ? loan.interest_arrears
+                                   : 0.0;
         scratch.scheduled_service_by_account_[slot] +=
             (runtime.rules.household_amortization +
              loan_service_rate(state, runtime, loan)) *
-            loan.principal.value();
+                loan.principal.value() +
+            carried;
+        scratch.working_metrics_.household_contractual_debt_service_due +=
+            (runtime.rules.household_amortization +
+             loan_service_rate(state, runtime, loan)) *
+                loan.principal.value() +
+            carried;
+        scratch.working_metrics_.household_interest_arrears_in_goods_reservation +=
+            carried;
     }
     for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
         const auto *household = state.households.get(real.household_ids_[index]);
@@ -802,6 +830,10 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
     if (!user_cost.ok()) {
         return user_cost;
     }
+    if (!runtime.rules.banking_enabled) {
+        refresh_aggregates(state, real, scratch);
+        return Status::success();
+    }
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(real.firm_ids_[index]);
         if (firm == nullptr || (firm->sector != core::FirmSector::consumption &&
@@ -844,7 +876,9 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
                                   const M5Runtime &runtime, M4TickScratch &real,
                                   M5TickScratch &scratch, bool full_pnl) {
     for (auto &loan : scratch.loans_) {
-        if (!loan.active || loan.principal.value() <= algorithms::kEconomicEpsilon) {
+        if (!loan.active ||
+            (loan.principal.value() <= algorithms::kEconomicEpsilon &&
+             loan.interest_arrears <= algorithms::kEconomicEpsilon)) {
             continue;
         }
         const auto *account_record = state.postings.get(loan.borrower_account);
@@ -858,8 +892,20 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
             account_record->key.owner.kind() == core::OwnerKind::household
                 ? runtime.rules.household_amortization
                 : runtime.rules.firm_amortization;
-        const double interest_due =
+        const bool household =
+            account_record->key.owner.kind() == core::OwnerKind::household;
+        const double accrued_interest =
             loan_service_rate(state, runtime, loan) * loan.principal.value();
+        const double opening_interest_arrears =
+            household && runtime.rules.household_interest_arrears
+                ? loan.interest_arrears
+                : 0.0;
+        const double interest_due = accrued_interest + opening_interest_arrears;
+        if (household && runtime.rules.household_interest_arrears) {
+            scratch.working_metrics_.household_interest_arrears_opening +=
+                opening_interest_arrears;
+            scratch.working_metrics_.household_interest_accrued += accrued_interest;
+        }
         double interest = 0.0;
         double principal = 0.0;
         if (full_pnl) {
@@ -880,8 +926,12 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
             }
             pnl_for(scratch, loan.lender)->loan_interest += interest;
             scratch.working_metrics_.loan_interest_paid += interest;
-            if (account_record->key.owner.kind() == core::OwnerKind::household) {
+            if (household) {
                 scratch.working_metrics_.household_interest_paid += interest;
+                if (runtime.rules.household_interest_arrears) {
+                    scratch.working_metrics_.household_interest_arrears_cash_paid +=
+                        interest;
+                }
             } else if (full_pnl) {
                 const auto firm_id =
                     static_cast<std::size_t>(account_record->key.owner.value());
@@ -892,6 +942,9 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
                     }
                 }
             }
+        }
+        if (household && runtime.rules.household_interest_arrears) {
+            loan.interest_arrears = std::max(0.0, interest_due - interest);
         }
         if (principal > algorithms::kEconomicEpsilon) {
             real.balances_[account] -= principal;
@@ -907,6 +960,10 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
                 }
             }
             scratch.working_metrics_.principal_repaid += principal;
+        }
+        if (loan.principal.value() <= algorithms::kEconomicEpsilon &&
+            loan.interest_arrears <= algorithms::kEconomicEpsilon) {
+            loan.active = false;
         }
     }
     refresh_aggregates(state, real, scratch);
@@ -1120,9 +1177,17 @@ void add_interbank(M5TickScratch &scratch, BankId lender, BankId borrower,
     const auto *component = state.banks.get(bank);
     const double capital = std::max(0.0, scratch.bank_capital_live_[index]);
     static_cast<void>(component);
-    return std::min(1.0, (capital / exposure) /
-                             std::max(algorithms::kEconomicEpsilon,
-                                      runtime.rules.run_health_reference));
+    const double book_health =
+        std::min(1.0, (capital / exposure) /
+                          std::max(algorithms::kEconomicEpsilon,
+                                   runtime.rules.run_health_reference));
+    const auto market_index = bank_index(bank);
+    const double market_health =
+        market_index < runtime.bank_market_health.size()
+            ? std::clamp(runtime.bank_market_health[market_index], 0.0, 1.0)
+            : 1.0;
+    return runtime.rules.run_market_weight * market_health +
+           (1.0 - runtime.rules.run_market_weight) * book_health;
 }
 
 void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
@@ -1200,6 +1265,17 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
         remaining -= amount;
     }
     return Status::success();
+}
+
+void extinguish_household_interest_arrears(M5TickScratch &scratch,
+                                           core::LoanRecord &loan) noexcept {
+    if (loan.borrower.kind() != core::OwnerKind::household ||
+        loan.interest_arrears <= algorithms::kEconomicEpsilon) {
+        return;
+    }
+    scratch.working_metrics_.household_interest_arrears_extinguished +=
+        loan.interest_arrears;
+    loan.interest_arrears = 0.0;
 }
 
 [[nodiscard]] Status resolve_bank(const core::RootState &state, M5Runtime &runtime,
@@ -1349,6 +1425,7 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
         }
         const auto *bank = state.banks.get(loan.lender);
         const double loss = loan.principal.value();
+        extinguish_household_interest_arrears(scratch, loan);
         real.balances_[account_index(bank->cash_account)] -= loss;
         pnl_for(scratch, loan.lender)->realized_loan_losses += loss;
         scratch.working_metrics_.realized_credit_losses += loss;
@@ -1363,7 +1440,8 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
                                    M4TickScratch &real, M5TickScratch &scratch,
                                    Tick tick, PhiloxRng &rng,
                                    std::optional<BankId> forced) {
-    if ((!runtime.rules.bank_runs && !forced.has_value()) || !runtime.rules.interbank ||
+    if (!runtime.rules.banking_enabled ||
+        (!runtime.rules.bank_runs && !forced.has_value()) || !runtime.rules.interbank ||
         state.banks.alive_count() <= 1) {
         return Status::success();
     }
@@ -1689,7 +1767,9 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
     for (std::size_t index = 0; index < scratch.loans_.size(); ++index) {
         const auto &loan = scratch.loans_[index];
         if (loan.id.value() != index + 1 || !finite(loan.principal.value()) ||
-            loan.principal.value() < -kTolerance || !valid_loan_purpose(loan.purpose) ||
+            loan.principal.value() < -kTolerance || !finite(loan.interest_arrears) ||
+            loan.interest_arrears < -kTolerance ||
+            !valid_loan_purpose(loan.purpose) ||
             state.banks.get(loan.lender) == nullptr ||
             state.postings.get(loan.borrower_account) == nullptr) {
             return Status(ErrorCode::invariant_violation,
@@ -2052,6 +2132,9 @@ double stage_m5_firm_plan_credit(const core::RootState &state,
                                  M5TickScratch &scratch, std::size_t firm_index,
                                  Tick tick, double credit_supply_multiplier,
                                  double additional_cash_need) {
+    if (!runtime.rules.banking_enabled) {
+        return 0.0;
+    }
     if (firm_index >= real_economy.firm_ids_.size() ||
         firm_index >= real_economy.firm_work_.size()) {
         return 0.0;
@@ -2207,6 +2290,10 @@ Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
                                       AccountId borrower_account, Money requested,
                                       Money borrower_limit,
                                       double credit_supply_multiplier) {
+    if (!runtime.rules.banking_enabled) {
+        return Status(ErrorCode::insufficient_funds,
+                      "M5 credit banking is disabled");
+    }
     if (!finite(requested.value()) || !finite(borrower_limit.value()) ||
         !finite(credit_supply_multiplier) || credit_supply_multiplier < 0.0 ||
         requested.value() <= algorithms::kEconomicEpsilon ||
@@ -2267,6 +2354,10 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
                                M4TickScratch &real_economy, const M5Runtime &runtime,
                                M5TickScratch &scratch, const M5CreditQuote &quote,
                                Tick tick, core::LoanPurpose purpose) {
+    if (!runtime.rules.banking_enabled) {
+        return Status(ErrorCode::insufficient_funds,
+                      "M5 credit banking is disabled");
+    }
     if (!quote.borrower_account.valid() || !quote.borrower.valid() ||
         !quote.lender.valid() || !finite(quote.principal.value()) ||
         quote.principal.value() <= algorithms::kEconomicEpsilon ||
@@ -2359,6 +2450,7 @@ Result<LoanId> stage_m5_credit(const core::RootState &state,
             quote.borrower_account,
             quote.principal,
             0.0,
+            0.0,
             {
                 quote.annual_rate,
                 tick,
@@ -2434,7 +2526,8 @@ Status stage_m5_loan_repayment(const core::RootState &state,
     }
     real_economy.balances_[account_slot] -= principal;
     loan.principal = Money(std::max(0.0, loan.principal.value() - principal));
-    loan.active = loan.principal.value() > algorithms::kEconomicEpsilon;
+    loan.active = loan.principal.value() > algorithms::kEconomicEpsilon ||
+                  loan.interest_arrears > algorithms::kEconomicEpsilon;
     if (!loan.active && loan.purpose == core::LoanPurpose::general &&
         account_slot < scratch.reusable_loan_by_account_.size() &&
         scratch.reusable_loan_by_account_[account_slot] == loan.id) {
@@ -2473,6 +2566,7 @@ Status stage_m5_loan_writeoff(const core::RootState &state, M4TickScratch &real_
     }
 
     const double loss = loan.principal.value();
+    extinguish_household_interest_arrears(scratch, loan);
     const auto bank_cash = account_index(bank->cash_account);
     real_economy.balances_[bank_cash] -= loss;
     pnl->realized_loan_losses += loss;
@@ -2824,6 +2918,7 @@ Status validate_m5_spec(const M5SimulationSpec &spec) noexcept {
         spec.rules.investment_user_cost_floor,
         spec.rules.run_sensitivity,
         spec.rules.run_health_reference,
+        spec.rules.run_market_weight,
         spec.rules.run_fear_persistence,
         spec.rules.bank_payout_ratio,
         spec.initial_policy_rate,
@@ -2849,6 +2944,8 @@ Status validate_m5_spec(const M5SimulationSpec &spec) noexcept {
             spec.rules.investment_user_cost_multiplier_max ||
         spec.rules.investment_user_cost_floor <= 0.0 ||
         spec.rules.run_health_reference <= 0.0 ||
+        spec.rules.run_market_weight < 0.0 ||
+        spec.rules.run_market_weight > 1.0 ||
         spec.rules.run_fear_persistence < 0.0 ||
         spec.rules.run_fear_persistence > 1.0 || spec.rules.bank_payout_ratio < 0.0 ||
         spec.rules.bank_payout_ratio > 1.0 || spec.initial_policy_rate < 0.0) {
@@ -2872,7 +2969,11 @@ Status validate_m5_state(const core::RootState &state,
         runtime.headline_price_index <= 0.0 ||
         runtime.previous_headline_price_index <= 0.0 ||
         !finite(runtime.previous_unemployment) || !finite(runtime.reserve_genesis) ||
-        !finite(runtime.bank_fear) || !state.interbank.validate_finite().ok() ||
+        !finite(runtime.bank_fear) || !all_finite(runtime.bank_market_health) ||
+        std::any_of(runtime.bank_market_health.begin(),
+                    runtime.bank_market_health.end(),
+                    [](double value) { return value < 0.0 || value > 1.0; }) ||
+        !state.interbank.validate_finite().ok() ||
         !state.central_bank_operations.validate_finite().ok() ||
         !state.bank_pnl.validate_finite().ok() ||
         !state.bank_capital.validate_finite().ok() ||
@@ -2933,18 +3034,18 @@ Result<M5Initialization> build_m5_genesis(const M5SimulationSpec &spec) {
             false,
         });
     });
+    std::vector<AccountId> borrowers;
+    borrowers.reserve(value.root.firms.alive_count() +
+                      value.root.households.alive_count());
+    value.root.firms.for_each_alive(
+        [&borrowers](FirmId, const core::FirmComponent &firm) {
+            borrowers.push_back(firm.primary_account);
+        });
+    value.root.households.for_each_alive(
+        [&borrowers](HouseholdId, const core::HouseholdComponent &household) {
+            borrowers.push_back(household.primary_account);
+        });
     if (spec.rules.assign_banks_by_size) {
-        std::vector<AccountId> borrowers;
-        borrowers.reserve(value.root.firms.alive_count() +
-                          value.root.households.alive_count());
-        value.root.firms.for_each_alive(
-            [&borrowers](FirmId, const core::FirmComponent &firm) {
-                borrowers.push_back(firm.primary_account);
-            });
-        value.root.households.for_each_alive(
-            [&borrowers](HouseholdId, const core::HouseholdComponent &household) {
-                borrowers.push_back(household.primary_account);
-            });
         std::stable_sort(borrowers.begin(), borrowers.end(),
                          [&value](AccountId left, AccountId right) {
                              return value.root.postings.get(left)->balance.value() >
@@ -2953,6 +3054,20 @@ Result<M5Initialization> build_m5_genesis(const M5SimulationSpec &spec) {
         for (std::size_t index = 0; index < borrowers.size(); ++index) {
             auto *account = value.root.postings.get(borrowers[index]);
             const auto *bank = value.root.banks.get(bank_ids[index % bank_ids.size()]);
+            account->key.settlement_node = bank->settlement_node;
+        }
+    } else {
+        PhiloxRng assignment_rng(
+            {static_cast<std::uint32_t>(spec.real_economy.seed) ^ 0x42414e4bU,
+             static_cast<std::uint32_t>(spec.real_economy.seed >> 32U) ^
+                 0x4153534eU});
+        for (const auto borrower : borrowers) {
+            auto draw = assignment_rng.uniform_index(bank_ids.size());
+            if (!draw.ok()) {
+                return draw.status();
+            }
+            auto *account = value.root.postings.get(borrower);
+            const auto *bank = value.root.banks.get(bank_ids[*draw.get_if()]);
             account->key.settlement_node = bank->settlement_node;
         }
     }
@@ -2969,6 +3084,7 @@ Result<M5Initialization> build_m5_genesis(const M5SimulationSpec &spec) {
             : spec.real_economy.rules.initial_price;
     runtime.previous_headline_price_index = runtime.headline_price_index;
     runtime.reserve_genesis = value.root.reserves.reserve_stock().value();
+    runtime.bank_market_health.assign(bank_ids.size() + 1U, 1.0);
     runtime.last_metrics.policy_rate = spec.initial_policy_rate;
     runtime.last_metrics.total_reserves = value.root.reserves.total_reserves().value();
     runtime.last_metrics.reserve_stock = value.root.reserves.reserve_stock().value();

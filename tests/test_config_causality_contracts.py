@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 45
+    assert payload["status_counts"]["blocked_native_route"] == 41
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -305,13 +305,15 @@ def test_distribution_contracts_cover_every_mapped_causal_field() -> None:
 def test_banking_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="banking_and_credit")
     activated = activation_contracts(module="banking_and_credit")
-    assert len(neutral) == 11
-    assert len(activated) == 20
+    assert len(neutral) == 12
+    assert len(activated) == 23
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "amort",
+        "bank_assignment",
         "bank_dynamics",
         "bank_entry_beta",
         "bank_entry_max",
+        "bank_enabled",
         "bank_leverage_disp",
         "bank_leverage_mean",
         "bank_rate_competition",
@@ -327,6 +329,7 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
         "hh_amort",
         "hh_subsistence",
         "household_credit",
+        "household_interest_arrears",
         "interbank",
         "interbank_rate_base",
         "interbank_tightness",
@@ -338,6 +341,7 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
         "monetary_direct_transmission",
         "run_fear_persistence",
         "run_health_ref",
+        "run_market_weight",
         "run_sensitivity",
     }
     assert all(

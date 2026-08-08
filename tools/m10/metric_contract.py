@@ -163,7 +163,7 @@ def build_contract() -> dict:
         len(public["metrics"]) != 41
         or len(extra_literal_rows) != 35
         or len(dashboard_rows) != 85
-        or source_count != 270
+        or source_count != 278
         or national_account_count != 63
     ):
         raise ValueError("M10 metric catalog width changed unexpectedly")

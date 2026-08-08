@@ -627,6 +627,14 @@ def native_treatment_spec(
         after_value = getattr(after, changed_field)
         if before_value == after_value:
             continue
+        # ``bank_enabled=False`` legitimately closes dependent Python-era
+        # capabilities, including the old master ``government`` flag.  The
+        # native capital-fiscal vertical always retains its fiscal settlement
+        # capability, so do not mistake that dependent closure for a direct
+        # government-off treatment.  The government field itself remains
+        # blocked and is still exercised when it is the requested treatment.
+        if changed_field == "government" and field != "government":
+            continue
         try:
             _apply_native_root_field(
                 native_spec,
@@ -896,6 +904,14 @@ def apply_native_activation_scenario(
     elif scenario == "binding_bank_capital":
         monetary_policy.bank_capital_constraint = True
         monetary_rules.opening_capital_per_bank = 250.0
+    elif scenario == "bank_assignment_balance_sheet":
+        monetary_rules.loan_spread_dispersion = 5.0e-3
+        monetary_rules.deposit_spread_dispersion = 1.0e-3
+        monetary_rules.bank_search_count = max(
+            2, int(monetary_rules.bank_count)
+        )
+        monetary_policy.bank_capital_constraint = True
+        monetary_rules.opening_capital_per_bank = 250.0
     elif scenario == "positive_deposit_carry":
         monetary_rules.deposit_rate = 1.0e-4
     elif scenario == "monetary_tightening_pressure":
@@ -932,6 +948,32 @@ def apply_native_activation_scenario(
         monetary_policy.bank_capital_constraint = True
         monetary_rules.opening_capital_per_bank = 250.0
         monetary_rules.bank_leverage_mean = 100.0
+    elif scenario == "bank_run_market_signal":
+        monetary_rules.bank_runs = True
+        monetary_rules.interbank = True
+        monetary_rules.run_sensitivity = 0.5
+        # Keep book capital healthy while a one-day portfolio rebalance sells
+        # the initial bank-equity float.  This creates a genuine lagged market
+        # drawdown (price / peak < 1) instead of merely enabling a market whose
+        # opening price and peak remain identical forever.
+        monetary_rules.run_health_reference = 0.50
+        monetary_rules.opening_capital_per_bank = 50.0
+        financial_rules.bank_equity = True
+        financial_rules.bank_equity_trading = True
+        financial_rules.bank_equity_lambda = 1.0
+        financial_rules.bank_equity_target = 0.0
+        financial_rules.fundamental_weight = 0.0
+        financial_rules.chartist_weight = 0.0
+        financial_rules.portfolio_adjustment = 1.0
+        financial_rules.equity_price_adjustment = 2.0
+        financial_rules.portfolio_review_interval_days = 1
+    elif scenario == "household_arrears_pressure":
+        rules.initial_household_money = 0.10
+        monetary.initial_policy_rate = 5.0e-3
+        monetary_rules.household_credit = True
+        monetary_rules.direct_monetary_transmission = True
+        monetary_rules.household_subsistence = 5.0
+        monetary_policy.household_credit_limit = 10.0
     elif scenario == "credit_joint_pressure":
         monetary_policy.bank_capital_constraint = True
         monetary_rules.opening_capital_per_bank = 250.0

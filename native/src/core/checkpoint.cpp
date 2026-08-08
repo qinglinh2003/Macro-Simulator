@@ -1006,6 +1006,7 @@ public:
             write_id(writer, loan.borrower_account);
             writer.f64(loan.principal.value());
             writer.f64(loan.roundoff_drift);
+            writer.f64(loan.interest_arrears);
             writer.f64(loan.terms.annual_rate.value());
             writer.u64(loan.terms.originated_tick.value());
             writer.u64(loan.terms.maturity_tick.value());
@@ -1401,13 +1402,14 @@ Result<RootState> CheckpointCodec::decode_state(
         const auto account = read_id<AccountId>(reader);
         const auto principal = reader.f64();
         const auto drift = reader.f64();
+        const auto interest_arrears = reader.f64();
         const auto rate = reader.f64();
         const auto originated = reader.u64();
         const auto maturity = reader.u64();
         const auto active = reader.boolean();
         const auto purpose = reader.u8();
         if (!id.ok() || !lender.ok() || !borrower.ok() || !account.ok()
-            || !principal.ok() || !drift.ok() || !rate.ok()
+            || !principal.ok() || !drift.ok() || !interest_arrears.ok() || !rate.ok()
             || !originated.ok() || !maturity.ok() || !active.ok() ||
             !purpose.ok()) {
             return corrupt("loan record is truncated");
@@ -1425,6 +1427,7 @@ Result<RootState> CheckpointCodec::decode_state(
                 *account.get_if(),
                 Money(*principal.get_if()),
                 *drift.get_if(),
+                *interest_arrears.get_if(),
                 LoanTerms{
                     Rate(*rate.get_if()),
                     Tick(*originated.get_if()),

@@ -24,8 +24,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 247,
-        "missing_native_route": 45,
+        "mapped_native": 251,
+        "missing_native_route": 41,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -129,11 +129,26 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
     ):
         assert rows[f"config.{field_name}"]["route_status"] == "mapped_native"
     bank_assignment = rows["config.bank_assignment"]
-    assert bank_assignment["route_status"] == "missing_native_route"
-    assert "round-robin" in bank_assignment["route_note"]
+    assert bank_assignment["route_status"] == "mapped_native"
+    assert bank_assignment["native_targets"] == [
+        "m5.rules.assign_banks_by_size"
+    ]
     bank_enabled = rows["config.bank_enabled"]
-    assert bank_enabled["route_status"] == "missing_native_route"
-    assert "ordinary firm credit" in bank_enabled["route_note"]
+    assert bank_enabled["route_status"] == "mapped_native"
+    assert bank_enabled["native_targets"] == [
+        "m5.monetary_rules.banking_enabled",
+        "m5.rules.banking_enabled",
+    ]
+    household_arrears = rows["config.household_interest_arrears"]
+    assert household_arrears["route_status"] == "mapped_native"
+    assert household_arrears["native_targets"] == [
+        "m5.monetary_rules.household_interest_arrears"
+    ]
+    run_market_weight = rows["config.run_market_weight"]
+    assert run_market_weight["route_status"] == "mapped_native"
+    assert run_market_weight["native_targets"] == [
+        "m5.monetary_rules.run_market_weight"
+    ]
     direct = rows["config.monetary_direct_transmission"]
     assert direct["route_status"] == "mapped_native"
     assert direct["native_targets"] == [

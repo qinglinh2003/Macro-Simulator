@@ -502,7 +502,9 @@ const std::vector<LoanRecord> &LoanBook::records() const noexcept { return loans
 Status LoanBook::validate_finite() const noexcept {
     for (const auto &loan : loans_) {
         if (!std::isfinite(loan.principal.value()) ||
-            !std::isfinite(loan.roundoff_drift) || loan.principal.value() < 0.0 ||
+            !std::isfinite(loan.roundoff_drift) ||
+            !std::isfinite(loan.interest_arrears) ||
+            loan.principal.value() < 0.0 || loan.interest_arrears < 0.0 ||
             !valid_loan_purpose(loan.purpose)) {
             return Status(ErrorCode::invariant_violation, "invalid loan");
         }
@@ -527,6 +529,7 @@ LoanBook::CreateResult LoanBook::create_unchecked(BankId lender, OwnerId borrowe
         borrower,
         borrower_account,
         principal,
+        0.0,
         0.0,
         terms,
         principal.value() != 0.0,

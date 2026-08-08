@@ -168,6 +168,7 @@ void append_root(DigestWriter& writer, const RootState& state) {
         append_id(writer, loan.borrower_account);
         writer.f64(loan.principal.value());
         writer.f64(loan.roundoff_drift);
+        writer.f64(loan.interest_arrears);
         writer.f64(loan.terms.annual_rate.value());
         writer.u64(loan.terms.originated_tick.value());
         writer.u64(loan.terms.maturity_tick.value());

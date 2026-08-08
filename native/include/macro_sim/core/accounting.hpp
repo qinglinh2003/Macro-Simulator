@@ -143,6 +143,7 @@ struct LoanRecord final {
     AccountId borrower_account{};
     Money principal{};
     double roundoff_drift{0.0};
+    double interest_arrears{0.0};
     LoanTerms terms{};
     bool active{true};
     LoanPurpose purpose{LoanPurpose::general};

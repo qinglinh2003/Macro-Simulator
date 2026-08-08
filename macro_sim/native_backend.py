@@ -172,6 +172,7 @@ M5_POLICY_FIELDS = {
 }
 
 M5_RULE_FIELDS = {
+    "banking_enabled": "bank_enabled",
     "bank_count": "n_banks",
     "opening_capital_per_bank": "d_bank0",
     "bank_leverage_mean": "bank_leverage_mean",
@@ -191,6 +192,7 @@ M5_RULE_FIELDS = {
     "deposit_rate": "deposit_rate",
     "interest_by_deposits": "interest_by_deposits",
     "deposit_interest_arrears": "deposit_interest_arrears",
+    "household_interest_arrears": "household_interest_arrears",
     "firm_amortization": "amort",
     "household_amortization": "hh_amort",
     "household_subsistence": "hh_subsistence",
@@ -202,6 +204,7 @@ M5_RULE_FIELDS = {
     "bank_runs": "bank_runs",
     "run_sensitivity": "run_sensitivity",
     "run_health_reference": "run_health_ref",
+    "run_market_weight": "run_market_weight",
     "run_fear_persistence": "run_fear_persistence",
 }
 
@@ -592,6 +595,7 @@ def _m8_spec(
         financial.rules.equity_finance = False
         financial.rules.margin_credit = False
     if not cfg.bank_enabled:
+        monetary.rules.banking_enabled = False
         monetary.rules.household_credit = False
         monetary.rules.interbank = False
         monetary.rules.rate_competition = False

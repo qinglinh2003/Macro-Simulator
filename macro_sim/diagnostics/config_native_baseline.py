@@ -75,17 +75,7 @@ def _native_root_values(native_spec: Any, economy_id: int = 0) -> dict[str, Any]
                 financial.rules.margin_credit,
             )
         ),
-        "bank_enabled": all(
-            (
-                monetary.rules.household_credit,
-                monetary.rules.interbank,
-                monetary.rules.rate_competition,
-                monetary.rules.relationship_lock_in,
-                financial.rules.bank_equity,
-                financial.rules.bank_equity_trading,
-                financial.rules.bank_dynamics,
-            )
-        ),
+        "bank_enabled": monetary.rules.banking_enabled,
         "government": bool(real.requested_capabilities & (1 << 1)),
         "tfp_law": (
             "learning"

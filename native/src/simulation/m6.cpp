@@ -405,6 +405,31 @@ void update_household_equity_wealth(const core::RootState &state,
     return std::nullopt;
 }
 
+void project_bank_market_health(const core::RootState &state,
+                                const core::SecurityBook &book,
+                                M5Runtime &monetary_runtime) {
+    std::size_t required = 1U;
+    state.banks.for_each_alive([&required](BankId id, const core::BankComponent &) {
+        required = std::max(required, static_cast<std::size_t>(id.value()) + 1U);
+    });
+    monetary_runtime.bank_market_health.assign(required, 1.0);
+    state.banks.for_each_alive(
+        [&book, &monetary_runtime](BankId id, const core::BankComponent &) {
+            const auto equity_id = bank_equity(book, id);
+            if (!equity_id.has_value()) {
+                return;
+            }
+            const auto *contract = book.get(*equity_id);
+            if (contract == nullptr ||
+                contract->peak_price.value() <= kEconomicEpsilon) {
+                return;
+            }
+            monetary_runtime.bank_market_health[static_cast<std::size_t>(id.value())] =
+                std::clamp(contract->price.value() / contract->peak_price.value(),
+                           0.0, 1.0);
+        });
+}
+
 [[nodiscard]] double household_security_value(const core::SecurityBook &book,
                                               core::OwnerId holder) noexcept {
     double value = 0.0;
@@ -876,6 +901,7 @@ void build_firm_statements(const core::RootState &state, M4TickScratch &real,
         core::OwnerId::household(household_id),
         account,
         Money(granted),
+        0.0,
         0.0,
         core::LoanTerms{
             Rate(monetary_runtime.policy_rate),
@@ -2901,6 +2927,7 @@ class M6Extension final : public M5TickExtension {
         lifecycle_counter_ = runtime_.lifecycle_rng_counter;
         security_counter_ = runtime_.security_rng_counter;
         open_bank_security_books(state, scratch_.securities_, monetary);
+        project_bank_market_health(state, scratch_.securities_, monetary_runtime);
         status = run_bond_open(state, real, monetary, scratch_, tick);
         if (!status.ok()) {
             return status;

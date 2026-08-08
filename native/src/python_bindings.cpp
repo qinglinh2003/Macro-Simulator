@@ -612,6 +612,21 @@ nb::dict m5_metrics_to_python(const macro_sim::simulation::M5Metrics &metrics) {
     output["principal_repaid"] = metrics.principal_repaid;
     output["loan_interest_paid"] = metrics.loan_interest_paid;
     output["household_interest_paid"] = metrics.household_interest_paid;
+    output["household_interest_arrears_opening"] =
+        metrics.household_interest_arrears_opening;
+    output["household_interest_accrued"] = metrics.household_interest_accrued;
+    output["household_interest_arrears_cash_paid"] =
+        metrics.household_interest_arrears_cash_paid;
+    output["household_interest_arrears_closing"] =
+        metrics.household_interest_arrears_closing;
+    output["household_interest_arrears_extinguished"] =
+        metrics.household_interest_arrears_extinguished;
+    output["household_contractual_debt_service_due"] =
+        metrics.household_contractual_debt_service_due;
+    output["household_interest_arrears_in_goods_reservation"] =
+        metrics.household_interest_arrears_in_goods_reservation;
+    output["household_interest_arrears_stock_flow_residual"] =
+        metrics.household_interest_arrears_stock_flow_residual;
     output["deposit_interest_paid"] = metrics.deposit_interest_paid;
     output["deposit_interest_arrears"] = metrics.deposit_interest_arrears;
     output["total_loan_principal"] = metrics.total_loan_principal;
@@ -1833,6 +1848,7 @@ NB_MODULE(_native, module) {
 #define MACRO_SIM_BIND_M5_RULE(field)                                                  \
     m5_rules.def_rw(#field, &macro_sim::simulation::M5Rules::field)
     MACRO_SIM_BIND_M5_RULE(bank_count);
+    MACRO_SIM_BIND_M5_RULE(banking_enabled);
     MACRO_SIM_BIND_M5_RULE(opening_capital_per_bank);
     MACRO_SIM_BIND_M5_RULE(bank_leverage_mean);
     MACRO_SIM_BIND_M5_RULE(bank_leverage_dispersion);
@@ -1851,6 +1867,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M5_RULE(deposit_search_count);
     MACRO_SIM_BIND_M5_RULE(deposit_rate);
     MACRO_SIM_BIND_M5_RULE(deposit_interest_arrears);
+    MACRO_SIM_BIND_M5_RULE(household_interest_arrears);
     MACRO_SIM_BIND_M5_RULE(interest_by_deposits);
     MACRO_SIM_BIND_M5_RULE(firm_amortization);
     MACRO_SIM_BIND_M5_RULE(household_amortization);
@@ -1863,6 +1880,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M5_RULE(bank_runs);
     MACRO_SIM_BIND_M5_RULE(run_sensitivity);
     MACRO_SIM_BIND_M5_RULE(run_health_reference);
+    MACRO_SIM_BIND_M5_RULE(run_market_weight);
     MACRO_SIM_BIND_M5_RULE(run_fear_persistence);
     MACRO_SIM_BIND_M5_RULE(bank_payout_ratio);
 #undef MACRO_SIM_BIND_M5_RULE

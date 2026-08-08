@@ -109,24 +109,74 @@ void test_policy_validation() {
 }
 
 void test_size_based_bank_assignment() {
-    auto round_robin_spec = base_spec();
-    round_robin_spec.real_economy.households = 5;
-    round_robin_spec.rules.assign_banks_by_size = false;
-    auto round_robin = build(round_robin_spec);
-    const auto *first_firm = round_robin.root.firms.get(macro_sim::FirmId(1));
-    assert(first_firm != nullptr);
-    const auto round_robin_node =
-        round_robin.root.postings.get(first_firm->primary_account)->key.settlement_node;
+    auto random_spec = base_spec();
+    random_spec.real_economy.households = 24;
+    random_spec.rules.assign_banks_by_size = false;
+    auto random = build(random_spec);
+    auto random_repeat = build(random_spec);
 
-    auto by_size_spec = round_robin_spec;
+    auto borrower_nodes = [](const Harness &harness) {
+        std::vector<std::uint64_t> nodes;
+        harness.root.firms.for_each_alive(
+            [&harness, &nodes](macro_sim::FirmId,
+                               const macro_sim::core::FirmComponent &firm) {
+                nodes.push_back(harness.root.postings.get(firm.primary_account)
+                                    ->key.settlement_node.value());
+            });
+        harness.root.households.for_each_alive(
+            [&harness, &nodes](macro_sim::HouseholdId,
+                               const macro_sim::core::HouseholdComponent &household) {
+                nodes.push_back(harness.root.postings.get(household.primary_account)
+                                    ->key.settlement_node.value());
+            });
+        return nodes;
+    };
+    const auto random_nodes = borrower_nodes(random);
+    assert(random_nodes == borrower_nodes(random_repeat));
+
+    auto different_seed_spec = random_spec;
+    ++different_seed_spec.real_economy.seed;
+    assert(random_nodes != borrower_nodes(build(different_seed_spec)));
+
+    auto by_size_spec = random_spec;
     by_size_spec.rules.assign_banks_by_size = true;
     auto by_size = build(by_size_spec);
-    first_firm = by_size.root.firms.get(macro_sim::FirmId(1));
-    assert(first_firm != nullptr);
-    const auto by_size_node =
-        by_size.root.postings.get(first_firm->primary_account)->key.settlement_node;
+    assert(random_nodes != borrower_nodes(by_size));
+}
 
-    assert(round_robin_node != by_size_node);
+void test_banking_capability_and_market_run_signal() {
+    auto disabled_spec = base_spec();
+    disabled_spec.rules.banking_enabled = false;
+    auto disabled = build(disabled_spec);
+    auto disabled_result = macro_sim::simulation::advance_m5_ticks(
+        disabled.root, disabled.real_runtime, disabled.real_scratch,
+        disabled.runtime, disabled.scratch, disabled.tick, 8);
+    assert(disabled_result.ok());
+    assert(disabled_result.get_if()->metrics.new_credit == 0.0);
+    assert(disabled_result.get_if()->metrics.total_loan_principal == 0.0);
+
+    auto book_only_spec = base_spec();
+    book_only_spec.rules.household_credit = false;
+    book_only_spec.rules.bank_runs = true;
+    book_only_spec.rules.run_sensitivity = 2.0;
+    book_only_spec.rules.run_market_weight = 0.0;
+    auto book_only = build(book_only_spec);
+    book_only.runtime.bank_market_health = {1.0, 0.0, 1.0, 1.0};
+    auto book_result = macro_sim::simulation::advance_m5_ticks(
+        book_only.root, book_only.real_runtime, book_only.real_scratch,
+        book_only.runtime, book_only.scratch, book_only.tick, 1);
+    assert(book_result.ok());
+    assert(book_result.get_if()->metrics.run_flight_volume == 0.0);
+
+    auto market_only_spec = book_only_spec;
+    market_only_spec.rules.run_market_weight = 1.0;
+    auto market_only = build(market_only_spec);
+    market_only.runtime.bank_market_health = {1.0, 0.0, 1.0, 1.0};
+    auto market_result = macro_sim::simulation::advance_m5_ticks(
+        market_only.root, market_only.real_runtime, market_only.real_scratch,
+        market_only.runtime, market_only.scratch, market_only.tick, 1);
+    assert(market_result.ok());
+    assert(market_result.get_if()->metrics.run_flight_volume > 0.0);
 }
 
 void test_credit_and_monetary_tick() {
@@ -532,6 +582,68 @@ void test_external_settlement_recloses_reserve_liquidity() {
     assert(harness.runtime.last_metrics.lolr_outstanding >= 0.5 - 1.0e-9);
 }
 
+void test_household_interest_arrears_waterfall_and_writeoff() {
+    auto spec = base_spec();
+    spec.rules.household_credit = false;
+    spec.rules.household_interest_arrears = true;
+    spec.rules.direct_monetary_transmission = false;
+    spec.rules.opening_capital_per_bank = 1'000.0;
+    spec.policy.firm_leverage_limit = 0.0;
+    auto harness = build(spec);
+
+    const auto *household = harness.root.households.get(macro_sim::HouseholdId(1));
+    assert(household != nullptr);
+    std::vector<macro_sim::core::LoanRecord> loans;
+    loans.push_back({
+        macro_sim::LoanId(1),
+        BankId(1),
+        macro_sim::core::OwnerId::household(macro_sim::HouseholdId(1)),
+        household->primary_account,
+        macro_sim::Money(100.0),
+        0.0,
+        0.0,
+        macro_sim::core::LoanTerms{
+            macro_sim::Rate(10.0),
+            Tick(0),
+            Tick(365),
+        },
+        true,
+        macro_sim::core::LoanPurpose::general,
+    });
+    harness.root.loans.replace_records(loans);
+    harness.root.postings.get(household->primary_account)->balance =
+        macro_sim::Money(
+            harness.root.postings.get(household->primary_account)->balance.value() +
+            100.0);
+
+    auto accrued = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1);
+    if (!accrued.ok()) {
+        std::cerr << "household arrears tick failed: "
+                  << accrued.status().message() << "\n";
+    }
+    assert(accrued.ok());
+    const auto &metrics = accrued.get_if()->metrics;
+    assert(metrics.household_interest_accrued == 1'000.0);
+    assert(metrics.household_interest_arrears_closing > 0.0);
+    assert(std::abs(metrics.household_interest_arrears_stock_flow_residual) < 1.0e-9);
+    assert(harness.root.loans.get(macro_sim::LoanId(1))->interest_arrears > 0.0);
+
+    M5AdvanceOptions options;
+    options.force_default_account = household->primary_account;
+    auto written_off = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1, options);
+    assert(written_off.ok());
+    assert(written_off.get_if()->metrics.household_interest_arrears_extinguished >
+           0.0);
+    assert(written_off.get_if()->metrics.household_interest_arrears_closing == 0.0);
+    assert(std::abs(written_off.get_if()
+                        ->metrics.household_interest_arrears_stock_flow_residual) <
+           1.0e-9);
+}
+
 void test_checkpoint_continuation() {
     auto direct = build();
     auto prefix = macro_sim::simulation::advance_m5_ticks(
@@ -580,6 +692,7 @@ void test_checkpoint_continuation() {
 int main() {
     test_policy_validation();
     test_size_based_bank_assignment();
+    test_banking_capability_and_market_run_signal();
     test_credit_and_monetary_tick();
     test_direct_monetary_transmission_changes_investment_and_household_service();
     test_interbank_clearing();
@@ -589,6 +702,7 @@ int main() {
     test_run_and_lolr();
     test_lolr_advance_matures_and_retires_reserves();
     test_external_settlement_recloses_reserve_liquidity();
+    test_household_interest_arrears_waterfall_and_writeoff();
     test_checkpoint_continuation();
     std::cout << "m5 monetary tests passed\n";
     return 0;

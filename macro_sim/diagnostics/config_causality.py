@@ -84,7 +84,7 @@ MANUAL_CONFIG_ROUTES: Mapping[str, tuple[str, ...]] = {
     "bank_capital_frac": ("m5.rules.opening_capital_per_bank",),
     "d_bank0": ("m5.rules.opening_capital_per_bank",),
     "bank_enabled": (
-        "native_bridge.bank_opening_capital_gate",
+        "m5.rules.banking_enabled",
     ),
     "bank_bond_appetite": ("m6.policy.bank_bond_appetite",),
     "bond_theta": ("m6.policy.household_bond_target",),
@@ -171,16 +171,6 @@ PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
 # syntactic assignment is not sufficient evidence of an implemented Config
 # route, so they remain repair work until the intended mechanism exists.
 INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
-    "config.bank_assignment": (
-        "Config defines random or borrower-size bank assignment, while the "
-        "native false branch currently uses deterministic round-robin genesis "
-        "assignment rather than the requested seeded random assignment"
-    ),
-    "config.bank_enabled": (
-        "Config defines the master bank-credit capability, while the native "
-        "bridge only disables selected dependent features and still creates "
-        "settlement banks and originates ordinary firm credit"
-    ),
     "config.demographic_lifecycle_consumption": (
         "Config defines a finite-life consumption budget, while the native "
         "member currently controls household moves after marriage, divorce, "

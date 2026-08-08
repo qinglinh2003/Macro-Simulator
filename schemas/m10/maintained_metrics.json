@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 270,
+    "native_stage_sources": 278,
     "public_sources": 41,
-    "total": 494
+    "total": 502
   },
   "metrics": [
     {
@@ -2022,6 +2022,78 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_opening",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_opening",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_accrued",
+      "parity_rule": "simulation::M5Metrics::household_interest_accrued",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_cash_paid",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_cash_paid",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_closing",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_closing",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_extinguished",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_extinguished",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_contractual_debt_service_due",
+      "parity_rule": "simulation::M5Metrics::household_contractual_debt_service_due",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_in_goods_reservation",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_in_goods_reservation",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.household_interest_arrears_stock_flow_residual",
+      "parity_rule": "simulation::M5Metrics::household_interest_arrears_stock_flow_residual",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
     },
     {
       "aggregation": "last",

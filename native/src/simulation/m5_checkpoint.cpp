@@ -20,7 +20,7 @@ namespace {
 using Json = nlohmann::json;
 
 constexpr std::array<std::uint8_t, 8> kMagic{
-    'M', 'S', 'M', '5', 'C', 'P', '0', '1',
+    'M', 'S', 'M', '5', 'C', 'P', '0', '2',
 };
 constexpr std::size_t kDigestBytes = 32;
 constexpr std::size_t kMaximumCheckpointBytes = 256U * 1024U * 1024U;
@@ -201,6 +201,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 
 [[nodiscard]] Json encode_rules(const M5Rules &value) {
     return Json::array({
+        value.banking_enabled,
         value.bank_count,
         value.opening_capital_per_bank,
         value.bank_leverage_mean,
@@ -220,6 +221,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.deposit_search_count,
         value.deposit_rate,
         value.deposit_interest_arrears,
+        value.household_interest_arrears,
         value.interest_by_deposits,
         value.firm_amortization,
         value.household_amortization,
@@ -232,17 +234,19 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.bank_runs,
         value.run_sensitivity,
         value.run_health_reference,
+        value.run_market_weight,
         value.run_fear_persistence,
         value.bank_payout_ratio,
     });
 }
 
 [[nodiscard]] M5Rules decode_rules(const Json &row) {
-    if (!row.is_array() || row.size() != 33) {
+    if (!row.is_array() || row.size() != 36) {
         throw std::runtime_error("invalid M5 rules");
     }
     M5Rules value;
     std::size_t i = 0;
+    value.banking_enabled = row[i++].get<bool>();
     value.bank_count = row[i++].get<std::uint64_t>();
     value.opening_capital_per_bank = row[i++].get<double>();
     value.bank_leverage_mean = row[i++].get<double>();
@@ -262,6 +266,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.deposit_search_count = row[i++].get<std::uint32_t>();
     value.deposit_rate = row[i++].get<double>();
     value.deposit_interest_arrears = row[i++].get<bool>();
+    value.household_interest_arrears = row[i++].get<bool>();
     value.interest_by_deposits = row[i++].get<bool>();
     value.firm_amortization = row[i++].get<double>();
     value.household_amortization = row[i++].get<double>();
@@ -274,6 +279,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.bank_runs = row[i++].get<bool>();
     value.run_sensitivity = row[i++].get<double>();
     value.run_health_reference = row[i++].get<double>();
+    value.run_market_weight = row[i++].get<double>();
     value.run_fear_persistence = row[i++].get<double>();
     value.bank_payout_ratio = row[i++].get<double>();
     return value;
@@ -291,6 +297,14 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.principal_repaid,
         value.loan_interest_paid,
         value.household_interest_paid,
+        value.household_interest_arrears_opening,
+        value.household_interest_accrued,
+        value.household_interest_arrears_cash_paid,
+        value.household_interest_arrears_closing,
+        value.household_interest_arrears_extinguished,
+        value.household_contractual_debt_service_due,
+        value.household_interest_arrears_in_goods_reservation,
+        value.household_interest_arrears_stock_flow_residual,
         value.deposit_interest_paid,
         value.deposit_interest_arrears,
         value.total_loan_principal,
@@ -312,7 +326,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M5Metrics &value) {
-    if (!row.is_array() || row.size() != 27) {
+    if (!row.is_array() || row.size() != 35) {
         throw std::runtime_error("invalid M5 metrics");
     }
     std::size_t i = 0;
@@ -326,6 +340,14 @@ void decode_metrics(const Json &row, M5Metrics &value) {
     value.principal_repaid = row[i++].get<double>();
     value.loan_interest_paid = row[i++].get<double>();
     value.household_interest_paid = row[i++].get<double>();
+    value.household_interest_arrears_opening = row[i++].get<double>();
+    value.household_interest_accrued = row[i++].get<double>();
+    value.household_interest_arrears_cash_paid = row[i++].get<double>();
+    value.household_interest_arrears_closing = row[i++].get<double>();
+    value.household_interest_arrears_extinguished = row[i++].get<double>();
+    value.household_contractual_debt_service_due = row[i++].get<double>();
+    value.household_interest_arrears_in_goods_reservation = row[i++].get<double>();
+    value.household_interest_arrears_stock_flow_residual = row[i++].get<double>();
     value.deposit_interest_paid = row[i++].get<double>();
     value.deposit_interest_arrears = row[i++].get<double>();
     value.total_loan_principal = row[i++].get<double>();
@@ -359,6 +381,7 @@ void decode_metrics(const Json &row, M5Metrics &value) {
         runtime.previous_unemployment,
         runtime.reserve_genesis,
         runtime.bank_fear,
+        runtime.bank_market_health,
     });
     output["metrics"] = encode_metrics(runtime.last_metrics);
     output["banks"] = Json::array();
@@ -433,7 +456,7 @@ void decode_state(const Json &input, core::RootState &root, M5Runtime &runtime) 
     runtime.policy = decode_policy(input.at("policy"));
     runtime.rules = decode_rules(input.at("rules"));
     const auto &state = input.at("runtime");
-    if (!state.is_array() || state.size() != 9) {
+    if (!state.is_array() || state.size() != 10) {
         throw std::runtime_error("invalid M5 runtime");
     }
     runtime.initial_policy_rate = state[0].get<double>();
@@ -445,6 +468,7 @@ void decode_state(const Json &input, core::RootState &root, M5Runtime &runtime) 
     runtime.previous_unemployment = state[6].get<double>();
     runtime.reserve_genesis = state[7].get<double>();
     runtime.bank_fear = state[8].get<double>();
+    runtime.bank_market_health = state[9].get<std::vector<double>>();
     decode_metrics(input.at("metrics"), runtime.last_metrics);
 
     for (const auto &row : input.at("banks")) {

@@ -1323,6 +1323,12 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
     )
     service_reserved = "metric.source.m5.household_debt_service_reserved"
     dscr_shortfall = "metric.source.m5.firm_dscr_credit_shortfall"
+    household_arrears = (
+        "metric.source.m5.household_interest_arrears_closing"
+    )
+    arrears_reservation = (
+        "metric.source.m5.household_interest_arrears_in_goods_reservation"
+    )
     return {
         "config.amort": {
             "status": "screening_ready",
@@ -1330,6 +1336,27 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {principal_repaid: "increase", loan_stock: "decrease"},
             "statistics": {principal_repaid: "cumulative"},
             "rationale": "Faster contractual firm-loan amortization should raise principal repayments and shorten the outstanding loan stock, subject to borrower cash constraints.",
+        },
+        "config.bank_assignment": {
+            "status": "activation_scenario_required",
+            "values": ("by_size",),
+            "directions": {
+                interbank_volume: "nonzero",
+                loan_interest: "nonzero",
+            },
+            "statistics": {
+                interbank_volume: "cumulative",
+                loan_interest: "cumulative",
+            },
+            "activation": "bank_assignment_balance_sheet",
+            "rationale": "Seeded random assignment and descending-balance round-robin assignment create different initial deposit and borrower networks. Heterogeneous lender rates and reserve settlement should therefore change funding flows without imposing an aggregate sign.",
+        },
+        "config.bank_enabled": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {new_credit: "decrease", loan_stock: "decrease"},
+            "statistics": {new_credit: "cumulative"},
+            "rationale": "The master banking capability must remove ordinary firm and household credit creation while retaining passive settlement nodes required by the accounting kernel.",
         },
         "config.bank_dynamics": {
             "status": "activation_scenario_required",
@@ -1467,6 +1494,21 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
             "statistics": {new_credit: "cumulative"},
             "rationale": "Disabling unsecured household credit should remove household loan balances and reduce aggregate originations while leaving firm credit active.",
         },
+        "config.household_interest_arrears": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "horizon_days": 90,
+            "directions": {
+                household_arrears: "decrease",
+                arrears_reservation: "decrease",
+            },
+            "statistics": {
+                household_arrears: "post_burnin_mean",
+                arrears_reservation: "cumulative",
+            },
+            "activation": "household_arrears_pressure",
+            "rationale": "The playable baseline carries unpaid household interest into later debt-service and goods-budget waterfalls. Disabling that memo account under a shared cash shortfall must remove both the closing arrears stock and its next-period goods reservation instead of changing an already-enabled control into itself.",
+        },
         "config.interbank": {
             "status": "activation_scenario_required",
             "values": (False,),
@@ -1560,6 +1602,15 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
             "statistics": {run_flight: "cumulative"},
             "activation": "bank_run_health_screen",
             "rationale": "A higher reference capital ratio makes the same bank balance sheet appear less healthy and should increase run pressure.",
+        },
+        "config.run_market_weight": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 1.0),
+            "horizon_days": 90,
+            "directions": {run_flight: "nonzero"},
+            "statistics": {run_flight: "cumulative"},
+            "activation": "bank_run_market_signal",
+            "rationale": "Under a shared bank-equity drawdown, the weight changes perceived bank health and therefore the timing and cross-bank allocation of flight. The cumulative aggregate sign is deliberately not imposed because earlier flight migrates deposits to the safe bank and can reduce the later stock exposed to runs.",
         },
         "config.run_sensitivity": {
             "status": "activation_scenario_required",

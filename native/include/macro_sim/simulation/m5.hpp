@@ -76,6 +76,7 @@ struct M5PolicyState final {
 };
 
 struct M5Rules final {
+    bool banking_enabled{true};
     std::uint64_t bank_count{2};
     double opening_capital_per_bank{25.0};
     double bank_leverage_mean{10.0};
@@ -95,6 +96,7 @@ struct M5Rules final {
     std::uint32_t deposit_search_count{2};
     double deposit_rate{0.0};
     bool deposit_interest_arrears{true};
+    bool household_interest_arrears{false};
     bool interest_by_deposits{true};
     double firm_amortization{0.10};
     double household_amortization{0.10};
@@ -107,6 +109,7 @@ struct M5Rules final {
     bool bank_runs{false};
     double run_sensitivity{0.0};
     double run_health_reference{0.10};
+    double run_market_weight{0.50};
     double run_fear_persistence{0.90};
     double bank_payout_ratio{0.50};
 
@@ -132,6 +135,14 @@ struct M5Metrics final {
     double principal_repaid{0.0};
     double loan_interest_paid{0.0};
     double household_interest_paid{0.0};
+    double household_interest_arrears_opening{0.0};
+    double household_interest_accrued{0.0};
+    double household_interest_arrears_cash_paid{0.0};
+    double household_interest_arrears_closing{0.0};
+    double household_interest_arrears_extinguished{0.0};
+    double household_contractual_debt_service_due{0.0};
+    double household_interest_arrears_in_goods_reservation{0.0};
+    double household_interest_arrears_stock_flow_residual{0.0};
     double deposit_interest_paid{0.0};
     double deposit_interest_arrears{0.0};
     double total_loan_principal{0.0};
@@ -182,6 +193,10 @@ struct M5Runtime final {
     double previous_unemployment{0.0};
     double reserve_genesis{0.0};
     double bank_fear{0.0};
+    // Dense by BankId. Index zero is the invalid-identity sentinel. M6 updates
+    // this projection from the previous close's listed-bank price/peak ratio.
+    // Pure M5 simulations retain the neutral value of one.
+    std::vector<double> bank_market_health{};
     M5Metrics last_metrics{};
 
     bool operator==(const M5Runtime &) const = default;

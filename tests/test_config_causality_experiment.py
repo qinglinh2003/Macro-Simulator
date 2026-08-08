@@ -82,6 +82,20 @@ def test_household_energy_capability_closes_dependent_mortality_channel() -> Non
     assert treated[0].energy_mortality_gamma == pytest.approx(0.0)
 
 
+def test_bank_disable_treatment_retains_native_fiscal_settlement_vertical() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=21, countries=1
+    )
+    treated = native_treatment_spec(
+        baseline, field="bank_enabled", value=False
+    )
+    economy = treated.economies[0].domestic_economy
+    monetary = economy.financial_economy.monetary_economy
+    assert monetary.rules.banking_enabled is False
+    assert monetary.rules.household_credit is False
+    assert monetary.real_economy.requested_capabilities == (1 << 0) | (1 << 1)
+
+
 def test_metric_reduction_and_paired_effect_preserve_pairing() -> None:
     summary = summarize_metric_series(
         [

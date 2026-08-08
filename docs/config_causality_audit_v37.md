@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 247 |
-| Native route missing or incomplete | 45 |
+| Native route confirmed | 251 |
+| Native route missing or incomplete | 41 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 45 missing or incomplete routes are real implementation work; they are not
+The 41 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,13 +306,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 247
+The native product baseline comparison now projects every one of the 251
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 227 |
+| Exact semantic value | 231 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -954,25 +954,54 @@ executable and both methodological fields are covered by invariance contracts.
 
 ### 8.11 Banking and credit screen
 
-The banking inventory contains 31 executable causal Config contracts and one
-genesis-only capitalization field. Four additional fields are blocked by
-semantic native gaps. The completed core screen covers 200 native worlds at
-100,000 persons: four paired seeds, 365 days, and eight native workers. Eleven
-contracts run against the neutral product baseline; the remaining conditional
-contracts use shared capital, entry, deposit-migration, or run-pressure states.
+The banking inventory now contains 35 executable causal Config contracts and
+one genesis-only capitalization field; no banking field remains blocked by a
+native semantic gap. The completed pre-repair core screen covers 200 native
+worlds at 100,000 persons: four paired seeds, 365 days, and eight native
+workers. The four repaired structural contracts add 36 native paths under the
+same population and seed design. Eleven legacy contracts and the banking
+capability run against the neutral product baseline; the remaining conditional
+contracts use shared capital, entry, deposit-migration, arrears, market-price,
+or run-pressure states.
 
-Static review found three routes that had previously received false credit.
-`bank_enabled` does not yet behave as the master credit capability promised by
-Config: its bridge closes selected dependent features while settlement banks
-and ordinary firm lending remain active. `bank_assignment="random"` is
-actually deterministic round-robin assignment;
-the canonical `"by_size"` spelling was also incorrectly compared with
-`"size"` in two native bridges. The spelling defect is fixed, while both fields
-remain blocked until their full semantics are implemented. Household interest
-arrears and the market-information weight in run behavior are the other two
-blocked banking routes.
+Static review found four routes that had previously received false credit and
+all four are now implemented. `bank_enabled=False` closes ordinary firm and
+household credit while retaining passive settlement nodes needed by the
+accounting kernel. `bank_assignment="random"` now uses an independently seeded
+Philox assignment stream, whereas canonical `"by_size"` sorts borrowers by
+opening deposits and round-robins them across banks. Household unpaid interest
+now survives as a per-loan memo stock, enters the next contractual-service and
+goods-budget waterfalls, is extinguished explicitly on write-off, and closes
+an exact stock-flow residual. Finally, bank-run health now blends book capital
+with the lagged bank-equity price-to-peak signal using `run_market_weight`.
 
 Current causal findings are:
+
+- The repaired banking capability is economically decisive. Disabling it
+  removes 100% of cumulative new credit (paired mean -760,617; 95% interval
+  [-803,401, -717,832]) and 100% of the post-burn-in loan stock (paired mean
+  -278,896; interval [-299,077, -258,715]) while the settlement ledger remains
+  valid. This is now a true credit-banking capability rather than a partial UI
+  cascade.
+- Bank assignment changes the network rather than imposing an aggregate sign.
+  Size-ranked round-robin assignment changes cumulative interbank funding by a
+  mean absolute 5.8% and loan-interest receipts by a mean absolute 105% across
+  paired paths; every seed is materially different even though opposing
+  cross-bank allocations make both signed intervals cross zero.
+- Under a shared cash-shortfall state, disabling household-interest arrears
+  removes the closing memo stock by 18,538 on average and cumulative next-day
+  goods reservation by 5.06 million. Both are exact 100% reductions with all
+  paired intervals excluding zero. The one-year stock-flow run also remains
+  stable; the routine contract uses a 90-day horizon because identification is
+  immediate.
+- Under a shared bank-equity selloff, moving market weight from 0.5 to zero
+  changes cumulative depositor flight by -47.0% on average with its paired
+  interval excluding zero. Moving it to one changes every seed materially
+  (mean absolute 41.0%), but the signed interval crosses zero. This is expected
+  endogenous path dependence: early flight migrates deposits to the safe bank
+  and can reduce the later stock exposed to runs. The contract therefore
+  requires a material nonzero response instead of imposing a false monotonic
+  aggregate sign.
 
 - Firm-loan amortization is clean and monotonic. Halving/doubling its daily
   rate changes cumulative principal repayment by about -39.9% / +65.9% and
@@ -1055,12 +1084,12 @@ Current causal findings are:
   silently discarding the obligation. This proves the accounting route; the
   activation rate is a stress instrument, not a plausible calibration target.
 
-The banking screen therefore finds a largely functional core, but it also
-identifies several gameplay problems: flat upper or lower ranges, rare-state
-controls that need explicit context, and capability labels whose native
-semantics are incomplete. Calibration should narrow the ordinary search,
-leverage, and run-sensitivity ranges and keep entry, arrears, and run controls
-in expert or scenario setup surfaces unless their triggering state is visible.
+The banking screen therefore finds a native-complete core, but it also
+identifies several gameplay problems: flat upper or lower ranges and rare-state
+controls that need explicit context. Calibration should narrow the ordinary
+search, leverage, and run-sensitivity ranges and keep entry, arrears, and run
+controls in expert or scenario setup surfaces unless their triggering state is
+visible.
 
 ### 8.12 Government and public-capital screen
 
