@@ -46,7 +46,12 @@ struct M6Rules final {
     double equity_price_adjustment{0.05};
     double equity_trend_lambda{0.20};
     double residual_income_lambda{0.05};
-    double q_smoothing{0.20};
+    double q_smoothing{1.0};
+    double q_investment_sensitivity{0.0};
+    double q_investment_floor{0.50};
+    double q_investment_cap{2.0};
+    double household_equity_wealth_smoothing{0.10};
+    double household_equity_wealth_effect{0.0};
     double fundamental_weight{0.70};
     double chartist_weight{0.30};
     double household_equity_target{0.25};
@@ -168,6 +173,11 @@ struct M6Metrics final {
     double total_firm_book_equity{0.0};
     double clearing_residual{0.0};
     double sector_retool_capital{0.0};
+    double mean_tobin_q_ema{1.0};
+    double mean_q_investment_multiplier{1.0};
+    double q_adjusted_investment_target{0.0};
+    double household_equity_wealth_ema{0.0};
+    double household_equity_consumption_addition{0.0};
     std::uint64_t active_security_lots{0};
     std::uint64_t household_bankruptcies{0};
     std::uint64_t firm_births{0};
@@ -211,6 +221,10 @@ struct M6Runtime final {
     std::vector<M6WatchlistRow> watchlist_rows;
     std::vector<EquityId> watchlist_equities;
     std::vector<LoanId> margin_loans;
+    // Dense by HouseholdId.  Index zero remains an invalid-identity sentinel.
+    // Keeping the EMA in the committed M6 runtime makes the wealth channel
+    // deterministic, checkpointable, and fault atomic.
+    std::vector<double> household_equity_value_ema;
     double replacement_capital_price{1.0};
     std::uint64_t lifecycle_rng_counter{0};
     std::uint64_t security_rng_counter{0};
@@ -289,6 +303,7 @@ class M6TickScratch final {
     std::vector<double> watch_attractiveness_;
     std::vector<double> equity_buy_commitments_;
     std::vector<LoanId> margin_loans_;
+    std::vector<double> household_equity_value_ema_;
     std::vector<std::uint32_t> margin_loan_heads_;
     std::vector<std::uint32_t> margin_loan_tails_;
     std::vector<std::uint32_t> margin_loan_next_;

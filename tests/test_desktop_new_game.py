@@ -521,12 +521,15 @@ def test_native_product_baseline_audit_covers_every_mapped_field() -> None:
     payload = build_native_baseline_audit(
         population=1_000, seed=61, countries=2
     )
-    assert payload["field_count"] == 232
+    assert payload["field_count"] == 238
     assert payload["status_counts"].get("projection_missing", 0) == 0
     assert payload["status_counts"].get("product_baseline_divergence", 0) == 0
     rows = {row["field_name"]: row for row in payload["rows"]}
     assert rows["K_firm0"]["status"] == "density_scaled"
     assert rows["theta_equity"]["status"] == "exact"
+    assert rows["lambda_q"]["status"] == "exact"
+    assert rows["q_invest_smooth"]["status"] == "exact"
+    assert rows["wealth_effect"]["status"] == "exact"
     assert rows["marriage_assortativity"]["status"] == "exact"
 
 

@@ -269,6 +269,15 @@ class M5TickExtension {
     prepare_tick(const core::RootState &state, M4Runtime &real_economy_runtime,
                  M4TickScratch &real_economy_scratch, M5Runtime &runtime,
                  M5TickScratch &scratch, Tick tick, PhiloxRng &rng) = 0;
+    // The real-economy plan is complete at this point, but credit has not yet
+    // been sized.  Financial-market extensions use this seam for valuation
+    // channels (for example Tobin's q) that must alter both the physical
+    // investment target and the financing request built from that target.
+    [[nodiscard]] virtual Status
+    before_credit(const core::RootState &, M4Runtime &, M4TickScratch &,
+                  M5Runtime &, M5TickScratch &, Tick, PhiloxRng &) {
+        return Status::success();
+    }
     [[nodiscard]] virtual Status
     after_planning(const core::RootState &state, M4Runtime &real_economy_runtime,
                    M4TickScratch &real_economy_scratch, M5Runtime &runtime,

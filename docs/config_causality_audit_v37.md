@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 232 |
-| Native route missing or incomplete | 60 |
+| Native route confirmed | 238 |
+| Native route missing or incomplete | 54 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 60 missing or incomplete routes are real implementation work; they are not
+The 54 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,13 +306,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 232
+The native product baseline comparison now projects every one of the 238
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 206 |
+| Exact semantic value | 218 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -1063,14 +1063,16 @@ by adding an artificial direct GDP effect.
 
 ### 8.13 Securities and capital-market screen
 
-The securities inventory has 21 executable causal fields, one denomination
+The securities inventory now has 27 routed causal fields, one denomination
 invariance field, two deliberately fixed invariance choices, one superseded
-compatibility name, and six genuine native route gaps. The gaps are
+compatibility name, and no native route gap. Six fields that were previously
+real gaps are now implemented with their distinct economic semantics:
 `equity_ema_lambda`, `lambda_q`, `q_invest_cap`, `q_invest_floor`,
-`q_invest_smooth`, and `wealth_effect`. In particular, `lambda_q` is not
-credited merely because C++ uses a similarly named equity-price smoother: its
-Config definition is a Tobin-q-to-real-investment sensitivity and no native
-real-investment equation consumes it.
+`q_invest_smooth`, and `wealth_effect`. The repair also removes an incorrect
+semantic alias: Config `lambda_q` had been projected to the native equity-price
+smoother even though it is the sensitivity of real investment to Tobin's q.
+Config `q_invest_smooth` now owns the q expectation gain, while `lambda_q`
+owns the investment response.
 
 The working fields were evaluated in four paired 100,000-person seeds with
 eight native workers. Eighteen direct mechanisms use a 90-day screen (116
@@ -1097,6 +1099,21 @@ Two implementation defects were found and repaired before the final screens:
    equity share, with a bounded unlevered cap and a safe zero-attractiveness
    sell path. This restores the stabilising fundamentalist and momentum
    feedback channels without adding a new market loop.
+
+The six route repairs add two further explicit transmission blocks:
+
+3. Consumption-sector firms maintain a smoothed Tobin-q state and transform
+   the already planned physical investment target by
+   `clip(1 + lambda_q * (q_ema - 1), q_invest_floor, q_invest_cap)`. The
+   adjustment occurs before M5 credit sizing, so both the physical target and
+   financing demand see the same multiplier. This prevents a cosmetic q
+   observable from being mistaken for an investment mechanism.
+4. Every household maintains an equity-market-wealth EMA. After market close,
+   `equity_ema_lambda` updates that committed state; on the following day,
+   `wealth_effect` adds the household-specific equity wealth term to its
+   consumption budget. The lag is deliberate: a closing price is not consumed
+   before it exists. The state, rules, and direct observables are checkpointed
+   and participate in failed-tick rollback.
 
 The new maintained observables separate stocks and flows that aggregate market
 value concealed: household and bank bond market values; household firm- and
@@ -1146,10 +1163,33 @@ The principal causal results are:
   or 200 leaves real output, aggregate firm fundamental value, and aggregate
   firm market capitalization bitwise unchanged across all four seeds. It
   should remain an internal technical parameter, not a gameplay setting.
+- The repaired q block passes a dedicated 100,000-person activated screen.
+  Relative to `lambda_q=0.0076`, setting it to zero lowers the first-window
+  multiplier and adjusted target by about 0.026%, while `lambda_q=0.25` raises
+  them by about 0.833% and 0.837%. A binding `q_invest_cap=1.01` lowers the
+  activated multiplier and target by about 14.2%. A stressed
+  `q_invest_floor=0.95` raises the post-burn-in multiplier by about 0.204%, with
+  a positive two-seed interval. `q_invest_smooth=0.01` changes the first-window
+  q EMA by about -3.05%; the 0.25 arm is materially pathwise but has a
+  heterogeneous signed response. These contracts therefore test the direct
+  investment state rather than requiring a universal short-run GDP sign.
+- The repaired household wealth block is live and quantitatively linear at its
+  direct seam. `wealth_effect=0.10` adds about 18,176 units to the cumulative
+  90-day household consumption budget and 0.50 adds about 90,900 units. The
+  realised goods-market effect remains endogenous and is not assigned a false
+  universal sign. Lowering `equity_ema_lambda` from 0.0076 to 0.001 reduces
+  post-burn-in equity-wealth-EMA volatility by about 82.1%; raising it to 0.10
+  increases volatility by about 109%. With the product baseline
+  `wealth_effect=0`, this expectation parameter correctly changes only its
+  maintained state, not aggregate demand in isolation.
 
-The screen closes the observable and route defects in the implemented
-securities core, but not the six semantic gaps above. The next interaction
-stage should estimate `theta_equity x portfolio_adjust`,
+The accepted repair artifact executes 30 native worlds across six contracts,
+two paired seeds, 100,000 persons, and eight workers. Every treatment arm is
+non-silent, every predeclared direct direction check passes or passes the
+heterogeneous-path gate, and no stability gate fails. The next interaction
+stage should estimate `wealth_effect x equity_ema_lambda`,
+`lambda_q x q_invest_smooth x q_invest_floor x q_invest_cap`,
+`theta_equity x portfolio_adjust`,
 `lambda_p x w_chartist x trend_lambda`, and
 `margin_credit x bank_theta_equity x bank_equity_lambda`; it should also test
 whether the bank-bond appetite saturation is calibrated to a plausible supply

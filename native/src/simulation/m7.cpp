@@ -2800,6 +2800,13 @@ class M7Extension final : public M6TickExtension {
             if (!created.ok() || created.get_if()->id != event.destination) {
                 std::terminate();
             }
+            const auto financial_household_slots = static_cast<std::size_t>(
+                state.households.allocator_state().next_id);
+            if (financial_runtime.household_equity_value_ema.size() <
+                financial_household_slots) {
+                financial_runtime.household_equity_value_ema.resize(
+                    financial_household_slots, 0.0);
+            }
             const auto account = state.postings.create_account(
                 {
                     core::AccountKind::deposit,

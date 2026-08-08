@@ -13,12 +13,12 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 60
+    assert payload["status_counts"]["blocked_native_route"] == 54
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
     contracts = screening_contracts(module="securities_and_capital_markets")
-    assert len(contracts) == 20
+    assert len(contracts) == 21
     assert {contract.field_name for contract in contracts} == {
         "bank_bond_appetite",
         "bank_equity",
@@ -40,6 +40,7 @@ def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
         "w_chartist",
         "w_fundamental",
         "watchlist_size",
+        "wealth_effect",
     }
     chartist = next(
         contract for contract in contracts if contract.field_name == "w_chartist"
@@ -48,8 +49,16 @@ def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
     activated = activation_contracts(
         module="securities_and_capital_markets"
     )
-    assert {contract.field_name for contract in activated} == {"trend_lambda"}
-    assert activated[0].activation_scenario == "active_chartist_demand"
+    assert {
+        contract.field_name: contract.activation_scenario for contract in activated
+    } == {
+        "equity_ema_lambda": "active_equity_wealth_signal",
+        "lambda_q": "active_q_investment_gap",
+        "q_invest_cap": "q_investment_cap_pressure",
+        "q_invest_floor": "q_investment_floor_pressure",
+        "q_invest_smooth": "active_q_investment_gap",
+        "trend_lambda": "active_chartist_demand",
+    }
     invariance = invariance_contracts(
         module="securities_and_capital_markets"
     )

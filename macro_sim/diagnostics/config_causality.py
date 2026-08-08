@@ -196,11 +196,6 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "capability bit is removed and therefore cannot execute the requested "
         "government-off economy"
     ),
-    "config.lambda_q": (
-        "Config defines the sensitivity of real investment to Tobin's q, while "
-        "the native member currently wired to it only smooths the q signal used "
-        "by primary equity issuance; real investment does not consume this value"
-    ),
     "config.necessity_share0": (
         "Config defines a fixed per-need-unit necessity quantity, while the "
         "native member currently controls the fraction of consumption firms "

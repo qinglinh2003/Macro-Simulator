@@ -202,6 +202,11 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m6.margin_principal",
         "metric.source.m6.margin_originated",
         "metric.source.m6.margin_repaid",
+        "metric.source.m6.mean_tobin_q_ema",
+        "metric.source.m6.mean_q_investment_multiplier",
+        "metric.source.m6.q_adjusted_investment_target",
+        "metric.source.m6.household_equity_wealth_ema",
+        "metric.source.m6.household_equity_consumption_addition",
         "metric.economy.tobin_q_mean",
         "metric.economy.equity_ownership_gini",
         "metric.economy.hh_wealth_gini_incl_equity",
@@ -2020,6 +2025,13 @@ def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
     margin = "metric.source.m6.margin_principal"
     margin_flow = "metric.source.m6.margin_originated"
     equity_gini = "metric.economy.equity_ownership_gini"
+    q_ema = "metric.source.m6.mean_tobin_q_ema"
+    q_multiplier = "metric.source.m6.mean_q_investment_multiplier"
+    q_target = "metric.source.m6.q_adjusted_investment_target"
+    equity_wealth_ema = "metric.source.m6.household_equity_wealth_ema"
+    equity_consumption = (
+        "metric.source.m6.household_equity_consumption_addition"
+    )
     return {
         "config.bank_bond_appetite": {
             "status": "screening_ready",
@@ -2080,6 +2092,15 @@ def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
             "statistics": {issuance: "cumulative"},
             "rationale": "Disabling primary equity finance should remove firms' sale of new shares while preserving the secondary stock market.",
         },
+        "config.equity_ema_lambda": {
+            "status": "activation_scenario_required",
+            "values": (0.001, 0.10),
+            "directions": {equity_wealth_ema: "nonzero"},
+            "statistics": {equity_wealth_ema: "post_burnin_volatility"},
+            "activation": "active_equity_wealth_signal",
+            "horizon_days": 180,
+            "rationale": "The household equity-wealth EMA must react more quickly to a moving marked-to-market portfolio when its gain is raised. The level sign is path-dependent, so the direct dynamic statistic is volatility rather than an imposed macro sign.",
+        },
         "config.founder_owned_genesis": {
             "status": "screening_ready",
             "values": (False,),
@@ -2092,6 +2113,21 @@ def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {firm_cap: "nonzero"},
             "statistics": {firm_cap: "post_burnin_volatility"},
             "rationale": "The market-impact gain controls how strongly a given order imbalance moves prices. A larger gain should alter market-cap volatility, while the equilibrium price level is not assigned a sign.",
+        },
+        "config.lambda_q": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.25),
+            "directions": {
+                q_multiplier: "increase",
+                q_target: "increase",
+            },
+            "statistics": {
+                q_multiplier: "first_window_mean",
+                q_target: "first_window_mean",
+            },
+            "activation": "active_q_investment_gap",
+            "horizon_days": 90,
+            "rationale": "With positive accelerator demand and q above one, a larger Tobin-q sensitivity must raise the pre-credit physical investment target and the multiplier visible to the financing stage.",
         },
         "config.margin_credit": {
             "status": "screening_ready",
@@ -2112,6 +2148,36 @@ def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {firm_turnover: "increase"},
             "statistics": {firm_turnover: "first_window_mean"},
             "rationale": "A faster partial-adjustment coefficient should move a larger fraction of each household's portfolio gap during the initial rebalancing window.",
+        },
+        "config.q_invest_cap": {
+            "status": "activation_scenario_required",
+            "values": (1.01,),
+            "directions": {q_multiplier: "increase", q_target: "increase"},
+            "statistics": {
+                q_multiplier: "first_window_mean",
+                q_target: "first_window_mean",
+            },
+            "activation": "q_investment_cap_pressure",
+            "horizon_days": 90,
+            "rationale": "Under a deliberately strong positive-q signal, the upper bound must visibly cap the valuation multiplier. Raising the cap should transmit more of the same q signal into planned real investment.",
+        },
+        "config.q_invest_floor": {
+            "status": "activation_scenario_required",
+            "values": (0.95,),
+            "directions": {q_multiplier: "increase"},
+            "statistics": {q_multiplier: "post_burnin_mean"},
+            "activation": "q_investment_floor_pressure",
+            "horizon_days": 180,
+            "rationale": "A high-volatility equity path produces a cross-section of firms below q=1. A higher crash floor must prevent their investment multiplier from falling as far and thereby preserve more planned investment.",
+        },
+        "config.q_invest_smooth": {
+            "status": "activation_scenario_required",
+            "values": (0.01, 0.25),
+            "directions": {q_ema: "nonzero"},
+            "statistics": {q_ema: "first_window_mean"},
+            "activation": "active_q_investment_gap",
+            "horizon_days": 90,
+            "rationale": "The q EMA gain controls the response lag between market valuation and the signal used by next-day investment. A slow and an instantaneous signal must produce distinct direct q paths under the same moving market.",
         },
         "config.resid_income_lambda": {
             "status": "screening_ready",
@@ -2180,6 +2246,14 @@ def _securities_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {equity_gini: "decrease", firm_turnover: "nonzero"},
             "statistics": {firm_turnover: "first_window_mean"},
             "rationale": "A broader permanent investment opportunity set should diversify household firm ownership and alter secondary-market turnover. It is a persistent market-structure treatment, not a transient opening shock.",
+        },
+        "config.wealth_effect": {
+            "status": "screening_ready",
+            "values": (0.10, 0.50),
+            "directions": {equity_consumption: "increase"},
+            "statistics": {equity_consumption: "cumulative"},
+            "horizon_days": 90,
+            "rationale": "The wealth-effect coefficient weights committed smoothed household equity wealth in the next-day consumption budget. A positive treatment must create a positive direct budget addition; realized output and employment remain equilibrium outcomes because the extra desired spending can accelerate deposit drawdown.",
         },
     }
 

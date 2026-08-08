@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 249,
+    "native_stage_sources": 254,
     "public_sources": 41,
-    "total": 473
+    "total": 478
   },
   "metrics": [
     {
@@ -2301,6 +2301,51 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.mean_tobin_q_ema",
+      "parity_rule": "simulation::M6Metrics::mean_tobin_q_ema",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.mean_q_investment_multiplier",
+      "parity_rule": "simulation::M6Metrics::mean_q_investment_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.q_adjusted_investment_target",
+      "parity_rule": "simulation::M6Metrics::q_adjusted_investment_target",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_equity_wealth_ema",
+      "parity_rule": "simulation::M6Metrics::household_equity_wealth_ema",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_equity_consumption_addition",
+      "parity_rule": "simulation::M6Metrics::household_equity_consumption_addition",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
     },
     {
       "aggregation": "last",

@@ -250,6 +250,114 @@ household_watchlist(const M6Runtime &runtime, HouseholdId household) noexcept {
                                      row.count);
 }
 
+void project_household_equity_values(const core::RootState &state,
+                                     const core::SecurityBook &securities,
+                                     std::vector<double> &values) {
+    values.assign(
+        static_cast<std::size_t>(state.households.allocator_state().next_id), 0.0);
+    for (const auto &lot : securities.lots()) {
+        if (!lot.active() || lot.security.kind() != core::SecurityKind::equity ||
+            lot.holder.kind() != core::OwnerKind::household) {
+            continue;
+        }
+        const auto identity = static_cast<std::size_t>(lot.holder.value());
+        const auto *contract = securities.get(EquityId(lot.security.value()));
+        if (identity >= values.size() || contract == nullptr || !contract->active) {
+            continue;
+        }
+        values[identity] += lot.units * contract->price.value();
+    }
+}
+
+void update_household_equity_wealth(const core::RootState &state,
+                                    const M6Runtime &runtime,
+                                    M6TickScratch &scratch) {
+    project_household_equity_values(state, scratch.securities_,
+                                    scratch.watch_current_);
+    if (scratch.household_equity_value_ema_.size() <
+        scratch.watch_current_.size()) {
+        scratch.household_equity_value_ema_.resize(scratch.watch_current_.size(),
+                                                   0.0);
+    }
+    const double speed = runtime.rules.household_equity_wealth_smoothing;
+    for (std::size_t identity = 1; identity < scratch.watch_current_.size();
+         ++identity) {
+        auto &smoothed = scratch.household_equity_value_ema_[identity];
+        smoothed += speed * (scratch.watch_current_[identity] - smoothed);
+    }
+}
+
+[[nodiscard]] Status apply_equity_wealth_consumption(
+    const core::RootState &state, M4TickScratch &real, const M6Runtime &runtime,
+    M6TickScratch &scratch) noexcept {
+    const auto required =
+        static_cast<std::size_t>(state.households.allocator_state().next_id);
+    if (scratch.household_equity_value_ema_.size() < required) {
+        scratch.household_equity_value_ema_.resize(required, 0.0);
+    }
+    double ema_total = 0.0;
+    double addition_total = 0.0;
+    for (std::size_t index = 0; index < real.household_ids_.size(); ++index) {
+        const auto id = real.household_ids_[index];
+        const auto identity = static_cast<std::size_t>(id.value());
+        const auto *household = state.households.get(id);
+        if (household == nullptr || identity >=
+                                        scratch.household_equity_value_ema_.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 household equity wealth projection is stale");
+        }
+        const double smoothed = scratch.household_equity_value_ema_[identity];
+        const double addition = household->wealth_propensity *
+                                runtime.rules.household_equity_wealth_effect *
+                                smoothed;
+        real.household_work_[index].consumption_budget += addition;
+        ema_total += smoothed;
+        addition_total += addition;
+    }
+    scratch.working_metrics_.household_equity_wealth_ema = ema_total;
+    scratch.working_metrics_.household_equity_consumption_addition = addition_total;
+    return Status::success();
+}
+
+[[nodiscard]] Status apply_q_investment_channel(const core::RootState &state,
+                                                M4TickScratch &real,
+                                                const M6Runtime &runtime,
+                                                M6TickScratch &scratch) noexcept {
+    double multiplier_total = 0.0;
+    double target_total = 0.0;
+    std::size_t investing_firms = 0;
+    for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
+        const auto *firm = state.firms.get(real.firm_ids_[index]);
+        if (firm == nullptr || firm->sector != core::FirmSector::consumption) {
+            continue;
+        }
+        const auto *lifecycle = firm_record(scratch.firms_, real.firm_ids_[index]);
+        if (lifecycle == nullptr || !lifecycle->active) {
+            return Status(ErrorCode::invariant_violation,
+                          "M6 Tobin q projection is stale");
+        }
+        double multiplier = 1.0;
+        if (runtime.rules.firm_equity &&
+            runtime.rules.q_investment_sensitivity > 0.0) {
+            multiplier = std::clamp(
+                1.0 + runtime.rules.q_investment_sensitivity *
+                          (lifecycle->tobin_q_ema - 1.0),
+                runtime.rules.q_investment_floor,
+                runtime.rules.q_investment_cap);
+            real.firm_work_[index].investment_target *= multiplier;
+        }
+        multiplier_total += multiplier;
+        target_total += real.firm_work_[index].investment_target;
+        ++investing_firms;
+    }
+    scratch.working_metrics_.mean_q_investment_multiplier =
+        investing_firms == 0
+            ? 1.0
+            : multiplier_total / static_cast<double>(investing_firms);
+    scratch.working_metrics_.q_adjusted_investment_target = target_total;
+    return Status::success();
+}
+
 [[nodiscard]] std::uint64_t splitmix64(std::uint64_t value) noexcept {
     value += 0x9e3779b97f4a7c15ULL;
     value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
@@ -2349,6 +2457,12 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
     scratch.working_metrics_.firm_equity_fundamental_value = 0.0;
     scratch.working_metrics_.bank_equity_fundamental_value = 0.0;
     scratch.working_metrics_.active_security_lots = 0;
+    scratch.working_metrics_.household_equity_wealth_ema = 0.0;
+    for (std::size_t identity = 1;
+         identity < scratch.household_equity_value_ema_.size(); ++identity) {
+        scratch.working_metrics_.household_equity_wealth_ema +=
+            scratch.household_equity_value_ema_[identity];
+    }
     for (const auto &lot : scratch.securities_.lots()) {
         if (!lot.active()) {
             continue;
@@ -2414,6 +2528,18 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
                 equity.outstanding_shares * equity.fundamental.value();
         }
     }
+    double q_total = 0.0;
+    std::size_t q_count = 0;
+    for (const auto &lifecycle : scratch.firms_) {
+        const auto *firm = state.firms.get(lifecycle.firm);
+        if (lifecycle.active && firm != nullptr &&
+            firm->sector == core::FirmSector::consumption) {
+            q_total += lifecycle.tobin_q_ema;
+            ++q_count;
+        }
+    }
+    scratch.working_metrics_.mean_tobin_q_ema =
+        q_count == 0 ? 1.0 : q_total / static_cast<double>(q_count);
     scratch.working_metrics_.margin_principal = 0.0;
     for (const auto loan_id : scratch.margin_loans_) {
         if (loan_id.value() > 0 && loan_id.value() <= monetary.loans_.size()) {
@@ -2707,6 +2833,8 @@ class M6Extension final : public M5TickExtension {
             runtime_.securities = std::move(scratch_.securities_);
             runtime_.firms = std::move(scratch_.firms_);
             runtime_.margin_loans = std::move(scratch_.margin_loans_);
+            runtime_.household_equity_value_ema =
+                std::move(scratch_.household_equity_value_ema_);
         }
     }
 
@@ -2719,10 +2847,14 @@ class M6Extension final : public M5TickExtension {
             scratch_.securities_ = std::move(runtime_.securities);
             scratch_.firms_ = std::move(runtime_.firms);
             scratch_.margin_loans_ = std::move(runtime_.margin_loans);
+            scratch_.household_equity_value_ema_ =
+                std::move(runtime_.household_equity_value_ema);
         } else {
             scratch_.securities_ = runtime_.securities;
             scratch_.firms_ = runtime_.firms;
             scratch_.margin_loans_ = runtime_.margin_loans;
+            scratch_.household_equity_value_ema_ =
+                runtime_.household_equity_value_ema;
         }
         if (real.firm_consumption_strata_.size() != real.firm_ids_.size()) {
             return Status(ErrorCode::internal_error,
@@ -2750,11 +2882,21 @@ class M6Extension final : public M5TickExtension {
         security_counter_ = runtime_.security_rng_counter;
         open_bank_security_books(state, scratch_.securities_, monetary);
         status = run_bond_open(state, real, monetary, scratch_, tick);
+        if (!status.ok()) {
+            return status;
+        }
+        status = apply_equity_wealth_consumption(state, real, runtime_, scratch_);
         if (!status.ok() || extension_ == nullptr) {
             return status;
         }
         return extension_->prepare_tick(state, real_runtime, real, monetary_runtime,
                                         monetary, runtime_, scratch_, tick, rng);
+    }
+
+    Status before_credit(const core::RootState &state, M4Runtime &,
+                         M4TickScratch &real, M5Runtime &, M5TickScratch &, Tick,
+                         PhiloxRng &) override {
+        return apply_q_investment_channel(state, real, runtime_, scratch_);
     }
 
     Status after_planning(const core::RootState &, M4Runtime &, M4TickScratch &,
@@ -3017,6 +3159,7 @@ class M6Extension final : public M5TickExtension {
         if (!status.ok()) {
             return status;
         }
+        update_household_equity_wealth(state, runtime_, scratch_);
         if (extension_ != nullptr) {
             status = extension_->close_day(state, real_runtime, real, monetary_runtime,
                                            monetary, runtime_, scratch_, tick, rng);
@@ -3074,10 +3217,14 @@ class M6Extension final : public M5TickExtension {
             runtime_.securities = std::move(scratch_.securities_);
             runtime_.firms = std::move(scratch_.firms_);
             runtime_.margin_loans = std::move(scratch_.margin_loans_);
+            runtime_.household_equity_value_ema =
+                std::move(scratch_.household_equity_value_ema_);
         } else {
             std::swap(runtime_.securities, scratch_.securities_);
             std::swap(runtime_.firms, scratch_.firms_);
             std::swap(runtime_.margin_loans, scratch_.margin_loans_);
+            std::swap(runtime_.household_equity_value_ema,
+                      scratch_.household_equity_value_ema_);
         }
         runtime_.lifecycle_rng_counter = lifecycle_counter_;
         runtime_.security_rng_counter = security_counter_;
@@ -3244,6 +3391,11 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.equity_trend_lambda,
         spec.rules.residual_income_lambda,
         spec.rules.q_smoothing,
+        spec.rules.q_investment_sensitivity,
+        spec.rules.q_investment_floor,
+        spec.rules.q_investment_cap,
+        spec.rules.household_equity_wealth_smoothing,
+        spec.rules.household_equity_wealth_effect,
         spec.rules.fundamental_weight,
         spec.rules.chartist_weight,
         spec.rules.household_equity_target,
@@ -3279,8 +3431,16 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.equity_price_adjustment < 0.0 ||
         spec.rules.equity_trend_lambda < 0.0 || spec.rules.equity_trend_lambda > 1.0 ||
         spec.rules.residual_income_lambda < 0.0 ||
-        spec.rules.residual_income_lambda > 1.0 || spec.rules.q_smoothing < 0.0 ||
+        spec.rules.residual_income_lambda > 1.0 || spec.rules.q_smoothing <= 0.0 ||
         spec.rules.q_smoothing > 1.0 || spec.rules.fundamental_weight < 0.0 ||
+        spec.rules.q_investment_sensitivity < 0.0 ||
+        spec.rules.q_investment_floor < 0.0 ||
+        spec.rules.q_investment_floor > 1.0 ||
+        spec.rules.q_investment_cap < 1.0 ||
+        spec.rules.q_investment_floor > spec.rules.q_investment_cap ||
+        spec.rules.household_equity_wealth_smoothing <= 0.0 ||
+        spec.rules.household_equity_wealth_smoothing > 1.0 ||
+        spec.rules.household_equity_wealth_effect < 0.0 ||
         spec.rules.chartist_weight < 0.0 || spec.rules.household_equity_target < 0.0 ||
         spec.rules.household_equity_target > 1.0 ||
         spec.rules.portfolio_adjustment < 0.0 ||
@@ -3333,7 +3493,12 @@ Status validate_m6_state_fast(const core::RootState &state,
         !validate_m6_rules(runtime.rules).ok() ||
         !runtime.securities.validate_records(state.accounting_tolerance).ok() ||
         !finite(runtime.replacement_capital_price) ||
-        runtime.replacement_capital_price <= 0.0) {
+        runtime.replacement_capital_price <= 0.0 ||
+        runtime.household_equity_value_ema.size() <
+            static_cast<std::size_t>(state.households.allocator_state().next_id) ||
+        !std::all_of(runtime.household_equity_value_ema.begin(),
+                     runtime.household_equity_value_ema.end(),
+                     [](double value) { return finite(value) && value >= 0.0; })) {
         return Status(ErrorCode::invariant_violation, "M6 persistent state is invalid");
     }
     for (const auto &bond : runtime.securities.bonds()) {
@@ -3647,6 +3812,8 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
     if (!securities_batch.ok()) {
         return securities_batch;
     }
+    project_household_equity_values(value.root, runtime.securities,
+                                    runtime.household_equity_value_ema);
     runtime.last_metrics.economy = value.runtime.last_metrics;
     runtime.last_metrics.bond_outstanding_face = 0.0;
     const auto state_validation = validate_m6_state(
@@ -3682,7 +3849,7 @@ void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runti
     bond_demands_.reserve(state.households.alive_count() + state.banks.alive_count());
     const auto observation_width =
         std::max<std::size_t>(runtime.rules.watchlist_size, state.banks.alive_count());
-    watch_current_.reserve(observation_width);
+    watch_current_.reserve(std::max(observation_width, household_count + 1U));
     watch_attractiveness_.reserve(observation_width);
     equity_buy_commitments_.resize(state.postings.size() + 1);
     margin_loans_.reserve(runtime.margin_loans.size() + state.households.alive_count());
@@ -3698,6 +3865,8 @@ void M6TickScratch::reserve(const core::RootState &state, const M6Runtime &runti
     firm_entries_.reserve(runtime.rules.entry_max);
     capital_firm_entries_.reserve(1);
     bank_entries_.reserve(runtime.rules.bank_entry_max);
+    household_equity_value_ema_.reserve(
+        static_cast<std::size_t>(state.households.allocator_state().next_id));
 }
 
 std::uint64_t M6TickScratch::capacity_signature() const noexcept {
@@ -3725,6 +3894,7 @@ std::uint64_t M6TickScratch::capacity_signature() const noexcept {
         firm_entries_.capacity(),
         capital_firm_entries_.capacity(),
         bank_entries_.capacity(),
+        household_equity_value_ema_.capacity(),
     };
     for (const auto capacity : capacities) {
         signature ^= static_cast<std::uint64_t>(capacity);

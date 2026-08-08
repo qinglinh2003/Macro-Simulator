@@ -721,6 +721,11 @@ nb::dict m6_metrics_to_python(const macro_sim::simulation::M6Metrics &metrics) {
     MACRO_SIM_M6_METRIC(total_firm_book_equity);
     MACRO_SIM_M6_METRIC(clearing_residual);
     MACRO_SIM_M6_METRIC(sector_retool_capital);
+    MACRO_SIM_M6_METRIC(mean_tobin_q_ema);
+    MACRO_SIM_M6_METRIC(mean_q_investment_multiplier);
+    MACRO_SIM_M6_METRIC(q_adjusted_investment_target);
+    MACRO_SIM_M6_METRIC(household_equity_wealth_ema);
+    MACRO_SIM_M6_METRIC(household_equity_consumption_addition);
     MACRO_SIM_M6_METRIC(active_security_lots);
     MACRO_SIM_M6_METRIC(household_bankruptcies);
     MACRO_SIM_M6_METRIC(firm_births);
@@ -1881,6 +1886,11 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_RULE(equity_trend_lambda);
     MACRO_SIM_BIND_M6_RULE(residual_income_lambda);
     MACRO_SIM_BIND_M6_RULE(q_smoothing);
+    MACRO_SIM_BIND_M6_RULE(q_investment_sensitivity);
+    MACRO_SIM_BIND_M6_RULE(q_investment_floor);
+    MACRO_SIM_BIND_M6_RULE(q_investment_cap);
+    MACRO_SIM_BIND_M6_RULE(household_equity_wealth_smoothing);
+    MACRO_SIM_BIND_M6_RULE(household_equity_wealth_effect);
     MACRO_SIM_BIND_M6_RULE(fundamental_weight);
     MACRO_SIM_BIND_M6_RULE(chartist_weight);
     MACRO_SIM_BIND_M6_RULE(household_equity_target);

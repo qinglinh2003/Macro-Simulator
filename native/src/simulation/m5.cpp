@@ -1819,8 +1819,16 @@ class M5Extension final : public M4TickExtension {
 
     Status after_planning(const core::RootState &state, M4Runtime &real_runtime,
                           M4TickScratch &real, Tick tick, PhiloxRng &rng) override {
-        auto status = run_credit(state, real_runtime, real, runtime_, scratch_, tick,
-                                 options_.credit_supply_multiplier);
+        auto status = Status::success();
+        if (extension_ != nullptr) {
+            status = extension_->before_credit(state, real_runtime, real, runtime_,
+                                               scratch_, tick, rng);
+            if (!status.ok()) {
+                return status;
+            }
+        }
+        status = run_credit(state, real_runtime, real, runtime_, scratch_, tick,
+                            options_.credit_supply_multiplier);
         if (!status.ok() || extension_ == nullptr) {
             return status;
         }

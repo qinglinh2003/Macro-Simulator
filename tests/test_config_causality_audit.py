@@ -24,8 +24,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 232,
-        "missing_native_route": 60,
+        "mapped_native": 238,
+        "missing_native_route": 54,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -99,8 +99,10 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     assert strata["route_status"] == "missing_native_route"
     assert "two-stage necessity/luxury" in strata["route_note"]
     q_sensitivity = rows["config.lambda_q"]
-    assert q_sensitivity["route_status"] == "missing_native_route"
-    assert "real investment" in q_sensitivity["route_note"]
+    assert q_sensitivity["route_status"] == "mapped_native"
+    assert q_sensitivity["native_targets"] == [
+        "m6.financial_rules.q_investment_sensitivity"
+    ]
 
 
 def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> None:

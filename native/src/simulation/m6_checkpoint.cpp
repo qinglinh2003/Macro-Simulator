@@ -117,6 +117,12 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"equity_trend_lambda", value.equity_trend_lambda},
         {"residual_income_lambda", value.residual_income_lambda},
         {"q_smoothing", value.q_smoothing},
+        {"q_investment_sensitivity", value.q_investment_sensitivity},
+        {"q_investment_floor", value.q_investment_floor},
+        {"q_investment_cap", value.q_investment_cap},
+        {"household_equity_wealth_smoothing",
+         value.household_equity_wealth_smoothing},
+        {"household_equity_wealth_effect", value.household_equity_wealth_effect},
         {"fundamental_weight", value.fundamental_weight},
         {"chartist_weight", value.chartist_weight},
         {"household_equity_target", value.household_equity_target},
@@ -177,6 +183,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(equity_trend_lambda, double);
     M6_RULE(residual_income_lambda, double);
     M6_RULE(q_smoothing, double);
+    M6_RULE(q_investment_sensitivity, double);
+    M6_RULE(q_investment_floor, double);
+    M6_RULE(q_investment_cap, double);
+    M6_RULE(household_equity_wealth_smoothing, double);
+    M6_RULE(household_equity_wealth_effect, double);
     M6_RULE(fundamental_weight, double);
     M6_RULE(chartist_weight, double);
     M6_RULE(household_equity_target, double);
@@ -250,6 +261,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.total_firm_book_equity,
         value.clearing_residual,
         value.sector_retool_capital,
+        value.mean_tobin_q_ema,
+        value.mean_q_investment_multiplier,
+        value.q_adjusted_investment_target,
+        value.household_equity_wealth_ema,
+        value.household_equity_consumption_addition,
         value.active_security_lots,
         value.household_bankruptcies,
         value.firm_births,
@@ -262,7 +278,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M6Metrics &value) {
-    if (!row.is_array() || row.size() != 32) {
+    if (!row.is_array() || row.size() != 37) {
         throw std::runtime_error("invalid M6 metrics");
     }
     std::size_t i = 0;
@@ -290,6 +306,11 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.total_firm_book_equity = row[i++].get<double>();
     value.clearing_residual = row[i++].get<double>();
     value.sector_retool_capital = row[i++].get<double>();
+    value.mean_tobin_q_ema = row[i++].get<double>();
+    value.mean_q_investment_multiplier = row[i++].get<double>();
+    value.q_adjusted_investment_target = row[i++].get<double>();
+    value.household_equity_wealth_ema = row[i++].get<double>();
+    value.household_equity_consumption_addition = row[i++].get<double>();
     value.active_security_lots = row[i++].get<std::uint64_t>();
     value.household_bankruptcies = row[i++].get<std::uint64_t>();
     value.firm_births = row[i++].get<std::uint64_t>();
@@ -446,6 +467,7 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     for (const auto loan : runtime.margin_loans) {
         output["margin_loans"].push_back(loan.value());
     }
+    output["household_equity_value_ema"] = runtime.household_equity_value_ema;
     return output;
 }
 
@@ -576,6 +598,8 @@ void decode_runtime(const Json &input, M6Runtime &runtime) {
     for (const auto &row : input.at("margin_loans")) {
         runtime.margin_loans.emplace_back(row.get<std::uint64_t>());
     }
+    runtime.household_equity_value_ema =
+        input.at("household_equity_value_ema").get<std::vector<double>>();
 }
 
 } // namespace

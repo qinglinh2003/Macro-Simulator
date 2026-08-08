@@ -936,6 +936,21 @@ def apply_native_activation_scenario(
         monetary_rules.deposit_spread_dispersion = 1.0e-4
     elif scenario == "active_chartist_demand":
         financial_rules.chartist_weight = 20.0
+    elif scenario == "active_equity_wealth_signal":
+        financial_rules.chartist_weight = 20.0
+    elif scenario == "active_q_investment_gap":
+        rules.initial_consumption_capital *= 0.5
+    elif scenario == "q_investment_cap_pressure":
+        rules.initial_consumption_capital *= 0.5
+        financial_rules.q_investment_sensitivity = 5.0
+        financial_rules.q_smoothing = 1.0
+    elif scenario == "q_investment_floor_pressure":
+        rules.initial_consumption_capital *= 0.5
+        financial_rules.chartist_weight = 20.0
+        financial_rules.equity_price_adjustment = 2.0
+        financial_rules.portfolio_adjustment = 0.50
+        financial_rules.q_investment_sensitivity = 1.0
+        financial_rules.q_smoothing = 1.0
     elif scenario == "deprivation_measurement_active":
         energy_rules.deprivation_burnin_years = 0
     elif scenario == "energy_inventory_gap":

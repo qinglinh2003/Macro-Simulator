@@ -793,10 +793,14 @@ void test_forced_leaving_home_creates_canonical_household() {
         destination,
         destination.value(),
     }));
-    assert(macro_sim::simulation::validate_m7_state(
-               harness.root, harness.real_runtime, harness.monetary_runtime,
-               harness.financial_runtime, harness.runtime, harness.tick)
-               .ok());
+    const auto validation = macro_sim::simulation::validate_m7_state(
+        harness.root, harness.real_runtime, harness.monetary_runtime,
+        harness.financial_runtime, harness.runtime, harness.tick);
+    if (!validation.ok()) {
+        std::cerr << "M7 leaving-home validation failed: "
+                  << validation.message() << "\n";
+    }
+    assert(validation.ok());
 }
 
 void test_family_transfer_uses_kin_and_conserves_cash() {

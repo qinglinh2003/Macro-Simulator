@@ -346,7 +346,12 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     financial.rules.equity_price_adjustment = 0.13;
     financial.rules.equity_trend_lambda = 0.023;
     financial.rules.residual_income_lambda = 0.0019;
-    financial.rules.q_smoothing = 0.0076;
+    financial.rules.q_smoothing = 1.0;
+    financial.rules.q_investment_sensitivity = 0.0076;
+    financial.rules.q_investment_floor = 0.50;
+    financial.rules.q_investment_cap = 2.0;
+    financial.rules.household_equity_wealth_smoothing = 0.0076;
+    financial.rules.household_equity_wealth_effect = 0.0;
     financial.rules.fundamental_weight = 1.0;
     financial.rules.chartist_weight = 0.20;
     financial.rules.portfolio_adjustment = 0.048;
@@ -482,7 +487,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
 [[nodiscard]] Status apply_country_overrides(const Json &overrides,
                                              simulation::M8SimulationSpec &spec,
                                              std::uint64_t &population_count) {
-    static constexpr std::array<std::string_view, 34> allowed{{
+    static constexpr std::array<std::string_view, 40> allowed{{
         "n_households",
         "n_firms_c",
         "n_firms_k",
@@ -517,6 +522,12 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         "tfp_drift_c",
         "tfp_drift_k",
         "tfp_drift_e",
+        "lambda_q",
+        "q_invest_floor",
+        "q_invest_cap",
+        "q_invest_smooth",
+        "equity_ema_lambda",
+        "wealth_effect",
     }};
     if (!overrides.is_object() ||
         !std::ranges::all_of(overrides.items(), [](const auto &item) {
@@ -584,7 +595,15 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !assign_number("tfp_learning_theta", real.rules.tfp_learning_theta) ||
         !assign_number("tfp_drift_c", real.rules.annual_tfp_growth_consumption) ||
         !assign_number("tfp_drift_k", real.rules.annual_tfp_growth_capital) ||
-        !assign_number("tfp_drift_e", real.rules.annual_tfp_growth_energy)) {
+        !assign_number("tfp_drift_e", real.rules.annual_tfp_growth_energy) ||
+        !assign_number("lambda_q", financial.rules.q_investment_sensitivity) ||
+        !assign_number("q_invest_floor", financial.rules.q_investment_floor) ||
+        !assign_number("q_invest_cap", financial.rules.q_investment_cap) ||
+        !assign_number("q_invest_smooth", financial.rules.q_smoothing) ||
+        !assign_number("equity_ema_lambda",
+                       financial.rules.household_equity_wealth_smoothing) ||
+        !assign_number("wealth_effect",
+                       financial.rules.household_equity_wealth_effect)) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country number is invalid");
     }

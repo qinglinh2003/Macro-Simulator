@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <numeric>
 
 #include "macro_sim/core/digest.hpp"
 #include "macro_sim/core/transaction.hpp"
@@ -291,6 +292,7 @@ void test_fault_is_atomic() {
     const auto equities = harness.runtime.securities.equities();
     const auto lots = harness.runtime.securities.lots();
     const auto firms = harness.runtime.firms;
+    const auto equity_wealth = harness.runtime.household_equity_value_ema;
     const auto watchlist = harness.runtime.watchlist_equities;
     const auto lifecycle_counter = harness.runtime.lifecycle_rng_counter;
     M6AdvanceOptions options;
@@ -302,8 +304,114 @@ void test_fault_is_atomic() {
     assert(harness.runtime.securities.equities() == equities);
     assert(harness.runtime.securities.lots() == lots);
     assert(harness.runtime.firms == firms);
+    assert(harness.runtime.household_equity_value_ema == equity_wealth);
     assert(harness.runtime.watchlist_equities == watchlist);
     assert(harness.runtime.lifecycle_rng_counter == lifecycle_counter);
+}
+
+void prepare_q_probe(Harness &harness, double q) {
+    harness.root.firms.for_each_alive(
+        [&](FirmId id, macro_sim::core::FirmComponent &firm) {
+            if (firm.sector != macro_sim::core::FirmSector::consumption) {
+                return;
+            }
+            firm.demand_expected = 100.0;
+            firm.physical_capital = macro_sim::Capital(1.0);
+            firm.investment_adjustment = 0.10;
+            firm.capital_depreciation = 0.0;
+            auto &lifecycle = harness.runtime.firms[
+                static_cast<std::size_t>(id.value())];
+            lifecycle.tobin_q_ema = q;
+        });
+}
+
+void test_tobin_q_changes_real_investment_before_credit() {
+    auto neutral_spec = base_spec();
+    neutral_spec.rules.q_investment_sensitivity = 0.0;
+    auto high_spec = base_spec();
+    high_spec.rules.q_investment_sensitivity = 0.50;
+    high_spec.rules.q_investment_cap = 2.0;
+    auto cap_spec = high_spec;
+    cap_spec.rules.q_investment_cap = 1.20;
+    auto floor_spec = high_spec;
+    floor_spec.rules.q_investment_floor = 0.80;
+
+    auto neutral = build(neutral_spec);
+    auto high = build(high_spec);
+    auto capped = build(cap_spec);
+    auto floored = build(floor_spec);
+    prepare_q_probe(neutral, 2.0);
+    prepare_q_probe(high, 2.0);
+    prepare_q_probe(capped, 10.0);
+    prepare_q_probe(floored, 0.0);
+
+    const auto neutral_result = advance(neutral, 1);
+    const auto high_result = advance(high, 1);
+    const auto capped_result = advance(capped, 1);
+    const auto floored_result = advance(floored, 1);
+    assert(neutral_result.ok());
+    assert(high_result.ok());
+    assert(capped_result.ok());
+    assert(floored_result.ok());
+    const auto &neutral_metrics = neutral_result.get_if()->metrics;
+    const auto &high_metrics = high_result.get_if()->metrics;
+    assert(neutral_metrics.q_adjusted_investment_target > 0.0);
+    assert(std::abs(neutral_metrics.mean_q_investment_multiplier - 1.0) < 1.0e-12);
+    assert(std::abs(high_metrics.mean_q_investment_multiplier - 1.5) < 1.0e-12);
+    assert(std::abs(high_metrics.q_adjusted_investment_target /
+                        neutral_metrics.q_adjusted_investment_target -
+                    1.5) <
+           1.0e-10);
+    assert(std::abs(capped_result.get_if()->metrics.mean_q_investment_multiplier -
+                    1.20) < 1.0e-12);
+    assert(std::abs(floored_result.get_if()->metrics.mean_q_investment_multiplier -
+                    0.80) < 1.0e-12);
+    // M5 sizes credit after the q multiplier, so the financing metric must see
+    // the same larger real target rather than the pre-q accelerator target.
+    assert(high_metrics.economy.firm_investment_target >
+           neutral_metrics.economy.firm_investment_target);
+}
+
+void test_equity_wealth_smoothing_and_consumption_channel() {
+    auto off_spec = base_spec();
+    off_spec.rules.household_equity_wealth_effect = 0.0;
+    auto on_spec = base_spec();
+    on_spec.rules.household_equity_wealth_effect = 1.0;
+    auto off = build(off_spec);
+    auto on = build(on_spec);
+    const double expected_addition = std::accumulate(
+        on.runtime.household_equity_value_ema.begin(),
+        on.runtime.household_equity_value_ema.end(), 0.0) *
+        on.real_runtime.rules.wealth_propensity;
+    assert(expected_addition > 0.0);
+    const auto off_result = advance(off, 1);
+    const auto on_result = advance(on, 1);
+    assert(off_result.ok());
+    assert(on_result.ok());
+    assert(off_result.get_if()->metrics.household_equity_consumption_addition == 0.0);
+    assert(std::abs(on_result.get_if()->metrics
+                        .household_equity_consumption_addition -
+                    expected_addition) <
+           1.0e-10);
+
+    auto slow_spec = base_spec();
+    slow_spec.rules.household_equity_wealth_smoothing = 0.25;
+    auto fast_spec = base_spec();
+    fast_spec.rules.household_equity_wealth_smoothing = 1.0;
+    auto slow = build(slow_spec);
+    auto fast = build(fast_spec);
+    std::fill(slow.runtime.household_equity_value_ema.begin(),
+              slow.runtime.household_equity_value_ema.end(), 0.0);
+    std::fill(fast.runtime.household_equity_value_ema.begin(),
+              fast.runtime.household_equity_value_ema.end(), 0.0);
+    const auto slow_result = advance(slow, 1);
+    const auto fast_result = advance(fast, 1);
+    assert(slow_result.ok());
+    assert(fast_result.ok());
+    const double slow_ema = slow_result.get_if()->metrics.household_equity_wealth_ema;
+    const double fast_ema = fast_result.get_if()->metrics.household_equity_wealth_ema;
+    assert(slow_ema > 0.0);
+    assert(std::abs(fast_ema / slow_ema - 4.0) < 1.0e-10);
 }
 
 void test_forced_firm_exit_and_bank_entry() {
@@ -844,6 +952,8 @@ int main() {
     test_genesis_and_multiday_advance();
     test_bank_equity_uses_lagged_closed_income();
     test_fault_is_atomic();
+    test_tobin_q_changes_real_investment_before_credit();
+    test_equity_wealth_smoothing_and_consumption_channel();
     test_forced_firm_exit_and_bank_entry();
     test_unsettled_trade_protects_firm_from_exit();
     test_firm_liquidation_recovers_haircut_collateral();
