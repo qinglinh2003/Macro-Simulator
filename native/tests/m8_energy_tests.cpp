@@ -229,6 +229,32 @@ void test_energy_day_conserves_and_constrains() {
                .ok());
 }
 
+void test_energy_sector_tfp_reaches_physical_production() {
+    auto control_spec = spec();
+    auto treatment_spec = control_spec;
+    auto &treatment_real = treatment_spec.domestic_economy.financial_economy
+                               .monetary_economy.real_economy;
+    treatment_real.rules.annual_tfp_growth_energy = 3.65;
+    auto control = build(control_spec);
+    auto treatment = build(treatment_spec);
+    for (auto &producer : control.runtime.energy_producers) {
+        producer.capacity_per_capital = 1.0e9;
+    }
+    for (auto &producer : treatment.runtime.energy_producers) {
+        producer.capacity_per_capital = 1.0e9;
+    }
+    const auto control_result = advance(control, 1);
+    const auto treatment_result = advance(treatment, 1);
+    assert(control_result.ok());
+    assert(treatment_result.ok());
+    assert(treatment.real_runtime.last_metrics.tfp_index_energy >
+           control.real_runtime.last_metrics.tfp_index_energy);
+    assert(treatment_result.get_if()->metrics.energy.production >
+           control_result.get_if()->metrics.energy.production);
+    assert(treatment.real_runtime.cumulative_sector_output[2] ==
+           treatment_result.get_if()->metrics.energy.production);
+}
+
 void test_firm_exit_transfers_physical_energy_stocks() {
     auto producer_control = build();
     auto producer_exit = build();
@@ -624,6 +650,7 @@ int main() {
     test_genesis_owns_energy_components();
     test_genesis_seeds_configured_employment_stock();
     test_energy_day_conserves_and_constrains();
+    test_energy_sector_tfp_reaches_physical_production();
     test_firm_exit_transfers_physical_energy_stocks();
     test_energy_profits_enter_common_income_settlement();
     test_energy_capacity_expands_through_capital_market();

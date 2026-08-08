@@ -74,6 +74,11 @@ M4_RULE_FIELDS = {
     "investment_adjustment": "lambda_I",
     "capital_depreciation": "delta_K",
     "annual_tfp_growth": "tfp_drift_rate",
+    "annual_tfp_growth_consumption": "tfp_drift_c",
+    "annual_tfp_growth_capital": "tfp_drift_k",
+    "annual_tfp_growth_energy": "tfp_drift_e",
+    "annual_tfp_volatility": "tfp_drift_sigma",
+    "tfp_learning_theta": "tfp_learning_theta",
     "profit_tax_rate": "tax_profit_rate",
     "income_tax_rate": "tax_income_rate",
     "consumption_tax_rate": "tax_consumption_rate",
@@ -509,6 +514,11 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
         else native.MatchingProtocol.SAMPLED
     )
     _assign(output.rules, cfg, M4_RULE_FIELDS)
+    output.rules.tfp_law = (
+        native.M4TfpLaw.LEARNING
+        if cfg.tfp_law == "learning"
+        else native.M4TfpLaw.EXOGENOUS
+    )
     firm_scale = _representative_entity_scale(
         cfg,
         output.consumption_firms + output.capital_firms,

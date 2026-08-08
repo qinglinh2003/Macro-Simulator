@@ -452,7 +452,14 @@ def _apply_native_root_field(
                 setattr(target, target_name, value)
                 matched = True
 
-    if field == "bond_theta":
+    if field == "tfp_law":
+        real_rules.tfp_law = (
+            native_backend._load_native().M4TfpLaw.LEARNING
+            if value == "learning"
+            else native_backend._load_native().M4TfpLaw.EXOGENOUS
+        )
+        matched = True
+    elif field == "bond_theta":
         financial_policy.household_bond_target = float(value)
         matched = True
     elif field == "bank_bond_appetite":
@@ -816,6 +823,10 @@ def apply_native_activation_scenario(
     housing_rules = economy.housing_rules
     if scenario == "positive_capital_gap":
         rules.initial_consumption_capital *= 0.5
+    elif scenario == "positive_learning_elasticity":
+        rules.tfp_learning_theta = 0.10
+    elif scenario == "tfp_learning_law":
+        rules.tfp_law = native_backend._load_native().M4TfpLaw.LEARNING
     elif scenario == "opening_consumption_stockout":
         rules.initial_consumption_inventory = 0.0
     elif scenario == "markup_ceiling_pressure":

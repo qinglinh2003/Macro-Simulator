@@ -39,6 +39,12 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.price_index",
         "metric.economy.unemployment_rate",
         "metric.source.m6.primary_equity_raised",
+        "metric.source.m4.tfp_index_consumption",
+        "metric.source.m4.tfp_index_capital",
+        "metric.source.m4.tfp_index_energy",
+        "metric.source.m4.tfp_growth_consumption",
+        "metric.source.m4.tfp_growth_capital",
+        "metric.source.m4.tfp_growth_energy",
     ),
     "firms_and_industrial_dynamics": (
         "metric.economy.firm_count_c",
@@ -470,6 +476,62 @@ def _production_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {output: "increase"},
             "horizon_days": 1825,
             "rationale": "A higher annual TFP trend must steepen medium-run real output growth rather than create a one-day level jump.",
+        },
+        "config.tfp_drift_c": {
+            "status": "screening_ready",
+            "values": (0.024,),
+            "directions": {
+                "metric.source.m4.tfp_index_consumption": "increase",
+            },
+            "horizon_days": 365,
+            "rationale": "The consumption-sector override must steepen only its own technology index while leaving the common trend as the fallback for other sectors.",
+        },
+        "config.tfp_drift_k": {
+            "status": "screening_ready",
+            "values": (0.024,),
+            "directions": {
+                "metric.source.m4.tfp_index_capital": "increase",
+            },
+            "horizon_days": 365,
+            "rationale": "The capital-goods override must independently move machinery-sector productivity and its direct index.",
+        },
+        "config.tfp_drift_e": {
+            "status": "screening_ready",
+            "values": (0.024,),
+            "directions": {
+                "metric.source.m4.tfp_index_energy": "increase",
+            },
+            "horizon_days": 365,
+            "rationale": "The energy override must reach energy producers rather than aliasing the consumption-sector technology path.",
+        },
+        "config.tfp_drift_sigma": {
+            "status": "screening_ready",
+            "values": (0.08,),
+            "directions": {
+                "metric.source.m4.tfp_growth_consumption": "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "A positive innovation scale must create a reproducible nonzero TFP-growth path on its dedicated RNG stream.",
+        },
+        "config.tfp_law": {
+            "status": "activation_scenario_required",
+            "values": ("learning",),
+            "directions": {
+                "metric.source.m4.tfp_index_consumption": "nonzero",
+            },
+            "horizon_days": 730,
+            "activation": "positive_learning_elasticity",
+            "rationale": "Selecting learning must replace calendar drift with cumulative sector experience once theta is positive.",
+        },
+        "config.tfp_learning_theta": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 0.20),
+            "directions": {
+                "metric.source.m4.tfp_index_consumption": "increase",
+            },
+            "horizon_days": 730,
+            "activation": "tfp_learning_law",
+            "rationale": "Under the learning law, a larger elasticity must translate the same accumulated output into a larger productivity gain.",
         },
         "config.v": {
             "status": "screening_ready",

@@ -48,6 +48,29 @@ def test_config_treatment_changes_only_the_target_economy() -> None:
     assert treated[1].lambda_y == baseline[1].lambda_y
 
 
+def test_native_tfp_treatments_reach_the_sector_state_machine() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=190, countries=1
+    )
+    sector = native_treatment_spec(
+        baseline, field="tfp_drift_e", value=0.024
+    )
+    rules = (
+        sector.economies[0].domestic_economy.financial_economy
+        .monetary_economy.real_economy.rules
+    )
+    assert rules.annual_tfp_growth_energy == pytest.approx(0.024)
+
+    learning = native_treatment_spec(
+        baseline, field="tfp_law", value="learning"
+    )
+    learning_rules = (
+        learning.economies[0].domestic_economy.financial_economy
+        .monetary_economy.real_economy.rules
+    )
+    assert str(learning_rules.tfp_law).endswith("LEARNING")
+
+
 def test_household_energy_capability_closes_dependent_mortality_channel() -> None:
     baseline = population_scaled_configs(
         population=100_000, days=90, seed=20

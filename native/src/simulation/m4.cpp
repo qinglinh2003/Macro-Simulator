@@ -18,6 +18,81 @@ namespace {
 
 constexpr double kTolerance = 1.0e-8;
 constexpr double kDaysPerYear = 365.0;
+
+struct TechnologyProjection final {
+    std::array<double, 3> indices{1.0, 1.0, 1.0};
+    std::array<double, 3> growth{0.0, 0.0, 0.0};
+    std::array<double, 3> learning_origin{0.0, 0.0, 0.0};
+    std::array<double, 3> learning_base{0.0, 0.0, 0.0};
+    std::array<bool, 3> learning_initialized{false, false, false};
+    PhiloxCounter rng_counter{};
+};
+
+[[nodiscard]] Result<TechnologyProjection>
+project_technology(const M4Runtime &runtime) noexcept {
+    TechnologyProjection next;
+    next.indices = {
+        runtime.technology_index,
+        runtime.technology_index_capital,
+        runtime.technology_index_energy,
+    };
+    next.learning_origin = runtime.tfp_learning_origin;
+    next.learning_base = runtime.tfp_learning_base;
+    next.learning_initialized = runtime.tfp_learning_initialized;
+    PhiloxRng rng(runtime.technology_rng_key, runtime.technology_rng_counter);
+
+    if (runtime.rules.tfp_law == M4TfpLaw::learning) {
+        if (runtime.rules.tfp_learning_theta != 0.0) {
+            for (std::size_t sector = 0; sector < next.indices.size(); ++sector) {
+                const double previous = next.indices[sector];
+                const double cumulative =
+                    std::max(0.0, runtime.cumulative_sector_output[sector]);
+                if (!next.learning_initialized[sector]) {
+                    if (cumulative <= 0.0) {
+                        continue;
+                    }
+                    next.learning_initialized[sector] = true;
+                    next.learning_origin[sector] = cumulative;
+                    next.learning_base[sector] =
+                        std::max(cumulative * kDaysPerYear, 1.0e-9);
+                    next.indices[sector] = 1.0;
+                } else {
+                    const double experience =
+                        std::max(0.0, cumulative - next.learning_origin[sector]);
+                    const double ratio = 1.0 + experience / next.learning_base[sector];
+                    next.indices[sector] =
+                        std::pow(ratio, runtime.rules.tfp_learning_theta);
+                }
+                next.growth[sector] = next.indices[sector] / previous - 1.0;
+            }
+        }
+    } else {
+        const std::array overrides{
+            runtime.rules.annual_tfp_growth_consumption,
+            runtime.rules.annual_tfp_growth_capital,
+            runtime.rules.annual_tfp_growth_energy,
+        };
+        for (std::size_t sector = 0; sector < next.indices.size(); ++sector) {
+            const double annual = overrides[sector] == 0.0
+                                      ? runtime.rules.annual_tfp_growth
+                                      : overrides[sector];
+            double daily = annual / kDaysPerYear;
+            if (runtime.rules.annual_tfp_volatility > 0.0) {
+                daily += runtime.rules.annual_tfp_volatility *
+                         rng.standard_normal() / kDaysPerYear;
+            }
+            const double factor = 1.0 + daily;
+            if (!std::isfinite(factor) || factor <= 0.0) {
+                return Status(ErrorCode::out_of_range,
+                              "M4 TFP innovation produced a non-positive index");
+            }
+            next.indices[sector] *= factor;
+            next.growth[sector] = daily;
+        }
+    }
+    next.rng_counter = rng.counter();
+    return next;
+}
 constexpr std::uint64_t kConsumptionStockoutVisitStream = 0x4353544f434b4f55ULL;
 constexpr std::size_t kAbsentFirmIndex = std::numeric_limits<std::size_t>::max();
 constexpr std::uint64_t kV1Capabilities =
@@ -366,7 +441,8 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
 
 void commit_working_state(core::RootState &state, M4Runtime &runtime,
                           M4TickScratch &scratch, Tick &tick, const M4Metrics &metrics,
-                          PhiloxCounter rng_counter, double technology_index,
+                          PhiloxCounter rng_counter,
+                          const TechnologyProjection &technology,
                           double public_capital) noexcept {
     for (auto &record : state.postings.records()) {
         record.balance =
@@ -402,7 +478,15 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         firm->attractiveness = work.attractiveness;
     }
     runtime.rng_counter = rng_counter;
-    runtime.technology_index = technology_index;
+    runtime.technology_rng_counter = technology.rng_counter;
+    runtime.technology_index = technology.indices[0];
+    runtime.technology_index_capital = technology.indices[1];
+    runtime.technology_index_energy = technology.indices[2];
+    runtime.tfp_learning_origin = technology.learning_origin;
+    runtime.tfp_learning_base = technology.learning_base;
+    runtime.tfp_learning_initialized = technology.learning_initialized;
+    runtime.cumulative_sector_output[0] += metrics.consumption_output_real;
+    runtime.cumulative_sector_output[1] += metrics.capital_output_real;
     runtime.public_capital = public_capital;
     runtime.previous_nominal_output = metrics.nominal_output;
     runtime.last_metrics = metrics;
@@ -501,7 +585,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
 
 [[nodiscard]] Status plan_firms(const core::RootState &state, const M4Runtime &runtime,
                                 M4TickScratch &scratch, PhiloxRng &rng,
-                                double production_factor,
+                                const std::array<double, 3> &production_factors,
                                 const M4AdvanceOptions &options) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(scratch.firm_ids_[index]);
@@ -541,7 +625,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             firm->total_factor_productivity,
             firm->physical_capital.value(),
             firm->capital_share,
-            production_factor,
+            production_factors[sector],
         });
         if (!labor.ok()) {
             return labor.status();
@@ -691,7 +775,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
 }
 
 [[nodiscard]] Status run_production(const core::RootState &state,
-                                    M4TickScratch &scratch, double production_factor,
+                                    M4TickScratch &scratch,
+                                    const std::array<double, 3> &production_factors,
                                     const M4AdvanceOptions &options) {
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(scratch.firm_ids_[index]);
@@ -708,7 +793,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             firm->total_factor_productivity * options.productivity_multipliers[sector],
             firm->physical_capital.value(),
             firm->capital_share,
-            production_factor,
+            production_factors[sector],
         });
         if (!produced.ok()) {
             return produced.status();
@@ -1613,22 +1698,28 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
     if (!status.ok()) {
         return status;
     }
-    const double daily_growth =
-        std::pow(1.0 + runtime.rules.annual_tfp_growth, 1.0 / kDaysPerYear);
-    const double technology_index = runtime.technology_index * daily_growth;
+    auto technology_result = project_technology(runtime);
+    if (!technology_result.ok()) {
+        return technology_result.status();
+    }
+    const auto technology = *technology_result.get_if();
     const double public_capital_factor =
         runtime.rules.public_capital_gamma > 0.0
             ? std::pow(1.0 + runtime.public_capital / runtime.public_capital_reference,
                        runtime.rules.public_capital_gamma)
             : 1.0;
-    const double production_factor = technology_index * public_capital_factor;
+    for (std::size_t sector = 0; sector < scratch.production_factors_.size(); ++sector) {
+        scratch.production_factors_[sector] =
+            technology.indices[sector] * public_capital_factor;
+    }
     capture_phase(state, scratch, options, M4Phase::open_real_economy);
 
     status = check_fault(options, M4Phase::plan_and_finance);
     if (!status.ok()) {
         return status;
     }
-    status = plan_firms(state, runtime, scratch, rng, production_factor, options);
+    status = plan_firms(state, runtime, scratch, rng, scratch.production_factors_,
+                        options);
     if (!status.ok()) {
         return status;
     }
@@ -1664,7 +1755,7 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
     if (!status.ok()) {
         return status;
     }
-    status = run_production(state, scratch, production_factor, options);
+    status = run_production(state, scratch, scratch.production_factors_, options);
     if (!status.ok()) {
         return status;
     }
@@ -1783,12 +1874,23 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
             return status;
         }
     }
-    const auto metrics =
+    auto metrics =
         measure(state, runtime, scratch, tick, tax_total, profit_tax, income_tax,
                 consumption_tax, government_spending, benefit_spending, public_capital,
                 public_investment_spending, job_guarantee_spending,
                 job_guarantee_labor,
                 job_guarantee_capital_addition);
+    metrics.tfp_index_consumption = technology.indices[0];
+    metrics.tfp_index_capital = technology.indices[1];
+    metrics.tfp_index_energy = technology.indices[2];
+    metrics.tfp_growth_consumption = technology.growth[0];
+    metrics.tfp_growth_capital = technology.growth[1];
+    metrics.tfp_growth_energy = technology.growth[2];
+    metrics.cumulative_output_consumption =
+        runtime.cumulative_sector_output[0] + metrics.consumption_output_real;
+    metrics.cumulative_output_capital =
+        runtime.cumulative_sector_output[1] + metrics.capital_output_real;
+    metrics.cumulative_output_energy = runtime.cumulative_sector_output[2];
     capture_phase(state, scratch, options, M4Phase::validate_and_measure);
 
     status = check_fault(options, M4Phase::stage_local_commit);
@@ -1796,7 +1898,7 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
         return status;
     }
     commit_working_state(state, runtime, scratch, tick, metrics, rng.counter(),
-                         technology_index, public_capital);
+                         technology, public_capital);
     if (extension != nullptr) {
         extension->commit(state, runtime, scratch, metrics.tick, metrics);
     }
@@ -1984,6 +2086,11 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.investment_adjustment,
         rules.capital_depreciation,
         rules.annual_tfp_growth,
+        rules.annual_tfp_growth_consumption,
+        rules.annual_tfp_growth_capital,
+        rules.annual_tfp_growth_energy,
+        rules.annual_tfp_volatility,
+        rules.tfp_learning_theta,
         rules.profit_tax_rate,
         rules.income_tax_rate,
         rules.consumption_tax_rate,
@@ -2021,7 +2128,14 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.capital_share < 0.0 || rules.capital_share >= 1.0 ||
         rules.capital_output_ratio < 0.0 ||
         rules.markup_minimum > rules.markup_maximum || rules.markup_minimum < 0.0 ||
-        rules.annual_tfp_growth <= -1.0 || rules.demand_adjustment < 0.0 ||
+        rules.annual_tfp_growth <= -1.0 ||
+        rules.annual_tfp_growth_consumption <= -1.0 ||
+        rules.annual_tfp_growth_capital <= -1.0 ||
+        rules.annual_tfp_growth_energy <= -1.0 ||
+        rules.annual_tfp_volatility < 0.0 || rules.tfp_learning_theta < 0.0 ||
+        static_cast<std::uint8_t>(rules.tfp_law) >
+            static_cast<std::uint8_t>(M4TfpLaw::learning) ||
+        rules.demand_adjustment < 0.0 ||
         rules.demand_adjustment > 1.0 || rules.income_adjustment < 0.0 ||
         rules.capital_clock_demand_smoothing <= 0.0 ||
         rules.capital_clock_demand_smoothing > 1.0 ||
@@ -2173,6 +2287,17 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
     });
     const std::array runtime_values{
         runtime.technology_index,
+        runtime.technology_index_capital,
+        runtime.technology_index_energy,
+        runtime.cumulative_sector_output[0],
+        runtime.cumulative_sector_output[1],
+        runtime.cumulative_sector_output[2],
+        runtime.tfp_learning_origin[0],
+        runtime.tfp_learning_origin[1],
+        runtime.tfp_learning_origin[2],
+        runtime.tfp_learning_base[0],
+        runtime.tfp_learning_base[1],
+        runtime.tfp_learning_base[2],
         runtime.public_capital,
         runtime.public_capital_reference,
         runtime.previous_nominal_output,
@@ -2203,9 +2328,29 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
         runtime.last_metrics.government_consumption,
         runtime.last_metrics.public_fixed_capital_formation,
         runtime.last_metrics.transfer_payments,
+        runtime.last_metrics.tfp_index_consumption,
+        runtime.last_metrics.tfp_index_capital,
+        runtime.last_metrics.tfp_index_energy,
+        runtime.last_metrics.tfp_growth_consumption,
+        runtime.last_metrics.tfp_growth_capital,
+        runtime.last_metrics.tfp_growth_energy,
+        runtime.last_metrics.cumulative_output_consumption,
+        runtime.last_metrics.cumulative_output_capital,
+        runtime.last_metrics.cumulative_output_energy,
     };
     if (!components_valid || !all_finite(runtime_values) ||
-        runtime.technology_index <= 0.0 || runtime.public_capital < 0.0 ||
+        runtime.technology_index <= 0.0 || runtime.technology_index_capital <= 0.0 ||
+        runtime.technology_index_energy <= 0.0 ||
+        std::any_of(runtime.cumulative_sector_output.begin(),
+                    runtime.cumulative_sector_output.end(),
+                    [](double value) { return value < 0.0; }) ||
+        std::any_of(runtime.tfp_learning_origin.begin(),
+                    runtime.tfp_learning_origin.end(),
+                    [](double value) { return value < 0.0; }) ||
+        std::any_of(runtime.tfp_learning_base.begin(),
+                    runtime.tfp_learning_base.end(),
+                    [](double value) { return value < 0.0; }) ||
+        runtime.public_capital < 0.0 ||
         runtime.public_capital_reference <= 0.0) {
         return Status(ErrorCode::invariant_violation,
                       "M4 persistent columns are invalid");
@@ -2327,6 +2472,11 @@ Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec) {
     runtime.rng_key = {
         static_cast<std::uint32_t>(spec.seed),
         static_cast<std::uint32_t>(spec.seed >> 32U) ^ 0x9e3779b9U,
+    };
+    const auto technology_seed = splitmix64(spec.seed + 19'000U);
+    runtime.technology_rng_key = {
+        static_cast<std::uint32_t>(technology_seed),
+        static_cast<std::uint32_t>(technology_seed >> 32U) ^ 0x9e3779b9U,
     };
     runtime.public_capital_reference = std::max(1.0, opening_capital);
     runtime.last_phase_trace.reserve(10);

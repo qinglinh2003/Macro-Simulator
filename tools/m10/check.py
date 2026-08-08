@@ -171,9 +171,9 @@ def validate_contracts() -> None:
     if maintained["counts"] != {
         "national_accounts": 63,
         "native_dashboard_analytics": 120,
-        "native_stage_sources": 235,
+        "native_stage_sources": 249,
         "public_sources": 41,
-        "total": 459,
+        "total": 473,
     }:
         raise AssertionError("M10 maintained metric coverage is incomplete")
     maintained_ids = [item["id"] for item in maintained["metrics"]]

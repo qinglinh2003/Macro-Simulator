@@ -207,7 +207,11 @@ def test_contracts_with_the_same_activation_share_one_control(
         )
 
     monkeypatch.setattr(config_batch, "_run_or_load", fake_run_or_load)
-    contracts = activation_contracts(module="production_and_technology")
+    contracts = tuple(
+        contract
+        for contract in activation_contracts(module="production_and_technology")
+        if contract.activation_scenario == "positive_capital_gap"
+    )
     payload = run_contract_batch(
         contracts,
         seeds=[101],

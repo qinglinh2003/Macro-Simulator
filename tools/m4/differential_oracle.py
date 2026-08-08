@@ -13,7 +13,7 @@ from typing import Any
 
 
 CAPITAL_AND_GOVERNMENT = 3
-DAILY_GROWTH = math.pow(1.02, 1.0 / 365.0)
+DAILY_GROWTH = 1.0 + 0.02 / 365.0
 
 
 def load_native(native_dir: Path):

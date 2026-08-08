@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 226 |
-| Native route missing or incomplete | 66 |
+| Native route confirmed | 232 |
+| Native route missing or incomplete | 60 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 66 missing or incomplete routes are real implementation work; they are not
+The 60 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,7 +306,7 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 226
+The native product baseline comparison now projects every one of the 232
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
@@ -466,6 +466,38 @@ The targeted five-year batch completed 20 additional native runs, covering
 - Fifth-year real GDP per capita no longer differs precisely under either
   opening-capital arm even though the physical stock remains different. The
   long-run stock and flow implications must therefore be reported separately.
+
+### 8.5a Sector TFP law repair and mechanism screen
+
+The native engine previously exposed only one deterministic economy-wide TFP
+index. Six current Config fields were therefore absent despite the uniform
+`tfp_drift_rate` route. The repair introduces one committed index for each of
+the consumption, capital-goods, and energy sectors; sector-specific trend
+overrides retain the established zero-means-inherit convention. Exogenous
+innovations use a dedicated Philox substream, so changing TFP volatility does
+not perturb matching or behavioral draws. The learning law initializes each
+sector independently from its first positive output flow and reads only
+committed cumulative output, preserving rollback and checkpoint determinism.
+
+The first executable screen used 100,000 persons, two paired seeds, 30 days,
+and eight native workers. It is a route/mechanism proof, not the final
+medium-run magnitude calibration:
+
+- `tfp_drift_c=2.4%`, `tfp_drift_k=2.4%`, and `tfp_drift_e=2.4%` each raise
+  only their predeclared sector index relative to the 1.2% inherited baseline;
+  all three direct direction checks pass.
+- `tfp_drift_sigma=0.08` creates a reproducible heterogeneous TFP-growth path;
+  the direct nonzero check passes while the ordinary economic RNG counter stays
+  isolated.
+- Selecting `tfp_law="learning"` under a common positive learning elasticity
+  changes the consumption-sector index, and increasing
+  `tfp_learning_theta` from 0.05 to 0.20 under the common learning-law
+  activation raises the index in both arms. All learning direction checks pass.
+
+These six fields move from missing to mapped-native status. Their direct causal
+mechanisms are resolved; multi-year macro elasticities, sector spillovers, and
+million-person confirmation remain part of P3-P4 rather than being inferred
+from this short route screen.
 
 ### 8.6 Firms and industrial dynamics screen
 

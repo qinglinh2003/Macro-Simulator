@@ -21,6 +21,11 @@ enum class M4Vertical : std::uint8_t {
     capital_fiscal = 1,
 };
 
+enum class M4TfpLaw : std::uint8_t {
+    exogenous = 0,
+    learning = 1,
+};
+
 enum class M4Capability : std::uint64_t {
     physical_capital = 1ULL << 0U,
     government = 1ULL << 1U,
@@ -77,6 +82,14 @@ struct M4Rules final {
     double investment_adjustment{0.0019};
     double capital_depreciation{2.28e-4};
     double annual_tfp_growth{0.02};
+    // A zero sector value inherits annual_tfp_growth, matching Config's
+    // established override semantics.
+    double annual_tfp_growth_consumption{0.0};
+    double annual_tfp_growth_capital{0.0};
+    double annual_tfp_growth_energy{0.0};
+    double annual_tfp_volatility{0.0};
+    M4TfpLaw tfp_law{M4TfpLaw::exogenous};
+    double tfp_learning_theta{0.0};
     double profit_tax_rate{0.25};
     double income_tax_rate{0.20};
     double consumption_tax_rate{0.15};
@@ -169,6 +182,15 @@ struct M4Metrics final {
     double job_guarantee_labor{0.0};
     double job_guarantee_public_capital_formation{0.0};
     double job_guarantee_realized_productivity{0.0};
+    double tfp_index_consumption{1.0};
+    double tfp_index_capital{1.0};
+    double tfp_index_energy{1.0};
+    double tfp_growth_consumption{0.0};
+    double tfp_growth_capital{0.0};
+    double tfp_growth_energy{0.0};
+    double cumulative_output_consumption{0.0};
+    double cumulative_output_capital{0.0};
+    double cumulative_output_energy{0.0};
 
     bool operator==(const M4Metrics &) const = default;
 };
@@ -238,7 +260,15 @@ struct M4Runtime final {
     bool stochastic{false};
     PhiloxKey rng_key{};
     PhiloxCounter rng_counter{};
+    PhiloxKey technology_rng_key{};
+    PhiloxCounter technology_rng_counter{};
     double technology_index{1.0};
+    double technology_index_capital{1.0};
+    double technology_index_energy{1.0};
+    std::array<double, 3> cumulative_sector_output{0.0, 0.0, 0.0};
+    std::array<double, 3> tfp_learning_origin{0.0, 0.0, 0.0};
+    std::array<double, 3> tfp_learning_base{0.0, 0.0, 0.0};
+    std::array<bool, 3> tfp_learning_initialized{false, false, false};
     double public_capital{0.0};
     double public_capital_reference{1.0};
     double previous_nominal_output{0.0};
@@ -328,6 +358,9 @@ class M4TickScratch final {
     std::vector<double> market_offer_remaining_;
     algorithms::MarketClearing clearing_;
     std::vector<M4PhaseSummary> phase_trace_;
+    // Composite TFP x public-capital factors for C, K, and E sectors.  M8
+    // reads the energy slot so every producer shares the same law of motion.
+    std::array<double, 3> production_factors_{1.0, 1.0, 1.0};
     std::uint64_t transfer_count_{0};
     std::uint64_t trade_count_{0};
     double external_goods_units_{0.0};

@@ -558,6 +558,16 @@ nb::dict m4_metrics_to_python(const macro_sim::simulation::M4Metrics &metrics) {
         metrics.job_guarantee_public_capital_formation;
     output["job_guarantee_realized_productivity"] =
         metrics.job_guarantee_realized_productivity;
+    output["tfp_index_consumption"] = metrics.tfp_index_consumption;
+    output["tfp_index_capital"] = metrics.tfp_index_capital;
+    output["tfp_index_energy"] = metrics.tfp_index_energy;
+    output["tfp_growth_consumption"] = metrics.tfp_growth_consumption;
+    output["tfp_growth_capital"] = metrics.tfp_growth_capital;
+    output["tfp_growth_energy"] = metrics.tfp_growth_energy;
+    output["cumulative_output_consumption"] =
+        metrics.cumulative_output_consumption;
+    output["cumulative_output_capital"] = metrics.cumulative_output_capital;
+    output["cumulative_output_energy"] = metrics.cumulative_output_energy;
     return output;
 }
 
@@ -1493,6 +1503,10 @@ nb::dict m4_snapshot_to_python(const macro_sim::EngineSession &session) {
     output["firms"] = std::move(firms);
     output["balances"] = std::move(balances);
     output["technology_index"] = session.simulation_runtime()->technology_index;
+    output["technology_index_capital"] =
+        session.simulation_runtime()->technology_index_capital;
+    output["technology_index_energy"] =
+        session.simulation_runtime()->technology_index_energy;
     output["public_capital"] = session.simulation_runtime()->public_capital;
     nb::list rng_counter;
     for (const auto value : session.simulation_runtime()->rng_counter) {
@@ -1559,6 +1573,9 @@ NB_MODULE(_native, module) {
     nb::enum_<macro_sim::simulation::M4Vertical>(module, "M4Vertical")
         .value("CASH_LOOP", macro_sim::simulation::M4Vertical::cash_loop)
         .value("CAPITAL_FISCAL", macro_sim::simulation::M4Vertical::capital_fiscal);
+    nb::enum_<macro_sim::simulation::M4TfpLaw>(module, "M4TfpLaw")
+        .value("EXOGENOUS", macro_sim::simulation::M4TfpLaw::exogenous)
+        .value("LEARNING", macro_sim::simulation::M4TfpLaw::learning);
     nb::enum_<macro_sim::algorithms::MatchingProtocol>(module, "MatchingProtocol")
         .value("SAMPLED", macro_sim::algorithms::MatchingProtocol::sampled)
         .value("PREFERENTIAL", macro_sim::algorithms::MatchingProtocol::preferential)
@@ -1597,6 +1614,12 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(investment_adjustment);
     MACRO_SIM_BIND_M4_RULE(capital_depreciation);
     MACRO_SIM_BIND_M4_RULE(annual_tfp_growth);
+    MACRO_SIM_BIND_M4_RULE(annual_tfp_growth_consumption);
+    MACRO_SIM_BIND_M4_RULE(annual_tfp_growth_capital);
+    MACRO_SIM_BIND_M4_RULE(annual_tfp_growth_energy);
+    MACRO_SIM_BIND_M4_RULE(annual_tfp_volatility);
+    MACRO_SIM_BIND_M4_RULE(tfp_law);
+    MACRO_SIM_BIND_M4_RULE(tfp_learning_theta);
     MACRO_SIM_BIND_M4_RULE(profit_tax_rate);
     MACRO_SIM_BIND_M4_RULE(income_tax_rate);
     MACRO_SIM_BIND_M4_RULE(consumption_tax_rate);

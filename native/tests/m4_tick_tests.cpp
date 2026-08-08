@@ -584,12 +584,82 @@ void test_faults_are_atomic() {
         assert(core::state_digest(*session.root()) == before);
         const auto *runtime = session.simulation_runtime();
         assert(runtime->rng_counter == runtime_before.rng_counter);
+        assert(runtime->technology_rng_counter ==
+               runtime_before.technology_rng_counter);
         assert(runtime->technology_index == runtime_before.technology_index);
+        assert(runtime->technology_index_capital ==
+               runtime_before.technology_index_capital);
+        assert(runtime->technology_index_energy ==
+               runtime_before.technology_index_energy);
+        assert(runtime->cumulative_sector_output ==
+               runtime_before.cumulative_sector_output);
         assert(runtime->public_capital == runtime_before.public_capital);
         assert(runtime->previous_nominal_output ==
                runtime_before.previous_nominal_output);
         assert(runtime->last_metrics == runtime_before.last_metrics);
     }
+}
+
+void test_sector_tfp_overrides_are_independent() {
+    auto spec = v1_spec(9123);
+    spec.rules.annual_tfp_growth = 0.01;
+    spec.rules.annual_tfp_growth_consumption = 0.04;
+    spec.rules.annual_tfp_growth_capital = 0.02;
+    spec.rules.annual_tfp_growth_energy = 0.03;
+    EngineSession session(41);
+    assert(session.initialize_simulation(spec).ok());
+    const auto result = session.advance_ticks(365);
+    assert(result.ok());
+    const auto *runtime = session.simulation_runtime();
+    assert_close(runtime->technology_index,
+                 std::pow(1.0 + 0.04 / 365.0, 365.0), 1.0e-10);
+    assert_close(runtime->technology_index_capital,
+                 std::pow(1.0 + 0.02 / 365.0, 365.0), 1.0e-10);
+    assert_close(runtime->technology_index_energy,
+                 std::pow(1.0 + 0.03 / 365.0, 365.0), 1.0e-10);
+    assert(runtime->last_metrics.tfp_index_consumption >
+           runtime->last_metrics.tfp_index_energy);
+    assert(runtime->last_metrics.tfp_index_energy >
+           runtime->last_metrics.tfp_index_capital);
+}
+
+void test_tfp_innovations_use_a_dedicated_rng_stream() {
+    auto deterministic_spec = v1_spec(99123);
+    deterministic_spec.stochastic = true;
+    deterministic_spec.rules.annual_tfp_volatility = 0.0;
+    auto volatile_spec = deterministic_spec;
+    volatile_spec.rules.annual_tfp_volatility = 0.20;
+    EngineSession deterministic(42);
+    EngineSession volatile_run(43);
+    assert(deterministic.initialize_simulation(deterministic_spec).ok());
+    assert(volatile_run.initialize_simulation(volatile_spec).ok());
+    assert(deterministic.advance_ticks(30).ok());
+    assert(volatile_run.advance_ticks(30).ok());
+    const auto *left = deterministic.simulation_runtime();
+    const auto *right = volatile_run.simulation_runtime();
+    assert(left->rng_counter == right->rng_counter);
+    assert(left->technology_rng_counter != right->technology_rng_counter);
+    assert(left->technology_index != right->technology_index);
+    assert(right->last_metrics.tfp_growth_consumption !=
+           deterministic_spec.rules.annual_tfp_growth / 365.0);
+}
+
+void test_learning_tfp_uses_committed_sector_experience() {
+    auto spec = v1_spec(54321);
+    spec.rules.tfp_law = M4TfpLaw::learning;
+    spec.rules.tfp_learning_theta = 0.20;
+    spec.rules.annual_tfp_growth = 0.50;
+    EngineSession session(44);
+    assert(session.initialize_simulation(spec).ok());
+    assert(session.advance_ticks(2).ok());
+    const auto *initialized = session.simulation_runtime();
+    assert(initialized->tfp_learning_initialized[0]);
+    assert_close(initialized->technology_index, 1.0);
+    assert(session.advance_ticks(1).ok());
+    const auto *learned = session.simulation_runtime();
+    assert(learned->technology_index > 1.0);
+    assert(learned->last_metrics.tfp_growth_consumption > 0.0);
+    assert(learned->cumulative_sector_output[0] > 0.0);
 }
 
 void test_chunking_and_stochastic_replay() {
@@ -702,6 +772,9 @@ int main() {
     test_consumption_tax_follows_each_household_purchase_basket();
     test_public_capital_stock_and_productivity();
     test_job_guarantee_productivity_builds_and_reports_public_capital();
+    test_sector_tfp_overrides_are_independent();
+    test_tfp_innovations_use_a_dedicated_rng_stream();
+    test_learning_tfp_uses_committed_sector_experience();
     test_faults_are_atomic();
     test_chunking_and_stochastic_replay();
     test_scratch_capacity_stabilizes();

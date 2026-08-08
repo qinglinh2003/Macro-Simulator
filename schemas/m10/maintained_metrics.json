@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 240,
+    "native_stage_sources": 249,
     "public_sources": 41,
-    "total": 464
+    "total": 473
   },
   "metrics": [
     {
@@ -1761,6 +1761,87 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "capital_units_per_fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_index_consumption",
+      "parity_rule": "simulation::M4Metrics::tfp_index_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_index_capital",
+      "parity_rule": "simulation::M4Metrics::tfp_index_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_index_energy",
+      "parity_rule": "simulation::M4Metrics::tfp_index_energy",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_growth_consumption",
+      "parity_rule": "simulation::M4Metrics::tfp_growth_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_growth_capital",
+      "parity_rule": "simulation::M4Metrics::tfp_growth_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.tfp_growth_energy",
+      "parity_rule": "simulation::M4Metrics::tfp_growth_energy",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.cumulative_output_consumption",
+      "parity_rule": "simulation::M4Metrics::cumulative_output_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.cumulative_output_capital",
+      "parity_rule": "simulation::M4Metrics::cumulative_output_capital",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.cumulative_output_energy",
+      "parity_rule": "simulation::M4Metrics::cumulative_output_energy",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units"
     },
     {
       "aggregation": "last",

@@ -482,7 +482,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
 [[nodiscard]] Status apply_country_overrides(const Json &overrides,
                                              simulation::M8SimulationSpec &spec,
                                              std::uint64_t &population_count) {
-    static constexpr std::array<std::string_view, 29> allowed{{
+    static constexpr std::array<std::string_view, 34> allowed{{
         "n_households",
         "n_firms_c",
         "n_firms_k",
@@ -512,6 +512,11 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         "national_accounts_metrics",
         "a_K",
         "tfp_drift_rate",
+        "tfp_drift_sigma",
+        "tfp_learning_theta",
+        "tfp_drift_c",
+        "tfp_drift_k",
+        "tfp_drift_e",
     }};
     if (!overrides.is_object() ||
         !std::ranges::all_of(overrides.items(), [](const auto &item) {
@@ -574,7 +579,12 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !assign_number("a_K", real.rules.capital_productivity) ||
         !assign_number("alpha", real.rules.capital_share) ||
         !assign_number("necessity_share0", financial.rules.initial_necessity_share) ||
-        !assign_number("tfp_drift_rate", real.rules.annual_tfp_growth)) {
+        !assign_number("tfp_drift_rate", real.rules.annual_tfp_growth) ||
+        !assign_number("tfp_drift_sigma", real.rules.annual_tfp_volatility) ||
+        !assign_number("tfp_learning_theta", real.rules.tfp_learning_theta) ||
+        !assign_number("tfp_drift_c", real.rules.annual_tfp_growth_consumption) ||
+        !assign_number("tfp_drift_k", real.rules.annual_tfp_growth_capital) ||
+        !assign_number("tfp_drift_e", real.rules.annual_tfp_growth_energy)) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country number is invalid");
     }
@@ -669,6 +679,9 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         if (law != "exogenous" && law != "learning") {
             return Status(ErrorCode::invalid_argument, "new-game TFP law is invalid");
         }
+        real.rules.tfp_law = law == "learning"
+                                 ? simulation::M4TfpLaw::learning
+                                 : simulation::M4TfpLaw::exogenous;
         real.stochastic = law == "exogenous";
     }
     return Status::success();

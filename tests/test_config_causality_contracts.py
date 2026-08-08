@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 66
+    assert payload["status_counts"]["blocked_native_route"] == 60
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -60,7 +60,7 @@ def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
 
 def test_production_screening_contracts_are_curated_and_routed() -> None:
     contracts = screening_contracts(module="production_and_technology")
-    assert len(contracts) == 10
+    assert len(contracts) == 14
     assert {contract.field_name for contract in contracts} == {
         "alpha",
         "capital_firm_entry",
@@ -71,6 +71,10 @@ def test_production_screening_contracts_are_curated_and_routed() -> None:
         "delta_K",
         "K_firm0",
         "tfp_drift_rate",
+        "tfp_drift_c",
+        "tfp_drift_k",
+        "tfp_drift_e",
+        "tfp_drift_sigma",
         "v",
     }
     assert all(contract.route_status == "mapped_native" for contract in contracts)
@@ -114,6 +118,8 @@ def test_activation_contracts_are_reviewed_and_separate() -> None:
     assert {contract.field_name for contract in contracts} == {
         "capital_rationed_signal",
         "lambda_I",
+        "tfp_law",
+        "tfp_learning_theta",
     }
     assert all(
         contract.status == "activation_scenario_required"

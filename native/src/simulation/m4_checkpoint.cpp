@@ -173,6 +173,12 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.investment_adjustment);
     writer.f64(rules.capital_depreciation);
     writer.f64(rules.annual_tfp_growth);
+    writer.f64(rules.annual_tfp_growth_consumption);
+    writer.f64(rules.annual_tfp_growth_capital);
+    writer.f64(rules.annual_tfp_growth_energy);
+    writer.f64(rules.annual_tfp_volatility);
+    writer.u8(static_cast<std::uint8_t>(rules.tfp_law));
+    writer.f64(rules.tfp_learning_theta);
     writer.f64(rules.profit_tax_rate);
     writer.f64(rules.income_tax_rate);
     writer.f64(rules.consumption_tax_rate);
@@ -223,6 +229,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     std::uint8_t luxury_tax_present = 0;
     double necessity_tax = 0.0;
     double luxury_tax = 0.0;
+    std::uint8_t tfp_law = 0;
     const auto success = reader.f64(rules.linear_productivity)
         && reader.f64(rules.capital_productivity)
         && reader.f64(rules.total_factor_productivity)
@@ -253,6 +260,12 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.investment_adjustment)
         && reader.f64(rules.capital_depreciation)
         && reader.f64(rules.annual_tfp_growth)
+        && reader.f64(rules.annual_tfp_growth_consumption)
+        && reader.f64(rules.annual_tfp_growth_capital)
+        && reader.f64(rules.annual_tfp_growth_energy)
+        && reader.f64(rules.annual_tfp_volatility)
+        && reader.u8(tfp_law)
+        && reader.f64(rules.tfp_learning_theta)
         && reader.f64(rules.profit_tax_rate)
         && reader.f64(rules.income_tax_rate)
         && reader.f64(rules.consumption_tax_rate)
@@ -303,7 +316,9 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     rules.luxury_consumption_tax_rate =
         luxury_tax_present != 0U ? std::optional<double>(luxury_tax)
                                  : std::nullopt;
+    rules.tfp_law = static_cast<M4TfpLaw>(tfp_law);
     return success && job_guarantee <= 1U &&
+           tfp_law <= static_cast<std::uint8_t>(M4TfpLaw::learning) &&
            capital_rationed_signal <= 1U &&
            consumption_rationed_signal <= 1U;
 }
@@ -344,6 +359,15 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.job_guarantee_labor);
     writer.f64(metrics.job_guarantee_public_capital_formation);
     writer.f64(metrics.job_guarantee_realized_productivity);
+    writer.f64(metrics.tfp_index_consumption);
+    writer.f64(metrics.tfp_index_capital);
+    writer.f64(metrics.tfp_index_energy);
+    writer.f64(metrics.tfp_growth_consumption);
+    writer.f64(metrics.tfp_growth_capital);
+    writer.f64(metrics.tfp_growth_energy);
+    writer.f64(metrics.cumulative_output_consumption);
+    writer.f64(metrics.cumulative_output_capital);
+    writer.f64(metrics.cumulative_output_energy);
 }
 
 [[nodiscard]] bool read_metrics(
@@ -388,7 +412,16 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.job_guarantee_spending)
         && reader.f64(metrics.job_guarantee_labor)
         && reader.f64(metrics.job_guarantee_public_capital_formation)
-        && reader.f64(metrics.job_guarantee_realized_productivity);
+        && reader.f64(metrics.job_guarantee_realized_productivity)
+        && reader.f64(metrics.tfp_index_consumption)
+        && reader.f64(metrics.tfp_index_capital)
+        && reader.f64(metrics.tfp_index_energy)
+        && reader.f64(metrics.tfp_growth_consumption)
+        && reader.f64(metrics.tfp_growth_capital)
+        && reader.f64(metrics.tfp_growth_energy)
+        && reader.f64(metrics.cumulative_output_consumption)
+        && reader.f64(metrics.cumulative_output_capital)
+        && reader.f64(metrics.cumulative_output_energy);
 }
 
 void write_household(
@@ -548,7 +581,27 @@ Result<std::vector<std::uint8_t>> save_m4_checkpoint(
     for (const auto value : runtime.rng_counter) {
         writer.u32(value);
     }
+    for (const auto value : runtime.technology_rng_key) {
+        writer.u32(value);
+    }
+    for (const auto value : runtime.technology_rng_counter) {
+        writer.u32(value);
+    }
     writer.f64(runtime.technology_index);
+    writer.f64(runtime.technology_index_capital);
+    writer.f64(runtime.technology_index_energy);
+    for (const auto value : runtime.cumulative_sector_output) {
+        writer.f64(value);
+    }
+    for (const auto value : runtime.tfp_learning_origin) {
+        writer.f64(value);
+    }
+    for (const auto value : runtime.tfp_learning_base) {
+        writer.f64(value);
+    }
+    for (const auto value : runtime.tfp_learning_initialized) {
+        writer.boolean(value);
+    }
     writer.f64(runtime.public_capital);
     writer.f64(runtime.public_capital_reference);
     writer.f64(runtime.previous_nominal_output);
@@ -643,7 +696,31 @@ Result<M4Checkpoint> load_m4_checkpoint(
             return corrupt("M4 checkpoint RNG counter is truncated");
         }
     }
+    for (auto& value : runtime.technology_rng_key) {
+        if (!reader.u32(value)) {
+            return corrupt("M4 checkpoint technology RNG key is truncated");
+        }
+    }
+    for (auto& value : runtime.technology_rng_counter) {
+        if (!reader.u32(value)) {
+            return corrupt("M4 checkpoint technology RNG counter is truncated");
+        }
+    }
     if (!reader.f64(runtime.technology_index)
+        || !reader.f64(runtime.technology_index_capital)
+        || !reader.f64(runtime.technology_index_energy)
+        || !std::all_of(runtime.cumulative_sector_output.begin(),
+                        runtime.cumulative_sector_output.end(),
+                        [&reader](double &value) { return reader.f64(value); })
+        || !std::all_of(runtime.tfp_learning_origin.begin(),
+                        runtime.tfp_learning_origin.end(),
+                        [&reader](double &value) { return reader.f64(value); })
+        || !std::all_of(runtime.tfp_learning_base.begin(),
+                        runtime.tfp_learning_base.end(),
+                        [&reader](double &value) { return reader.f64(value); })
+        || !std::all_of(runtime.tfp_learning_initialized.begin(),
+                        runtime.tfp_learning_initialized.end(),
+                        [&reader](bool &value) { return reader.boolean(value); })
         || !reader.f64(runtime.public_capital)
         || !reader.f64(runtime.public_capital_reference)
         || !reader.f64(runtime.previous_nominal_output)

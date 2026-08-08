@@ -78,6 +78,7 @@ MANUAL_CONFIG_ROUTES: Mapping[str, tuple[str, ...]] = {
     "marriage_assortativity": ("m7.rules.marriage_rules.assortativity",),
     "demographics_population": ("m7.population.initial_persons",),
     "simulation_start_date": ("m7.population.start_calendar_day",),
+    "tfp_law": ("m4.real_rules.tfp_law",),
     "energy_hh_share": ("m8.energy_rules.household_need",),
     "bank_capital_frac": ("m5.rules.opening_capital_per_bank",),
     "d_bank0": ("m5.rules.opening_capital_per_bank",),

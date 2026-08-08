@@ -1280,7 +1280,7 @@ class M8Extension final : public M7TickExtension {
         return injected_fault(options_, M8FaultPoint::before_commit);
     }
 
-    void commit(core::RootState &state, M4Runtime &, M4TickScratch &,
+    void commit(core::RootState &state, M4Runtime &real_runtime, M4TickScratch &,
                 M5Runtime &monetary, M5TickScratch &, M6Runtime &, M6TickScratch &,
                 M7Runtime &, M7TickScratch &population_scratch, Tick,
                 const M7Metrics &metrics) noexcept override {
@@ -1336,7 +1336,13 @@ class M8Extension final : public M7TickExtension {
         runtime_.permit_year = scratch_.permit_year_;
         runtime_.permits_used = scratch_.permits_used_;
         runtime_.housing_event_counter = scratch_.housing_event_counter_;
+        real_runtime.cumulative_sector_output[2] +=
+            scratch_.working_metrics_.energy.production;
+        real_runtime.last_metrics.cumulative_output_energy =
+            real_runtime.cumulative_sector_output[2];
         scratch_.working_metrics_.economy = metrics;
+        scratch_.working_metrics_.economy.economy.economy.economy
+            .cumulative_output_energy = real_runtime.cumulative_sector_output[2];
         runtime_.last_metrics = scratch_.working_metrics_;
         const double core_price =
             std::max(kEconomicEpsilon, metrics.economy.economy.economy.price_index);
@@ -2721,6 +2727,7 @@ class M8Extension final : public M7TickExtension {
                                     firm->physical_capital.value() *
                                     input_.capacity_multiplier;
             const double labor_output = firm->productivity * work.hired *
+                                        real.production_factors_[2] *
                                         input_.labor_availability_multiplier *
                                         input_.supply_multiplier;
             const double produced = std::min(capacity, std::max(0.0, labor_output));
@@ -2977,7 +2984,7 @@ class M8Extension final : public M7TickExtension {
     }
 
     [[nodiscard]] Status settle_energy_results(const core::RootState &state,
-                                               const M4Runtime &real_runtime,
+                                               const M4Runtime &,
                                                M4TickScratch &real) {
         double weighted_value = 0.0;
         double sold = 0.0;
@@ -3166,16 +3173,6 @@ class M8Extension final : public M7TickExtension {
         }
 
         const auto &real_options = options_.base.base.base.base;
-        const double daily_growth =
-            std::pow(1.0 + real_runtime.rules.annual_tfp_growth, 1.0 / 365.0);
-        const double technology_index = real_runtime.technology_index * daily_growth;
-        const double public_capital_factor =
-            real_runtime.rules.public_capital_gamma > 0.0
-                ? std::pow(1.0 + real_runtime.public_capital /
-                                     real_runtime.public_capital_reference,
-                           real_runtime.rules.public_capital_gamma)
-                : 1.0;
-        const double production_factor = technology_index * public_capital_factor;
         for (auto &input : scratch_.energy_inputs_) {
             if (!input.active) {
                 continue;
@@ -3203,7 +3200,7 @@ class M8Extension final : public M7TickExtension {
                         real_options.productivity_multipliers[sector],
                     firm->physical_capital.value(),
                     firm->capital_share,
-                    production_factor,
+                    real.production_factors_[sector],
                 });
                 if (!produced.ok()) {
                     return produced.status();

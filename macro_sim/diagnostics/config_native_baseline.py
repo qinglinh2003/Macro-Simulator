@@ -82,6 +82,11 @@ def _native_root_values(native_spec: Any, economy_id: int = 0) -> dict[str, Any]
             )
         ),
         "government": bool(real.requested_capabilities & (1 << 1)),
+        "tfp_law": (
+            "learning"
+            if str(real.rules.tfp_law).lower().endswith("learning")
+            else "exogenous"
+        ),
     }
     for source_name, value in manual.items():
         values[source_name].append(
