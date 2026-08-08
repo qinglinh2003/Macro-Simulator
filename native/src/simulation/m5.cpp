@@ -1665,6 +1665,21 @@ class M5Extension final : public M4TickExtension {
         if (!rate_status.ok()) {
             return rate_status;
         }
+        if (runtime_.policy.monetary_regime == MonetaryRegime::exogenous) {
+            const double current = runtime_.last_metrics.economy.price_index;
+            const double previous = runtime_.previous_price_index;
+            if (current > algorithms::kEconomicEpsilon &&
+                previous > algorithms::kEconomicEpsilon) {
+                const double ratio = current / previous;
+                real_runtime.rules.wage_expected_inflation =
+                    runtime_.policy.logarithmic_inflation ? std::log(ratio)
+                                                          : ratio - 1.0;
+            } else {
+                real_runtime.rules.wage_expected_inflation = 0.0;
+            }
+        } else {
+            real_runtime.rules.wage_expected_inflation = runtime_.inflation_sensor;
+        }
         apply_fiscal_policy(real_runtime, runtime_);
         open_financial_books(state, real, runtime_, scratch_, tick);
         auto status = service_lolr(state, real, scratch_, tick);

@@ -487,7 +487,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         work.markup = firm->markup;
         auto expectation = algorithms::demand_expectation(
             firm->demand_expected, firm->sales_previous, firm->rationed_previous,
-            firm->demand_adjustment);
+            firm->demand_adjustment *
+                runtime.rules.capital_clock_demand_smoothing);
         if (!expectation.ok()) {
             return expectation.status();
         }
@@ -546,8 +547,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             wage_draw,
             0.0,
             runtime.rules.wage_downward_drift,
-            0.0,
-            0.0,
+            runtime.rules.wage_expected_inflation,
+            runtime.rules.wage_indexation,
         });
         if (!wage.ok()) {
             return wage.status();
@@ -1898,6 +1899,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.capital_share,
         rules.capital_output_ratio,
         rules.demand_adjustment,
+        rules.capital_clock_demand_smoothing,
         rules.income_adjustment,
         rules.inventory_ratio,
         rules.inventory_gap_close,
@@ -1907,6 +1909,8 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.wage_shortage_adjustment,
         rules.wage_downward_drift,
         rules.wage_calvo_probability,
+        rules.wage_indexation,
+        rules.wage_expected_inflation,
         rules.price_calvo_probability,
         rules.income_propensity,
         rules.wealth_propensity,
@@ -1951,6 +1955,8 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.markup_minimum > rules.markup_maximum || rules.markup_minimum < 0.0 ||
         rules.annual_tfp_growth <= -1.0 || rules.demand_adjustment < 0.0 ||
         rules.demand_adjustment > 1.0 || rules.income_adjustment < 0.0 ||
+        rules.capital_clock_demand_smoothing <= 0.0 ||
+        rules.capital_clock_demand_smoothing > 1.0 ||
         rules.income_adjustment > 1.0 || rules.inventory_ratio < 0.0 ||
         rules.inventory_gap_close < 0.0 || rules.inventory_gap_close > 1.0 ||
         rules.markup_adjustment < 0.0 || rules.wage_shortage_adjustment < 0.0 ||
@@ -1994,7 +2000,9 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.initial_markup > rules.markup_maximum ||
         rules.initial_expected_demand < 0.0 || rules.wage_calvo_probability < 0.0 ||
         rules.wage_calvo_probability > 1.0 || rules.price_calvo_probability < 0.0 ||
-        rules.price_calvo_probability > 1.0 || rules.market_sample_size == 0) {
+        rules.price_calvo_probability > 1.0 || rules.wage_indexation < 0.0 ||
+        rules.wage_indexation > 1.0 || rules.wage_expected_inflation <= -1.0 ||
+        rules.market_sample_size == 0) {
         return Status(ErrorCode::invalid_argument, "M4 rules are invalid");
     }
     return Status::success();

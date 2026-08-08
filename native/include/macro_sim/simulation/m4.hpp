@@ -50,6 +50,7 @@ struct M4Rules final {
     double capital_share{0.3};
     double capital_output_ratio{2.5};
     double demand_adjustment{0.0076};
+    double capital_clock_demand_smoothing{1.0};
     double income_adjustment{0.0076};
     double inventory_ratio{14.0};
     double inventory_gap_close{0.05};
@@ -59,6 +60,11 @@ struct M4Rules final {
     double wage_shortage_adjustment{0.0075};
     double wage_downward_drift{0.0075};
     double wage_calvo_probability{0.0};
+    double wage_indexation{0.0};
+    // Committed one-tick-lag inflation expectation supplied by the monetary
+    // extension.  This is transient during an advance and is restored after
+    // the tick; standalone M4 runs may set it explicitly for mechanism tests.
+    double wage_expected_inflation{0.0};
     double price_calvo_probability{0.0};
     double income_propensity{0.8};
     double wealth_propensity{5.5e-5};

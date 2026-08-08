@@ -1561,6 +1561,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(capital_share);
     MACRO_SIM_BIND_M4_RULE(capital_output_ratio);
     MACRO_SIM_BIND_M4_RULE(demand_adjustment);
+    MACRO_SIM_BIND_M4_RULE(capital_clock_demand_smoothing);
     MACRO_SIM_BIND_M4_RULE(income_adjustment);
     MACRO_SIM_BIND_M4_RULE(inventory_ratio);
     MACRO_SIM_BIND_M4_RULE(inventory_gap_close);
@@ -1570,6 +1571,8 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(wage_shortage_adjustment);
     MACRO_SIM_BIND_M4_RULE(wage_downward_drift);
     MACRO_SIM_BIND_M4_RULE(wage_calvo_probability);
+    MACRO_SIM_BIND_M4_RULE(wage_indexation);
+    MACRO_SIM_BIND_M4_RULE(wage_expected_inflation);
     MACRO_SIM_BIND_M4_RULE(price_calvo_probability);
     MACRO_SIM_BIND_M4_RULE(income_propensity);
     MACRO_SIM_BIND_M4_RULE(wealth_propensity);

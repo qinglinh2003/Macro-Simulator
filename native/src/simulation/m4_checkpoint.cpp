@@ -149,6 +149,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.capital_share);
     writer.f64(rules.capital_output_ratio);
     writer.f64(rules.demand_adjustment);
+    writer.f64(rules.capital_clock_demand_smoothing);
     writer.f64(rules.income_adjustment);
     writer.f64(rules.inventory_ratio);
     writer.f64(rules.inventory_gap_close);
@@ -158,6 +159,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.wage_shortage_adjustment);
     writer.f64(rules.wage_downward_drift);
     writer.f64(rules.wage_calvo_probability);
+    writer.f64(rules.wage_indexation);
+    writer.f64(rules.wage_expected_inflation);
     writer.f64(rules.price_calvo_probability);
     writer.f64(rules.income_propensity);
     writer.f64(rules.wealth_propensity);
@@ -218,6 +221,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.capital_share)
         && reader.f64(rules.capital_output_ratio)
         && reader.f64(rules.demand_adjustment)
+        && reader.f64(rules.capital_clock_demand_smoothing)
         && reader.f64(rules.income_adjustment)
         && reader.f64(rules.inventory_ratio)
         && reader.f64(rules.inventory_gap_close)
@@ -227,6 +231,8 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.wage_shortage_adjustment)
         && reader.f64(rules.wage_downward_drift)
         && reader.f64(rules.wage_calvo_probability)
+        && reader.f64(rules.wage_indexation)
+        && reader.f64(rules.wage_expected_inflation)
         && reader.f64(rules.price_calvo_probability)
         && reader.f64(rules.income_propensity)
         && reader.f64(rules.wealth_propensity)

@@ -37,6 +37,10 @@ using namespace macro_sim::simulation;
 }
 
 void assert_close(double left, double right, double tolerance = 1.0e-8) {
+    if (std::abs(left - right) > tolerance) {
+        std::fprintf(stderr, "assert_close failed: left=%.17g right=%.17g tolerance=%.17g\n",
+                     left, right, tolerance);
+    }
     assert(std::abs(left - right) <= tolerance);
 }
 
@@ -138,6 +142,66 @@ void test_dividend_payout_is_reported_directly() {
     const double distributed = run(1.0);
     assert_close(retained, 0.0);
     assert(distributed > 0.0);
+}
+
+void test_capital_clock_demand_smoothing_scales_the_source_ema() {
+    const auto run = [](double smoothing) {
+        auto spec = v0_spec(4822);
+        spec.rules.demand_adjustment = 0.5;
+        spec.rules.capital_clock_demand_smoothing = smoothing;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        value.root.firms.for_each_alive(
+            [](FirmId, core::FirmComponent &firm) {
+                firm.demand_expected = 10.0;
+                firm.sales_previous = 20.0;
+                firm.rationed_previous = 0.0;
+                firm.demand_adjustment = 0.5;
+            });
+        M4TickScratch scratch;
+        Tick tick(0);
+        const auto advanced =
+            advance_tick(value.root, value.runtime, scratch, tick);
+        assert(advanced.ok());
+        const auto *firm = value.root.firms.get(FirmId(1));
+        assert(firm != nullptr);
+        return firm->demand_expected;
+    };
+
+    assert_close(run(1.0), 15.0);
+    assert_close(run(0.5), 12.5);
+}
+
+void test_wage_indexation_uses_committed_expected_inflation() {
+    const auto run = [](double indexation) {
+        auto spec = v0_spec(4823);
+        spec.stochastic = true;
+        spec.rules.wage_calvo_probability = 1.0;
+        spec.rules.wage_downward_drift = 0.0;
+        spec.rules.wage_indexation = indexation;
+        spec.rules.wage_expected_inflation = 0.01;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        value.root.firms.for_each_alive(
+            [](FirmId, core::FirmComponent &firm) {
+                firm.hired_previous = 1.0;
+                firm.labor_demand_previous = 1.0;
+                firm.shortage_adjustment = 0.0;
+            });
+        M4TickScratch scratch;
+        Tick tick(0);
+        const auto advanced =
+            advance_tick(value.root, value.runtime, scratch, tick);
+        assert(advanced.ok());
+        const auto *firm = value.root.firms.get(FirmId(1));
+        assert(firm != nullptr);
+        return firm->posted_wage.value();
+    };
+
+    assert_close(run(0.0), 1.0);
+    assert_close(run(1.0), 1.01);
 }
 
 void test_fiscal_quantity_and_deficit_regimes_are_distinct() {
@@ -383,6 +447,9 @@ void test_scratch_capacity_stabilizes() {
 void test_checkpoint_round_trip_and_corruption() {
     auto spec = v1_spec(412);
     spec.stochastic = true;
+    spec.rules.capital_clock_demand_smoothing = 0.5;
+    spec.rules.wage_indexation = 0.75;
+    spec.rules.wage_expected_inflation = 0.001;
     EngineSession source(7);
     assert(source.initialize_simulation(spec).ok());
     assert(source.advance_ticks(12).ok());
@@ -430,6 +497,8 @@ int main() {
     test_v0_genesis_and_tick();
     test_v1_fiscal_and_capital_tick();
     test_dividend_payout_is_reported_directly();
+    test_capital_clock_demand_smoothing_scales_the_source_ema();
+    test_wage_indexation_uses_committed_expected_inflation();
     test_fiscal_quantity_and_deficit_regimes_are_distinct();
     test_fiscal_deficit_responds_to_unemployment();
     test_deficit_envelope_includes_transfer_spending();
