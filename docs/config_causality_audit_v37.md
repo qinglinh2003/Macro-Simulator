@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 238 |
-| Native route missing or incomplete | 54 |
+| Native route confirmed | 243 |
+| Native route missing or incomplete | 49 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,7 +104,7 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 54 missing or incomplete routes are real implementation work; they are not
+The 49 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -306,13 +306,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 238
+The native product baseline comparison now projects every one of the 243
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 218 |
+| Exact semantic value | 223 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -340,6 +340,16 @@ contract. The corrected overlay preserves the native control multiplier. For
 example, a +/-20% `K_firm0` treatment now changes actual opening capital by
 exactly +/-20%.
 
+The maintained product-scale baseline also separates structural smoke tests
+from economic calibration. A three-country run with 100,000 persons per
+country, 1,825 days, and eight native workers finished in 177.7 seconds using
+about 502 MB of known native storage. Closing unemployment was 1.87%, 2.81%,
+and 17.26%; mean unemployment over the final year was 11.08%, 7.22%, and
+8.70%. All three economies therefore satisfy the 20% calibration bound at the
+supported scale. The 64-120-person M11 topology fixture can produce much wider
+finite-population tails and is no longer used as a macroeconomic calibration
+test.
+
 ### 8.2 Structural defects found by dynamic experiments
 
 1. `a` reaches `linear_productivity`, but the playable product uses
@@ -352,11 +362,12 @@ exactly +/-20%.
    balance. At 100,000 households this could fail the sufficient-funds gate.
    Both paths now distribute a bounded real remainder and have native
    large-population regressions.
-3. `necessity_share0` now reaches C++ genesis and changes the number of
-   necessity firms, but a 0.50 to 0.80 treatment still produces an identical
-   economic trajectory under equal tax rates. The native goods market lacks
-   the old two-stage Engel mechanism (necessities first, discretionary goods
-   second). This is a genuine mechanism-salience failure, not a route failure.
+3. The original `necessity_share0` route controlled the fraction of firms
+   tagged as necessity producers rather than household necessity demand. The
+   route has been split: `n_firm_share` owns genesis firm allocation, while
+   `necessity_share0` now defines a fixed per-need-unit basket in a two-stage
+   necessity-then-luxury goods market. Direct requested quantity, realized
+   necessity and luxury spending, and both firm counts are maintained metrics.
 4. `lambda_I` is dormant while desired capital is below installed capital; the
    baseline initially remains on replacement investment. It is assigned a
    predeclared positive-capital-gap activation scenario rather than being
@@ -650,12 +661,11 @@ Current findings:
   household goods quantity separately from total sector sales. A native
   household goods-quantity observable is required before final calibration.
 
-Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` now reach the native demand
-allocation mechanism, while `necessity_share0` remains blocked because it
-reaches genesis but remains economically silent
-because the native goods market has no two-stage necessity/discretionary Engel
-allocation. These are implementation gaps, not small elasticities.
+`pref_attach_beta` and `pref_price_elasticity` reach the native seller-demand
+allocation mechanism. The former `necessity_share0` gap is now closed by the
+two-stage necessity/discretionary market described in section 8.10; its direct
+quantity contract is evaluated separately from seller search and price
+selection so neither mechanism receives credit for the other.
 
 ### 8.8 Labor-market screen
 
@@ -832,12 +842,13 @@ unrelated assignment as an implemented route.
 
 ### 8.10 Distribution and private household support screen
 
-The distribution inventory contains only two executable economic Config
-contracts: the family-transfer capability and its donor reserve buffer. Two
-additional inputs, the `deprivation_gauges` switch and the `subsistence_share`
-poverty-line standard, are observation-only. The
-remaining seven fields are blocked until their intended native mechanisms are
-implemented.
+The distribution inventory contains seven executable economic Config
+contracts. Five now own native demand or industrial-structure mechanisms:
+`consumption_strata`, `mpc_dispersion`, `mpc_wealth_curvature`,
+`n_firm_share`, and `necessity_share0`. The other two govern the private
+family-transfer safety net. `deprivation_gauges` and `subsistence_share` are
+observation-only. Only `strat_mult_lo` and `strat_mult_hi` remain blocked; the
+native engine still lacks their intended demographic rank gradient.
 
 The family screen covers 16 native worlds at 100,000 persons: four paired
 seeds, 365 days, and eight native workers. Its current findings are:
@@ -871,15 +882,51 @@ seeds, 365 days, and eight native workers. Its current findings are:
   economic series remain exactly invariant. Both measurement controls belong
   in diagnostics or methodology settings rather than the economy setup screen.
 
-Static review also found two false-positive native routes. `consumption_strata`
-is defined by Config as a sequenced necessity/luxury goods market, but the
-native member currently only gates sector switching and preserves a tax tag.
-`necessity_share0` is defined as a fixed per-need-unit necessity quantity, while
-the native member controls the fraction of consumption firms tagged as
-necessity producers. Both are now blocked as semantic gaps instead of receiving
-credit for unrelated effects. Together with missing MPC dispersion, MPC wealth
-curvature, firm-share normalization, and stratum multipliers, this means the
-full distribution-to-demand feedback loop is not yet native-complete.
+The five newly closed contracts add 44 native worlds at 100,000 persons, four
+paired seeds, 90 days, and eight workers. They exposed and repaired three
+semantic defects before receiving causal credit:
+
+- `consumption_strata` now selects an ordered goods market: households first
+  request a fixed quantity of necessities and only spend the residual budget
+  on luxury goods. Disabling it under a shared isolation scenario removes all
+  classified necessity demand, lowers realized necessity spending by about
+  21.5%, lowers its spending share by 13.34 percentage points, and raises
+  classified luxury spending by about 36.5%. All four direct intervals exclude
+  zero.
+- `necessity_share0` no longer controls firm tags. It is converted at genesis
+  into physical need as `share * opening wage / opening price`, then multiplied
+  by live demographic need units each day. Moving it from 0.50 to 0.25 or 0.75
+  changes requested necessity quantity by exactly -50% or +50%. Realized
+  spending is deliberately not assigned a universal sign because capacity,
+  prices, income, and stock-outs respond endogenously.
+- `n_firm_share` now exclusively owns the necessity/luxury producer split. At
+  the maintained density, moving it from 0.50 to 0.25 transfers exactly 375
+  firms from necessity to luxury; moving it to 0.75 performs the reverse. Firm
+  entry subsequently chooses the stratum with the stronger observed median
+  return instead of alternating mechanically.
+- `mpc_dispersion` now draws reproducible mean-corrected lognormal income and
+  wealth propensities from a dedicated RNG stream. A legacy fixed lower bound
+  of 0.001 had collapsed every wealth propensity to the same value under the
+  daily calibration `alpha2=5.5e-5`; replacing it with a numerical-only
+  `1e-12` floor restores the intended heterogeneity. Relative to sigma 0.4,
+  sigma zero removes both standard deviations, while sigma 0.8 raises the
+  income-propensity deviation about 57.6% and the wealth-propensity deviation
+  about 123.6%. Aggregate consumption planning changes strongly but remains a
+  nonlinear equilibrium outcome.
+- `mpc_wealth_curvature` now enters the native buffer-stock formula. In a
+  common wealth-dispersion activation, lowering the exponent from 1.0 to 0.5
+  reduces the wealth-financed consumption budget by about 0.61%; its four-seed
+  interval excludes zero. The direct formula has an exact unit regression, but
+  this modest baseline elasticity means the control should remain expert-level
+  until richer persistent wealth dispersion is calibrated.
+
+The engine also publishes separate planned consumption, wealth-financed
+consumption, both propensity dispersions, requested necessity quantity,
+realized necessity and luxury spending, their spending share, and both firm
+counts. This prevents general-equilibrium sales outcomes from masking or
+falsely crediting the direct distribution mechanism. The remaining rank
+gradient fields require a per-demographic-group propensity assignment before
+this module can be declared native-complete.
 
 ### 8.11 Banking and credit screen
 

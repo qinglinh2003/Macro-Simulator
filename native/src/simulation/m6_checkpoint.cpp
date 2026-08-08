@@ -152,7 +152,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"k_entry_demand", value.k_entry_demand},
         {"k_entry_hazard", value.k_entry_hazard},
         {"consumption_strata", value.consumption_strata},
-        {"initial_necessity_share", value.initial_necessity_share},
+        {"necessity_firm_share", value.necessity_firm_share},
         {"sector_switching", value.sector_switching},
         {"switch_return_gap", value.switch_return_gap},
         {"switch_pressure_days", value.switch_pressure_days},
@@ -217,7 +217,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(k_entry_demand, double);
     M6_RULE(k_entry_hazard, double);
     M6_RULE(consumption_strata, bool);
-    M6_RULE(initial_necessity_share, double);
+    M6_RULE(necessity_firm_share, double);
     M6_RULE(sector_switching, bool);
     M6_RULE(switch_return_gap, double);
     M6_RULE(switch_pressure_days, std::uint32_t);

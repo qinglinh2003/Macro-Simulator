@@ -24,8 +24,8 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 238,
-        "missing_native_route": 54,
+        "mapped_native": 243,
+        "missing_native_route": 49,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -96,8 +96,11 @@ def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -
     assert lifecycle["experiment_role"] == "repair_before_experiment"
     assert "finite-life consumption" in lifecycle["route_note"]
     strata = rows["config.consumption_strata"]
-    assert strata["route_status"] == "missing_native_route"
-    assert "two-stage necessity/luxury" in strata["route_note"]
+    assert strata["route_status"] == "mapped_native"
+    assert strata["native_targets"] == [
+        "m4.real_rules.consumption_strata",
+        "m6.financial_rules.consumption_strata",
+    ]
     q_sensitivity = rows["config.lambda_q"]
     assert q_sensitivity["route_status"] == "mapped_native"
     assert q_sensitivity["native_targets"] == [
@@ -117,8 +120,7 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
         "invariance_only"
     )
     necessity = rows["config.necessity_share0"]
-    assert necessity["route_status"] == "missing_native_route"
-    assert "per-need-unit necessity quantity" in necessity["route_note"]
+    assert necessity["route_status"] == "mapped_native"
     bank_assignment = rows["config.bank_assignment"]
     assert bank_assignment["route_status"] == "missing_native_route"
     assert "round-robin" in bank_assignment["route_note"]

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <vector>
 #include <utility>
 
 #include "macro_sim/core/digest.hpp"
@@ -450,6 +451,140 @@ void test_consumption_tax_follows_each_household_purchase_basket() {
                  0.05 * necessity_spent + 0.50 * luxury_spent, 1.0e-7);
 }
 
+void test_mpc_dispersion_is_exactly_off_and_reproducible() {
+    auto homogeneous_spec = v0_spec(9128);
+    homogeneous_spec.households = 128;
+    homogeneous_spec.rules.income_propensity = 0.70;
+    homogeneous_spec.rules.wealth_propensity = 0.10;
+    homogeneous_spec.rules.mpc_dispersion = 0.0;
+    auto homogeneous = build_m4_genesis(homogeneous_spec);
+    assert(homogeneous.ok());
+    homogeneous.get_if()->root.households.for_each_alive(
+        [](HouseholdId, const core::HouseholdComponent &household) {
+            assert_close(household.income_propensity, 0.70);
+            assert_close(household.wealth_propensity, 0.10);
+        });
+
+    auto heterogeneous_spec = homogeneous_spec;
+    heterogeneous_spec.rules.mpc_dispersion = 0.40;
+    auto first = build_m4_genesis(heterogeneous_spec);
+    auto second = build_m4_genesis(heterogeneous_spec);
+    assert(first.ok());
+    assert(second.ok());
+    assert(core::state_digest(first.get_if()->root) ==
+           core::state_digest(second.get_if()->root));
+    assert(first.get_if()->runtime.rng_counter ==
+           homogeneous.get_if()->runtime.rng_counter);
+
+    std::vector<double> income;
+    std::vector<double> wealth;
+    first.get_if()->root.households.for_each_alive(
+        [&](HouseholdId, const core::HouseholdComponent &household) {
+            income.push_back(household.income_propensity);
+            wealth.push_back(household.wealth_propensity);
+        });
+    const auto variance = [](const std::vector<double> &values) {
+        double mean = 0.0;
+        double squared = 0.0;
+        for (const double value : values) {
+            mean += value;
+            squared += value * value;
+        }
+        mean /= static_cast<double>(values.size());
+        return squared / static_cast<double>(values.size()) - mean * mean;
+    };
+    assert(variance(income) > 0.0);
+    assert(variance(wealth) > 0.0);
+
+    auto calibrated_spec = heterogeneous_spec;
+    calibrated_spec.rules.wealth_propensity = 5.5e-5;
+    auto calibrated = build_m4_genesis(calibrated_spec);
+    assert(calibrated.ok());
+    std::vector<double> calibrated_wealth;
+    calibrated.get_if()->root.households.for_each_alive(
+        [&](HouseholdId, const core::HouseholdComponent &household) {
+            calibrated_wealth.push_back(household.wealth_propensity);
+        });
+    assert(variance(calibrated_wealth) > 0.0);
+    assert(std::ranges::any_of(calibrated_wealth,
+                               [](double value) { return value < 0.001; }));
+}
+
+void test_mpc_wealth_curvature_changes_only_the_wealth_budget_formula() {
+    const auto run = [](double curvature) {
+        auto spec = v0_spec(9129);
+        spec.households = 1;
+        spec.rules.initial_household_money = 1600.0;
+        spec.rules.income_propensity = 0.0;
+        spec.rules.wealth_propensity = 0.10;
+        spec.rules.mpc_wealth_curvature = curvature;
+        spec.rules.initial_consumption_inventory = 1000.0;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        value.runtime.rules.initial_household_money = 400.0;
+        M4TickScratch scratch;
+        Tick tick{};
+        const auto result =
+            advance_ticks(value.root, value.runtime, scratch, tick, 1);
+        assert(result.ok());
+        return result.get_if()->metrics.household_wealth_consumption_budget;
+    };
+
+    assert_close(run(1.0), 160.0);
+    assert_close(run(0.5), 80.0);
+}
+
+void test_consumption_strata_prioritize_fixed_necessities() {
+    struct Result final {
+        M4Metrics metrics;
+        std::uint8_t necessity_unmet{0U};
+    };
+    const auto run = [](double need) {
+        auto spec = v0_spec(9130);
+        spec.households = 1;
+        spec.consumption_firms = 2;
+        spec.rules.initial_household_money = 100.0;
+        spec.rules.income_propensity = 0.0;
+        spec.rules.wealth_propensity = 0.50;
+        spec.rules.consumption_strata = true;
+        spec.rules.necessity_need_per_unit = need;
+        spec.rules.initial_consumption_inventory = 1000.0;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        M4TickScratch scratch;
+        Tick tick{};
+        const auto result =
+            advance_ticks(value.root, value.runtime, scratch, tick, 1);
+        assert(result.ok());
+        assert(scratch.household_necessity_unmet_.size() == 1U);
+        return Result{result.get_if()->metrics,
+                      scratch.household_necessity_unmet_.front()};
+    };
+
+    const auto low_need = run(5.0);
+    const auto high_need = run(10.0);
+    assert_close(low_need.metrics.necessity_firm_count, 1.0);
+    assert_close(low_need.metrics.luxury_firm_count, 1.0);
+    assert_close(low_need.metrics.necessity_requested_quantity, 5.0);
+    assert_close(high_need.metrics.necessity_requested_quantity, 10.0);
+    assert(low_need.metrics.necessity_consumption > 0.0);
+    assert(low_need.metrics.luxury_consumption > 0.0);
+    assert(high_need.metrics.necessity_consumption >
+           low_need.metrics.necessity_consumption);
+    assert(high_need.metrics.luxury_consumption <
+           low_need.metrics.luxury_consumption);
+    assert_close(low_need.metrics.household_consumption,
+                 low_need.metrics.necessity_consumption +
+                     low_need.metrics.luxury_consumption);
+
+    const auto unaffordable_need = run(1000.0);
+    assert(unaffordable_need.necessity_unmet == 1U);
+    assert(unaffordable_need.metrics.necessity_consumption > 0.0);
+    assert_close(unaffordable_need.metrics.luxury_consumption, 0.0);
+}
+
 void test_public_capital_stock_and_productivity() {
     auto spec = v1_spec(778);
     spec.rules.government_consumption_share = 0.0;
@@ -704,6 +839,10 @@ void test_checkpoint_round_trip_and_corruption() {
     spec.rules.preferential_attachment_beta = 1.25;
     spec.rules.preferential_price_elasticity = 0.75;
     spec.rules.initial_capital_firm_money = 350.0;
+    spec.rules.mpc_dispersion = 0.35;
+    spec.rules.mpc_wealth_curvature = 0.75;
+    spec.rules.consumption_strata = true;
+    spec.rules.necessity_need_per_unit = 0.40;
     spec.rules.wage_indexation = 0.75;
     spec.rules.wage_expected_inflation = 0.001;
     EngineSession source(7);
@@ -770,6 +909,9 @@ int main() {
     test_deficit_envelope_includes_transfer_spending();
     test_consumption_price_index_excludes_capital_goods();
     test_consumption_tax_follows_each_household_purchase_basket();
+    test_mpc_dispersion_is_exactly_off_and_reproducible();
+    test_mpc_wealth_curvature_changes_only_the_wealth_budget_formula();
+    test_consumption_strata_prioritize_fixed_necessities();
     test_public_capital_stock_and_productivity();
     test_job_guarantee_productivity_builds_and_reports_public_capital();
     test_sector_tfp_overrides_are_independent();

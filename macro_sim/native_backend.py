@@ -70,6 +70,9 @@ M4_RULE_FIELDS = {
     "price_calvo_probability": "theta_price",
     "income_propensity": "alpha1",
     "wealth_propensity": "alpha2",
+    "mpc_dispersion": "mpc_dispersion",
+    "mpc_wealth_curvature": "mpc_wealth_curvature",
+    "consumption_strata": "consumption_strata",
     "dividend_payout": "rho",
     "investment_adjustment": "lambda_I",
     "capital_depreciation": "delta_K",
@@ -268,7 +271,7 @@ M6_RULE_FIELDS = {
     "k_entry_demand": "k_entry_demand",
     "k_entry_hazard": "k_entry_hazard",
     "consumption_strata": "consumption_strata",
-    "initial_necessity_share": "necessity_share0",
+    "necessity_firm_share": "n_firm_share",
     "sector_switching": "sector_switching",
     "switch_return_gap": "switch_return_gap",
     "switch_pressure_days": "switch_pressure_days",
@@ -519,6 +522,11 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
         else native.MatchingProtocol.SAMPLED
     )
     _assign(output.rules, cfg, M4_RULE_FIELDS)
+    output.rules.necessity_need_per_unit = (
+        float(cfg.necessity_share0) * float(cfg.w_firm0) / float(cfg.p_firm0)
+        if cfg.consumption_strata
+        else 0.0
+    )
     output.rules.tfp_law = (
         native.M4TfpLaw.LEARNING
         if cfg.tfp_law == "learning"

@@ -95,6 +95,11 @@ project_technology(const M4Runtime &runtime) noexcept {
 }
 constexpr std::uint64_t kConsumptionStockoutVisitStream = 0x4353544f434b4f55ULL;
 constexpr std::size_t kAbsentFirmIndex = std::numeric_limits<std::size_t>::max();
+enum class GoodsSession : std::uint8_t {
+    combined = 0,
+    necessity = 1,
+    luxury = 2,
+};
 constexpr std::uint64_t kV1Capabilities =
     capability_bit(M4Capability::physical_capital) |
     capability_bit(M4Capability::government);
@@ -307,6 +312,22 @@ void record_consumption_purchase(M4TickScratch &scratch, std::size_t household_i
     });
 }
 
+[[nodiscard]] double consumption_session_tax_rate(
+    const M4Runtime &runtime, GoodsSession session) noexcept {
+    if (runtime.vertical != M4Vertical::capital_fiscal) {
+        return 0.0;
+    }
+    if (session == GoodsSession::necessity) {
+        return runtime.rules.necessity_consumption_tax_rate.value_or(
+            runtime.rules.consumption_tax_rate);
+    }
+    if (session == GoodsSession::luxury) {
+        return runtime.rules.luxury_consumption_tax_rate.value_or(
+            runtime.rules.consumption_tax_rate);
+    }
+    return maximum_consumption_tax_rate(runtime);
+}
+
 void capture_phase(const core::RootState &state, M4TickScratch &scratch,
                    const M4AdvanceOptions &options, M4Phase phase) {
     if (!options.capture_phase_trace) {
@@ -344,6 +365,15 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
         return Status(ErrorCode::invariant_violation,
                       "M4 reserve projection is not finite");
     }
+    if (!all_finite(scratch.household_need_units_) ||
+        !all_finite(scratch.household_goods_outlay_remaining_) ||
+        std::ranges::any_of(scratch.household_need_units_,
+                            [](double value) { return value < 0.0; }) ||
+        std::ranges::any_of(scratch.household_goods_outlay_remaining_,
+                            [](double value) { return value < 0.0; })) {
+        return Status(ErrorCode::invariant_violation,
+                      "M4 household consumption projection is invalid");
+    }
     for (const auto &record : state.postings.records()) {
         const auto index = static_cast<std::size_t>(record.id.value());
         if (index >= scratch.balances_.size()) {
@@ -366,6 +396,7 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
         const std::array values{
             household.income_expected,    household.income_realized,
             household.consumption_budget, household.spent,
+            household.wealth_consumption_budget,
             household.necessity_spent,    household.luxury_spent,
             household.labor_sold,         household.labor_capacity,
         };
@@ -381,7 +412,8 @@ void capture_phase(const core::RootState &state, M4TickScratch &scratch,
             return Status(ErrorCode::invariant_violation,
                           "M4 household realized income is negative");
         }
-        if (household.consumption_budget < 0.0 || household.spent < 0.0 ||
+        if (household.consumption_budget < 0.0 ||
+            household.wealth_consumption_budget < 0.0 || household.spent < 0.0 ||
             household.necessity_spent < 0.0 || household.luxury_spent < 0.0) {
             return Status(ErrorCode::invariant_violation,
                           "M4 household consumption state is negative");
@@ -528,10 +560,17 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     scratch.trade_count_ = 0;
     scratch.external_goods_units_ = 0.0;
     scratch.external_goods_value_ = 0.0;
+    scratch.external_goods_stock_remaining_ = 0.0;
     scratch.supplemental_tax_receipts_ = 0.0;
     scratch.supplemental_nontax_receipts_ = 0.0;
     scratch.supplemental_government_consumption_ = 0.0;
     scratch.supplemental_transfer_payments_ = 0.0;
+    std::fill(scratch.household_need_units_.begin(),
+              scratch.household_need_units_.end(), 1.0);
+    std::fill(scratch.household_goods_outlay_remaining_.begin(),
+              scratch.household_goods_outlay_remaining_.end(), 0.0);
+    std::fill(scratch.household_necessity_unmet_.begin(),
+              scratch.household_necessity_unmet_.end(), 0U);
     scratch.phase_trace_.clear();
     for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
         const auto *household = state.households.get(scratch.household_ids_[index]);
@@ -548,7 +587,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             scratch.balances_[static_cast<std::size_t>(
                 household->primary_account.value())],
             0.0,
-            1.0,
+            runtime.rules.mpc_wealth_curvature,
             std::max(1.0, runtime.rules.initial_household_money),
         });
         if (!consumption.ok()) {
@@ -558,6 +597,9 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         work = {};
         work.income_expected = *expectation.get_if();
         work.consumption_budget = *consumption.get_if();
+        work.wealth_consumption_budget = std::max(
+            0.0, work.consumption_budget -
+                     household->income_propensity * work.income_expected);
     }
     for (std::size_t index = 0; index < scratch.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(scratch.firm_ids_[index]);
@@ -808,6 +850,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                           M4TickScratch &scratch, PhiloxRng &rng,
                                           Tick tick, bool capital_market,
                                           bool consumption_rationed_signal,
+                                          GoodsSession goods_session,
+                                          double goods_tax_rate,
                                           const M4AdvanceOptions &options) {
     scratch.market_buyer_order_.resize(scratch.orders_.size());
     std::iota(scratch.market_buyer_order_.begin(), scratch.market_buyer_order_.end(),
@@ -887,6 +931,11 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 offer.offer_id == options.external_goods_offer->offer_id) {
                 scratch.external_goods_units_ += quantity;
                 scratch.external_goods_value_ += value;
+                if (goods_session == GoodsSession::necessity) {
+                    scratch.household_work_[household_index].necessity_spent += value;
+                } else if (goods_session == GoodsSession::luxury) {
+                    scratch.household_work_[household_index].luxury_spent += value;
+                }
             } else {
                 const auto firm_index = firm_projection_index(scratch, offer.offer_id);
                 if (firm_index == kAbsentFirmIndex ||
@@ -911,6 +960,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             }
         }
         if (!capital_market && consumption_rationed_signal &&
+            (goods_session != GoodsSession::luxury ||
+             scratch.household_necessity_unmet_[household_index] == 0U) &&
             remaining_budget > algorithms::kEconomicEpsilon &&
             remaining_demand > algorithms::kEconomicEpsilon &&
             scratch.market_active_offers_.empty() && !scratch.offers_.empty()) {
@@ -940,13 +991,29 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             }
             scratch.firm_work_[firm_index].investment = allocated;
         } else {
-            scratch.household_work_[household_index].spent =
-                order.budget.value() - remaining_budget;
+            const double session_spent = order.budget.value() - remaining_budget;
+            auto &work = scratch.household_work_[household_index];
+            if (goods_session == GoodsSession::combined) {
+                work.spent = session_spent;
+            } else {
+                work.spent += session_spent;
+                scratch.household_goods_outlay_remaining_[household_index] =
+                    std::max(
+                        0.0,
+                        scratch.household_goods_outlay_remaining_[household_index] -
+                            session_spent * (1.0 + goods_tax_rate));
+                if (goods_session == GoodsSession::necessity) {
+                    scratch.household_necessity_unmet_[household_index] =
+                        remaining_demand > algorithms::kEconomicEpsilon ? 1U : 0U;
+                }
+            }
         }
     }
     for (std::size_t index = 0; index < scratch.offers_.size(); ++index) {
         if (!capital_market && options.external_goods_offer.has_value() &&
             scratch.offers_[index].offer_id == options.external_goods_offer->offer_id) {
+            scratch.external_goods_stock_remaining_ =
+                scratch.market_offer_remaining_[index];
             continue;
         }
         const auto firm_index =
@@ -964,9 +1031,36 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
 [[nodiscard]] Status apply_market(const core::RootState &state,
                                   const M4Runtime &runtime, M4TickScratch &scratch,
                                   PhiloxRng &rng, Tick tick, bool capital_market,
-                                  const M4AdvanceOptions &options) {
+                                  const M4AdvanceOptions &options,
+                                  GoodsSession goods_session =
+                                      GoodsSession::combined) {
+    if (!capital_market && goods_session == GoodsSession::combined &&
+        runtime.rules.consumption_strata) {
+        for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
+            const auto *household = state.households.get(scratch.household_ids_[index]);
+            const double cash = scratch.balances_[static_cast<std::size_t>(
+                household->primary_account.value())];
+            scratch.household_goods_outlay_remaining_[index] =
+                std::max(0.0,
+                         std::min(scratch.household_work_[index].consumption_budget,
+                                  cash));
+        }
+        scratch.external_goods_stock_remaining_ =
+            options.external_goods_offer.has_value()
+                ? options.external_goods_offer->stock
+                : 0.0;
+        auto status = apply_market(state, runtime, scratch, rng, tick, false, options,
+                                   GoodsSession::necessity);
+        if (!status.ok()) {
+            return status;
+        }
+        return apply_market(state, runtime, scratch, rng, tick, false, options,
+                            GoodsSession::luxury);
+    }
     scratch.orders_.clear();
     scratch.offers_.clear();
+    const double goods_tax_rate =
+        consumption_session_tax_rate(runtime, goods_session);
     if (capital_market) {
         const auto add_investment_orders =
             [&](const std::vector<std::size_t> &indices) {
@@ -1006,22 +1100,38 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
             const auto *household = state.households.get(scratch.household_ids_[index]);
             const auto &work = scratch.household_work_[index];
-            const double cash = scratch.balances_[static_cast<std::size_t>(
-                household->primary_account.value())];
-            const double budget = std::min(work.consumption_budget, cash);
+            const double budget = goods_session == GoodsSession::combined
+                                      ? std::min(
+                                            work.consumption_budget,
+                                            scratch.balances_[static_cast<std::size_t>(
+                                                household->primary_account.value())])
+                                      : scratch
+                                            .household_goods_outlay_remaining_[index];
+            const double demand = goods_session == GoodsSession::necessity
+                                      ? runtime.rules.necessity_need_per_unit *
+                                            scratch.household_need_units_[index]
+                                      : std::numeric_limits<double>::infinity();
             if (budget > algorithms::kEconomicEpsilon) {
+                if (demand <= algorithms::kEconomicEpsilon) {
+                    continue;
+                }
+                if (goods_session == GoodsSession::necessity) {
+                    scratch.household_necessity_unmet_[index] = 1U;
+                }
                 scratch.orders_.push_back({
                     scratch.household_ids_[index].value(),
                     household->primary_account,
-                    Goods(std::numeric_limits<double>::infinity()),
-                    Money(budget /
-                          (1.0 + (runtime.vertical == M4Vertical::capital_fiscal
-                                      ? maximum_consumption_tax_rate(runtime)
-                                      : 0.0))),
+                    Goods(demand),
+                    Money(budget / (1.0 + goods_tax_rate)),
                 });
             }
         }
         for (const auto index : scratch.consumption_firm_indices_) {
+            const bool luxury = scratch.firm_consumption_strata_[index] != 0U;
+            if ((goods_session == GoodsSession::necessity && luxury) ||
+                (goods_session == GoodsSession::luxury && !luxury)) {
+                continue;
+            }
             const auto *firm = state.firms.get(scratch.firm_ids_[index]);
             const auto &work = scratch.firm_work_[index];
             scratch.offers_.push_back({
@@ -1032,12 +1142,18 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 work.attractiveness,
             });
         }
-        if (options.external_goods_offer.has_value()) {
+        const double external_stock = goods_session == GoodsSession::combined
+                                          ? (options.external_goods_offer.has_value()
+                                                 ? options.external_goods_offer->stock
+                                                 : 0.0)
+                                          : scratch.external_goods_stock_remaining_;
+        if (options.external_goods_offer.has_value() &&
+            external_stock > algorithms::kEconomicEpsilon) {
             const auto &offer = *options.external_goods_offer;
             scratch.offers_.push_back({
                 offer.offer_id,
                 offer.seller,
-                Goods(offer.stock),
+                Goods(external_stock),
                 Price(offer.price),
                 1.0,
             });
@@ -1046,7 +1162,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     if (runtime.market_protocol == algorithms::MatchingProtocol::sampled &&
         runtime.rules.market_sample_size == 1) {
         return apply_sampled_market(state, scratch, rng, tick, capital_market,
-                                    runtime.rules.consumption_rationed_signal, options);
+                                    runtime.rules.consumption_rationed_signal,
+                                    goods_session, goods_tax_rate, options);
     }
     algorithms::MarketConfig config;
     config.protocol = runtime.market_protocol;
@@ -1081,6 +1198,13 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             trade.offer_id == options.external_goods_offer->offer_id) {
             scratch.external_goods_units_ += trade.quantity.value();
             scratch.external_goods_value_ += trade.value.value();
+            if (goods_session == GoodsSession::necessity) {
+                scratch.household_work_[household_index].necessity_spent +=
+                    trade.value.value();
+            } else if (goods_session == GoodsSession::luxury) {
+                scratch.household_work_[household_index].luxury_spent +=
+                    trade.value.value();
+            }
         } else {
             const auto firm_index = firm_projection_index(scratch, trade.offer_id);
             if (firm_index >= scratch.firm_work_.size() ||
@@ -1101,6 +1225,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     for (const auto &stock : scratch.clearing_.stock_commands) {
         if (!capital_market && options.external_goods_offer.has_value() &&
             stock.offer_id == options.external_goods_offer->offer_id) {
+            scratch.external_goods_stock_remaining_ = stock.closing.value();
             continue;
         }
         const auto firm_index = firm_projection_index(scratch, stock.offer_id);
@@ -1132,7 +1257,27 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 return Status(ErrorCode::internal_error,
                               "M4 household buyer projection is stale");
             }
-            scratch.household_work_[household_index].spent = allocation.spent.value();
+            auto &work = scratch.household_work_[household_index];
+            const double session_spent = allocation.spent.value();
+            if (goods_session == GoodsSession::combined) {
+                work.spent = session_spent;
+            } else {
+                work.spent += session_spent;
+                scratch.household_goods_outlay_remaining_[household_index] =
+                    std::max(
+                        0.0,
+                        scratch.household_goods_outlay_remaining_[household_index] -
+                            session_spent * (1.0 + goods_tax_rate));
+                if (goods_session == GoodsSession::necessity) {
+                    const double need = runtime.rules.necessity_need_per_unit *
+                                        scratch.household_need_units_[household_index];
+                    scratch.household_necessity_unmet_[household_index] =
+                        allocation.allocated.value() + algorithms::kEconomicEpsilon <
+                                need
+                            ? 1U
+                            : 0U;
+                }
+            }
         }
     }
     return Status::success();
@@ -1584,6 +1729,13 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
             price_value += firm.sales * firm.posted_price;
             metrics.consumption_output_real += firm.produced;
             metrics.consumption_output_nominal += firm.produced * firm.posted_price;
+            if (runtime.rules.consumption_strata) {
+                if (scratch.firm_consumption_strata_[index] != 0U) {
+                    metrics.luxury_firm_count += 1.0;
+                } else {
+                    metrics.necessity_firm_count += 1.0;
+                }
+            }
         } else if (persistent->sector == core::FirmSector::capital) {
             metrics.capital_output_real += firm.produced;
             metrics.capital_output_nominal += firm.produced * firm.posted_price;
@@ -1614,14 +1766,52 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
         metrics.wages_paid += productive_job_guarantee_spending;
     }
     double labor_capacity = 0.0;
-    for (const auto &household : scratch.household_work_) {
+    double income_propensity_total = 0.0;
+    double income_propensity_squared = 0.0;
+    double wealth_propensity_total = 0.0;
+    double wealth_propensity_squared = 0.0;
+    for (std::size_t index = 0; index < scratch.household_work_.size(); ++index) {
+        const auto &household = scratch.household_work_[index];
+        const auto *persistent = state.households.get(scratch.household_ids_[index]);
         metrics.household_consumption += household.spent;
+        metrics.household_consumption_budget += household.consumption_budget;
+        metrics.household_wealth_consumption_budget +=
+            household.wealth_consumption_budget;
+        if (runtime.rules.consumption_strata) {
+            metrics.necessity_requested_quantity +=
+                runtime.rules.necessity_need_per_unit *
+                std::max(0.0, scratch.household_need_units_[index]);
+        }
+        metrics.necessity_consumption += household.necessity_spent;
+        metrics.luxury_consumption += household.luxury_spent;
+        income_propensity_total += persistent->income_propensity;
+        income_propensity_squared +=
+            persistent->income_propensity * persistent->income_propensity;
+        wealth_propensity_total += persistent->wealth_propensity;
+        wealth_propensity_squared +=
+            persistent->wealth_propensity * persistent->wealth_propensity;
         metrics.unemployment_rate +=
             std::max(0.0, household.labor_capacity - household.labor_sold);
         labor_capacity += household.labor_capacity;
     }
     metrics.unemployment_rate =
         labor_capacity > 0.0 ? metrics.unemployment_rate / labor_capacity : 0.0;
+    const auto household_count =
+        static_cast<double>(std::max<std::size_t>(1U, scratch.household_work_.size()));
+    const double mean_income_propensity = income_propensity_total / household_count;
+    const double mean_wealth_propensity = wealth_propensity_total / household_count;
+    metrics.household_income_propensity_stddev = std::sqrt(std::max(
+        0.0, income_propensity_squared / household_count -
+                 mean_income_propensity * mean_income_propensity));
+    metrics.household_wealth_propensity_stddev = std::sqrt(std::max(
+        0.0, wealth_propensity_squared / household_count -
+                 mean_wealth_propensity * mean_wealth_propensity));
+    const double classified_consumption =
+        metrics.necessity_consumption + metrics.luxury_consumption;
+    metrics.necessity_consumption_share =
+        classified_consumption > algorithms::kEconomicEpsilon
+            ? metrics.necessity_consumption / classified_consumption
+            : 0.0;
     if (sold_quantity > algorithms::kEconomicEpsilon) {
         metrics.price_index = price_value / sold_quantity;
     } else if (!scratch.consumption_firm_indices_.empty()) {
@@ -1980,6 +2170,9 @@ void M4TickScratch::reserve(const core::RootState &state) {
     reserve_balances_.resize(state.reserves.size() + 1);
     reserve_minimum_.resize(state.reserves.size() + 1);
     household_net_wealth_.resize(household_count);
+    household_need_units_.resize(household_count);
+    household_goods_outlay_remaining_.resize(household_count);
+    household_necessity_unmet_.resize(household_count);
     household_work_.resize(household_count);
     firm_work_.resize(firm_count);
     orders_.reserve(std::max(household_count, firm_count));
@@ -2010,6 +2203,9 @@ std::uint64_t M4TickScratch::capacity_signature() const noexcept {
         reserve_balances_.capacity(),
         reserve_minimum_.capacity(),
         household_net_wealth_.capacity(),
+        household_need_units_.capacity(),
+        household_goods_outlay_remaining_.capacity(),
+        household_necessity_unmet_.capacity(),
         household_work_.capacity(),
         firm_work_.capacity(),
         orders_.capacity(),
@@ -2082,6 +2278,9 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.price_calvo_probability,
         rules.income_propensity,
         rules.wealth_propensity,
+        rules.mpc_dispersion,
+        rules.mpc_wealth_curvature,
+        rules.necessity_need_per_unit,
         rules.dividend_payout,
         rules.investment_adjustment,
         rules.capital_depreciation,
@@ -2146,7 +2345,14 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.preferential_price_elasticity < 0.0 ||
         rules.wage_shortage_adjustment < 0.0 ||
         rules.wage_downward_drift < 0.0 || rules.income_propensity < 0.0 ||
-        rules.wealth_propensity < 0.0 || rules.dividend_payout < 0.0 ||
+        rules.wealth_propensity < 0.0 || rules.mpc_dispersion < 0.0 ||
+        rules.mpc_wealth_curvature <= 0.0 ||
+        rules.mpc_wealth_curvature > 1.0 ||
+        rules.necessity_need_per_unit < 0.0 ||
+        (rules.consumption_strata &&
+         (spec.consumption_firms < 2U ||
+          rules.necessity_need_per_unit <= 0.0)) ||
+        rules.dividend_payout < 0.0 ||
         rules.dividend_payout > 1.0 || rules.investment_adjustment < 0.0 ||
         rules.capital_depreciation < 0.0 || rules.capital_depreciation > 1.0 ||
         rules.profit_tax_rate < 0.0 || rules.profit_tax_rate > 1.0 ||
@@ -2426,10 +2632,28 @@ Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec) {
         return state.status();
     }
     auto root = std::move(*state.get_if());
+    PhiloxRng mpc_rng(
+        {static_cast<std::uint32_t>(spec.seed) ^ 0x4d504344U,
+         static_cast<std::uint32_t>(spec.seed >> 32U) ^ 0x49535052U});
     root.households.for_each_alive(
-        [&spec](HouseholdId, core::HouseholdComponent &household) {
+        [&spec, &mpc_rng](HouseholdId, core::HouseholdComponent &household) {
             household.income_propensity = spec.rules.income_propensity;
             household.wealth_propensity = spec.rules.wealth_propensity;
+            if (spec.rules.mpc_dispersion > 0.0) {
+                const double sigma = spec.rules.mpc_dispersion;
+                const double mean_correction = -0.5 * sigma * sigma;
+                household.income_propensity = std::clamp(
+                    spec.rules.income_propensity *
+                        std::exp(mean_correction + sigma * mpc_rng.standard_normal()),
+                    0.01, 0.99);
+                household.wealth_propensity = std::min(
+                    household.income_propensity - 1.0e-6,
+                    std::max(
+                        1.0e-12,
+                        spec.rules.wealth_propensity *
+                            std::exp(mean_correction +
+                                     sigma * mpc_rng.standard_normal())));
+            }
             household.income_adjustment = spec.rules.income_adjustment;
             household.income_expected = spec.rules.initial_wage;
             household.income_realized = spec.rules.initial_wage;

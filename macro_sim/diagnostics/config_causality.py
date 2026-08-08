@@ -79,6 +79,7 @@ MANUAL_CONFIG_ROUTES: Mapping[str, tuple[str, ...]] = {
     "demographics_population": ("m7.population.initial_persons",),
     "simulation_start_date": ("m7.population.start_calendar_day",),
     "tfp_law": ("m4.real_rules.tfp_law",),
+    "necessity_share0": ("m4.real_rules.necessity_need_per_unit",),
     "energy_hh_share": ("m8.energy_rules.household_need",),
     "bank_capital_frac": ("m5.rules.opening_capital_per_bank",),
     "d_bank0": ("m5.rules.opening_capital_per_bank",),
@@ -180,11 +181,6 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "bridge only disables selected dependent features and still creates "
         "settlement banks and originates ordinary firm credit"
     ),
-    "config.consumption_strata": (
-        "Config defines a two-stage necessity/luxury goods market, while the "
-        "native member only gates sector switching and preserves a firm tag for "
-        "differential tax accounting"
-    ),
     "config.demographic_lifecycle_consumption": (
         "Config defines a finite-life consumption budget, while the native "
         "member currently controls household moves after marriage, divorce, "
@@ -195,11 +191,6 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "native capital-fiscal vertical rejects a specification after that "
         "capability bit is removed and therefore cannot execute the requested "
         "government-off economy"
-    ),
-    "config.necessity_share0": (
-        "Config defines a fixed per-need-unit necessity quantity, while the "
-        "native member currently controls the fraction of consumption firms "
-        "tagged as necessity producers"
     ),
 }
 

@@ -214,6 +214,46 @@ void test_genesis_person_efficiency_is_mean_preserving_and_deterministic() {
     }
 }
 
+void test_demography_projects_age_weighted_consumption_needs() {
+    auto spec = base_spec();
+    auto &real = spec.financial_economy.monetary_economy.real_economy;
+    real.rules.consumption_strata = true;
+    real.rules.necessity_need_per_unit = 1.0;
+    spec.financial_economy.rules.consumption_strata = true;
+    auto harness = build(spec);
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+
+    std::vector<double> expected(harness.real_scratch.household_need_units_.size(),
+                                 0.0);
+    constexpr double days_per_year = 365.0;
+    const auto calendar_day = spec.population.start_calendar_day + 1;
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(person_id);
+        assert(person != nullptr);
+        const auto household_identity =
+            static_cast<std::size_t>(person->household.value());
+        assert(household_identity <
+               harness.real_scratch.household_dense_index_.size());
+        const auto household_index =
+            harness.real_scratch.household_dense_index_[household_identity];
+        assert(household_index < expected.size());
+        const double age = std::max(
+            0.0, static_cast<double>(calendar_day - person->birth_day) /
+                     days_per_year);
+        expected[household_index] +=
+            age < 18.0 ? 0.65 : (age >= 65.0 ? 0.90 : 1.0);
+    }
+    bool differs_from_household_count = false;
+    for (std::size_t index = 0; index < expected.size(); ++index) {
+        assert(std::abs(harness.real_scratch.household_need_units_[index] -
+                        expected[index]) < 1.0e-12);
+        differs_from_household_count =
+            differs_from_household_count || std::abs(expected[index] - 1.0) > 1.0e-12;
+    }
+    assert(differs_from_household_count);
+}
+
 void test_death_and_estate_settle_exactly_once() {
     auto harness = build();
     const auto household = harness.runtime.persons.get(PersonId(1))->household;
@@ -1157,6 +1197,7 @@ void test_validation_rejects_invalid_population() {
 int main() {
     test_genesis_derives_households_from_population();
     test_genesis_person_efficiency_is_mean_preserving_and_deterministic();
+    test_demography_projects_age_weighted_consumption_needs();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();

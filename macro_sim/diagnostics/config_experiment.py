@@ -573,6 +573,13 @@ def _apply_native_root_field(
         marriage.assortativity = float(value)
         population_rules.marriage_rules = marriage
         matched = True
+    elif field == "necessity_share0":
+        real_rules.necessity_need_per_unit = (
+            float(value)
+            * float(real_rules.initial_wage)
+            / max(1.0e-12, float(real_rules.initial_price))
+        )
+        matched = True
 
     if not matched:
         raise ValueError(
@@ -953,6 +960,11 @@ def apply_native_activation_scenario(
         financial_rules.q_smoothing = 1.0
     elif scenario == "deprivation_measurement_active":
         energy_rules.deprivation_burnin_years = 0
+    elif scenario == "consumption_strata_isolation":
+        financial_rules.sector_switching = False
+        population_rules.family_transfers = False
+    elif scenario == "wealth_dispersion":
+        financial_rules.household_equity_wealth_effect = 0.02
     elif scenario == "energy_inventory_gap":
         rules.initial_consumption_inventory = 0.0
         rules.initial_capital_inventory = 0.0

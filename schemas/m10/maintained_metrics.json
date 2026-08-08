@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 254,
+    "native_stage_sources": 264,
     "public_sources": 41,
-    "total": 478
+    "total": 488
   },
   "metrics": [
     {
@@ -1527,6 +1527,96 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.household_consumption_budget",
+      "parity_rule": "simulation::M4Metrics::household_consumption_budget",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.household_wealth_consumption_budget",
+      "parity_rule": "simulation::M4Metrics::household_wealth_consumption_budget",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.household_income_propensity_stddev",
+      "parity_rule": "simulation::M4Metrics::household_income_propensity_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.household_wealth_propensity_stddev",
+      "parity_rule": "simulation::M4Metrics::household_wealth_propensity_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.necessity_requested_quantity",
+      "parity_rule": "simulation::M4Metrics::necessity_requested_quantity",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "goods_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.necessity_consumption",
+      "parity_rule": "simulation::M4Metrics::necessity_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.luxury_consumption",
+      "parity_rule": "simulation::M4Metrics::luxury_consumption",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.necessity_consumption_share",
+      "parity_rule": "simulation::M4Metrics::necessity_consumption_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.necessity_firm_count",
+      "parity_rule": "simulation::M4Metrics::necessity_firm_count",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.luxury_firm_count",
+      "parity_rule": "simulation::M4Metrics::luxury_firm_count",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "firms"
     },
     {
       "aggregation": "last",

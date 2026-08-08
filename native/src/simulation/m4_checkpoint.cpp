@@ -19,7 +19,7 @@ namespace macro_sim::simulation {
 namespace {
 
 constexpr std::array<std::uint8_t, 8> kMagic{
-    'M', 'S', 'M', '4', 'C', 'P', '0', '2',
+    'M', 'S', 'M', '4', 'C', 'P', '0', '4',
 };
 constexpr std::size_t kDigestBytes = 32;
 constexpr std::size_t kMaximumCheckpointBytes = 128U * 1024U * 1024U;
@@ -169,6 +169,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.price_calvo_probability);
     writer.f64(rules.income_propensity);
     writer.f64(rules.wealth_propensity);
+    writer.f64(rules.mpc_dispersion);
+    writer.f64(rules.mpc_wealth_curvature);
+    writer.boolean(rules.consumption_strata);
+    writer.f64(rules.necessity_need_per_unit);
     writer.f64(rules.dividend_payout);
     writer.f64(rules.investment_adjustment);
     writer.f64(rules.capital_depreciation);
@@ -224,6 +228,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     std::uint8_t job_guarantee = 0;
     std::uint8_t capital_rationed_signal = 0;
     std::uint8_t consumption_rationed_signal = 0;
+    bool consumption_strata = false;
     bool gibrat_growth = false;
     std::uint8_t necessity_tax_present = 0;
     std::uint8_t luxury_tax_present = 0;
@@ -256,6 +261,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.price_calvo_probability)
         && reader.f64(rules.income_propensity)
         && reader.f64(rules.wealth_propensity)
+        && reader.f64(rules.mpc_dispersion)
+        && reader.f64(rules.mpc_wealth_curvature)
+        && reader.boolean(consumption_strata)
+        && reader.f64(rules.necessity_need_per_unit)
         && reader.f64(rules.dividend_payout)
         && reader.f64(rules.investment_adjustment)
         && reader.f64(rules.capital_depreciation)
@@ -307,6 +316,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.u32(rules.market_sample_size);
     rules.job_guarantee = job_guarantee != 0;
     rules.gibrat_growth = gibrat_growth;
+    rules.consumption_strata = consumption_strata;
     rules.capital_rationed_signal = capital_rationed_signal != 0;
     rules.consumption_rationed_signal =
         consumption_rationed_signal != 0;
@@ -333,6 +343,16 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.conservation_drift);
     writer.f64(metrics.aggregate_capital);
     writer.f64(metrics.household_consumption);
+    writer.f64(metrics.household_consumption_budget);
+    writer.f64(metrics.household_wealth_consumption_budget);
+    writer.f64(metrics.household_income_propensity_stddev);
+    writer.f64(metrics.household_wealth_propensity_stddev);
+    writer.f64(metrics.necessity_requested_quantity);
+    writer.f64(metrics.necessity_consumption);
+    writer.f64(metrics.luxury_consumption);
+    writer.f64(metrics.necessity_consumption_share);
+    writer.f64(metrics.necessity_firm_count);
+    writer.f64(metrics.luxury_firm_count);
     writer.f64(metrics.wages_paid);
     writer.f64(metrics.firm_profit);
     writer.f64(metrics.dividends_paid);
@@ -387,6 +407,16 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.conservation_drift)
         && reader.f64(metrics.aggregate_capital)
         && reader.f64(metrics.household_consumption)
+        && reader.f64(metrics.household_consumption_budget)
+        && reader.f64(metrics.household_wealth_consumption_budget)
+        && reader.f64(metrics.household_income_propensity_stddev)
+        && reader.f64(metrics.household_wealth_propensity_stddev)
+        && reader.f64(metrics.necessity_requested_quantity)
+        && reader.f64(metrics.necessity_consumption)
+        && reader.f64(metrics.luxury_consumption)
+        && reader.f64(metrics.necessity_consumption_share)
+        && reader.f64(metrics.necessity_firm_count)
+        && reader.f64(metrics.luxury_firm_count)
         && reader.f64(metrics.wages_paid)
         && reader.f64(metrics.firm_profit)
         && reader.f64(metrics.dividends_paid)

@@ -81,7 +81,7 @@ struct M6Rules final {
     double k_entry_demand{2.0};
     double k_entry_hazard{1.0 / 60.0};
     bool consumption_strata{true};
-    double initial_necessity_share{0.50};
+    double necessity_firm_share{0.50};
     bool sector_switching{true};
     double switch_return_gap{0.10};
     std::uint32_t switch_pressure_days{30};

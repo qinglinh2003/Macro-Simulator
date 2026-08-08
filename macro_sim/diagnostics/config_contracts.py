@@ -120,6 +120,16 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.economy.unemployment_rate",
     ),
     "distribution_and_welfare": (
+        "metric.source.m4.household_consumption_budget",
+        "metric.source.m4.household_wealth_consumption_budget",
+        "metric.source.m4.household_income_propensity_stddev",
+        "metric.source.m4.household_wealth_propensity_stddev",
+        "metric.source.m4.necessity_requested_quantity",
+        "metric.source.m4.necessity_consumption",
+        "metric.source.m4.luxury_consumption",
+        "metric.source.m4.necessity_consumption_share",
+        "metric.source.m4.necessity_firm_count",
+        "metric.source.m4.luxury_firm_count",
         "metric.source.m7.family_transfer_total",
         "metric.source.m7.family_transfer_recipients",
         "metric.source.m7.family_exposed_households",
@@ -1104,6 +1114,16 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
 
 
 def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
+    budget = "metric.source.m4.household_consumption_budget"
+    wealth_budget = "metric.source.m4.household_wealth_consumption_budget"
+    income_mpc_stddev = "metric.source.m4.household_income_propensity_stddev"
+    wealth_mpc_stddev = "metric.source.m4.household_wealth_propensity_stddev"
+    necessity_requested = "metric.source.m4.necessity_requested_quantity"
+    necessity_spending = "metric.source.m4.necessity_consumption"
+    luxury_spending = "metric.source.m4.luxury_consumption"
+    necessity_share = "metric.source.m4.necessity_consumption_share"
+    necessity_firms = "metric.source.m4.necessity_firm_count"
+    luxury_firms = "metric.source.m4.luxury_firm_count"
     transfer_total = "metric.source.m7.family_transfer_total"
     transfer_recipients = "metric.source.m7.family_transfer_recipients"
     deprivation = "metric.source.m8.energy.deprivation_below_100_share"
@@ -1111,6 +1131,18 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
     unemployment = "metric.economy.unemployment_rate"
     consumption = "metric.economy.na.household_consumption_real"
     return {
+        "config.consumption_strata": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {
+                necessity_requested: "nonzero",
+                necessity_share: "nonzero",
+                necessity_spending: "nonzero",
+                luxury_spending: "nonzero",
+            },
+            "activation": "consumption_strata_isolation",
+            "rationale": "Disabling the structural split must replace the ordered fixed-quantity necessity session followed by residual luxury demand with one combined goods market. The direct spending composition must change while sector switching and family transfers are held inactive in both arms.",
+        },
         "config.deprivation_gauges": {
             "status": "invariance_activation_required",
             "values": (False,),
@@ -1142,6 +1174,46 @@ def _distribution_contracts() -> Mapping[str, Mapping[str, Any]]:
                 transfer_recipients: "cumulative",
             },
             "rationale": "Disabling the private kin safety net should remove conserving household-to-household transfers and their recipients; poverty, consumption, and public support are equilibrium spillovers.",
+        },
+        "config.mpc_dispersion": {
+            "status": "screening_ready",
+            "values": (0.0, 0.80),
+            "directions": {
+                income_mpc_stddev: "increase",
+                wealth_mpc_stddev: "increase",
+                budget: "ambiguous",
+            },
+            "rationale": "A wider mean-corrected lognormal preference distribution must increase cross-household dispersion in both income and wealth propensities. Aggregate consumption is an equilibrium result because truncation, liquidity constraints, and income heterogeneity make the macro response nonlinear.",
+        },
+        "config.mpc_wealth_curvature": {
+            "status": "activation_scenario_required",
+            "values": (0.50,),
+            "directions": {
+                wealth_budget: "increase",
+                budget: "ambiguous",
+            },
+            "activation": "wealth_dispersion",
+            "rationale": "With positive dispersed household wealth, moving from a concave buffer-stock rule toward the linear rule must increase the wealth-financed consumption budget for above-reference wealth. Total planned consumption remains an equilibrium outcome because some households can remain below the reference and liquidity constraints bind.",
+        },
+        "config.n_firm_share": {
+            "status": "screening_ready",
+            "values": (0.25, 0.75),
+            "directions": {
+                necessity_firms: "increase",
+                luxury_firms: "decrease",
+            },
+            "rationale": "The firm-share parameter changes only the genesis allocation of consumption producers across necessity and luxury sectors. Raising it must increase necessity producers and reduce luxury producers without redefining household necessity quantity.",
+        },
+        "config.necessity_share0": {
+            "status": "screening_ready",
+            "values": (0.25, 0.75),
+            "directions": {
+                necessity_requested: "increase",
+                necessity_spending: "ambiguous",
+                necessity_share: "ambiguous",
+                luxury_spending: "ambiguous",
+            },
+            "rationale": "A larger fixed per-need-unit necessity basket must increase requested necessity quantity before residual luxury demand is admitted. Realized spending and its share remain equilibrium outcomes because sector capacity, prices, income, and stock-outs can move endogenously. It must not change the number of firms assigned to either sector.",
         },
         "config.subsistence_share": {
             "status": "invariance_activation_required",

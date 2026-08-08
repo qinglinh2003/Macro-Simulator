@@ -245,6 +245,9 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     // needs a high propensity to avoid a mechanical demand leakage that would
     // otherwise sustain double-digit unemployment without an external shock.
     real.rules.income_propensity = 0.97;
+    real.rules.mpc_dispersion = 0.40;
+    real.rules.mpc_wealth_curvature = 1.0;
+    real.rules.consumption_strata = true;
     // The daily clock reads an annual capital-output ratio.  The opening stock
     // and TFP normalization are a joint calibration that preserves genesis
     // output while making replacement capital economically meaningful.
@@ -261,6 +264,8 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     real.rules.job_guarantee_productivity = 0.50;
     real.rules.initial_consumption_capital = 7300.0;
     real.rules.initial_price = 0.80;
+    real.rules.necessity_need_per_unit =
+        0.50 * real.rules.initial_wage / real.rules.initial_price;
     // Open near the sustainable flow rate and carry the same fourteen days of
     // inventory targeted by the production rule.  The historical one-day
     // stock created a mechanical inventory boom and a first-year labor crash.
@@ -487,7 +492,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
 [[nodiscard]] Status apply_country_overrides(const Json &overrides,
                                              simulation::M8SimulationSpec &spec,
                                              std::uint64_t &population_count) {
-    static constexpr std::array<std::string_view, 40> allowed{{
+    static constexpr std::array<std::string_view, 43> allowed{{
         "n_households",
         "n_firms_c",
         "n_firms_k",
@@ -512,6 +517,9 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         "demographics_enabled",
         "consumption_strata",
         "necessity_share0",
+        "n_firm_share",
+        "mpc_dispersion",
+        "mpc_wealth_curvature",
         "energy_enabled",
         "government",
         "national_accounts_metrics",
@@ -586,10 +594,17 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         target = overrides.at(key).get<double>();
         return true;
     };
+    double necessity_share =
+        real.rules.necessity_need_per_unit * real.rules.initial_price /
+        real.rules.initial_wage;
     if (!assign_number("a", real.rules.linear_productivity) ||
         !assign_number("a_K", real.rules.capital_productivity) ||
         !assign_number("alpha", real.rules.capital_share) ||
-        !assign_number("necessity_share0", financial.rules.initial_necessity_share) ||
+        !assign_number("necessity_share0", necessity_share) ||
+        !assign_number("n_firm_share", financial.rules.necessity_firm_share) ||
+        !assign_number("mpc_dispersion", real.rules.mpc_dispersion) ||
+        !assign_number("mpc_wealth_curvature",
+                       real.rules.mpc_wealth_curvature) ||
         !assign_number("tfp_drift_rate", real.rules.annual_tfp_growth) ||
         !assign_number("tfp_drift_sigma", real.rules.annual_tfp_volatility) ||
         !assign_number("tfp_learning_theta", real.rules.tfp_learning_theta) ||
@@ -607,6 +622,8 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country number is invalid");
     }
+    real.rules.necessity_need_per_unit =
+        necessity_share * real.rules.initial_wage / real.rules.initial_price;
     const auto boolean = [&overrides](std::string_view key, bool &target) -> bool {
         if (!overrides.contains(key)) {
             return true;
@@ -628,6 +645,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !boolean("housing_construction_enabled", spec.housing_rules.construction) ||
         !boolean("demographics_enabled", population.rules.fertility) ||
         !boolean("consumption_strata", financial.rules.consumption_strata) ||
+        !boolean("consumption_strata", real.rules.consumption_strata) ||
         !boolean("energy_enabled", spec.energy_rules.enabled) ||
         !boolean("national_accounts_metrics", monetary.policy.fixed_basket_cpi)) {
         return Status(ErrorCode::invalid_argument,
@@ -635,6 +653,11 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
     }
     if (overrides.contains("demographics_enabled")) {
         population.rules.mortality = population.rules.fertility;
+    }
+    if (overrides.contains("consumption_strata") &&
+        !real.rules.consumption_strata) {
+        financial.rules.sector_switching = false;
+        population.rules.family_transfers = false;
     }
     if (overrides.contains("capital_market")) {
         if (!overrides.at("capital_market").is_boolean()) {
@@ -855,7 +878,9 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         real.rules.linear_productivity *= selected_profile->productivity;
         real.rules.capital_productivity *= selected_profile->productivity;
         real.rules.annual_tfp_growth = selected_profile->tfp_growth;
-        financial.rules.initial_necessity_share = selected_profile->necessity_share;
+        real.rules.necessity_need_per_unit =
+            selected_profile->necessity_share * real.rules.initial_wage /
+            real.rules.initial_price;
         monetary.rules.bank_count = base_banks;
         population.population.initial_persons = real.households;
         population.population.start_calendar_day = *ordinal;

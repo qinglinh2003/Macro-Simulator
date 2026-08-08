@@ -78,6 +78,10 @@ struct M4Rules final {
     double price_calvo_probability{0.0};
     double income_propensity{0.8};
     double wealth_propensity{5.5e-5};
+    double mpc_dispersion{0.0};
+    double mpc_wealth_curvature{1.0};
+    bool consumption_strata{false};
+    double necessity_need_per_unit{0.0};
     double dividend_payout{0.5};
     double investment_adjustment{0.0019};
     double capital_depreciation{2.28e-4};
@@ -156,6 +160,16 @@ struct M4Metrics final {
     double conservation_drift{0.0};
     double aggregate_capital{0.0};
     double household_consumption{0.0};
+    double household_consumption_budget{0.0};
+    double household_wealth_consumption_budget{0.0};
+    double household_income_propensity_stddev{0.0};
+    double household_wealth_propensity_stddev{0.0};
+    double necessity_requested_quantity{0.0};
+    double necessity_consumption{0.0};
+    double luxury_consumption{0.0};
+    double necessity_consumption_share{0.0};
+    double necessity_firm_count{0.0};
+    double luxury_firm_count{0.0};
     double wages_paid{0.0};
     double firm_profit{0.0};
     double dividends_paid{0.0};
@@ -297,6 +311,7 @@ class M4TickScratch final {
         double income_expected{0.0};
         double income_realized{0.0};
         double consumption_budget{0.0};
+        double wealth_consumption_budget{0.0};
         double spent{0.0};
         double necessity_spent{0.0};
         double luxury_spent{0.0};
@@ -349,6 +364,9 @@ class M4TickScratch final {
     std::vector<double> reserve_balances_;
     std::vector<double> reserve_minimum_;
     std::vector<double> household_net_wealth_;
+    std::vector<double> household_need_units_;
+    std::vector<double> household_goods_outlay_remaining_;
+    std::vector<std::uint8_t> household_necessity_unmet_;
     std::vector<HouseholdWork> household_work_;
     std::vector<FirmWork> firm_work_;
     std::vector<algorithms::BuyOrder> orders_;
@@ -369,6 +387,7 @@ class M4TickScratch final {
     double supplemental_nontax_receipts_{0.0};
     double supplemental_government_consumption_{0.0};
     double supplemental_transfer_payments_{0.0};
+    double external_goods_stock_remaining_{0.0};
 };
 
 class M4TickExtension {

@@ -1283,6 +1283,10 @@ class M7Extension final : public M6TickExtension {
                 return status;
             }
         }
+        if (real_runtime.rules.consumption_strata) {
+            std::fill(real.household_need_units_.begin(),
+                      real.household_need_units_.end(), 0.0);
+        }
         for (const auto person_id : scratch_.opening_alive_) {
             const auto *person = scratch_.persons_.get(person_id);
             if (person == nullptr || !person->alive) {
@@ -1327,6 +1331,21 @@ class M7Extension final : public M6TickExtension {
                 if (scratch_.membership_.members(person->household).empty()) {
                     scratch_.retired_households_.push_back(person->household);
                 }
+            } else if (real_runtime.rules.consumption_strata) {
+                const auto household_identity =
+                    static_cast<std::size_t>(person->household.value());
+                if (household_identity >= real.household_dense_index_.size()) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "M7 household need projection is stale");
+                }
+                const auto household_index =
+                    real.household_dense_index_[household_identity];
+                if (household_index >= real.household_need_units_.size()) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "M7 household need projection is stale");
+                }
+                real.household_need_units_[household_index] +=
+                    age < 18.0 ? 0.65 : (age >= 65.0 ? 0.90 : 1.0);
             }
         }
         if (options_.force_death.has_value() &&

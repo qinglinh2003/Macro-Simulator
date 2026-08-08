@@ -54,6 +54,11 @@ def _native_root_values(native_spec: Any, economy_id: int = 0) -> dict[str, Any]
         "demographics_population": population.population.initial_persons,
         "simulation_start_date": population.population.start_calendar_day,
         "marriage_assortativity": population.rules.marriage_rules.assortativity,
+        "necessity_share0": (
+            real.rules.necessity_need_per_unit
+            * real.rules.initial_price
+            / real.rules.initial_wage
+        ),
         "bank_bond_appetite": financial.policy.bank_bond_appetite,
         "bond_theta": financial.policy.household_bond_target,
         "bank_capital_frac": monetary.rules.opening_capital_per_bank,

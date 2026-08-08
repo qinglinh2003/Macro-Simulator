@@ -311,6 +311,7 @@ void update_household_equity_wealth(const core::RootState &state,
                                 runtime.rules.household_equity_wealth_effect *
                                 smoothed;
         real.household_work_[index].consumption_budget += addition;
+        real.household_work_[index].wealth_consumption_budget += addition;
         ema_total += smoothed;
         addition_total += addition;
     }
@@ -1920,6 +1921,8 @@ pick_bank_founder(const core::RootState &state, const M4TickScratch &real, doubl
         return Status::success();
     }
     std::vector<double> returns;
+    std::vector<double> necessity_returns;
+    std::vector<double> luxury_returns;
     for (const auto firm_id : real.firm_ids_) {
         const auto *firm = state.firms.get(firm_id);
         const auto *lifecycle = firm_record(scratch.firms_, firm_id);
@@ -1929,7 +1932,13 @@ pick_bank_founder(const core::RootState &state, const M4TickScratch &real, doubl
         }
         const auto index = static_cast<std::size_t>(firm_id.value());
         if (index < scratch.firm_return_.size()) {
-            returns.push_back(scratch.firm_return_[index]);
+            const double value = scratch.firm_return_[index];
+            returns.push_back(value);
+            if (lifecycle->stratum == ConsumptionStratum::necessity) {
+                necessity_returns.push_back(value);
+            } else {
+                luxury_returns.push_back(value);
+            }
         }
     }
     if (returns.empty()) {
@@ -1937,6 +1946,18 @@ pick_bank_founder(const core::RootState &state, const M4TickScratch &real, doubl
     }
     std::sort(returns.begin(), returns.end());
     const double median = returns[returns.size() / 2];
+    const auto sector_median = [](std::vector<double> values) {
+        if (values.empty()) {
+            return 0.0;
+        }
+        std::sort(values.begin(), values.end());
+        return values[values.size() / 2];
+    };
+    const auto entry_stratum =
+        runtime.rules.consumption_strata &&
+                sector_median(luxury_returns) > sector_median(necessity_returns)
+            ? ConsumptionStratum::luxury
+            : ConsumptionStratum::necessity;
     const double excess = median - (runtime.last_metrics.economy.policy_rate +
                                     runtime.rules.entry_hurdle);
     if (excess <= 0.0) {
@@ -2002,8 +2023,7 @@ pick_bank_founder(const core::RootState &state, const M4TickScratch &real, doubl
             lifecycle.statement.cash + lifecycle.statement.eligible_collateral_value;
         lifecycle.statement.borrowing_base_headroom =
             lifecycle.statement.borrowing_base_proxy;
-        lifecycle.stratum =
-            entry % 2 == 0 ? ConsumptionStratum::necessity : ConsumptionStratum::luxury;
+        lifecycle.stratum = entry_stratum;
         lifecycle.active = true;
         if (scratch.firms_.size() <= predicted_firm.value()) {
             scratch.firms_.resize(static_cast<std::size_t>(predicted_firm.value()) + 1);
@@ -3414,7 +3434,7 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.subscale_exit_hazard,
         spec.rules.k_entry_demand,
         spec.rules.k_entry_hazard,
-        spec.rules.initial_necessity_share,
+        spec.rules.necessity_firm_share,
         spec.rules.switch_return_gap,
         spec.rules.switch_hazard,
         spec.rules.switch_retool_loss,
@@ -3457,8 +3477,8 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.subscale_grace_days == 0U || spec.rules.subscale_exit_hazard < 0.0 ||
         spec.rules.subscale_exit_hazard > 1.0 || spec.rules.k_entry_demand <= 0.0 ||
         spec.rules.k_entry_hazard < 0.0 || spec.rules.k_entry_hazard > 1.0 ||
-        spec.rules.initial_necessity_share < 0.0 ||
-        spec.rules.initial_necessity_share > 1.0 ||
+        spec.rules.necessity_firm_share <= 0.0 ||
+        spec.rules.necessity_firm_share >= 1.0 ||
         spec.rules.switch_return_gap < 0.0 || spec.rules.switch_pressure_days == 0 ||
         spec.rules.switch_hazard < 0.0 || spec.rules.switch_hazard > 1.0 ||
         spec.rules.switch_retool_loss < 0.0 || spec.rules.switch_retool_loss > 1.0 ||
@@ -3660,10 +3680,10 @@ Result<M6Initialization> build_m6_genesis(const M6SimulationSpec &spec) {
             lifecycle.statement.borrowing_base_proxy;
         if (firm.sector == core::FirmSector::consumption) {
             const double before = std::ceil(static_cast<double>(consumption_index) *
-                                            runtime.rules.initial_necessity_share);
+                                            runtime.rules.necessity_firm_share);
             ++consumption_index;
             const double after = std::ceil(static_cast<double>(consumption_index) *
-                                           runtime.rules.initial_necessity_share);
+                                           runtime.rules.necessity_firm_share);
             lifecycle.stratum = after > before ? ConsumptionStratum::necessity
                                                : ConsumptionStratum::luxury;
         } else {

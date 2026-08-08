@@ -530,6 +530,21 @@ nb::dict m4_metrics_to_python(const macro_sim::simulation::M4Metrics &metrics) {
     output["conservation_drift"] = metrics.conservation_drift;
     output["aggregate_capital"] = metrics.aggregate_capital;
     output["household_consumption"] = metrics.household_consumption;
+    output["household_consumption_budget"] = metrics.household_consumption_budget;
+    output["household_wealth_consumption_budget"] =
+        metrics.household_wealth_consumption_budget;
+    output["household_income_propensity_stddev"] =
+        metrics.household_income_propensity_stddev;
+    output["household_wealth_propensity_stddev"] =
+        metrics.household_wealth_propensity_stddev;
+    output["necessity_requested_quantity"] =
+        metrics.necessity_requested_quantity;
+    output["necessity_consumption"] = metrics.necessity_consumption;
+    output["luxury_consumption"] = metrics.luxury_consumption;
+    output["necessity_consumption_share"] =
+        metrics.necessity_consumption_share;
+    output["necessity_firm_count"] = metrics.necessity_firm_count;
+    output["luxury_firm_count"] = metrics.luxury_firm_count;
     output["wages_paid"] = metrics.wages_paid;
     output["firm_profit"] = metrics.firm_profit;
     output["dividends_paid"] = metrics.dividends_paid;
@@ -1615,6 +1630,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(price_calvo_probability);
     MACRO_SIM_BIND_M4_RULE(income_propensity);
     MACRO_SIM_BIND_M4_RULE(wealth_propensity);
+    MACRO_SIM_BIND_M4_RULE(mpc_dispersion);
+    MACRO_SIM_BIND_M4_RULE(mpc_wealth_curvature);
+    MACRO_SIM_BIND_M4_RULE(consumption_strata);
+    MACRO_SIM_BIND_M4_RULE(necessity_need_per_unit);
     MACRO_SIM_BIND_M4_RULE(dividend_payout);
     MACRO_SIM_BIND_M4_RULE(investment_adjustment);
     MACRO_SIM_BIND_M4_RULE(capital_depreciation);
@@ -1920,7 +1939,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_RULE(k_entry_demand);
     MACRO_SIM_BIND_M6_RULE(k_entry_hazard);
     MACRO_SIM_BIND_M6_RULE(consumption_strata);
-    MACRO_SIM_BIND_M6_RULE(initial_necessity_share);
+    MACRO_SIM_BIND_M6_RULE(necessity_firm_share);
     MACRO_SIM_BIND_M6_RULE(sector_switching);
     MACRO_SIM_BIND_M6_RULE(switch_return_gap);
     MACRO_SIM_BIND_M6_RULE(switch_pressure_days);

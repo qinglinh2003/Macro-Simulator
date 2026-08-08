@@ -582,6 +582,29 @@ void test_consumption_firm_entry_uses_configured_attractiveness() {
     assert(std::abs(entrant->attractiveness - 0.37) < 1.0e-12);
 }
 
+void test_consumption_firm_entry_selects_the_stronger_return_stratum() {
+    auto spec = base_spec();
+    auto &real = spec.monetary_economy.real_economy;
+    real.rules.consumption_strata = true;
+    real.rules.necessity_need_per_unit = 0.001;
+    spec.rules.consumption_strata = true;
+    spec.rules.necessity_firm_share = 0.50;
+    spec.rules.entry_beta = 1.0;
+    spec.rules.entry_max = 1;
+    spec.rules.startup_deposits = 5.0;
+    auto harness = build(spec);
+    harness.runtime.last_metrics.economy.policy_rate = -1.0;
+    const auto next_id = harness.root.firms.allocator_state().next_id;
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.firm_births == 1U);
+    const auto &entrant =
+        harness.runtime.firms[static_cast<std::size_t>(next_id)];
+    assert(entrant.active);
+    assert(entrant.stratum ==
+           macro_sim::simulation::ConsumptionStratum::luxury);
+}
+
 void test_capital_firms_are_not_idle_consumption_shells() {
     auto spec = base_spec();
     spec.rules.shell_exit_days = 1;
@@ -616,9 +639,9 @@ void test_capital_firms_are_not_idle_consumption_shells() {
     }
 }
 
-void test_genesis_respects_initial_necessity_share() {
+void test_genesis_respects_necessity_firm_share() {
     auto spec = base_spec();
-    spec.rules.initial_necessity_share = 0.66;
+    spec.rules.necessity_firm_share = 0.66;
     auto harness = build(spec);
     std::uint64_t necessity = 0U;
     std::uint64_t luxury = 0U;
@@ -638,7 +661,7 @@ void test_genesis_respects_initial_necessity_share() {
     assert(necessity == 4U);
     assert(luxury == 2U);
 
-    spec.rules.initial_necessity_share = 1.01;
+    spec.rules.necessity_firm_share = 1.01;
     assert(!macro_sim::simulation::build_m6_genesis(spec).ok());
 }
 
@@ -960,8 +983,9 @@ int main() {
     test_bank_entry_uses_post_extension_founder_cash();
     test_firm_entry_uses_post_extension_founder_cash();
     test_consumption_firm_entry_uses_configured_attractiveness();
+    test_consumption_firm_entry_selects_the_stronger_return_stratum();
     test_capital_firms_are_not_idle_consumption_shells();
-    test_genesis_respects_initial_necessity_share();
+    test_genesis_respects_necessity_firm_share();
     test_firm_dividends_follow_equity_ownership();
     test_large_fallback_dividend_distribution_reconciles();
     test_wealth_tax_base_includes_securities_and_subtracts_debt();
