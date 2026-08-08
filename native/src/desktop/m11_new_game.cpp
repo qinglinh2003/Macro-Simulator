@@ -251,6 +251,10 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     real.rules.total_factor_productivity = 0.17033823412749668;
     real.rules.capital_output_ratio = 912.5;
     real.rules.demand_adjustment = 0.0038;
+    real.rules.capital_clock_demand_smoothing = 0.5;
+    real.rules.gibrat_growth = true;
+    real.rules.gibrat_sigma = 0.0052;
+    real.rules.preferential_price_elasticity = 1.0;
     real.rules.wage_calvo_probability = 0.011;
     real.rules.price_calvo_probability = 0.0037;
     real.rules.public_capital_gamma = 0.10;
@@ -318,6 +322,10 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     monetary.rules.interbank = true;
     monetary.rules.deposit_interest_arrears = false;
     monetary.rules.direct_monetary_transmission = true;
+    monetary.rules.investment_user_cost_elasticity = 0.5;
+    monetary.rules.investment_user_cost_multiplier_min = 0.5;
+    monetary.rules.investment_user_cost_multiplier_max = 1.5;
+    monetary.rules.investment_user_cost_floor = 1.0e-9;
     // Loan rates already use the daily clock.  Principal amortization must use
     // the same clock: these values imply approximately 2.5-year business loans
     // and 5-year unsecured household loans rather than ten-day maturities.
@@ -421,6 +429,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     spec.housing_rules.demand_price_step = 0.03;
     spec.housing_rules.leave_home_elasticity = 1.0;
     spec.housing_rules.fertility_elasticity = 0.5;
+    spec.housing_rules.wealth_effect = 0.1;
     spec.housing_policy.mortgage_underwriting = true;
 }
 

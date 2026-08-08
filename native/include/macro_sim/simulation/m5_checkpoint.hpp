@@ -9,7 +9,7 @@
 
 namespace macro_sim::simulation {
 
-inline constexpr std::uint32_t kM5CheckpointSchemaVersion = 1;
+inline constexpr std::uint32_t kM5CheckpointSchemaVersion = 2;
 
 struct M5Checkpoint final {
     core::RootState root;

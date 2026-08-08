@@ -876,6 +876,27 @@ def apply_native_activation_scenario(
         monetary_rules.opening_capital_per_bank = 250.0
     elif scenario == "positive_deposit_carry":
         monetary_rules.deposit_rate = 1.0e-4
+    elif scenario == "monetary_tightening_pressure":
+        monetary.initial_policy_rate = 5.0e-3
+        monetary_policy.neutral_rate = 1.34e-4
+        rules.initial_consumption_capital *= 0.5
+        rules.initial_household_money = 0.20
+        monetary_policy.household_credit_limit = 5.0
+        monetary_rules.household_subsistence = 2.0
+    elif scenario == "monetary_tightening_elasticity":
+        monetary.initial_policy_rate = 5.0e-3
+        monetary_policy.neutral_rate = 1.34e-4
+        monetary_rules.investment_user_cost_multiplier_min = 0.05
+        rules.initial_consumption_capital *= 0.5
+    elif scenario == "monetary_easing_pressure":
+        monetary.initial_policy_rate = 0.0
+        monetary_policy.neutral_rate = 3.0e-4
+        rules.initial_consumption_capital *= 0.5
+    elif scenario == "monetary_zlb_pressure":
+        monetary.initial_policy_rate = 0.0
+        monetary_policy.neutral_rate = 1.34e-4
+        rules.capital_depreciation = 0.0
+        rules.initial_consumption_capital *= 0.5
     elif scenario == "bank_run_pressure":
         monetary_policy.bank_capital_constraint = True
         monetary_rules.opening_capital_per_bank = 250.0

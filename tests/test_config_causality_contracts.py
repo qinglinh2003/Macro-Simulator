@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 455
     assert len(payload["contracts"]) == 455
     assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 82
+    assert payload["status_counts"]["blocked_native_route"] == 69
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -135,8 +135,6 @@ def test_firm_contracts_cover_every_mapped_causal_or_genesis_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
-
-
 def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(
         module="consumption_prices_and_expectations"
@@ -168,8 +166,6 @@ def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
-
-
 def test_labor_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="labor_market")
     activated = activation_contracts(module="labor_market")
@@ -284,7 +280,7 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="banking_and_credit")
     activated = activation_contracts(module="banking_and_credit")
     assert len(neutral) == 11
-    assert len(activated) == 15
+    assert len(activated) == 20
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "amort",
         "bank_dynamics",
@@ -309,6 +305,11 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
         "interbank_rate_base",
         "interbank_tightness",
         "interest_by_deposits",
+        "investment_user_cost_elasticity",
+        "investment_user_cost_floor",
+        "investment_user_cost_multiplier_max",
+        "investment_user_cost_multiplier_min",
+        "monetary_direct_transmission",
         "run_fear_persistence",
         "run_health_ref",
         "run_sensitivity",
@@ -317,6 +318,20 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+    user_cost_metric = (
+        "metric.source.m5.investment_user_cost_multiplier_mean"
+    )
+    user_cost_fields = {
+        "investment_user_cost_elasticity",
+        "investment_user_cost_floor",
+        "investment_user_cost_multiplier_max",
+        "investment_user_cost_multiplier_min",
+    }
+    for contract in activated:
+        if contract.field_name in user_cost_fields:
+            assert contract.direction_statistics == {
+                user_cost_metric: "post_burnin_mean"
+            }
 
 
 def test_bank_assignment_draft_uses_the_canonical_enum_spelling() -> None:

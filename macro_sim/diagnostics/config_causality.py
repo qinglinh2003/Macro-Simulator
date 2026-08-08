@@ -201,11 +201,6 @@ INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
         "the native member currently wired to it only smooths the q signal used "
         "by primary equity issuance; real investment does not consume this value"
     ),
-    "config.monetary_direct_transmission": (
-        "Config defines direct investment user-cost, household debt-budget, "
-        "and firm debt-service transmission, while the native member currently "
-        "only applies the firm debt-service-coverage constraint"
-    ),
     "config.necessity_share0": (
         "Config defines a fixed per-need-unit necessity quantity, while the "
         "native member currently controls the fraction of consumption firms "

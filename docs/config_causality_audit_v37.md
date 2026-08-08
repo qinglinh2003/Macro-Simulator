@@ -91,18 +91,18 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 209 |
-| Native route missing or incomplete | 82 |
+| Native route confirmed | 224 |
+| Native route missing or incomplete | 69 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
 | Deliberately fixed in the native engine | 12 |
-| Superseded compatibility names | 16 |
+| Superseded compatibility names | 14 |
 | Derived values | 2 |
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 82 missing or incomplete routes are real implementation work; they are not
+The 69 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -304,22 +304,27 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 209
+The native product baseline comparison now projects every one of the 224
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 189 |
+| Exact semantic value | 204 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
 | Computed or unit-encoded value | 5 |
 
-Two unexplained product drifts were found and repaired:
+Seven unexplained product drifts were found and repaired:
 
 - `theta_equity` was 0.30 in Config but 0.25 in the native product;
-- `marriage_assortativity` was 1.0 in Config but 0.25 in the native product.
+- `marriage_assortativity` was 1.0 in Config but 0.25 in the native product;
+- the C++ desktop parser retained old defaults for capital-clock demand
+  smoothing, Gibrat firm growth and volatility, preferential price sensitivity,
+  and the housing wealth effect even though the playable Config preset had
+  enabled and calibrated all five. The parser now seeds the same values as the
+  canonical product Config.
 
 `energy_hh_share` is not a drift: Config expresses an expenditure share while
 the native rule stores physical need, so the bridge must apply
@@ -604,8 +609,9 @@ Current findings:
   household goods-quantity observable is required before final calibration.
 
 Several fields are intentionally not credited with consumption causality.
-`pref_attach_beta` and `pref_price_elasticity` remain among the 82 blocked native
-routes, and `necessity_share0` reaches genesis but remains economically silent
+`pref_attach_beta` and `pref_price_elasticity` now reach the native demand
+allocation mechanism, while `necessity_share0` remains blocked because it
+reaches genesis but remains economically silent
 because the native goods market has no two-stage necessity/discretionary Engel
 allocation. These are implementation gaps, not small elasticities.
 
@@ -824,25 +830,23 @@ full distribution-to-demand feedback loop is not yet native-complete.
 
 ### 8.11 Banking and credit screen
 
-The banking inventory contains 26 executable causal Config contracts and one
-genesis-only capitalization field. Nine additional fields are blocked by
-semantic native gaps. The final causal screen covers 200 native worlds at
+The banking inventory contains 31 executable causal Config contracts and one
+genesis-only capitalization field. Four additional fields are blocked by
+semantic native gaps. The completed core screen covers 200 native worlds at
 100,000 persons: four paired seeds, 365 days, and eight native workers. Eleven
-contracts run against the neutral product baseline; fifteen conditional
+contracts run against the neutral product baseline; the remaining conditional
 contracts use shared capital, entry, deposit-migration, or run-pressure states.
 
 Static review found three routes that had previously received false credit.
 `bank_enabled` does not yet behave as the master credit capability promised by
 Config: its bridge closes selected dependent features while settlement banks
-and ordinary firm lending remain active. `monetary_direct_transmission` promises
-investment user-cost, household debt-budget, and firm debt-service channels,
-but native currently implements only the firm debt-service screen.
-`bank_assignment="random"` is actually deterministic round-robin assignment;
+and ordinary firm lending remain active. `bank_assignment="random"` is
+actually deterministic round-robin assignment;
 the canonical `"by_size"` spelling was also incorrectly compared with
-`"size"` in two native bridges. The spelling defect is fixed, while all three
-fields remain blocked until their full semantics are implemented. The other
-blocked fields are household interest arrears, the four investment-user-cost
-parameters, and the market-information weight in run behavior.
+`"size"` in two native bridges. The spelling defect is fixed, while both fields
+remain blocked until their full semantics are implemented. Household interest
+arrears and the market-information weight in run behavior are the other two
+blocked banking routes.
 
 Current causal findings are:
 
@@ -885,6 +889,18 @@ Current causal findings are:
   by about -1.4% / +3.5%; its aggregate-origination effect is too noisy to
   resolve. Allocating bank interest equally rather than by deposits moves mean
   income Gini by only about -0.0005 with an interval crossing zero.
+- Direct monetary transmission is now complete across its promised channels.
+  At a shared above-neutral rate, disabling it removes the investment
+  user-cost response, household debt-service cash reservation, and firm DSCR
+  screen. Across four paired seeds this raises cumulative desired investment
+  about 49.2%, removes all reserved household service cash and DSCR shortfall,
+  and raises new credit about 198%. The four user-cost parameters also move a
+  newly maintained mean multiplier in the preregistered direction: the
+  elasticity steepens the response, the lower and upper multiplier bounds bind
+  under tight and easy monetary states respectively, and a positive zero-bound
+  user-cost floor attenuates easing. Aggregate investment may subsequently be
+  amplified or offset by equilibrium feedback, so parameter wiring is judged
+  on the multiplier and macro salience is reported separately.
 - Bank-entry controls require low shared incumbent capitalization and an
   affordable founder stake. Under that predeclared state, disabling bank
   dynamics removes all entries. Moving entry sensitivity from 0.02 to 0.005 /

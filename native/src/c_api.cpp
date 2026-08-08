@@ -94,6 +94,11 @@ void fill_m5_metrics(macro_sim_m5_metrics &output,
     output.policy_rate = metrics.policy_rate;
     output.inflation_sensor = metrics.inflation_sensor;
     output.new_credit = metrics.new_credit;
+    output.firm_investment_target = metrics.firm_investment_target;
+    output.investment_user_cost_multiplier_mean =
+        metrics.investment_user_cost_multiplier_mean;
+    output.household_debt_service_reserved = metrics.household_debt_service_reserved;
+    output.firm_dscr_credit_shortfall = metrics.firm_dscr_credit_shortfall;
     output.principal_repaid = metrics.principal_repaid;
     output.loan_interest_paid = metrics.loan_interest_paid;
     output.household_interest_paid = metrics.household_interest_paid;

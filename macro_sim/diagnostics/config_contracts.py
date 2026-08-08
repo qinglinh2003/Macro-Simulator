@@ -133,6 +133,10 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
     ),
     "banking_and_credit": (
         "metric.source.m5.new_credit",
+        "metric.source.m5.firm_investment_target",
+        "metric.source.m5.investment_user_cost_multiplier_mean",
+        "metric.source.m5.household_debt_service_reserved",
+        "metric.source.m5.firm_dscr_credit_shortfall",
         "metric.source.m5.principal_repaid",
         "metric.source.m5.loan_interest_paid",
         "metric.source.m5.household_interest_paid",
@@ -1088,6 +1092,12 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
     run_flight = "metric.source.m5.run_flight_volume"
     bank_births = "metric.source.m6.bank_births"
     household_debt = "metric.economy.household_debt_total"
+    investment_target = "metric.source.m5.firm_investment_target"
+    user_cost_multiplier = (
+        "metric.source.m5.investment_user_cost_multiplier_mean"
+    )
+    service_reserved = "metric.source.m5.household_debt_service_reserved"
+    dscr_shortfall = "metric.source.m5.firm_dscr_credit_shortfall"
     return {
         "config.amort": {
             "status": "screening_ready",
@@ -1259,6 +1269,56 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
             "values": (False,),
             "directions": {"metric.economy.income_gini": "nonzero"},
             "rationale": "Allocating bank payout equally rather than in proportion to deposits changes who receives financial income; distribution, consumption, and output are equilibrium consequences.",
+        },
+        "config.monetary_direct_transmission": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "directions": {
+                investment_target: "nonzero",
+                service_reserved: "decrease",
+                dscr_shortfall: "decrease",
+                new_credit: "nonzero",
+            },
+            "statistics": {
+                investment_target: "cumulative",
+                service_reserved: "cumulative",
+                dscr_shortfall: "cumulative",
+                new_credit: "cumulative",
+            },
+            "activation": "monetary_tightening_pressure",
+            "rationale": "At a shared above-neutral loan rate, disabling direct transmission removes the investment user-cost multiplier, household contractual-service cash reservation, and firm DSCR screen. All three demand and credit flows should therefore weakly increase relative to the enabled control.",
+        },
+        "config.investment_user_cost_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.10, 1.0),
+            "directions": {user_cost_multiplier: "decrease"},
+            "statistics": {user_cost_multiplier: "post_burnin_mean"},
+            "activation": "monetary_tightening_elasticity",
+            "rationale": "With the expected real financing cost above its neutral benchmark, a larger absolute elasticity should reduce desired and realized investment more strongly.",
+        },
+        "config.investment_user_cost_multiplier_min": {
+            "status": "activation_scenario_required",
+            "values": (0.25, 0.75),
+            "directions": {user_cost_multiplier: "increase"},
+            "statistics": {user_cost_multiplier: "post_burnin_mean"},
+            "activation": "monetary_tightening_pressure",
+            "rationale": "Under a sufficiently tight monetary state, a higher lower bound truncates the contractionary user-cost response and therefore supports more investment.",
+        },
+        "config.investment_user_cost_multiplier_max": {
+            "status": "activation_scenario_required",
+            "values": (1.10, 2.0),
+            "directions": {user_cost_multiplier: "increase"},
+            "statistics": {user_cost_multiplier: "post_burnin_mean"},
+            "activation": "monetary_easing_pressure",
+            "rationale": "Under a below-neutral financing cost, a higher upper bound permits a larger expansionary investment response instead of clipping it at the ordinary cap.",
+        },
+        "config.investment_user_cost_floor": {
+            "status": "activation_scenario_required",
+            "values": (1.0e-4,),
+            "directions": {user_cost_multiplier: "decrease"},
+            "statistics": {user_cost_multiplier: "post_burnin_mean"},
+            "activation": "monetary_zlb_pressure",
+            "rationale": "At the zero lower bound with zero depreciation, raising the positive real-user-cost floor narrows the apparent easing gap and should reduce the expansionary investment multiplier while preserving finite values.",
         },
         "config.run_fear_persistence": {
             "status": "activation_scenario_required",

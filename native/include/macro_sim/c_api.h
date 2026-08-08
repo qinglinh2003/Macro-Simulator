@@ -279,6 +279,10 @@ typedef struct macro_sim_m5_metrics {
     double policy_rate;
     double inflation_sensor;
     double new_credit;
+    double firm_investment_target;
+    double investment_user_cost_multiplier_mean;
+    double household_debt_service_reserved;
+    double firm_dscr_credit_shortfall;
     double principal_repaid;
     double loan_interest_paid;
     double household_interest_paid;

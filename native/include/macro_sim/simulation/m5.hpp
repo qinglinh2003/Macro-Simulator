@@ -100,6 +100,10 @@ struct M5Rules final {
     double household_amortization{0.10};
     double household_subsistence{0.0};
     bool direct_monetary_transmission{true};
+    double investment_user_cost_elasticity{0.5};
+    double investment_user_cost_multiplier_min{0.5};
+    double investment_user_cost_multiplier_max{1.5};
+    double investment_user_cost_floor{1.0e-9};
     bool bank_runs{false};
     double run_sensitivity{0.0};
     double run_health_reference{0.10};
@@ -121,6 +125,10 @@ struct M5Metrics final {
     double policy_rate{0.0};
     double inflation_sensor{0.0};
     double new_credit{0.0};
+    double firm_investment_target{0.0};
+    double investment_user_cost_multiplier_mean{1.0};
+    double household_debt_service_reserved{0.0};
+    double firm_dscr_credit_shortfall{0.0};
     double principal_repaid{0.0};
     double loan_interest_paid{0.0};
     double household_interest_paid{0.0};
@@ -196,6 +204,7 @@ class M5TickScratch final {
     std::vector<LoanId> relationship_loan_by_account_;
     std::vector<double> exposure_by_bank_;
     std::vector<double> deposits_by_bank_;
+    std::vector<double> scheduled_service_by_account_;
     std::vector<double> bank_capital_live_;
     std::vector<std::uint8_t> bank_alive_;
     std::vector<BankId> bank_by_node_;

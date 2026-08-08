@@ -53,6 +53,7 @@ using macro_sim::simulation::MonetaryRegime;
     spec.rules.full_firm_pnl = true;
     spec.rules.realized_bank_pnl = true;
     spec.rules.household_credit = true;
+    spec.rules.direct_monetary_transmission = false;
     spec.rules.deposit_rate = 0.0001;
     spec.rules.deposit_interest_arrears = true;
     spec.policy.bank_capital_constraint = true;
@@ -164,6 +165,104 @@ void test_credit_and_monetary_tick() {
     assert(result.ok());
     assert(std::abs(result.get_if()->metrics.policy_rate -
                     harness.runtime.initial_policy_rate) < 1.0e-12);
+}
+
+struct DirectTransmissionResponse final {
+    double investment_target{0.0};
+    double investment_user_cost_multiplier_mean{1.0};
+    double debtor_consumption_budget{0.0};
+    double household_interest_paid{0.0};
+    double household_debt_service_reserved{0.0};
+};
+
+[[nodiscard]] DirectTransmissionResponse direct_transmission_at(double rate) {
+    auto spec = base_spec();
+    spec.initial_policy_rate = rate;
+    spec.policy.neutral_rate = 0.001;
+    spec.policy.inflation_target = 0.0;
+    spec.rules.direct_monetary_transmission = true;
+    spec.rules.investment_user_cost_elasticity = 1.0;
+    spec.rules.investment_user_cost_multiplier_min = 0.1;
+    spec.rules.investment_user_cost_multiplier_max = 2.0;
+    spec.rules.investment_user_cost_floor = 1.0e-9;
+    spec.rules.household_credit = false;
+    spec.rules.household_amortization = 0.0;
+    spec.real_economy.rules.initial_expected_demand = 20.0;
+    auto harness = build(spec);
+
+    const auto debtor_id = macro_sim::HouseholdId(1);
+    const auto recipient_id = macro_sim::HouseholdId(2);
+    const auto *debtor = harness.root.households.get(debtor_id);
+    const auto *recipient = harness.root.households.get(recipient_id);
+    assert(debtor != nullptr && recipient != nullptr);
+    const auto node = harness.root.postings.settlement_node(debtor->primary_account);
+    assert(node.ok());
+    BankId lender{};
+    harness.root.banks.for_each_alive([&](BankId id, const auto &bank) {
+        if (bank.settlement_node == *node.get_if()) {
+            lender = id;
+        }
+    });
+    assert(lender.valid());
+    macro_sim::core::SettlementTransaction origination(harness.root);
+    assert(origination
+               .originate_loan(lender, macro_sim::core::OwnerId::household(debtor_id),
+                               debtor->primary_account, macro_sim::Money(50.0),
+                               macro_sim::core::LoanTerms{macro_sim::Rate(0.001),
+                                                          Tick(0), Tick(365)})
+               .ok());
+    assert(origination.commit().ok());
+    const auto live_balance = harness.root.postings.balance(debtor->primary_account);
+    assert(live_balance.ok() && live_balance.get_if()->value() > 2.0);
+    macro_sim::core::SettlementTransaction cash_constraint(harness.root);
+    assert(cash_constraint
+               .transfer(debtor->primary_account, recipient->primary_account,
+                         macro_sim::Money(live_balance.get_if()->value() - 2.0))
+               .ok());
+    assert(cash_constraint.commit().ok());
+
+    auto result = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1);
+    if (!result.ok()) {
+        std::cerr << "direct transmission tick failed: " << result.status().message()
+                  << "\n";
+    }
+    assert(result.ok());
+    double investment_target = 0.0;
+    for (const auto &work : harness.real_scratch.firm_work_) {
+        investment_target += work.investment_target;
+    }
+    double consumption_budget = -1.0;
+    for (std::size_t index = 0; index < harness.real_scratch.household_ids_.size();
+         ++index) {
+        if (harness.real_scratch.household_ids_[index] == debtor_id) {
+            consumption_budget =
+                harness.real_scratch.household_work_[index].consumption_budget;
+            break;
+        }
+    }
+    assert(consumption_budget >= 0.0);
+    assert(std::abs(result.get_if()->metrics.firm_investment_target -
+                    investment_target) < 1.0e-9);
+    return {
+        investment_target,
+        result.get_if()->metrics.investment_user_cost_multiplier_mean,
+        consumption_budget,
+        result.get_if()->metrics.household_interest_paid,
+        result.get_if()->metrics.household_debt_service_reserved,
+    };
+}
+
+void test_direct_monetary_transmission_changes_investment_and_household_service() {
+    const auto low = direct_transmission_at(0.0);
+    const auto high = direct_transmission_at(0.03);
+    assert(low.investment_target > high.investment_target);
+    assert(low.investment_user_cost_multiplier_mean >
+           high.investment_user_cost_multiplier_mean);
+    assert(low.debtor_consumption_budget > high.debtor_consumption_budget);
+    assert(low.household_interest_paid < high.household_interest_paid);
+    assert(low.household_debt_service_reserved < high.household_debt_service_reserved);
 }
 
 void test_interbank_clearing() {
@@ -389,18 +488,15 @@ void test_external_settlement_recloses_reserve_liquidity() {
     harness.root.households.for_each_alive(
         [&](macro_sim::HouseholdId,
             const macro_sim::core::HouseholdComponent &household) {
-            const auto *account =
-                harness.root.postings.get(household.primary_account);
+            const auto *account = harness.root.postings.get(household.primary_account);
             assert(account != nullptr);
             if (!destination.valid() &&
-                account->key.settlement_node ==
-                    destination_bank->settlement_node) {
+                account->key.settlement_node == destination_bank->settlement_node) {
                 destination = household.primary_account;
             }
         });
     assert(destination.valid());
-    const auto opening =
-        harness.root.reserves.balance(source_bank->settlement_node);
+    const auto opening = harness.root.reserves.balance(source_bank->settlement_node);
     assert(opening.ok());
     const double requested = opening.get_if()->value() + 1.0;
     macro_sim::core::SettlementTransaction external(harness.root);
@@ -409,12 +505,11 @@ void test_external_settlement_recloses_reserve_liquidity() {
                          macro_sim::Money(requested))
                .ok());
     assert(external.commit_locally_validated().ok());
-    auto source_reserve =
-        harness.root.reserves.balance(source_bank->settlement_node);
+    auto source_reserve = harness.root.reserves.balance(source_bank->settlement_node);
     assert(source_reserve.ok() && source_reserve.get_if()->value() < 0.0);
     const double reserve_stock = harness.root.reserves.reserve_stock().value();
-    assert(macro_sim::simulation::close_m5_external_liquidity(
-               harness.root, harness.runtime, Tick(0))
+    assert(macro_sim::simulation::close_m5_external_liquidity(harness.root,
+                                                              harness.runtime, Tick(0))
                .ok());
     source_reserve = harness.root.reserves.balance(source_bank->settlement_node);
     assert(source_reserve.ok() && source_reserve.get_if()->value() >= -1.0e-9);
@@ -426,12 +521,11 @@ void test_external_settlement_recloses_reserve_liquidity() {
     harness.runtime.policy.lender_of_last_resort = true;
     macro_sim::core::SettlementTransaction late_external(harness.root);
     assert(late_external
-               .transfer(source_bank->cash_account, destination,
-                         macro_sim::Money(0.5))
+               .transfer(source_bank->cash_account, destination, macro_sim::Money(0.5))
                .ok());
     assert(late_external.commit_locally_validated().ok());
-    assert(macro_sim::simulation::close_m5_external_liquidity(
-               harness.root, harness.runtime, Tick(1))
+    assert(macro_sim::simulation::close_m5_external_liquidity(harness.root,
+                                                              harness.runtime, Tick(1))
                .ok());
     source_reserve = harness.root.reserves.balance(source_bank->settlement_node);
     assert(source_reserve.ok() && source_reserve.get_if()->value() >= -1.0e-9);
@@ -487,6 +581,7 @@ int main() {
     test_policy_validation();
     test_size_based_bank_assignment();
     test_credit_and_monetary_tick();
+    test_direct_monetary_transmission_changes_investment_and_household_service();
     test_interbank_clearing();
     test_realized_and_legacy_bank_pnl_paths();
     test_phase_fault_is_atomic();

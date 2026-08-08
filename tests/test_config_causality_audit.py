@@ -21,12 +21,12 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
-        "mapped_native": 209,
-        "missing_native_route": 82,
+        "mapped_native": 224,
+        "missing_native_route": 69,
         "native_fixed": 12,
         "planned_removal": 1,
         "run_control": 1,
-        "superseded": 16,
+        "superseded": 14,
     }
     assert sum(payload["route_counts"].values()) == payload["field_count"]
     assert sum(payload["experiment_role_counts"].values()) == payload["field_count"]
@@ -113,8 +113,10 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
     assert bank_enabled["route_status"] == "missing_native_route"
     assert "ordinary firm credit" in bank_enabled["route_note"]
     direct = rows["config.monetary_direct_transmission"]
-    assert direct["route_status"] == "missing_native_route"
-    assert "investment user-cost" in direct["route_note"]
+    assert direct["route_status"] == "mapped_native"
+    assert direct["native_targets"] == [
+        "m5.monetary_rules.direct_monetary_transmission"
+    ]
     government = rows["config.government"]
     assert government["route_status"] == "missing_native_route"
     assert "rejects a specification" in government["route_note"]

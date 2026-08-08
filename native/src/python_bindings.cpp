@@ -573,6 +573,11 @@ nb::dict m5_metrics_to_python(const macro_sim::simulation::M5Metrics &metrics) {
     output["policy_rate"] = metrics.policy_rate;
     output["inflation_sensor"] = metrics.inflation_sensor;
     output["new_credit"] = metrics.new_credit;
+    output["firm_investment_target"] = metrics.firm_investment_target;
+    output["investment_user_cost_multiplier_mean"] =
+        metrics.investment_user_cost_multiplier_mean;
+    output["household_debt_service_reserved"] = metrics.household_debt_service_reserved;
+    output["firm_dscr_credit_shortfall"] = metrics.firm_dscr_credit_shortfall;
     output["principal_repaid"] = metrics.principal_repaid;
     output["loan_interest_paid"] = metrics.loan_interest_paid;
     output["household_interest_paid"] = metrics.household_interest_paid;
@@ -1790,6 +1795,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M5_RULE(household_amortization);
     MACRO_SIM_BIND_M5_RULE(household_subsistence);
     MACRO_SIM_BIND_M5_RULE(direct_monetary_transmission);
+    MACRO_SIM_BIND_M5_RULE(investment_user_cost_elasticity);
+    MACRO_SIM_BIND_M5_RULE(investment_user_cost_multiplier_min);
+    MACRO_SIM_BIND_M5_RULE(investment_user_cost_multiplier_max);
+    MACRO_SIM_BIND_M5_RULE(investment_user_cost_floor);
     MACRO_SIM_BIND_M5_RULE(bank_runs);
     MACRO_SIM_BIND_M5_RULE(run_sensitivity);
     MACRO_SIM_BIND_M5_RULE(run_health_reference);

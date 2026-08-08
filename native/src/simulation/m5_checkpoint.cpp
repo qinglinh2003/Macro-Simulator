@@ -225,6 +225,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.household_amortization,
         value.household_subsistence,
         value.direct_monetary_transmission,
+        value.investment_user_cost_elasticity,
+        value.investment_user_cost_multiplier_min,
+        value.investment_user_cost_multiplier_max,
+        value.investment_user_cost_floor,
         value.bank_runs,
         value.run_sensitivity,
         value.run_health_reference,
@@ -234,7 +238,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 [[nodiscard]] M5Rules decode_rules(const Json &row) {
-    if (!row.is_array() || row.size() != 29) {
+    if (!row.is_array() || row.size() != 33) {
         throw std::runtime_error("invalid M5 rules");
     }
     M5Rules value;
@@ -263,6 +267,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.household_amortization = row[i++].get<double>();
     value.household_subsistence = row[i++].get<double>();
     value.direct_monetary_transmission = row[i++].get<bool>();
+    value.investment_user_cost_elasticity = row[i++].get<double>();
+    value.investment_user_cost_multiplier_min = row[i++].get<double>();
+    value.investment_user_cost_multiplier_max = row[i++].get<double>();
+    value.investment_user_cost_floor = row[i++].get<double>();
     value.bank_runs = row[i++].get<bool>();
     value.run_sensitivity = row[i++].get<double>();
     value.run_health_reference = row[i++].get<double>();
@@ -276,6 +284,10 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.policy_rate,
         value.inflation_sensor,
         value.new_credit,
+        value.firm_investment_target,
+        value.investment_user_cost_multiplier_mean,
+        value.household_debt_service_reserved,
+        value.firm_dscr_credit_shortfall,
         value.principal_repaid,
         value.loan_interest_paid,
         value.household_interest_paid,
@@ -300,13 +312,17 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M5Metrics &value) {
-    if (!row.is_array() || row.size() != 23) {
+    if (!row.is_array() || row.size() != 27) {
         throw std::runtime_error("invalid M5 metrics");
     }
     std::size_t i = 0;
     value.policy_rate = row[i++].get<double>();
     value.inflation_sensor = row[i++].get<double>();
     value.new_credit = row[i++].get<double>();
+    value.firm_investment_target = row[i++].get<double>();
+    value.investment_user_cost_multiplier_mean = row[i++].get<double>();
+    value.household_debt_service_reserved = row[i++].get<double>();
+    value.firm_dscr_credit_shortfall = row[i++].get<double>();
     value.principal_repaid = row[i++].get<double>();
     value.loan_interest_paid = row[i++].get<double>();
     value.household_interest_paid = row[i++].get<double>();
