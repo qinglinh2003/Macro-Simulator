@@ -429,6 +429,17 @@ def test_binding_labor_reservation_preserves_quit_hazard() -> None:
     assert rules.welfare_quit_hazard == pytest.approx(expected_hazard)
 
 
+def test_native_population_rules_receive_suspension_quit_discount() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=90, seed=411
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="suspension_quit_discount", value=1.2
+    )
+    rules = native_spec.economies[0].domestic_economy.rules
+    assert rules.suspension_quit_discount == pytest.approx(1.2)
+
+
 def test_labor_demand_contraction_preserves_layoff_band() -> None:
     baseline = population_scaled_new_game(
         population=100_000, days=90, seed=42
@@ -451,6 +462,33 @@ def test_labor_demand_contraction_preserves_layoff_band() -> None:
     assert population_rules.layoff_band == pytest.approx(expected_band)
     assert rules.initial_expected_demand == pytest.approx(opening_demand * 4.0)
     assert rules.demand_adjustment == pytest.approx(0.10)
+
+
+def test_job_guarantee_public_works_activation_preserves_productivity() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=421
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="jg_productivity", value=0.75
+    )
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    assert rules.job_guarantee_productivity == pytest.approx(0.75)
+    apply_native_activation_scenario(
+        native_spec, scenario="active_job_guarantee_public_works"
+    )
+    monetary = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy
+    )
+    assert monetary.policy.job_guarantee is True
+    assert monetary.policy.job_guarantee_wage_ratio == pytest.approx(0.5)
+    assert monetary.policy.job_guarantee_public_works_share == pytest.approx(1.0)
+    assert monetary.real_economy.rules.job_guarantee_productivity == pytest.approx(
+        0.75
+    )
 
 
 def test_unpartnered_marriage_activation_preserves_assortativity() -> None:

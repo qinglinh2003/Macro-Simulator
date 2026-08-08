@@ -208,6 +208,7 @@ struct LaborAccounts final {
     double retirement_separations_total{0.0};
     double recalls_total{0.0};
     double suspensions_total{0.0};
+    double suspension_poaches_total{0.0};
     double welfare_quits_total{0.0};
     double job_to_job_moves_total{0.0};
     double private_fte_inflows_total{0.0};

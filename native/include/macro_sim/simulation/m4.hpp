@@ -98,6 +98,7 @@ struct M4Rules final {
     bool job_guarantee{false};
     double job_guarantee_wage_ratio{0.0};
     double job_guarantee_public_works_share{1.0};
+    double job_guarantee_productivity{0.0};
     double initial_household_money{100.0};
     double initial_firm_money{200.0};
     double initial_capital_firm_money{200.0};
@@ -164,6 +165,10 @@ struct M4Metrics final {
     double government_consumption{0.0};
     double public_fixed_capital_formation{0.0};
     double transfer_payments{0.0};
+    double job_guarantee_spending{0.0};
+    double job_guarantee_labor{0.0};
+    double job_guarantee_public_capital_formation{0.0};
+    double job_guarantee_realized_productivity{0.0};
 
     bool operator==(const M4Metrics &) const = default;
 };

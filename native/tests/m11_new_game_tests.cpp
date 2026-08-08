@@ -143,6 +143,7 @@ void test_default_is_complete_latest_world() {
         assert_close(real.rules.wage_calvo_probability, 0.011);
         assert_close(real.rules.price_calvo_probability, 0.0037);
         assert_close(real.rules.public_capital_gamma, 0.10);
+        assert_close(real.rules.job_guarantee_productivity, 0.50);
         assert(economy.housing_rules.builder_land_fee_credit);
         assert_close(economy.housing_rules.initial_builder_cash_buffer, 25.0);
         assert_close(economy.housing_rules.builder_demand_seed, 0.0);

@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0-P3 complete; every executable Config field has a reviewed contract, all module and package screens are complete, and P4 million-person confirmation is in progress
+Status: P0-P1 and the first package screen are complete; the P2 native-route repair loop and P4 million-person confirmation are in progress
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -91,8 +91,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 224 |
-| Native route missing or incomplete | 69 |
+| Native route confirmed | 226 |
+| Native route missing or incomplete | 67 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -102,7 +102,7 @@ The adjudicated P0 inventory reports:
 | Run control | 1 |
 | Planned removal | 1 |
 
-The 69 missing or incomplete routes are real implementation work; they are not
+The 67 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -304,13 +304,13 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 224
+The native product baseline comparison now projects every one of the 226
 currently routed Config fields into the exact C++ new-game contract at 100,000
 persons per country:
 
 | Native baseline relationship | Fields |
 |---|---:|
-| Exact semantic value | 204 |
+| Exact semantic value | 206 |
 | Representative-agent density scaling | 7 |
 | Experiment scale override | 7 |
 | Experiment seed override | 1 |
@@ -617,12 +617,14 @@ allocation. These are implementation gaps, not small elasticities.
 
 ### 8.8 Labor-market screen
 
-The labor inventory contains 26 Config fields. Twenty-one have native causal
-routes and reviewed contracts: 15 neutral-baseline treatments and six
-conditional treatments. Two fields (`suspension_quit_discount` and
-`wage_indexation`) remain blocked native routes. The remaining three are
-deliberate native invariants: persistent labor accounting, explicit matching,
-and person-level efficiency.
+The labor inventory contains 26 Config fields. Twenty-two have native causal
+routes and reviewed contracts: 16 neutral-baseline treatments and six
+conditional treatments. `wage_indexation` also has a native equation and unit
+contract but its system-level economic review remains open. The remaining
+three are deliberate native invariants: persistent labor accounting, explicit
+matching, and person-level efficiency. `suspension_quit_discount`, previously
+the last genuine labor route gap, now reaches outside offers made to suspended
+workers and has a dedicated transition-flow observable.
 
 `labor_accounting=false` cannot be treated as an ordinary all-module ablation.
 The current energy, payroll, and household projections require persistent
@@ -630,7 +632,8 @@ person-job records, so disabling that vertical while retaining downstream
 modules is not a coherent playable economy. It is now classified as a fixed
 engine architecture choice rather than credited with a causal effect.
 
-The final evidence set covers 180 native worlds at 100,000 persons. The core
+The previous final evidence set covered 180 native worlds at 100,000 persons;
+the suspension-poaching repair adds eight paired native worlds. The core
 neutral and conditional screens use four paired seeds, 90 days, a 22-day
 burn-in, and eight workers. One-year paired runs resolve the wage-downward-
 adjustment extremes. Every final run passed the native stability gates.
@@ -666,6 +669,14 @@ Current findings:
   to 90 days is exactly silent over this screen. The upper threshold is above
   the duration of economically relevant suspensions and is not presently a
   useful ordinary player range.
+- The suspended-worker outside-offer threshold is live but sharply nonlinear.
+  Raising `suspension_quit_discount` from 0.9 to 1.05 eliminates all 9,305.75
+  mean cumulative outside poaches in the four-seed screen, raises recalls by
+  6,899, and lowers total hires by 3,909. The paired poaching interval is
+  [-9,445.80, -9,165.70]. Lower values are flat because every observed outside
+  offer already clears the wage threshold. This is a regime threshold, not a
+  smooth ordinary slider; richer offered-wage dispersion would be required for
+  a gradual response.
 - Demand-layoff speeds are highly salient. `lambda_fire=0.015/0.06` changes
   cumulative demand layoffs by about -68.4% / +112.6%, while
   `layoff_target_smooth=0.01/0.08` changes them by about -60.7% / +311%. These
@@ -940,21 +951,37 @@ in expert or scenario setup surfaces unless their triggering state is visible.
 
 ### 8.12 Government and public-capital screen
 
-The public-sector inventory contains two executable causal Config fields and
-two blocked structural fields. The formal dynamic screen covers 20 native
-worlds at 100,000 persons, four paired seeds, 1,095 days, and eight native
-workers. A preceding one-year screen was retained as horizon-selection evidence
-but is not used for the final slow-stock conclusions.
+The public-sector inventory contains three executable causal Config fields and
+one blocked structural field. The slow-stock screen covers 20 native worlds at
+100,000 persons, four paired seeds, 1,095 days, and eight native workers. The
+active job-guarantee screen adds 12 one-year native worlds. A preceding
+one-year public-capital screen is retained as horizon-selection evidence but is
+not used for the final slow-stock conclusions.
 
 Static execution review revoked false route credit from `government`. Config
 defines it as the master fiscal-sector capability, and both the diagnostic and
 desktop bridges can clear the capability bit, but the only current physical-
 capital vertical requires that bit and rejects the resulting specification
 before genesis. A government-off economy is therefore not executable.
-`jg_productivity` is also blocked: the Config contract says job-guarantee public
-works add public capital, while no native member or equation receives it.
 
-The two working public-capital parameters behave as follows:
+`jg_productivity` is no longer blocked. Native public works now record residual
+labor, physical capital formation, wage-valued own-account construction, and
+realized capital per assigned public-works labor. The public-works share of
+job-guarantee wages is classified as public fixed-capital formation instead of transfers;
+the same spending remains in total government spending, so the fiscal balance
+does not change merely because the activity is reclassified.
+
+The three working public-capital parameters behave as follows:
+
+- Under a common active job guarantee with all residual labor assigned to
+  public works, moving `jg_productivity` from 0.50 to 0.25 / 0.75 changes the
+  measured realized productivity by exactly -0.25 / +0.25 in every seed. Gross
+  one-year public-works capital formation changes by -104,652 (-48.9%) /
+  +111,781 (+52.3%). The small real-GDP-per-person responses, about -0.08% /
+  +0.42% post burn-in, remain seed-imprecise. The engineering coefficient is
+  therefore proven independently of endogenous changes in residual labor; the
+  latter are reported as macro spillovers rather than used to infer the direct
+  route.
 
 - The baseline daily public-capital depreciation rate of 0.000228 is about 8.0%
   compounded annually. Moving it to 0.000057 (about 2.1% annually) raises the
@@ -981,10 +1008,13 @@ The two working public-capital parameters behave as follows:
   formally resolved. The one-year panel was weaker still, confirming that this
   mechanism must be assessed as a slow stock-productivity channel.
 
-The current calibration is economically coherent but weak as gameplay. Public-
-capital elasticity is live and modestly salient at the upper arm; depreciation
-mostly changes an invisible stock. The later interaction stage must estimate
-`gov_investment_share x public_capital_gamma x public_capital_depreciation`.
+The current calibration is economically coherent but uneven as gameplay.
+Public-capital elasticity is live and modestly salient at the upper arm;
+depreciation mostly changes an invisible stock; and job-guarantee productivity
+is a conditional technology whose gross effect depends on how much residual
+labor the policy absorbs. A later interaction stage must estimate
+`gov_investment_share x public_capital_gamma x public_capital_depreciation` and
+`job_guarantee x job_guarantee_public_works_share x jg_productivity`.
 Until that response surface is known, the depreciation rate belongs in expert
 setup rather than a prominent player control, and it should not be made salient
 by adding an artificial direct GDP effect.

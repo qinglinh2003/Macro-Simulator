@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 235,
+    "native_stage_sources": 240,
     "public_sources": 41,
-    "total": 459
+    "total": 464
   },
   "metrics": [
     {
@@ -1729,6 +1729,42 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m4.job_guarantee_spending",
+      "parity_rule": "simulation::M4Metrics::job_guarantee_spending",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.job_guarantee_labor",
+      "parity_rule": "simulation::M4Metrics::job_guarantee_labor",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.job_guarantee_public_capital_formation",
+      "parity_rule": "simulation::M4Metrics::job_guarantee_public_capital_formation",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m4.job_guarantee_realized_productivity",
+      "parity_rule": "simulation::M4Metrics::job_guarantee_realized_productivity",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "capital_units_per_fte"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.policy_rate",
       "parity_rule": "simulation::M5Metrics::policy_rate",
       "source_kind": "committed_native_stage",
@@ -2694,6 +2730,15 @@
       "cadence_ticks": 1,
       "id": "metric.source.m7.suspensions_flow",
       "parity_rule": "simulation::M7Metrics::suspensions_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "jobs_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.suspension_poaches",
+      "parity_rule": "simulation::M7Metrics::suspension_poaches",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "jobs_per_tick"

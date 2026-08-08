@@ -206,6 +206,7 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(family_exposed_households);
     MACRO_SIM_FILL_M7(hires);
     MACRO_SIM_FILL_M7(separations);
+    MACRO_SIM_FILL_M7(suspension_poaches);
     MACRO_SIM_FILL_M7(marriages);
     MACRO_SIM_FILL_M7(divorces);
     MACRO_SIM_FILL_M7(widowhoods);
@@ -1816,6 +1817,7 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->firing_adjustment = value.firing_adjustment;
     output->layoff_band = value.layoff_band;
     output->target_smoothing = value.target_smoothing;
+    output->suspension_quit_discount = value.suspension_quit_discount;
     output->search_intensity = value.search_intensity;
     output->ladder_search_intensity = value.ladder_search_intensity;
     output->ladder_premium = value.ladder_premium;
@@ -1905,6 +1907,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.firing_adjustment = rules->firing_adjustment;
     value.layoff_band = rules->layoff_band;
     value.target_smoothing = rules->target_smoothing;
+    value.suspension_quit_discount = rules->suspension_quit_discount;
     value.search_intensity = rules->search_intensity;
     value.ladder_search_intensity = rules->ladder_search_intensity;
     value.ladder_premium = rules->ladder_premium;

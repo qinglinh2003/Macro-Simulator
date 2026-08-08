@@ -19,7 +19,7 @@ namespace macro_sim::simulation {
 namespace {
 
 constexpr std::array<std::uint8_t, 8> kMagic{
-    'M', 'S', 'M', '4', 'C', 'P', '0', '1',
+    'M', 'S', 'M', '4', 'C', 'P', '0', '2',
 };
 constexpr std::size_t kDigestBytes = 32;
 constexpr std::size_t kMaximumCheckpointBytes = 128U * 1024U * 1024U;
@@ -196,6 +196,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.u8(rules.job_guarantee ? 1U : 0U);
     writer.f64(rules.job_guarantee_wage_ratio);
     writer.f64(rules.job_guarantee_public_works_share);
+    writer.f64(rules.job_guarantee_productivity);
     writer.f64(rules.initial_household_money);
     writer.f64(rules.initial_firm_money);
     writer.f64(rules.initial_capital_firm_money);
@@ -275,6 +276,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.u8(job_guarantee)
         && reader.f64(rules.job_guarantee_wage_ratio)
         && reader.f64(rules.job_guarantee_public_works_share)
+        && reader.f64(rules.job_guarantee_productivity)
         && reader.f64(rules.initial_household_money)
         && reader.f64(rules.initial_firm_money)
         && reader.f64(rules.initial_capital_firm_money)
@@ -338,6 +340,10 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.government_consumption);
     writer.f64(metrics.public_fixed_capital_formation);
     writer.f64(metrics.transfer_payments);
+    writer.f64(metrics.job_guarantee_spending);
+    writer.f64(metrics.job_guarantee_labor);
+    writer.f64(metrics.job_guarantee_public_capital_formation);
+    writer.f64(metrics.job_guarantee_realized_productivity);
 }
 
 [[nodiscard]] bool read_metrics(
@@ -378,7 +384,11 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.fixed_capital_formation_real)
         && reader.f64(metrics.government_consumption)
         && reader.f64(metrics.public_fixed_capital_formation)
-        && reader.f64(metrics.transfer_payments);
+        && reader.f64(metrics.transfer_payments)
+        && reader.f64(metrics.job_guarantee_spending)
+        && reader.f64(metrics.job_guarantee_labor)
+        && reader.f64(metrics.job_guarantee_public_capital_formation)
+        && reader.f64(metrics.job_guarantee_realized_productivity);
 }
 
 void write_household(

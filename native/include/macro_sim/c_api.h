@@ -527,6 +527,7 @@ typedef struct macro_sim_m7_rules {
     double firing_adjustment;
     double layoff_band;
     double target_smoothing;
+    double suspension_quit_discount;
     double search_intensity;
     double ladder_search_intensity;
     double ladder_premium;
@@ -591,6 +592,7 @@ typedef struct macro_sim_m7_metrics {
     double family_exposed_households;
     double hires;
     double separations;
+    double suspension_poaches;
     uint64_t marriages;
     uint64_t divorces;
     uint64_t widowhoods;

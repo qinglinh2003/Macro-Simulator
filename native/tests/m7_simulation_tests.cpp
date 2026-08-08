@@ -1140,6 +1140,12 @@ void test_validation_rejects_invalid_population() {
     spec = base_spec();
     spec.rules.genesis_employment_rate = 1.01;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.suspension_quit_discount = 0.0;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.suspension_quit_discount = 1.51;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
 }
 
 } // namespace

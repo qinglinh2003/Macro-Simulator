@@ -37,6 +37,7 @@ struct M7Rules final {
     double layoff_band{0.05};
     double target_smoothing{0.02};
     std::uint32_t suspension_timeout_days{45};
+    double suspension_quit_discount{0.9};
     bool frictional_search{false};
     double search_intensity{0.15};
     bool relationship_wages{true};
@@ -168,6 +169,7 @@ struct M7Metrics final {
     double retirement_separations{0.0};
     double welfare_quits{0.0};
     double suspensions_flow{0.0};
+    double suspension_poaches{0.0};
     double recalls{0.0};
     std::uint64_t marriages{0};
     std::uint64_t divorces{0};

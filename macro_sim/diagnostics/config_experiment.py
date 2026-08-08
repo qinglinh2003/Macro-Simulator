@@ -850,6 +850,10 @@ def apply_native_activation_scenario(
     elif scenario == "labor_demand_contraction":
         rules.initial_expected_demand *= 4.0
         rules.demand_adjustment = 0.10
+    elif scenario == "active_job_guarantee_public_works":
+        monetary_policy.job_guarantee = True
+        monetary_policy.job_guarantee_wage_ratio = 0.5
+        monetary_policy.job_guarantee_public_works_share = 1.0
     elif scenario == "unpartnered_marriage_market":
         population.population.target_household_size = 1.0
         population_rules.marriage_interval_days = 14

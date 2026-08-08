@@ -284,6 +284,10 @@ void test_round_trip_and_continuation_are_exact() {
         REPORT_M4_FIELD(government_consumption)
         REPORT_M4_FIELD(public_fixed_capital_formation)
         REPORT_M4_FIELD(transfer_payments)
+        REPORT_M4_FIELD(job_guarantee_spending)
+        REPORT_M4_FIELD(job_guarantee_labor)
+        REPORT_M4_FIELD(job_guarantee_public_capital_formation)
+        REPORT_M4_FIELD(job_guarantee_realized_productivity)
 #undef REPORT_M4_FIELD
     }
     assert(restored.runtime == original.runtime);

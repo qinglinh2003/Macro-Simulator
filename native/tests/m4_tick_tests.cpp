@@ -484,6 +484,85 @@ void test_public_capital_stock_and_productivity() {
            baseline_result.get_if()->metrics.real_output);
 }
 
+void test_job_guarantee_productivity_builds_and_reports_public_capital() {
+    auto pure_transfer_spec = v1_spec(779);
+    pure_transfer_spec.rules.government_consumption_share = 0.0;
+    pure_transfer_spec.rules.government_investment_share = 0.0;
+    pure_transfer_spec.rules.public_capital_depreciation = 0.0;
+    pure_transfer_spec.rules.initial_expected_demand = 0.0;
+    pure_transfer_spec.rules.job_guarantee = true;
+    pure_transfer_spec.rules.job_guarantee_wage_ratio = 0.5;
+    pure_transfer_spec.rules.job_guarantee_public_works_share = 1.0;
+    pure_transfer_spec.rules.job_guarantee_productivity = 0.0;
+    auto productive_spec = pure_transfer_spec;
+    productive_spec.rules.job_guarantee_productivity = 0.5;
+    auto partial_works_spec = productive_spec;
+    partial_works_spec.rules.job_guarantee_public_works_share = 0.4;
+
+    auto pure_transfer = build_m4_genesis(pure_transfer_spec);
+    auto productive = build_m4_genesis(productive_spec);
+    auto partial_works = build_m4_genesis(partial_works_spec);
+    assert(pure_transfer.ok());
+    assert(productive.ok());
+    assert(partial_works.ok());
+    auto pure_transfer_state = std::move(pure_transfer).take();
+    auto productive_state = std::move(productive).take();
+    auto partial_works_state = std::move(partial_works).take();
+    M4TickScratch pure_transfer_scratch;
+    M4TickScratch productive_scratch;
+    M4TickScratch partial_works_scratch;
+    Tick pure_transfer_tick{};
+    Tick productive_tick{};
+    Tick partial_works_tick{};
+    const auto pure_transfer_result = advance_ticks(
+        pure_transfer_state.root, pure_transfer_state.runtime,
+        pure_transfer_scratch, pure_transfer_tick, 1);
+    const auto productive_result = advance_ticks(
+        productive_state.root, productive_state.runtime,
+        productive_scratch, productive_tick, 1);
+    const auto partial_works_result = advance_ticks(
+        partial_works_state.root, partial_works_state.runtime,
+        partial_works_scratch, partial_works_tick, 1);
+    assert(pure_transfer_result.ok());
+    assert(productive_result.ok());
+    assert(partial_works_result.ok());
+    const auto &zero = pure_transfer_result.get_if()->metrics;
+    const auto &positive = productive_result.get_if()->metrics;
+    const auto &partial = partial_works_result.get_if()->metrics;
+    assert(zero.job_guarantee_spending > 0.0);
+    assert_close(positive.job_guarantee_spending,
+                 zero.job_guarantee_spending);
+    assert(zero.job_guarantee_labor > 0.0);
+    assert_close(positive.job_guarantee_labor,
+                 zero.job_guarantee_labor);
+    assert_close(zero.job_guarantee_public_capital_formation, 0.0);
+    assert(positive.job_guarantee_public_capital_formation > 0.0);
+    assert_close(zero.job_guarantee_realized_productivity, 0.0);
+    assert_close(positive.job_guarantee_realized_productivity, 0.5);
+    assert_close(pure_transfer_state.runtime.public_capital, 0.0);
+    assert_close(productive_state.runtime.public_capital,
+                 positive.job_guarantee_public_capital_formation);
+    assert_close(zero.public_fixed_capital_formation, 0.0);
+    assert_close(positive.public_fixed_capital_formation,
+                 positive.job_guarantee_spending);
+    assert_close(zero.transfer_payments - positive.transfer_payments,
+                 positive.job_guarantee_spending);
+    assert_close(positive.real_output - zero.real_output,
+                 positive.job_guarantee_public_capital_formation);
+    assert_close(positive.nominal_output - zero.nominal_output,
+                 positive.job_guarantee_spending);
+    assert_close(partial.job_guarantee_spending,
+                 positive.job_guarantee_spending);
+    assert_close(partial.job_guarantee_public_capital_formation,
+                 0.4 * positive.job_guarantee_public_capital_formation);
+    assert_close(partial.public_fixed_capital_formation,
+                 0.4 * partial.job_guarantee_spending);
+    assert_close(zero.transfer_payments - partial.transfer_payments,
+                 0.4 * partial.job_guarantee_spending);
+    assert_close(partial.nominal_output - zero.nominal_output,
+                 0.4 * partial.job_guarantee_spending);
+}
+
 void test_faults_are_atomic() {
     constexpr std::array phases{
         M4Phase::open_books,           M4Phase::open_real_economy,
@@ -622,6 +701,7 @@ int main() {
     test_consumption_price_index_excludes_capital_goods();
     test_consumption_tax_follows_each_household_purchase_basket();
     test_public_capital_stock_and_productivity();
+    test_job_guarantee_productivity_builds_and_reports_public_capital();
     test_faults_are_atomic();
     test_chunking_and_stochastic_replay();
     test_scratch_capacity_stabilizes();

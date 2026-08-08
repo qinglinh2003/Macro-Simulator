@@ -24,6 +24,7 @@ def make_spec(native, seed: int):
     real.requested_capabilities = 3
     real.market_protocol = native.MatchingProtocol.PRICE_SORTED
     real.seed = seed
+    real.rules.job_guarantee_productivity = 0.5
     rules = native.M5Rules()
     rules.bank_count = 3
     rules.opening_capital_per_bank = 30.0

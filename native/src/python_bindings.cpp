@@ -552,6 +552,12 @@ nb::dict m4_metrics_to_python(const macro_sim::simulation::M4Metrics &metrics) {
     output["government_consumption"] = metrics.government_consumption;
     output["public_fixed_capital_formation"] = metrics.public_fixed_capital_formation;
     output["transfer_payments"] = metrics.transfer_payments;
+    output["job_guarantee_spending"] = metrics.job_guarantee_spending;
+    output["job_guarantee_labor"] = metrics.job_guarantee_labor;
+    output["job_guarantee_public_capital_formation"] =
+        metrics.job_guarantee_public_capital_formation;
+    output["job_guarantee_realized_productivity"] =
+        metrics.job_guarantee_realized_productivity;
     return output;
 }
 
@@ -782,6 +788,7 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(retirement_separations);
     MACRO_SIM_M7_METRIC(welfare_quits);
     MACRO_SIM_M7_METRIC(suspensions_flow);
+    MACRO_SIM_M7_METRIC(suspension_poaches);
     MACRO_SIM_M7_METRIC(recalls);
     MACRO_SIM_M7_METRIC(marriages);
     MACRO_SIM_M7_METRIC(divorces);
@@ -1611,6 +1618,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(job_guarantee);
     MACRO_SIM_BIND_M4_RULE(job_guarantee_wage_ratio);
     MACRO_SIM_BIND_M4_RULE(job_guarantee_public_works_share);
+    MACRO_SIM_BIND_M4_RULE(job_guarantee_productivity);
     MACRO_SIM_BIND_M4_RULE(initial_household_money);
     MACRO_SIM_BIND_M4_RULE(initial_firm_money);
     MACRO_SIM_BIND_M4_RULE(initial_capital_firm_money);
@@ -1955,6 +1963,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(layoff_band);
     MACRO_SIM_BIND_M7_RULE(target_smoothing);
     MACRO_SIM_BIND_M7_RULE(suspension_timeout_days);
+    MACRO_SIM_BIND_M7_RULE(suspension_quit_discount);
     MACRO_SIM_BIND_M7_RULE(frictional_search);
     MACRO_SIM_BIND_M7_RULE(search_intensity);
     MACRO_SIM_BIND_M7_RULE(relationship_wages);

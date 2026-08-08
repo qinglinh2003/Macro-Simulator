@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 455
     assert len(payload["contracts"]) == 455
     assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 69
+    assert payload["status_counts"]["blocked_native_route"] == 67
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -197,10 +197,11 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
         "omega",
         "reservation_markup",
         "suspension_timer",
+        "suspension_quit_discount",
         "theta_wage",
         "welfare_quit_hazard",
     }
-    assert len(neutral) == 15
+    assert len(neutral) == 16
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
@@ -346,7 +347,9 @@ def test_bank_assignment_draft_uses_the_canonical_enum_spelling() -> None:
 def test_government_contracts_cover_every_executable_causal_field() -> None:
     neutral = screening_contracts(module="government_and_public_sector")
     activated = activation_contracts(module="government_and_public_sector")
-    assert activated == ()
+    assert {contract.field_name for contract in activated} == {
+        "jg_productivity"
+    }
     assert {contract.field_name for contract in neutral} == {
         "public_capital_depreciation",
         "public_capital_gamma",

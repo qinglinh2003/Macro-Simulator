@@ -148,6 +148,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.layoff_band,
         value.target_smoothing,
         value.suspension_timeout_days,
+        value.suspension_quit_discount,
         value.frictional_search,
         value.search_intensity,
         value.relationship_wages,
@@ -187,7 +188,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 45U) {
+    if (!row.is_array() || row.size() != 46U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -206,6 +207,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.layoff_band = row[index++].get<double>();
     value.target_smoothing = row[index++].get<double>();
     value.suspension_timeout_days = row[index++].get<std::uint32_t>();
+    value.suspension_quit_discount = row[index++].get<double>();
     value.frictional_search = row[index++].get<bool>();
     value.search_intensity = row[index++].get<double>();
     value.relationship_wages = row[index++].get<bool>();
@@ -312,6 +314,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.retirement_separations_total,
         value.recalls_total,
         value.suspensions_total,
+        value.suspension_poaches_total,
         value.welfare_quits_total,
         value.job_to_job_moves_total,
         value.private_fte_inflows_total,
@@ -324,7 +327,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 [[nodiscard]] core::LaborAccounts decode_labor(const Json &row) {
-    if (!row.is_array() || row.size() != 31U) {
+    if (!row.is_array() || row.size() != 32U) {
         throw std::runtime_error("invalid M7 labor accounts");
     }
     core::LaborAccounts value;
@@ -353,6 +356,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M7_LABOR(retirement_separations_total);
     M7_LABOR(recalls_total);
     M7_LABOR(suspensions_total);
+    M7_LABOR(suspension_poaches_total);
     M7_LABOR(welfare_quits_total);
     M7_LABOR(job_to_job_moves_total);
     M7_LABOR(private_fte_inflows_total);
@@ -416,6 +420,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.retirement_separations,
         value.welfare_quits,
         value.suspensions_flow,
+        value.suspension_poaches,
         value.recalls,
         value.marriages,
         value.divorces,
@@ -425,7 +430,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 54U) {
+    if (!row.is_array() || row.size() != 55U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -478,6 +483,7 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.retirement_separations = row[index++].get<double>();
     value.welfare_quits = row[index++].get<double>();
     value.suspensions_flow = row[index++].get<double>();
+    value.suspension_poaches = row[index++].get<double>();
     value.recalls = row[index++].get<double>();
     value.marriages = row[index++].get<std::uint64_t>();
     value.divorces = row[index++].get<std::uint64_t>();

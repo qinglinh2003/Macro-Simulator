@@ -1231,7 +1231,10 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                                     Tick tick, PhiloxRng &rng, double &tax_total,
                                     double &profit_tax, double &income_tax,
                                     double &benefit_spending,
-                                    double &public_capital_addition) {
+                                    double &public_capital_addition,
+                                    double &job_guarantee_spending,
+                                    double &job_guarantee_labor,
+                                    double &job_guarantee_capital_addition) {
     const bool fiscal = runtime.vertical == M4Vertical::capital_fiscal;
     const auto treasury = state.institutions.treasury_account;
     const auto clearing = state.institutions.clearing_account;
@@ -1365,8 +1368,13 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
             }
             work.income_realized += payment;
             benefit_spending += payment;
-            public_capital_addition +=
+            job_guarantee_spending += payment;
+            job_guarantee_labor += residual;
+            const double produced =
+                runtime.rules.job_guarantee_productivity *
                 runtime.rules.job_guarantee_public_works_share * residual;
+            public_capital_addition += produced;
+            job_guarantee_capital_addition += produced;
         }
     }
     for (std::size_t index = 0; index < scratch.household_ids_.size(); ++index) {
@@ -1465,7 +1473,10 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
                                 double tax_total, double profit_tax, double income_tax,
                                 double consumption_tax, double government_spending,
                                 double benefit_spending, double public_capital,
-                                double public_investment_spending) noexcept {
+                                double public_investment_spending,
+                                double job_guarantee_spending,
+                                double job_guarantee_labor,
+                                double job_guarantee_capital_formation) noexcept {
     M4Metrics metrics;
     metrics.tick = tick;
     double sold_quantity = 0.0;
@@ -1499,6 +1510,24 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
         metrics.dividends_paid += firm.dividends;
         metrics.aggregate_capital += firm.closing_capital;
     }
+    const double productive_job_guarantee_spending =
+        runtime.rules.job_guarantee_public_works_share * job_guarantee_spending;
+    const bool productive_job_guarantee =
+        job_guarantee_capital_formation > algorithms::kEconomicEpsilon;
+    if (productive_job_guarantee) {
+        // Productive JG labor is own-account government construction.  Value
+        // current output at its observed wage cost and record the physical
+        // public-capital units separately, matching national-account treatment
+        // of own-account fixed-capital formation.
+        metrics.real_output += job_guarantee_capital_formation;
+        metrics.nominal_output += productive_job_guarantee_spending;
+        metrics.gross_output_nominal += productive_job_guarantee_spending;
+        metrics.fixed_capital_formation_real +=
+            job_guarantee_capital_formation;
+        metrics.fixed_capital_formation_nominal +=
+            productive_job_guarantee_spending;
+        metrics.wages_paid += productive_job_guarantee_spending;
+    }
     double labor_capacity = 0.0;
     for (const auto &household : scratch.household_work_) {
         metrics.household_consumption += household.spent;
@@ -1528,12 +1557,26 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
                                   scratch.supplemental_transfer_payments_;
     metrics.government_consumption = government_spending - public_investment_spending +
                                      scratch.supplemental_government_consumption_;
-    metrics.public_fixed_capital_formation = public_investment_spending;
+    metrics.public_fixed_capital_formation =
+        public_investment_spending +
+        (productive_job_guarantee ? productive_job_guarantee_spending : 0.0);
     metrics.transfer_payments =
-        benefit_spending + scratch.supplemental_transfer_payments_;
+        benefit_spending -
+        (productive_job_guarantee ? productive_job_guarantee_spending : 0.0) +
+        scratch.supplemental_transfer_payments_;
     metrics.government_deficit = metrics.government_spending - metrics.tax_total -
                                  scratch.supplemental_nontax_receipts_;
     metrics.public_capital = public_capital;
+    metrics.job_guarantee_spending = job_guarantee_spending;
+    metrics.job_guarantee_labor = job_guarantee_labor;
+    metrics.job_guarantee_public_capital_formation =
+        job_guarantee_capital_formation;
+    const double public_works_labor =
+        runtime.rules.job_guarantee_public_works_share * job_guarantee_labor;
+    metrics.job_guarantee_realized_productivity =
+        public_works_labor > algorithms::kEconomicEpsilon
+            ? job_guarantee_capital_formation / public_works_labor
+            : 0.0;
     static_cast<void>(runtime);
     return metrics;
 }
@@ -1693,6 +1736,9 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
         return status;
     }
     double benefit_spending = 0.0;
+    double job_guarantee_spending = 0.0;
+    double job_guarantee_labor = 0.0;
+    double job_guarantee_capital_addition = 0.0;
     if (extension != nullptr) {
         status = extension->before_settlement(state, runtime, scratch, tick, rng);
         if (!status.ok()) {
@@ -1701,7 +1747,9 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
     }
     status = run_settlement(state, runtime, scratch, extension, tick, rng, tax_total,
                             profit_tax, income_tax, benefit_spending,
-                            public_capital_addition);
+                            public_capital_addition, job_guarantee_spending,
+                            job_guarantee_labor,
+                            job_guarantee_capital_addition);
     if (!status.ok()) {
         return status;
     }
@@ -1738,7 +1786,9 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
     const auto metrics =
         measure(state, runtime, scratch, tick, tax_total, profit_tax, income_tax,
                 consumption_tax, government_spending, benefit_spending, public_capital,
-                public_investment_spending);
+                public_investment_spending, job_guarantee_spending,
+                job_guarantee_labor,
+                job_guarantee_capital_addition);
     capture_phase(state, scratch, options, M4Phase::validate_and_measure);
 
     status = check_fault(options, M4Phase::stage_local_commit);
@@ -1952,6 +2002,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.minimum_wage,
         rules.job_guarantee_wage_ratio,
         rules.job_guarantee_public_works_share,
+        rules.job_guarantee_productivity,
         rules.initial_household_money,
         rules.initial_firm_money,
         rules.initial_capital_firm_money,
@@ -2010,6 +2061,7 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.minimum_wage < 0.0 || rules.job_guarantee_wage_ratio < 0.0 ||
         rules.job_guarantee_public_works_share < 0.0 ||
         rules.job_guarantee_public_works_share > 1.0 ||
+        rules.job_guarantee_productivity < 0.0 ||
         rules.government_investment_share > 1.0 || rules.initial_price <= 0.0 ||
         rules.initial_capital_price <= 0.0 || rules.initial_wage <= 0.0 ||
         rules.initial_household_money < 0.0 || rules.initial_firm_money < 0.0 ||

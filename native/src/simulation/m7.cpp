@@ -1917,12 +1917,22 @@ class M7Extension final : public M6TickExtension {
                     scratch_.employment_.get(existing_primary_id);
                 if (existing_primary != nullptr && existing_primary->active &&
                     existing_primary->suspended) {
+                    // A suspended contract preserves a valuable recall option.  A
+                    // worker accepts an outside match only when its posted wage
+                    // clears the configured fraction of the old contractual wage.
+                    if (firm_id == existing_primary->firm ||
+                        work.posted_wage + kLaborTolerance <
+                            runtime_.rules.suspension_quit_discount *
+                                existing_primary->wage) {
+                        continue;
+                    }
                     const auto separated = separate_job(
                         scratch_.employment_, existing_primary_id, calendar_day,
                         core::SeparationKind::cash_layoff, scratch_.labor_accounts_);
                     if (!separated.ok()) {
                         return separated;
                     }
+                    scratch_.labor_accounts_.suspension_poaches_total += 1.0;
                     scratch_.working_metrics_.separations += 1.0;
                 }
                 const auto hired =
@@ -2606,6 +2616,9 @@ class M7Extension final : public M6TickExtension {
                 flow_delta(closing.welfare_quits_total, opening.welfare_quits_total);
             scratch_.working_metrics_.suspensions_flow =
                 flow_delta(closing.suspensions_total, opening.suspensions_total);
+            scratch_.working_metrics_.suspension_poaches = flow_delta(
+                closing.suspension_poaches_total,
+                opening.suspension_poaches_total);
             scratch_.working_metrics_.recalls =
                 flow_delta(closing.recalls_total, opening.recalls_total);
             scratch_.working_metrics_.job_to_job_moves = flow_delta(
@@ -2972,6 +2985,7 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.firing_adjustment,
         rules.layoff_band,
         rules.target_smoothing,
+        rules.suspension_quit_discount,
         rules.search_intensity,
         rules.ladder_search_intensity,
         rules.ladder_premium,
@@ -2998,6 +3012,8 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.firing_adjustment < 0.0 || rules.firing_adjustment > 1.0 ||
         rules.layoff_band < 0.0 || rules.target_smoothing < 0.0 ||
         rules.target_smoothing > 1.0 || rules.suspension_timeout_days == 0 ||
+        rules.suspension_quit_discount <= 0.0 ||
+        rules.suspension_quit_discount > 1.5 ||
         rules.search_intensity < 0.0 || rules.search_intensity > 1.0 ||
         rules.ladder_search_intensity < 0.0 || rules.ladder_search_intensity > 1.0 ||
         rules.ladder_premium < 0.0 || rules.efficiency_sigma < 0.0 ||

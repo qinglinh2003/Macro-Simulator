@@ -164,6 +164,10 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
     "government_and_public_sector": (
         "metric.source.m4.public_capital",
         "metric.source.m4.public_fixed_capital_formation",
+        "metric.source.m4.job_guarantee_spending",
+        "metric.source.m4.job_guarantee_labor",
+        "metric.source.m4.job_guarantee_public_capital_formation",
+        "metric.source.m4.job_guarantee_realized_productivity",
         "metric.source.m4.government_spending",
         "metric.source.m4.government_deficit",
         "metric.economy.na.real_gdp_per_capita",
@@ -751,6 +755,7 @@ def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
     churn = "metric.source.m7.churn_separations"
     layoffs = "metric.source.m7.demand_layoff_separations"
     suspensions = "metric.source.m7.suspensions_flow"
+    suspension_poaches = "metric.source.m7.suspension_poaches"
     suspended = "metric.source.m7.suspended"
     second_jobs = "metric.source.m7.second_job_hours"
     moves = "metric.source.m7.job_to_job_moves"
@@ -888,6 +893,13 @@ def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
             "values": (1, 90),
             "directions": {suspended: "increase"},
             "rationale": "A longer recall window should retain more suspended matches; automatic cash layoffs and successful outside matches are reported as competing transition flows rather than assigned a permanent sign.",
+        },
+        "config.suspension_quit_discount": {
+            "status": "screening_ready",
+            "values": (1.05,),
+            "directions": {suspension_poaches: "decrease"},
+            "statistics": {suspension_poaches: "cumulative"},
+            "rationale": "A higher outside-offer threshold preserves more recall options by requiring a suspended worker to receive a larger wage relative to the suspended contract before accepting another employer's offer. The playable wage grid saturates below the 0.9 baseline—all observed outside offers already qualify—so the reviewed treatment probes the economically active upper side rather than crediting a deliberately flat lower arm.",
         },
         "config.theta_wage": {
             "status": "screening_ready",
@@ -1349,9 +1361,30 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
 
 def _government_contracts() -> Mapping[str, Mapping[str, Any]]:
     public_capital = "metric.source.m4.public_capital"
+    jg_capital = (
+        "metric.source.m4.job_guarantee_public_capital_formation"
+    )
+    jg_productivity = "metric.source.m4.job_guarantee_realized_productivity"
     output = "metric.economy.na.real_gdp_per_capita"
     unemployment = "metric.economy.unemployment_rate"
     return {
+        "config.jg_productivity": {
+            "status": "activation_scenario_required",
+            "values": (0.25, 0.75),
+            "horizon_days": 365,
+            "directions": {
+                jg_productivity: "increase",
+                jg_capital: "ambiguous",
+                public_capital: "ambiguous",
+                output: "ambiguous",
+            },
+            "statistics": {
+                jg_productivity: "post_burnin_mean",
+                jg_capital: "cumulative",
+            },
+            "activation": "active_job_guarantee_public_works",
+            "rationale": "With a common active employer-of-last-resort programme and a full public-works allocation, the direct causal contract is capital formed per unit of assigned residual labor. Gross formation, public capital, and GDP remain reported but are not assigned a universal sign because employment and labor-market feedback can offset the engineering coefficient. Productive construction is valued at wage cost in national accounts and augments the public-capital stock.",
+        },
         "config.public_capital_depreciation": {
             "status": "screening_ready",
             "values": (5.7e-5, 9.12e-4),

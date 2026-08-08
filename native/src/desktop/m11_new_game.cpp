@@ -258,6 +258,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     real.rules.wage_calvo_probability = 0.011;
     real.rules.price_calvo_probability = 0.0037;
     real.rules.public_capital_gamma = 0.10;
+    real.rules.job_guarantee_productivity = 0.50;
     real.rules.initial_consumption_capital = 7300.0;
     real.rules.initial_price = 0.80;
     // Open near the sustainable flow rate and carry the same fourteen days of
