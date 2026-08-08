@@ -59,6 +59,10 @@ M4_RULE_FIELDS = {
     "markup_minimum": "mu_min",
     "markup_maximum": "mu_max",
     "diseconomy_slope": "dis_slope",
+    "gibrat_growth": "gibrat_growth",
+    "gibrat_sigma": "gibrat_sigma",
+    "preferential_attachment_beta": "pref_attach_beta",
+    "preferential_price_elasticity": "pref_price_elasticity",
     "wage_shortage_adjustment": "omega",
     "wage_downward_drift": "delta",
     "wage_calvo_probability": "theta_wage",
@@ -240,6 +244,7 @@ M6_RULE_FIELDS = {
     "entry_max": "entry_max",
     "startup_deposits": "startup_deposits",
     "startup_capital": "startup_capital",
+    "entrant_attractiveness": "gibrat_entry_a0",
     "firm_subscale_exit": "firm_subscale_exit",
     "capital_firm_entry": "capital_firm_entry",
     "subscale_viability_workers": "subscale_viability_workers",
@@ -489,7 +494,14 @@ def _m4_spec(native: Any, cfg: Any, economy_id: int) -> Any:
     output.seed = int(cfg.seed)
     # M4 V1 owns only the physical-capital and government capability bits.
     output.requested_capabilities = (1 << 0) | (1 << 1)
-    output.stochastic = bool(cfg.tfp_drift_sigma or cfg.gibrat_sigma)
+    output.stochastic = bool(
+        cfg.tfp_drift_sigma or (cfg.gibrat_growth and cfg.gibrat_sigma)
+    )
+    output.market_protocol = (
+        native.MatchingProtocol.PREFERENTIAL
+        if cfg.gibrat_growth
+        else native.MatchingProtocol.SAMPLED
+    )
     _assign(output.rules, cfg, M4_RULE_FIELDS)
     firm_scale = _representative_entity_scale(
         cfg,

@@ -67,6 +67,7 @@ struct M6Rules final {
     std::uint32_t entry_max{1};
     double startup_deposits{10.0};
     double startup_capital{2.0};
+    double entrant_attractiveness{0.2};
     bool firm_subscale_exit{false};
     bool capital_firm_entry{false};
     double subscale_viability_workers{0.5};

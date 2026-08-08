@@ -58,6 +58,10 @@ struct M4Rules final {
     double markup_minimum{0.0};
     double markup_maximum{1.0};
     double diseconomy_slope{0.0};
+    bool gibrat_growth{false};
+    double gibrat_sigma{0.0};
+    double preferential_attachment_beta{1.0};
+    double preferential_price_elasticity{0.0};
     double wage_shortage_adjustment{0.0075};
     double wage_downward_drift{0.0075};
     double wage_calvo_probability{0.0};
@@ -290,6 +294,7 @@ class M4TickScratch final {
         double posted_wage{0.0};
         double markup{0.0};
         double demand_expected{0.0};
+        double attractiveness{1.0};
     };
 
     std::vector<HouseholdId> household_ids_;

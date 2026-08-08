@@ -157,6 +157,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.markup_minimum);
     writer.f64(rules.markup_maximum);
     writer.f64(rules.diseconomy_slope);
+    writer.boolean(rules.gibrat_growth);
+    writer.f64(rules.gibrat_sigma);
+    writer.f64(rules.preferential_attachment_beta);
+    writer.f64(rules.preferential_price_elasticity);
     writer.f64(rules.wage_shortage_adjustment);
     writer.f64(rules.wage_downward_drift);
     writer.f64(rules.wage_calvo_probability);
@@ -213,6 +217,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     std::uint8_t job_guarantee = 0;
     std::uint8_t capital_rationed_signal = 0;
     std::uint8_t consumption_rationed_signal = 0;
+    bool gibrat_growth = false;
     std::uint8_t necessity_tax_present = 0;
     std::uint8_t luxury_tax_present = 0;
     double necessity_tax = 0.0;
@@ -231,6 +236,10 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.markup_minimum)
         && reader.f64(rules.markup_maximum)
         && reader.f64(rules.diseconomy_slope)
+        && reader.boolean(gibrat_growth)
+        && reader.f64(rules.gibrat_sigma)
+        && reader.f64(rules.preferential_attachment_beta)
+        && reader.f64(rules.preferential_price_elasticity)
         && reader.f64(rules.wage_shortage_adjustment)
         && reader.f64(rules.wage_downward_drift)
         && reader.f64(rules.wage_calvo_probability)
@@ -282,6 +291,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.u8(consumption_rationed_signal)
         && reader.u32(rules.market_sample_size);
     rules.job_guarantee = job_guarantee != 0;
+    rules.gibrat_growth = gibrat_growth;
     rules.capital_rationed_signal = capital_rationed_signal != 0;
     rules.consumption_rationed_signal =
         consumption_rationed_signal != 0;
@@ -435,6 +445,7 @@ void write_firm(
     writer.f64(firm.hired_previous);
     writer.f64(firm.sales_previous);
     writer.f64(firm.rationed_previous);
+    writer.f64(firm.attractiveness);
 }
 
 [[nodiscard]] bool read_firm(
@@ -474,7 +485,8 @@ void write_firm(
         || !reader.f64(firm->labor_demand_previous)
         || !reader.f64(firm->hired_previous)
         || !reader.f64(firm->sales_previous)
-        || !reader.f64(firm->rationed_previous)) {
+        || !reader.f64(firm->rationed_previous)
+        || !reader.f64(firm->attractiveness)) {
         return false;
     }
     firm->technology = static_cast<core::FirmTechnology>(technology);
@@ -664,7 +676,7 @@ Result<M4Checkpoint> load_m4_checkpoint(
     if (!reader.u64(firm_count) || firm_count > 10'000'000) {
         return corrupt("M4 checkpoint firm count is invalid");
     }
-    const auto firm_record_bytes = 8U + 1U + 21U * 8U;
+    const auto firm_record_bytes = 8U + 1U + 22U * 8U;
     const auto firm_bytes =
         static_cast<std::size_t>(firm_count) * firm_record_bytes;
     std::span<const std::uint8_t> encoded_firms;

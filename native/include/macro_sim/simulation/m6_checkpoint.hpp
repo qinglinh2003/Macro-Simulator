@@ -10,7 +10,7 @@
 
 namespace macro_sim::simulation {
 
-inline constexpr std::uint32_t kM6CheckpointSchemaVersion = 1;
+inline constexpr std::uint32_t kM6CheckpointSchemaVersion = 2;
 
 struct M6Checkpoint final {
     core::RootState root;

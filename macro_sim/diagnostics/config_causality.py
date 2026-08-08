@@ -136,8 +136,6 @@ SUPERSEDED_FIELDS: Mapping[str, str] = {
     ),
     "config.d_firm0": "config.d_cfirm0",
     "config.float_shares": "config.shares_per_firm",
-    "config.gibrat_entry_a0": "config.entry_hurdle and config.entry_beta",
-    "config.gibrat_growth": "config.firm_dynamics",
     "config.n_firms": "config.n_firms_c and config.n_firms_k",
     "config.lifecycle-household.annual_leave_rate_late":
         "config.demographic_annual_leave_rate_late",

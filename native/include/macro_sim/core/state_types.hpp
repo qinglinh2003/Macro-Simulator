@@ -185,6 +185,7 @@ struct FirmComponent final {
     double hired_previous{0.0};
     double sales_previous{0.0};
     double rationed_previous{0.0};
+    double attractiveness{1.0};
 };
 
 struct BankComponent final {

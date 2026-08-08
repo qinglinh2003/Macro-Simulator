@@ -137,6 +137,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"entry_max", value.entry_max},
         {"startup_deposits", value.startup_deposits},
         {"startup_capital", value.startup_capital},
+        {"entrant_attractiveness", value.entrant_attractiveness},
         {"firm_subscale_exit", value.firm_subscale_exit},
         {"capital_firm_entry", value.capital_firm_entry},
         {"subscale_viability_workers", value.subscale_viability_workers},
@@ -196,6 +197,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M6_RULE(entry_max, std::uint32_t);
     M6_RULE(startup_deposits, double);
     M6_RULE(startup_capital, double);
+    M6_RULE(entrant_attractiveness, double);
     M6_RULE(firm_subscale_exit, bool);
     M6_RULE(capital_firm_entry, bool);
     M6_RULE(subscale_viability_workers, double);

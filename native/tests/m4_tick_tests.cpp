@@ -245,6 +245,66 @@ void test_diseconomy_slope_raises_large_firm_unit_cost() {
     assert(coordination_costs > constant_returns);
 }
 
+void test_gibrat_growth_updates_persistent_firm_attractiveness() {
+    auto spec = v0_spec(4825);
+    spec.stochastic = true;
+    spec.market_protocol = algorithms::MatchingProtocol::preferential;
+    spec.rules.gibrat_growth = true;
+    spec.rules.gibrat_sigma = 0.20;
+    auto initialization = build_m4_genesis(spec);
+    assert(initialization.ok());
+    auto value = std::move(initialization).take();
+    M4TickScratch scratch;
+    Tick tick(0);
+    assert(advance_tick(value.root, value.runtime, scratch, tick).ok());
+    bool changed = false;
+    value.root.firms.for_each_alive(
+        [&changed](FirmId, const core::FirmComponent &firm) {
+            assert(std::isfinite(firm.attractiveness));
+            assert(firm.attractiveness > 0.0);
+            changed = changed || std::abs(firm.attractiveness - 1.0) > 1.0e-12;
+        });
+    assert(changed);
+}
+
+void test_preferential_beta_and_price_elasticity_change_market_share() {
+    const auto run = [](double beta, double price_elasticity,
+                        bool heterogeneous_price) {
+        auto spec = v0_spec(4826);
+        spec.households = 1000;
+        spec.consumption_firms = 2;
+        spec.stochastic = true;
+        spec.market_protocol = algorithms::MatchingProtocol::preferential;
+        spec.rules.preferential_attachment_beta = beta;
+        spec.rules.preferential_price_elasticity = price_elasticity;
+        spec.rules.initial_consumption_inventory = 1000.0;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        auto *first = value.root.firms.get(FirmId(1));
+        auto *second = value.root.firms.get(FirmId(2));
+        assert(first != nullptr && second != nullptr);
+        first->attractiveness = 1.0;
+        second->attractiveness = heterogeneous_price ? 1.0 : 4.0;
+        first->posted_price = Price(1.0);
+        second->posted_price = Price(heterogeneous_price ? 2.0 : 1.0);
+        M4TickScratch scratch;
+        Tick tick(0);
+        assert(advance_tick(value.root, value.runtime, scratch, tick).ok());
+        return std::array{first->sales_previous, second->sales_previous};
+    };
+
+    const auto neutral_brand = run(0.0, 0.0, false);
+    const auto strong_brand = run(2.0, 0.0, false);
+    assert(strong_brand[1] / std::max(1.0, strong_brand[0]) >
+           neutral_brand[1] / std::max(1.0, neutral_brand[0]));
+
+    const auto price_blind = run(0.0, 0.0, true);
+    const auto price_sensitive = run(0.0, 2.0, true);
+    assert(price_sensitive[0] / std::max(1.0, price_sensitive[1]) >
+           price_blind[0] / std::max(1.0, price_blind[1]));
+}
+
 void test_fiscal_quantity_and_deficit_regimes_are_distinct() {
     auto quantity = v1_spec(207);
     quantity.rules.government_investment_share = 0.0;
@@ -490,6 +550,10 @@ void test_checkpoint_round_trip_and_corruption() {
     spec.stochastic = true;
     spec.rules.capital_clock_demand_smoothing = 0.5;
     spec.rules.diseconomy_slope = 0.01;
+    spec.rules.gibrat_growth = true;
+    spec.rules.gibrat_sigma = 0.01;
+    spec.rules.preferential_attachment_beta = 1.25;
+    spec.rules.preferential_price_elasticity = 0.75;
     spec.rules.initial_capital_firm_money = 350.0;
     spec.rules.wage_indexation = 0.75;
     spec.rules.wage_expected_inflation = 0.001;
@@ -502,7 +566,13 @@ void test_checkpoint_round_trip_and_corruption() {
     assert(checkpoint.ok());
 
     EngineSession restored(8);
-    assert(restored.restore_checkpoint(*checkpoint.get_if()).ok());
+    const auto restore_status = restored.restore_checkpoint(*checkpoint.get_if());
+    if (!restore_status.ok()) {
+        std::fprintf(stderr, "M4 checkpoint restore failed: %.*s\n",
+                     static_cast<int>(restore_status.message().size()),
+                     restore_status.message().data());
+    }
+    assert(restore_status.ok());
     assert(restored.tick() == Tick(12));
     const auto restored_digest = restored.digest();
     assert(restored_digest.ok());
@@ -544,6 +614,8 @@ int main() {
     test_capital_clock_demand_smoothing_scales_the_source_ema();
     test_wage_indexation_uses_committed_expected_inflation();
     test_diseconomy_slope_raises_large_firm_unit_cost();
+    test_gibrat_growth_updates_persistent_firm_attractiveness();
+    test_preferential_beta_and_price_elasticity_change_market_share();
     test_fiscal_quantity_and_deficit_regimes_are_distinct();
     test_fiscal_deficit_responds_to_unemployment();
     test_deficit_envelope_includes_transfer_spending();

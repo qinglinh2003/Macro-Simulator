@@ -1876,6 +1876,7 @@ pick_bank_founder(const core::RootState &state, const M4TickScratch &real, doubl
             Money(real.firm_ids_.empty()
                       ? 1.0
                       : state.firms.get(real.firm_ids_.front())->posted_wage.value());
+        component.attractiveness = runtime.rules.entrant_attractiveness;
         FirmLifecycleRecord lifecycle;
         lifecycle.firm = predicted_firm;
         lifecycle.statement.firm = predicted_firm;
@@ -3256,6 +3257,7 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.entry_beta,
         spec.rules.startup_deposits,
         spec.rules.startup_capital,
+        spec.rules.entrant_attractiveness,
         spec.rules.subscale_viability_workers,
         spec.rules.subscale_exit_hazard,
         spec.rules.k_entry_demand,
@@ -3290,6 +3292,7 @@ Status validate_m6_rules(const M6Rules &rules) noexcept {
         spec.rules.shell_exit_days == 0 || spec.rules.entry_hurdle < 0.0 ||
         spec.rules.entry_beta < 0.0 || spec.rules.startup_deposits < 0.0 ||
         spec.rules.startup_capital < 0.0 ||
+        spec.rules.entrant_attractiveness <= 0.0 ||
         spec.rules.subscale_viability_workers <= 0.0 ||
         spec.rules.subscale_grace_days == 0U || spec.rules.subscale_exit_hazard < 0.0 ||
         spec.rules.subscale_exit_hazard > 1.0 || spec.rules.k_entry_demand <= 0.0 ||

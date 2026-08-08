@@ -256,9 +256,20 @@ void test_bank_equity_uses_lagged_closed_income() {
     fast_spec.rules.bank_equity_lambda = 1.0;
     auto slow = build(slow_spec);
     auto fast = build(fast_spec);
+    const auto seed_closed_income = [](Harness &harness) {
+        harness.root.banks.for_each_alive(
+            [&harness](macro_sim::BankId bank, const auto &) {
+                auto *pnl = harness.root.bank_pnl.get(bank);
+                assert(pnl != nullptr);
+                pnl->loan_interest = 1.0;
+                pnl->net_income = 1.0;
+            });
+    };
+    seed_closed_income(slow);
+    seed_closed_income(fast);
 
-    const auto slow_result = advance(slow, 20);
-    const auto fast_result = advance(fast, 20);
+    const auto slow_result = advance(slow, 1);
+    const auto fast_result = advance(fast, 1);
     assert(slow_result.ok());
     assert(fast_result.ok());
     const double slow_value =
@@ -267,6 +278,10 @@ void test_bank_equity_uses_lagged_closed_income() {
         fast_result.get_if()->metrics.bank_equity_fundamental_value;
     assert(slow_value > 0.0);
     assert(fast_value > 0.0);
+    if (std::abs(slow_value - fast_value) <= 1.0e-6) {
+        std::cerr << "bank equity smoothing did not separate: slow=" << slow_value
+                  << " fast=" << fast_value << "\n";
+    }
     assert(std::abs(slow_value - fast_value) > 1.0e-6);
 }
 
@@ -440,6 +455,23 @@ void test_firm_entry_uses_post_extension_founder_cash() {
     assert(result.ok());
     assert(harness.root.firms.alive_count() == firm_count);
     assert(result.get_if()->metrics.firm_births == 0U);
+}
+
+void test_consumption_firm_entry_uses_configured_attractiveness() {
+    auto spec = base_spec();
+    spec.rules.entry_beta = 1.0;
+    spec.rules.entry_max = 1;
+    spec.rules.startup_deposits = 5.0;
+    spec.rules.entrant_attractiveness = 0.37;
+    auto harness = build(spec);
+    harness.runtime.last_metrics.economy.policy_rate = -1.0;
+    const auto next_id = harness.root.firms.allocator_state().next_id;
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.firm_births == 1U);
+    const auto *entrant = harness.root.firms.get(FirmId(next_id));
+    assert(entrant != nullptr);
+    assert(std::abs(entrant->attractiveness - 0.37) < 1.0e-12);
 }
 
 void test_capital_firms_are_not_idle_consumption_shells() {
@@ -817,6 +849,7 @@ int main() {
     test_firm_liquidation_recovers_haircut_collateral();
     test_bank_entry_uses_post_extension_founder_cash();
     test_firm_entry_uses_post_extension_founder_cash();
+    test_consumption_firm_entry_uses_configured_attractiveness();
     test_capital_firms_are_not_idle_consumption_shells();
     test_genesis_respects_initial_necessity_share();
     test_firm_dividends_follow_equity_ownership();

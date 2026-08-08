@@ -399,6 +399,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         firm->hired_previous = work.hired;
         firm->sales_previous = work.sales;
         firm->rationed_previous = work.rationed_demand;
+        firm->attractiveness = work.attractiveness;
     }
     runtime.rng_counter = rng_counter;
     runtime.technology_index = technology_index;
@@ -485,6 +486,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         work.posted_price = firm->posted_price.value();
         work.posted_wage = firm->posted_wage.value();
         work.markup = firm->markup;
+        work.attractiveness = firm->attractiveness;
         auto expectation = algorithms::demand_expectation(
             firm->demand_expected, firm->sales_previous, firm->rationed_previous,
             firm->demand_adjustment *
@@ -513,6 +515,14 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         const double total_factor_productivity =
             firm->total_factor_productivity * options.productivity_multipliers[sector];
         auto &work = scratch.firm_work_[index];
+        if (firm->sector == core::FirmSector::consumption &&
+            runtime.rules.gibrat_growth && runtime.rules.gibrat_sigma > 0.0) {
+            const double sigma = runtime.rules.gibrat_sigma;
+            work.attractiveness = std::max(
+                algorithms::kEconomicEpsilon,
+                work.attractiveness *
+                    std::exp(sigma * rng.standard_normal() - 0.5 * sigma * sigma));
+        }
         auto production_plan = algorithms::production_plan({
             work.demand_expected,
             firm->inventory_ratio,
@@ -904,7 +914,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 firm->primary_account,
                 Goods(std::max(0.0, work.closing_inventory)),
                 Price(work.posted_price),
-                1.0,
+                work.attractiveness,
             });
         }
     } else {
@@ -934,7 +944,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                 firm->primary_account,
                 Goods(std::max(0.0, work.closing_inventory)),
                 Price(work.posted_price),
-                1.0,
+                work.attractiveness,
             });
         }
         if (options.external_goods_offer.has_value()) {
@@ -956,6 +966,8 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     algorithms::MarketConfig config;
     config.protocol = runtime.market_protocol;
     config.sample_size = runtime.rules.market_sample_size;
+    config.preferential_beta = runtime.rules.preferential_attachment_beta;
+    config.price_elasticity = runtime.rules.preferential_price_elasticity;
     config.rng_key = runtime.rng_key;
     config.rng_counter = rng.counter();
     auto clearing = algorithms::clear_market(scratch.orders_, scratch.offers_, config);
@@ -1907,6 +1919,9 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.markup_minimum,
         rules.markup_maximum,
         rules.diseconomy_slope,
+        rules.gibrat_sigma,
+        rules.preferential_attachment_beta,
+        rules.preferential_price_elasticity,
         rules.wage_shortage_adjustment,
         rules.wage_downward_drift,
         rules.wage_calvo_probability,
@@ -1962,6 +1977,8 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.income_adjustment > 1.0 || rules.inventory_ratio < 0.0 ||
         rules.inventory_gap_close < 0.0 || rules.inventory_gap_close > 1.0 ||
         rules.markup_adjustment < 0.0 || rules.diseconomy_slope < 0.0 ||
+        rules.gibrat_sigma < 0.0 || rules.preferential_attachment_beta < 0.0 ||
+        rules.preferential_price_elasticity < 0.0 ||
         rules.wage_shortage_adjustment < 0.0 ||
         rules.wage_downward_drift < 0.0 || rules.income_propensity < 0.0 ||
         rules.wealth_propensity < 0.0 || rules.dividend_payout < 0.0 ||
@@ -2088,6 +2105,7 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
             firm.hired_previous,
             firm.sales_previous,
             firm.rationed_previous,
+            firm.attractiveness,
         };
         components_valid =
             components_valid && all_finite(values) &&
@@ -2098,6 +2116,8 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
             firm.posted_wage.value() > 0.0 && firm.demand_expected >= 0.0 &&
             firm.hired_previous >= 0.0 && firm.sales_previous >= 0.0 &&
             firm.rationed_previous >= 0.0;
+        components_valid = components_valid &&
+                           firm.attractiveness > 0.0;
     });
     const std::array runtime_values{
         runtime.technology_index,
@@ -2244,6 +2264,7 @@ Result<M4Initialization> build_m4_genesis(const M4SimulationSpec &spec) {
         firm.posted_wage = Money(spec.rules.initial_wage);
         firm.markup = spec.rules.initial_markup;
         firm.demand_expected = spec.rules.initial_expected_demand;
+        firm.attractiveness = 1.0;
     });
     M4Runtime runtime;
     runtime.vertical = spec.vertical;

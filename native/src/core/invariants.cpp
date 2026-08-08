@@ -79,7 +79,8 @@ InvariantReport run_invariants(const RootState& state) noexcept {
                 finite_components
                 && std::isfinite(firm.goods_inventory.value())
                 && std::isfinite(firm.physical_capital.value())
-                && std::isfinite(firm.productivity);
+                && std::isfinite(firm.productivity)
+                && std::isfinite(firm.attractiveness);
         }
     );
     if (!finite_components) {
@@ -117,7 +118,8 @@ InvariantReport run_invariants(const RootState& state) noexcept {
                 )
                 && firm.goods_inventory.value() >= 0.0
                 && firm.physical_capital.value() >= 0.0
-                && firm.productivity >= 0.0;
+                && firm.productivity >= 0.0
+                && firm.attractiveness > 0.0;
         }
     );
     state.banks.for_each_alive(

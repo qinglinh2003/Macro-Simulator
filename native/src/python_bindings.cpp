@@ -1569,6 +1569,10 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M4_RULE(markup_minimum);
     MACRO_SIM_BIND_M4_RULE(markup_maximum);
     MACRO_SIM_BIND_M4_RULE(diseconomy_slope);
+    MACRO_SIM_BIND_M4_RULE(gibrat_growth);
+    MACRO_SIM_BIND_M4_RULE(gibrat_sigma);
+    MACRO_SIM_BIND_M4_RULE(preferential_attachment_beta);
+    MACRO_SIM_BIND_M4_RULE(preferential_price_elasticity);
     MACRO_SIM_BIND_M4_RULE(wage_shortage_adjustment);
     MACRO_SIM_BIND_M4_RULE(wage_downward_drift);
     MACRO_SIM_BIND_M4_RULE(wage_calvo_probability);
@@ -1857,6 +1861,7 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M6_RULE(entry_max);
     MACRO_SIM_BIND_M6_RULE(startup_deposits);
     MACRO_SIM_BIND_M6_RULE(startup_capital);
+    MACRO_SIM_BIND_M6_RULE(entrant_attractiveness);
     MACRO_SIM_BIND_M6_RULE(firm_subscale_exit);
     MACRO_SIM_BIND_M6_RULE(capital_firm_entry);
     MACRO_SIM_BIND_M6_RULE(subscale_viability_workers);
