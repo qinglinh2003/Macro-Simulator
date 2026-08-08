@@ -118,7 +118,6 @@ class PlanningConfig:
     lambda_q: float
     q_invest_floor: float
     q_invest_cap: float
-    k_replacement_floor: bool
     wealth_effect: float
     mpc_wealth_curvature: float
     d_household0: float

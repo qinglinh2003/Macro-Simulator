@@ -171,11 +171,6 @@ def run_planning_phase(econ: Any) -> None:
                 )
             else:
                 B.plan_investment(f, cfg.lambda_q, cfg.q_invest_floor, cfg.q_invest_cap)  # B5 (+q, v6.1b)
-            # v2.5 diagnostic (PLAN_v2 §1.1 disambiguation): force K-firms to at
-            # least replace depreciation, removing the "never invests" failure so
-            # any remaining collapse must be the structural absorbing state.
-            if cfg.k_replacement_floor and f.sells == "capital":
-                f.investment_target = max(f.investment_target, f.delta_K * f.capital)
             # v17.0: E-firms carry the same floor UNCONDITIONALLY -- it is an existence
             # condition, not a diagnostic: a demand slump zeroes the accelerator, K
             # depreciates away, and a dead E-sector is ABSORBING (recovery demand cannot

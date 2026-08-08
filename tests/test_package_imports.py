@@ -630,7 +630,6 @@ def test_config_exposes_passive_planning_config_view():
         lambda_q=0.12,
         q_invest_floor=0.7,
         q_invest_cap=1.8,
-        k_replacement_floor=True,
         wealth_effect=0.15,
         mpc_wealth_curvature=0.8,
         d_household0=125.0,
@@ -642,7 +641,6 @@ def test_config_exposes_passive_planning_config_view():
     assert cfg.planning.lambda_q == cfg.lambda_q
     assert cfg.planning.q_invest_floor == cfg.q_invest_floor
     assert cfg.planning.q_invest_cap == cfg.q_invest_cap
-    assert cfg.planning.k_replacement_floor is cfg.k_replacement_floor
     assert cfg.planning.wealth_effect == cfg.wealth_effect
     assert cfg.planning.mpc_wealth_curvature == cfg.mpc_wealth_curvature
     assert cfg.planning.d_household0 == cfg.d_household0

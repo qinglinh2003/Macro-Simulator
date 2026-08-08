@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import fields
+
+from macro_sim.config import Config
 from macro_sim.diagnostics.config_causality import build_audit_inventory
 
 
@@ -15,16 +18,15 @@ def test_playable_baseline_enables_every_required_module() -> None:
 
 def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
     payload = build_audit_inventory()
-    assert payload["field_count"] == 455
+    assert payload["field_count"] == 453
     assert payload["route_counts"] == {
         "derived": 2,
         "excluded_policy": 108,
         "excluded_shock": 4,
         "infrastructure_invariance": 20,
         "mapped_native": 226,
-        "missing_native_route": 67,
+        "missing_native_route": 66,
         "native_fixed": 12,
-        "planned_removal": 1,
         "run_control": 1,
         "superseded": 14,
     }
@@ -32,6 +34,16 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
     assert sum(payload["experiment_role_counts"].values()) == payload["field_count"]
     assert all(row["module"] for row in payload["rows"])
     assert all(row["experiment_role"] for row in payload["rows"])
+
+
+def test_failed_v25_capital_recursion_is_not_a_silent_config_surface() -> None:
+    names = {field.name for field in fields(Config)}
+    assert "symmetric_k" not in names
+    assert "k_replacement_floor" not in names
+    assert not hasattr(Config, "v25")
+    inventory_ids = {row["id"] for row in build_audit_inventory()["rows"]}
+    assert "config.symmetric_k" not in inventory_ids
+    assert "config.k_replacement_floor" not in inventory_ids
 
 
 def test_missing_routes_cannot_be_misreported_as_causal_treatments() -> None:
@@ -66,7 +78,6 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
         "house_price_income_years": "housing",
         "rho": "firms_and_industrial_dynamics",
         "subsistence_share": "distribution_and_welfare",
-        "symmetric_k": "production_and_technology",
         "seed": "scale_and_genesis",
         "ticks_per_year": "numerics_and_observability",
     }

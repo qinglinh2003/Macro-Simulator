@@ -22,11 +22,11 @@ def test_generated_contracts_are_sorted_unique_and_complete() -> None:
     )
     ids = [item["id"] for item in contracts["rows"]]
     assert ids == sorted(ids)
-    assert len(ids) == len(set(ids)) == 1536
+    assert len(ids) == len(set(ids)) == 1538
     assert contracts["family_counts"] == {
         "checkpoint": 4,
-        "config": 455,
-        "controller": 43,
+        "config": 453,
+        "controller": 45,
         "event": 24,
         "external_policy": 14,
         "invariant": 13,
@@ -34,8 +34,8 @@ def test_generated_contracts_are_sorted_unique_and_complete() -> None:
         "observation": 143,
         "phase": 16,
         "policy": 88,
-        "protocol": 12,
-        "rng": 125,
+        "protocol": 13,
+        "rng": 126,
         "scenario": 40,
         "shock": 8,
     }

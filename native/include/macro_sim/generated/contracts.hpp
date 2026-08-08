@@ -10,7 +10,7 @@
 namespace macro_sim::generated {
 
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
-inline constexpr std::string_view kM0ContractSha256 = "08cb44d8cbdf90ca70d791bb34b0cdb831a64690aca6c57c004890288ea60173";
+inline constexpr std::string_view kM0ContractSha256 = "7198d8f17c5199ea097b94897d9c168e4949f1f95f2b858c2e66695f50e92ea5";
 
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };
@@ -46,7 +46,7 @@ struct ScalarValue final {
     std::string_view text{};
 };
 
-inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
+inline constexpr std::array<ContractSpec, 1538> kContractSpecs{{
     {"checkpoint.field.canonical_encoding_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.engine_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.payload", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -259,7 +259,6 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"config.job_search_intensity", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.k_entry_demand", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.k_entry_hazard", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
-    {"config.k_replacement_floor", "config", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
     {"config.kappa", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.labor_accounting", "config", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
     {"config.labor_fractional_hours", "config", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
@@ -438,7 +437,6 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"config.switch_pressure_days", "config", ScalarKind::integer, false, false, false, 0.0, 0.0, ""},
     {"config.switch_retool_loss", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.switch_return_gap", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
-    {"config.symmetric_k", "config", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
     {"config.tax_consumption_rate", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.tax_energy_rate", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
     {"config.tax_energy_windfall", "config", ScalarKind::number, false, false, false, 0.0, 0.0, ""},
@@ -515,6 +513,7 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"controller.group.energy_structure", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.group.fiscal_stance", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.group.fx_operations", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"controller.group.labor_and_welfare", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.group.liquidity_operations", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.group.macroprudential", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.group.monetary_stance", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -539,6 +538,7 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"controller.seat.central_bank", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.seat.energy", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.seat.external_affairs", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"controller.seat.labor_social", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.seat.regulator", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.seat.treasury", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"controller.trigger.bank_capital_stress", "controller", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -555,6 +555,7 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"desktop.command.new_game", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"desktop.command.resolve_context", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"desktop.command.snapshot", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"desktop.command.stage_policy", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"desktop.command.trigger_shock", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"desktop.response.error", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"desktop.response.success", "protocol", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -1356,7 +1357,7 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"policy.hh_credit_limit", "policy", ScalarKind::number, false, true, true, 0, 20, ""},
     {"policy.household_bankruptcy", "policy", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
     {"policy.housing_in_wealth_tax", "policy", ScalarKind::boolean, false, false, false, 0.0, 0.0, ""},
-    {"policy.housing_permits", "policy", ScalarKind::number, false, true, true, 0, 100000, ""},
+    {"policy.housing_permits", "policy", ScalarKind::integer, false, true, true, 0, 100000, ""},
     {"policy.housing_property_tax", "policy", ScalarKind::number, false, true, true, 0, 0.10000000000000001, ""},
     {"policy.housing_transfer_tax", "policy", ScalarKind::number, false, true, true, 0, 0.29999999999999999, ""},
     {"policy.immigration_cap", "external_policy", ScalarKind::number, true, true, true, 0, 10, ""},
@@ -1530,6 +1531,7 @@ inline constexpr std::array<ContractSpec, 1536> kContractSpecs{{
     {"rng.stream.case-macro_sim-rl-model-numpy-mlppolicy-init.self-rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"rng.stream.case-macro_sim-rl-model-numpy-mlppolicy-reseed.self-rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"rng.stream.macro_sim-behavior-planning-diversify_mpc.rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"rng.stream.macro_sim-controllers-native_envelope-decode.generator", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"rng.stream.macro_sim-demographics-kernel-create_genesis_population.rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"rng.stream.macro_sim-demographics-phase1_acceptance-run_phase1_acceptance.leaving_rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"rng.stream.macro_sim-demographics-relationships-build_genesis_relationships.rng", "rng", ScalarKind::any, false, false, false, 0.0, 0.0, ""},

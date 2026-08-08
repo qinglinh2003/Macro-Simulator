@@ -15,18 +15,18 @@ def _inventory(name: str) -> dict:
 def test_config_and_capability_tripwires():
     config = _inventory("config")
     capabilities = _inventory("capabilities")
-    assert config["metadata"]["root_config_field_count"] == 370
-    assert config["metadata"]["total_tunable_count"] == 455
+    assert config["metadata"]["root_config_field_count"] == 368
+    assert config["metadata"]["total_tunable_count"] == 453
     assert capabilities["metadata"] == {
-        "config_mechanism_count": 63,
+        "config_mechanism_count": 61,
         "dependency_source": "reviewed M0 capability map",
         "world_mechanism_count": 5,
     }
     root_fields = [
         row for row in config["rows"] if row["declaring_type"] == "Config"
     ]
-    assert len(root_fields) == 370
-    assert len({row["field_name"] for row in root_fields}) == 370
+    assert len(root_fields) == 368
+    assert len({row["field_name"] for row in root_fields}) == 368
     assert not [
         row for row in config["rows"] if row["classification"] == "pending_ruling"
     ]

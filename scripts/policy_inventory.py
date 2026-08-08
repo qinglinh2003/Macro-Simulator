@@ -178,7 +178,7 @@ CONFIG_MECHANISM = {
     "bank_dynamics", "bank_runs", "bonds", "government", "capital_market",
     "per_firm_equity", "equity_finance", "household_credit",
     "household_interest_arrears", "margin_credit", "gibrat_growth", "firm_dynamics",
-    "symmetric_k", "k_replacement_floor", "energy_enabled", "energy_household",
+    "energy_enabled", "energy_household",
     "deprivation_gauges", "national_accounts_metrics", "consumption_strata",
     "family_transfers", "sector_switching", "monetary_direct_transmission",
     "interest_by_deposits", "index_startup", "capital_annual_clock",

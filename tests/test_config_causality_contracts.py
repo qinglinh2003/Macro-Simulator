@@ -10,10 +10,10 @@ from macro_sim.diagnostics.config_contracts import (
 
 def test_contract_registry_covers_every_inventory_field() -> None:
     payload = build_contract_registry()
-    assert payload["field_count"] == 455
-    assert len(payload["contracts"]) == 455
-    assert len({item["field_id"] for item in payload["contracts"]}) == 455
-    assert payload["status_counts"]["blocked_native_route"] == 67
+    assert payload["field_count"] == 453
+    assert len(payload["contracts"]) == 453
+    assert len({item["field_id"] for item in payload["contracts"]}) == 453
+    assert payload["status_counts"]["blocked_native_route"] == 66
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:

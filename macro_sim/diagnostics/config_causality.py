@@ -163,7 +163,6 @@ DERIVED_FIELDS: Mapping[str, str] = {
 
 RUN_CONTROL_FIELDS = frozenset({"config.n_ticks"})
 PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
-    "config.symmetric_k": "obsolete alternative capital formulation",
 }
 
 # These fields reach a native member with a different economic meaning. A
@@ -294,8 +293,6 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "investment_user_cost_multiplier_max": "banking_and_credit",
     "investment_user_cost_multiplier_min": "banking_and_credit",
     "monetary_direct_transmission": "banking_and_credit",
-    "k_replacement_floor": "production_and_technology",
-    "symmetric_k": "production_and_technology",
     "n_ticks": "numerics_and_observability",
     "national_accounts_metrics": "numerics_and_observability",
     "ticks_per_year": "numerics_and_observability",

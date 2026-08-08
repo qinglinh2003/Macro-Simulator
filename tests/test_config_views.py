@@ -206,7 +206,6 @@ def test_planning_system_reads_grouped_config_view_for_consumption_budget(monkey
         lambda_q=0.0,
         q_invest_floor=0.5,
         q_invest_cap=2.0,
-        k_replacement_floor=False,
         wealth_effect=0.0,
         mpc_wealth_curvature=1.0,
         d_household0=100.0,

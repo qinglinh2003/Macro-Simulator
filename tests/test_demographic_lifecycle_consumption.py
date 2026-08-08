@@ -281,7 +281,6 @@ def test_planning_phase_uses_lifecycle_budget_when_demographic_bridge_enabled():
                     "lambda_q": 0.0,
                     "q_invest_floor": 0.0,
                     "q_invest_cap": 0.0,
-                    "k_replacement_floor": False,
                     "wealth_effect": 0.0,
                     "mpc_wealth_curvature": 1.0,
                     "d_household0": 1.0,

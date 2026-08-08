@@ -432,7 +432,7 @@ HTML 中可以使用本地 mock state，但交互与状态关系要完整；不�
 
 ### 10.5 消费分布、创世与商品市场（20）
 
-`mpc_dispersion`, `mpc_wealth_curvature`, `rho`, `firm_full_pnl`, `capital_service_pricing`, `priced_firm_balance_sheet`, `firm_capital_haircut`, `firm_inventory_haircut`, `d_household0`, `d_firm0`, `p_firm0`, `w_firm0`, `inv_firm0`, `mu_firm0`, `demand_e_firm0`, `search_m`, `n_firms_c`, `n_firms_k`, `symmetric_k`, `k_replacement_floor`。
+`mpc_dispersion`, `mpc_wealth_curvature`, `rho`, `firm_full_pnl`, `capital_service_pricing`, `priced_firm_balance_sheet`, `firm_capital_haircut`, `firm_inventory_haircut`, `d_household0`, `d_firm0`, `p_firm0`, `w_firm0`, `inv_firm0`, `mu_firm0`, `demand_e_firm0`, `search_m`, `n_firms_c`, `n_firms_k`。
 
 ### 10.6 银行与债券（53）
 

@@ -56,7 +56,9 @@ The following examples are intentionally not part of the all-on baseline:
 
 - `consumption_rationed_signal`: a stress experiment. Genesis stockouts can
   otherwise become a persistent demand shock.
-- `symmetric_k`: an alternative capital formulation, not an additive module.
+- The failed v2.5 `symmetric_k` / `k_replacement_floor` experiment is historical
+  evidence, not a selectable latest-engine formulation. Both no-effect Config
+  fields were removed rather than being given a fabricated native route.
 - `deposit_interest_arrears`: a contract treatment that needs its own banking
   stress scenario before becoming a baseline choice.
 - `couple`: an internal world coupling state derived from open-economy
@@ -66,11 +68,12 @@ Every such exception must have an explicit disposition and activation test.
 
 ## 3. Canonical Config surface
 
-The canonical M0 inventory contains 455 immutable inputs:
+The canonical M0 inventory contains 453 immutable inputs after removing the two
+failed v2.5-only capital-sector experiment switches:
 
 | Declaring type | Fields |
 |---|---:|
-| `Config` | 370 |
+| `Config` | 368 |
 | `LifecycleHouseholdConfig` | 4 |
 | `RelationshipConfig` | 12 |
 | `SocialDynamicsConfig` | 35 |
@@ -92,7 +95,7 @@ The adjudicated P0 inventory reports:
 | Disposition | Fields |
 |---|---:|
 | Native route confirmed | 226 |
-| Native route missing or incomplete | 67 |
+| Native route missing or incomplete | 66 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -100,9 +103,8 @@ The adjudicated P0 inventory reports:
 | Superseded compatibility names | 14 |
 | Derived values | 2 |
 | Run control | 1 |
-| Planned removal | 1 |
 
-The 67 missing or incomplete routes are real implementation work; they are not
+The 66 missing or incomplete routes are real implementation work; they are not
 allowed to enter a dynamic run and be reported as small elasticities. The other
 non-routed fields have been marked as exactly one of:
 
@@ -366,6 +368,14 @@ exactly +/-20%.
    capital instead creates funded investment orders and unmet demand while
    retaining supply response. Under this common activation, disabling the
    signal lowers 90-day cumulative investment by 2.66%.
+6. `symmetric_k` and `k_replacement_floor` were a coupled v2.5 falsification,
+   not two independent mechanisms in the latest economy. The replacement floor
+   only read a capital stock created by `symmetric_k`; with the canonical
+   labor-only capital-goods technology, both fields were silent. The historical
+   experiment also found the symmetric recursion unstable. Both fields, the
+   obsolete `Config.v25()` constructor, and their passive planning surface have
+   therefore been removed. The canonical inventory contracts this as a surface
+   reduction instead of manufacturing a meaningless C++ response.
 
 ### 8.3 Production and technology early screen
 
@@ -1446,7 +1456,7 @@ tests finite-size robustness before any final range is frozen.
 
 ### P0 - Static ownership and routing
 
-- Generate the 455-field ledger from the canonical schema.
+- Generate the 453-field ledger from the canonical schema.
 - Verify the all-module playable baseline.
 - Locate every native route.
 - Adjudicate every missing route.

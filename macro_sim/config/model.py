@@ -374,14 +374,6 @@ class Config:
     n_firms_c: int = 15             # N_{F_C}: consumption-goods firms -- scale (v2 only)
     n_firms_k: int = 0              # N_{F_K}: capital-goods firms -- scale. 0 => v1 kernel
                                     # (default). Set >0 (e.g. via Config.v2()) to enable v2.
-    symmetric_k: bool = False       # v2.5: if True, K-firms also use capital (Cobb-Douglas)
-                                    # and invest -- undoes the "cut capital recursion" (§10.2)
-                                    # to give K-firm retained earnings an outlet (§11.4).
-    k_replacement_floor: bool = False  # v2.5 diagnostic: force K-firms to invest at least
-                                    # delta_K*K each tick (always replace depreciation),
-                                    # to separate "accelerator under-sizes K* => never
-                                    # invests" (calibration) from "capital-goods supply
-                                    # needs capital => absorbing zero state" (structural).
 
     # ======================================================================
     # v3 -- banks + endogenous money (DESIGNDOC §12). Inactive unless bank_enabled.
@@ -1231,7 +1223,6 @@ class Config:
             lambda_q=self.lambda_q,
             q_invest_floor=self.q_invest_floor,
             q_invest_cap=self.q_invest_cap,
-            k_replacement_floor=self.k_replacement_floor,
             wealth_effect=self.wealth_effect,
             mpc_wealth_curvature=self.mpc_wealth_curvature,
             d_household0=self.d_household0,
@@ -1383,15 +1374,6 @@ class Config:
         """Construct a v2 (investment + capital) config. Enables the capital sector
         (n_firms_k>0) with the PLAN_v2 §7 tentative defaults; override as needed."""
         base = dict(n_firms_c=500, n_firms_k=250, n_households=5000)
-        base.update(overrides)
-        return cls(**base)
-
-    @classmethod
-    def v25(cls, **overrides) -> "Config":
-        """v2.5: symmetrized capital sector (§11.4). K-firms also use capital and
-        invest, giving their retained earnings an outlet. Tests the falsifiable
-        'partial cure' prediction for the secondary K-sink."""
-        base = dict(n_firms_c=15, n_firms_k=10, symmetric_k=True)
         base.update(overrides)
         return cls(**base)
 
@@ -1813,7 +1795,6 @@ class Config:
             pref_price_elasticity=1.0,   # restore the demand-side price brake (R3)
             real_entry_signal=True,      # deflated entry signal + zero entrant inventory (R5/A2)
             shell_exit_ticks=365,        # idle shells liquidate after a year (R5)
-            k_replacement_floor=True,    # K-firms at least replace depreciation (R6)
             delta=0.0075,                # symmetric downward wage step when hiring is easy (escapes the ZLB deflation ratchet)
             entry_hurdle=1.34e-4,        # ~5%/yr equity premium: entry needs profit above rate + premium, not just above a floored rate
             omo_index_deposits=True,     # reserve target follows deposits, not genesis (R4)

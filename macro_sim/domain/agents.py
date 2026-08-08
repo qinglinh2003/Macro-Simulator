@@ -268,9 +268,6 @@ class Firm:
         (the cure channel) is not dead on tick 1. Marked transient; verify it washes out.
         """
         d_seed = _k_demand_seed(cfg)
-        # v2.5 (symmetric_k): K-firms also use capital (Cobb-Douglas) and invest,
-        # so their retained earnings get an outlet (§11.4). v2: labor-only, no invest.
-        sym = cfg.symmetric_k
         return cls(
             id=f"K{idx}",
             lambda_d=cfg.lambda_d, phi=cfg.phi, eta=cfg.eta,
@@ -281,13 +278,11 @@ class Firm:
             target_inventory_prev=cfg.phi * d_seed,
             sales_prev=d_seed,                              # neutral first B2 update
             sells="capital",
-            tech="cobb_douglas" if sym else "linear",
-            invests=sym,
+            tech="linear",
+            invests=False,
             A=cfg.A, alpha=cfg.alpha,
-            v=(cfg.v if sym else 0.0), lambda_I=(cfg.lambda_I if sym else 0.0),
-            delta_K=(cfg.delta_K if sym else 0.0),
-            capital=(cfg.K_firm0 if sym else 0.0),
-            capital_prev=(cfg.K_firm0 if sym else 0.0),
+            v=0.0, lambda_I=0.0, delta_K=0.0,
+            capital=0.0, capital_prev=0.0,
         )
 
 
