@@ -504,6 +504,7 @@ typedef struct macro_sim_m7_rules {
     uint32_t marriage;
     uint32_t divorce;
     uint32_t household_lifecycle;
+    uint32_t lifecycle_consumption;
     uint32_t leaving_home;
     uint32_t forbid_same_household;
     uint32_t forbid_close_kin;
@@ -514,6 +515,7 @@ typedef struct macro_sim_m7_rules {
     uint32_t marriage_maximum_age_gap;
     uint32_t leave_home_min_age;
     uint32_t leave_home_peak_end_age;
+    uint32_t demographic_feedback_burnin_years;
     double makeham_a;
     double gompertz_b;
     double gompertz_theta;
@@ -546,6 +548,15 @@ typedef struct macro_sim_m7_rules {
     double marriage_preferred_age_gap;
     double marriage_age_gap_penalty;
     double marriage_assortativity;
+    double lifecycle_income_propensity;
+    double lifecycle_wealth_draw_propensity;
+    double demographic_signal_halflife_years;
+    double fertility_income_elasticity;
+    double fertility_multiplier_minimum;
+    double fertility_multiplier_maximum;
+    double mortality_income_elasticity;
+    double mortality_multiplier_minimum;
+    double mortality_multiplier_maximum;
 } macro_sim_m7_rules;
 
 typedef struct macro_sim_m7_metrics {
@@ -555,6 +566,9 @@ typedef struct macro_sim_m7_metrics {
     uint64_t population;
     uint64_t births;
     uint64_t deaths;
+    double demographic_real_wage_signal;
+    double demographic_fertility_multiplier;
+    double demographic_mortality_multiplier;
     uint64_t households_with_members;
     double mean_household_size;
     double working_age_share;

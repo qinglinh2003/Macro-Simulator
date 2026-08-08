@@ -104,6 +104,9 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m7.person_efficiency_stddev",
         "metric.source.m7.births",
         "metric.source.m7.deaths",
+        "metric.source.m7.demographic_real_wage_signal",
+        "metric.source.m7.demographic_fertility_multiplier",
+        "metric.source.m7.demographic_mortality_multiplier",
         "metric.source.m7.wealth_rank_mortality_multiplier_stddev",
         "metric.source.m7.wealth_rank_fertility_multiplier_stddev",
         "metric.source.m7.bottom_wealth_quintile_deaths",
@@ -1026,11 +1029,111 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
     fertility_rank_stddev = (
         "metric.source.m7.wealth_rank_fertility_multiplier_stddev"
     )
+    consumption_budget = "metric.source.m4.household_consumption_budget"
+    wealth_consumption_budget = (
+        "metric.source.m4.household_wealth_consumption_budget"
+    )
+    income_signal = "metric.source.m7.demographic_real_wage_signal"
+    fertility_income_multiplier = (
+        "metric.source.m7.demographic_fertility_multiplier"
+    )
+    mortality_income_multiplier = (
+        "metric.source.m7.demographic_mortality_multiplier"
+    )
     bottom_deaths = "metric.source.m7.bottom_wealth_quintile_deaths"
     top_deaths = "metric.source.m7.top_wealth_quintile_deaths"
     bottom_births = "metric.source.m7.bottom_wealth_quintile_births"
     top_births = "metric.source.m7.top_wealth_quintile_births"
     return {
+        "config.demographic_lifecycle_consumption": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {consumption_budget: "nonzero"},
+            "rationale": "Finite-life consumption replaces the perpetual-horizon propensity rule with an age-composition-adjusted permanent-income term and an annuitized draw from net wealth. Disabling it must therefore change desired household spending while leaving household formation rules untouched.",
+        },
+        "config.lifecycle_alpha_income": {
+            "status": "screening_ready",
+            "values": (0.40, 1.20),
+            "directions": {consumption_budget: "increase"},
+            "rationale": "The lifecycle income coefficient is the marginal weight placed on age-adjusted permanent income. With the finite-life channel active, a larger value should raise aggregate desired consumption before cash and credit constraints bind.",
+        },
+        "config.lifecycle_alpha_wealth_draw": {
+            "status": "screening_ready",
+            "values": (0.0, 4.0),
+            "directions": {
+                wealth_consumption_budget: "increase",
+                consumption_budget: "increase",
+            },
+            "rationale": "The lifecycle wealth coefficient scales the annuity-like draw from positive household net worth over members' expected remaining lives. A larger value should raise both the directly measured wealth-funded budget and total desired consumption.",
+        },
+        "config.demo_feedback_burnin_years": {
+            "status": "activation_scenario_required",
+            "values": (1, 8),
+            "activation": "demographic_real_wage_transition",
+            "horizon_days": 3650,
+            "directions": {income_signal: "nonzero"},
+            "statistics": {income_signal: "post_burnin_volatility"},
+            "rationale": "The burn-in discards early price-and-wage normalization before anchoring the development signal. Changing its length must alter when and at what clean real-wage level the demographic feedback baseline is established.",
+        },
+        "config.demo_signal_halflife_years": {
+            "status": "activation_scenario_required",
+            "values": (1.0, 10.0),
+            "activation": "demographic_real_wage_transition",
+            "horizon_days": 3650,
+            "directions": {income_signal: "nonzero"},
+            "statistics": {income_signal: "post_burnin_volatility"},
+            "rationale": "The half-life controls how quickly persistent real-wage changes enter the slow development signal. Faster and slower filters must produce different transition paths while preserving the same neutral value at the baseline anchor.",
+        },
+        "config.fertility_income_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 1.0),
+            "activation": "demographic_income_elasticity_transition",
+            "horizon_days": 2555,
+            "directions": {fertility_income_multiplier: "nonzero", births: "nonzero"},
+            "statistics": {births: "cumulative"},
+            "rationale": "This elasticity converts persistent real-wage development into a population-wide fertility multiplier. Zero is exactly neutral; a positive value must change the multiplier and cumulative births once the annual signal moves away from its anchor.",
+        },
+        "config.fertility_mult_lo": {
+            "status": "activation_scenario_required",
+            "values": (0.2, 0.9),
+            "activation": "demographic_positive_income_transition",
+            "horizon_days": 2555,
+            "directions": {fertility_income_multiplier: "increase"},
+            "rationale": "The lower bound limits how far development-driven fertility can fall below neutral. Under a shared positive real-wage transition, a higher floor must leave a higher fertility multiplier when the unconstrained response would cross it.",
+        },
+        "config.fertility_mult_hi": {
+            "status": "activation_scenario_required",
+            "values": (1.05, 2.0),
+            "activation": "demographic_negative_income_transition",
+            "horizon_days": 2555,
+            "directions": {fertility_income_multiplier: "increase"},
+            "rationale": "The upper bound caps the fertility response to a persistent adverse real-wage transition. A higher cap must allow a larger multiplier when the unconstrained response exceeds the lower cap.",
+        },
+        "config.mortality_income_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 1.0),
+            "activation": "demographic_income_elasticity_transition",
+            "horizon_days": 2555,
+            "directions": {mortality_income_multiplier: "nonzero", deaths: "nonzero"},
+            "statistics": {deaths: "cumulative"},
+            "rationale": "This elasticity maps persistent real-wage development into a population-wide mortality multiplier. Zero is exactly neutral; a positive value must change mortality pressure and cumulative deaths after the clean annual signal becomes active.",
+        },
+        "config.mortality_mult_lo": {
+            "status": "activation_scenario_required",
+            "values": (0.4, 0.9),
+            "activation": "demographic_positive_income_transition",
+            "horizon_days": 2555,
+            "directions": {mortality_income_multiplier: "increase"},
+            "rationale": "The mortality floor limits health gains from a positive development transition. Raising it must keep the mortality multiplier closer to one once the unconstrained response would fall farther.",
+        },
+        "config.mortality_mult_hi": {
+            "status": "activation_scenario_required",
+            "values": (1.05, 2.0),
+            "activation": "demographic_negative_income_transition",
+            "horizon_days": 2555,
+            "directions": {mortality_income_multiplier: "increase"},
+            "rationale": "The mortality ceiling limits excess mortality under a persistent adverse real-wage transition. A higher ceiling must permit a larger multiplier when the lower ceiling would bind.",
+        },
         "config.demographic_adult_leaving_home_enabled": {
             "status": "activation_scenario_required",
             "values": (False,),

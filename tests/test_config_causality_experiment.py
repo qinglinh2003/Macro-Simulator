@@ -597,6 +597,119 @@ def test_mortality_treatment_preserves_genesis_age_profile() -> None:
 
 
 @pytest.mark.parametrize(
+    ("field", "native_field", "value"),
+    (
+        ("demographic_lifecycle_consumption", "lifecycle_consumption", False),
+        ("lifecycle_alpha_income", "lifecycle_income_propensity", 0.45),
+        (
+            "lifecycle_alpha_wealth_draw",
+            "lifecycle_wealth_draw_propensity",
+            2.5,
+        ),
+        (
+            "demo_feedback_burnin_years",
+            "demographic_feedback_burnin_years",
+            2,
+        ),
+        (
+            "demo_signal_halflife_years",
+            "demographic_signal_halflife_years",
+            2.5,
+        ),
+        ("fertility_income_elasticity", "fertility_income_elasticity", 0.4),
+        ("fertility_mult_lo", "fertility_multiplier_minimum", 0.6),
+        ("fertility_mult_hi", "fertility_multiplier_maximum", 1.8),
+        ("mortality_income_elasticity", "mortality_income_elasticity", 0.3),
+        ("mortality_mult_lo", "mortality_multiplier_minimum", 0.7),
+        ("mortality_mult_hi", "mortality_multiplier_maximum", 1.7),
+    ),
+)
+def test_lifecycle_and_development_treatments_reach_population_rules(
+    field: str,
+    native_field: str,
+    value: bool | float | int,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=3650, seed=441
+    )
+    native_spec = native_treatment_spec(
+        baseline,
+        field=field,
+        value=value,
+    )
+    actual = getattr(
+        native_spec.economies[0].domestic_economy.rules,
+        native_field,
+    )
+    if isinstance(value, bool):
+        assert actual is value
+    elif isinstance(value, int):
+        assert actual == value
+    else:
+        assert actual == pytest.approx(value)
+
+
+@pytest.mark.parametrize(
+    (
+        "scenario",
+        "growth",
+        "signal_halflife",
+        "fertility_elasticity",
+        "mortality_elasticity",
+    ),
+    (
+        ("demographic_real_wage_transition", 0.025, None, None, None),
+        ("demographic_income_elasticity_transition", 0.025, 1.0, None, None),
+        ("demographic_positive_income_transition", 0.08, 0.5, 4.0, 4.0),
+        ("demographic_negative_income_transition", -0.05, 0.5, 4.0, 4.0),
+    ),
+)
+def test_demographic_income_activation_builds_a_shared_wage_transition(
+    scenario: str,
+    growth: float,
+    signal_halflife: float | None,
+    fertility_elasticity: float | None,
+    mortality_elasticity: float | None,
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=3650, seed=442
+    )
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    population_rules = native_spec.economies[0].domestic_economy.rules
+    initial_fertility = population_rules.fertility_income_elasticity
+    initial_mortality = population_rules.mortality_income_elasticity
+
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+
+    economy = native_spec.economies[0].domestic_economy
+    real_rules = (
+        economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    population_rules = economy.rules
+    assert real_rules.annual_tfp_growth == pytest.approx(growth)
+    assert real_rules.wage_indexation == pytest.approx(1.0)
+    assert population_rules.demographic_feedback_burnin_years == 4
+    if signal_halflife is not None:
+        assert population_rules.demographic_signal_halflife_years == pytest.approx(
+            signal_halflife
+        )
+    if fertility_elasticity is None:
+        assert population_rules.fertility_income_elasticity == pytest.approx(
+            initial_fertility
+        )
+        assert population_rules.mortality_income_elasticity == pytest.approx(
+            initial_mortality
+        )
+    else:
+        assert population_rules.fertility_income_elasticity == pytest.approx(
+            fertility_elasticity
+        )
+        assert population_rules.mortality_income_elasticity == pytest.approx(
+            mortality_elasticity
+        )
+
+
+@pytest.mark.parametrize(
     ("scenario", "expected_peak_end"),
     (
         ("eligible_peak_leaving_home", 30),

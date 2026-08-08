@@ -789,6 +789,9 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(deaths);
     MACRO_SIM_M7_METRIC(wealth_rank_mortality_multiplier_stddev);
     MACRO_SIM_M7_METRIC(wealth_rank_fertility_multiplier_stddev);
+    MACRO_SIM_M7_METRIC(demographic_real_wage_signal);
+    MACRO_SIM_M7_METRIC(demographic_fertility_multiplier);
+    MACRO_SIM_M7_METRIC(demographic_mortality_multiplier);
     MACRO_SIM_M7_METRIC(bottom_wealth_quintile_deaths);
     MACRO_SIM_M7_METRIC(top_wealth_quintile_deaths);
     MACRO_SIM_M7_METRIC(bottom_wealth_quintile_births);
@@ -2062,6 +2065,9 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(marriage);
     MACRO_SIM_BIND_M7_RULE(divorce);
     MACRO_SIM_BIND_M7_RULE(household_lifecycle);
+    MACRO_SIM_BIND_M7_RULE(lifecycle_consumption);
+    MACRO_SIM_BIND_M7_RULE(lifecycle_income_propensity);
+    MACRO_SIM_BIND_M7_RULE(lifecycle_wealth_draw_propensity);
     MACRO_SIM_BIND_M7_RULE(leaving_home);
     MACRO_SIM_BIND_M7_RULE(leave_home_min_age);
     MACRO_SIM_BIND_M7_RULE(leave_home_peak_end_age);
@@ -2074,6 +2080,14 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(fertility_rank_gradient);
     MACRO_SIM_BIND_M7_RULE(stratification_multiplier_minimum);
     MACRO_SIM_BIND_M7_RULE(stratification_multiplier_maximum);
+    MACRO_SIM_BIND_M7_RULE(demographic_feedback_burnin_years);
+    MACRO_SIM_BIND_M7_RULE(demographic_signal_halflife_years);
+    MACRO_SIM_BIND_M7_RULE(fertility_income_elasticity);
+    MACRO_SIM_BIND_M7_RULE(fertility_multiplier_minimum);
+    MACRO_SIM_BIND_M7_RULE(fertility_multiplier_maximum);
+    MACRO_SIM_BIND_M7_RULE(mortality_income_elasticity);
+    MACRO_SIM_BIND_M7_RULE(mortality_multiplier_minimum);
+    MACRO_SIM_BIND_M7_RULE(mortality_multiplier_maximum);
     MACRO_SIM_BIND_M7_RULE(marriage_rules);
 #undef MACRO_SIM_BIND_M7_RULE
     nb::class_<macro_sim::simulation::M7PopulationSpec>(module, "M7PopulationSpec")

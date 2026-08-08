@@ -172,6 +172,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.marriage,
         value.divorce,
         value.household_lifecycle,
+        value.lifecycle_consumption,
+        value.lifecycle_income_propensity,
+        value.lifecycle_wealth_draw_propensity,
         value.leaving_home,
         value.leave_home_min_age,
         value.leave_home_peak_end_age,
@@ -184,6 +187,14 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.fertility_rank_gradient,
         value.stratification_multiplier_minimum,
         value.stratification_multiplier_maximum,
+        value.demographic_feedback_burnin_years,
+        value.demographic_signal_halflife_years,
+        value.fertility_income_elasticity,
+        value.fertility_multiplier_minimum,
+        value.fertility_multiplier_maximum,
+        value.mortality_income_elasticity,
+        value.mortality_multiplier_minimum,
+        value.mortality_multiplier_maximum,
     });
     return output;
 }
@@ -193,7 +204,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 50U) {
+    if (!row.is_array() || row.size() != 61U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -235,6 +246,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.marriage = row[index++].get<bool>();
     value.divorce = row[index++].get<bool>();
     value.household_lifecycle = row[index++].get<bool>();
+    value.lifecycle_consumption = row[index++].get<bool>();
+    value.lifecycle_income_propensity = row[index++].get<double>();
+    value.lifecycle_wealth_draw_propensity = row[index++].get<double>();
     value.leaving_home = row[index++].get<bool>();
     value.leave_home_min_age = row[index++].get<std::uint32_t>();
     value.leave_home_peak_end_age = row[index++].get<std::uint32_t>();
@@ -247,6 +261,14 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.fertility_rank_gradient = row[index++].get<double>();
     value.stratification_multiplier_minimum = row[index++].get<double>();
     value.stratification_multiplier_maximum = row[index++].get<double>();
+    value.demographic_feedback_burnin_years = row[index++].get<std::uint32_t>();
+    value.demographic_signal_halflife_years = row[index++].get<double>();
+    value.fertility_income_elasticity = row[index++].get<double>();
+    value.fertility_multiplier_minimum = row[index++].get<double>();
+    value.fertility_multiplier_maximum = row[index++].get<double>();
+    value.mortality_income_elasticity = row[index++].get<double>();
+    value.mortality_multiplier_minimum = row[index++].get<double>();
+    value.mortality_multiplier_maximum = row[index++].get<double>();
     return value;
 }
 
@@ -385,6 +407,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.deaths,
         value.wealth_rank_mortality_multiplier_stddev,
         value.wealth_rank_fertility_multiplier_stddev,
+        value.demographic_real_wage_signal,
+        value.demographic_fertility_multiplier,
+        value.demographic_mortality_multiplier,
         value.bottom_wealth_quintile_deaths,
         value.top_wealth_quintile_deaths,
         value.bottom_wealth_quintile_births,
@@ -445,7 +470,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 61U) {
+    if (!row.is_array() || row.size() != 64U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -454,6 +479,9 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.deaths = row[index++].get<std::uint64_t>();
     value.wealth_rank_mortality_multiplier_stddev = row[index++].get<double>();
     value.wealth_rank_fertility_multiplier_stddev = row[index++].get<double>();
+    value.demographic_real_wage_signal = row[index++].get<double>();
+    value.demographic_fertility_multiplier = row[index++].get<double>();
+    value.demographic_mortality_multiplier = row[index++].get<double>();
     value.bottom_wealth_quintile_deaths = row[index++].get<std::uint64_t>();
     value.top_wealth_quintile_deaths = row[index++].get<std::uint64_t>();
     value.bottom_wealth_quintile_births = row[index++].get<std::uint64_t>();
@@ -536,6 +564,20 @@ void decode_metrics(const Json &row, M7Metrics &value) {
         {"mortality_quintile", runtime.mortality_quintile_multiplier},
         {"fertility_quintile", runtime.fertility_quintile_multiplier},
     };
+    output["demographic_signal"] = Json::array({
+        runtime.demographic_signal_year,
+        runtime.demographic_signal_years_completed,
+        runtime.demographic_signal_ewma,
+        runtime.demographic_signal_baseline,
+        runtime.demographic_signal_x,
+        runtime.demographic_signal_fertility_multiplier,
+        runtime.demographic_signal_mortality_multiplier,
+        runtime.demographic_signal_last_real_wage,
+        runtime.demographic_signal_wage_sum,
+        runtime.demographic_signal_labor_sum,
+        runtime.demographic_signal_price_sum,
+        runtime.demographic_signal_days,
+    });
     output["persons"] = Json::array();
     for (const auto &person : runtime.persons.records()) {
         output["persons"].push_back(encode_person(person));
@@ -659,6 +701,35 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     runtime.fertility_quintile_multiplier =
         stratification.at("fertility_quintile")
             .get<std::array<double, kWealthQuintiles>>();
+    const auto &demographic_signal = input.at("demographic_signal");
+    if (!demographic_signal.is_array() || demographic_signal.size() != 12U) {
+        throw std::runtime_error("invalid M7 demographic signal");
+    }
+    std::size_t signal_index = 0U;
+    runtime.demographic_signal_year =
+        demographic_signal[signal_index++].get<std::int32_t>();
+    runtime.demographic_signal_years_completed =
+        demographic_signal[signal_index++].get<std::uint32_t>();
+    runtime.demographic_signal_ewma =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_baseline =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_x =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_fertility_multiplier =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_mortality_multiplier =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_last_real_wage =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_wage_sum =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_labor_sum =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_price_sum =
+        demographic_signal[signal_index++].get<double>();
+    runtime.demographic_signal_days =
+        demographic_signal[signal_index++].get<std::uint32_t>();
 
     std::vector<core::PersonRecord> persons;
     for (const auto &row : input.at("persons")) {

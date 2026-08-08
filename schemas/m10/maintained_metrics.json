@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 278,
+    "native_stage_sources": 281,
     "public_sources": 41,
-    "total": 502
+    "total": 505
   },
   "metrics": [
     {
@@ -2625,6 +2625,33 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.demographic_real_wage_signal",
+      "parity_rule": "simulation::M7Metrics::demographic_real_wage_signal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "index"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.demographic_fertility_multiplier",
+      "parity_rule": "simulation::M7Metrics::demographic_fertility_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.demographic_mortality_multiplier",
+      "parity_rule": "simulation::M7Metrics::demographic_mortality_multiplier",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
     },
     {
       "aggregation": "last",

@@ -170,13 +170,7 @@ PLANNED_REMOVAL_FIELDS: Mapping[str, str] = {
 # These fields reach a native member with a different economic meaning. A
 # syntactic assignment is not sufficient evidence of an implemented Config
 # route, so they remain repair work until the intended mechanism exists.
-INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {
-    "config.demographic_lifecycle_consumption": (
-        "Config defines a finite-life consumption budget, while the native "
-        "member currently controls household moves after marriage, divorce, "
-        "and leaving home"
-    ),
-}
+INCOMPLETE_NATIVE_ROUTE_FIELDS: Mapping[str, str] = {}
 
 # Measurement gates may change published observables but must not receive credit
 # for changing the economy they observe.
@@ -222,6 +216,8 @@ FIELD_MODULE_OVERRIDES: Mapping[str, str] = {
     "alpha1": "consumption_prices_and_expectations",
     "alpha2": "consumption_prices_and_expectations",
     "consumption_rationed_signal": "consumption_prices_and_expectations",
+    "demo_feedback_burnin_years": "demography_and_households",
+    "demo_signal_halflife_years": "demography_and_households",
     "eta": "consumption_prices_and_expectations",
     "inventory_gap_close": "consumption_prices_and_expectations",
     "lambda_d": "consumption_prices_and_expectations",

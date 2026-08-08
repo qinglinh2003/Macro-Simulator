@@ -254,6 +254,71 @@ void test_demography_projects_age_weighted_consumption_needs() {
     assert(differs_from_household_count);
 }
 
+void test_lifecycle_consumption_replaces_the_standard_budget() {
+    auto standard = build();
+    auto lifecycle_spec = base_spec();
+    lifecycle_spec.rules.lifecycle_consumption = true;
+    lifecycle_spec.rules.lifecycle_income_propensity = 0.0;
+    lifecycle_spec.rules.lifecycle_wealth_draw_propensity = 0.0;
+    auto lifecycle = build(lifecycle_spec);
+
+    const auto standard_result = advance(standard, 1);
+    const auto lifecycle_result = advance(lifecycle, 1);
+    assert(standard_result.ok());
+    assert(lifecycle_result.ok());
+    assert(standard_result.get_if()->metrics.economy.economy.economy
+               .household_consumption_budget > 0.0);
+    assert(lifecycle_result.get_if()->metrics.economy.economy.economy
+               .household_consumption_budget == 0.0);
+
+    lifecycle_spec.rules.lifecycle_income_propensity = 1.0;
+    auto income_channel = build(lifecycle_spec);
+    const auto income_result = advance(income_channel, 1);
+    assert(income_result.ok());
+    assert(income_result.get_if()->metrics.economy.economy.economy
+               .household_consumption_budget > 0.0);
+}
+
+void test_real_wage_signal_updates_vital_multipliers_annually() {
+    auto spec = base_spec();
+    spec.population.start_calendar_day = 737'790; // 2020-12-31
+    spec.rules.demographic_feedback_burnin_years = 1U;
+    spec.rules.demographic_signal_halflife_years = 1.0;
+    spec.rules.fertility_income_elasticity = 1.0;
+    spec.rules.mortality_income_elasticity = 1.0;
+    auto harness = build(spec);
+    harness.runtime.demographic_signal_year = 2020;
+    harness.runtime.demographic_signal_years_completed = 1U;
+    harness.runtime.demographic_signal_ewma = 100.0;
+    harness.runtime.demographic_signal_baseline = 100.0;
+    harness.runtime.demographic_signal_last_real_wage = 100.0;
+    harness.runtime.demographic_signal_wage_sum = 50.0;
+    harness.runtime.demographic_signal_labor_sum = 1.0;
+    harness.runtime.demographic_signal_price_sum = 1.0;
+    harness.runtime.demographic_signal_days = 1U;
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(std::abs(harness.runtime.demographic_signal_x - 0.75) < 1.0e-12);
+    assert(std::abs(harness.runtime.demographic_signal_fertility_multiplier -
+                    4.0 / 3.0) < 1.0e-12);
+    assert(std::abs(harness.runtime.demographic_signal_mortality_multiplier - 1.3) <
+           1.0e-12);
+    assert(result.get_if()->metrics.demographic_fertility_multiplier > 1.0);
+    assert(result.get_if()->metrics.demographic_mortality_multiplier > 1.0);
+
+    auto neutral_spec = spec;
+    neutral_spec.rules.fertility_income_elasticity = 0.0;
+    neutral_spec.rules.mortality_income_elasticity = 0.0;
+    auto neutral = build(neutral_spec);
+    neutral.runtime.demographic_signal_fertility_multiplier = 1.4;
+    neutral.runtime.demographic_signal_mortality_multiplier = 1.2;
+    const auto neutral_result = advance(neutral, 1);
+    assert(neutral_result.ok());
+    assert(neutral.runtime.demographic_signal_fertility_multiplier == 1.0);
+    assert(neutral.runtime.demographic_signal_mortality_multiplier == 1.0);
+}
+
 void test_wealth_rank_gradients_apply_bounded_vital_risk() {
     auto spec = base_spec();
     spec.population.initial_persons = 2'000;
@@ -1258,6 +1323,15 @@ void test_validation_rejects_invalid_population() {
     spec = base_spec();
     spec.rules.stratification_multiplier_maximum = 0.99;
     assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.lifecycle_income_propensity = -0.01;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.demographic_feedback_burnin_years = 0U;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
+    spec = base_spec();
+    spec.rules.fertility_multiplier_minimum = 1.01;
+    assert(!macro_sim::simulation::validate_m7_spec(spec).ok());
 }
 
 } // namespace
@@ -1266,6 +1340,8 @@ int main() {
     test_genesis_derives_households_from_population();
     test_genesis_person_efficiency_is_mean_preserving_and_deterministic();
     test_demography_projects_age_weighted_consumption_needs();
+    test_lifecycle_consumption_replaces_the_standard_budget();
+    test_real_wage_signal_updates_vital_multipliers_annually();
     test_wealth_rank_gradients_apply_bounded_vital_risk();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();

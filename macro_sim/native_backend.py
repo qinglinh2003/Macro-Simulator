@@ -317,7 +317,9 @@ M7_RULE_FIELDS = {
     "family_transfer_buffer": "family_transfer_buffer",
     "marriage": "demographic_marriage_enabled",
     "divorce": "demographic_divorce_enabled",
-    "household_lifecycle": "demographic_lifecycle_consumption",
+    "lifecycle_consumption": "demographic_lifecycle_consumption",
+    "lifecycle_income_propensity": "lifecycle_alpha_income",
+    "lifecycle_wealth_draw_propensity": "lifecycle_alpha_wealth_draw",
     "leaving_home": "demographic_adult_leaving_home_enabled",
     "leave_home_min_age": "demographic_leave_home_min_age",
     "leave_home_peak_end_age": "demographic_leave_home_peak_end_age",
@@ -330,6 +332,14 @@ M7_RULE_FIELDS = {
     "fertility_rank_gradient": "fertility_rank_gradient",
     "stratification_multiplier_minimum": "strat_mult_lo",
     "stratification_multiplier_maximum": "strat_mult_hi",
+    "demographic_feedback_burnin_years": "demo_feedback_burnin_years",
+    "demographic_signal_halflife_years": "demo_signal_halflife_years",
+    "fertility_income_elasticity": "fertility_income_elasticity",
+    "fertility_multiplier_minimum": "fertility_mult_lo",
+    "fertility_multiplier_maximum": "fertility_mult_hi",
+    "mortality_income_elasticity": "mortality_income_elasticity",
+    "mortality_multiplier_minimum": "mortality_mult_lo",
+    "mortality_multiplier_maximum": "mortality_mult_hi",
 }
 
 ENERGY_POLICY_FIELDS = {

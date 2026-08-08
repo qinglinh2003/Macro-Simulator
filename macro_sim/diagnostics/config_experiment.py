@@ -894,6 +894,25 @@ def apply_native_activation_scenario(
     elif scenario == "eligible_late_leaving_home":
         population_rules.leave_home_min_age = 18
         population_rules.leave_home_peak_end_age = 18
+    elif scenario == "demographic_real_wage_transition":
+        rules.annual_tfp_growth = 0.025
+        rules.wage_indexation = 1.0
+    elif scenario == "demographic_income_elasticity_transition":
+        rules.annual_tfp_growth = 0.025
+        rules.wage_indexation = 1.0
+        population_rules.demographic_signal_halflife_years = 1.0
+    elif scenario == "demographic_positive_income_transition":
+        rules.annual_tfp_growth = 0.08
+        rules.wage_indexation = 1.0
+        population_rules.demographic_signal_halflife_years = 0.5
+        population_rules.fertility_income_elasticity = 4.0
+        population_rules.mortality_income_elasticity = 4.0
+    elif scenario == "demographic_negative_income_transition":
+        rules.annual_tfp_growth = -0.05
+        rules.wage_indexation = 1.0
+        population_rules.demographic_signal_halflife_years = 0.5
+        population_rules.fertility_income_elasticity = 4.0
+        population_rules.mortality_income_elasticity = 4.0
     elif scenario == "bank_entry_eligible_founders":
         financial_policy.bank_minimum_capital = 0.1
         monetary_rules.opening_capital_per_bank = 250.0

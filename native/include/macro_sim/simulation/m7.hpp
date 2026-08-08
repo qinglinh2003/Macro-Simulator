@@ -61,6 +61,9 @@ struct M7Rules final {
     bool marriage{true};
     bool divorce{true};
     bool household_lifecycle{true};
+    bool lifecycle_consumption{false};
+    double lifecycle_income_propensity{0.8};
+    double lifecycle_wealth_draw_propensity{1.0};
     bool leaving_home{true};
     std::uint32_t leave_home_min_age{22};
     std::uint32_t leave_home_peak_end_age{30};
@@ -73,6 +76,14 @@ struct M7Rules final {
     double fertility_rank_gradient{0.0};
     double stratification_multiplier_minimum{0.5};
     double stratification_multiplier_maximum{2.0};
+    std::uint32_t demographic_feedback_burnin_years{4};
+    double demographic_signal_halflife_years{5.0};
+    double fertility_income_elasticity{0.0};
+    double fertility_multiplier_minimum{0.5};
+    double fertility_multiplier_maximum{1.5};
+    double mortality_income_elasticity{0.0};
+    double mortality_multiplier_minimum{0.7};
+    double mortality_multiplier_maximum{1.3};
     core::MarriageRules marriage_rules{};
 
     bool operator==(const M7Rules &) const = default;
@@ -130,6 +141,9 @@ struct M7Metrics final {
     std::uint64_t deaths{0};
     double wealth_rank_mortality_multiplier_stddev{0.0};
     double wealth_rank_fertility_multiplier_stddev{0.0};
+    double demographic_real_wage_signal{1.0};
+    double demographic_fertility_multiplier{1.0};
+    double demographic_mortality_multiplier{1.0};
     std::uint64_t bottom_wealth_quintile_deaths{0};
     std::uint64_t top_wealth_quintile_deaths{0};
     std::uint64_t bottom_wealth_quintile_births{0};
@@ -212,6 +226,18 @@ struct M7Runtime final {
                                                         1.0};
     std::array<double, 5> fertility_quintile_multiplier{1.0, 1.0, 1.0, 1.0,
                                                         1.0};
+    std::int32_t demographic_signal_year{0};
+    std::uint32_t demographic_signal_years_completed{0};
+    double demographic_signal_ewma{0.0};
+    double demographic_signal_baseline{0.0};
+    double demographic_signal_x{1.0};
+    double demographic_signal_fertility_multiplier{1.0};
+    double demographic_signal_mortality_multiplier{1.0};
+    double demographic_signal_last_real_wage{0.0};
+    double demographic_signal_wage_sum{0.0};
+    double demographic_signal_labor_sum{0.0};
+    double demographic_signal_price_sum{0.0};
+    std::uint32_t demographic_signal_days{0};
     std::uint64_t next_event_id{1};
     std::uint64_t population_rng_counter{0};
     M7Metrics last_metrics{};
@@ -266,10 +292,26 @@ class M7TickScratch final {
     std::vector<std::uint8_t> household_wealth_quintile_;
     std::vector<double> household_mortality_multiplier_;
     std::vector<double> household_fertility_multiplier_;
+    std::vector<double> lifecycle_need_units_;
+    std::vector<double> lifecycle_income_capacity_;
+    std::vector<double> lifecycle_inverse_life_days_;
+    std::vector<double> lifecycle_net_wealth_;
     std::array<double, 5> mortality_quintile_multiplier_{1.0, 1.0, 1.0, 1.0,
                                                          1.0};
     std::array<double, 5> fertility_quintile_multiplier_{1.0, 1.0, 1.0, 1.0,
                                                          1.0};
+    std::int32_t demographic_signal_year_{0};
+    std::uint32_t demographic_signal_years_completed_{0};
+    double demographic_signal_ewma_{0.0};
+    double demographic_signal_baseline_{0.0};
+    double demographic_signal_x_{1.0};
+    double demographic_signal_fertility_multiplier_{1.0};
+    double demographic_signal_mortality_multiplier_{1.0};
+    double demographic_signal_last_real_wage_{0.0};
+    double demographic_signal_wage_sum_{0.0};
+    double demographic_signal_labor_sum_{0.0};
+    double demographic_signal_price_sum_{0.0};
+    std::uint32_t demographic_signal_days_{0};
     std::vector<HouseholdId> kin_households_;
     std::vector<HouseholdId> retired_households_;
     std::vector<std::size_t> household_work_index_;

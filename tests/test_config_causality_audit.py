@@ -23,9 +23,9 @@ def test_every_config_inventory_row_receives_an_audit_disposition() -> None:
         "derived": 2,
         "excluded_policy": 108,
         "excluded_shock": 4,
-        "infrastructure_invariance": 20,
-        "mapped_native": 252,
-        "missing_native_route": 40,
+        "infrastructure_invariance": 18,
+        "mapped_native": 263,
+        "missing_native_route": 31,
         "native_fixed": 12,
         "run_control": 1,
         "superseded": 14,
@@ -87,14 +87,16 @@ def test_ambiguous_config_names_are_owned_by_their_native_mechanism() -> None:
     } == expected
 
 
-def test_semantically_incomplete_native_assignment_is_not_counted_as_a_route() -> None:
+def test_lifecycle_consumption_is_routed_to_its_native_mechanism() -> None:
     rows = {
         row["id"]: row for row in build_audit_inventory()["rows"]
     }
     lifecycle = rows["config.demographic_lifecycle_consumption"]
-    assert lifecycle["route_status"] == "missing_native_route"
-    assert lifecycle["experiment_role"] == "repair_before_experiment"
-    assert "finite-life consumption" in lifecycle["route_note"]
+    assert lifecycle["route_status"] == "mapped_native"
+    assert lifecycle["experiment_role"] == "causal_treatment"
+    assert lifecycle["native_targets"] == [
+        "m7.population_rules.lifecycle_consumption"
+    ]
     strata = rows["config.consumption_strata"]
     assert strata["route_status"] == "mapped_native"
     assert strata["native_targets"] == [

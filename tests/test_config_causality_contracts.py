@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 40
+    assert payload["status_counts"]["blocked_native_route"] == 31
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -234,13 +234,23 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="demography_and_households")
     activated = activation_contracts(module="demography_and_households")
     assert {contract.field_name for contract in activated} == {
+        "demo_feedback_burnin_years",
+        "demo_signal_halflife_years",
         "demographic_adult_leaving_home_enabled",
         "demographic_annual_leave_rate_late",
         "demographic_annual_leave_rate_peak",
         "demographic_leave_home_peak_end_age",
+        "fertility_income_elasticity",
+        "fertility_mult_hi",
+        "fertility_mult_lo",
         "marriage_assortativity",
+        "mortality_income_elasticity",
+        "mortality_mult_hi",
+        "mortality_mult_lo",
     }
     assert {contract.field_name for contract in (*neutral, *activated)} == {
+        "demo_feedback_burnin_years",
+        "demo_signal_halflife_years",
         "demographic_adult_leaving_home_enabled",
         "demographic_annual_divorce_rate_base",
         "demographic_annual_leave_rate_late",
@@ -249,16 +259,25 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "demographic_divorce_enabled",
         "demographic_leave_home_min_age",
         "demographic_leave_home_peak_end_age",
+        "demographic_lifecycle_consumption",
         "demographic_marriage_enabled",
         "demographic_marriage_market_interval_days",
         "demographics_enabled",
         "demographics_mortality_scale",
         "demographics_tfr",
+        "fertility_income_elasticity",
+        "fertility_mult_hi",
+        "fertility_mult_lo",
         "fertility_rank_gradient",
+        "lifecycle_alpha_income",
+        "lifecycle_alpha_wealth_draw",
         "marriage_assortativity",
+        "mortality_income_elasticity",
+        "mortality_mult_hi",
+        "mortality_mult_lo",
         "mortality_rank_gradient",
     }
-    assert len(neutral) == 11
+    assert len(neutral) == 14
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
@@ -268,7 +287,7 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         for row in build_contract_registry()["contracts"]
         if row["field_id"] == "config.demographic_lifecycle_consumption"
     )
-    assert lifecycle["status"] == "blocked_native_route"
+    assert lifecycle["status"] == "screening_ready"
 
 
 def test_distribution_contracts_cover_every_mapped_causal_field() -> None:

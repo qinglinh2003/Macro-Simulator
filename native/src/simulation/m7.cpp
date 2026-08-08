@@ -79,6 +79,246 @@ constexpr std::uint8_t kUnrankedWealthQuintile = 5U;
     return std::max(0.0, static_cast<double>(day - person.birth_day) / kDaysPerYear);
 }
 
+[[nodiscard]] std::int32_t calendar_year_from_ordinal(std::int32_t ordinal) noexcept {
+    if (ordinal < 1) {
+        return static_cast<std::int32_t>(
+            std::floor(static_cast<double>(ordinal) / kDaysPerYear));
+    }
+    // Python's date ordinal 719163 is 1970-01-01.  Convert with the inverse of
+    // Howard Hinnant's civil calendar algorithm so year boundaries follow the
+    // actual Gregorian calendar used by the product start-date contract.
+    std::int64_t days = static_cast<std::int64_t>(ordinal) - 719163;
+    days += 719468;
+    const std::int64_t era = (days >= 0 ? days : days - 146096) / 146097;
+    const auto day_of_era = static_cast<std::uint32_t>(days - era * 146097);
+    const auto year_of_era = static_cast<std::uint32_t>(
+        (day_of_era - day_of_era / 1460U + day_of_era / 36524U -
+         day_of_era / 146096U) /
+        365U);
+    std::int64_t year = static_cast<std::int64_t>(year_of_era) + era * 400;
+    const auto day_of_year =
+        day_of_era - (365U * year_of_era + year_of_era / 4U - year_of_era / 100U);
+    const auto month_prime = (5U * day_of_year + 2U) / 153U;
+    year += month_prime < 10U ? 0 : 1;
+    return static_cast<std::int32_t>(year);
+}
+
+[[nodiscard]] double lifecycle_income_capacity(double age, const M7Rules &rules) {
+    const double entry = static_cast<double>(rules.working_age);
+    const double retirement = static_cast<double>(rules.retirement_age);
+    if (age < entry || age >= retirement) {
+        return 0.0;
+    }
+    const double ramp_up_end = entry + 6.0;
+    if (age <= ramp_up_end) {
+        return 0.5 + 0.5 * (age - entry) / std::max(1.0, ramp_up_end - entry);
+    }
+    if (age < retirement - 14.0) {
+        return 1.0;
+    }
+    const double decline_years = std::max(1.0, retirement - (retirement - 14.0) - 1.0);
+    return std::clamp(1.0 - 0.3 * (age - (retirement - 14.0)) / decline_years,
+                      0.0, 1.0);
+}
+
+[[nodiscard]] std::vector<double>
+expected_remaining_life_by_age(const algorithms::VitalRates &rates) {
+    const auto maximum_age = static_cast<std::size_t>(rates.maximum_age);
+    std::vector<double> survivorship(maximum_age + 1U, 1.0);
+    for (std::size_t age = 1; age <= maximum_age; ++age) {
+        const auto survival = algorithms::survival_probability(
+            rates, static_cast<double>(age - 1U), 1.0);
+        if (!survival.ok()) {
+            return {};
+        }
+        survivorship[age] = survivorship[age - 1U] * *survival.get_if();
+    }
+    std::vector<double> remaining(maximum_age + 1U, 0.0);
+    double tail = 0.0;
+    for (std::size_t offset = 0; offset <= maximum_age; ++offset) {
+        const auto age = maximum_age - offset;
+        tail += survivorship[age];
+        if (survivorship[age] > kLaborTolerance) {
+            remaining[age] = tail / survivorship[age];
+        }
+    }
+    return remaining;
+}
+
+[[nodiscard]] Status apply_lifecycle_consumption(
+    const core::RootState &state, const M7Rules &rules,
+    const core::PersonStore &persons, std::int32_t calendar_day,
+    M4TickScratch &real, const M5TickScratch &monetary,
+    const M6TickScratch &financial, M7TickScratch &scratch) {
+    if (!rules.lifecycle_consumption) {
+        return Status::success();
+    }
+    const auto count = real.household_ids_.size();
+    scratch.lifecycle_need_units_.assign(count, 0.0);
+    scratch.lifecycle_income_capacity_.assign(count, 0.0);
+    scratch.lifecycle_inverse_life_days_.assign(count, 0.0);
+    scratch.lifecycle_net_wealth_.assign(count, 0.0);
+    std::vector<std::uint32_t> members(count, 0U);
+    std::vector<std::uint32_t> adults(count, 0U);
+    const auto remaining_life = expected_remaining_life_by_age(rules.vital_rates);
+    if (remaining_life.empty()) {
+        return Status(ErrorCode::invalid_argument,
+                      "M7 lifecycle consumption has invalid vital rates");
+    }
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto *household = state.households.get(real.household_ids_[index]);
+        if (household == nullptr) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 lifecycle household is absent");
+        }
+        const auto account =
+            static_cast<std::size_t>(household->primary_account.value());
+        if (account >= real.balances_.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 lifecycle household account is stale");
+        }
+        scratch.lifecycle_net_wealth_[index] = real.balances_[account];
+        if (account < monetary.debt_by_account_.size()) {
+            scratch.lifecycle_net_wealth_[index] -= monetary.debt_by_account_[account];
+        }
+    }
+    for (const auto &lot : financial.securities_.lots()) {
+        if (!lot.active() || lot.holder.kind() != core::OwnerKind::household) {
+            continue;
+        }
+        const auto identity = static_cast<std::size_t>(lot.holder.value());
+        const auto index = identity < real.household_dense_index_.size()
+                               ? real.household_dense_index_[identity]
+                               : std::numeric_limits<std::size_t>::max();
+        if (index >= count) {
+            continue;
+        }
+        if (lot.security.kind() == core::SecurityKind::equity) {
+            const auto *contract =
+                financial.securities_.get(EquityId(lot.security.value()));
+            if (contract != nullptr && contract->active) {
+                scratch.lifecycle_net_wealth_[index] +=
+                    lot.units * contract->price.value();
+            }
+        } else {
+            const auto *contract =
+                financial.securities_.get(BondId(lot.security.value()));
+            if (contract != nullptr && contract->active) {
+                scratch.lifecycle_net_wealth_[index] += lot.units;
+            }
+        }
+    }
+    for (const auto person_id : persons.alive_ids()) {
+        const auto *person = persons.get(person_id);
+        if (person == nullptr || !person->alive) {
+            continue;
+        }
+        const auto identity = static_cast<std::size_t>(person->household.value());
+        const auto index = identity < real.household_dense_index_.size()
+                               ? real.household_dense_index_[identity]
+                               : std::numeric_limits<std::size_t>::max();
+        if (index >= count) {
+            continue;
+        }
+        const double age = completed_age(*person, calendar_day);
+        scratch.lifecycle_need_units_[index] +=
+            age < 18.0 ? 0.65 : (age >= 65.0 ? 0.90 : 1.0);
+        scratch.lifecycle_income_capacity_[index] +=
+            lifecycle_income_capacity(age, rules) * person->efficiency;
+        if (age >= static_cast<double>(rules.working_age) &&
+            age < static_cast<double>(rules.retirement_age)) {
+            ++adults[index];
+        }
+        const auto integer_age = std::min<std::size_t>(
+            remaining_life.size() - 1U,
+            static_cast<std::size_t>(std::max(0.0, std::floor(age))));
+        scratch.lifecycle_inverse_life_days_[index] +=
+            1.0 / std::max(1.0, remaining_life[integer_age] * kDaysPerYear);
+        ++members[index];
+    }
+    for (std::size_t index = 0; index < count; ++index) {
+        auto &work = real.household_work_[index];
+        if (members[index] == 0U) {
+            work.consumption_budget = 0.0;
+            work.wealth_consumption_budget = 0.0;
+            continue;
+        }
+        double adjusted_income = 0.0;
+        if (adults[index] > 0U) {
+            const double capacity_per_adult =
+                scratch.lifecycle_income_capacity_[index] /
+                static_cast<double>(adults[index]);
+            adjusted_income = std::max(0.0, work.income_expected) *
+                              capacity_per_adult *
+                              scratch.lifecycle_need_units_[index] /
+                              static_cast<double>(adults[index]);
+        }
+        const double wealth_draw =
+            std::max(0.0, scratch.lifecycle_net_wealth_[index]) *
+            scratch.lifecycle_inverse_life_days_[index] /
+            static_cast<double>(members[index]);
+        work.consumption_budget = std::max(
+            0.0, rules.lifecycle_income_propensity * adjusted_income +
+                     rules.lifecycle_wealth_draw_propensity * wealth_draw);
+        work.wealth_consumption_budget =
+            rules.lifecycle_wealth_draw_propensity * wealth_draw;
+    }
+    return Status::success();
+}
+
+void finalize_demographic_signal_year(const M7Rules &rules, M7TickScratch &scratch) {
+    double real_wage = scratch.demographic_signal_last_real_wage_;
+    if (scratch.demographic_signal_labor_sum_ > kLaborTolerance &&
+        scratch.demographic_signal_price_sum_ > kLaborTolerance &&
+        scratch.demographic_signal_days_ > 0U) {
+        const double mean_price =
+            scratch.demographic_signal_price_sum_ /
+            static_cast<double>(scratch.demographic_signal_days_);
+        real_wage = (scratch.demographic_signal_wage_sum_ /
+                     scratch.demographic_signal_labor_sum_) /
+                    mean_price;
+        scratch.demographic_signal_last_real_wage_ = real_wage;
+    }
+    scratch.demographic_signal_wage_sum_ = 0.0;
+    scratch.demographic_signal_labor_sum_ = 0.0;
+    scratch.demographic_signal_price_sum_ = 0.0;
+    scratch.demographic_signal_days_ = 0U;
+    ++scratch.demographic_signal_years_completed_;
+    if (real_wage <= kLaborTolerance ||
+        scratch.demographic_signal_years_completed_ <=
+            rules.demographic_feedback_burnin_years) {
+        return;
+    }
+    if (scratch.demographic_signal_ewma_ <= kLaborTolerance) {
+        scratch.demographic_signal_ewma_ = real_wage;
+        scratch.demographic_signal_baseline_ = real_wage;
+    } else {
+        const double alpha =
+            1.0 - std::pow(0.5, 1.0 / rules.demographic_signal_halflife_years);
+        scratch.demographic_signal_ewma_ +=
+            alpha * (real_wage - scratch.demographic_signal_ewma_);
+    }
+    scratch.demographic_signal_x_ =
+        scratch.demographic_signal_ewma_ /
+        std::max(kLaborTolerance, scratch.demographic_signal_baseline_);
+    scratch.demographic_signal_fertility_multiplier_ =
+        rules.fertility_income_elasticity > 0.0
+            ? std::clamp(
+                  std::pow(scratch.demographic_signal_x_,
+                           -rules.fertility_income_elasticity),
+                  rules.fertility_multiplier_minimum,
+                  rules.fertility_multiplier_maximum)
+            : 1.0;
+    scratch.demographic_signal_mortality_multiplier_ =
+        rules.mortality_income_elasticity > 0.0
+            ? std::clamp(
+                  std::pow(scratch.demographic_signal_x_,
+                           -rules.mortality_income_elasticity),
+                  rules.mortality_multiplier_minimum,
+                  rules.mortality_multiplier_maximum)
+            : 1.0;
+}
+
 struct FirmLaborTotals final {
     double effective_labor{0.0};
     double payroll{0.0};
@@ -1477,6 +1717,30 @@ class M7Extension final : public M6TickExtension {
             runtime_.mortality_quintile_multiplier;
         scratch_.fertility_quintile_multiplier_ =
             runtime_.fertility_quintile_multiplier;
+        scratch_.demographic_signal_year_ = runtime_.demographic_signal_year;
+        scratch_.demographic_signal_years_completed_ =
+            runtime_.demographic_signal_years_completed;
+        scratch_.demographic_signal_ewma_ = runtime_.demographic_signal_ewma;
+        scratch_.demographic_signal_baseline_ =
+            runtime_.demographic_signal_baseline;
+        scratch_.demographic_signal_x_ = runtime_.demographic_signal_x;
+        scratch_.demographic_signal_fertility_multiplier_ =
+            runtime_.rules.fertility_income_elasticity > 0.0
+                ? runtime_.demographic_signal_fertility_multiplier
+                : 1.0;
+        scratch_.demographic_signal_mortality_multiplier_ =
+            runtime_.rules.mortality_income_elasticity > 0.0
+                ? runtime_.demographic_signal_mortality_multiplier
+                : 1.0;
+        scratch_.demographic_signal_last_real_wage_ =
+            runtime_.demographic_signal_last_real_wage;
+        scratch_.demographic_signal_wage_sum_ =
+            runtime_.demographic_signal_wage_sum;
+        scratch_.demographic_signal_labor_sum_ =
+            runtime_.demographic_signal_labor_sum;
+        scratch_.demographic_signal_price_sum_ =
+            runtime_.demographic_signal_price_sum;
+        scratch_.demographic_signal_days_ = runtime_.demographic_signal_days;
         scratch_.labor_accounts_ = runtime_.labor_accounts;
         scratch_.pending_leaving_home_.clear();
         scratch_.opening_alive_.assign(scratch_.persons_.alive_ids().begin(),
@@ -1586,6 +1850,8 @@ class M7Extension final : public M6TickExtension {
                             scratch_.household_mortality_multiplier_));
                     const double adjusted_survival = std::clamp(
                         1.0 - scratch_.external_mortality_multiplier_ *
+                                  scratch_
+                                      .demographic_signal_mortality_multiplier_ *
                                   rank_multiplier * base_mortality,
                         0.0, 1.0);
                     dies = unit_draw(state.seed, person_id.value(), calendar_day,
@@ -1640,7 +1906,9 @@ class M7Extension final : public M6TickExtension {
             return Status(ErrorCode::contract_violation,
                           "forced death target was not settled");
         }
-        return Status::success();
+        return apply_lifecycle_consumption(
+            state, runtime_.rules, scratch_.persons_, calendar_day, real,
+            monetary, financial, scratch_);
     }
 
     Status run_labor(const core::RootState &state, M4Runtime &real_runtime,
@@ -2771,6 +3039,8 @@ class M7Extension final : public M6TickExtension {
                     runtime_.rules.fertility
                         ? 1.0 - std::exp(-*annual_rate.get_if() *
                                          scratch_.external_fertility_multiplier_ *
+                                         scratch_
+                                             .demographic_signal_fertility_multiplier_ *
                                          household_rank_multiplier(
                                              person->household,
                                              std::span<const double>(
@@ -2904,6 +3174,38 @@ class M7Extension final : public M6TickExtension {
             }
         }
         ++scratch_.population_rng_counter_;
+        const auto signal_year = calendar_year_from_ordinal(calendar_day);
+        if (scratch_.demographic_signal_year_ == 0) {
+            scratch_.demographic_signal_year_ = signal_year;
+        } else if (signal_year != scratch_.demographic_signal_year_) {
+            finalize_demographic_signal_year(runtime_.rules, scratch_);
+            scratch_.demographic_signal_year_ = signal_year;
+        }
+        double wage_sum = 0.0;
+        double labor_sum = 0.0;
+        double price_sum = 0.0;
+        std::size_t priced_firms = 0U;
+        for (const auto &work : real.firm_work_) {
+            wage_sum += std::max(0.0, work.wage_bill);
+            labor_sum += std::max(0.0, work.hired);
+            if (work.posted_price > kLaborTolerance) {
+                price_sum += work.posted_price;
+                ++priced_firms;
+            }
+        }
+        scratch_.demographic_signal_wage_sum_ += wage_sum;
+        scratch_.demographic_signal_labor_sum_ += labor_sum;
+        scratch_.demographic_signal_price_sum_ +=
+            priced_firms > 0U ? price_sum / static_cast<double>(priced_firms)
+                              : std::max(kLaborTolerance,
+                                         real_runtime.last_metrics.price_index);
+        ++scratch_.demographic_signal_days_;
+        scratch_.working_metrics_.demographic_real_wage_signal =
+            scratch_.demographic_signal_x_;
+        scratch_.working_metrics_.demographic_fertility_multiplier =
+            scratch_.demographic_signal_fertility_multiplier_;
+        scratch_.working_metrics_.demographic_mortality_multiplier =
+            scratch_.demographic_signal_mortality_multiplier_;
         measure_population(state, runtime_.rules, scratch_.persons_,
                            scratch_.membership_, scratch_.relationships_, calendar_day,
                            scratch_.working_metrics_);
@@ -3254,6 +3556,26 @@ class M7Extension final : public M6TickExtension {
         }
         scratch_.working_metrics_.economy = metrics;
         runtime_.last_metrics = scratch_.working_metrics_;
+        runtime_.demographic_signal_year = scratch_.demographic_signal_year_;
+        runtime_.demographic_signal_years_completed =
+            scratch_.demographic_signal_years_completed_;
+        runtime_.demographic_signal_ewma = scratch_.demographic_signal_ewma_;
+        runtime_.demographic_signal_baseline =
+            scratch_.demographic_signal_baseline_;
+        runtime_.demographic_signal_x = scratch_.demographic_signal_x_;
+        runtime_.demographic_signal_fertility_multiplier =
+            scratch_.demographic_signal_fertility_multiplier_;
+        runtime_.demographic_signal_mortality_multiplier =
+            scratch_.demographic_signal_mortality_multiplier_;
+        runtime_.demographic_signal_last_real_wage =
+            scratch_.demographic_signal_last_real_wage_;
+        runtime_.demographic_signal_wage_sum =
+            scratch_.demographic_signal_wage_sum_;
+        runtime_.demographic_signal_labor_sum =
+            scratch_.demographic_signal_labor_sum_;
+        runtime_.demographic_signal_price_sum =
+            scratch_.demographic_signal_price_sum_;
+        runtime_.demographic_signal_days = scratch_.demographic_signal_days_;
         runtime_.current_calendar_day =
             runtime_.start_calendar_day + static_cast<std::int32_t>(tick.value()) + 1;
         if (extension_ != nullptr) {
@@ -3295,6 +3617,11 @@ void M7TickScratch::reserve(const M7Runtime &runtime) {
         runtime.household_mortality_multiplier.size());
     household_fertility_multiplier_.reserve(
         runtime.household_fertility_multiplier.size());
+    const auto household_count = runtime.membership.household_capacity();
+    lifecycle_need_units_.reserve(household_count);
+    lifecycle_income_capacity_.reserve(household_count);
+    lifecycle_inverse_life_days_.reserve(household_count);
+    lifecycle_net_wealth_.reserve(household_count);
     kin_households_.reserve(16);
     retired_households_.reserve(4);
     firm_target_ema_.reserve(runtime.firm_target_ema.size());
@@ -3318,6 +3645,12 @@ std::uint64_t M7TickScratch::capacity_signature() const noexcept {
             << 14U) ^
            (static_cast<std::uint64_t>(household_fertility_multiplier_.capacity())
             << 18U) ^
+           (static_cast<std::uint64_t>(lifecycle_need_units_.capacity()) << 22U) ^
+           (static_cast<std::uint64_t>(lifecycle_income_capacity_.capacity())
+            << 26U) ^
+           (static_cast<std::uint64_t>(lifecycle_inverse_life_days_.capacity())
+            << 30U) ^
+           (static_cast<std::uint64_t>(lifecycle_net_wealth_.capacity()) << 34U) ^
            (static_cast<std::uint64_t>(beneficial_assets_.capacity()) << 48U) ^
            (static_cast<std::uint64_t>(estate_securities_.capacity()) << 56U) ^
            (static_cast<std::uint64_t>(kin_households_.capacity()) << 4U) ^
@@ -3362,6 +3695,15 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.fertility_rank_gradient,
         rules.stratification_multiplier_minimum,
         rules.stratification_multiplier_maximum,
+        rules.lifecycle_income_propensity,
+        rules.lifecycle_wealth_draw_propensity,
+        rules.demographic_signal_halflife_years,
+        rules.fertility_income_elasticity,
+        rules.fertility_multiplier_minimum,
+        rules.fertility_multiplier_maximum,
+        rules.mortality_income_elasticity,
+        rules.mortality_multiplier_minimum,
+        rules.mortality_multiplier_maximum,
     };
     if (rules.working_age < 1U || rules.retirement_age <= rules.working_age ||
         rules.retirement_age > rules.vital_rates.maximum_age ||
@@ -3395,6 +3737,18 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.stratification_multiplier_minimum <= 0.0 ||
         rules.stratification_multiplier_minimum > 1.0 ||
         rules.stratification_multiplier_maximum < 1.0 ||
+        rules.lifecycle_income_propensity < 0.0 ||
+        rules.lifecycle_wealth_draw_propensity < 0.0 ||
+        rules.demographic_feedback_burnin_years == 0U ||
+        rules.demographic_signal_halflife_years <= 0.0 ||
+        rules.fertility_income_elasticity < 0.0 ||
+        rules.fertility_multiplier_minimum <= 0.0 ||
+        rules.fertility_multiplier_minimum > 1.0 ||
+        rules.fertility_multiplier_maximum < 1.0 ||
+        rules.mortality_income_elasticity < 0.0 ||
+        rules.mortality_multiplier_minimum <= 0.0 ||
+        rules.mortality_multiplier_minimum > 1.0 ||
+        rules.mortality_multiplier_maximum < 1.0 ||
         (rules.second_jobs && !rules.fractional_hours) ||
         (rules.job_ladder && !rules.relationship_wages) ||
         rules.marriage_rules.minimum_age == 0 ||
@@ -3507,6 +3861,30 @@ Status validate_m7_state_impl(const core::RootState &state,
         if (!status.ok()) {
             return status;
         }
+    }
+    const std::array signal_values{
+        runtime.demographic_signal_ewma,
+        runtime.demographic_signal_baseline,
+        runtime.demographic_signal_x,
+        runtime.demographic_signal_fertility_multiplier,
+        runtime.demographic_signal_mortality_multiplier,
+        runtime.demographic_signal_last_real_wage,
+        runtime.demographic_signal_wage_sum,
+        runtime.demographic_signal_labor_sum,
+        runtime.demographic_signal_price_sum,
+    };
+    if (!std::all_of(signal_values.begin(), signal_values.end(), finite) ||
+        runtime.demographic_signal_ewma < 0.0 ||
+        runtime.demographic_signal_baseline < 0.0 ||
+        runtime.demographic_signal_x <= 0.0 ||
+        runtime.demographic_signal_fertility_multiplier <= 0.0 ||
+        runtime.demographic_signal_mortality_multiplier <= 0.0 ||
+        runtime.demographic_signal_last_real_wage < 0.0 ||
+        runtime.demographic_signal_wage_sum < 0.0 ||
+        runtime.demographic_signal_labor_sum < 0.0 ||
+        runtime.demographic_signal_price_sum < 0.0) {
+        return Status(ErrorCode::invariant_violation,
+                      "M7 demographic signal state is invalid");
     }
     for (const auto &lot : state.ownership.records()) {
         if (lot.active && lot.owner.kind() == core::OwnerKind::household &&

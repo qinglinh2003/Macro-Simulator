@@ -403,6 +403,7 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.marriage = true;
     population.rules.divorce = true;
     population.rules.household_lifecycle = true;
+    population.rules.lifecycle_consumption = true;
     population.rules.leaving_home = true;
     population.rules.annual_marriage_rate = 0.30;
     population.rules.annual_divorce_rate = 0.012;
@@ -410,6 +411,8 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     population.rules.fertility_rank_gradient = 0.5;
     population.rules.stratification_multiplier_minimum = 0.5;
     population.rules.stratification_multiplier_maximum = 2.0;
+    population.rules.fertility_income_elasticity = 0.06;
+    population.rules.mortality_income_elasticity = 0.04;
     population.rules.marriage_rules.assortativity = 1.0;
     spec.energy_rules.enabled = true;
     spec.energy_rules.household_energy = true;
@@ -497,7 +500,7 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
 [[nodiscard]] Status apply_country_overrides(const Json &overrides,
                                              simulation::M8SimulationSpec &spec,
                                              std::uint64_t &population_count) {
-    static constexpr std::array<std::string_view, 47> allowed{{
+    static constexpr std::array<std::string_view, 58> allowed{{
         "n_households",
         "n_firms_c",
         "n_firms_k",
@@ -545,6 +548,17 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         "q_invest_smooth",
         "equity_ema_lambda",
         "wealth_effect",
+        "demographic_lifecycle_consumption",
+        "lifecycle_alpha_income",
+        "lifecycle_alpha_wealth_draw",
+        "demo_feedback_burnin_years",
+        "demo_signal_halflife_years",
+        "fertility_income_elasticity",
+        "fertility_mult_lo",
+        "fertility_mult_hi",
+        "mortality_income_elasticity",
+        "mortality_mult_lo",
+        "mortality_mult_hi",
     }};
     if (!overrides.is_object() ||
         !std::ranges::all_of(overrides.items(), [](const auto &item) {
@@ -635,7 +649,25 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !assign_number("equity_ema_lambda",
                        financial.rules.household_equity_wealth_smoothing) ||
         !assign_number("wealth_effect",
-                       financial.rules.household_equity_wealth_effect)) {
+                       financial.rules.household_equity_wealth_effect) ||
+        !assign_number("lifecycle_alpha_income",
+                       population.rules.lifecycle_income_propensity) ||
+        !assign_number("lifecycle_alpha_wealth_draw",
+                       population.rules.lifecycle_wealth_draw_propensity) ||
+        !assign_number("demo_signal_halflife_years",
+                       population.rules.demographic_signal_halflife_years) ||
+        !assign_number("fertility_income_elasticity",
+                       population.rules.fertility_income_elasticity) ||
+        !assign_number("fertility_mult_lo",
+                       population.rules.fertility_multiplier_minimum) ||
+        !assign_number("fertility_mult_hi",
+                       population.rules.fertility_multiplier_maximum) ||
+        !assign_number("mortality_income_elasticity",
+                       population.rules.mortality_income_elasticity) ||
+        !assign_number("mortality_mult_lo",
+                       population.rules.mortality_multiplier_minimum) ||
+        !assign_number("mortality_mult_hi",
+                       population.rules.mortality_multiplier_maximum)) {
         return Status(ErrorCode::invalid_argument,
                       "new-game country number is invalid");
     }
@@ -661,6 +693,8 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
         !boolean("housing_rental_enabled", spec.housing_rules.rentals) ||
         !boolean("housing_construction_enabled", spec.housing_rules.construction) ||
         !boolean("demographics_enabled", population.rules.fertility) ||
+        !boolean("demographic_lifecycle_consumption",
+                 population.rules.lifecycle_consumption) ||
         !boolean("consumption_strata", financial.rules.consumption_strata) ||
         !boolean("consumption_strata", real.rules.consumption_strata) ||
         !boolean("energy_enabled", spec.energy_rules.enabled) ||
@@ -670,6 +704,15 @@ void calibrate_opening_bank_capital(simulation::M8SimulationSpec &spec) {
     }
     if (overrides.contains("demographics_enabled")) {
         population.rules.mortality = population.rules.fertility;
+    }
+    if (overrides.contains("demo_feedback_burnin_years")) {
+        if (!unsigned_integer(overrides.at("demo_feedback_burnin_years"), 1U,
+                              std::numeric_limits<std::uint32_t>::max())) {
+            return Status(ErrorCode::out_of_range,
+                          "new-game demographic burn-in is out of range");
+        }
+        population.rules.demographic_feedback_burnin_years =
+            overrides.at("demo_feedback_burnin_years").get<std::uint32_t>();
     }
     if (overrides.contains("consumption_strata") &&
         !real.rules.consumption_strata) {

@@ -169,6 +169,9 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(population);
     MACRO_SIM_FILL_M7(births);
     MACRO_SIM_FILL_M7(deaths);
+    MACRO_SIM_FILL_M7(demographic_real_wage_signal);
+    MACRO_SIM_FILL_M7(demographic_fertility_multiplier);
+    MACRO_SIM_FILL_M7(demographic_mortality_multiplier);
     MACRO_SIM_FILL_M7(households_with_members);
     MACRO_SIM_FILL_M7(mean_household_size);
     MACRO_SIM_FILL_M7(working_age_share);
@@ -1792,6 +1795,7 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     MACRO_SIM_M7_RULE_FLAG(marriage);
     MACRO_SIM_M7_RULE_FLAG(divorce);
     MACRO_SIM_M7_RULE_FLAG(household_lifecycle);
+    MACRO_SIM_M7_RULE_FLAG(lifecycle_consumption);
     MACRO_SIM_M7_RULE_FLAG(leaving_home);
 #undef MACRO_SIM_M7_RULE_FLAG
     output->forbid_same_household =
@@ -1804,6 +1808,8 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->marriage_maximum_age_gap = value.marriage_rules.maximum_age_gap;
     output->leave_home_min_age = value.leave_home_min_age;
     output->leave_home_peak_end_age = value.leave_home_peak_end_age;
+    output->demographic_feedback_burnin_years =
+        value.demographic_feedback_burnin_years;
     output->makeham_a = value.vital_rates.makeham_a;
     output->gompertz_b = value.vital_rates.gompertz_b;
     output->gompertz_theta = value.vital_rates.gompertz_theta;
@@ -1836,6 +1842,17 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->marriage_preferred_age_gap = value.marriage_rules.preferred_age_gap;
     output->marriage_age_gap_penalty = value.marriage_rules.age_gap_penalty;
     output->marriage_assortativity = value.marriage_rules.assortativity;
+    output->lifecycle_income_propensity = value.lifecycle_income_propensity;
+    output->lifecycle_wealth_draw_propensity =
+        value.lifecycle_wealth_draw_propensity;
+    output->demographic_signal_halflife_years =
+        value.demographic_signal_halflife_years;
+    output->fertility_income_elasticity = value.fertility_income_elasticity;
+    output->fertility_multiplier_minimum = value.fertility_multiplier_minimum;
+    output->fertility_multiplier_maximum = value.fertility_multiplier_maximum;
+    output->mortality_income_elasticity = value.mortality_income_elasticity;
+    output->mortality_multiplier_minimum = value.mortality_multiplier_minimum;
+    output->mortality_multiplier_maximum = value.mortality_multiplier_maximum;
     return status(MACRO_SIM_OK, "");
 }
 
@@ -1854,6 +1871,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
         !valid_flag(rules->age_participation) || !valid_flag(rules->family_transfers) ||
         !valid_flag(rules->relationships) || !valid_flag(rules->marriage) ||
         !valid_flag(rules->divorce) || !valid_flag(rules->household_lifecycle) ||
+        !valid_flag(rules->lifecycle_consumption) ||
         !valid_flag(rules->leaving_home) || !valid_flag(rules->forbid_same_household) ||
         !valid_flag(rules->forbid_close_kin)) {
         return status(MACRO_SIM_INVALID_ARGUMENT,
@@ -1883,6 +1901,7 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     MACRO_SIM_COPY_M7_FLAG(marriage);
     MACRO_SIM_COPY_M7_FLAG(divorce);
     MACRO_SIM_COPY_M7_FLAG(household_lifecycle);
+    MACRO_SIM_COPY_M7_FLAG(lifecycle_consumption);
     MACRO_SIM_COPY_M7_FLAG(leaving_home);
 #undef MACRO_SIM_COPY_M7_FLAG
     value.marriage_rules.forbid_same_household = rules->forbid_same_household != 0;
@@ -1894,6 +1913,8 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.marriage_rules.maximum_age_gap = rules->marriage_maximum_age_gap;
     value.leave_home_min_age = rules->leave_home_min_age;
     value.leave_home_peak_end_age = rules->leave_home_peak_end_age;
+    value.demographic_feedback_burnin_years =
+        rules->demographic_feedback_burnin_years;
     value.vital_rates.makeham_a = rules->makeham_a;
     value.vital_rates.gompertz_b = rules->gompertz_b;
     value.vital_rates.gompertz_theta = rules->gompertz_theta;
@@ -1926,6 +1947,17 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.marriage_rules.preferred_age_gap = rules->marriage_preferred_age_gap;
     value.marriage_rules.age_gap_penalty = rules->marriage_age_gap_penalty;
     value.marriage_rules.assortativity = rules->marriage_assortativity;
+    value.lifecycle_income_propensity = rules->lifecycle_income_propensity;
+    value.lifecycle_wealth_draw_propensity =
+        rules->lifecycle_wealth_draw_propensity;
+    value.demographic_signal_halflife_years =
+        rules->demographic_signal_halflife_years;
+    value.fertility_income_elasticity = rules->fertility_income_elasticity;
+    value.fertility_multiplier_minimum = rules->fertility_multiplier_minimum;
+    value.fertility_multiplier_maximum = rules->fertility_multiplier_maximum;
+    value.mortality_income_elasticity = rules->mortality_income_elasticity;
+    value.mortality_multiplier_minimum = rules->mortality_multiplier_minimum;
+    value.mortality_multiplier_maximum = rules->mortality_multiplier_maximum;
     return status(session->engine.update_m7_rules(value));
 }
 
