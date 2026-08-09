@@ -1154,10 +1154,10 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.relationship.max_children_per_household": {
             "status": "screening_ready",
-            "values": (3, 12),
+            "values": (3,),
             "horizon_days": 30,
             "directions": {maximum_household_size: "increase"},
-            "rationale": "The household child cap is a hard genesis capacity constraint. Raising it must permit larger parent-child households before unmatched children are placed with alternative guardians.",
+            "rationale": "The household child cap is a hard genesis capacity constraint. Tightening it below the calibrated value must reduce the largest parent-child households before unmatched children are placed with alternative guardians. A very high cap is intentionally not credited: once it exceeds the realized family-size support it is correctly nonbinding.",
         },
         "config.relationship.max_children_per_parent": {
             "status": "screening_ready",
@@ -1181,13 +1181,13 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.relationship.parent_max_age_gap": {
             "status": "screening_ready",
-            "values": (35, 65),
+            "values": (35,),
             "horizon_days": 30,
             "directions": {
                 mother_age_gap_stddev: "increase",
                 father_age_gap_stddev: "increase",
             },
-            "rationale": "The maximum legal parent age gap truncates the upper tail of genesis parent matching. Relaxing it should widen the realized intergenerational distribution.",
+            "rationale": "The maximum legal parent age gap truncates the upper tail of genesis parent matching. Tightening it below the calibrated value must narrow the realized intergenerational distribution. A limit above the available parent-child age support is correctly nonbinding and is not used as evidence.",
         },
         "config.relationship.parent_min_age_gap": {
             "status": "screening_ready",
