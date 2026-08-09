@@ -419,6 +419,46 @@ void test_real_wage_signal_denominator_includes_unemployed_working_age_people() 
                     std::max(1.0e-8, opening_price_index)) < 1.0e-12);
 }
 
+void test_real_wage_signal_includes_job_guarantee_labor_income() {
+    auto spec = base_spec();
+    auto &policy = spec.financial_economy.monetary_economy.policy;
+    policy.job_guarantee = true;
+    policy.job_guarantee_wage_ratio = 0.75;
+    auto harness = build(spec);
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(result.get_if()->metrics.job_guarantee > 0.0);
+
+    double private_contractual_income = 0.0;
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(person_id);
+        for (const auto job_id : std::array{
+                 harness.runtime.employment.primary_job(person_id),
+                 harness.runtime.employment.secondary_job(person_id)}) {
+            const auto *job = harness.runtime.employment.get(job_id);
+            if (job != nullptr && job->active && !job->suspended) {
+                private_contractual_income +=
+                    job->wage * job->hours * person->efficiency;
+            }
+        }
+    }
+    double mean_posted_wage = 0.0;
+    for (const auto &work : harness.real_scratch.firm_work_) {
+        mean_posted_wage += work.posted_wage;
+    }
+    mean_posted_wage /= static_cast<double>(
+        std::max<std::size_t>(1U, harness.real_scratch.firm_work_.size()));
+    const double guarantee_wage =
+        std::max(policy.minimum_wage,
+                 policy.job_guarantee_wage_ratio * mean_posted_wage);
+    const double expected =
+        private_contractual_income +
+        result.get_if()->metrics.job_guarantee * guarantee_wage;
+    assert(std::abs(harness.runtime.demographic_signal_wage_sum - expected) <
+           1.0e-12);
+}
+
 void test_wealth_rank_gradients_apply_bounded_vital_risk() {
     auto spec = base_spec();
     spec.population.initial_persons = 2'000;
@@ -1508,6 +1548,7 @@ int main() {
     test_lifecycle_consumption_replaces_the_standard_budget();
     test_real_wage_signal_updates_vital_multipliers_annually();
     test_real_wage_signal_denominator_includes_unemployed_working_age_people();
+    test_real_wage_signal_includes_job_guarantee_labor_income();
     test_wealth_rank_gradients_apply_bounded_vital_risk();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();

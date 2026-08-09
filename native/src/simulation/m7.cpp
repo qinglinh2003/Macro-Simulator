@@ -1898,8 +1898,22 @@ measure_labor(const core::RootState &state, const M7Rules &rules,
         wage_hours > kLaborTolerance ? wage_bill / wage_hours : 0.0;
     metrics.participation_rate =
         working_age_total > 0.0 ? accounts.labor_supply / working_age_total : 0.0;
+    double contractual_income = wage_bill;
+    if (policy.job_guarantee && policy.job_guarantee_wage_ratio > 0.0 &&
+        accounts.job_guarantee > kLaborTolerance) {
+        double mean_posted_wage = 0.0;
+        for (const auto &work : real.firm_work_) {
+            mean_posted_wage += std::max(0.0, work.posted_wage);
+        }
+        mean_posted_wage /=
+            static_cast<double>(std::max<std::size_t>(1U, real.firm_work_.size()));
+        const double guarantee_wage =
+            std::max(policy.minimum_wage,
+                     policy.job_guarantee_wage_ratio * mean_posted_wage);
+        contractual_income += accounts.job_guarantee * guarantee_wage;
+    }
     static_cast<void>(state);
-    return {wage_bill, working_age_total};
+    return {contractual_income, working_age_total};
 }
 
 class M7Extension final : public M6TickExtension {
