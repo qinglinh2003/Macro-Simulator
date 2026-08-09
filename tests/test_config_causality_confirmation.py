@@ -79,6 +79,7 @@ def test_matched_finite_size_comparison_reports_sign_and_ratio() -> None:
     arm = payload["fields"][0]["arms"][0]
     assert arm["confirmation_direction_gate"] == "pass"
     assert payload["acceptance"] == {
+        "accepted": True,
         "direction_arm_count": 1,
         "direction_failure_count": 0,
         "mechanism_silent_count": 0,
@@ -99,6 +100,7 @@ def test_finite_size_comparison_surfaces_failed_large_scale_gate() -> None:
     assert arm["confirmation_direction_results"] == {"metric.test": "fail"}
     assert arm["confirmation_direction_gate"] == "fail"
     assert payload["acceptance"] == {
+        "accepted": False,
         "direction_arm_count": 1,
         "direction_failure_count": 1,
         "mechanism_silent_count": 1,

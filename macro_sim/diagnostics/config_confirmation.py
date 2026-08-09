@@ -259,27 +259,33 @@ def compare_batch_reports(
         for arm in field["arms"]
         if arm["confirmation_direction_gate"] != "not_applicable"
     ]
+    acceptance = {
+        "direction_arm_count": len(direction_arms),
+        "direction_failure_count": sum(
+            arm["confirmation_direction_gate"] != "pass" for arm in direction_arms
+        ),
+        "mechanism_silent_count": sum(
+            arm["confirmation_mechanism_silent"]
+            for field in compared_fields
+            for arm in field["arms"]
+        ),
+        "primary_inconclusive_count": sum(
+            arm["confirmation_primary_effect_inconclusive"]
+            for field in compared_fields
+            for arm in field["arms"]
+        ),
+    }
+    acceptance["accepted"] = (
+        acceptance["direction_arm_count"] > 0
+        and acceptance["direction_failure_count"] == 0
+        and acceptance["mechanism_silent_count"] == 0
+        and acceptance["primary_inconclusive_count"] == 0
+    )
     return {
         "schema_version": "config-finite-size-confirmation-v1",
         "reference_population_per_country": small_population,
         "confirmation_population_per_country": large_population,
         "seeds": list(large.get("seeds", ())),
-        "acceptance": {
-            "direction_arm_count": len(direction_arms),
-            "direction_failure_count": sum(
-                arm["confirmation_direction_gate"] != "pass"
-                for arm in direction_arms
-            ),
-            "mechanism_silent_count": sum(
-                arm["confirmation_mechanism_silent"]
-                for field in compared_fields
-                for arm in field["arms"]
-            ),
-            "primary_inconclusive_count": sum(
-                arm["confirmation_primary_effect_inconclusive"]
-                for field in compared_fields
-                for arm in field["arms"]
-            ),
-        },
+        "acceptance": acceptance,
         "fields": compared_fields,
     }
