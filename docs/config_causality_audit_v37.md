@@ -526,9 +526,12 @@ medium-run magnitude calibration:
   activation raises the index in both arms. All learning direction checks pass.
 
 These six fields move from missing to mapped-native status. Their direct causal
-mechanisms are resolved; multi-year macro elasticities, sector spillovers, and
-million-person confirmation remain part of P3-P4 rather than being inferred
-from this short route screen.
+mechanisms are resolved. A subsequent 365-day, four-seed formal closure confirms
+all three sector trend overrides with resolved positive direct-index effects;
+the stochastic-volatility treatment passes the predeclared heterogeneous-path
+criterion in all paired paths. Learning-law formal confirmation, multi-year
+macro elasticities, sector spillovers, and million-person confirmation remain
+separate from this route-level result.
 
 ### 8.6 Firms and industrial dynamics screen
 
