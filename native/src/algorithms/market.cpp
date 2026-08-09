@@ -812,6 +812,7 @@ Status validate_market_clearing(
         std::unordered_map<std::uint64_t, double> allocated;
         std::unordered_map<std::uint64_t, double> spent;
         std::unordered_map<std::uint64_t, double> sold;
+        std::unordered_map<std::uint64_t, std::size_t> sale_counts;
         std::unordered_set<std::uint64_t> allocation_ids;
         std::unordered_set<std::uint64_t> stock_command_ids;
         orders_by_id.reserve(orders.size());
@@ -819,6 +820,7 @@ Status validate_market_clearing(
         allocated.reserve(orders.size());
         spent.reserve(orders.size());
         sold.reserve(offers.size());
+        sale_counts.reserve(offers.size());
         allocation_ids.reserve(orders.size());
         stock_command_ids.reserve(offers.size());
         for (const auto& order : orders) {
@@ -863,6 +865,7 @@ Status validate_market_clearing(
             allocated[trade.order_id] += trade.quantity.value();
             spent[trade.order_id] += trade.value.value();
             sold[trade.offer_id] += trade.quantity.value();
+            ++sale_counts[trade.offer_id];
         }
         for (const auto& order : orders) {
             const double order_allocated = allocated[order.order_id];
@@ -955,18 +958,35 @@ Status validate_market_clearing(
         for (const auto& command : clearing.stock_commands) {
             const auto offer = offers_by_id.find(command.offer_id);
             const double expected_sold = sold[command.offer_id];
+            const double stock_scale = std::max({
+                1.0,
+                std::abs(command.opening.value()),
+                std::abs(command.sold.value()),
+                std::abs(command.closing.value()),
+                std::abs(expected_sold),
+            });
+            // A large market accumulates sold quantities in a different order
+            // from the live-offer decrement. Both paths conserve the same stock,
+            // but their floating-point round-off grows with the stock scale.
+            const double stock_tolerance = std::max(
+                kEconomicEpsilon,
+                32.0 * std::numeric_limits<double>::epsilon()
+                    * static_cast<double>(std::max<std::size_t>(
+                        1, sale_counts[command.offer_id]))
+                    * stock_scale
+            );
             if (
                 offer == offers_by_id.end()
                 || !stock_command_ids.insert(command.offer_id).second
                 || command.seller != offer->second->seller
                 || command.opening != offer->second->stock
                 || std::abs(command.sold.value() - expected_sold)
-                    > kEconomicEpsilon
+                    > stock_tolerance
                 || std::abs(
                     command.opening.value()
                     - command.sold.value()
                     - command.closing.value()
-                ) > kEconomicEpsilon
+                ) > stock_tolerance
                 || command.closing.value() < -kEconomicEpsilon
             ) {
                 return Status(

@@ -314,7 +314,7 @@ def test_child_pressure_activation_preserves_parent_capacity() -> None:
 @pytest.mark.parametrize(
     ("field", "value", "scenario", "attribute"),
     [
-        ("entry_beta", 0.2, "consumption_entry_pressure", "entry_beta"),
+        ("entry_beta", 0.0, "consumption_entry_pressure", "entry_beta"),
         (
             "k_entry_demand",
             1.0,

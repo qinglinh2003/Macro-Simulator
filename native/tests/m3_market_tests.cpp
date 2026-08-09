@@ -155,6 +155,23 @@ void test_no_self_trade_and_no_oversell() {
     }
 }
 
+void test_large_stock_roundoff_is_not_a_conservation_failure() {
+    std::vector<BuyOrder> orders;
+    orders.reserve(10'000);
+    for (std::uint64_t index = 0; index < 10'000; ++index) {
+        orders.push_back(
+            {index + 1, AccountId(index + 20), Goods(1.0 / 3'000.0), Money(1.0)}
+        );
+    }
+    const std::vector<SellOffer> offers{
+        {20'000, AccountId(20'020), Goods(1.0e12), Price(1.0), 1.0},
+    };
+    MarketConfig config;
+    config.protocol = MatchingProtocol::price_sorted;
+    const auto clearing = take(clear_market(orders, offers, config));
+    assert(validate_market_clearing(orders, offers, clearing).ok());
+}
+
 void test_supported_worker_counts_are_invariant() {
     const auto orders = standard_orders();
     const auto offers = standard_offers();
@@ -300,6 +317,7 @@ int main() {
     test_price_sorted_fixture();
     test_sampled_and_preferential_fixtures();
     test_no_self_trade_and_no_oversell();
+    test_large_stock_roundoff_is_not_a_conservation_failure();
     test_supported_worker_counts_are_invariant();
     test_randomized_properties();
     test_stochastic_selection_distributions();
