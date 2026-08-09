@@ -1091,6 +1091,10 @@ def apply_native_activation_scenario(
     elif scenario == "demographic_real_wage_transition":
         rules.annual_tfp_growth = 0.025
         rules.wage_indexation = 1.0
+    elif scenario == "demographic_signal_transition":
+        rules.annual_tfp_growth = 0.025
+        rules.wage_indexation = 1.0
+        population_rules.demographic_feedback_burnin_years = 1
     elif scenario == "demographic_income_elasticity_transition":
         rules.annual_tfp_growth = 0.025
         rules.wage_indexation = 1.0

@@ -1451,11 +1451,11 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.demo_signal_halflife_years": {
             "status": "activation_scenario_required",
             "values": (1.0, 10.0),
-            "activation": "demographic_real_wage_transition",
-            "horizon_days": 3650,
+            "activation": "demographic_signal_transition",
+            "horizon_days": 1095,
             "directions": {income_signal: "nonzero"},
             "statistics": {income_signal: "post_burnin_volatility"},
-            "rationale": "The half-life controls how quickly persistent real-wage changes enter the slow development signal. Faster and slower filters must produce different transition paths while preserving the same neutral value at the baseline anchor.",
+            "rationale": "The half-life controls how quickly persistent real-wage changes enter the slow development signal. A shared one-year burn-in exposes both filters over a three-year identified transition; faster and slower filters must produce different paths while preserving the same neutral value at the baseline anchor.",
         },
         "config.fertility_income_elasticity": {
             "status": "activation_scenario_required",

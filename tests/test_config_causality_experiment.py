@@ -966,6 +966,7 @@ def test_lifecycle_and_development_treatments_reach_population_rules(
     ),
     (
         ("demographic_real_wage_transition", 0.025, None, None, None),
+        ("demographic_signal_transition", 0.025, None, None, None),
         ("demographic_income_elasticity_transition", 0.025, 1.0, None, None),
         ("demographic_positive_income_transition", 0.08, 0.5, 4.0, 4.0),
         ("demographic_negative_income_transition", -0.05, 0.5, 4.0, 4.0),
