@@ -48,6 +48,7 @@ def _report_evidence(
 ) -> dict[str, Any]:
     arms = tuple(report.get("arms", ()))
     resolved = tuple(_arm_resolved(arm) for arm in arms)
+    direction_results = tuple(_direction_results(arm) for arm in arms)
     seed_count = len(payload.get("seeds", ()))
     if arms and all(resolved):
         strength = "formal_complete" if seed_count >= formal_seed_count else "pilot_complete"
@@ -67,6 +68,16 @@ def _report_evidence(
         "silent_arm_count": sum(
             arm.get("mechanism_silent") is True for arm in arms
         ),
+        "inconclusive_arm_count": sum(
+            "inconclusive" in results for results in direction_results
+        ),
+        "direction_failure_arm_count": sum(
+            "fail" in results for results in direction_results
+        ),
+        "stability_failure_arm_count": sum(
+            bool(arm.get("stability_failure")) for arm in arms
+        ),
+        "unjudged_arm_count": sum(not results for results in direction_results),
     }
 
 
@@ -118,6 +129,10 @@ def build_evidence_ledger(
                 "arm_count": 0,
                 "resolved_arm_count": 0,
                 "silent_arm_count": 0,
+                "inconclusive_arm_count": 0,
+                "direction_failure_arm_count": 0,
+                "stability_failure_arm_count": 0,
+                "unjudged_arm_count": 0,
             }
         else:
             field_candidates = candidates.get(field_name, ())
@@ -140,6 +155,10 @@ def build_evidence_ledger(
                     "arm_count": 0,
                     "resolved_arm_count": 0,
                     "silent_arm_count": 0,
+                    "inconclusive_arm_count": 0,
+                    "direction_failure_arm_count": 0,
+                    "stability_failure_arm_count": 0,
+                    "unjudged_arm_count": 0,
                 },
             )
         rows.append(

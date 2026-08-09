@@ -47,6 +47,8 @@ def test_evidence_ledger_distinguishes_complete_partial_and_excluded() -> None:
     assert rows["partial"]["status"] == "formal_partial"
     assert rows["partial"]["resolved_arm_count"] == 1
     assert rows["partial"]["silent_arm_count"] == 0
+    assert rows["partial"]["inconclusive_arm_count"] == 1
+    assert rows["partial"]["direction_failure_arm_count"] == 0
     assert rows["missing"]["status"] == "no_evidence"
     assert rows["policy"]["status"] == "excluded_policy"
 
@@ -75,3 +77,14 @@ def test_evidence_ledger_does_not_call_unjudged_arm_silent() -> None:
     row = payload["rows"][0]
     assert row["status"] == "no_evidence"
     assert row["silent_arm_count"] == 0
+    assert row["stability_failure_arm_count"] == 1
+    assert row["unjudged_arm_count"] == 1
+
+
+def test_evidence_ledger_counts_explicit_direction_failures() -> None:
+    payload = build_evidence_ledger(
+        [_contract("field")], [("failed.json", _payload("field", [_arm("fail")]))]
+    )
+    row = payload["rows"][0]
+    assert row["direction_failure_arm_count"] == 1
+    assert row["inconclusive_arm_count"] == 0
