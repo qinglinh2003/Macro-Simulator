@@ -375,6 +375,7 @@ void test_real_wage_signal_updates_vital_multipliers_annually() {
 void test_real_wage_signal_denominator_includes_unemployed_working_age_people() {
     auto harness = build();
     const auto calendar_day = base_spec().population.start_calendar_day + 1;
+    const double opening_price_index = harness.real_runtime.last_metrics.price_index;
     double working_age_population = 0.0;
     for (const auto person_id : harness.runtime.persons.alive_ids()) {
         const auto *person = harness.runtime.persons.get(person_id);
@@ -414,6 +415,8 @@ void test_real_wage_signal_denominator_includes_unemployed_working_age_people() 
     }
     assert(std::abs(harness.runtime.demographic_signal_wage_sum -
                     contractual_labor_income) < 1.0e-12);
+    assert(std::abs(harness.runtime.demographic_signal_price_sum -
+                    std::max(1.0e-8, opening_price_index)) < 1.0e-12);
 }
 
 void test_wealth_rank_gradients_apply_bounded_vital_risk() {

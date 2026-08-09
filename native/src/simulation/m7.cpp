@@ -3488,14 +3488,8 @@ class M7Extension final : public M6TickExtension {
             scratch_.demographic_signal_year_ = signal_year;
         }
         double wage_sum = 0.0;
-        double price_sum = 0.0;
-        std::size_t priced_firms = 0U;
         for (const auto &work : real.firm_work_) {
             wage_sum += std::max(0.0, work.wage_bill);
-            if (work.posted_price > kLaborTolerance) {
-                price_sum += work.posted_price;
-                ++priced_firms;
-            }
         }
         // Use employment-adjusted contractual labor income, not cash payroll
         // conditional on having been hired.  The cash quotient can rise in a
@@ -3566,10 +3560,12 @@ class M7Extension final : public M6TickExtension {
         }
         scratch_.demographic_signal_wage_sum_ += wage_sum;
         scratch_.demographic_signal_labor_sum_ += working_age_population;
-        scratch_.demographic_signal_price_sum_ +=
-            priced_firms > 0U ? price_sum / static_cast<double>(priced_firms)
-                              : std::max(kLaborTolerance,
-                                         real_runtime.last_metrics.price_index);
+        // Deflate by the maintained economy price index.  An unweighted mean
+        // of firms' posted prices is composition-sensitive: firm exit and
+        // entry during a contraction can make that mean collapse even when
+        // the transaction-based aggregate price level does not.
+        scratch_.demographic_signal_price_sum_ += std::max(
+            kLaborTolerance, real_runtime.last_metrics.price_index);
         ++scratch_.demographic_signal_days_;
         scratch_.working_metrics_.demographic_real_wage_signal =
             scratch_.demographic_signal_x_;
