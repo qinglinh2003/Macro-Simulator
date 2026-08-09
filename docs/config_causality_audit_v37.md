@@ -799,11 +799,12 @@ latter two without weakening the native state invariants.
 
 ### 8.9 Demography and household-lifecycle screen
 
-The demography inventory currently has 14 executable Config contracts. The
-core final screen covers 96 native worlds at 100,000 persons: four paired seeds,
-365 days, and eight native workers. Age-threshold contracts use separate
-lifecycle horizons because a one-year screen cannot identify the age at which a
-child leaves home.
+The demography inventory now has 58 executable Config contracts. Neutral,
+activation, relationship, guardian, and lifecycle batches use 100,000 persons,
+four paired seeds, and eight native workers for formal evidence. Age-threshold
+and slow development contracts use separate multi-year horizons because a
+one-year screen cannot identify household transitions or annually settled
+income feedback.
 
 The screen found and repaired two causal-identification defects before crediting
 any result. First, changing mortality also changed the stable genesis age
@@ -827,17 +828,25 @@ Current findings:
   -50.0% / +101.5%; halving/doubling the divorce rate changes divorces by about
   -48.8% / +94.0%. Disabling either capability removes its corresponding event
   flow.
-- `demographic_marriage_market_interval_days` is not an economic gameplay
-  parameter. Moving the clearing cadence from 30 days to 14 / 90 days changes
-  annual marriage incidence by only about +0.84% / +0.15%, with both intervals
-  unresolved. Its hazard is already interval-adjusted, so this field is now
-  treated as a numerical-cadence equivalence contract rather than a required
-  nonzero causal effect.
+- `demographic_marriage_market_interval_days` is a scheduling control rather
+  than an annual marriage-hazard lever. Its hazard is interval-adjusted, so
+  cumulative incidence is approximately invariant, while 14- and 90-day
+  clearing intervals both produce formally resolved differences in the
+  post-burn-in volatility of daily marriage events. The field is functional
+  but should be hidden from ordinary setup unless event lumpiness is intended
+  as a gameplay choice.
 - Assortative matching is strongly live without changing the number of
   marriages materially. Setting its weight from 1 to zero raises the mean
   absolute partner log-efficiency gap by about 893%; raising it to four lowers
   that gap by about 48.5%. Both four-seed intervals exclude zero. The mechanism
   changes who marries whom, not the aggregate marriage hazard.
+- The remaining partner-market structure is also formally resolved. Lower and
+  higher acceptance probabilities move cumulative marriages by about -6,654
+  and +1,314 per 100,000-person economy. Age-gap mean, dispersion, penalty,
+  maximum accepted gap, maximum marriage age, and the optional target-partner
+  profile all change their declared incidence or match-quality observables with
+  four-seed intervals excluding zero. These are matching preferences and
+  eligibility constraints, not substitutes for the annual marriage hazard.
 - Leaving-home capabilities and rates are live under an eligible-cohort
   scenario. Disabling the capability removes all departures. Halving/doubling
   the late-age hazard changes departures by about -43.9% / +90.1%; the same
@@ -854,11 +863,13 @@ Current findings:
   mechanism checks, not confidence-qualified estimates; the field is unlikely
   to merit a prominent gameplay control at its current salience.
 
-`demographic_lifecycle_consumption` remains a real semantic native gap. The
-Python Config defines finite-life consumption budgeting, while its historical
-native assignment only toggled household moves after marriage, divorce, and
-leaving home. The audit now blocks this field instead of falsely crediting that
-unrelated assignment as an implemented route.
+The former `demographic_lifecycle_consumption` semantic gap is closed. The
+native engine now replaces perpetual-horizon spending with an age-adjusted
+permanent-income term and an annuitized draw from positive household net worth.
+Disabling the mechanism and changing either `lifecycle_alpha_income` or
+`lifecycle_alpha_wealth_draw` produces the expected direct consumption-budget
+response across four paired seeds; the wealth coefficient also passes its
+dedicated wealth-funded-budget observable.
 
 ### 8.10 Distribution and private household support screen
 
