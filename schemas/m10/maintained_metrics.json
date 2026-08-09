@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 281,
+    "native_stage_sources": 296,
     "public_sources": 41,
-    "total": 505
+    "total": 520
   },
   "metrics": [
     {
@@ -3156,6 +3156,141 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.remarriages",
+      "parity_rule": "simulation::M7Metrics::remarriages",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.widowed_remarriages",
+      "parity_rule": "simulation::M7Metrics::widowed_remarriages",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "events_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_same_household_assignments",
+      "parity_rule": "simulation::M7Metrics::guardian_same_household_assignments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_grandparent_assignments",
+      "parity_rule": "simulation::M7Metrics::guardian_grandparent_assignments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_adult_sibling_assignments",
+      "parity_rule": "simulation::M7Metrics::guardian_adult_sibling_assignments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_parent_assignments",
+      "parity_rule": "simulation::M7Metrics::guardian_parent_assignments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_unresolved_assignments",
+      "parity_rule": "simulation::M7Metrics::guardian_unresolved_assignments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.partnered_adult_share",
+      "parity_rule": "simulation::M7Metrics::partnered_adult_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.dual_parent_minor_share",
+      "parity_rule": "simulation::M7Metrics::dual_parent_minor_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.guardian_only_minor_share",
+      "parity_rule": "simulation::M7Metrics::guardian_only_minor_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_mother_age_gap",
+      "parity_rule": "simulation::M7Metrics::mean_mother_age_gap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "years"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mother_age_gap_stddev",
+      "parity_rule": "simulation::M7Metrics::mother_age_gap_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "years"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.mean_father_age_gap",
+      "parity_rule": "simulation::M7Metrics::mean_father_age_gap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "years"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.father_age_gap_stddev",
+      "parity_rule": "simulation::M7Metrics::father_age_gap_stddev",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "years"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m7.maximum_household_size",
+      "parity_rule": "simulation::M7Metrics::maximum_household_size",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "persons_per_household"
     },
     {
       "aggregation": "last",

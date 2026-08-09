@@ -365,19 +365,19 @@ Status RelationshipBook::validate(
             return Status(ErrorCode::invariant_violation,
                           "person union projection is inconsistent");
         }
-        if (person->mother == person_id ||
-            person->father == person_id ||
-            person->guardian == person_id ||
-            (person->mother.valid() &&
-             !persons.contains(person->mother)) ||
-            (person->father.valid() &&
-             !persons.contains(person->father)) ||
-            (person->guardian.valid() &&
-             !persons.alive(person->guardian))) {
-            return Status(
-                ErrorCode::invariant_violation,
-                "person family reference is inconsistent"
-            );
+        if (person->mother == person_id || person->father == person_id ||
+            person->guardian == person_id) {
+            return Status(ErrorCode::invariant_violation,
+                          "person family reference is self-referential");
+        }
+        if ((person->mother.valid() && !persons.contains(person->mother)) ||
+            (person->father.valid() && !persons.contains(person->father))) {
+            return Status(ErrorCode::invariant_violation,
+                          "person parent reference is absent");
+        }
+        if (person->guardian.valid() && !persons.alive(person->guardian)) {
+            return Status(ErrorCode::invariant_violation,
+                          "person guardian reference is deceased");
         }
         for (const auto parent :
              std::array{person->mother, person->father}) {

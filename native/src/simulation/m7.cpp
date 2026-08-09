@@ -5,6 +5,8 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <queue>
+#include <tuple>
 #include <utility>
 
 #include "macro_sim/core/transaction.hpp"
@@ -31,6 +33,10 @@ constexpr std::uint64_t kMarriageStream = 0x4d41525249414745ULL;
 constexpr std::uint64_t kLeavingHomeStream = 0x4c45415645484f4dULL;
 constexpr std::uint64_t kEfficiencyNormalStream = 0x454646494349454eULL;
 constexpr std::uint64_t kEfficiencyAngleStream = 0x454646494349414eULL;
+constexpr std::uint64_t kGenesisPartnerOrderStream = 0x47454e504152544eULL;
+constexpr std::uint64_t kGenesisSpouseGapStream = 0x47454e5350474150ULL;
+constexpr std::uint64_t kGenesisParentGapStream = 0x47454e5041474150ULL;
+constexpr std::uint64_t kGenesisTwoParentStream = 0x47454e54574f5041ULL;
 constexpr double kTwoPi = 6.283185307179586476925286766559;
 constexpr double kLaborTolerance = 1.0e-8;
 constexpr std::size_t kWealthQuintiles = 5U;
@@ -55,6 +61,43 @@ constexpr std::uint8_t kUnrankedWealthQuintile = 5U;
     const auto bits =
         splitmix64(seed ^ splitmix64(identity) ^ splitmix64(day_bits) ^ stream);
     return static_cast<double>(bits >> 11U) * 0x1.0p-53;
+}
+
+[[nodiscard]] double normal_draw(std::uint64_t seed, std::uint64_t identity,
+                                 std::int64_t day,
+                                 std::uint64_t stream) noexcept {
+    const double radial = std::max(
+        unit_draw(seed, identity, day, stream),
+        std::numeric_limits<double>::min());
+    const double angle = unit_draw(seed, identity, day, stream ^ 0x9e3779b97f4a7c15ULL);
+    return std::sqrt(-2.0 * std::log(radial)) * std::cos(kTwoPi * angle);
+}
+
+[[nodiscard]] std::size_t union_age_band(double age) noexcept {
+    if (age < 25.0) {
+        return 0U;
+    }
+    if (age < 35.0) {
+        return 1U;
+    }
+    if (age < 50.0) {
+        return 2U;
+    }
+    if (age < 65.0) {
+        return 3U;
+    }
+    if (age < 75.0) {
+        return 4U;
+    }
+    return 5U;
+}
+
+[[nodiscard]] double union_target_share(const M7UnionTargetProfile &profile,
+                                        double age) noexcept {
+    if (!profile.enabled || age < 18.0 || age > 100.0) {
+        return 0.0;
+    }
+    return profile.shares[union_age_band(age)];
 }
 
 [[nodiscard]] double person_efficiency_draw(const M7Rules &rules, std::uint64_t seed,
@@ -968,6 +1011,79 @@ void record_head_separation(core::SeparationKind kind,
     }
 }
 
+[[nodiscard]] double annual_marriage_entry_rate(
+    const core::PersonRecord &person, const M7Rules &rules,
+    std::int32_t day) noexcept {
+    const double age = completed_age(person, day);
+    double profile_multiplier = 1.0;
+    if (rules.social_union_target_profile.enabled) {
+        const double maximum = *std::max_element(
+            rules.social_union_target_profile.shares.begin(),
+            rules.social_union_target_profile.shares.end());
+        profile_multiplier = maximum <= 0.0
+                                 ? 0.0
+                                 : union_target_share(
+                                       rules.social_union_target_profile, age) /
+                                       maximum;
+    } else {
+        const double z = (age - rules.marriage_peak_age) /
+                         rules.marriage_age_width;
+        profile_multiplier = std::exp(-0.5 * z * z);
+    }
+    double rate = rules.annual_marriage_rate * profile_multiplier;
+    if (person.marriage_count > 0U || person.last_divorce_day >= 0) {
+        rate *= rules.remarriage_rate_multiplier;
+    }
+    if (person.last_widowed_day >= 0) {
+        rate *= rules.widowed_remarriage_multiplier;
+    }
+    return std::clamp(rate, 0.0, 1.0);
+}
+
+[[nodiscard]] bool union_has_minor_child(
+    const core::PersonStore &persons,
+    const core::RelationshipBook &relationships,
+    const core::UnionRecord &record, std::int32_t day) noexcept {
+    for (const auto parent : std::array{record.first, record.second}) {
+        for (const auto child : relationships.children(parent)) {
+            const auto *person = persons.get(child);
+            if (person != nullptr && person->alive &&
+                completed_age(*person, day) < 18.0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] double annual_divorce_hazard(
+    const core::PersonStore &persons,
+    const core::RelationshipBook &relationships,
+    const core::UnionRecord &record, const M7Rules &rules,
+    std::int32_t day) noexcept {
+    const double duration_years = std::max(
+        0.0, static_cast<double>(day - record.start_day) / kDaysPerYear);
+    const double duration_z =
+        (duration_years - rules.divorce_peak_duration_years) /
+        rules.divorce_duration_width;
+    const double duration_peak = std::exp(-0.5 * duration_z * duration_z);
+    double rate = rules.annual_divorce_rate *
+                  (1.0 + (rules.divorce_peak_multiplier - 1.0) *
+                             duration_peak);
+    if (union_has_minor_child(persons, relationships, record, day)) {
+        rate *= rules.divorce_child_multiplier;
+    }
+    const auto *first = persons.get(record.first);
+    const auto *second = persons.get(record.second);
+    if (first != nullptr && second != nullptr) {
+        const double age_gap = std::abs(completed_age(*first, day) -
+                                        completed_age(*second, day));
+        rate *= std::pow(rules.divorce_age_gap_multiplier_per_10y,
+                         age_gap / 10.0);
+    }
+    return std::clamp(rate, 0.0, 1.0);
+}
+
 [[nodiscard]] Status separate_job(core::EmploymentBook &employment, JobId job_id,
                                   std::int32_t day, core::SeparationKind kind,
                                   core::LaborAccounts &accounts);
@@ -980,9 +1096,47 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     metrics.population = persons.alive_count();
     std::uint64_t working = 0;
     std::uint64_t dependents = 0;
+    std::uint64_t adults = 0;
+    std::uint64_t partnered_adults = 0;
+    std::uint64_t minors = 0;
+    std::uint64_t dual_parent_minors = 0;
+    std::uint64_t guardian_only_minors = 0;
+    std::uint64_t mothers = 0;
+    std::uint64_t fathers = 0;
+    double mother_gap_sum = 0.0;
+    double mother_gap_square_sum = 0.0;
+    double father_gap_sum = 0.0;
+    double father_gap_square_sum = 0.0;
     for (const auto id : persons.alive_ids()) {
         const auto *person = persons.get(id);
         const double age = completed_age(*person, day);
+        if (age >= static_cast<double>(rules.working_age)) {
+            ++adults;
+            partnered_adults += person->partner.valid() ? 1U : 0U;
+        } else {
+            ++minors;
+            const bool has_mother = persons.alive(person->mother);
+            const bool has_father = persons.alive(person->father);
+            dual_parent_minors += has_mother && has_father ? 1U : 0U;
+            guardian_only_minors +=
+                !has_mother && !has_father && persons.alive(person->guardian)
+                    ? 1U
+                    : 0U;
+            if (has_mother) {
+                const double gap =
+                    completed_age(*persons.get(person->mother), day) - age;
+                mother_gap_sum += gap;
+                mother_gap_square_sum += gap * gap;
+                ++mothers;
+            }
+            if (has_father) {
+                const double gap =
+                    completed_age(*persons.get(person->father), day) - age;
+                father_gap_sum += gap;
+                father_gap_square_sum += gap * gap;
+                ++fathers;
+            }
+        }
         if (age >= static_cast<double>(rules.working_age) &&
             age < static_cast<double>(rules.retirement_age)) {
             ++working;
@@ -991,10 +1145,15 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
         }
     }
     std::uint64_t active_households = 0;
+    metrics.maximum_household_size = 0U;
     state.households.for_each_alive(
         [&](HouseholdId household, const core::HouseholdComponent &) {
-            if (!membership.members(household).empty()) {
+            const auto member_count = membership.members(household).size();
+            if (member_count > 0U) {
                 ++active_households;
+                metrics.maximum_household_size = std::max(
+                    metrics.maximum_household_size,
+                    static_cast<std::uint64_t>(member_count));
             }
         });
     metrics.households_with_members = active_households;
@@ -1009,6 +1168,36 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     metrics.dependency_ratio =
         working == 0 ? static_cast<double>(dependents)
                      : static_cast<double>(dependents) / static_cast<double>(working);
+    metrics.partnered_adult_share =
+        adults == 0U ? 0.0
+                     : static_cast<double>(partnered_adults) /
+                           static_cast<double>(adults);
+    metrics.dual_parent_minor_share =
+        minors == 0U ? 0.0
+                     : static_cast<double>(dual_parent_minors) /
+                           static_cast<double>(minors);
+    metrics.guardian_only_minor_share =
+        minors == 0U ? 0.0
+                     : static_cast<double>(guardian_only_minors) /
+                           static_cast<double>(minors);
+    metrics.mean_mother_age_gap =
+        mothers == 0U ? 0.0 : mother_gap_sum / static_cast<double>(mothers);
+    metrics.mother_age_gap_stddev =
+        mothers == 0U
+            ? 0.0
+            : std::sqrt(std::max(
+                  0.0, mother_gap_square_sum / static_cast<double>(mothers) -
+                           metrics.mean_mother_age_gap *
+                               metrics.mean_mother_age_gap));
+    metrics.mean_father_age_gap =
+        fathers == 0U ? 0.0 : father_gap_sum / static_cast<double>(fathers);
+    metrics.father_age_gap_stddev =
+        fathers == 0U
+            ? 0.0
+            : std::sqrt(std::max(
+                  0.0, father_gap_square_sum / static_cast<double>(fathers) -
+                           metrics.mean_father_age_gap *
+                               metrics.mean_father_age_gap));
     double efficiency_sum = 0.0;
     double efficiency_square_sum = 0.0;
     for (const auto id : persons.alive_ids()) {
@@ -1211,27 +1400,100 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
             continue;
         }
         PersonId replacement{};
+        enum class GuardianRoute : std::uint8_t {
+            none,
+            parent,
+            grandparent,
+            adult_sibling,
+            same_household,
+        };
+        auto route = GuardianRoute::none;
+        const auto eligible_guardian = [&](PersonId candidate) {
+            if (!persons.alive(candidate) || candidate == deceased ||
+                candidate == dependent->id) {
+                return false;
+            }
+            const auto *candidate_record = persons.get(candidate);
+            return candidate_record != nullptr &&
+                   completed_age(*candidate_record, day) >=
+                       static_cast<double>(rules.working_age) &&
+                   membership.members(candidate_record->household).size() <
+                       static_cast<std::size_t>(
+                           rules.guardian_maximum_household_size);
+        };
         for (const auto parent : std::array{dependent->mother, dependent->father}) {
-            if (parent != deceased && persons.alive(parent)) {
+            if (eligible_guardian(parent)) {
                 replacement = parent;
+                route = GuardianRoute::parent;
                 break;
             }
         }
-        if (!replacement.valid()) {
-            for (const auto candidate : membership.members(dependent->household)) {
-                if (candidate == deceased || candidate == dependent->id) {
+        if (!replacement.valid() && rules.guardian_search_grandparents) {
+            for (const auto parent_id :
+                 std::array{dependent->mother, dependent->father}) {
+                const auto *parent = persons.get(parent_id);
+                if (parent == nullptr) {
                     continue;
                 }
-                const auto *candidate_record = persons.get(candidate);
-                if (candidate_record != nullptr && candidate_record->alive &&
-                    completed_age(*candidate_record, day) >=
-                        static_cast<double>(rules.working_age)) {
+                for (const auto grandparent :
+                     std::array{parent->mother, parent->father}) {
+                    if (eligible_guardian(grandparent)) {
+                        replacement = grandparent;
+                        route = GuardianRoute::grandparent;
+                        break;
+                    }
+                }
+                if (replacement.valid()) {
+                    break;
+                }
+            }
+        }
+        if (!replacement.valid() && rules.guardian_search_adult_siblings) {
+            for (const auto parent_id :
+                 std::array{dependent->mother, dependent->father}) {
+                if (!parent_id.valid()) {
+                    continue;
+                }
+                for (const auto sibling : relationships.children(parent_id)) {
+                    if (eligible_guardian(sibling)) {
+                        replacement = sibling;
+                        route = GuardianRoute::adult_sibling;
+                        break;
+                    }
+                }
+                if (replacement.valid()) {
+                    break;
+                }
+            }
+        }
+        if (!replacement.valid() &&
+            rules.guardian_search_same_household_adults) {
+            for (const auto candidate : membership.members(dependent->household)) {
+                if (eligible_guardian(candidate)) {
                     replacement = candidate;
+                    route = GuardianRoute::same_household;
                     break;
                 }
             }
         }
         dependent->guardian = replacement;
+        switch (route) {
+        case GuardianRoute::parent:
+            ++metrics.guardian_parent_assignments;
+            break;
+        case GuardianRoute::grandparent:
+            ++metrics.guardian_grandparent_assignments;
+            break;
+        case GuardianRoute::adult_sibling:
+            ++metrics.guardian_adult_sibling_assignments;
+            break;
+        case GuardianRoute::same_household:
+            ++metrics.guardian_same_household_assignments;
+            break;
+        case GuardianRoute::none:
+            ++metrics.guardian_unresolved_assignments;
+            break;
+        }
         if (replacement.valid() && replacement.value() < guardian_heads.size() &&
             person_index < guardian_next.size()) {
             const auto replacement_index =
@@ -2849,16 +3111,18 @@ class M7Extension final : public M6TickExtension {
         }
 
         if (runtime_.rules.relationships && runtime_.rules.divorce) {
-            const double daily_divorce =
-                runtime_.rules.annual_divorce_rate >= 1.0
-                    ? 1.0
-                    : 1.0 - std::pow(1.0 - runtime_.rules.annual_divorce_rate,
-                                     kDailyYear);
             scratch_.divorce_candidates_.clear();
             for (const auto &union_record : scratch_.relationships_.unions()) {
                 if (!union_record.active) {
                     continue;
                 }
+                const double annual_divorce = annual_divorce_hazard(
+                    scratch_.persons_, scratch_.relationships_, union_record,
+                    runtime_.rules, calendar_day);
+                const double daily_divorce =
+                    annual_divorce >= 1.0
+                        ? 1.0
+                        : 1.0 - std::pow(1.0 - annual_divorce, kDailyYear);
                 if (unit_draw(state.seed, union_record.event.value(), calendar_day,
                               kDivorceStream) < daily_divorce) {
                     scratch_.divorce_candidates_.push_back(union_record.first);
@@ -2908,18 +3172,48 @@ class M7Extension final : public M6TickExtension {
             const double interval_years =
                 static_cast<double>(runtime_.rules.marriage_interval_days) /
                 kDaysPerYear;
-            const double acceptance =
-                runtime_.rules.annual_marriage_rate >= 1.0
-                    ? 1.0
-                    : 1.0 - std::pow(1.0 - runtime_.rules.annual_marriage_rate,
-                                     interval_years);
             for (const auto &match : *matches.get_if()) {
+                const auto *first = scratch_.persons_.get(match.first);
+                const auto *second = scratch_.persons_.get(match.second);
+                if (first == nullptr || second == nullptr) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "marriage match references an absent person");
+                }
+                const double first_rate = annual_marriage_entry_rate(
+                    *first, runtime_.rules, calendar_day);
+                const double second_rate = annual_marriage_entry_rate(
+                    *second, runtime_.rules, calendar_day);
+                const double annual_pair_rate =
+                    std::sqrt(first_rate * second_rate);
+                const double entry_probability =
+                    annual_pair_rate >= 1.0
+                        ? 1.0
+                        : 1.0 - std::pow(1.0 - annual_pair_rate,
+                                         interval_years);
+                const double signed_gap = completed_age(*second, calendar_day) -
+                                          completed_age(*first, calendar_day);
+                const double gap_z =
+                    (signed_gap -
+                     runtime_.rules.marriage_rules.preferred_age_gap) /
+                    runtime_.rules.marriage_age_gap_stddev;
+                const double gap_density = std::exp(-0.5 * gap_z * gap_z);
+                const double compatibility = std::clamp(
+                    (runtime_.rules.marriage_acceptance_base -
+                     runtime_.rules.marriage_acceptance_age_gap_penalty *
+                         std::abs(signed_gap)) *
+                        gap_density,
+                    0.0, 1.0);
+                const double acceptance = entry_probability * compatibility;
                 const auto pair_identity =
                     splitmix64(match.first.value()) ^ splitmix64(match.second.value());
                 if (unit_draw(state.seed, pair_identity, calendar_day,
                               kMarriageStream) >= acceptance) {
                     continue;
                 }
+                const bool remarriage = first->marriage_count > 0U ||
+                                        second->marriage_count > 0U;
+                const bool widowed_remarriage = first->last_widowed_day >= 0 ||
+                                                second->last_widowed_day >= 0;
                 const auto event = EventId(scratch_.next_event_id_++);
                 const auto status = scratch_.relationships_.marry(
                     scratch_.persons_, event, match.first, match.second, calendar_day);
@@ -2937,6 +3231,9 @@ class M7Extension final : public M6TickExtension {
                     scratch_.persons_.get(match.second)->household = destination;
                 }
                 ++scratch_.working_metrics_.marriages;
+                scratch_.working_metrics_.remarriages += remarriage ? 1U : 0U;
+                scratch_.working_metrics_.widowed_remarriages +=
+                    widowed_remarriage ? 1U : 0U;
             }
         }
 
@@ -3065,6 +3362,10 @@ class M7Extension final : public M6TickExtension {
             }
             for (const auto mother_id : scratch_.fertility_candidates_) {
                 const auto *mother = scratch_.persons_.get(mother_id);
+                const auto mother_household = mother->household;
+                const auto father = scratch_.persons_.alive(mother->partner)
+                                        ? mother->partner
+                                        : PersonId{};
                 core::PersonRecord baby;
                 baby.sex = unit_draw(state.seed, mother_id.value(), calendar_day,
                                      kSexStream) < *female_share.get_if()
@@ -3072,10 +3373,9 @@ class M7Extension final : public M6TickExtension {
                                : core::PersonSex::male;
                 baby.birth_day = calendar_day;
                 baby.mother = mother_id;
-                baby.father = scratch_.persons_.alive(mother->partner) ? mother->partner
-                                                                       : PersonId{};
+                baby.father = father;
                 baby.guardian = mother_id;
-                baby.household = mother->household;
+                baby.household = mother_household;
                 const auto created = scratch_.persons_.create(baby);
                 if (!created.ok()) {
                     return created.status();
@@ -3095,7 +3395,7 @@ class M7Extension final : public M6TickExtension {
                 }
                 ++scratch_.working_metrics_.births;
                 const auto wealth_quintile = household_wealth_quintile(
-                    mother->household,
+                    mother_household,
                     std::span<const std::uint8_t>(
                         scratch_.household_wealth_quintile_));
                 if (wealth_quintile == 0U) {
@@ -3595,6 +3895,614 @@ class M7Extension final : public M6TickExtension {
     bool committed_{false};
 };
 
+constexpr std::uint64_t kNoGenesisPerson =
+    std::numeric_limits<std::uint64_t>::max();
+
+struct GenesisPersonPlan final {
+    core::PersonSex sex{core::PersonSex::female};
+    std::uint32_t age{0};
+    std::int32_t birth_day{0};
+    std::uint64_t household_index{kNoGenesisPerson};
+    std::uint64_t partner_index{kNoGenesisPerson};
+    std::uint64_t mother_index{kNoGenesisPerson};
+    std::uint64_t father_index{kNoGenesisPerson};
+    std::uint64_t guardian_index{kNoGenesisPerson};
+};
+
+struct GenesisRelationshipPlan final {
+    std::vector<GenesisPersonPlan> people;
+    std::uint64_t household_count{0};
+};
+
+using GenesisAgeBuckets = std::vector<std::vector<std::uint64_t>>;
+
+[[nodiscard]] std::uint64_t pop_genesis_partner(
+    GenesisAgeBuckets &male_by_age, const std::vector<GenesisPersonPlan> &people,
+    double female_age, double target_age, std::uint32_t maximum_gap) {
+    std::uint64_t selected{kNoGenesisPerson};
+    double selected_distance = std::numeric_limits<double>::infinity();
+    std::uint32_t selected_age = 0U;
+    const auto minimum_age = static_cast<std::int32_t>(std::max(
+        0.0, female_age - static_cast<double>(maximum_gap)));
+    const auto maximum_age = static_cast<std::int32_t>(
+        female_age + static_cast<double>(maximum_gap));
+    for (auto age = minimum_age; age <= maximum_age; ++age) {
+        if (age < 0 || static_cast<std::size_t>(age) >= male_by_age.size()) {
+            continue;
+        }
+        auto &bucket = male_by_age[static_cast<std::size_t>(age)];
+        while (!bucket.empty() &&
+               people[static_cast<std::size_t>(bucket.back())].partner_index !=
+                   kNoGenesisPerson) {
+            bucket.pop_back();
+        }
+        if (bucket.empty()) {
+            continue;
+        }
+        const double distance = std::abs(static_cast<double>(age) - target_age);
+        if (distance < selected_distance ||
+            (distance == selected_distance &&
+             static_cast<std::uint32_t>(age) < selected_age)) {
+            selected = bucket.back();
+            selected_distance = distance;
+            selected_age = static_cast<std::uint32_t>(age);
+        }
+    }
+    if (selected != kNoGenesisPerson) {
+        male_by_age[selected_age].pop_back();
+    }
+    return selected;
+}
+
+void match_genesis_partners(GenesisRelationshipPlan &plan,
+                            const M7Rules &rules, std::uint64_t seed,
+                            std::int32_t day) {
+    auto &people = plan.people;
+    std::vector<std::uint64_t> females;
+    GenesisAgeBuckets male_by_age(1U);
+    for (std::uint64_t index = 0; index < people.size(); ++index) {
+        const auto &person = people[static_cast<std::size_t>(index)];
+        if (person.age < rules.working_age) {
+            continue;
+        }
+        if (male_by_age.size() <= person.age) {
+            male_by_age.resize(static_cast<std::size_t>(person.age) + 1U);
+        }
+        if (person.sex == core::PersonSex::female) {
+            females.push_back(index);
+        } else {
+            male_by_age[person.age].push_back(index);
+        }
+    }
+    const auto random_order = [seed, day](std::uint64_t left,
+                                          std::uint64_t right) {
+        const auto left_key = splitmix64(
+            seed ^ splitmix64(left + 1U) ^
+            splitmix64(static_cast<std::uint64_t>(day)) ^
+            kGenesisPartnerOrderStream);
+        const auto right_key = splitmix64(
+            seed ^ splitmix64(right + 1U) ^
+            splitmix64(static_cast<std::uint64_t>(day)) ^
+            kGenesisPartnerOrderStream);
+        return left_key < right_key || (left_key == right_key && left < right);
+    };
+    std::sort(females.begin(), females.end(), random_order);
+    for (auto &bucket : male_by_age) {
+        std::sort(bucket.begin(), bucket.end(), random_order);
+    }
+
+    std::array<std::uint64_t, 6> female_counts{};
+    for (const auto index : females) {
+        ++female_counts[union_age_band(
+            static_cast<double>(people[static_cast<std::size_t>(index)].age))];
+    }
+    std::array<std::uint64_t, 6> targets{};
+    if (rules.genesis_union_target_profile.enabled) {
+        for (std::size_t band = 0; band < targets.size(); ++band) {
+            targets[band] = static_cast<std::uint64_t>(std::llround(
+                rules.genesis_union_target_profile.shares[band] *
+                static_cast<double>(female_counts[band])));
+        }
+    } else {
+        const auto adults = static_cast<std::uint64_t>(std::count_if(
+            people.begin(), people.end(), [&rules](const GenesisPersonPlan &person) {
+                return person.age >= rules.working_age;
+            }));
+        targets.fill(std::numeric_limits<std::uint64_t>::max());
+        targets[0] = static_cast<std::uint64_t>(std::llround(
+            rules.genesis_target_partnered_adult_share *
+            static_cast<double>(adults) / 2.0));
+    }
+    std::array<std::uint64_t, 6> matched{};
+    std::uint64_t flat_matched = 0U;
+    for (const auto female_index : females) {
+        auto &female = people[static_cast<std::size_t>(female_index)];
+        const auto band = union_age_band(static_cast<double>(female.age));
+        const bool reached = rules.genesis_union_target_profile.enabled
+                                 ? matched[band] >= targets[band]
+                                 : flat_matched >= targets[0];
+        if (reached) {
+            continue;
+        }
+        const double target_age =
+            static_cast<double>(female.age) +
+            rules.genesis_spouse_age_gap_stddev *
+                normal_draw(seed, female_index + 1U, day,
+                            kGenesisSpouseGapStream);
+        const auto male_index = pop_genesis_partner(
+            male_by_age, people, static_cast<double>(female.age), target_age,
+            rules.genesis_spouse_maximum_age_gap);
+        if (male_index == kNoGenesisPerson) {
+            continue;
+        }
+        female.partner_index = male_index;
+        people[static_cast<std::size_t>(male_index)].partner_index = female_index;
+        ++matched[band];
+        ++flat_matched;
+    }
+}
+
+[[nodiscard]] std::uint64_t next_parent_candidate(
+    const GenesisAgeBuckets &buckets, std::vector<std::size_t> &cursors,
+    std::uint32_t age, const std::vector<std::uint32_t> &remaining_capacity,
+    const std::vector<std::uint32_t> &household_children,
+    std::uint32_t household_limit,
+    const std::vector<GenesisPersonPlan> &people,
+    bool require_partner,
+    const std::vector<std::uint32_t> *partner_capacity = nullptr) {
+    if (static_cast<std::size_t>(age) >= buckets.size()) {
+        return kNoGenesisPerson;
+    }
+    const auto &bucket = buckets[age];
+    auto &cursor = cursors[age];
+    while (cursor < bucket.size()) {
+        const auto candidate = bucket[cursor];
+        const auto &person = people[static_cast<std::size_t>(candidate)];
+        const bool partner_ok =
+            !require_partner ||
+            (person.partner_index != kNoGenesisPerson &&
+             (partner_capacity == nullptr ||
+              (*partner_capacity)[static_cast<std::size_t>(
+                  person.partner_index)] > 0U));
+        const bool household_ok =
+            person.household_index != kNoGenesisPerson &&
+            household_children[static_cast<std::size_t>(
+                person.household_index)] < household_limit;
+        if (remaining_capacity[static_cast<std::size_t>(candidate)] > 0U &&
+            partner_ok && household_ok) {
+            return candidate;
+        }
+        ++cursor;
+    }
+    return kNoGenesisPerson;
+}
+
+template <typename Candidate>
+[[nodiscard]] bool for_ordered_parent_gaps(std::uint32_t minimum_gap,
+                                           std::uint32_t maximum_gap,
+                                           double target_gap,
+                                           Candidate &&candidate) {
+    const auto rounded = static_cast<std::int32_t>(std::llround(std::clamp(
+        target_gap, static_cast<double>(minimum_gap),
+        static_cast<double>(maximum_gap))));
+    const auto span = maximum_gap - minimum_gap;
+    for (std::uint32_t offset = 0U; offset <= span; ++offset) {
+        const auto lower = rounded - static_cast<std::int32_t>(offset);
+        if (lower >= static_cast<std::int32_t>(minimum_gap) &&
+            candidate(static_cast<std::uint32_t>(lower))) {
+            return true;
+        }
+        const auto upper = rounded + static_cast<std::int32_t>(offset);
+        if (offset > 0U && upper <= static_cast<std::int32_t>(maximum_gap) &&
+            candidate(static_cast<std::uint32_t>(upper))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void assign_genesis_adult_households(GenesisRelationshipPlan &plan,
+                                     const M7Rules &rules,
+                                     std::vector<std::uint64_t> &adults,
+                                     std::vector<std::uint64_t> &minors) {
+    adults.reserve(plan.people.size());
+    minors.reserve(plan.people.size() / 4U);
+    for (std::uint64_t index = 0; index < plan.people.size(); ++index) {
+        (plan.people[static_cast<std::size_t>(index)].age >= rules.working_age
+             ? adults
+             : minors)
+            .push_back(index);
+    }
+    for (const auto adult : adults) {
+        auto &person = plan.people[static_cast<std::size_t>(adult)];
+        if (person.household_index != kNoGenesisPerson) {
+            continue;
+        }
+        const auto household = plan.household_count++;
+        person.household_index = household;
+        if (person.partner_index != kNoGenesisPerson) {
+            plan.people[static_cast<std::size_t>(person.partner_index)]
+                .household_index = household;
+        }
+    }
+}
+
+void assign_genesis_children(GenesisRelationshipPlan &plan,
+                             const M7SimulationSpec &spec,
+                             const std::vector<std::uint64_t> &adults,
+                             std::vector<std::uint64_t> minors,
+                             std::uint64_t seed) {
+    std::uint32_t maximum_age = 0U;
+    for (const auto &person : plan.people) {
+        maximum_age = std::max(maximum_age, person.age);
+    }
+    GenesisAgeBuckets women(maximum_age + 1U);
+    GenesisAgeBuckets men(maximum_age + 1U);
+    GenesisAgeBuckets partnered_women(maximum_age + 1U);
+    GenesisAgeBuckets unpartnered_women(maximum_age + 1U);
+    GenesisAgeBuckets unpartnered_men(maximum_age + 1U);
+    for (const auto adult : adults) {
+        const auto &person = plan.people[static_cast<std::size_t>(adult)];
+        auto &all = person.sex == core::PersonSex::female ? women : men;
+        all[person.age].push_back(adult);
+        if (person.sex == core::PersonSex::female &&
+            person.partner_index != kNoGenesisPerson) {
+            partnered_women[person.age].push_back(adult);
+        } else if (person.partner_index == kNoGenesisPerson) {
+            auto &single = person.sex == core::PersonSex::female
+                               ? unpartnered_women
+                               : unpartnered_men;
+            single[person.age].push_back(adult);
+        }
+    }
+    std::vector<std::size_t> women_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> men_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> partnered_women_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> single_women_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> single_men_cursor(maximum_age + 1U, 0U);
+    std::vector<std::uint32_t> capacity(
+        plan.people.size(), spec.rules.genesis_maximum_children_per_parent);
+    std::vector<std::uint32_t> household_children(plan.household_count, 0U);
+    std::vector<std::uint32_t> household_size(plan.household_count, 0U);
+    for (const auto adult : adults) {
+        ++household_size[static_cast<std::size_t>(
+            plan.people[static_cast<std::size_t>(adult)].household_index)];
+    }
+    using HouseholdLoad = std::pair<std::uint32_t, std::uint64_t>;
+    std::priority_queue<HouseholdLoad, std::vector<HouseholdLoad>,
+                        std::greater<HouseholdLoad>>
+        guardian_households;
+    for (std::uint64_t household = 0; household < plan.household_count;
+         ++household) {
+        guardian_households.emplace(household_size[household], household);
+    }
+    std::sort(minors.begin(), minors.end(), [&plan](std::uint64_t left,
+                                                    std::uint64_t right) {
+        const auto left_age = plan.people[static_cast<std::size_t>(left)].age;
+        const auto right_age = plan.people[static_cast<std::size_t>(right)].age;
+        return left_age > right_age || (left_age == right_age && left < right);
+    });
+    for (const auto child_index : minors) {
+        auto &child = plan.people[static_cast<std::size_t>(child_index)];
+        const double target_gap =
+            spec.rules.genesis_ideal_parent_age_gap +
+            spec.rules.genesis_parent_age_gap_stddev *
+                normal_draw(seed, child_index + 1U,
+                            spec.population.start_calendar_day,
+                            kGenesisParentGapStream);
+        const bool prefer_two =
+            unit_draw(seed, child_index + 1U,
+                      spec.population.start_calendar_day,
+                      kGenesisTwoParentStream) <
+            spec.rules.genesis_two_parent_assignment_share;
+        const auto assign_two = [&]() {
+            return for_ordered_parent_gaps(
+                spec.rules.genesis_parent_minimum_age_gap,
+                spec.rules.genesis_parent_maximum_age_gap, target_gap,
+                [&](std::uint32_t gap) {
+                    const auto mother = next_parent_candidate(
+                        partnered_women, partnered_women_cursor,
+                        child.age + gap, capacity, household_children,
+                        spec.rules.genesis_maximum_children_per_household,
+                        plan.people, true, &capacity);
+                    if (mother == kNoGenesisPerson) {
+                        return false;
+                    }
+                    const auto father =
+                        plan.people[static_cast<std::size_t>(mother)]
+                            .partner_index;
+                    child.mother_index = mother;
+                    child.father_index = father;
+                    child.guardian_index = mother;
+                    child.household_index =
+                        plan.people[static_cast<std::size_t>(mother)]
+                            .household_index;
+                    --capacity[static_cast<std::size_t>(mother)];
+                    --capacity[static_cast<std::size_t>(father)];
+                    ++household_children[static_cast<std::size_t>(
+                        child.household_index)];
+                    return true;
+                });
+        };
+        const auto assign_single = [&](GenesisAgeBuckets &buckets,
+                                       std::vector<std::size_t> &cursors,
+                                       core::PersonSex sex) {
+            return for_ordered_parent_gaps(
+                spec.rules.genesis_parent_minimum_age_gap,
+                spec.rules.genesis_parent_maximum_age_gap, target_gap,
+                [&](std::uint32_t gap) {
+                    const auto parent = next_parent_candidate(
+                        buckets, cursors, child.age + gap, capacity,
+                        household_children,
+                        spec.rules.genesis_maximum_children_per_household,
+                        plan.people, false);
+                    if (parent == kNoGenesisPerson) {
+                        return false;
+                    }
+                    (sex == core::PersonSex::female ? child.mother_index
+                                                    : child.father_index) = parent;
+                    child.guardian_index = parent;
+                    child.household_index =
+                        plan.people[static_cast<std::size_t>(parent)]
+                            .household_index;
+                    --capacity[static_cast<std::size_t>(parent)];
+                    ++household_children[static_cast<std::size_t>(
+                        child.household_index)];
+                    return true;
+                });
+        };
+        bool assigned = false;
+        if (prefer_two) {
+            assigned = assign_two() ||
+                       assign_single(unpartnered_women, single_women_cursor,
+                                     core::PersonSex::female) ||
+                       assign_single(unpartnered_men, single_men_cursor,
+                                     core::PersonSex::male);
+        } else {
+            assigned = assign_single(unpartnered_women, single_women_cursor,
+                                     core::PersonSex::female) ||
+                       assign_single(unpartnered_men, single_men_cursor,
+                                     core::PersonSex::male) ||
+                       assign_two();
+        }
+        assigned = assigned ||
+                   assign_single(women, women_cursor,
+                                 core::PersonSex::female) ||
+                   assign_single(men, men_cursor, core::PersonSex::male);
+        if (!assigned) {
+            while (!guardian_households.empty()) {
+                const auto [size, household] = guardian_households.top();
+                if (size == household_size[household]) {
+                    break;
+                }
+                guardian_households.pop();
+            }
+            const auto household = guardian_households.top().second;
+            guardian_households.pop();
+            child.household_index = household;
+            for (const auto adult : adults) {
+                if (plan.people[static_cast<std::size_t>(adult)]
+                        .household_index == household) {
+                    child.guardian_index = adult;
+                    break;
+                }
+            }
+            ++household_children[household];
+        }
+        ++household_size[static_cast<std::size_t>(child.household_index)];
+        guardian_households.emplace(
+            household_size[static_cast<std::size_t>(child.household_index)],
+            child.household_index);
+    }
+}
+
+[[nodiscard]] std::uint64_t next_lineage_parent(
+    const GenesisAgeBuckets &buckets, std::vector<std::size_t> &cursors,
+    std::uint32_t age, const std::vector<std::uint32_t> &remaining_capacity,
+    const std::vector<GenesisPersonPlan> &people, bool require_partner,
+    std::uint64_t excluded) {
+    if (static_cast<std::size_t>(age) >= buckets.size()) {
+        return kNoGenesisPerson;
+    }
+    const auto &bucket = buckets[age];
+    auto &cursor = cursors[age];
+    while (cursor < bucket.size()) {
+        const auto candidate = bucket[cursor];
+        const auto &person = people[static_cast<std::size_t>(candidate)];
+        const bool family_role_ok =
+            candidate != excluded && person.partner_index != excluded;
+        const bool partner_ok =
+            !require_partner ||
+            (person.partner_index != kNoGenesisPerson &&
+             remaining_capacity[static_cast<std::size_t>(
+                 person.partner_index)] > 0U);
+        if (remaining_capacity[static_cast<std::size_t>(candidate)] > 0U &&
+            family_role_ok && partner_ok) {
+            return candidate;
+        }
+        ++cursor;
+    }
+    return kNoGenesisPerson;
+}
+
+void assign_genesis_adult_lineage(GenesisRelationshipPlan &plan,
+                                  const M7SimulationSpec &spec,
+                                  std::vector<std::uint64_t> adults,
+                                  std::uint64_t seed) {
+    std::uint32_t maximum_age = 0U;
+    for (const auto &person : plan.people) {
+        maximum_age = std::max(maximum_age, person.age);
+    }
+    GenesisAgeBuckets women(maximum_age + 1U);
+    GenesisAgeBuckets men(maximum_age + 1U);
+    GenesisAgeBuckets partnered_women(maximum_age + 1U);
+    for (const auto adult : adults) {
+        const auto &person = plan.people[static_cast<std::size_t>(adult)];
+        (person.sex == core::PersonSex::female ? women : men)[person.age]
+            .push_back(adult);
+        if (person.sex == core::PersonSex::female &&
+            person.partner_index != kNoGenesisPerson) {
+            partnered_women[person.age].push_back(adult);
+        }
+    }
+    std::vector<std::size_t> women_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> men_cursor(maximum_age + 1U, 0U);
+    std::vector<std::size_t> partnered_cursor(maximum_age + 1U, 0U);
+    std::vector<std::uint32_t> capacity(
+        plan.people.size(), spec.rules.genesis_maximum_children_per_parent);
+    for (const auto &person : plan.people) {
+        if (person.mother_index != kNoGenesisPerson) {
+            auto &remaining =
+                capacity[static_cast<std::size_t>(person.mother_index)];
+            remaining -= remaining > 0U ? 1U : 0U;
+        }
+        if (person.father_index != kNoGenesisPerson) {
+            auto &remaining =
+                capacity[static_cast<std::size_t>(person.father_index)];
+            remaining -= remaining > 0U ? 1U : 0U;
+        }
+    }
+    std::sort(adults.begin(), adults.end(), [&plan](std::uint64_t left,
+                                                    std::uint64_t right) {
+        const auto left_age = plan.people[static_cast<std::size_t>(left)].age;
+        const auto right_age = plan.people[static_cast<std::size_t>(right)].age;
+        return left_age > right_age || (left_age == right_age && left < right);
+    });
+    for (const auto child_index : adults) {
+        auto &child = plan.people[static_cast<std::size_t>(child_index)];
+        if (child.age + spec.rules.genesis_parent_minimum_age_gap > maximum_age) {
+            continue;
+        }
+        const double target_gap =
+            spec.rules.genesis_ideal_parent_age_gap +
+            spec.rules.genesis_parent_age_gap_stddev *
+                normal_draw(seed, child_index + 1U,
+                            spec.population.start_calendar_day,
+                            kGenesisParentGapStream ^ 0x9e3779b97f4a7c15ULL);
+        const bool prefer_two =
+            unit_draw(seed, child_index + 1U,
+                      spec.population.start_calendar_day,
+                      kGenesisTwoParentStream ^ 0x517cc1b727220a95ULL) <
+            spec.rules.genesis_two_parent_assignment_share;
+        const auto assign_two = [&]() {
+            return for_ordered_parent_gaps(
+                spec.rules.genesis_parent_minimum_age_gap,
+                spec.rules.genesis_parent_maximum_age_gap, target_gap,
+                [&](std::uint32_t gap) {
+                    const auto mother = next_lineage_parent(
+                        partnered_women, partnered_cursor, child.age + gap,
+                        capacity, plan.people, true, child_index);
+                    if (mother == kNoGenesisPerson) {
+                        return false;
+                    }
+                    const auto father =
+                        plan.people[static_cast<std::size_t>(mother)]
+                            .partner_index;
+                    child.mother_index = mother;
+                    child.father_index = father;
+                    --capacity[static_cast<std::size_t>(mother)];
+                    --capacity[static_cast<std::size_t>(father)];
+                    return true;
+                });
+        };
+        const auto assign_single = [&](GenesisAgeBuckets &buckets,
+                                       std::vector<std::size_t> &cursors,
+                                       core::PersonSex sex) {
+            return for_ordered_parent_gaps(
+                spec.rules.genesis_parent_minimum_age_gap,
+                spec.rules.genesis_parent_maximum_age_gap, target_gap,
+                [&](std::uint32_t gap) {
+                    const auto parent = next_lineage_parent(
+                        buckets, cursors, child.age + gap, capacity,
+                        plan.people, false, child_index);
+                    if (parent == kNoGenesisPerson) {
+                        return false;
+                    }
+                    (sex == core::PersonSex::female ? child.mother_index
+                                                    : child.father_index) = parent;
+                    --capacity[static_cast<std::size_t>(parent)];
+                    return true;
+                });
+        };
+        if (prefer_two && assign_two()) {
+            continue;
+        }
+        if (assign_single(women, women_cursor, core::PersonSex::female) ||
+            assign_single(men, men_cursor, core::PersonSex::male)) {
+            continue;
+        }
+        if (!prefer_two) {
+            static_cast<void>(assign_two());
+        }
+    }
+}
+
+[[nodiscard]] Result<GenesisRelationshipPlan> build_genesis_relationship_plan(
+    const M7SimulationSpec &spec, const std::vector<double> &age_weights,
+    double female_share) {
+    GenesisRelationshipPlan plan;
+    plan.people.reserve(spec.population.initial_persons);
+    const auto seed = spec.financial_economy.monetary_economy.real_economy.seed;
+    for (std::uint64_t index = 0; index < spec.population.initial_persons;
+         ++index) {
+        const auto identity = index + 1U;
+        const auto age = sample_age(
+            age_weights,
+            unit_draw(seed, identity, spec.population.start_calendar_day,
+                      kAgeStream));
+        const auto offset = static_cast<std::int32_t>(
+            unit_draw(seed, identity, spec.population.start_calendar_day,
+                      kOffsetStream) *
+            kDaysPerYear);
+        GenesisPersonPlan person;
+        person.age = age;
+        person.sex = unit_draw(seed, identity,
+                               spec.population.start_calendar_day, kSexStream) <
+                             female_share
+                         ? core::PersonSex::female
+                         : core::PersonSex::male;
+        person.birth_day = spec.population.start_calendar_day -
+                           static_cast<std::int32_t>(age * 365U) - offset;
+        plan.people.push_back(person);
+    }
+
+    if (!spec.rules.relationships) {
+        plan.household_count = static_cast<std::uint64_t>(std::ceil(
+            static_cast<double>(spec.population.initial_persons) /
+            spec.population.target_household_size));
+        for (std::size_t index = 0; index < plan.people.size(); ++index) {
+            plan.people[index].household_index =
+                static_cast<std::uint64_t>(index) % plan.household_count;
+        }
+        return plan;
+    }
+
+    if (spec.rules.marriage) {
+        match_genesis_partners(plan, spec.rules, seed,
+                               spec.population.start_calendar_day);
+    }
+    std::vector<std::uint64_t> adults;
+    std::vector<std::uint64_t> minors;
+    assign_genesis_adult_households(plan, spec.rules, adults, minors);
+    if (!minors.empty() && adults.empty()) {
+        plan.household_count = static_cast<std::uint64_t>(std::ceil(
+            static_cast<double>(spec.population.initial_persons) /
+            spec.population.target_household_size));
+        for (std::size_t index = 0; index < plan.people.size(); ++index) {
+            plan.people[index].household_index =
+                static_cast<std::uint64_t>(index) % plan.household_count;
+        }
+        return plan;
+    }
+    if (plan.household_count == 0U) {
+        return Status(ErrorCode::invalid_argument,
+                      "M7 genesis relationship plan has no households");
+    }
+    assign_genesis_children(plan, spec, adults, std::move(minors), seed);
+    assign_genesis_adult_lineage(plan, spec, adults, seed);
+    return plan;
+}
+
 } // namespace
 
 void M7TickScratch::reserve(const M7Runtime &runtime) {
@@ -3704,6 +4612,30 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.mortality_income_elasticity,
         rules.mortality_multiplier_minimum,
         rules.mortality_multiplier_maximum,
+        rules.genesis_ideal_parent_age_gap,
+        rules.genesis_parent_age_gap_stddev,
+        rules.genesis_spouse_age_gap_stddev,
+        rules.genesis_target_partnered_adult_share,
+        rules.genesis_two_parent_assignment_share,
+        rules.marriage_peak_age,
+        rules.marriage_age_width,
+        rules.marriage_age_gap_stddev,
+        rules.marriage_acceptance_base,
+        rules.marriage_acceptance_age_gap_penalty,
+        rules.remarriage_rate_multiplier,
+        rules.widowed_remarriage_multiplier,
+        rules.divorce_peak_duration_years,
+        rules.divorce_duration_width,
+        rules.divorce_peak_multiplier,
+        rules.divorce_child_multiplier,
+        rules.divorce_age_gap_multiplier_per_10y,
+    };
+    const auto valid_union_profile = [](const M7UnionTargetProfile &profile) {
+        return std::all_of(profile.shares.begin(), profile.shares.end(),
+                           [](double share) {
+                               return finite(share) && share >= 0.0 &&
+                                      share <= 1.0;
+                           });
     };
     if (rules.working_age < 1U || rules.retirement_age <= rules.working_age ||
         rules.retirement_age > rules.vital_rates.maximum_age ||
@@ -3749,6 +4681,36 @@ Status validate_m7_rules(const M7Rules &rules) noexcept {
         rules.mortality_multiplier_minimum <= 0.0 ||
         rules.mortality_multiplier_minimum > 1.0 ||
         rules.mortality_multiplier_maximum < 1.0 ||
+        !valid_union_profile(rules.genesis_union_target_profile) ||
+        !valid_union_profile(rules.social_union_target_profile) ||
+        rules.genesis_parent_minimum_age_gap == 0U ||
+        rules.genesis_parent_maximum_age_gap <
+            rules.genesis_parent_minimum_age_gap ||
+        rules.genesis_ideal_parent_age_gap <
+            static_cast<double>(rules.genesis_parent_minimum_age_gap) ||
+        rules.genesis_ideal_parent_age_gap >
+            static_cast<double>(rules.genesis_parent_maximum_age_gap) ||
+        rules.genesis_parent_age_gap_stddev <= 0.0 ||
+        rules.genesis_spouse_age_gap_stddev <= 0.0 ||
+        rules.genesis_target_partnered_adult_share < 0.0 ||
+        rules.genesis_target_partnered_adult_share > 1.0 ||
+        rules.genesis_two_parent_assignment_share < 0.0 ||
+        rules.genesis_two_parent_assignment_share > 1.0 ||
+        rules.genesis_maximum_children_per_parent == 0U ||
+        rules.genesis_maximum_children_per_household == 0U ||
+        rules.marriage_age_width <= 0.0 ||
+        rules.marriage_age_gap_stddev <= 0.0 ||
+        rules.marriage_acceptance_base < 0.0 ||
+        rules.marriage_acceptance_base > 1.0 ||
+        rules.marriage_acceptance_age_gap_penalty < 0.0 ||
+        rules.remarriage_rate_multiplier < 0.0 ||
+        rules.widowed_remarriage_multiplier < 0.0 ||
+        rules.divorce_peak_duration_years < 0.0 ||
+        rules.divorce_duration_width <= 0.0 ||
+        rules.divorce_peak_multiplier < 0.0 ||
+        rules.divorce_child_multiplier < 0.0 ||
+        rules.divorce_age_gap_multiplier_per_10y <= 0.0 ||
+        rules.guardian_maximum_household_size == 0U ||
         (rules.second_jobs && !rules.fractional_hours) ||
         (rules.job_ladder && !rules.relationship_wages) ||
         rules.marriage_rules.minimum_age == 0 ||
@@ -3918,11 +4880,28 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
     if (!status.ok()) {
         return status;
     }
+    const auto &genesis_vital_rates = spec.population.fixed_genesis_vital_rates
+                                          ? spec.population.genesis_vital_rates
+                                          : spec.rules.vital_rates;
+    const auto age_weights = stable_age_weights(genesis_vital_rates);
+    if (age_weights.empty()) {
+        return Status(ErrorCode::invalid_argument,
+                      "M7 stable age distribution is invalid");
+    }
+    const auto female_share = algorithms::female_birth_share(genesis_vital_rates);
+    if (!female_share.ok()) {
+        return female_share.status();
+    }
+    auto relationship_plan_result = build_genesis_relationship_plan(
+        spec, age_weights, *female_share.get_if());
+    if (!relationship_plan_result.ok()) {
+        return relationship_plan_result.status();
+    }
+    auto relationship_plan = std::move(relationship_plan_result).take();
+
     auto financial_spec = spec.financial_economy;
     auto &real = financial_spec.monetary_economy.real_economy;
-    real.households = static_cast<std::uint64_t>(
-        std::ceil(static_cast<double>(spec.population.initial_persons) /
-                  spec.population.target_household_size));
+    real.households = relationship_plan.household_count;
     auto genesis = build_m6_genesis(financial_spec);
     if (!genesis.ok()) {
         return genesis.status();
@@ -3936,19 +4915,6 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
     runtime.current_calendar_day = spec.population.start_calendar_day;
     runtime.firm_target_ema.resize(
         static_cast<std::size_t>(financial.root.firms.allocator_state().next_id), 0.0);
-    const auto &genesis_vital_rates = spec.population.fixed_genesis_vital_rates
-                                          ? spec.population.genesis_vital_rates
-                                          : spec.rules.vital_rates;
-    const auto age_weights = stable_age_weights(genesis_vital_rates);
-    if (age_weights.empty()) {
-        return Status(ErrorCode::invalid_argument,
-                      "M7 stable age distribution is invalid");
-    }
-    const auto female_share = algorithms::female_birth_share(genesis_vital_rates);
-    if (!female_share.ok()) {
-        return female_share.status();
-    }
-
     std::vector<HouseholdId> households;
     households.reserve(financial.root.households.alive_count());
     financial.root.households.for_each_alive(
@@ -3956,50 +4922,38 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
             households.push_back(id);
         });
     std::sort(households.begin(), households.end());
-    std::vector<PersonId> adults;
-    std::vector<PersonId> minors;
-    adults.reserve(spec.population.initial_persons);
-    minors.reserve(spec.population.initial_persons / 4U);
-    for (std::uint64_t index = 0; index < spec.population.initial_persons; ++index) {
-        const auto identity = index + 1U;
-        const auto age = sample_age(
-            age_weights, unit_draw(financial.root.seed, identity,
-                                   spec.population.start_calendar_day, kAgeStream));
-        const auto offset = static_cast<std::int32_t>(
-            unit_draw(financial.root.seed, identity, spec.population.start_calendar_day,
-                      kOffsetStream) *
-            kDaysPerYear);
+    std::vector<PersonId> person_ids;
+    person_ids.reserve(relationship_plan.people.size());
+    for (const auto &planned : relationship_plan.people) {
         core::PersonRecord person;
-        person.sex =
-            unit_draw(financial.root.seed, identity, spec.population.start_calendar_day,
-                      kSexStream) < *female_share.get_if()
-                ? core::PersonSex::female
-                : core::PersonSex::male;
-        person.birth_day = spec.population.start_calendar_day -
-                           static_cast<std::int32_t>(age * 365U) - offset;
+        person.sex = planned.sex;
+        person.birth_day = planned.birth_day;
         const auto created = runtime.persons.create(person);
         if (!created.ok()) {
             return created.status();
         }
         const auto person_id = *created.get_if();
+        person_ids.push_back(person_id);
         auto *stored = runtime.persons.get(person_id);
         stored->efficiency = person_efficiency_draw(spec.rules, financial.root.seed,
                                                     person_id, stored->birth_day);
         const bool working_age =
-            age >= spec.rules.working_age && age < spec.rules.retirement_age;
+            planned.age >= spec.rules.working_age &&
+            planned.age < spec.rules.retirement_age;
         stored->participating = working_age && structurally_participates(
                                                    spec.rules, financial.root.seed,
-                                                   person_id, static_cast<double>(age));
+                                                   person_id,
+                                                   static_cast<double>(planned.age));
         stored->searching = stored->participating;
-        (age >= spec.rules.working_age ? adults : minors).push_back(person_id);
     }
-    std::vector<PersonId> assignment_order;
-    assignment_order.reserve(spec.population.initial_persons);
-    assignment_order.insert(assignment_order.end(), adults.begin(), adults.end());
-    assignment_order.insert(assignment_order.end(), minors.begin(), minors.end());
-    for (std::size_t index = 0; index < assignment_order.size(); ++index) {
-        const auto person_id = assignment_order[index];
-        const auto household = households[index % households.size()];
+    for (std::size_t index = 0; index < person_ids.size(); ++index) {
+        const auto person_id = person_ids[index];
+        const auto household_index = relationship_plan.people[index].household_index;
+        if (household_index >= households.size()) {
+            return Status(ErrorCode::invariant_violation,
+                          "M7 genesis household plan is out of range");
+        }
+        const auto household = households[static_cast<std::size_t>(household_index)];
         runtime.persons.get(person_id)->household = household;
         const auto membership = runtime.membership.add(person_id, household);
         if (!membership.ok()) {
@@ -4031,63 +4985,69 @@ Result<M7Initialization> build_m7_genesis(const M7SimulationSpec &spec) {
     }
 
     if (runtime.rules.relationships) {
-        for (const auto household : households) {
-            std::vector<PersonId> women;
-            std::vector<PersonId> men;
-            std::vector<PersonId> children;
-            for (const auto person_id : runtime.membership.members(household)) {
-                const auto *person = runtime.persons.get(person_id);
-                const double age =
-                    completed_age(*person, spec.population.start_calendar_day);
-                if (age < static_cast<double>(runtime.rules.working_age)) {
-                    children.push_back(person_id);
-                } else if (person->sex == core::PersonSex::female) {
-                    women.push_back(person_id);
-                } else {
-                    men.push_back(person_id);
+        if (runtime.rules.marriage) {
+            for (std::size_t index = 0; index < relationship_plan.people.size();
+                 ++index) {
+                const auto partner_index =
+                    relationship_plan.people[index].partner_index;
+                if (partner_index == kNoGenesisPerson || index >= partner_index) {
+                    continue;
                 }
-            }
-            const auto pair_count =
-                runtime.rules.marriage ? std::min(women.size(), men.size()) : 0U;
-            for (std::size_t index = 0; index < pair_count; ++index) {
+                const auto younger_age = std::min(
+                    relationship_plan.people[index].age,
+                    relationship_plan.people[static_cast<std::size_t>(partner_index)]
+                        .age);
+                const auto maximum_years = younger_age > runtime.rules.working_age
+                                               ? std::min<std::uint32_t>(
+                                                     15U, younger_age -
+                                                              runtime.rules.working_age)
+                                               : 0U;
+                const auto years = maximum_years == 0U
+                                       ? 0U
+                                       : 1U + static_cast<std::uint32_t>(
+                                                  unit_draw(
+                                                      financial.root.seed,
+                                                      index + 1U,
+                                                      spec.population
+                                                          .start_calendar_day,
+                                                      kMarriageStream) *
+                                                  static_cast<double>(
+                                                      maximum_years));
+                const auto union_day =
+                    spec.population.start_calendar_day -
+                    static_cast<std::int32_t>(years * 365U);
                 const auto union_status = runtime.relationships.marry(
-                    runtime.persons, EventId(runtime.next_event_id++), women[index],
-                    men[index], spec.population.start_calendar_day);
+                    runtime.persons, EventId(runtime.next_event_id++),
+                    person_ids[index],
+                    person_ids[static_cast<std::size_t>(partner_index)], union_day);
                 if (!union_status.ok()) {
                     return union_status;
                 }
             }
-            for (const auto child_id : children) {
-                auto *child = runtime.persons.get(child_id);
-                PersonId mother{};
-                PersonId father{};
-                for (const auto candidate : women) {
-                    const auto *adult = runtime.persons.get(candidate);
-                    if (completed_age(*adult, spec.population.start_calendar_day) >=
-                        completed_age(*child, spec.population.start_calendar_day) +
-                            16.0) {
-                        mother = candidate;
-                        break;
-                    }
-                }
-                for (const auto candidate : men) {
-                    const auto *adult = runtime.persons.get(candidate);
-                    if (completed_age(*adult, spec.population.start_calendar_day) >=
-                        completed_age(*child, spec.population.start_calendar_day) +
-                            16.0) {
-                        father = candidate;
-                        break;
-                    }
-                }
-                child->mother = mother;
-                child->father = father;
-                child->guardian = mother.valid() ? mother : father;
-                if (mother.valid() || father.valid()) {
-                    const auto lineage =
-                        runtime.relationships.register_birth(runtime.persons, child_id);
-                    if (!lineage.ok()) {
-                        return lineage;
-                    }
+        }
+        for (std::size_t index = 0; index < relationship_plan.people.size();
+             ++index) {
+            const auto &planned = relationship_plan.people[index];
+            auto *child = runtime.persons.get(person_ids[index]);
+            child->mother = planned.mother_index == kNoGenesisPerson
+                                ? PersonId{}
+                                : person_ids[static_cast<std::size_t>(
+                                      planned.mother_index)];
+            child->father = planned.father_index == kNoGenesisPerson
+                                ? PersonId{}
+                                : person_ids[static_cast<std::size_t>(
+                                      planned.father_index)];
+            child->guardian =
+                planned.age >= runtime.rules.working_age ||
+                        planned.guardian_index == kNoGenesisPerson
+                    ? PersonId{}
+                    : person_ids[static_cast<std::size_t>(
+                          planned.guardian_index)];
+            if (child->mother.valid() || child->father.valid()) {
+                const auto lineage = runtime.relationships.register_birth(
+                    runtime.persons, person_ids[index]);
+                if (!lineage.ok()) {
+                    return lineage;
                 }
             }
         }

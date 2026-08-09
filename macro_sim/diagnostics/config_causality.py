@@ -50,6 +50,11 @@ NATIVE_RULE_MAPS: tuple[tuple[str, Mapping[str, str]], ...] = (
     ("m5.monetary_rules", native_backend.M5_RULE_FIELDS),
     ("m6.financial_rules", native_backend.M6_RULE_FIELDS),
     ("m7.population_rules", native_backend.M7_RULE_FIELDS),
+    (
+        "m7.relationship_rules",
+        native_backend.M7_RELATIONSHIP_RULE_FIELDS,
+    ),
+    ("m7.social_rules", native_backend.M7_SOCIAL_RULE_FIELDS),
     ("m8.energy_rules", native_backend.ENERGY_RULE_FIELDS),
     ("m8.housing_rules", native_backend.HOUSING_RULE_FIELDS),
 )
@@ -413,6 +418,22 @@ def _route_for(row: Mapping[str, Any]) -> Route:
         return Route("missing_native_route")
     if declaring_type == "World":
         targets = WORLD_NATIVE_ROUTES.get(name, ())
+        if targets:
+            return Route("mapped_native", targets)
+        return Route("missing_native_route")
+    if declaring_type == "RelationshipConfig":
+        targets = _source_routes(
+            name,
+            (("m7.relationship_rules", native_backend.M7_RELATIONSHIP_RULE_FIELDS),),
+        )
+        if targets:
+            return Route("mapped_native", targets)
+        return Route("missing_native_route")
+    if declaring_type == "SocialDynamicsConfig":
+        targets = _source_routes(
+            name,
+            (("m7.social_rules", native_backend.M7_SOCIAL_RULE_FIELDS),),
+        )
         if targets:
             return Route("mapped_native", targets)
         return Route("missing_native_route")

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <new>
 #include <string_view>
@@ -213,6 +214,21 @@ void fill_m7_metrics(macro_sim_m7_metrics &output,
     MACRO_SIM_FILL_M7(marriages);
     MACRO_SIM_FILL_M7(divorces);
     MACRO_SIM_FILL_M7(widowhoods);
+    MACRO_SIM_FILL_M7(remarriages);
+    MACRO_SIM_FILL_M7(widowed_remarriages);
+    MACRO_SIM_FILL_M7(guardian_same_household_assignments);
+    MACRO_SIM_FILL_M7(guardian_grandparent_assignments);
+    MACRO_SIM_FILL_M7(guardian_adult_sibling_assignments);
+    MACRO_SIM_FILL_M7(guardian_parent_assignments);
+    MACRO_SIM_FILL_M7(guardian_unresolved_assignments);
+    MACRO_SIM_FILL_M7(partnered_adult_share);
+    MACRO_SIM_FILL_M7(dual_parent_minor_share);
+    MACRO_SIM_FILL_M7(guardian_only_minor_share);
+    MACRO_SIM_FILL_M7(mean_mother_age_gap);
+    MACRO_SIM_FILL_M7(mother_age_gap_stddev);
+    MACRO_SIM_FILL_M7(mean_father_age_gap);
+    MACRO_SIM_FILL_M7(father_age_gap_stddev);
+    MACRO_SIM_FILL_M7(maximum_household_size);
     MACRO_SIM_FILL_M7(leaving_home_events);
 #undef MACRO_SIM_FILL_M7
 }
@@ -1853,6 +1869,57 @@ macro_sim_status macro_sim_m7_rules_defaults(macro_sim_m7_rules *output) {
     output->mortality_income_elasticity = value.mortality_income_elasticity;
     output->mortality_multiplier_minimum = value.mortality_multiplier_minimum;
     output->mortality_multiplier_maximum = value.mortality_multiplier_maximum;
+    output->genesis_union_target_profile_enabled =
+        value.genesis_union_target_profile.enabled ? 1U : 0U;
+    std::copy(value.genesis_union_target_profile.shares.begin(),
+              value.genesis_union_target_profile.shares.end(),
+              output->genesis_union_target_shares);
+    output->genesis_parent_minimum_age_gap =
+        value.genesis_parent_minimum_age_gap;
+    output->genesis_parent_maximum_age_gap =
+        value.genesis_parent_maximum_age_gap;
+    output->genesis_ideal_parent_age_gap = value.genesis_ideal_parent_age_gap;
+    output->genesis_parent_age_gap_stddev =
+        value.genesis_parent_age_gap_stddev;
+    output->genesis_spouse_maximum_age_gap =
+        value.genesis_spouse_maximum_age_gap;
+    output->genesis_spouse_age_gap_stddev =
+        value.genesis_spouse_age_gap_stddev;
+    output->genesis_target_partnered_adult_share =
+        value.genesis_target_partnered_adult_share;
+    output->genesis_two_parent_assignment_share =
+        value.genesis_two_parent_assignment_share;
+    output->genesis_maximum_children_per_parent =
+        value.genesis_maximum_children_per_parent;
+    output->genesis_maximum_children_per_household =
+        value.genesis_maximum_children_per_household;
+    output->social_union_target_profile_enabled =
+        value.social_union_target_profile.enabled ? 1U : 0U;
+    std::copy(value.social_union_target_profile.shares.begin(),
+              value.social_union_target_profile.shares.end(),
+              output->social_union_target_shares);
+    output->marriage_peak_age = value.marriage_peak_age;
+    output->marriage_age_width = value.marriage_age_width;
+    output->marriage_age_gap_stddev = value.marriage_age_gap_stddev;
+    output->marriage_acceptance_base = value.marriage_acceptance_base;
+    output->marriage_acceptance_age_gap_penalty =
+        value.marriage_acceptance_age_gap_penalty;
+    output->remarriage_rate_multiplier = value.remarriage_rate_multiplier;
+    output->widowed_remarriage_multiplier = value.widowed_remarriage_multiplier;
+    output->divorce_peak_duration_years = value.divorce_peak_duration_years;
+    output->divorce_duration_width = value.divorce_duration_width;
+    output->divorce_peak_multiplier = value.divorce_peak_multiplier;
+    output->divorce_child_multiplier = value.divorce_child_multiplier;
+    output->divorce_age_gap_multiplier_per_10y =
+        value.divorce_age_gap_multiplier_per_10y;
+    output->guardian_search_grandparents =
+        value.guardian_search_grandparents ? 1U : 0U;
+    output->guardian_search_adult_siblings =
+        value.guardian_search_adult_siblings ? 1U : 0U;
+    output->guardian_search_same_household_adults =
+        value.guardian_search_same_household_adults ? 1U : 0U;
+    output->guardian_maximum_household_size =
+        value.guardian_maximum_household_size;
     return status(MACRO_SIM_OK, "");
 }
 
@@ -1873,7 +1940,12 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
         !valid_flag(rules->divorce) || !valid_flag(rules->household_lifecycle) ||
         !valid_flag(rules->lifecycle_consumption) ||
         !valid_flag(rules->leaving_home) || !valid_flag(rules->forbid_same_household) ||
-        !valid_flag(rules->forbid_close_kin)) {
+        !valid_flag(rules->forbid_close_kin) ||
+        !valid_flag(rules->genesis_union_target_profile_enabled) ||
+        !valid_flag(rules->social_union_target_profile_enabled) ||
+        !valid_flag(rules->guardian_search_grandparents) ||
+        !valid_flag(rules->guardian_search_adult_siblings) ||
+        !valid_flag(rules->guardian_search_same_household_adults)) {
         return status(MACRO_SIM_INVALID_ARGUMENT,
                       "session and valid M7 rules are required");
     }
@@ -1958,6 +2030,58 @@ macro_sim_status macro_sim_m7_update_rules(macro_sim_session *session,
     value.mortality_income_elasticity = rules->mortality_income_elasticity;
     value.mortality_multiplier_minimum = rules->mortality_multiplier_minimum;
     value.mortality_multiplier_maximum = rules->mortality_multiplier_maximum;
+    value.genesis_union_target_profile.enabled =
+        rules->genesis_union_target_profile_enabled != 0U;
+    std::copy(std::begin(rules->genesis_union_target_shares),
+              std::end(rules->genesis_union_target_shares),
+              value.genesis_union_target_profile.shares.begin());
+    value.genesis_parent_minimum_age_gap =
+        rules->genesis_parent_minimum_age_gap;
+    value.genesis_parent_maximum_age_gap =
+        rules->genesis_parent_maximum_age_gap;
+    value.genesis_ideal_parent_age_gap = rules->genesis_ideal_parent_age_gap;
+    value.genesis_parent_age_gap_stddev =
+        rules->genesis_parent_age_gap_stddev;
+    value.genesis_spouse_maximum_age_gap =
+        rules->genesis_spouse_maximum_age_gap;
+    value.genesis_spouse_age_gap_stddev =
+        rules->genesis_spouse_age_gap_stddev;
+    value.genesis_target_partnered_adult_share =
+        rules->genesis_target_partnered_adult_share;
+    value.genesis_two_parent_assignment_share =
+        rules->genesis_two_parent_assignment_share;
+    value.genesis_maximum_children_per_parent =
+        rules->genesis_maximum_children_per_parent;
+    value.genesis_maximum_children_per_household =
+        rules->genesis_maximum_children_per_household;
+    value.social_union_target_profile.enabled =
+        rules->social_union_target_profile_enabled != 0U;
+    std::copy(std::begin(rules->social_union_target_shares),
+              std::end(rules->social_union_target_shares),
+              value.social_union_target_profile.shares.begin());
+    value.marriage_peak_age = rules->marriage_peak_age;
+    value.marriage_age_width = rules->marriage_age_width;
+    value.marriage_age_gap_stddev = rules->marriage_age_gap_stddev;
+    value.marriage_acceptance_base = rules->marriage_acceptance_base;
+    value.marriage_acceptance_age_gap_penalty =
+        rules->marriage_acceptance_age_gap_penalty;
+    value.remarriage_rate_multiplier = rules->remarriage_rate_multiplier;
+    value.widowed_remarriage_multiplier =
+        rules->widowed_remarriage_multiplier;
+    value.divorce_peak_duration_years = rules->divorce_peak_duration_years;
+    value.divorce_duration_width = rules->divorce_duration_width;
+    value.divorce_peak_multiplier = rules->divorce_peak_multiplier;
+    value.divorce_child_multiplier = rules->divorce_child_multiplier;
+    value.divorce_age_gap_multiplier_per_10y =
+        rules->divorce_age_gap_multiplier_per_10y;
+    value.guardian_search_grandparents =
+        rules->guardian_search_grandparents != 0U;
+    value.guardian_search_adult_siblings =
+        rules->guardian_search_adult_siblings != 0U;
+    value.guardian_search_same_household_adults =
+        rules->guardian_search_same_household_adults != 0U;
+    value.guardian_maximum_household_size =
+        rules->guardian_maximum_household_size;
     return status(session->engine.update_m7_rules(value));
 }
 

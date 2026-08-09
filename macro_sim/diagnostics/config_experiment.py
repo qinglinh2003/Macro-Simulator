@@ -604,6 +604,74 @@ def _apply_native_root_field(
     native_spec.economies = economies
 
 
+def _set_union_target_profile(
+    current: Any,
+    value: Any,
+) -> Any:
+    """Translate the inventory representation of a union profile to M7."""
+    profile = native_backend._load_native().M7UnionTargetProfile()
+    profile.enabled = bool(value is not None and value is not False)
+    profile.shares = list(current.shares)
+    if isinstance(value, Mapping):
+        bands = tuple(value.get("bands", ()))
+        if len(bands) != 6:
+            raise ValueError("a native union target profile requires six age bands")
+        profile.shares = [float(band["target_share"]) for band in bands]
+    return profile
+
+
+def native_nested_treatment_spec(
+    baseline: NewGameSpec,
+    *,
+    scope: str,
+    field: str,
+    value: Any,
+    target_economy: int = 0,
+) -> Any:
+    """Overlay a relationship or social-physics treatment on native M7."""
+    if scope not in {"relationship", "social"}:
+        raise ValueError(f"unknown nested Config scope {scope!r}")
+    native_spec = native_backend.build_native_new_game_spec(baseline)
+    economies = list(native_spec.economies)
+    if not 0 <= target_economy < len(economies):
+        raise IndexError("economy_id is outside the native experiment spec")
+    economy = economies[target_economy]
+    population = economy.domestic_economy
+    rules = population.rules
+    mapping = (
+        native_backend.M7_RELATIONSHIP_RULE_FIELDS
+        if scope == "relationship"
+        else native_backend.M7_SOCIAL_RULE_FIELDS
+    )
+    targets = [target for target, source in mapping.items() if source == field]
+    if len(targets) != 1:
+        raise ValueError(
+            f"nested Config field {scope}.{field!s} has no unique native setter"
+        )
+    target = targets[0]
+    if target in {
+        "genesis_union_target_profile",
+        "social_union_target_profile",
+    }:
+        setattr(
+            rules,
+            target,
+            _set_union_target_profile(getattr(rules, target), value),
+        )
+    elif target.startswith("marriage_rules."):
+        member = target.split(".", 1)[1]
+        marriage = rules.marriage_rules
+        setattr(marriage, member, value)
+        rules.marriage_rules = marriage
+    else:
+        setattr(rules, target, value)
+    population.rules = rules
+    economy.domestic_economy = population
+    economies[target_economy] = economy
+    native_spec.economies = economies
+    return native_spec
+
+
 def native_treatment_spec(
     baseline: NewGameSpec,
     *,
@@ -881,10 +949,45 @@ def apply_native_activation_scenario(
         monetary_policy.job_guarantee_wage_ratio = 0.5
         monetary_policy.job_guarantee_public_works_share = 1.0
     elif scenario == "unpartnered_marriage_market":
-        population.population.target_household_size = 1.0
+        genesis_profile = population_rules.genesis_union_target_profile
+        genesis_profile.enabled = False
+        population_rules.genesis_union_target_profile = genesis_profile
+        population_rules.genesis_target_partnered_adult_share = 0.0
         population_rules.marriage_interval_days = 14
         population_rules.annual_marriage_rate = 1.0
         population_rules.annual_divorce_rate = 0.0
+    elif scenario == "genesis_flat_union_profile":
+        genesis_profile = population_rules.genesis_union_target_profile
+        genesis_profile.enabled = False
+        population_rules.genesis_union_target_profile = genesis_profile
+    elif scenario == "social_marriage_hump":
+        social_profile = population_rules.social_union_target_profile
+        social_profile.enabled = False
+        population_rules.social_union_target_profile = social_profile
+        population_rules.marriage_interval_days = 14
+        population_rules.annual_marriage_rate = 1.0
+        population_rules.annual_divorce_rate = 0.0
+    elif scenario == "social_remarriage_market":
+        social_profile = population_rules.social_union_target_profile
+        social_profile.enabled = False
+        population_rules.social_union_target_profile = social_profile
+        population_rules.marriage_interval_days = 14
+        population_rules.annual_marriage_rate = 1.0
+        population_rules.annual_divorce_rate = 0.20
+    elif scenario == "social_widow_market":
+        population_rules.marriage_interval_days = 14
+        population_rules.annual_marriage_rate = 1.0
+        vital = population_rules.vital_rates
+        vital.makeham_a = max(float(vital.makeham_a), 0.025)
+        population_rules.vital_rates = vital
+        population.population.fixed_genesis_vital_rates = True
+        population.population.genesis_vital_rates = vital
+    elif scenario == "guardian_mortality_stress":
+        vital = population_rules.vital_rates
+        vital.makeham_a = max(float(vital.makeham_a), 0.05)
+        population_rules.vital_rates = vital
+        population.population.fixed_genesis_vital_rates = True
+        population.population.genesis_vital_rates = vital
     elif scenario == "eligible_peak_leaving_home":
         population_rules.leave_home_min_age = 18
     elif scenario == "long_horizon_peak_leaving_home":

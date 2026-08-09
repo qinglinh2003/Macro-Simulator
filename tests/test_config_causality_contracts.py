@@ -13,7 +13,7 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["field_count"] == 453
     assert len(payload["contracts"]) == 453
     assert len({item["field_id"] for item in payload["contracts"]}) == 453
-    assert payload["status_counts"]["blocked_native_route"] == 31
+    assert payload["status_counts"].get("blocked_native_route", 0) == 0
 
 
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
@@ -243,10 +243,26 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "fertility_income_elasticity",
         "fertility_mult_hi",
         "fertility_mult_lo",
+        "guardian_max_household_size",
+        "guardian_search_adult_siblings",
+        "guardian_search_grandparents",
+        "guardian_search_same_household_adults",
+        "marriage_acceptance_base",
+        "marriage_age_gap_mean",
+        "marriage_age_gap_penalty",
+        "marriage_age_gap_sd",
+        "marriage_age_width",
         "marriage_assortativity",
+        "marriage_max_age",
+        "marriage_max_age_gap",
+        "marriage_peak_age",
         "mortality_income_elasticity",
         "mortality_mult_hi",
         "mortality_mult_lo",
+        "remarriage_rate_multiplier",
+        "target_partnered_adult_share",
+        "union_target_profile",
+        "widowed_remarriage_multiplier",
     }
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "demo_feedback_burnin_years",
@@ -265,19 +281,50 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "demographics_enabled",
         "demographics_mortality_scale",
         "demographics_tfr",
+        "divorce_age_gap_multiplier_per_10y",
+        "divorce_child_multiplier",
+        "divorce_duration_width",
+        "divorce_peak_duration_years",
+        "divorce_peak_multiplier",
         "fertility_income_elasticity",
         "fertility_mult_hi",
         "fertility_mult_lo",
         "fertility_rank_gradient",
+        "guardian_max_household_size",
+        "guardian_search_adult_siblings",
+        "guardian_search_grandparents",
+        "guardian_search_same_household_adults",
+        "ideal_parent_age_gap",
         "lifecycle_alpha_income",
         "lifecycle_alpha_wealth_draw",
+        "marriage_acceptance_base",
+        "marriage_age_gap_mean",
+        "marriage_age_gap_penalty",
+        "marriage_age_gap_sd",
+        "marriage_age_width",
         "marriage_assortativity",
+        "marriage_max_age",
+        "marriage_max_age_gap",
+        "marriage_peak_age",
+        "max_children_per_household",
+        "max_children_per_parent",
         "mortality_income_elasticity",
         "mortality_mult_hi",
         "mortality_mult_lo",
         "mortality_rank_gradient",
+        "parent_age_gap_sd",
+        "parent_max_age_gap",
+        "parent_min_age_gap",
+        "remarriage_rate_multiplier",
+        "spouse_age_gap_sd",
+        "spouse_max_age_gap",
+        "target_partnered_adult_share",
+        "two_parent_assignment_share",
+        "union_target_profile",
+        "widowed_remarriage_multiplier",
     }
-    assert len(neutral) == 14
+    assert len(neutral) == 29
+    assert len(activated) == 29
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)

@@ -1044,7 +1044,302 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
     top_deaths = "metric.source.m7.top_wealth_quintile_deaths"
     bottom_births = "metric.source.m7.bottom_wealth_quintile_births"
     top_births = "metric.source.m7.top_wealth_quintile_births"
+    active_unions = "metric.source.m7.active_unions"
+    partnered_share = "metric.source.m7.partnered_adult_share"
+    partner_age_gap = "metric.source.m7.mean_partner_age_gap"
+    dual_parent_share = "metric.source.m7.dual_parent_minor_share"
+    guardian_only_share = "metric.source.m7.guardian_only_minor_share"
+    mother_age_gap = "metric.source.m7.mean_mother_age_gap"
+    mother_age_gap_stddev = "metric.source.m7.mother_age_gap_stddev"
+    father_age_gap = "metric.source.m7.mean_father_age_gap"
+    father_age_gap_stddev = "metric.source.m7.father_age_gap_stddev"
+    maximum_household_size = "metric.source.m7.maximum_household_size"
+    guardian_same_household = (
+        "metric.source.m7.guardian_same_household_assignments"
+    )
+    guardian_grandparent = (
+        "metric.source.m7.guardian_grandparent_assignments"
+    )
+    guardian_adult_sibling = (
+        "metric.source.m7.guardian_adult_sibling_assignments"
+    )
+    guardian_unresolved = (
+        "metric.source.m7.guardian_unresolved_assignments"
+    )
+    remarriages = "metric.source.m7.remarriages"
+    widowed_remarriages = "metric.source.m7.widowed_remarriages"
     return {
+        "config.relationship.ideal_parent_age_gap": {
+            "status": "screening_ready",
+            "values": (22.0, 36.0),
+            "horizon_days": 30,
+            "directions": {
+                mother_age_gap: "increase",
+                father_age_gap: "increase",
+            },
+            "rationale": "The preferred intergenerational age distance anchors genesis parent selection. Moving it must move the realized mother-child and father-child age gaps inside the legal bounds.",
+        },
+        "config.relationship.max_children_per_household": {
+            "status": "screening_ready",
+            "values": (3, 12),
+            "horizon_days": 30,
+            "directions": {maximum_household_size: "increase"},
+            "rationale": "The household child cap is a hard genesis capacity constraint. Raising it must permit larger parent-child households before unmatched children are placed with alternative guardians.",
+        },
+        "config.relationship.max_children_per_parent": {
+            "status": "screening_ready",
+            "values": (2, 10),
+            "horizon_days": 30,
+            "directions": {
+                dual_parent_share: "increase",
+                guardian_only_share: "decrease",
+            },
+            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. More capacity should expand valid parent coverage and reduce guardian-only placement pressure.",
+        },
+        "config.relationship.parent_age_gap_sd": {
+            "status": "screening_ready",
+            "values": (2.0, 12.0),
+            "horizon_days": 30,
+            "directions": {
+                mother_age_gap_stddev: "increase",
+                father_age_gap_stddev: "increase",
+            },
+            "rationale": "The parent-gap standard deviation controls dispersion around the preferred generational distance; the engine reports the realized maternal and paternal dispersion directly.",
+        },
+        "config.relationship.parent_max_age_gap": {
+            "status": "screening_ready",
+            "values": (35, 65),
+            "horizon_days": 30,
+            "directions": {
+                mother_age_gap_stddev: "increase",
+                father_age_gap_stddev: "increase",
+            },
+            "rationale": "The maximum legal parent age gap truncates the upper tail of genesis parent matching. Relaxing it should widen the realized intergenerational distribution.",
+        },
+        "config.relationship.parent_min_age_gap": {
+            "status": "screening_ready",
+            "values": (10, 22),
+            "horizon_days": 30,
+            "directions": {
+                mother_age_gap: "increase",
+                father_age_gap: "increase",
+            },
+            "rationale": "The minimum legal parent age gap is a hard lower bound. Raising it must increase realized parent-child age distances or expose parent-capacity scarcity.",
+        },
+        "config.relationship.spouse_age_gap_sd": {
+            "status": "screening_ready",
+            "values": (1.0, 10.0),
+            "horizon_days": 30,
+            "directions": {partner_age_gap: "increase"},
+            "rationale": "Genesis spouse-gap dispersion broadens the target-age search around each female partner. A wider draw should increase the realized absolute partner-age gap before the maximum-gap truncation binds.",
+        },
+        "config.relationship.spouse_max_age_gap": {
+            "status": "screening_ready",
+            "values": (5, 35),
+            "horizon_days": 30,
+            "directions": {partner_age_gap: "increase"},
+            "rationale": "The maximum spouse age gap is the hard support of genesis matching. A wider support should allow more distant age matches and raise the realized mean absolute gap.",
+        },
+        "config.relationship.target_partnered_adult_share": {
+            "status": "activation_scenario_required",
+            "values": (0.25, 0.80),
+            "activation": "genesis_flat_union_profile",
+            "horizon_days": 30,
+            "directions": {
+                partnered_share: "increase",
+                active_unions: "increase",
+            },
+            "rationale": "When the age-specific target profile is deliberately disabled in both arms, this flat target must control the share of adults assigned a partner at genesis.",
+        },
+        "config.relationship.two_parent_assignment_share": {
+            "status": "screening_ready",
+            "values": (0.30, 0.98),
+            "horizon_days": 30,
+            "directions": {dual_parent_share: "increase"},
+            "rationale": "This probability controls whether genesis child placement first searches for a partnered mother and her spouse rather than a single parent. Raising it should increase dual-parent coverage subject to capacity.",
+        },
+        "config.relationship.union_target_profile": {
+            "status": "screening_ready",
+            "values": (False,),
+            "horizon_days": 30,
+            "directions": {partnered_share: "nonzero", active_unions: "nonzero"},
+            "rationale": "Disabling the six-band family-formation profile switches genesis matching to the flat partnered-adult target. The resulting union stock and age composition must differ from the age-specific baseline.",
+        },
+        "config.social.divorce_age_gap_multiplier_per_10y": {
+            "status": "screening_ready",
+            "values": (1.0, 2.5),
+            "horizon_days": 1825,
+            "directions": {divorces: "increase"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "This multiplier compounds the annual divorce hazard with each ten years of spousal age distance. Raising it should increase dissolution among age-dissimilar genesis unions.",
+        },
+        "config.social.divorce_child_multiplier": {
+            "status": "screening_ready",
+            "values": (0.25, 1.25),
+            "horizon_days": 1825,
+            "directions": {divorces: "increase"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "The child multiplier scales divorce risk for couples with a living minor child. A larger value weakens the stabilizing child effect and should raise cumulative divorces.",
+        },
+        "config.social.divorce_duration_width": {
+            "status": "screening_ready",
+            "values": (1.5, 8.0),
+            "horizon_days": 1825,
+            "directions": {divorces: "increase"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "A wider duration hump keeps the elevated divorce hazard active farther from its peak year and should raise cumulative dissolution across the mixed-duration genesis union stock.",
+        },
+        "config.social.divorce_peak_duration_years": {
+            "status": "screening_ready",
+            "values": (1.0, 10.0),
+            "horizon_days": 1825,
+            "directions": {divorces: "nonzero"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "Moving the duration-risk peak redistributes dissolution pressure across young and mature unions. The aggregate sign depends on the shared opening duration distribution, but the cumulative path must change.",
+        },
+        "config.social.divorce_peak_multiplier": {
+            "status": "screening_ready",
+            "values": (1.0, 4.0),
+            "horizon_days": 1825,
+            "directions": {divorces: "increase"},
+            "statistics": {divorces: "cumulative"},
+            "rationale": "The peak multiplier raises divorce hazards near the configured duration peak while retaining the same base rate; a larger multiplier should raise cumulative dissolutions.",
+        },
+        "config.social.guardian_max_household_size": {
+            "status": "activation_scenario_required",
+            "values": (3, 12),
+            "activation": "guardian_mortality_stress",
+            "horizon_days": 1825,
+            "directions": {guardian_unresolved: "decrease"},
+            "statistics": {guardian_unresolved: "cumulative"},
+            "rationale": "This capacity rule excludes otherwise valid adults in already crowded households. Relaxing it should reduce the number of wards for whom no eligible replacement guardian can be found under mortality stress.",
+        },
+        "config.social.guardian_search_adult_siblings": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "guardian_mortality_stress",
+            "horizon_days": 1825,
+            "directions": {guardian_adult_sibling: "decrease"},
+            "statistics": {guardian_adult_sibling: "cumulative"},
+            "rationale": "Disabling the adult-sibling tier must remove that exact kinship route when parents and grandparents are unavailable; unresolved or later fallback placements are separate outcomes.",
+        },
+        "config.social.guardian_search_grandparents": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "guardian_mortality_stress",
+            "horizon_days": 1825,
+            "directions": {guardian_grandparent: "decrease"},
+            "statistics": {guardian_grandparent: "cumulative"},
+            "rationale": "Disabling grandparent search must eliminate that explicit replacement route in the multigenerational genesis kin graph while preserving subsequent fallback tiers.",
+        },
+        "config.social.guardian_search_same_household_adults": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "guardian_mortality_stress",
+            "horizon_days": 1825,
+            "directions": {guardian_same_household: "decrease"},
+            "statistics": {guardian_same_household: "cumulative"},
+            "rationale": "Disabling the final private-household fallback must remove assignments to a non-parent adult already co-resident with the ward.",
+        },
+        "config.social.marriage_acceptance_base": {
+            "status": "activation_scenario_required",
+            "values": (0.40, 1.0),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {marriages: "increase"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "The base compatibility probability scales acceptance after two candidates meet. A larger value should convert more eligible matches into marriages in a common initially unpartnered market.",
+        },
+        "config.social.marriage_age_gap_mean": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 8.0),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {partner_age_gap: "nonzero", marriages: "nonzero"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "The preferred signed partner-age gap centers runtime compatibility. Moving it should alter realized partner-age distance and potentially the number of accepted matches.",
+        },
+        "config.social.marriage_age_gap_penalty": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.15),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {marriages: "decrease"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "A stronger linear penalty lowers acceptance as absolute age distance grows and should reduce cumulative marriages in a common candidate pool.",
+        },
+        "config.social.marriage_age_gap_sd": {
+            "status": "activation_scenario_required",
+            "values": (1.0, 10.0),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {partner_age_gap: "nonzero", marriages: "nonzero"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "The compatibility standard deviation determines how quickly acceptance falls away from the preferred signed age gap. Changing it must alter match composition and incidence.",
+        },
+        "config.social.marriage_age_width": {
+            "status": "activation_scenario_required",
+            "values": (4.0, 18.0),
+            "activation": "social_marriage_hump",
+            "horizon_days": 730,
+            "directions": {marriages: "increase"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "With the age-band target disabled in both arms, this width controls how broadly marriage entry remains elevated around peak age. A wider hump should admit more candidates.",
+        },
+        "config.social.marriage_max_age": {
+            "status": "activation_scenario_required",
+            "values": (55, 95),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {marriages: "increase"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "The maximum eligible age truncates the runtime marriage market. Raising it should add older unpartnered adults and increase cumulative matches.",
+        },
+        "config.social.marriage_max_age_gap": {
+            "status": "activation_scenario_required",
+            "values": (5, 35),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {marriages: "increase", partner_age_gap: "increase"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "The hard age-gap cutoff controls which candidate pairs can be considered. Relaxing it should expand feasible matches and permit more age-distant unions.",
+        },
+        "config.social.marriage_peak_age": {
+            "status": "activation_scenario_required",
+            "values": (22.0, 40.0),
+            "activation": "social_marriage_hump",
+            "horizon_days": 730,
+            "directions": {marriages: "nonzero"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "With the age-band target disabled, moving the entry-rate peak changes which age cohorts receive the strongest marriage hazard. Its aggregate sign depends on the age distribution, but incidence must change.",
+        },
+        "config.social.remarriage_rate_multiplier": {
+            "status": "activation_scenario_required",
+            "values": (0.10, 1.50),
+            "activation": "social_remarriage_market",
+            "horizon_days": 1825,
+            "directions": {remarriages: "increase"},
+            "statistics": {remarriages: "cumulative"},
+            "rationale": "After a shared high-divorce activation creates eligible previously married adults, this multiplier should monotonically change the rate at which they form a later union.",
+        },
+        "config.social.union_target_profile": {
+            "status": "activation_scenario_required",
+            "values": (False,),
+            "activation": "unpartnered_marriage_market",
+            "horizon_days": 730,
+            "directions": {marriages: "nonzero"},
+            "statistics": {marriages: "cumulative"},
+            "rationale": "Disabling the runtime age-band profile switches entry to the parametric age hump. The age-weighted marriage path must differ in the same initially unpartnered market.",
+        },
+        "config.social.widowed_remarriage_multiplier": {
+            "status": "activation_scenario_required",
+            "values": (0.10, 1.50),
+            "activation": "social_widow_market",
+            "horizon_days": 1825,
+            "directions": {widowed_remarriages: "increase"},
+            "statistics": {widowed_remarriages: "cumulative"},
+            "rationale": "A shared mortality activation creates widowed candidates; the multiplier must then monotonically change their subsequent marriage-entry hazard.",
+        },
         "config.demographic_lifecycle_consumption": {
             "status": "screening_ready",
             "values": (False,),
@@ -2620,7 +2915,15 @@ def build_contract_registry() -> dict[str, Any]:
         contract = TreatmentContract(
             field_id=str(row["id"]),
             field_name=str(row["field_name"]),
-            scope=("world" if row["declaring_type"] == "World" else "root"),
+            scope=(
+                "world"
+                if row["declaring_type"] == "World"
+                else "relationship"
+                if row["declaring_type"] == "RelationshipConfig"
+                else "social"
+                if row["declaring_type"] == "SocialDynamicsConfig"
+                else "root"
+            ),
             module=str(row["module"]),
             experiment_role=str(row["experiment_role"]),
             route_status=str(row["route_status"]),

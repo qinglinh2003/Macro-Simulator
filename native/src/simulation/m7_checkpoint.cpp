@@ -133,6 +133,24 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     Json output;
     output["vital"] = encode_vital(value.vital_rates);
     output["marriage_rules"] = encode_marriage_rules(value.marriage_rules);
+    output["genesis_union_target_profile"] = Json::array({
+        value.genesis_union_target_profile.enabled,
+        value.genesis_union_target_profile.shares[0],
+        value.genesis_union_target_profile.shares[1],
+        value.genesis_union_target_profile.shares[2],
+        value.genesis_union_target_profile.shares[3],
+        value.genesis_union_target_profile.shares[4],
+        value.genesis_union_target_profile.shares[5],
+    });
+    output["social_union_target_profile"] = Json::array({
+        value.social_union_target_profile.enabled,
+        value.social_union_target_profile.shares[0],
+        value.social_union_target_profile.shares[1],
+        value.social_union_target_profile.shares[2],
+        value.social_union_target_profile.shares[3],
+        value.social_union_target_profile.shares[4],
+        value.social_union_target_profile.shares[5],
+    });
     output["values"] = Json::array({
         value.working_age,
         value.retirement_age,
@@ -195,6 +213,32 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.mortality_income_elasticity,
         value.mortality_multiplier_minimum,
         value.mortality_multiplier_maximum,
+        value.genesis_parent_minimum_age_gap,
+        value.genesis_parent_maximum_age_gap,
+        value.genesis_ideal_parent_age_gap,
+        value.genesis_parent_age_gap_stddev,
+        value.genesis_spouse_maximum_age_gap,
+        value.genesis_spouse_age_gap_stddev,
+        value.genesis_target_partnered_adult_share,
+        value.genesis_two_parent_assignment_share,
+        value.genesis_maximum_children_per_parent,
+        value.genesis_maximum_children_per_household,
+        value.marriage_peak_age,
+        value.marriage_age_width,
+        value.marriage_age_gap_stddev,
+        value.marriage_acceptance_base,
+        value.marriage_acceptance_age_gap_penalty,
+        value.remarriage_rate_multiplier,
+        value.widowed_remarriage_multiplier,
+        value.divorce_peak_duration_years,
+        value.divorce_duration_width,
+        value.divorce_peak_multiplier,
+        value.divorce_child_multiplier,
+        value.divorce_age_gap_multiplier_per_10y,
+        value.guardian_search_grandparents,
+        value.guardian_search_adult_siblings,
+        value.guardian_search_same_household_adults,
+        value.guardian_maximum_household_size,
     });
     return output;
 }
@@ -203,8 +247,22 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     M7Rules value;
     value.vital_rates = decode_vital(input.at("vital"));
     value.marriage_rules = decode_marriage_rules(input.at("marriage_rules"));
+    const auto decode_profile = [](const Json &row,
+                                   M7UnionTargetProfile &profile) {
+        if (!row.is_array() || row.size() != 7U) {
+            throw std::runtime_error("invalid M7 union target profile");
+        }
+        profile.enabled = row[0].get<bool>();
+        for (std::size_t index = 0; index < profile.shares.size(); ++index) {
+            profile.shares[index] = row[index + 1U].get<double>();
+        }
+    };
+    decode_profile(input.at("genesis_union_target_profile"),
+                   value.genesis_union_target_profile);
+    decode_profile(input.at("social_union_target_profile"),
+                   value.social_union_target_profile);
     const auto &row = input.at("values");
-    if (!row.is_array() || row.size() != 61U) {
+    if (!row.is_array() || row.size() != 87U) {
         throw std::runtime_error("invalid M7 rules");
     }
     std::size_t index = 0;
@@ -269,6 +327,33 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
     value.mortality_income_elasticity = row[index++].get<double>();
     value.mortality_multiplier_minimum = row[index++].get<double>();
     value.mortality_multiplier_maximum = row[index++].get<double>();
+    value.genesis_parent_minimum_age_gap = row[index++].get<std::uint32_t>();
+    value.genesis_parent_maximum_age_gap = row[index++].get<std::uint32_t>();
+    value.genesis_ideal_parent_age_gap = row[index++].get<double>();
+    value.genesis_parent_age_gap_stddev = row[index++].get<double>();
+    value.genesis_spouse_maximum_age_gap = row[index++].get<std::uint32_t>();
+    value.genesis_spouse_age_gap_stddev = row[index++].get<double>();
+    value.genesis_target_partnered_adult_share = row[index++].get<double>();
+    value.genesis_two_parent_assignment_share = row[index++].get<double>();
+    value.genesis_maximum_children_per_parent = row[index++].get<std::uint32_t>();
+    value.genesis_maximum_children_per_household =
+        row[index++].get<std::uint32_t>();
+    value.marriage_peak_age = row[index++].get<double>();
+    value.marriage_age_width = row[index++].get<double>();
+    value.marriage_age_gap_stddev = row[index++].get<double>();
+    value.marriage_acceptance_base = row[index++].get<double>();
+    value.marriage_acceptance_age_gap_penalty = row[index++].get<double>();
+    value.remarriage_rate_multiplier = row[index++].get<double>();
+    value.widowed_remarriage_multiplier = row[index++].get<double>();
+    value.divorce_peak_duration_years = row[index++].get<double>();
+    value.divorce_duration_width = row[index++].get<double>();
+    value.divorce_peak_multiplier = row[index++].get<double>();
+    value.divorce_child_multiplier = row[index++].get<double>();
+    value.divorce_age_gap_multiplier_per_10y = row[index++].get<double>();
+    value.guardian_search_grandparents = row[index++].get<bool>();
+    value.guardian_search_adult_siblings = row[index++].get<bool>();
+    value.guardian_search_same_household_adults = row[index++].get<bool>();
+    value.guardian_maximum_household_size = row[index++].get<std::uint32_t>();
     return value;
 }
 
@@ -465,12 +550,27 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.marriages,
         value.divorces,
         value.widowhoods,
+        value.remarriages,
+        value.widowed_remarriages,
+        value.guardian_same_household_assignments,
+        value.guardian_grandparent_assignments,
+        value.guardian_adult_sibling_assignments,
+        value.guardian_parent_assignments,
+        value.guardian_unresolved_assignments,
+        value.partnered_adult_share,
+        value.dual_parent_minor_share,
+        value.guardian_only_minor_share,
+        value.mean_mother_age_gap,
+        value.mother_age_gap_stddev,
+        value.mean_father_age_gap,
+        value.father_age_gap_stddev,
+        value.maximum_household_size,
         value.leaving_home_events,
     });
 }
 
 void decode_metrics(const Json &row, M7Metrics &value) {
-    if (!row.is_array() || row.size() != 64U) {
+    if (!row.is_array() || row.size() != 79U) {
         throw std::runtime_error("invalid M7 metrics");
     }
     std::size_t index = 0;
@@ -537,6 +637,23 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     value.marriages = row[index++].get<std::uint64_t>();
     value.divorces = row[index++].get<std::uint64_t>();
     value.widowhoods = row[index++].get<std::uint64_t>();
+    value.remarriages = row[index++].get<std::uint64_t>();
+    value.widowed_remarriages = row[index++].get<std::uint64_t>();
+    value.guardian_same_household_assignments =
+        row[index++].get<std::uint64_t>();
+    value.guardian_grandparent_assignments = row[index++].get<std::uint64_t>();
+    value.guardian_adult_sibling_assignments =
+        row[index++].get<std::uint64_t>();
+    value.guardian_parent_assignments = row[index++].get<std::uint64_t>();
+    value.guardian_unresolved_assignments = row[index++].get<std::uint64_t>();
+    value.partnered_adult_share = row[index++].get<double>();
+    value.dual_parent_minor_share = row[index++].get<double>();
+    value.guardian_only_minor_share = row[index++].get<double>();
+    value.mean_mother_age_gap = row[index++].get<double>();
+    value.mother_age_gap_stddev = row[index++].get<double>();
+    value.mean_father_age_gap = row[index++].get<double>();
+    value.father_age_gap_stddev = row[index++].get<double>();
+    value.maximum_household_size = row[index++].get<std::uint64_t>();
     value.leaving_home_events = row[index++].get<std::uint64_t>();
 }
 

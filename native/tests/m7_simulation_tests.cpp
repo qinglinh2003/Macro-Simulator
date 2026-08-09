@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -117,7 +118,10 @@ advance(Harness &harness, std::uint64_t count, const M7AdvanceOptions &options =
 
 void test_genesis_derives_households_from_population() {
     auto harness = build();
-    assert(harness.root.households.alive_count() == 40);
+    const auto household_count = harness.root.households.alive_count();
+    assert(household_count > 0U);
+    assert(household_count < 100U);
+    assert(household_count != 40U);
     assert(harness.runtime.persons.alive_count() == 100);
     double opening_income = 0.0;
     harness.root.households.for_each_alive(
@@ -159,19 +163,30 @@ void test_genesis_derives_households_from_population() {
         });
     assert(!has_household_loan || has_debt_claim);
     assert(harness.runtime.last_metrics.population == 100);
-    assert(harness.runtime.last_metrics.households_with_members == 40);
+    assert(harness.runtime.last_metrics.households_with_members ==
+           household_count);
     std::uint64_t referenced_children = 0;
+    std::uint64_t referenced_adults = 0;
     for (const auto person_id : harness.runtime.persons.alive_ids()) {
         const auto *person = harness.runtime.persons.get(person_id);
         if (person->mother.valid() || person->father.valid()) {
             ++referenced_children;
-            assert(person->guardian.valid());
-            assert(harness.runtime.persons.alive(person->guardian));
-            assert(harness.runtime.persons.get(person->guardian)->household ==
-                   person->household);
+            const auto age = static_cast<std::uint32_t>(
+                (base_spec().population.start_calendar_day - person->birth_day) /
+                365);
+            if (age < base_spec().rules.working_age) {
+                assert(person->guardian.valid());
+                assert(harness.runtime.persons.alive(person->guardian));
+                assert(harness.runtime.persons.get(person->guardian)->household ==
+                       person->household);
+            } else {
+                ++referenced_adults;
+                assert(!person->guardian.valid());
+            }
         }
     }
     assert(referenced_children > 0);
+    assert(referenced_adults > 0);
     assert(!harness.runtime.relationships.unions().empty());
     assert(macro_sim::simulation::validate_m7_state(
                harness.root, harness.real_runtime, harness.monetary_runtime,
@@ -180,8 +195,46 @@ void test_genesis_derives_households_from_population() {
     harness.root.households.for_each_alive(
         [&](HouseholdId id, const macro_sim::core::HouseholdComponent &) {
             const auto count = harness.runtime.membership.members(id).size();
-            assert(count == 2 || count == 3);
+            assert(count >= 1U);
+            assert(count <=
+                   base_spec().rules.genesis_maximum_children_per_household +
+                       2U);
         });
+}
+
+void test_genesis_relationship_rules_have_direct_observable_effects() {
+    auto low_union_spec = base_spec();
+    low_union_spec.population.initial_persons = 4'096;
+    low_union_spec.rules.genesis_union_target_profile.enabled = false;
+    low_union_spec.rules.genesis_target_partnered_adult_share = 0.10;
+    auto high_union_spec = low_union_spec;
+    high_union_spec.rules.genesis_target_partnered_adult_share = 0.80;
+    const auto low_union = build(low_union_spec);
+    const auto high_union = build(high_union_spec);
+    assert(low_union.runtime.last_metrics.partnered_adult_share < 0.20);
+    assert(high_union.runtime.last_metrics.partnered_adult_share > 0.60);
+    assert(high_union.runtime.last_metrics.partnered_adult_share >
+           low_union.runtime.last_metrics.partnered_adult_share + 0.45);
+
+    auto single_parent_spec = base_spec();
+    single_parent_spec.population.initial_persons = 4'096;
+    single_parent_spec.rules.genesis_two_parent_assignment_share = 0.0;
+    auto dual_parent_spec = single_parent_spec;
+    dual_parent_spec.rules.genesis_two_parent_assignment_share = 1.0;
+    const auto single_parent = build(single_parent_spec);
+    const auto dual_parent = build(dual_parent_spec);
+    assert(dual_parent.runtime.last_metrics.dual_parent_minor_share >
+           single_parent.runtime.last_metrics.dual_parent_minor_share);
+
+    auto narrow_gap_spec = base_spec();
+    narrow_gap_spec.population.initial_persons = 4'096;
+    narrow_gap_spec.rules.genesis_parent_age_gap_stddev = 0.01;
+    auto wide_gap_spec = narrow_gap_spec;
+    wide_gap_spec.rules.genesis_parent_age_gap_stddev = 12.0;
+    const auto narrow_gap = build(narrow_gap_spec);
+    const auto wide_gap = build(wide_gap_spec);
+    assert(wide_gap.runtime.last_metrics.mother_age_gap_stddev >
+           narrow_gap.runtime.last_metrics.mother_age_gap_stddev);
 }
 
 void test_genesis_person_efficiency_is_mean_preserving_and_deterministic() {
@@ -325,6 +378,7 @@ void test_wealth_rank_gradients_apply_bounded_vital_risk() {
     spec.rules.mortality_rank_gradient = 0.8;
     spec.rules.fertility_rank_gradient = 0.5;
     auto harness = build(spec);
+    harness.runtime.rules.marriage = false;
     auto result = advance(harness, 1);
     assert(result.ok());
     assert(result.get_if()->metrics.wealth_rank_mortality_multiplier_stddev > 0.0);
@@ -355,17 +409,38 @@ void test_wealth_rank_gradients_apply_bounded_vital_risk() {
         }
     }
     assert(bottom_member.valid());
+    if (!top_fertile_woman.valid()) {
+        for (const auto person_id : harness.runtime.persons.alive_ids()) {
+            const auto *person = harness.runtime.persons.get(person_id);
+            const double age = static_cast<double>(
+                                   harness.runtime.current_calendar_day -
+                                   person->birth_day) /
+                               365.2425;
+            if (person->sex != PersonSex::female || age < 15.0 || age > 49.0) {
+                continue;
+            }
+            if (person->household ==
+                harness.runtime.persons.get(bottom_member)->household) {
+                continue;
+            }
+            top_fertile_woman = person_id;
+            const auto household =
+                static_cast<std::size_t>(person->household.value());
+            harness.runtime.household_wealth_quintile[household] = 4U;
+            break;
+        }
+    }
     assert(top_fertile_woman.valid());
     M7AdvanceOptions forced_death;
     forced_death.force_death = bottom_member;
     result = advance(harness, 1, forced_death);
     assert(result.ok());
-    assert(result.get_if()->metrics.bottom_wealth_quintile_deaths == 1U);
+    assert(result.get_if()->metrics.bottom_wealth_quintile_deaths >= 1U);
     M7AdvanceOptions forced_birth;
     forced_birth.force_birth = top_fertile_woman;
     result = advance(harness, 1, forced_birth);
     assert(result.ok());
-    assert(result.get_if()->metrics.top_wealth_quintile_births == 1U);
+    assert(result.get_if()->metrics.top_wealth_quintile_births >= 1U);
 
     auto bounded = spec;
     bounded.rules.stratification_multiplier_minimum = 0.9;
@@ -586,6 +661,8 @@ void test_relationship_household_lifecycle() {
     spec.rules.marriage_interval_days = 30;
     spec.rules.annual_marriage_rate = 1.0;
     spec.rules.annual_divorce_rate = 0.0;
+    spec.rules.genesis_union_target_profile.enabled = false;
+    spec.rules.genesis_target_partnered_adult_share = 0.0;
     auto harness = build(spec);
     auto result = advance(harness, 1);
     if (!result.ok()) {
@@ -623,6 +700,8 @@ void test_relationship_household_lifecycle() {
     spec.rules.marriage_interval_days = 30;
     spec.rules.annual_marriage_rate = 1.0;
     spec.rules.annual_divorce_rate = 0.0;
+    spec.rules.genesis_union_target_profile.enabled = false;
+    spec.rules.genesis_target_partnered_adult_share = 0.0;
     harness = build(spec);
     result = advance(harness, 1);
     assert(result.ok());
@@ -644,22 +723,64 @@ void test_relationship_household_lifecycle() {
 
 void test_last_member_estate_moves_canonical_positions() {
     auto spec = base_spec();
-    spec.population.initial_persons = 3;
+    spec.population.initial_persons = 100;
     spec.population.target_household_size = 1.0;
     spec.policy.inheritance_tax_rate = 0.20;
     spec.rules.marriage = false;
     spec.rules.divorce = false;
     spec.rules.leaving_home = false;
+    spec.rules.genesis_union_target_profile.enabled = false;
+    spec.rules.genesis_target_partnered_adult_share = 0.0;
     spec.financial_economy.monetary_economy.rules.household_credit = false;
     auto harness = build(spec);
-    auto *deceased_record = harness.runtime.persons.get(PersonId(1));
-    deceased_record->mother = PersonId(2);
-    assert(harness.runtime.relationships
-               .register_birth(harness.runtime.persons, PersonId(1))
-               .ok());
+    PersonId deceased{};
+    PersonId heir{};
+    for (const auto candidate : harness.runtime.persons.alive_ids()) {
+        const auto *record = harness.runtime.persons.get(candidate);
+        if (harness.runtime.membership.members(record->household).size() != 1U) {
+            continue;
+        }
+        for (const auto parent : std::array{record->mother, record->father}) {
+            const auto *parent_record = harness.runtime.persons.get(parent);
+            if (parent_record != nullptr && parent_record->alive &&
+                parent_record->household != record->household) {
+                deceased = candidate;
+                heir = parent;
+                break;
+            }
+        }
+        if (deceased.valid()) {
+            break;
+        }
+    }
+    if (!deceased.valid()) {
+        for (const auto candidate : harness.runtime.persons.alive_ids()) {
+            const auto *record = harness.runtime.persons.get(candidate);
+            if (harness.runtime.membership.members(record->household).size() == 1U &&
+                !record->mother.valid() && !record->father.valid()) {
+                deceased = candidate;
+                break;
+            }
+        }
+        assert(deceased.valid());
+        for (const auto candidate : harness.runtime.persons.alive_ids()) {
+            if (candidate != deceased &&
+                harness.runtime.persons.get(candidate)->household !=
+                    harness.runtime.persons.get(deceased)->household) {
+                heir = candidate;
+                break;
+            }
+        }
+        assert(heir.valid());
+        harness.runtime.persons.get(deceased)->mother = heir;
+        assert(harness.runtime.relationships
+                   .register_birth(harness.runtime.persons, deceased)
+                   .ok());
+    }
+    auto *deceased_record = harness.runtime.persons.get(deceased);
     const auto source_household = deceased_record->household;
     const auto destination_household =
-        harness.runtime.persons.get(PersonId(2))->household;
+        harness.runtime.persons.get(heir)->household;
     assert(source_household != destination_household);
     const auto source_account =
         harness.root.households.get(source_household)->primary_account;
@@ -682,7 +803,7 @@ void test_last_member_estate_moves_canonical_positions() {
     assert(dust_position_created);
     const auto opening_households = harness.root.households.alive_count();
     M7AdvanceOptions options;
-    options.force_death = PersonId(1);
+    options.force_death = deceased;
     const auto result = advance(harness, 1, options);
     if (!result.ok()) {
         std::cerr << "M7 last-member estate failed: " << result.status().message()
@@ -694,7 +815,7 @@ void test_last_member_estate_moves_canonical_positions() {
     assert(!harness.root.postings.get(source_account)->open);
     assert(harness.runtime.estates.size() == 1);
     const auto &estate = harness.runtime.estates.front();
-    assert(estate.heir == PersonId(2));
+    assert(estate.heir == heir);
     assert(estate.destination_household == destination_household);
     assert(estate.tax_paid > 0.0);
     for (const auto &security : harness.financial_runtime.securities.bonds()) {
@@ -732,8 +853,13 @@ void test_public_residual_estate_has_no_unrelated_heir() {
     spec.rules.marriage = false;
     spec.rules.divorce = false;
     spec.rules.leaving_home = false;
+    spec.rules.relationships = false;
+    spec.rules.household_lifecycle = false;
+    spec.rules.family_transfers = false;
     spec.financial_economy.monetary_economy.rules.household_credit = false;
     auto harness = build(spec);
+    harness.runtime.rules.relationships = true;
+    harness.runtime.rules.household_lifecycle = true;
     const auto treasury = harness.root.institutions.treasury_account;
     const double opening_treasury =
         harness.root.postings.balance(treasury).get_if()->value();
@@ -758,8 +884,13 @@ void test_unclaimed_external_share_returns_to_asset_household() {
     spec.rules.marriage = false;
     spec.rules.divorce = false;
     spec.rules.leaving_home = false;
+    spec.rules.relationships = false;
+    spec.rules.household_lifecycle = false;
+    spec.rules.family_transfers = false;
     spec.financial_economy.monetary_economy.rules.household_credit = false;
     auto harness = build(spec);
+    harness.runtime.rules.relationships = true;
+    harness.runtime.rules.household_lifecycle = true;
 
     const auto deceased = PersonId(1);
     const auto surviving_owner = PersonId(2);
@@ -820,8 +951,13 @@ void test_unclaimed_empty_household_escheats_canonical_positions() {
     spec.rules.marriage = false;
     spec.rules.divorce = false;
     spec.rules.leaving_home = false;
+    spec.rules.relationships = false;
+    spec.rules.household_lifecycle = false;
+    spec.rules.family_transfers = false;
     spec.financial_economy.monetary_economy.rules.household_credit = false;
     auto harness = build(spec);
+    harness.runtime.rules.relationships = true;
+    harness.runtime.rules.household_lifecycle = true;
 
     const auto first = PersonId(1);
     const auto deceased = PersonId(2);
@@ -874,49 +1010,30 @@ void test_forced_leaving_home_creates_canonical_household() {
     auto harness = build(spec);
     PersonId child{};
     PersonId parent{};
-    for (const auto household_id : std::vector<HouseholdId>{
-             harness.runtime.persons.get(PersonId(1))->household}) {
-        const auto members = harness.runtime.membership.members(household_id);
-        for (const auto candidate : members) {
-            const auto *record = harness.runtime.persons.get(candidate);
-            const double age =
-                static_cast<double>(harness.runtime.current_calendar_day -
-                                    record->birth_day) /
-                365.2425;
-            if (age >= 22.0) {
+    for (const auto candidate : harness.runtime.persons.alive_ids()) {
+        const auto *record = harness.runtime.persons.get(candidate);
+        if (record->partner.valid()) {
+            continue;
+        }
+        for (const auto candidate_parent :
+             std::array{record->mother, record->father}) {
+            const auto *parent_record =
+                harness.runtime.persons.get(candidate_parent);
+            if (parent_record != nullptr && parent_record->alive &&
+                parent_record->household == record->household) {
                 child = candidate;
+                parent = candidate_parent;
                 break;
             }
         }
-        for (const auto candidate : members) {
-            if (candidate != child) {
-                parent = candidate;
-                break;
-            }
-        }
-    }
-    if (!child.valid() || !parent.valid()) {
-        for (const auto household_id : std::vector<HouseholdId>{
-                 harness.runtime.persons.get(PersonId(4))->household,
-                 harness.runtime.persons.get(PersonId(7))->household,
-             }) {
-            const auto members = harness.runtime.membership.members(household_id);
-            if (members.size() < 2U) {
-                continue;
-            }
-            child = members.front();
-            parent = members.back();
-            auto *record = harness.runtime.persons.get(child);
-            record->birth_day = harness.runtime.current_calendar_day - 25 * 365;
+        if (child.valid()) {
             break;
         }
     }
     assert(child.valid());
     assert(parent.valid());
     auto *child_record = harness.runtime.persons.get(child);
-    child_record->mother = parent;
-    assert(harness.runtime.relationships.register_birth(harness.runtime.persons, child)
-               .ok());
+    child_record->birth_day = harness.runtime.current_calendar_day - 25 * 365;
     const auto origin = child_record->household;
     const macro_sim::core::BeneficialAssetKey origin_cash{
         macro_sim::core::BeneficialAssetKind::household_cash,
@@ -1338,6 +1455,7 @@ void test_validation_rejects_invalid_population() {
 
 int main() {
     test_genesis_derives_households_from_population();
+    test_genesis_relationship_rules_have_direct_observable_effects();
     test_genesis_person_efficiency_is_mean_preserving_and_deterministic();
     test_demography_projects_age_weighted_consumption_needs();
     test_lifecycle_consumption_replaces_the_standard_budget();

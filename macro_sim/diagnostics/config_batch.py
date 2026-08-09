@@ -23,6 +23,7 @@ from macro_sim.diagnostics.config_experiment import (
     apply_native_activation_scenario,
     changed_metrics,
     effect_scales,
+    native_nested_treatment_spec,
     native_treatment_spec,
     native_world_treatment_spec,
     population_scaled_new_game,
@@ -360,15 +361,21 @@ def run_contract_batch(
                 value_key = _canonical_hash(value)[:16]
                 for seed in seed_values:
                     baseline = baselines[seed]
-                    treated = (
-                        native_world_treatment_spec(
+                    if contract.scope == "world":
+                        treated = native_world_treatment_spec(
                             baseline, field=contract.field_name, value=value
                         )
-                        if contract.scope == "world"
-                        else native_treatment_spec(
+                    elif contract.scope in {"relationship", "social"}:
+                        treated = native_nested_treatment_spec(
+                            baseline,
+                            scope=contract.scope,
+                            field=contract.field_name,
+                            value=value,
+                        )
+                    else:
+                        treated = native_treatment_spec(
                             baseline, field=contract.field_name, value=value
                         )
-                    )
                     apply_native_activation_scenario(
                         treated, scenario=activation_scenario
                     )

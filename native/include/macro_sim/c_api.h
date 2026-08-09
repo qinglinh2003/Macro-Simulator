@@ -557,6 +557,36 @@ typedef struct macro_sim_m7_rules {
     double mortality_income_elasticity;
     double mortality_multiplier_minimum;
     double mortality_multiplier_maximum;
+    uint32_t genesis_union_target_profile_enabled;
+    double genesis_union_target_shares[6];
+    uint32_t genesis_parent_minimum_age_gap;
+    uint32_t genesis_parent_maximum_age_gap;
+    double genesis_ideal_parent_age_gap;
+    double genesis_parent_age_gap_stddev;
+    uint32_t genesis_spouse_maximum_age_gap;
+    double genesis_spouse_age_gap_stddev;
+    double genesis_target_partnered_adult_share;
+    double genesis_two_parent_assignment_share;
+    uint32_t genesis_maximum_children_per_parent;
+    uint32_t genesis_maximum_children_per_household;
+    uint32_t social_union_target_profile_enabled;
+    double social_union_target_shares[6];
+    double marriage_peak_age;
+    double marriage_age_width;
+    double marriage_age_gap_stddev;
+    double marriage_acceptance_base;
+    double marriage_acceptance_age_gap_penalty;
+    double remarriage_rate_multiplier;
+    double widowed_remarriage_multiplier;
+    double divorce_peak_duration_years;
+    double divorce_duration_width;
+    double divorce_peak_multiplier;
+    double divorce_child_multiplier;
+    double divorce_age_gap_multiplier_per_10y;
+    uint32_t guardian_search_grandparents;
+    uint32_t guardian_search_adult_siblings;
+    uint32_t guardian_search_same_household_adults;
+    uint32_t guardian_maximum_household_size;
 } macro_sim_m7_rules;
 
 typedef struct macro_sim_m7_metrics {
@@ -610,6 +640,21 @@ typedef struct macro_sim_m7_metrics {
     uint64_t marriages;
     uint64_t divorces;
     uint64_t widowhoods;
+    uint64_t remarriages;
+    uint64_t widowed_remarriages;
+    uint64_t guardian_same_household_assignments;
+    uint64_t guardian_grandparent_assignments;
+    uint64_t guardian_adult_sibling_assignments;
+    uint64_t guardian_parent_assignments;
+    uint64_t guardian_unresolved_assignments;
+    double partnered_adult_share;
+    double dual_parent_minor_share;
+    double guardian_only_minor_share;
+    double mean_mother_age_gap;
+    double mother_age_gap_stddev;
+    double mean_father_age_gap;
+    double father_age_gap_stddev;
+    uint64_t maximum_household_size;
     uint64_t leaving_home_events;
 } macro_sim_m7_metrics;
 

@@ -8,6 +8,7 @@ from macro_sim.diagnostics.config_experiment import (
     apply_config_treatment,
     derive_analysis_metrics,
     effect_scales,
+    native_nested_treatment_spec,
     native_treatment_spec,
     native_world_treatment_spec,
     paired_effect,
@@ -17,6 +18,79 @@ from macro_sim.diagnostics.config_experiment import (
     summarize_paired_runs,
     summarize_time_responses,
 )
+
+
+def test_nested_relationship_and_social_treatments_reach_m7_rules() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=189, countries=2
+    )
+    relationship = native_nested_treatment_spec(
+        baseline,
+        scope="relationship",
+        field="parent_min_age_gap",
+        value=21,
+        target_economy=1,
+    )
+    assert (
+        relationship.economies[0]
+        .domestic_economy.rules.genesis_parent_minimum_age_gap
+        != 21
+    )
+    assert (
+        relationship.economies[1]
+        .domestic_economy.rules.genesis_parent_minimum_age_gap
+        == 21
+    )
+
+    social = native_nested_treatment_spec(
+        baseline,
+        scope="social",
+        field="marriage_age_gap_mean",
+        value=4.0,
+    )
+    assert (
+        social.economies[0]
+        .domestic_economy.rules.marriage_rules.preferred_age_gap
+        == pytest.approx(4.0)
+    )
+
+
+def test_nested_union_profiles_preserve_six_band_contract() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=188
+    )
+    bands = {
+        "bands": [
+            {"target_share": value}
+            for value in (0.05, 0.20, 0.40, 0.60, 0.50, 0.25)
+        ]
+    }
+    treated = native_nested_treatment_spec(
+        baseline,
+        scope="relationship",
+        field="union_target_profile",
+        value=bands,
+    )
+    profile = (
+        treated.economies[0]
+        .domestic_economy.rules.genesis_union_target_profile
+    )
+    assert profile.enabled is True
+    assert list(profile.shares) == pytest.approx(
+        [0.05, 0.20, 0.40, 0.60, 0.50, 0.25]
+    )
+
+    disabled = native_nested_treatment_spec(
+        baseline,
+        scope="social",
+        field="union_target_profile",
+        value=None,
+    )
+    assert (
+        disabled.economies[0]
+        .domestic_economy.rules.social_union_target_profile.enabled
+        is False
+    )
 
 
 def test_population_scaling_preserves_representative_entity_densities() -> None:
@@ -564,7 +638,8 @@ def test_unpartnered_marriage_activation_preserves_assortativity() -> None:
     )
     population = native_spec.economies[0].domestic_economy
     rules = population.rules
-    assert population.population.target_household_size == pytest.approx(1.0)
+    assert rules.genesis_union_target_profile.enabled is False
+    assert rules.genesis_target_partnered_adult_share == pytest.approx(0.0)
     assert rules.marriage_interval_days == 14
     assert rules.annual_marriage_rate == pytest.approx(1.0)
     assert rules.annual_divorce_rate == pytest.approx(0.0)

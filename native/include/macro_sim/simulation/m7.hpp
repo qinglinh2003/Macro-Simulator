@@ -14,6 +14,13 @@
 
 namespace macro_sim::simulation {
 
+struct M7UnionTargetProfile final {
+    bool enabled{true};
+    std::array<double, 6> shares{0.10, 0.58, 0.74, 0.68, 0.55, 0.32};
+
+    bool operator==(const M7UnionTargetProfile &) const = default;
+};
+
 struct M7PolicyState final {
     double inheritance_tax_rate{0.0};
     double pension_replacement{0.0};
@@ -84,6 +91,34 @@ struct M7Rules final {
     double mortality_income_elasticity{0.0};
     double mortality_multiplier_minimum{0.7};
     double mortality_multiplier_maximum{1.3};
+    M7UnionTargetProfile genesis_union_target_profile{};
+    std::uint32_t genesis_parent_minimum_age_gap{15};
+    std::uint32_t genesis_parent_maximum_age_gap{50};
+    double genesis_ideal_parent_age_gap{28.0};
+    double genesis_parent_age_gap_stddev{6.0};
+    std::uint32_t genesis_spouse_maximum_age_gap{18};
+    double genesis_spouse_age_gap_stddev{4.5};
+    double genesis_target_partnered_adult_share{0.55};
+    double genesis_two_parent_assignment_share{0.82};
+    std::uint32_t genesis_maximum_children_per_parent{6};
+    std::uint32_t genesis_maximum_children_per_household{8};
+    M7UnionTargetProfile social_union_target_profile{};
+    double marriage_peak_age{28.0};
+    double marriage_age_width{9.0};
+    double marriage_age_gap_stddev{4.5};
+    double marriage_acceptance_base{0.85};
+    double marriage_acceptance_age_gap_penalty{0.06};
+    double remarriage_rate_multiplier{0.65};
+    double widowed_remarriage_multiplier{0.75};
+    double divorce_peak_duration_years{5.0};
+    double divorce_duration_width{4.0};
+    double divorce_peak_multiplier{2.0};
+    double divorce_child_multiplier{0.75};
+    double divorce_age_gap_multiplier_per_10y{1.25};
+    bool guardian_search_grandparents{true};
+    bool guardian_search_adult_siblings{true};
+    bool guardian_search_same_household_adults{true};
+    std::uint32_t guardian_maximum_household_size{8};
     core::MarriageRules marriage_rules{};
 
     bool operator==(const M7Rules &) const = default;
@@ -199,6 +234,21 @@ struct M7Metrics final {
     std::uint64_t marriages{0};
     std::uint64_t divorces{0};
     std::uint64_t widowhoods{0};
+    std::uint64_t remarriages{0};
+    std::uint64_t widowed_remarriages{0};
+    std::uint64_t guardian_same_household_assignments{0};
+    std::uint64_t guardian_grandparent_assignments{0};
+    std::uint64_t guardian_adult_sibling_assignments{0};
+    std::uint64_t guardian_parent_assignments{0};
+    std::uint64_t guardian_unresolved_assignments{0};
+    double partnered_adult_share{0.0};
+    double dual_parent_minor_share{0.0};
+    double guardian_only_minor_share{0.0};
+    double mean_mother_age_gap{0.0};
+    double mother_age_gap_stddev{0.0};
+    double mean_father_age_gap{0.0};
+    double father_age_gap_stddev{0.0};
+    std::uint64_t maximum_household_size{0};
     std::uint64_t leaving_home_events{0};
 
     bool operator==(const M7Metrics &) const = default;

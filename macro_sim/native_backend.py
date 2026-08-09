@@ -342,6 +342,52 @@ M7_RULE_FIELDS = {
     "mortality_multiplier_maximum": "mortality_mult_hi",
 }
 
+# RelationshipConfig and SocialDynamicsConfig are nested demographic physics,
+# rather than fields on the start-menu Config.  Keep their native routes in
+# explicit catalogs so the causality audit and its native treatment setter can
+# exercise the same M7 rules without pretending that they are root fields.
+M7_RELATIONSHIP_RULE_FIELDS = {
+    "genesis_ideal_parent_age_gap": "ideal_parent_age_gap",
+    "genesis_maximum_children_per_household":
+        "max_children_per_household",
+    "genesis_maximum_children_per_parent": "max_children_per_parent",
+    "genesis_parent_age_gap_stddev": "parent_age_gap_sd",
+    "genesis_parent_maximum_age_gap": "parent_max_age_gap",
+    "genesis_parent_minimum_age_gap": "parent_min_age_gap",
+    "genesis_spouse_age_gap_stddev": "spouse_age_gap_sd",
+    "genesis_spouse_maximum_age_gap": "spouse_max_age_gap",
+    "genesis_target_partnered_adult_share":
+        "target_partnered_adult_share",
+    "genesis_two_parent_assignment_share":
+        "two_parent_assignment_share",
+    "genesis_union_target_profile": "union_target_profile",
+}
+
+M7_SOCIAL_RULE_FIELDS = {
+    "divorce_age_gap_multiplier_per_10y":
+        "divorce_age_gap_multiplier_per_10y",
+    "divorce_child_multiplier": "divorce_child_multiplier",
+    "divorce_duration_width": "divorce_duration_width",
+    "divorce_peak_duration_years": "divorce_peak_duration_years",
+    "divorce_peak_multiplier": "divorce_peak_multiplier",
+    "guardian_maximum_household_size": "guardian_max_household_size",
+    "guardian_search_adult_siblings": "guardian_search_adult_siblings",
+    "guardian_search_grandparents": "guardian_search_grandparents",
+    "guardian_search_same_household_adults":
+        "guardian_search_same_household_adults",
+    "marriage_acceptance_base": "marriage_acceptance_base",
+    "marriage_rules.preferred_age_gap": "marriage_age_gap_mean",
+    "marriage_acceptance_age_gap_penalty": "marriage_age_gap_penalty",
+    "marriage_age_gap_stddev": "marriage_age_gap_sd",
+    "marriage_age_width": "marriage_age_width",
+    "marriage_rules.maximum_age": "marriage_max_age",
+    "marriage_rules.maximum_age_gap": "marriage_max_age_gap",
+    "marriage_peak_age": "marriage_peak_age",
+    "remarriage_rate_multiplier": "remarriage_rate_multiplier",
+    "social_union_target_profile": "union_target_profile",
+    "widowed_remarriage_multiplier": "widowed_remarriage_multiplier",
+}
+
 ENERGY_POLICY_FIELDS = {
     "excise_rate": "tax_energy_rate",
     "windfall_tax_rate": "tax_energy_windfall",

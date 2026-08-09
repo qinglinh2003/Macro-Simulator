@@ -36,6 +36,9 @@ using namespace macro_sim::reporting;
     population.rules.mortality = false;
     population.rules.marriage = false;
     population.rules.divorce = false;
+    population.rules.relationships = false;
+    population.rules.household_lifecycle = false;
+    population.rules.family_transfers = false;
     economy.energy_rules.producer_count = 1;
     economy.housing_rules.enabled = false;
 
@@ -64,10 +67,10 @@ void test_descriptors_are_stable_and_complete() {
     assert(public_descriptors.size() == kM10PublicMetricCount);
     const auto descriptors = metric_descriptors();
     assert(descriptors.size() == kM10MetricCount);
-    assert(kM10NativeSourceMetricCount == 281U);
+    assert(kM10NativeSourceMetricCount == 296U);
     assert(kM10DashboardMetricCount == 85U);
     assert(kM10NationalAccountMetricCount == 63U);
-    assert(kM10MetricCount == 505U);
+    assert(kM10MetricCount == 520U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());

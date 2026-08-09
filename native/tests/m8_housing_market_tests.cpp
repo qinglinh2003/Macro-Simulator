@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -182,8 +183,21 @@ void test_mortgage_follows_heir_when_borrower_household_retires() {
         harness.population_runtime.membership.members(original.borrower);
     assert(members.size() == 1U);
     const auto deceased = members.front();
+    auto *deceased_record = harness.population_runtime.persons.get(deceased);
     macro_sim::PersonId heir{};
+    for (const auto candidate :
+         std::array{deceased_record->mother, deceased_record->father}) {
+        const auto *record = harness.population_runtime.persons.get(candidate);
+        if (record != nullptr && record->alive &&
+            record->household != original.borrower) {
+            heir = candidate;
+            break;
+        }
+    }
     for (const auto candidate : harness.population_runtime.persons.alive_ids()) {
+        if (heir.valid()) {
+            break;
+        }
         const auto *record = harness.population_runtime.persons.get(candidate);
         if (candidate != deceased && record->household != original.borrower) {
             heir = candidate;
@@ -191,12 +205,14 @@ void test_mortgage_follows_heir_when_borrower_household_retires() {
         }
     }
     assert(heir.valid());
-    auto *deceased_record = harness.population_runtime.persons.get(deceased);
-    deceased_record->mother = heir;
-    deceased_record->father = macro_sim::PersonId{};
-    assert(harness.population_runtime.relationships
-               .register_birth(harness.population_runtime.persons, deceased)
-               .ok());
+    if (deceased_record->mother != heir && deceased_record->father != heir) {
+        assert(!deceased_record->mother.valid());
+        assert(!deceased_record->father.valid());
+        deceased_record->mother = heir;
+        assert(harness.population_runtime.relationships
+                   .register_birth(harness.population_runtime.persons, deceased)
+                   .ok());
+    }
     const auto heir_household = harness.population_runtime.persons.get(heir)->household;
     harness.runtime.housing_rules.market_interval_days = 30U;
     M8AdvanceOptions options;

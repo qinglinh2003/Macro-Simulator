@@ -847,6 +847,21 @@ nb::dict m7_metrics_to_python(const macro_sim::simulation::M7Metrics &metrics) {
     MACRO_SIM_M7_METRIC(marriages);
     MACRO_SIM_M7_METRIC(divorces);
     MACRO_SIM_M7_METRIC(widowhoods);
+    MACRO_SIM_M7_METRIC(remarriages);
+    MACRO_SIM_M7_METRIC(widowed_remarriages);
+    MACRO_SIM_M7_METRIC(guardian_same_household_assignments);
+    MACRO_SIM_M7_METRIC(guardian_grandparent_assignments);
+    MACRO_SIM_M7_METRIC(guardian_adult_sibling_assignments);
+    MACRO_SIM_M7_METRIC(guardian_parent_assignments);
+    MACRO_SIM_M7_METRIC(guardian_unresolved_assignments);
+    MACRO_SIM_M7_METRIC(partnered_adult_share);
+    MACRO_SIM_M7_METRIC(dual_parent_minor_share);
+    MACRO_SIM_M7_METRIC(guardian_only_minor_share);
+    MACRO_SIM_M7_METRIC(mean_mother_age_gap);
+    MACRO_SIM_M7_METRIC(mother_age_gap_stddev);
+    MACRO_SIM_M7_METRIC(mean_father_age_gap);
+    MACRO_SIM_M7_METRIC(father_age_gap_stddev);
+    MACRO_SIM_M7_METRIC(maximum_household_size);
     MACRO_SIM_M7_METRIC(leaving_home_events);
 #undef MACRO_SIM_M7_METRIC
     return output;
@@ -2016,6 +2031,13 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_MARRIAGE(forbid_same_household);
     MACRO_SIM_BIND_MARRIAGE(forbid_close_kin);
 #undef MACRO_SIM_BIND_MARRIAGE
+    nb::class_<macro_sim::simulation::M7UnionTargetProfile>(
+        module, "M7UnionTargetProfile")
+        .def(nb::init<>())
+        .def_rw("enabled",
+                &macro_sim::simulation::M7UnionTargetProfile::enabled)
+        .def_rw("shares",
+                &macro_sim::simulation::M7UnionTargetProfile::shares);
     nb::class_<macro_sim::simulation::M7PolicyState>(module, "M7Policy")
         .def(nb::init<>())
         .def_rw("inheritance_tax_rate",
@@ -2088,6 +2110,34 @@ NB_MODULE(_native, module) {
     MACRO_SIM_BIND_M7_RULE(mortality_income_elasticity);
     MACRO_SIM_BIND_M7_RULE(mortality_multiplier_minimum);
     MACRO_SIM_BIND_M7_RULE(mortality_multiplier_maximum);
+    MACRO_SIM_BIND_M7_RULE(genesis_union_target_profile);
+    MACRO_SIM_BIND_M7_RULE(genesis_parent_minimum_age_gap);
+    MACRO_SIM_BIND_M7_RULE(genesis_parent_maximum_age_gap);
+    MACRO_SIM_BIND_M7_RULE(genesis_ideal_parent_age_gap);
+    MACRO_SIM_BIND_M7_RULE(genesis_parent_age_gap_stddev);
+    MACRO_SIM_BIND_M7_RULE(genesis_spouse_maximum_age_gap);
+    MACRO_SIM_BIND_M7_RULE(genesis_spouse_age_gap_stddev);
+    MACRO_SIM_BIND_M7_RULE(genesis_target_partnered_adult_share);
+    MACRO_SIM_BIND_M7_RULE(genesis_two_parent_assignment_share);
+    MACRO_SIM_BIND_M7_RULE(genesis_maximum_children_per_parent);
+    MACRO_SIM_BIND_M7_RULE(genesis_maximum_children_per_household);
+    MACRO_SIM_BIND_M7_RULE(social_union_target_profile);
+    MACRO_SIM_BIND_M7_RULE(marriage_peak_age);
+    MACRO_SIM_BIND_M7_RULE(marriage_age_width);
+    MACRO_SIM_BIND_M7_RULE(marriage_age_gap_stddev);
+    MACRO_SIM_BIND_M7_RULE(marriage_acceptance_base);
+    MACRO_SIM_BIND_M7_RULE(marriage_acceptance_age_gap_penalty);
+    MACRO_SIM_BIND_M7_RULE(remarriage_rate_multiplier);
+    MACRO_SIM_BIND_M7_RULE(widowed_remarriage_multiplier);
+    MACRO_SIM_BIND_M7_RULE(divorce_peak_duration_years);
+    MACRO_SIM_BIND_M7_RULE(divorce_duration_width);
+    MACRO_SIM_BIND_M7_RULE(divorce_peak_multiplier);
+    MACRO_SIM_BIND_M7_RULE(divorce_child_multiplier);
+    MACRO_SIM_BIND_M7_RULE(divorce_age_gap_multiplier_per_10y);
+    MACRO_SIM_BIND_M7_RULE(guardian_search_grandparents);
+    MACRO_SIM_BIND_M7_RULE(guardian_search_adult_siblings);
+    MACRO_SIM_BIND_M7_RULE(guardian_search_same_household_adults);
+    MACRO_SIM_BIND_M7_RULE(guardian_maximum_household_size);
     MACRO_SIM_BIND_M7_RULE(marriage_rules);
 #undef MACRO_SIM_BIND_M7_RULE
     nb::class_<macro_sim::simulation::M7PopulationSpec>(module, "M7PopulationSpec")

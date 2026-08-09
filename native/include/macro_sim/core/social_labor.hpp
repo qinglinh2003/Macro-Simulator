@@ -36,9 +36,9 @@ struct UnionRecord final {
 
 struct MarriageRules final {
     std::uint32_t minimum_age{18};
-    std::uint32_t maximum_age{80};
-    std::uint32_t maximum_age_gap{20};
-    double preferred_age_gap{0.0};
+    std::uint32_t maximum_age{75};
+    std::uint32_t maximum_age_gap{18};
+    double preferred_age_gap{2.0};
     double age_gap_penalty{1.0};
     double assortativity{0.25};
     bool forbid_same_household{true};
