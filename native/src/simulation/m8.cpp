@@ -744,29 +744,6 @@ class M8Extension final : public M7TickExtension {
             runtime_.housing_affordability.leave_home_multiplier;
         scratch_.working_metrics_.housing.fertility_multiplier =
             runtime_.housing_affordability.fertility_multiplier;
-        if (runtime_.housing_rules.enabled &&
-            runtime_.housing_rules.wealth_effect > algorithms::kEconomicEpsilon) {
-            const double marginal_propensity = real_runtime.rules.wealth_propensity;
-            for (const auto &dwelling : runtime_.properties.records()) {
-                if (!dwelling.active ||
-                    dwelling.owner.kind() != core::OwnerKind::household) {
-                    continue;
-                }
-                const auto identity =
-                    static_cast<std::size_t>(dwelling.owner.value());
-                const auto household_index =
-                    identity < real.household_dense_index_.size()
-                        ? real.household_dense_index_[identity]
-                        : kAbsentIndex;
-                if (household_index >= real.household_work_.size()) {
-                    return Status(ErrorCode::invariant_violation,
-                                  "M8 housing wealth owner projection is stale");
-                }
-                real.household_work_[household_index].consumption_budget +=
-                    runtime_.housing_rules.wealth_effect * marginal_propensity *
-                    scratch_.house_price_;
-            }
-        }
         scratch_.orders_.clear();
         scratch_.offers_.clear();
         scratch_.buyer_order_.clear();
@@ -815,6 +792,33 @@ class M8Extension final : public M7TickExtension {
                         M4TickScratch &real, M5Runtime &monetary,
                         M5TickScratch &monetary_scratch, M6Runtime &, M6TickScratch &,
                         M7Runtime &, M7TickScratch &, Tick tick, PhiloxRng &) override {
+        // M4 plans the ordinary household budget after prepare_tick().  Apply
+        // housing wealth here, after that plan exists but before household
+        // credit and goods settlement consume it.  Applying it in
+        // prepare_tick() was silently overwritten by M4's consumption plan.
+        if (runtime_.housing_rules.enabled &&
+            runtime_.housing_rules.wealth_effect > algorithms::kEconomicEpsilon) {
+            const double marginal_propensity = real_runtime.rules.wealth_propensity;
+            for (const auto &dwelling : runtime_.properties.records()) {
+                if (!dwelling.active ||
+                    dwelling.owner.kind() != core::OwnerKind::household) {
+                    continue;
+                }
+                const auto identity =
+                    static_cast<std::size_t>(dwelling.owner.value());
+                const auto household_index =
+                    identity < real.household_dense_index_.size()
+                        ? real.household_dense_index_[identity]
+                        : kAbsentIndex;
+                if (household_index >= real.household_work_.size()) {
+                    return Status(ErrorCode::invariant_violation,
+                                  "M8 housing wealth owner projection is stale");
+                }
+                real.household_work_[household_index].consumption_budget +=
+                    runtime_.housing_rules.wealth_effect * marginal_propensity *
+                    scratch_.house_price_;
+            }
+        }
         if (runtime_.housing_rules.construction) {
             const auto status = plan_builders(state, real_runtime, real, monetary,
                                               monetary_scratch, tick);

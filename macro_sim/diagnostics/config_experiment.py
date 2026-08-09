@@ -245,7 +245,36 @@ def _history_rows(
         if next_cursor <= cursor:
             raise RuntimeError("native metric history cursor did not advance")
         cursor = next_cursor
+    _fill_sparse_analysis_metrics(output)
     return output
+
+
+def _fill_sparse_analysis_metrics(rows: list[dict[str, Any]]) -> None:
+    """Make event-defined analysis series usable on a daily causal grid.
+
+    A transaction price is undefined on a day with no consumption-goods sale.
+    The audit nevertheless needs paired paths on identical ticks.  We therefore
+    carry the last observed transaction proxy forward; before the first trade,
+    the maintained aggregate price index is the explicit opening fallback.
+    This avoids turning a no-trade day into a fictitious zero price.
+    """
+    metric_id = "metric.analysis.goods_transaction_price_proxy"
+    fallback_id = "metric.economy.price_index"
+    last_value: float | None = None
+    for row in rows:
+        observed = row.get(metric_id)
+        if isinstance(observed, (int, float)) and not isinstance(observed, bool):
+            number = float(observed)
+            if math.isfinite(number):
+                last_value = number
+                continue
+        fallback = row.get(fallback_id)
+        if last_value is None and isinstance(fallback, (int, float)) and not isinstance(fallback, bool):
+            number = float(fallback)
+            if math.isfinite(number):
+                last_value = number
+        if last_value is not None:
+            row[metric_id] = last_value
 
 
 def derive_analysis_metrics(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -457,6 +486,13 @@ def _apply_native_root_field(
             native_backend._load_native().M4TfpLaw.LEARNING
             if value == "learning"
             else native_backend._load_native().M4TfpLaw.EXOGENOUS
+        )
+        matched = True
+    elif field == "gibrat_growth":
+        real.market_protocol = (
+            native_backend._load_native().MatchingProtocol.PREFERENTIAL
+            if bool(value)
+            else native_backend._load_native().MatchingProtocol.SAMPLED
         )
         matched = True
     elif field == "bond_theta":
@@ -916,6 +952,19 @@ def apply_native_activation_scenario(
         rules.initial_consumption_inventory = 0.0
     elif scenario == "markup_floor_pressure":
         rules.initial_consumption_inventory *= 4.0
+    elif scenario == "consumer_choice_market":
+        rules.initial_consumption_inventory *= 20.0
+        rules.income_propensity = 0.10
+        rules.wealth_propensity = 0.001
+        rules.price_calvo_probability = 1.0
+        rules.markup_adjustment = 0.05
+    elif scenario == "positive_wage_inflation_pulse":
+        rules.initial_price *= 0.5
+        rules.initial_capital_price *= 0.5
+        rules.price_calvo_probability = 1.0
+        rules.wage_calvo_probability = 1.0
+        rules.wage_shortage_adjustment = 0.0
+        rules.wage_downward_drift = 0.0
     elif scenario == "idle_consumption_firms":
         rules.initial_consumption_capital = 1.0e-12
         rules.initial_consumption_inventory = 0.0
@@ -924,6 +973,16 @@ def apply_native_activation_scenario(
     elif scenario == "high_consumption_entry_pressure":
         financial_rules.entry_beta = 5.0
         financial_rules.entry_hurdle = 0.0
+    elif scenario == "entrant_attractiveness_pressure":
+        real.consumption_firms = min(int(real.consumption_firms), 50)
+        rules.initial_consumption_inventory *= 20.0
+        rules.income_propensity = 0.10
+        rules.wealth_propensity = 0.001
+        rules.price_calvo_probability = 1.0
+        rules.markup_adjustment = 0.05
+        financial_rules.entry_beta = 50.0
+        financial_rules.entry_hurdle = 0.0
+        financial_rules.entry_max = 25
     elif scenario == "sector_returns_hazard":
         financial_rules.switch_return_gap = 0.0
         financial_rules.switch_pressure_days = 5

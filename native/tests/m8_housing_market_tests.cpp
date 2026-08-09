@@ -700,8 +700,10 @@ void test_housing_wealth_effect_adds_owner_consumption_budget() {
     auto neutral = build(neutral_spec);
     auto treatment = build(treatment_spec);
 
-    assert(advance(neutral, 1).ok());
-    assert(advance(treatment, 1).ok());
+    const auto neutral_result = advance(neutral, 1);
+    const auto treatment_result = advance(treatment, 1);
+    assert(neutral_result.ok());
+    assert(treatment_result.ok());
     const auto total_budget = [](const Harness &harness) {
         double total = 0.0;
         for (const auto &household : harness.real_scratch.household_work_) {
@@ -710,6 +712,10 @@ void test_housing_wealth_effect_adds_owner_consumption_budget() {
         return total;
     };
     assert(total_budget(treatment) > total_budget(neutral));
+    assert(treatment_result.get_if()
+               ->metrics.economy.economy.economy.economy.household_consumption >
+           neutral_result.get_if()
+               ->metrics.economy.economy.economy.economy.household_consumption);
 }
 
 void test_failed_market_tick_is_atomic() {

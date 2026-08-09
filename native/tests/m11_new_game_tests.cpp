@@ -107,6 +107,7 @@ void test_default_is_complete_latest_world() {
         assert_close(population.rules.genesis_employment_rate, 0.95);
         assert(population.rules.family_transfers);
         assert(real.stochastic);
+        assert(real.market_protocol == algorithms::MatchingProtocol::preferential);
         assert(financial.rules.bonds);
         assert(financial.rules.firm_equity);
         assert(financial.rules.bank_equity);

@@ -445,6 +445,14 @@ def _production_contracts() -> Mapping[str, Mapping[str, Any]]:
             },
             "rationale": "Capability ablation identifies the equity-finance channel and its real-economy spillovers.",
         },
+        "config.capital_clock_demand_smoothing": {
+            "status": "screening_ready",
+            "values": (0.25, 1.0),
+            "directions": {
+                "metric.economy.inventory_to_sales": "nonzero",
+            },
+            "rationale": "This coefficient converts the common daily demand-learning speed to the slower capital-clock expectation update used by incumbent firms. Changing it must alter inventory adjustment rather than remain an unused clock-conversion constant.",
+        },
         "config.capital_rationed_signal": {
             "status": "activation_scenario_required",
             "values": (False,),
@@ -582,6 +590,14 @@ def _firm_contracts() -> Mapping[str, Mapping[str, Any]]:
     switches = "metric.source.m6.sector_switches"
     retool = "metric.source.m6.sector_retool_capital"
     return {
+        "config.dis_slope": {
+            "status": "screening_ready",
+            "values": (0.01, 0.05),
+            "directions": {
+                "metric.economy.price_index": "increase",
+            },
+            "rationale": "A steeper coordination-cost slope raises unit cost with firm-level production scale. With the same demand and factor inputs, the posted price path must rise when those diseconomies bind.",
+        },
         "config.demand_e_firm0": {
             "status": "screening_ready",
             "values": (5.0, 7.5),
@@ -632,6 +648,34 @@ def _firm_contracts() -> Mapping[str, Mapping[str, Any]]:
                 "metric.source.m4.firm_profit": "cumulative",
             },
             "rationale": "The full cash-basis income statement services debt before settlement; disabling it tests whether that phase ordering changes realized interest and firm profit flows.",
+        },
+        "config.gibrat_entry_a0": {
+            "status": "activation_scenario_required",
+            "values": (0.05, 1.0),
+            "directions": {
+                "metric.economy.firm_size_gini_output": "nonzero",
+            },
+            "activation": "entrant_attractiveness_pressure",
+            "rationale": "Entrant attractiveness determines the initial demand weight of newly created consumption firms. A shared identification regime starts with a deliberately narrow incumbent pool and supplies many entrants, after which changing their opening weight must alter the distribution of firm sales. The ordinary scalable baseline contains so many incumbents that the small daily entrant flow is observationally drowned out.",
+        },
+        "config.gibrat_growth": {
+            "status": "screening_ready",
+            "values": (False,),
+            "directions": {
+                "metric.economy.firm_size_gini_output": "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "The capability applies persistent multiplicative shocks to consumption-firm attractiveness. Disabling it must change the resulting sales-size distribution without changing the common aggregate demand budget.",
+        },
+        "config.gibrat_sigma": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.10),
+            "activation": "consumer_choice_market",
+            "directions": {
+                "metric.economy.firm_size_gini_output": "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "The Gibrat innovation scale controls dispersion in persistent firm attractiveness. It is identified in the same surplus-inventory consumer-choice market used for seller preferences because the calibrated shortage baseline clears nearly every offer regardless of its demand weight. Zero removes this source of size divergence. The high arm is intentionally far above the calibrated 0.0052 so the persistent attractiveness shocks reliably cross discrete seller-choice boundaries and change observed firm-sales concentration.",
         },
         "config.firm_subscale_exit": {
             "status": "screening_ready",
@@ -825,6 +869,26 @@ def _consumption_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {inventory: "increase"},
             "rationale": "A higher target number of inventory days should raise inventory coverage and create a larger working-stock buffer against demand surprises.",
         },
+        "config.pref_attach_beta": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 2.0),
+            "activation": "consumer_choice_market",
+            "directions": {
+                "metric.economy.firm_size_gini_output": "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "Preferential attachment makes already attractive sellers more likely to receive household demand. It is identified under a shared surplus-inventory market where buyers actually choose among simultaneously available sellers; in the calibrated shortage baseline virtually every seller clears its stock, so ordering preferences cannot affect realized sales. Changing the exponent in the activated market must alter firm-sales concentration; aggregate consumption is held as an equilibrium outcome rather than assigned a sign.",
+        },
+        "config.pref_price_elasticity": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 2.0),
+            "activation": "consumer_choice_market",
+            "directions": {
+                "metric.analysis.goods_transaction_price_proxy": "nonzero",
+            },
+            "horizon_days": 365,
+            "rationale": "Price elasticity changes how strongly household demand favors cheaper sellers. It is identified in a common surplus-inventory market with active daily repricing so both seller choice and price dispersion are present; the shortage baseline clears nearly every offer and makes the choice weight observationally irrelevant. It must move the realized transaction-price mix, while endogenous inventory depletion and repricing make a permanent level sign inappropriate.",
+        },
         "config.search_m": {
             "status": "screening_ready",
             "values": (2, 8),
@@ -1002,6 +1066,15 @@ def _labor_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {wage: "nonzero"},
             "statistics": {wage: "post_burnin_volatility"},
             "rationale": "The Calvo wage-reset probability should change wage dynamics and the pass-through speed of labor shortages or surpluses.",
+        },
+        "config.wage_indexation": {
+            "status": "activation_scenario_required",
+            "values": (1.0,),
+            "directions": {wage: "increase"},
+            "statistics": {wage: "first_window_mean"},
+            "horizon_days": 30,
+            "activation": "positive_wage_inflation_pulse",
+            "rationale": "Under a common positive expected-inflation pulse and fully adjusting wage quotes, stronger indexation must raise the wage path. The activation isolates inflation pass-through from labor-shortage and downward-wage adjustments.",
         },
         "config.welfare_quit_hazard": {
             "status": "activation_scenario_required",
@@ -2157,6 +2230,19 @@ def _housing_contracts() -> Mapping[str, Mapping[str, Any]]:
             "directions": {price: "increase"},
             "statistics": {price: "first_window_mean"},
             "rationale": "The opening price-to-income multiple anchors the initial dwelling valuation. A higher multiple must raise the opening house-price path; persistence is measured separately rather than assumed to wash out.",
+        },
+        "config.housing_wealth_effect": {
+            "status": "activation_scenario_required",
+            "values": (0.0, 0.25),
+            "activation": "housing_liquid_market",
+            "horizon_days": 5,
+            "directions": {
+                "metric.economy.na.household_consumption_real": "increase",
+            },
+            "statistics": {
+                "metric.economy.na.household_consumption_real": "first_window_mean",
+            },
+            "rationale": "The housing wealth effect adds an explicit marginal spending propensity for owner-occupied dwelling value. It must be identified in a common market state with actual owner-occupiers; the neutral scalable baseline deliberately starts without that ownership stock. Conditional on the shared liquid-market activation, a larger coefficient must raise owner-household consumption demand before general-equilibrium income, price, and credit feedbacks are interpreted.",
         },
         "config.housing_ask_decay": {
             "status": "activation_scenario_required",

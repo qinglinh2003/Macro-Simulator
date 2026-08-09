@@ -234,6 +234,64 @@ def test_analysis_metric_derives_the_goods_transaction_price_proxy() -> None:
     assert "metric.analysis.goods_transaction_price_proxy" not in missing
 
 
+def test_sparse_transaction_proxy_uses_price_index_then_carries_last_trade() -> None:
+    from macro_sim.diagnostics.config_experiment import _fill_sparse_analysis_metrics
+
+    rows = [
+        {"metric.economy.price_index": 1.2},
+        {
+            "metric.economy.price_index": 1.3,
+            "metric.analysis.goods_transaction_price_proxy": 0.8,
+        },
+        {"metric.economy.price_index": 1.4},
+    ]
+    _fill_sparse_analysis_metrics(rows)
+    assert [
+        row["metric.analysis.goods_transaction_price_proxy"] for row in rows
+    ] == pytest.approx([1.2, 0.8, 0.8])
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "attribute"),
+    [
+        ("pref_attach_beta", 2.0, "preferential_attachment_beta"),
+        ("pref_price_elasticity", 2.0, "preferential_price_elasticity"),
+    ],
+)
+def test_consumer_choice_activation_preserves_the_audited_preference(
+    field: str, value: float, attribute: str
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=27
+    )
+    native_spec = native_treatment_spec(baseline, field=field, value=value)
+    before = native_spec.economies[0].domestic_economy.financial_economy.monetary_economy.real_economy
+    opening_inventory = before.rules.initial_consumption_inventory
+    apply_native_activation_scenario(
+        native_spec, scenario="consumer_choice_market"
+    )
+    real = native_spec.economies[0].domestic_economy.financial_economy.monetary_economy.real_economy
+    assert getattr(real.rules, attribute) == pytest.approx(value)
+    assert real.rules.initial_consumption_inventory == pytest.approx(
+        20.0 * opening_inventory
+    )
+    assert real.rules.price_calvo_probability == pytest.approx(1.0)
+    assert real.rules.income_propensity == pytest.approx(0.10)
+    assert real.rules.wealth_propensity == pytest.approx(0.001)
+
+
+def test_gibrat_capability_selects_the_matching_protocol() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=28
+    )
+    disabled = native_treatment_spec(
+        baseline, field="gibrat_growth", value=False
+    )
+    real = disabled.economies[0].domestic_economy.financial_economy.monetary_economy.real_economy
+    assert not real.rules.gibrat_growth
+    assert real.market_protocol == native_backend._load_native().MatchingProtocol.SAMPLED
+
+
 def test_paired_run_summary_uses_common_metrics_only() -> None:
     def run(value: float, *, extra: bool = False) -> dict:
         metrics = {
@@ -424,6 +482,19 @@ def test_housing_search_activation_preserves_the_audited_search_count() -> None:
     assert economy.housing_rules.initial_dwellings_per_household == pytest.approx(
         1.20
     )
+
+
+def test_housing_liquid_activation_preserves_the_audited_wealth_effect() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=26
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="housing_wealth_effect", value=0.25
+    )
+    apply_native_activation_scenario(native_spec, scenario="housing_liquid_market")
+    economy = native_spec.economies[0]
+    assert economy.housing_rules.wealth_effect == pytest.approx(0.25)
+    assert economy.housing_rules.initial_homeownership_share == pytest.approx(0.40)
 
 
 @pytest.mark.parametrize(
@@ -648,6 +719,27 @@ def test_unpartnered_marriage_activation_preserves_assortativity() -> None:
     )
 
 
+def test_positive_wage_inflation_activation_preserves_indexation_treatment() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=431
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="wage_indexation", value=0.25
+    )
+    apply_native_activation_scenario(
+        native_spec, scenario="positive_wage_inflation_pulse"
+    )
+    rules = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy.rules
+    )
+    assert rules.wage_indexation == pytest.approx(0.25)
+    assert rules.price_calvo_probability == pytest.approx(1.0)
+    assert rules.wage_calvo_probability == pytest.approx(1.0)
+    assert rules.wage_shortage_adjustment == pytest.approx(0.0)
+    assert rules.wage_downward_drift == pytest.approx(0.0)
+
+
 def test_mortality_treatment_preserves_genesis_age_profile() -> None:
     baseline = population_scaled_new_game(
         population=100_000, days=90, seed=44
@@ -833,6 +925,26 @@ def test_entry_pressure_activation_preserves_the_daily_entry_cap() -> None:
     assert after.entry_max == expected_cap
     assert after.entry_beta == pytest.approx(5.0)
     assert after.entry_hurdle == pytest.approx(0.0)
+
+
+def test_entrant_attractiveness_activation_creates_an_identifiable_entry_cohort() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=40
+    )
+    native_spec = native_treatment_spec(
+        baseline, field="gibrat_entry_a0", value=0.05
+    )
+    apply_native_activation_scenario(
+        native_spec, scenario="entrant_attractiveness_pressure"
+    )
+    economy = native_spec.economies[0]
+    real = economy.domestic_economy.financial_economy.monetary_economy.real_economy
+    financial = economy.domestic_economy.financial_economy
+    assert real.consumption_firms == 50
+    assert financial.rules.entry_beta == pytest.approx(50.0)
+    assert financial.rules.entry_max == 25
+    assert financial.rules.entrant_attractiveness == pytest.approx(0.05)
+    assert real.rules.income_propensity == pytest.approx(0.10)
 
 
 @pytest.mark.parametrize(

@@ -258,6 +258,11 @@ void enable_complete_playable_modules(simulation::M8SimulationSpec &spec) {
     real.rules.gibrat_growth = true;
     real.rules.gibrat_sigma = 0.0052;
     real.rules.preferential_price_elasticity = 1.0;
+    // Gibrat attractiveness and the two preference coefficients are weights
+    // of the preferential matcher.  Leaving the product on the sampled
+    // protocol made all three Config fields silently inert even though their
+    // native rules were populated.
+    real.market_protocol = algorithms::MatchingProtocol::preferential;
     real.rules.wage_calvo_probability = 0.011;
     real.rules.price_calvo_probability = 0.0037;
     real.rules.public_capital_gamma = 0.10;

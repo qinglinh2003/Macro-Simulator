@@ -69,11 +69,12 @@ def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
 
 def test_production_screening_contracts_are_curated_and_routed() -> None:
     contracts = screening_contracts(module="production_and_technology")
-    assert len(contracts) == 14
+    assert len(contracts) == 15
     assert {contract.field_name for contract in contracts} == {
         "alpha",
         "capital_firm_entry",
         "capital_market",
+        "capital_clock_demand_smoothing",
         "lambda_issue",
         "A",
         "a_K",
@@ -139,9 +140,9 @@ def test_activation_contracts_are_reviewed_and_separate() -> None:
 def test_firm_contracts_cover_every_mapped_causal_or_genesis_field() -> None:
     neutral = screening_contracts(module="firms_and_industrial_dynamics")
     activated = activation_contracts(module="firms_and_industrial_dynamics")
-    assert len(neutral) == 14
-    assert len(activated) == 7
-    assert len({contract.field_name for contract in (*neutral, *activated)}) == 21
+    assert len(neutral) == 16
+    assert len(activated) == 9
+    assert len({contract.field_name for contract in (*neutral, *activated)}) == 25
     assert "rho" in {contract.field_name for contract in neutral}
     assert "sector_switching" in {
         contract.field_name for contract in activated
@@ -162,6 +163,8 @@ def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
         "consumption_rationed_signal",
         "mu_max",
         "mu_min",
+        "pref_attach_beta",
+        "pref_price_elasticity",
     }
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "alpha1",
@@ -174,6 +177,8 @@ def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
         "mu_max",
         "mu_min",
         "phi",
+        "pref_attach_beta",
+        "pref_price_elasticity",
         "search_m",
         "theta_price",
     }
@@ -190,6 +195,7 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
         "labor_relationship_wages",
         "ladder_search_intensity",
         "layoff_band",
+        "wage_indexation",
         "welfare_quit_hazard",
     }
     assert {contract.field_name for contract in (*neutral, *activated)} == {
@@ -214,6 +220,7 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
         "suspension_timer",
         "suspension_quit_discount",
         "theta_wage",
+        "wage_indexation",
         "welfare_quit_hazard",
     }
     assert len(neutral) == 16
