@@ -2171,13 +2171,13 @@ class M7Extension final : public M6TickExtension {
                     static_cast<std::size_t>(person->household.value());
                 if (household_identity >= real.household_dense_index_.size()) {
                     return Status(ErrorCode::invariant_violation,
-                                  "M7 household need projection is stale");
+                                  "M7 household need identity is absent");
                 }
                 const auto household_index =
                     real.household_dense_index_[household_identity];
                 if (household_index >= real.household_need_units_.size()) {
                     return Status(ErrorCode::invariant_violation,
-                                  "M7 household need projection is stale");
+                                  "M7 household need dense index is absent");
                 }
                 real.household_need_units_[household_index] +=
                     age < 18.0 ? 0.65 : (age >= 65.0 ? 0.90 : 1.0);
@@ -3167,7 +3167,11 @@ class M7Extension final : public M6TickExtension {
                 if (!status.ok()) {
                     return status;
                 }
-                if (runtime_.rules.household_lifecycle &&
+                const bool origin_retiring =
+                    std::find(scratch_.retired_households_.begin(),
+                              scratch_.retired_households_.end(),
+                              second_origin) != scratch_.retired_households_.end();
+                if (runtime_.rules.household_lifecycle && !origin_retiring &&
                     state.households.get(second_origin) != nullptr) {
                     auto move_status = scratch_.membership_.move(second, second_origin);
                     if (!move_status.ok()) {

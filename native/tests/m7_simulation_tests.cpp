@@ -808,6 +808,80 @@ void test_relationship_household_lifecycle() {
     assert(harness.runtime.relationships.validate(harness.runtime.persons).ok());
 }
 
+void test_divorce_does_not_reenter_household_retired_by_same_day_death() {
+    auto spec = base_spec();
+    spec.population.start_calendar_day = 29;
+    spec.population.target_household_size = 2.0;
+    spec.rules.marriage_interval_days = 30;
+    spec.rules.annual_marriage_rate = 1.0;
+    spec.rules.annual_divorce_rate = 0.0;
+    spec.rules.genesis_union_target_profile.enabled = false;
+    spec.rules.genesis_target_partnered_adult_share = 0.0;
+    auto harness = build(spec);
+    auto result = advance(harness, 1);
+    assert(result.ok());
+
+    PersonId spouse{};
+    PersonId last_origin_member{};
+    HouseholdId origin{};
+    macro_sim::EventId union_event{};
+    for (const auto &union_record : harness.runtime.relationships.unions()) {
+        if (union_record.active) {
+            spouse = union_record.second;
+            union_event = union_record.event;
+            break;
+        }
+    }
+    assert(spouse.valid() && union_event.valid());
+    harness.root.households.for_each_alive(
+        [&](HouseholdId household,
+            const macro_sim::core::HouseholdComponent &) {
+            if (origin.valid() ||
+                household == harness.runtime.persons.get(spouse)->household) {
+                return;
+            }
+            const auto members = harness.runtime.membership.members(household);
+            if (members.size() == 1U) {
+                origin = household;
+                last_origin_member = members.front();
+            }
+        });
+    assert(last_origin_member.valid() && origin.valid());
+    auto unions = harness.runtime.relationships.unions();
+    auto rewritten = std::vector<macro_sim::core::UnionRecord>(
+        unions.begin(), unions.end());
+    const auto selected = std::find_if(
+        rewritten.begin(), rewritten.end(),
+        [union_event](const macro_sim::core::UnionRecord &record) {
+            return record.event == union_event;
+        });
+    assert(selected != rewritten.end());
+    selected->second_origin_household = origin;
+    assert(harness.runtime.relationships
+               .replace_unions(harness.runtime.persons, std::move(rewritten))
+               .ok());
+
+    harness.runtime.rules.annual_divorce_rate = 1.0;
+    M7AdvanceOptions death;
+    death.force_death = last_origin_member;
+    result = advance(harness, 1, death);
+    if (!result.ok()) {
+        std::cerr << "same-day estate/divorce failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    const auto *survivor = harness.runtime.persons.get(spouse);
+    assert(survivor != nullptr && survivor->alive);
+    assert(!survivor->partner.valid());
+    assert(survivor->household != origin);
+    assert(harness.root.households.get(origin) == nullptr);
+    assert(harness.root.households.get(survivor->household) != nullptr);
+    assert(macro_sim::simulation::validate_m7_state(
+               harness.root, harness.real_runtime, harness.monetary_runtime,
+               harness.financial_runtime, harness.runtime, harness.tick)
+               .ok());
+}
+
 void test_last_member_estate_moves_canonical_positions() {
     auto spec = base_spec();
     spec.population.initial_persons = 100;
@@ -1557,6 +1631,7 @@ int main() {
     test_payroll_budget_uses_worker_efficiency();
     test_labor_matching_fills_effective_units();
     test_relationship_household_lifecycle();
+    test_divorce_does_not_reenter_household_retired_by_same_day_death();
     test_last_member_estate_moves_canonical_positions();
     test_public_residual_estate_has_no_unrelated_heir();
     test_unclaimed_external_share_returns_to_asset_household();
