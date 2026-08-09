@@ -973,6 +973,24 @@ def apply_native_activation_scenario(
     elif scenario == "high_consumption_entry_pressure":
         financial_rules.entry_beta = 5.0
         financial_rules.entry_hurdle = 0.0
+    elif scenario == "consumption_entry_pressure":
+        financial_rules.entry_hurdle = 0.0
+        financial_rules.entry_max = 100
+        rules.income_propensity = 0.50
+    elif scenario == "capital_firm_entry_pressure":
+        rules.initial_consumption_capital *= 0.10
+        financial_rules.k_entry_hazard = 1.0
+    elif scenario == "subscale_exit_pressure":
+        rules.initial_expected_demand *= 0.05
+        financial_rules.subscale_grace_days = 5
+        financial_rules.subscale_exit_hazard = 1.0
+        financial_rules.shell_exit_days = 10_000
+    elif scenario == "firm_debt_service_pressure":
+        rules.initial_consumption_capital *= 0.10
+        rules.investment_adjustment = max(float(rules.investment_adjustment), 0.25)
+        monetary.initial_policy_rate = 5.0e-3
+        monetary_rules.direct_monetary_transmission = True
+        monetary_rules.firm_amortization = 0.05
     elif scenario == "entrant_attractiveness_pressure":
         real.consumption_firms = min(int(real.consumption_firms), 50)
         rules.initial_consumption_inventory *= 20.0
@@ -1101,6 +1119,23 @@ def apply_native_activation_scenario(
         monetary_rules.opening_capital_per_bank = 250.0
     elif scenario == "positive_deposit_carry":
         monetary_rules.deposit_rate = 1.0e-4
+    elif scenario == "relationship_refinancing_pressure":
+        rules.initial_consumption_capital *= 0.10
+        rules.investment_adjustment = max(float(rules.investment_adjustment), 0.25)
+        monetary_rules.loan_spread_dispersion = 5.0e-3
+        monetary_rules.bank_search_count = max(
+            int(monetary_rules.bank_search_count),
+            int(monetary_rules.bank_count),
+        )
+        monetary_rules.opening_capital_per_bank = 1_000.0
+    elif scenario == "bank_payout_distribution_pressure":
+        rules.initial_consumption_capital *= 0.10
+        rules.investment_adjustment = max(float(rules.investment_adjustment), 0.25)
+        monetary.initial_policy_rate = 5.0e-3
+        monetary_rules.deposit_rate = 0.0
+        monetary_rules.bank_payout_ratio = 1.0
+        monetary_rules.opening_capital_per_bank = 1_000.0
+        monetary_policy.bank_target_capital_ratio = 0.0
     elif scenario == "monetary_tightening_pressure":
         monetary.initial_policy_rate = 5.0e-3
         monetary_policy.neutral_rate = 1.34e-4

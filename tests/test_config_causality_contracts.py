@@ -140,8 +140,8 @@ def test_activation_contracts_are_reviewed_and_separate() -> None:
 def test_firm_contracts_cover_every_mapped_causal_or_genesis_field() -> None:
     neutral = screening_contracts(module="firms_and_industrial_dynamics")
     activated = activation_contracts(module="firms_and_industrial_dynamics")
-    assert len(neutral) == 16
-    assert len(activated) == 9
+    assert len(neutral) == 12
+    assert len(activated) == 13
     assert len({contract.field_name for contract in (*neutral, *activated)}) == 25
     assert "rho" in {contract.field_name for contract in neutral}
     assert "sector_switching" in {
@@ -390,8 +390,8 @@ def test_distribution_contracts_cover_every_mapped_causal_field() -> None:
 def test_banking_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="banking_and_credit")
     activated = activation_contracts(module="banking_and_credit")
-    assert len(neutral) == 12
-    assert len(activated) == 23
+    assert len(neutral) == 10
+    assert len(activated) == 25
     assert {contract.field_name for contract in (*neutral, *activated)} == {
         "amort",
         "bank_assignment",

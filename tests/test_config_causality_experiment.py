@@ -311,6 +311,94 @@ def test_child_pressure_activation_preserves_parent_capacity() -> None:
     assert population.population.genesis_vital_rates.total_fertility_rate == pytest.approx(6.0)
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "scenario", "attribute"),
+    [
+        ("entry_beta", 0.2, "consumption_entry_pressure", "entry_beta"),
+        (
+            "k_entry_demand",
+            1.0,
+            "capital_firm_entry_pressure",
+            "k_entry_demand",
+        ),
+        (
+            "subscale_viability_workers",
+            2.0,
+            "subscale_exit_pressure",
+            "subscale_viability_workers",
+        ),
+    ],
+)
+def test_firm_activation_preserves_treatment(
+    field: str, value: float, scenario: str, attribute: str
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=30
+    )
+    native_spec = native_treatment_spec(baseline, field=field, value=value)
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+    real = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy.real_economy
+    )
+    financial = native_spec.economies[0].domestic_economy.financial_economy
+    assert getattr(financial.rules, attribute) == pytest.approx(value)
+    if scenario == "consumption_entry_pressure":
+        assert financial.rules.entry_hurdle == pytest.approx(0.0)
+        assert financial.rules.entry_max == 100
+    elif scenario == "capital_firm_entry_pressure":
+        assert financial.rules.k_entry_hazard == pytest.approx(1.0)
+    else:
+        assert financial.rules.subscale_grace_days == 5
+        assert financial.rules.subscale_exit_hazard == pytest.approx(1.0)
+        assert real.rules.initial_expected_demand > 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "scenario", "attribute"),
+    [
+        (
+            "firm_full_pnl",
+            False,
+            "firm_debt_service_pressure",
+            "full_firm_pnl",
+        ),
+        (
+            "bank_relationship_lock_in",
+            False,
+            "relationship_refinancing_pressure",
+            "relationship_lock_in",
+        ),
+        (
+            "interest_by_deposits",
+            False,
+            "bank_payout_distribution_pressure",
+            "interest_by_deposits",
+        ),
+    ],
+)
+def test_banking_activation_preserves_treatment(
+    field: str, value: bool, scenario: str, attribute: str
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=31
+    )
+    native_spec = native_treatment_spec(baseline, field=field, value=value)
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+    monetary = (
+        native_spec.economies[0]
+        .domestic_economy.financial_economy.monetary_economy
+    )
+    assert getattr(monetary.rules, attribute) is value
+    if scenario == "firm_debt_service_pressure":
+        assert monetary.rules.firm_amortization == pytest.approx(0.05)
+    elif scenario == "relationship_refinancing_pressure":
+        assert monetary.rules.loan_spread_dispersion == pytest.approx(5.0e-3)
+    else:
+        assert monetary.rules.bank_payout_ratio == pytest.approx(1.0)
+        assert monetary.policy.bank_target_capital_ratio == pytest.approx(0.0)
+
+
 def test_paired_run_summary_uses_common_metrics_only() -> None:
     def run(value: float, *, extra: bool = False) -> dict:
         metrics = {
