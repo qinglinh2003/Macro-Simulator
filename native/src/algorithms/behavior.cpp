@@ -292,6 +292,9 @@ Result<WagePlanResult> wage_plan(const WagePlanInput& input) noexcept {
         input.wage <= 0.0
         || !valid_probability(input.calvo_probability)
         || !valid_probability(input.calvo_draw)
+        || input.shortage_adjustment < 0.0
+        || input.downward_drift < 0.0
+        || input.downward_drift >= 1.0
     ) {
         return invalid("invalid wage or Calvo inputs");
     }
@@ -299,15 +302,25 @@ Result<WagePlanResult> wage_plan(const WagePlanInput& input) noexcept {
     const bool rationed =
         input.hired_previous
         < input.labor_demand_previous - kEconomicEpsilon;
-    double target = input.wage * (1.0 + drift);
+    const double indexed_gross = 1.0 + drift;
+    if (!std::isfinite(indexed_gross) || indexed_gross <= 0.0) {
+        return invalid("wage indexation produced a nonpositive gross factor");
+    }
+    double target = input.wage * indexed_gross;
     if (rationed) {
-        target = input.wage
-            * (1.0 + drift + input.shortage_adjustment);
+        target = input.wage * (indexed_gross + input.shortage_adjustment);
     } else if (
         input.downward_drift > 0.0
         && input.labor_demand_previous > kEconomicEpsilon
     ) {
-        target = input.wage * (1.0 + drift - input.downward_drift);
+        target = input.wage * (indexed_gross - input.downward_drift);
+        if (target <= 0.0) {
+            // Preserve the established additive rule over its ordinary range.
+            // In severe deflation its two individually valid adjustments can
+            // sum past -100%; sequential proportional composition supplies a
+            // positive limiting rule without changing ordinary trajectories.
+            target = input.wage * indexed_gross * (1.0 - input.downward_drift);
+        }
     }
     const bool repriced = input.calvo_draw < input.calvo_probability;
     double posted = repriced ? target : input.wage;

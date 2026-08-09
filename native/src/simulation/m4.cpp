@@ -2356,7 +2356,8 @@ Status validate_spec(const M4SimulationSpec &spec) noexcept {
         rules.gibrat_sigma < 0.0 || rules.preferential_attachment_beta < 0.0 ||
         rules.preferential_price_elasticity < 0.0 ||
         rules.wage_shortage_adjustment < 0.0 ||
-        rules.wage_downward_drift < 0.0 || rules.income_propensity < 0.0 ||
+        rules.wage_downward_drift < 0.0 || rules.wage_downward_drift >= 1.0 ||
+        rules.income_propensity < 0.0 ||
         rules.wealth_propensity < 0.0 || rules.mpc_dispersion < 0.0 ||
         rules.mpc_wealth_curvature <= 0.0 ||
         rules.mpc_wealth_curvature > 1.0 ||

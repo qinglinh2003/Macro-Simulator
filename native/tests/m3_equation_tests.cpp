@@ -89,6 +89,26 @@ void test_costs_and_plans() {
     near(wage_output.posted, 11.5);
     assert(wage_output.rationed);
     assert(wage_output.repriced);
+
+    WagePlanInput ordinary_indexation = wage;
+    ordinary_indexation.minimum_wage = 0.0;
+    ordinary_indexation.expected_inflation = 0.02;
+    ordinary_indexation.wage_indexation = 1.0;
+    const auto ordinary_output = take(wage_plan(ordinary_indexation));
+    near(ordinary_output.target, 11.2);
+
+    WagePlanInput deflationary_wage;
+    deflationary_wage.wage = 10.0;
+    deflationary_wage.hired_previous = 5.0;
+    deflationary_wage.labor_demand_previous = 5.0;
+    deflationary_wage.calvo_probability = 1.0;
+    deflationary_wage.calvo_draw = 0.0;
+    deflationary_wage.downward_drift = 0.01;
+    deflationary_wage.expected_inflation = -0.999;
+    deflationary_wage.wage_indexation = 1.0;
+    const auto deflationary_output = take(wage_plan(deflationary_wage));
+    near(deflationary_output.target, 10.0 * 0.001 * 0.99);
+    assert(deflationary_output.posted > 0.0);
     assert(wage_output.minimum_bound);
 
     PricePlanInput price;
