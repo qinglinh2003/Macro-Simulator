@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from macro_sim.diagnostics.config_confirmation import compare_batch_reports
+from macro_sim.diagnostics.config_confirmation import (
+    REPRESENTATIVE_CONFIRMATION_FIELDS,
+    compare_batch_reports,
+)
+from macro_sim.diagnostics.config_contracts import build_contract_registry
 
 
 def _effect(difference: float, low: float, high: float) -> dict:
@@ -112,3 +116,18 @@ def test_finite_size_comparison_rejects_horizon_or_seed_mismatch() -> None:
     large["seeds"] = [101]
     with pytest.raises(ValueError, match="paired seeds"):
         compare_batch_reports(_batch(population=100_000), large)
+
+
+def test_representative_confirmation_covers_every_causal_module() -> None:
+    contracts = build_contract_registry()["contracts"]
+    causal_contracts = {
+        (contract["module"], contract["field_name"]): contract
+        for contract in contracts
+        if contract["experiment_role"] == "causal_treatment"
+    }
+    causal_modules = {module for module, _field in causal_contracts}
+    assert set(REPRESENTATIVE_CONFIRMATION_FIELDS) == causal_modules
+    for module, field_name in REPRESENTATIVE_CONFIRMATION_FIELDS.items():
+        contract = causal_contracts[(module, field_name)]
+        assert contract["horizon_days"] <= 365
+        assert contract["treatment_values"]

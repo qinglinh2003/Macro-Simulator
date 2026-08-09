@@ -8,6 +8,22 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+REPRESENTATIVE_CONFIRMATION_FIELDS: Mapping[str, str] = {
+    "banking_and_credit": "household_credit",
+    "consumption_prices_and_expectations": "alpha1",
+    "demography_and_households": "demographic_annual_divorce_rate_base",
+    "distribution_and_welfare": "mpc_dispersion",
+    "energy": "energy_intensity",
+    "firms_and_industrial_dynamics": "rho",
+    "government_and_public_sector": "jg_productivity",
+    "housing": "builder_productivity",
+    "labor_market": "job_search_intensity",
+    "open_economy": "migration_rate",
+    "production_and_technology": "alpha",
+    "securities_and_capital_markets": "wealth_effect",
+}
+
+
 def _canonical_value(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 

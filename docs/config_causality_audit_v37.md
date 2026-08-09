@@ -1720,6 +1720,18 @@ tests finite-size robustness before any final range is frozen.
 - Calibrate plausible ranges against primary empirical sources.
 - Freeze per-field causal contracts and regression thresholds.
 
+The one-million-person confirmation sample is pre-registered in
+`REPRESENTATIVE_CONFIRMATION_FIELDS`. It contains exactly one treatment from
+each of the 12 causal modules: `alpha`, `alpha1`, `household_credit`, `rho`,
+`jg_productivity`, `job_search_intensity`,
+`demographic_annual_divorce_rate_base`, `mpc_dispersion`,
+`builder_productivity`, `energy_intensity`, `wealth_effect`, and
+`migration_rate`. Each selected contract is at most one year, has a direct or
+high-salience maintained outcome, and must be rerun with identical seeds at
+100,000 and 1,000,000 persons. The finite-size report now fails visibly on a
+direction failure, a silent mechanism, or an inconclusive primary effect; run
+completion alone is not acceptance.
+
 ### P5 - Policy audit handoff
 
 - Move runtime levers to the Policy experiment matrix.
