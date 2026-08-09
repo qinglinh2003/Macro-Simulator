@@ -407,6 +407,18 @@ test.
    Slow demographic development contracts run for four years: year one is
    discarded, year two establishes the real-wage anchor, year three updates the
    annual signal, and year four exposes fertility and mortality outcomes.
+10. The demographic development signal had two selection biases. It divided
+    cash payroll by hired labor, so mass job loss could raise the conditional
+    earnings of the few surviving workers, and it deflated that quotient by an
+    unweighted mean of firms' posted prices, which changed sharply when firms
+    entered or exited. The native engine now measures contractual labor income
+    per working-age person—giving unemployed people zero income—and deflates it
+    by the maintained aggregate price index. The calculation reuses the normal
+    labor measurement pass and removes the old firm-price scan, so the repair
+    adds no extra per-person pass. In the 100,000-person adverse-transition
+    control, the corrected annual index falls from 1.0 to about 0.397 while
+    unemployment rises from 17.5% before the shock to 98.1% at the endpoint;
+    the baseline fertility and mortality ceilings then bind at 1.5 and 1.3.
 
 ### 8.3 Production and technology early screen
 
