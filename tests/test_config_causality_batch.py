@@ -9,6 +9,7 @@ from macro_sim.diagnostics.config_batch import (
     _canonical_hash,
     _direction_result,
     _load_cached,
+    rejudge_contract_report,
     run_contract_batch,
 )
 from macro_sim.diagnostics.config_contracts import (
@@ -32,6 +33,42 @@ def test_cache_rejects_a_different_signature(tmp_path: Path) -> None:
     )
     assert _load_cached(path, signature="def") is None
     assert _load_cached(path, signature="abc") == {"days": 90}
+
+
+def test_rejudge_contract_report_reuses_effects_with_corrected_direction() -> None:
+    contract = next(
+        contract
+        for contract in activation_contracts(module="housing")
+        if contract.field_name == "housing_fertility_mult_hi"
+    )
+    metric_id = next(iter(contract.expected_directions))
+    report = {
+        "contract": {
+            "field_name": contract.field_name,
+            "scope": contract.scope,
+            "baseline_value": contract.baseline_value,
+            "treatment_values": list(contract.treatment_values),
+        },
+        "arms": [
+            {
+                "treatment_value": contract.treatment_values[0],
+                "effects": {
+                    metric_id: {
+                        "last_window_mean": {
+                            "mean_difference": -0.2,
+                            "confidence_low": -0.3,
+                            "confidence_high": -0.1,
+                        }
+                    }
+                },
+                "time_responses": {},
+            }
+        ],
+    }
+    updated = rejudge_contract_report(report, contract)
+    assert updated["arms"][0]["direction_checks"][metric_id]["result"] == "pass"
+    assert updated["arms"][0]["causally_resolved_expected_metrics"] == [metric_id]
+    assert "direction_checks" not in report["arms"][0]
 
 
 @pytest.mark.parametrize(

@@ -7,6 +7,7 @@ worlds that would oversubscribe the host.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import asdict
 import hashlib
 import json
@@ -245,6 +246,58 @@ def _arm_report(
         "direction_checks": direction_checks,
         "causally_resolved_expected_metrics": sorted(resolved_expected),
     }
+
+
+def rejudge_contract_report(
+    report: Mapping[str, Any], contract: TreatmentContract
+) -> dict[str, Any]:
+    """Reapply a corrected direction contract to unchanged simulation effects."""
+
+    previous = report["contract"]
+    if previous.get("field_name") != contract.field_name:
+        raise ValueError("field name does not match the corrected contract")
+    if previous.get("scope") != contract.scope:
+        raise ValueError("scope does not match the corrected contract")
+    if previous.get("baseline_value") != contract.baseline_value:
+        raise ValueError("baseline value does not match the corrected contract")
+    if tuple(previous.get("treatment_values", ())) != tuple(
+        contract.treatment_values
+    ):
+        raise ValueError("treatment arms do not match the corrected contract")
+
+    updated = deepcopy(dict(report))
+    updated["contract"] = asdict(contract)
+    for arm in updated.get("arms", ()):
+        if arm.get("stability_failure"):
+            continue
+        direction_checks: dict[str, dict[str, str]] = {}
+        resolved_expected = []
+        for metric_id, expected in contract.expected_directions.items():
+            statistic = contract.direction_statistics.get(
+                metric_id, "post_burnin_mean"
+            )
+            metric_effects = arm.get("effects", {}).get(metric_id)
+            if not isinstance(metric_effects, Mapping):
+                result = "missing_metric"
+            elif statistic not in metric_effects:
+                result = "missing_statistic"
+            else:
+                result = _direction_result(
+                    expected=expected,
+                    effect=metric_effects[statistic],
+                    baseline_value=contract.baseline_value,
+                    treatment_value=arm["treatment_value"],
+                    time_response=arm.get("time_responses", {}).get(metric_id),
+                )
+            direction_checks[metric_id] = {
+                "statistic": statistic,
+                "result": result,
+            }
+            if result in {"pass", "pass_heterogeneous"}:
+                resolved_expected.append(metric_id)
+        arm["direction_checks"] = direction_checks
+        arm["causally_resolved_expected_metrics"] = sorted(resolved_expected)
+    return updated
 
 
 def run_contract_batch(
