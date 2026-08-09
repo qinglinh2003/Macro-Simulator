@@ -1333,6 +1333,11 @@ The principal causal results are:
   `wealth_effect=0`, this expectation parameter correctly changes only its
   maintained state, not aggregate demand in isolation.
 
+A subsequent 12-path, four-seed formal block confirms both `wealth_effect`
+arms on the direct household-equity consumption addition. Both direction
+checks pass without a silent or statistically inconclusive arm, so the earlier
+two-seed repair result is not being retained on a single favorable seed pair.
+
 The accepted repair artifact executes 30 native worlds across six contracts,
 two paired seeds, 100,000 persons, and eight workers. Every treatment arm is
 non-silent, every predeclared direct direction check passes or passes the
