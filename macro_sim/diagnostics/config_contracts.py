@@ -1247,7 +1247,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.social.divorce_age_gap_multiplier_per_10y": {
             "status": "screening_ready",
             "values": (1.0, 2.5),
-            "horizon_days": 1825,
+            "horizon_days": 365,
             "directions": {divorces: "increase"},
             "statistics": {divorces: "cumulative"},
             "rationale": "This multiplier compounds the annual divorce hazard with each ten years of spousal age distance. Raising it should increase dissolution among age-dissimilar genesis unions.",
@@ -1255,7 +1255,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.social.divorce_child_multiplier": {
             "status": "screening_ready",
             "values": (0.25, 1.25),
-            "horizon_days": 1825,
+            "horizon_days": 365,
             "directions": {divorces: "increase"},
             "statistics": {divorces: "cumulative"},
             "rationale": "The child multiplier scales divorce risk for couples with a living minor child. A larger value weakens the stabilizing child effect and should raise cumulative divorces.",
@@ -1263,7 +1263,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.social.divorce_duration_width": {
             "status": "screening_ready",
             "values": (1.5, 8.0),
-            "horizon_days": 1825,
+            "horizon_days": 365,
             "directions": {divorces: "increase"},
             "statistics": {divorces: "cumulative"},
             "rationale": "A wider duration hump keeps the elevated divorce hazard active farther from its peak year and should raise cumulative dissolution across the mixed-duration genesis union stock.",
@@ -1271,7 +1271,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.social.divorce_peak_duration_years": {
             "status": "screening_ready",
             "values": (1.0, 10.0),
-            "horizon_days": 1825,
+            "horizon_days": 365,
             "directions": {divorces: "nonzero"},
             "statistics": {divorces: "cumulative"},
             "rationale": "Moving the duration-risk peak redistributes dissolution pressure across young and mature unions. The aggregate sign depends on the shared opening duration distribution, but the cumulative path must change.",
@@ -1279,7 +1279,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.social.divorce_peak_multiplier": {
             "status": "screening_ready",
             "values": (1.0, 4.0),
-            "horizon_days": 1825,
+            "horizon_days": 365,
             "directions": {divorces: "increase"},
             "statistics": {divorces: "cumulative"},
             "rationale": "The peak multiplier raises divorce hazards near the configured duration peak while retaining the same base rate; a larger multiplier should raise cumulative dissolutions.",
