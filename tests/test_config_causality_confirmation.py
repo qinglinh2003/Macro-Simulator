@@ -13,7 +13,13 @@ def _effect(difference: float, low: float, high: float) -> dict:
     }
 
 
-def _batch(*, population: int, days: int = 365, difference: float = 2.0) -> dict:
+def _batch(
+    *,
+    population: int,
+    days: int = 365,
+    difference: float = 2.0,
+    direction_result: str = "pass",
+) -> dict:
     contract = {
         "scope": "root",
         "field_name": "v",
@@ -34,6 +40,11 @@ def _batch(*, population: int, days: int = 365, difference: float = 2.0) -> dict
                 "arms": [
                     {
                         "treatment_value": 2.0,
+                        "mechanism_silent": False,
+                        "primary_effect_inconclusive": False,
+                        "direction_checks": {
+                            "metric.test": {"result": direction_result}
+                        },
                         "effects": {
                             "metric.test": {
                                 "post_burnin_mean": _effect(
@@ -61,6 +72,34 @@ def test_matched_finite_size_comparison_reports_sign_and_ratio() -> None:
     assert metric["raw_confirmation_to_reference_ratio"] == pytest.approx(1.5)
     assert metric["per_person_confirmation_to_reference_ratio"] == pytest.approx(0.15)
     assert metric["confirmation_interval_excludes_zero"] is True
+    arm = payload["fields"][0]["arms"][0]
+    assert arm["confirmation_direction_gate"] == "pass"
+    assert payload["acceptance"] == {
+        "direction_arm_count": 1,
+        "direction_failure_count": 0,
+        "mechanism_silent_count": 0,
+        "primary_inconclusive_count": 0,
+    }
+
+
+def test_finite_size_comparison_surfaces_failed_large_scale_gate() -> None:
+    large = _batch(
+        population=1_000_000,
+        difference=-3.0,
+        direction_result="fail",
+    )
+    large["reports"][0]["arms"][0]["mechanism_silent"] = True
+    large["reports"][0]["arms"][0]["primary_effect_inconclusive"] = True
+    payload = compare_batch_reports(_batch(population=100_000), large)
+    arm = payload["fields"][0]["arms"][0]
+    assert arm["confirmation_direction_results"] == {"metric.test": "fail"}
+    assert arm["confirmation_direction_gate"] == "fail"
+    assert payload["acceptance"] == {
+        "direction_arm_count": 1,
+        "direction_failure_count": 1,
+        "mechanism_silent_count": 1,
+        "primary_inconclusive_count": 1,
+    }
 
 
 def test_finite_size_comparison_rejects_horizon_or_seed_mismatch() -> None:

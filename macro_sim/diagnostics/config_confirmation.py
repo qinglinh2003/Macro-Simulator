@@ -60,6 +60,21 @@ def _interval_excludes_zero(effect: Mapping[str, Any]) -> bool | None:
     return not (low <= 0.0 <= high)
 
 
+def _direction_results(arm: Mapping[str, Any]) -> dict[str, str]:
+    results: dict[str, str] = {}
+    for metric_id, check in arm.get("direction_checks", {}).items():
+        if isinstance(check, Mapping) and isinstance(check.get("result"), str):
+            results[str(metric_id)] = str(check["result"])
+    return results
+
+
+def _direction_gate(results: Mapping[str, str]) -> str:
+    if not results:
+        return "not_applicable"
+    accepted = {"pass", "pass_heterogeneous"}
+    return "pass" if all(value in accepted for value in results.values()) else "fail"
+
+
 def compare_batch_reports(
     reference: str | Path | Mapping[str, Any],
     confirmation: str | Path | Mapping[str, Any],
@@ -127,6 +142,8 @@ def compare_batch_reports(
         for value_key in sorted(small_arms):
             small_arm = small_arms[value_key]
             large_arm = large_arms[value_key]
+            reference_direction_results = _direction_results(small_arm)
+            confirmation_direction_results = _direction_results(large_arm)
             metrics = []
             for metric_id in small_contract.get("primary_metrics", ()):
                 statistic = direction_statistics.get(metric_id, "post_burnin_mean")
@@ -193,6 +210,20 @@ def compare_batch_reports(
             arm_comparisons.append(
                 {
                     "treatment_value": large_arm["treatment_value"],
+                    "reference_direction_results": reference_direction_results,
+                    "confirmation_direction_results": confirmation_direction_results,
+                    "reference_direction_gate": _direction_gate(
+                        reference_direction_results
+                    ),
+                    "confirmation_direction_gate": _direction_gate(
+                        confirmation_direction_results
+                    ),
+                    "confirmation_mechanism_silent": bool(
+                        large_arm.get("mechanism_silent", False)
+                    ),
+                    "confirmation_primary_effect_inconclusive": bool(
+                        large_arm.get("primary_effect_inconclusive", False)
+                    ),
                     "metrics": metrics,
                 }
             )
@@ -206,10 +237,33 @@ def compare_batch_reports(
             }
         )
 
+    direction_arms = [
+        arm
+        for field in compared_fields
+        for arm in field["arms"]
+        if arm["confirmation_direction_gate"] != "not_applicable"
+    ]
     return {
         "schema_version": "config-finite-size-confirmation-v1",
         "reference_population_per_country": small_population,
         "confirmation_population_per_country": large_population,
         "seeds": list(large.get("seeds", ())),
+        "acceptance": {
+            "direction_arm_count": len(direction_arms),
+            "direction_failure_count": sum(
+                arm["confirmation_direction_gate"] != "pass"
+                for arm in direction_arms
+            ),
+            "mechanism_silent_count": sum(
+                arm["confirmation_mechanism_silent"]
+                for field in compared_fields
+                for arm in field["arms"]
+            ),
+            "primary_inconclusive_count": sum(
+                arm["confirmation_primary_effect_inconclusive"]
+                for field in compared_fields
+                for arm in field["arms"]
+            ),
+        },
         "fields": compared_fields,
     }
