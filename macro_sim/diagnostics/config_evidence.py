@@ -54,6 +54,12 @@ def _report_evidence(
         strength = "formal_complete" if seed_count >= formal_seed_count else "pilot_complete"
     elif any(resolved):
         strength = "formal_partial" if seed_count >= formal_seed_count else "pilot_partial"
+    elif arms:
+        strength = (
+            "formal_unresolved"
+            if seed_count >= formal_seed_count
+            else "pilot_unresolved"
+        )
     else:
         strength = "no_evidence"
     return {
@@ -109,10 +115,12 @@ def build_evidence_ledger(
 
     rank = {
         "no_evidence": 0,
-        "pilot_partial": 1,
-        "pilot_complete": 2,
-        "formal_partial": 3,
-        "formal_complete": 4,
+        "pilot_unresolved": 1,
+        "formal_unresolved": 2,
+        "pilot_partial": 3,
+        "pilot_complete": 4,
+        "formal_partial": 5,
+        "formal_complete": 6,
     }
     rows = []
     for contract in contracts:

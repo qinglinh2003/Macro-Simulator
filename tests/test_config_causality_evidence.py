@@ -75,7 +75,7 @@ def test_evidence_ledger_does_not_call_unjudged_arm_silent() -> None:
     arm = {"stability_failure": True, "direction_checks": None}
     payload = build_evidence_ledger([_contract("field")], [("failed.json", _payload("field", [arm]))])
     row = payload["rows"][0]
-    assert row["status"] == "no_evidence"
+    assert row["status"] == "formal_unresolved"
     assert row["silent_arm_count"] == 0
     assert row["stability_failure_arm_count"] == 1
     assert row["unjudged_arm_count"] == 1
@@ -86,5 +86,14 @@ def test_evidence_ledger_counts_explicit_direction_failures() -> None:
         [_contract("field")], [("failed.json", _payload("field", [_arm("fail")]))]
     )
     row = payload["rows"][0]
+    assert row["status"] == "formal_unresolved"
     assert row["direction_failure_arm_count"] == 1
     assert row["inconclusive_arm_count"] == 0
+
+
+def test_evidence_ledger_labels_single_seed_effect_as_pilot_unresolved() -> None:
+    payload = build_evidence_ledger(
+        [_contract("field")],
+        [("pilot.json", _payload("field", [_arm("inconclusive")], seeds=1))],
+    )
+    assert payload["rows"][0]["status"] == "pilot_unresolved"
