@@ -960,21 +960,23 @@ def test_lifecycle_and_development_treatments_reach_population_rules(
     (
         "scenario",
         "growth",
+        "wage_indexation",
         "signal_halflife",
         "fertility_elasticity",
         "mortality_elasticity",
     ),
     (
-        ("demographic_real_wage_transition", 0.025, None, None, None),
-        ("demographic_signal_transition", 0.025, None, None, None),
-        ("demographic_income_elasticity_transition", 0.025, 1.0, None, None),
-        ("demographic_positive_income_transition", 0.08, 0.5, 4.0, 4.0),
-        ("demographic_negative_income_transition", -0.05, 0.5, 4.0, 4.0),
+        ("demographic_real_wage_transition", 0.025, 1.0, None, None, None),
+        ("demographic_signal_transition", 0.025, 1.0, None, None, None),
+        ("demographic_income_elasticity_transition", 0.025, 1.0, 1.0, None, None),
+        ("demographic_positive_income_transition", 0.08, 1.0, 0.5, 4.0, 4.0),
+        ("demographic_negative_income_transition", 0.0, 0.0, 0.5, 4.0, 4.0),
     ),
 )
 def test_demographic_income_activation_builds_a_shared_wage_transition(
     scenario: str,
     growth: float,
+    wage_indexation: float,
     signal_halflife: float | None,
     fertility_elasticity: float | None,
     mortality_elasticity: float | None,
@@ -995,7 +997,7 @@ def test_demographic_income_activation_builds_a_shared_wage_transition(
     )
     population_rules = economy.rules
     assert real_rules.annual_tfp_growth == pytest.approx(growth)
-    assert real_rules.wage_indexation == pytest.approx(1.0)
+    assert real_rules.wage_indexation == pytest.approx(wage_indexation)
     assert population_rules.demographic_feedback_burnin_years == (
         4 if scenario == "demographic_real_wage_transition" else 1
     )

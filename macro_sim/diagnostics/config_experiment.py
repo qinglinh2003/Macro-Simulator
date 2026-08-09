@@ -1108,8 +1108,12 @@ def apply_native_activation_scenario(
         population_rules.fertility_income_elasticity = 4.0
         population_rules.mortality_income_elasticity = 4.0
     elif scenario == "demographic_negative_income_transition":
-        rules.annual_tfp_growth = -0.05
-        rules.wage_indexation = 1.0
+        # The legacy non-indexed wage rule is the identified adverse real-wage
+        # path: nominal wages lag the endogenous price level. Negative TFP on
+        # its own lowers prices even faster than wages and therefore raises the
+        # measured real wage, which activates the wrong demographic clamp.
+        rules.annual_tfp_growth = 0.0
+        rules.wage_indexation = 0.0
         population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 0.5
         population_rules.fertility_income_elasticity = 4.0
