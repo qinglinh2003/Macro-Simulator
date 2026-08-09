@@ -60,6 +60,9 @@ def _report_evidence(
         "stage": payload.get("stage"),
         "arm_count": len(arms),
         "resolved_arm_count": sum(resolved),
+        "silent_arm_count": sum(
+            bool(arm.get("mechanism_silent", True)) for arm in arms
+        ),
     }
 
 
@@ -109,6 +112,7 @@ def build_evidence_ledger(
                 "stage": None,
                 "arm_count": 0,
                 "resolved_arm_count": 0,
+                "silent_arm_count": 0,
             }
         else:
             field_candidates = candidates.get(field_name, ())
@@ -128,6 +132,7 @@ def build_evidence_ledger(
                     "stage": None,
                     "arm_count": 0,
                     "resolved_arm_count": 0,
+                    "silent_arm_count": 0,
                 },
             )
         rows.append(
@@ -149,4 +154,3 @@ def build_evidence_ledger(
         "status_counts": dict(sorted(counts.items())),
         "rows": rows,
     }
-

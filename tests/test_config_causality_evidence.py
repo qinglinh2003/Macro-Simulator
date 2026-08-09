@@ -44,6 +44,7 @@ def test_evidence_ledger_distinguishes_complete_partial_and_excluded() -> None:
     assert rows["complete"]["status"] == "formal_complete"
     assert rows["partial"]["status"] == "formal_partial"
     assert rows["partial"]["resolved_arm_count"] == 1
+    assert rows["partial"]["silent_arm_count"] == 0
     assert rows["missing"]["status"] == "no_evidence"
     assert rows["policy"]["status"] == "excluded_policy"
 
@@ -53,4 +54,3 @@ def test_evidence_ledger_ignores_small_population_reports() -> None:
     report["population_per_country"] = 10_000
     payload = build_evidence_ledger([_contract("field")], [("small.json", report)])
     assert payload["rows"][0]["status"] == "no_evidence"
-
