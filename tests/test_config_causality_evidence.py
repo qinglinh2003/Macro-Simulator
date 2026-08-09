@@ -19,12 +19,14 @@ def _arm(result: str, *, silent: bool = False) -> dict:
     }
 
 
-def _payload(field: str, arms: list[dict], *, seeds: int = 4) -> dict:
+def _payload(field: str, arms: list[dict], *, seeds: int = 4, days: int = 365) -> dict:
     return {
         "population_per_country": 100_000,
         "seeds": list(range(seeds)),
         "stage": "formal",
-        "reports": [{"contract": {"field_name": field}, "arms": arms}],
+        "reports": [
+            {"contract": {"field_name": field}, "days": days, "arms": arms}
+        ],
     }
 
 
@@ -54,3 +56,14 @@ def test_evidence_ledger_ignores_small_population_reports() -> None:
     report["population_per_country"] = 10_000
     payload = build_evidence_ledger([_contract("field")], [("small.json", report)])
     assert payload["rows"][0]["status"] == "no_evidence"
+
+
+def test_evidence_ledger_prefers_longer_equally_strong_report() -> None:
+    reports = [
+        ("short.json", _payload("field", [_arm("inconclusive")], days=90)),
+        ("long.json", _payload("field", [_arm("inconclusive")], days=7_300)),
+    ]
+    payload = build_evidence_ledger([_contract("field")], reports)
+    row = payload["rows"][0]
+    assert row["source"] == "long.json"
+    assert row["days"] == 7_300
