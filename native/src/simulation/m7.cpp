@@ -1752,11 +1752,16 @@ void measure_population(const core::RootState &state, const M7Rules &rules,
     return separate_job(employment, primary, day, kind, accounts);
 }
 
-void measure_labor(const core::RootState &state, const M7Rules &rules,
-                   const M5PolicyState &policy, const core::PersonStore &persons,
-                   const core::EmploymentBook &employment, const M4TickScratch &real,
-                   std::int32_t day, core::LaborAccounts &accounts,
-                   M7Metrics &metrics) {
+struct LaborIncomeMeasurement final {
+    double contractual_income{0.0};
+    double working_age_population{0.0};
+};
+
+[[nodiscard]] LaborIncomeMeasurement
+measure_labor(const core::RootState &state, const M7Rules &rules,
+              const M5PolicyState &policy, const core::PersonStore &persons,
+              const core::EmploymentBook &employment, const M4TickScratch &real,
+              std::int32_t day, core::LaborAccounts &accounts, M7Metrics &metrics) {
     accounts.employed_fte = 0.0;
     accounts.employed_heads = 0.0;
     accounts.unemployed = 0.0;
@@ -1894,6 +1899,7 @@ void measure_labor(const core::RootState &state, const M7Rules &rules,
     metrics.participation_rate =
         working_age_total > 0.0 ? accounts.labor_supply / working_age_total : 0.0;
     static_cast<void>(state);
+    return {wage_bill, working_age_total};
 }
 
 class M7Extension final : public M6TickExtension {
@@ -3485,6 +3491,7 @@ class M7Extension final : public M6TickExtension {
         double price_sum = 0.0;
         std::size_t priced_firms = 0U;
         for (const auto &work : real.firm_work_) {
+            wage_sum += std::max(0.0, work.wage_bill);
             if (work.posted_price > kLaborTolerance) {
                 price_sum += work.posted_price;
                 ++priced_firms;
@@ -3496,47 +3503,19 @@ class M7Extension final : public M6TickExtension {
         // causing the demographic feedback to misread mass job loss as an
         // improvement in living standards.  Working-age people without active
         // hours remain in the denominator with zero labor income.
-        double working_age_population = 0.0;
-        for (const auto person_id : scratch_.persons_.alive_ids()) {
-            const auto *person = scratch_.persons_.get(person_id);
-            const double age = completed_age(*person, calendar_day);
-            const bool working_age =
-                age >= static_cast<double>(runtime_.rules.working_age) &&
-                age < static_cast<double>(runtime_.rules.retirement_age);
-            if (!working_age) {
-                continue;
-            }
-            working_age_population += 1.0;
-            for (const auto job_id : std::array{
-                     scratch_.employment_.primary_job(person_id),
-                     scratch_.employment_.secondary_job(person_id)}) {
-                const auto *job = scratch_.employment_.get(job_id);
-                if (job != nullptr && job->active && !job->suspended) {
-                    wage_sum += std::max(
-                        0.0, job->wage * job->hours * person->efficiency);
-                }
-            }
-        }
-        scratch_.demographic_signal_wage_sum_ += wage_sum;
-        scratch_.demographic_signal_labor_sum_ += working_age_population;
-        scratch_.demographic_signal_price_sum_ +=
-            priced_firms > 0U ? price_sum / static_cast<double>(priced_firms)
-                              : std::max(kLaborTolerance,
-                                         real_runtime.last_metrics.price_index);
-        ++scratch_.demographic_signal_days_;
-        scratch_.working_metrics_.demographic_real_wage_signal =
-            scratch_.demographic_signal_x_;
-        scratch_.working_metrics_.demographic_fertility_multiplier =
-            scratch_.demographic_signal_fertility_multiplier_;
-        scratch_.working_metrics_.demographic_mortality_multiplier =
-            scratch_.demographic_signal_mortality_multiplier_;
         measure_population(state, runtime_.rules, scratch_.persons_,
                            scratch_.membership_, scratch_.relationships_, calendar_day,
                            scratch_.working_metrics_);
+        double working_age_population =
+            static_cast<double>(scratch_.working_metrics_.population) *
+            scratch_.working_metrics_.working_age_share;
         if (runtime_.rules.persistent_labor) {
-            measure_labor(state, runtime_.rules, monetary.policy, scratch_.persons_,
-                          scratch_.employment_, real, calendar_day,
-                          scratch_.labor_accounts_, scratch_.working_metrics_);
+            const auto labor_income = measure_labor(
+                state, runtime_.rules, monetary.policy, scratch_.persons_,
+                scratch_.employment_, real, calendar_day, scratch_.labor_accounts_,
+                scratch_.working_metrics_);
+            wage_sum = labor_income.contractual_income;
+            working_age_population = labor_income.working_age_population;
             const auto flow_delta = [](double closing, double opening) {
                 return std::max(0.0, closing - opening);
             };
@@ -3585,6 +3564,19 @@ class M7Extension final : public M6TickExtension {
                 }
             }
         }
+        scratch_.demographic_signal_wage_sum_ += wage_sum;
+        scratch_.demographic_signal_labor_sum_ += working_age_population;
+        scratch_.demographic_signal_price_sum_ +=
+            priced_firms > 0U ? price_sum / static_cast<double>(priced_firms)
+                              : std::max(kLaborTolerance,
+                                         real_runtime.last_metrics.price_index);
+        ++scratch_.demographic_signal_days_;
+        scratch_.working_metrics_.demographic_real_wage_signal =
+            scratch_.demographic_signal_x_;
+        scratch_.working_metrics_.demographic_fertility_multiplier =
+            scratch_.demographic_signal_fertility_multiplier_;
+        scratch_.working_metrics_.demographic_mortality_multiplier =
+            scratch_.demographic_signal_mortality_multiplier_;
         scratch_.working_metrics_.beneficial_projection_error =
             beneficial_projection_error(scratch_.beneficial_ownership_);
         return Status::success();
