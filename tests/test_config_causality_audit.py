@@ -117,6 +117,7 @@ def test_persistent_securities_structure_is_not_mislabeled_as_transient() -> Non
     assert rows["config.watchlist_size"]["experiment_role"] == (
         "causal_treatment"
     )
+    assert rows["config.w_firm0"]["experiment_role"] == "causal_treatment"
     assert rows["config.shares_per_firm"]["experiment_role"] == (
         "invariance_only"
     )

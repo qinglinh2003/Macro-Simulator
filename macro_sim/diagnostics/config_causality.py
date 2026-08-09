@@ -189,7 +189,11 @@ OBSERVATION_ONLY_FIELDS = frozenset(
 # account.  Treating all three as transient genesis shocks would erase their
 # actual economic contract.
 STRUCTURAL_CAUSAL_FIELDS = frozenset(
-    {"config.founder_owned_genesis", "config.watchlist_size"}
+    {
+        "config.founder_owned_genesis",
+        "config.w_firm0",
+        "config.watchlist_size",
+    }
 )
 STRUCTURAL_INVARIANCE_FIELDS = frozenset({"config.shares_per_firm"})
 
