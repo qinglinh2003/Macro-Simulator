@@ -1065,12 +1065,20 @@ def apply_native_activation_scenario(
         population_rules.vital_rates = vital
         population.population.fixed_genesis_vital_rates = True
         population.population.genesis_vital_rates = vital
-    elif scenario == "guardian_mortality_stress":
+    elif scenario in {
+        "guardian_mortality_stress",
+        "guardian_sibling_stress",
+        "guardian_household_stress",
+    }:
         vital = population_rules.vital_rates
         vital.makeham_a = max(float(vital.makeham_a), 0.05)
         population_rules.vital_rates = vital
         population.population.fixed_genesis_vital_rates = True
         population.population.genesis_vital_rates = vital
+        if scenario in {"guardian_sibling_stress", "guardian_household_stress"}:
+            population_rules.guardian_search_grandparents = False
+        if scenario == "guardian_household_stress":
+            population_rules.guardian_search_adult_siblings = False
     elif scenario == "eligible_peak_leaving_home":
         population_rules.leave_home_min_age = 18
     elif scenario == "long_horizon_peak_leaving_home":

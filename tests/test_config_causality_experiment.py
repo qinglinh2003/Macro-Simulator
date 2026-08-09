@@ -399,6 +399,39 @@ def test_banking_activation_preserves_treatment(
         assert monetary.policy.bank_target_capital_ratio == pytest.approx(0.0)
 
 
+@pytest.mark.parametrize(
+    ("field", "scenario", "attribute"),
+    [
+        (
+            "guardian_search_adult_siblings",
+            "guardian_sibling_stress",
+            "guardian_search_adult_siblings",
+        ),
+        (
+            "guardian_search_same_household_adults",
+            "guardian_household_stress",
+            "guardian_search_same_household_adults",
+        ),
+    ],
+)
+def test_guardian_fallback_activation_preserves_treatment(
+    field: str, scenario: str, attribute: str
+) -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=365, seed=32
+    )
+    native_spec = native_nested_treatment_spec(
+        baseline, scope="social", field=field, value=False
+    )
+    apply_native_activation_scenario(native_spec, scenario=scenario)
+    population = native_spec.economies[0].domestic_economy
+    assert getattr(population.rules, attribute) is False
+    assert population.rules.guardian_search_grandparents is False
+    if scenario == "guardian_household_stress":
+        assert population.rules.guardian_search_adult_siblings is False
+    assert population.population.fixed_genesis_vital_rates
+
+
 def test_paired_run_summary_uses_common_metrics_only() -> None:
     def run(value: float, *, extra: bool = False) -> dict:
         metrics = {
