@@ -1376,12 +1376,11 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.social.marriage_max_age_gap": {
             "status": "activation_scenario_required",
-            "values": (5, 35),
+            "values": (2,),
             "activation": "unpartnered_marriage_market",
             "horizon_days": 730,
-            "directions": {marriages: "increase", partner_age_gap: "increase"},
-            "statistics": {marriages: "cumulative"},
-            "rationale": "The hard age-gap cutoff controls which candidate pairs can be considered. Relaxing it should expand feasible matches and permit more age-distant unions.",
+            "directions": {partner_age_gap: "increase"},
+            "rationale": "The hard age-gap cutoff controls which candidate pairs can be considered. Tightening it to two years makes the support bind and must reduce the realized partner-age gap. Aggregate marriage incidence is not imposed because a narrow support can also reduce congestion in the sampled matching process; a ceiling above the available age support is correctly nonbinding.",
         },
         "config.social.marriage_peak_age": {
             "status": "activation_scenario_required",
