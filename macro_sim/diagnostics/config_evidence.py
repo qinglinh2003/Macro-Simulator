@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -13,6 +14,56 @@ ACCEPTED_DIRECTION_RESULTS = {
     "pass",
     "pass_heterogeneous",
 }
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _contract_compatible(
+    stored: Mapping[str, Any],
+    current: Mapping[str, Any],
+    arms: Iterable[Mapping[str, Any]],
+) -> bool:
+    """Reject evidence produced for a materially different causal contract.
+
+    Reporting catalogs and recommended horizons can grow without invalidating
+    an already identified direct effect.  Treatment levels, activation state,
+    baseline, scope, expected signs, and their statistics cannot: changing any
+    of those changes the estimand itself.
+    """
+
+    for key in (
+        "scope",
+        "field_name",
+        "baseline_value",
+        "treatment_values",
+        "activation_scenario",
+    ):
+        if key in current and _canonical(stored.get(key)) != _canonical(current[key]):
+            return False
+
+    stored_directions = stored.get("expected_directions", {})
+    current_directions = current.get("expected_directions", {})
+    stored_statistics = stored.get("direction_statistics", {})
+    current_statistics = current.get("direction_statistics", {})
+    for metric_id, expected in current_directions.items():
+        if stored_directions.get(metric_id) != expected:
+            return False
+        if stored_statistics.get(metric_id, "post_burnin_mean") != (
+            current_statistics.get(metric_id, "post_burnin_mean")
+        ):
+            return False
+
+    for arm in arms:
+        if arm.get("stability_failure"):
+            continue
+        checks = arm.get("direction_checks")
+        if current_directions and not isinstance(checks, Mapping):
+            return False
+        if any(metric_id not in checks for metric_id in current_directions):
+            return False
+    return True
 
 
 def _direction_results(arm: Mapping[str, Any]) -> tuple[str, ...]:
@@ -96,15 +147,36 @@ def build_evidence_ledger(
 ) -> dict[str, Any]:
     """Return the strongest native evidence found for every Config contract."""
 
+    contract_rows = tuple(contracts)
+    current_by_id = {
+        str(contract["field_id"]): contract for contract in contract_rows
+    }
+    current_ids_by_name: dict[str, list[str]] = {}
+    for contract in contract_rows:
+        current_ids_by_name.setdefault(str(contract["field_name"]), []).append(
+            str(contract["field_id"])
+        )
     candidates: dict[str, list[dict[str, Any]]] = {}
     for source, payload in batch_reports:
         if int(payload.get("population_per_country", 0)) < minimum_population:
             continue
         for report in payload.get("reports", ()):
-            field_name = report.get("contract", {}).get("field_name")
+            stored_contract = report.get("contract", {})
+            field_name = stored_contract.get("field_name")
             if not isinstance(field_name, str):
                 continue
-            candidates.setdefault(field_name, []).append(
+            field_id = stored_contract.get("field_id")
+            if not isinstance(field_id, str) or field_id not in current_by_id:
+                matching_ids = current_ids_by_name.get(field_name, ())
+                if len(matching_ids) != 1:
+                    continue
+                field_id = matching_ids[0]
+            current = current_by_id.get(field_id)
+            if current is None or not _contract_compatible(
+                stored_contract, current, report.get("arms", ())
+            ):
+                continue
+            candidates.setdefault(field_id, []).append(
                 _report_evidence(
                     payload,
                     report,
@@ -123,7 +195,7 @@ def build_evidence_ledger(
         "formal_complete": 6,
     }
     rows = []
-    for contract in contracts:
+    for contract in contract_rows:
         role = str(contract["experiment_role"])
         field_name = str(contract["field_name"])
         if role != "causal_treatment":
@@ -143,7 +215,7 @@ def build_evidence_ledger(
                 "unjudged_arm_count": 0,
             }
         else:
-            field_candidates = candidates.get(field_name, ())
+            field_candidates = candidates.get(str(contract["field_id"]), ())
             evidence = max(
                 field_candidates,
                 key=lambda item: (

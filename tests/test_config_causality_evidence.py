@@ -97,3 +97,59 @@ def test_evidence_ledger_labels_single_seed_effect_as_pilot_unresolved() -> None
         [("pilot.json", _payload("field", [_arm("inconclusive")], seeds=1))],
     )
     assert payload["rows"][0]["status"] == "pilot_unresolved"
+
+
+def test_evidence_ledger_rejects_a_stale_causal_contract() -> None:
+    contract = {
+        **_contract("field"),
+        "scope": "root",
+        "baseline_value": 1.0,
+        "treatment_values": (0.5,),
+        "activation_scenario": "pressure",
+        "expected_directions": {"metric.test": "increase"},
+        "direction_statistics": {"metric.test": "cumulative"},
+    }
+    report = _payload("field", [_arm("pass")])
+    report["reports"][0]["contract"] = {
+        **contract,
+        "expected_directions": {"metric.test": "decrease"},
+    }
+    payload = build_evidence_ledger([contract], [("stale.json", report)])
+    assert payload["rows"][0]["status"] == "no_evidence"
+
+
+def test_evidence_ledger_accepts_catalog_growth_for_same_estimand() -> None:
+    contract = {
+        **_contract("field"),
+        "scope": "root",
+        "baseline_value": 1.0,
+        "treatment_values": (0.5,),
+        "activation_scenario": "pressure",
+        "expected_directions": {"metric.test": "increase"},
+        "direction_statistics": {"metric.test": "post_burnin_mean"},
+        "primary_metrics": ("metric.test", "metric.new_spillover"),
+    }
+    report = _payload("field", [_arm("pass")], days=90)
+    report["reports"][0]["contract"] = {
+        **contract,
+        "primary_metrics": ["metric.test"],
+        "horizon_days": 90,
+    }
+    payload = build_evidence_ledger([contract], [("compatible.json", report)])
+    assert payload["rows"][0]["status"] == "formal_complete"
+
+
+def test_evidence_ledger_keys_duplicate_names_by_full_field_id() -> None:
+    root = _contract("shared")
+    nested = {
+        **_contract("shared", "excluded_non_treatment"),
+        "field_id": "config.social.shared",
+    }
+    report = _payload("shared", [_arm("pass")])
+    report["reports"][0]["contract"]["field_id"] = root["field_id"]
+    payload = build_evidence_ledger(
+        [root, nested], [("root.json", report)]
+    )
+    rows = {row["field_id"]: row for row in payload["rows"]}
+    assert rows["config.shared"]["status"] == "formal_complete"
+    assert rows["config.social.shared"]["status"] == "excluded_non_treatment"

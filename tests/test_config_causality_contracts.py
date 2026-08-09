@@ -382,10 +382,16 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
     assert lifecycle["status"] == "screening_ready"
 
 
-def test_housing_upper_clamps_use_the_structural_monotonic_direction() -> None:
+def test_housing_feedback_contracts_distinguish_elasticities_from_clamps() -> None:
     contracts = {
         contract.field_name: contract
         for contract in activation_contracts(module="housing")
+    }
+    assert contracts["housing_fertility_elasticity"].expected_directions == {
+        "metric.source.m8.housing.fertility_multiplier": "decrease"
+    }
+    assert contracts["housing_leave_elasticity"].expected_directions == {
+        "metric.source.m8.housing.leave_home_multiplier": "decrease"
     }
     assert contracts["housing_fertility_mult_hi"].expected_directions == {
         "metric.source.m8.housing.fertility_multiplier": "increase"
