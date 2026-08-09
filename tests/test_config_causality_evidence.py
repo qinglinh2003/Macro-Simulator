@@ -67,3 +67,11 @@ def test_evidence_ledger_prefers_longer_equally_strong_report() -> None:
     row = payload["rows"][0]
     assert row["source"] == "long.json"
     assert row["days"] == 7_300
+
+
+def test_evidence_ledger_does_not_call_unjudged_arm_silent() -> None:
+    arm = {"stability_failure": True, "direction_checks": None}
+    payload = build_evidence_ledger([_contract("field")], [("failed.json", _payload("field", [arm]))])
+    row = payload["rows"][0]
+    assert row["status"] == "no_evidence"
+    assert row["silent_arm_count"] == 0

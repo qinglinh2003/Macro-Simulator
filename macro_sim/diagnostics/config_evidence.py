@@ -17,7 +17,10 @@ ACCEPTED_DIRECTION_RESULTS = {
 
 def _direction_results(arm: Mapping[str, Any]) -> tuple[str, ...]:
     results = []
-    for check in arm.get("direction_checks", {}).values():
+    checks = arm.get("direction_checks")
+    if not isinstance(checks, Mapping):
+        return ()
+    for check in checks.values():
         if isinstance(check, Mapping):
             result = check.get("result")
         else:
@@ -62,7 +65,7 @@ def _report_evidence(
         "arm_count": len(arms),
         "resolved_arm_count": sum(resolved),
         "silent_arm_count": sum(
-            bool(arm.get("mechanism_silent", True)) for arm in arms
+            arm.get("mechanism_silent") is True for arm in arms
         ),
     }
 
