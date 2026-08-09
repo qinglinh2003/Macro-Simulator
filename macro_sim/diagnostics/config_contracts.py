@@ -826,9 +826,9 @@ def _consumption_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.consumption_rationed_signal": {
             "status": "activation_scenario_required",
             "values": (True,),
-            "directions": {inventory: "increase"},
+            "directions": {inventory: "nonzero"},
             "activation": "opening_consumption_stockout",
-            "rationale": "A shared opening stockout exposes whether unfilled consumer and government orders enter seller demand expectations and raise the subsequent inventory response; output, employment, prices, and realized consumption remain unconstrained trade-offs.",
+            "rationale": "A shared opening stockout exposes whether unfilled consumer and government orders enter seller demand expectations and materially change the subsequent inventory response. The sign is not fixed because higher planned production raises supply while induced sales draw inventory down; output, employment, prices, and realized consumption remain unconstrained trade-offs.",
         },
         "config.eta": {
             "status": "screening_ready",
