@@ -1404,7 +1404,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "status": "activation_scenario_required",
             "values": (False,),
             "activation": "unpartnered_marriage_market",
-            "horizon_days": 730,
+            "horizon_days": 365,
             "directions": {marriages: "nonzero"},
             "statistics": {marriages: "cumulative"},
             "rationale": "Disabling the runtime age-band profile switches entry to the parametric age hump. The age-weighted marriage path must differ in the same initially unpartnered market.",
