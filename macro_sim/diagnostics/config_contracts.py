@@ -1169,11 +1169,8 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "values": (2, 10),
             "activation": "genesis_child_pressure",
             "horizon_days": 30,
-            "directions": {
-                dual_parent_share: "increase",
-                maximum_household_size: "increase",
-            },
-            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. It is identified under a shared high-fertility genesis population so the capacity is genuinely binding; more capacity should permit larger parent-child households and weakly expand dual-parent coverage. Guardian-only placement is deliberately not an outcome because the genesis fallback assigns unmatched children to alternative adult households.",
+            "directions": {maximum_household_size: "increase"},
+            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. It is identified under a shared high-fertility genesis population so the capacity is genuinely binding; more capacity must permit larger parent-child households. Dual-parent coverage remains an observed spillover rather than a monotonic contract because alternative guardian placement can offset the partnered-parent allocation share.",
         },
         "config.relationship.parent_age_gap_sd": {
             "status": "screening_ready",
@@ -1882,9 +1879,9 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.bank_rate_competition": {
             "status": "screening_ready",
             "values": (False,),
-            "directions": {loan_interest: "nonzero", new_credit: "nonzero"},
-            "statistics": {loan_interest: "cumulative", new_credit: "cumulative"},
-            "rationale": "Borrower shopping across heterogeneous loan spreads should alter realized funding cost and credit allocation without assigning an equilibrium output sign.",
+            "directions": {loan_interest: "nonzero"},
+            "statistics": {loan_interest: "cumulative"},
+            "rationale": "Borrower shopping across heterogeneous loan spreads must alter the realized funding cost. Aggregate new credit remains an observed equilibrium spillover rather than a mandatory nonzero response because a binding loan-supply ceiling can change allocation and price without changing total originations.",
         },
         "config.bank_realized_pnl": {
             "status": "activation_scenario_required",
@@ -1963,9 +1960,8 @@ def _banking_contracts() -> Mapping[str, Mapping[str, Any]]:
         "config.hh_subsistence": {
             "status": "screening_ready",
             "values": (0.0, 1.0),
-            "directions": {household_debt: "increase", new_credit: "increase"},
-            "statistics": {new_credit: "cumulative"},
-            "rationale": "A higher underwriting income floor gives liquidity-constrained households more room to borrow toward their planned consumption budget.",
+            "directions": {household_debt: "increase"},
+            "rationale": "A higher underwriting income floor gives liquidity-constrained households more room to carry debt toward their planned consumption budget. Gross new-credit flow remains a secondary equilibrium outcome because faster origination can be offset by repayment and repeat-borrowing timing over the same window.",
         },
         "config.household_credit": {
             "status": "screening_ready",

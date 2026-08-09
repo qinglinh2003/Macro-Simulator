@@ -372,7 +372,6 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         if contract.field_name == "max_children_per_parent"
     )
     assert child_capacity.expected_directions == {
-        "metric.source.m7.dual_parent_minor_share": "increase",
         "metric.source.m7.maximum_household_size": "increase",
     }
     lifecycle = next(
@@ -473,6 +472,15 @@ def test_banking_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+    by_field = {
+        contract.field_name: contract for contract in (*neutral, *activated)
+    }
+    assert set(by_field["bank_rate_competition"].expected_directions) == {
+        "metric.source.m5.loan_interest_paid"
+    }
+    assert set(by_field["hh_subsistence"].expected_directions) == {
+        "metric.economy.household_debt_total"
+    }
     user_cost_metric = (
         "metric.source.m5.investment_user_cost_multiplier_mean"
     )
