@@ -1459,7 +1459,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.fertility_income_elasticity": {
             "status": "activation_scenario_required",
-            "values": (1.0,),
+            "values": (0.0, 1.0),
             "activation": "demographic_income_elasticity_transition",
             "horizon_days": 1460,
             "directions": {fertility_income_multiplier: "nonzero", births: "nonzero"},
@@ -1484,7 +1484,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.mortality_income_elasticity": {
             "status": "activation_scenario_required",
-            "values": (1.0,),
+            "values": (0.0, 1.0),
             "activation": "demographic_income_elasticity_transition",
             "horizon_days": 1460,
             "directions": {mortality_income_multiplier: "nonzero", deaths: "nonzero"},
