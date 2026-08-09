@@ -1019,6 +1019,12 @@ def apply_native_activation_scenario(
         genesis_profile = population_rules.genesis_union_target_profile
         genesis_profile.enabled = False
         population_rules.genesis_union_target_profile = genesis_profile
+    elif scenario == "genesis_child_pressure":
+        vital = population_rules.vital_rates
+        vital.total_fertility_rate = 6.0
+        population_rules.vital_rates = vital
+        population.population.fixed_genesis_vital_rates = True
+        population.population.genesis_vital_rates = vital
     elif scenario == "social_marriage_hump":
         social_profile = population_rules.social_union_target_profile
         social_profile.enabled = False

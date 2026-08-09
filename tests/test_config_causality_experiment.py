@@ -292,6 +292,25 @@ def test_gibrat_capability_selects_the_matching_protocol() -> None:
     assert real.market_protocol == native_backend._load_native().MatchingProtocol.SAMPLED
 
 
+def test_child_pressure_activation_preserves_parent_capacity() -> None:
+    baseline = population_scaled_new_game(
+        population=100_000, days=30, seed=29
+    )
+    native_spec = native_nested_treatment_spec(
+        baseline,
+        scope="relationship",
+        field="max_children_per_parent",
+        value=2,
+    )
+    apply_native_activation_scenario(
+        native_spec, scenario="genesis_child_pressure"
+    )
+    population = native_spec.economies[0].domestic_economy
+    assert population.rules.genesis_maximum_children_per_parent == 2
+    assert population.population.fixed_genesis_vital_rates
+    assert population.population.genesis_vital_rates.total_fertility_rate == pytest.approx(6.0)
+
+
 def test_paired_run_summary_uses_common_metrics_only() -> None:
     def run(value: float, *, extra: bool = False) -> dict:
         metrics = {

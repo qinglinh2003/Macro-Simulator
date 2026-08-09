@@ -263,6 +263,7 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "marriage_max_age",
         "marriage_max_age_gap",
         "marriage_peak_age",
+        "max_children_per_parent",
         "mortality_income_elasticity",
         "mortality_mult_hi",
         "mortality_mult_lo",
@@ -330,8 +331,8 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         "union_target_profile",
         "widowed_remarriage_multiplier",
     }
-    assert len(neutral) == 29
-    assert len(activated) == 29
+    assert len(neutral) == 28
+    assert len(activated) == 30
     assert all(
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)

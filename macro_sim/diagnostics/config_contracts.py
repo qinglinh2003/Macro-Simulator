@@ -1160,14 +1160,15 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "rationale": "The household child cap is a hard genesis capacity constraint. Tightening it below the calibrated value must reduce the largest parent-child households before unmatched children are placed with alternative guardians. A very high cap is intentionally not credited: once it exceeds the realized family-size support it is correctly nonbinding.",
         },
         "config.relationship.max_children_per_parent": {
-            "status": "screening_ready",
+            "status": "activation_scenario_required",
             "values": (2, 10),
+            "activation": "genesis_child_pressure",
             "horizon_days": 30,
             "directions": {
                 dual_parent_share: "increase",
                 guardian_only_share: "decrease",
             },
-            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. More capacity should expand valid parent coverage and reduce guardian-only placement pressure.",
+            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. It is identified under a shared high-fertility genesis population so the capacity is genuinely binding; more capacity should expand valid parent coverage and reduce guardian-only placement pressure.",
         },
         "config.relationship.parent_age_gap_sd": {
             "status": "screening_ready",
@@ -1208,10 +1209,10 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
         },
         "config.relationship.spouse_max_age_gap": {
             "status": "screening_ready",
-            "values": (5, 35),
+            "values": (5,),
             "horizon_days": 30,
             "directions": {partner_age_gap: "increase"},
-            "rationale": "The maximum spouse age gap is the hard support of genesis matching. A wider support should allow more distant age matches and raise the realized mean absolute gap.",
+            "rationale": "The maximum spouse age gap is the hard support of genesis matching. Tightening it below the calibrated value must reduce the realized mean absolute gap. A ceiling wider than the available partner-age support is correctly nonbinding and is not used as causal evidence.",
         },
         "config.relationship.target_partnered_adult_share": {
             "status": "activation_scenario_required",
