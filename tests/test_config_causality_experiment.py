@@ -995,7 +995,9 @@ def test_demographic_income_activation_builds_a_shared_wage_transition(
     population_rules = economy.rules
     assert real_rules.annual_tfp_growth == pytest.approx(growth)
     assert real_rules.wage_indexation == pytest.approx(1.0)
-    assert population_rules.demographic_feedback_burnin_years == 4
+    assert population_rules.demographic_feedback_burnin_years == (
+        4 if scenario == "demographic_real_wage_transition" else 1
+    )
     if signal_halflife is not None:
         assert population_rules.demographic_signal_halflife_years == pytest.approx(
             signal_halflife

@@ -1094,16 +1094,19 @@ def apply_native_activation_scenario(
     elif scenario == "demographic_income_elasticity_transition":
         rules.annual_tfp_growth = 0.025
         rules.wage_indexation = 1.0
+        population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 1.0
     elif scenario == "demographic_positive_income_transition":
         rules.annual_tfp_growth = 0.08
         rules.wage_indexation = 1.0
+        population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 0.5
         population_rules.fertility_income_elasticity = 4.0
         population_rules.mortality_income_elasticity = 4.0
     elif scenario == "demographic_negative_income_transition":
         rules.annual_tfp_growth = -0.05
         rules.wage_indexation = 1.0
+        population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 0.5
         population_rules.fertility_income_elasticity = 4.0
         population_rules.mortality_income_elasticity = 4.0
