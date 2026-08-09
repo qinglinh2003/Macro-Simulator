@@ -16,6 +16,19 @@ def test_contract_registry_covers_every_inventory_field() -> None:
     assert payload["status_counts"].get("blocked_native_route", 0) == 0
 
 
+def test_executable_contracts_do_not_repeat_the_control_value() -> None:
+    contracts = (
+        *screening_contracts(),
+        *activation_contracts(),
+        *invariance_contracts(),
+    )
+    assert all(
+        value != contract.baseline_value
+        for contract in contracts
+        for value in contract.treatment_values
+    )
+
+
 def test_securities_contracts_cover_each_executable_market_mechanism() -> None:
     contracts = screening_contracts(module="securities_and_capital_markets")
     assert len(contracts) == 21
@@ -242,6 +255,20 @@ def test_labor_contracts_cover_every_mapped_causal_field() -> None:
 def test_demography_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(module="demography_and_households")
     activated = activation_contracts(module="demography_and_households")
+    slow_development_fields = {
+        "demo_signal_halflife_years",
+        "fertility_income_elasticity",
+        "fertility_mult_hi",
+        "fertility_mult_lo",
+        "mortality_income_elasticity",
+        "mortality_mult_hi",
+        "mortality_mult_lo",
+    }
+    assert all(
+        contract.horizon_days >= 1460
+        for contract in activated
+        if contract.field_name in slow_development_fields
+    )
     assert {contract.field_name for contract in activated} == {
         "demo_feedback_burnin_years",
         "demo_signal_halflife_years",
