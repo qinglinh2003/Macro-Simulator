@@ -3485,26 +3485,37 @@ class M7Extension final : public M6TickExtension {
         double price_sum = 0.0;
         std::size_t priced_firms = 0U;
         for (const auto &work : real.firm_work_) {
-            wage_sum += std::max(0.0, work.wage_bill);
             if (work.posted_price > kLaborTolerance) {
                 price_sum += work.posted_price;
                 ++priced_firms;
             }
         }
-        // Use employment-adjusted labor income, not earnings conditional on
-        // having been hired.  The conditional quotient can rise in a deep
-        // contraction when low-paying or cash-constrained jobs disappear,
+        // Use employment-adjusted contractual labor income, not cash payroll
+        // conditional on having been hired.  The cash quotient can rise in a
+        // deep contraction when low-paying or cash-constrained jobs disappear,
         // causing the demographic feedback to misread mass job loss as an
-        // improvement in living standards.
+        // improvement in living standards.  Working-age people without active
+        // hours remain in the denominator with zero labor income.
         double working_age_population = 0.0;
         for (const auto person_id : scratch_.persons_.alive_ids()) {
             const auto *person = scratch_.persons_.get(person_id);
             const double age = completed_age(*person, calendar_day);
-            working_age_population +=
+            const bool working_age =
                 age >= static_cast<double>(runtime_.rules.working_age) &&
-                        age < static_cast<double>(runtime_.rules.retirement_age)
-                    ? 1.0
-                    : 0.0;
+                age < static_cast<double>(runtime_.rules.retirement_age);
+            if (!working_age) {
+                continue;
+            }
+            working_age_population += 1.0;
+            for (const auto job_id : std::array{
+                     scratch_.employment_.primary_job(person_id),
+                     scratch_.employment_.secondary_job(person_id)}) {
+                const auto *job = scratch_.employment_.get(job_id);
+                if (job != nullptr && job->active && !job->suspended) {
+                    wage_sum += std::max(
+                        0.0, job->wage * job->hours * person->efficiency);
+                }
+            }
         }
         scratch_.demographic_signal_wage_sum_ += wage_sum;
         scratch_.demographic_signal_labor_sum_ += working_age_population;

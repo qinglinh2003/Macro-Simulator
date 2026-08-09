@@ -393,6 +393,27 @@ void test_real_wage_signal_denominator_includes_unemployed_working_age_people() 
                     working_age_population) < 1.0e-12);
     assert(harness.runtime.demographic_signal_labor_sum >=
            result.get_if()->metrics.employed_fte);
+    double contractual_labor_income = 0.0;
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(person_id);
+        const double age = std::max(
+            0.0, static_cast<double>(calendar_day - person->birth_day) / 365.0);
+        if (age < static_cast<double>(harness.runtime.rules.working_age) ||
+            age >= static_cast<double>(harness.runtime.rules.retirement_age)) {
+            continue;
+        }
+        for (const auto job_id : std::array{
+                 harness.runtime.employment.primary_job(person_id),
+                 harness.runtime.employment.secondary_job(person_id)}) {
+            const auto *job = harness.runtime.employment.get(job_id);
+            if (job != nullptr && job->active && !job->suspended) {
+                contractual_labor_income +=
+                    job->wage * job->hours * person->efficiency;
+            }
+        }
+    }
+    assert(std::abs(harness.runtime.demographic_signal_wage_sum -
+                    contractual_labor_income) < 1.0e-12);
 }
 
 void test_wealth_rank_gradients_apply_bounded_vital_risk() {
