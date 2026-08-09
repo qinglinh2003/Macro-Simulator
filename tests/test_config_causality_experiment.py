@@ -969,7 +969,7 @@ def test_lifecycle_and_development_treatments_reach_population_rules(
         ("demographic_real_wage_transition", 0.025, 1.0, None, None, None),
         ("demographic_signal_transition", 0.025, 1.0, None, None, None),
         ("demographic_income_elasticity_transition", 0.025, 1.0, 1.0, None, None),
-        ("demographic_positive_income_transition", 0.08, 1.0, 0.5, 4.0, 4.0),
+        ("demographic_positive_income_transition", 0.0, 0.0, 0.5, 4.0, 4.0),
         ("demographic_negative_income_transition", 0.0, 0.0, 0.5, 4.0, 4.0),
     ),
 )
@@ -1019,15 +1019,22 @@ def test_demographic_income_activation_builds_a_shared_wage_transition(
         assert population_rules.mortality_income_elasticity == pytest.approx(
             mortality_elasticity
         )
-    if scenario == "demographic_negative_income_transition":
+    if scenario in {
+        "demographic_positive_income_transition",
+        "demographic_negative_income_transition",
+    }:
         assert real_rules.wage_calvo_probability == 0.0
         assert real_rules.wage_shortage_adjustment == 0.0
         assert real_rules.wage_downward_drift == 0.0
         assert len(native_spec.shocks) == 1
         shock = native_spec.shocks[0]
         assert shock.kind == native_backend._load_native().ShockKind.PRODUCTIVITY
-        assert shock.start_tick == 730
-        assert shock.duration == 730
+        if scenario == "demographic_positive_income_transition":
+            assert shock.start_tick == 365
+            assert shock.duration == 365
+        else:
+            assert shock.start_tick == 730
+            assert shock.duration == 730
         assert shock.magnitude == pytest.approx(0.50)
 
 

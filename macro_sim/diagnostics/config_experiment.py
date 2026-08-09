@@ -1101,12 +1101,30 @@ def apply_native_activation_scenario(
         population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 1.0
     elif scenario == "demographic_positive_income_transition":
-        rules.annual_tfp_growth = 0.08
-        rules.wage_indexation = 1.0
+        # Form the year-two demographic anchor under a temporary adverse
+        # productivity state, then let the economy recover from year three.
+        # A permanently faster TFP trend is not a valid positive-income
+        # activation here: endogenous labor shedding can lower employment-
+        # adjusted earnings even while technical efficiency rises.
+        rules.annual_tfp_growth = 0.0
+        rules.wage_indexation = 0.0
+        rules.wage_calvo_probability = 0.0
+        rules.wage_shortage_adjustment = 0.0
+        rules.wage_downward_drift = 0.0
         population_rules.demographic_feedback_burnin_years = 1
         population_rules.demographic_signal_halflife_years = 0.5
         population_rules.fertility_income_elasticity = 4.0
         population_rules.mortality_income_elasticity = 4.0
+        native = native_backend._load_native()
+        shock = native.ShockSpec()
+        shock.id = 9_100_000
+        shock.kind = native.ShockKind.PRODUCTIVITY
+        shock.economy_id = target_economy
+        shock.start_tick = 365
+        shock.duration = 365
+        shock.magnitude = 0.50
+        shock.shape = native.ShockShape.STEP
+        native_spec.shocks = [*native_spec.shocks, shock]
     elif scenario == "demographic_negative_income_transition":
         # Establish the demographic anchor before applying a persistent adverse
         # productivity transition. Freeze nominal posted wages so lower real
