@@ -1019,6 +1019,16 @@ def test_demographic_income_activation_builds_a_shared_wage_transition(
         assert population_rules.mortality_income_elasticity == pytest.approx(
             mortality_elasticity
         )
+    if scenario == "demographic_negative_income_transition":
+        assert real_rules.wage_calvo_probability == 0.0
+        assert real_rules.wage_shortage_adjustment == 0.0
+        assert real_rules.wage_downward_drift == 0.0
+        assert len(native_spec.shocks) == 1
+        shock = native_spec.shocks[0]
+        assert shock.kind == native_backend._load_native().ShockKind.HOUSEHOLD_DEMAND
+        assert shock.start_tick == 730
+        assert shock.duration == 730
+        assert shock.magnitude == pytest.approx(-1.0)
 
 
 @pytest.mark.parametrize(
