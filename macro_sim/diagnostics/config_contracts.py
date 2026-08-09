@@ -1443,7 +1443,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "horizon_days": 3650,
             "directions": {income_signal: "nonzero"},
             "statistics": {income_signal: "post_burnin_volatility"},
-            "rationale": "The burn-in discards early price-and-wage normalization before anchoring the development signal. Changing its length must alter when and at what clean real-wage level the demographic feedback baseline is established.",
+            "rationale": "The burn-in discards early price, employment, and payroll normalization before anchoring the development signal. The signal is employment-adjusted real labor income per working-age person, so changing the burn-in must alter when and at what clean living-standard level its baseline is established.",
         },
         "config.demo_signal_halflife_years": {
             "status": "activation_scenario_required",
@@ -1452,7 +1452,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "horizon_days": 1460,
             "directions": {income_signal: "nonzero"},
             "statistics": {income_signal: "post_burnin_volatility"},
-            "rationale": "The half-life controls how quickly persistent real-wage changes enter the slow development signal. A shared one-year burn-in exposes both filters over a four-year identified transition: the first year is discarded, the second establishes the anchor, the third updates the signal, and the fourth exposes downstream outcomes. Faster and slower filters must produce different paths while preserving the same neutral value at the baseline anchor.",
+            "rationale": "The half-life controls how quickly persistent changes in employment-adjusted real labor income enter the slow development signal. A shared one-year burn-in exposes both filters over a four-year identified transition: the first year is discarded, the second establishes the anchor, the third updates the signal, and the fourth exposes downstream outcomes. Faster and slower filters must produce different paths while preserving the same neutral value at the baseline anchor.",
         },
         "config.fertility_income_elasticity": {
             "status": "activation_scenario_required",
@@ -1461,7 +1461,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "horizon_days": 1460,
             "directions": {fertility_income_multiplier: "nonzero", births: "nonzero"},
             "statistics": {births: "cumulative"},
-            "rationale": "This elasticity converts persistent real-wage development into a population-wide fertility multiplier. Zero is exactly neutral; a positive value must change the multiplier and cumulative births once the annual signal moves away from its anchor.",
+            "rationale": "This elasticity converts persistent development in employment-adjusted real labor income into a population-wide fertility multiplier. Zero is exactly neutral; a positive value must change the multiplier and cumulative births once the annual signal moves away from its anchor.",
         },
         "config.fertility_mult_lo": {
             "status": "activation_scenario_required",
@@ -1469,7 +1469,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "activation": "demographic_positive_income_transition",
             "horizon_days": 1460,
             "directions": {fertility_income_multiplier: "increase"},
-            "rationale": "The lower bound limits how far development-driven fertility can fall below neutral. Under a shared positive real-wage transition, a higher floor must leave a higher fertility multiplier when the unconstrained response would cross it.",
+            "rationale": "The lower bound limits how far development-driven fertility can fall below neutral. Under a shared positive real-labor-income transition, a higher floor must leave a higher fertility multiplier when the unconstrained response would cross it.",
         },
         "config.fertility_mult_hi": {
             "status": "activation_scenario_required",
@@ -1477,7 +1477,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "activation": "demographic_negative_income_transition",
             "horizon_days": 1460,
             "directions": {fertility_income_multiplier: "increase"},
-            "rationale": "The upper bound caps the fertility response to a persistent adverse real-wage transition. A higher cap must allow a larger multiplier when the unconstrained response exceeds the lower cap.",
+            "rationale": "The upper bound caps the fertility response to a persistent adverse real-labor-income transition. A higher cap must allow a larger multiplier when the unconstrained response exceeds the lower cap.",
         },
         "config.mortality_income_elasticity": {
             "status": "activation_scenario_required",
@@ -1486,7 +1486,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "horizon_days": 1460,
             "directions": {mortality_income_multiplier: "nonzero", deaths: "nonzero"},
             "statistics": {deaths: "cumulative"},
-            "rationale": "This elasticity maps persistent real-wage development into a population-wide mortality multiplier. Zero is exactly neutral; a positive value must change mortality pressure and cumulative deaths after the clean annual signal becomes active.",
+            "rationale": "This elasticity maps persistent development in employment-adjusted real labor income into a population-wide mortality multiplier. Zero is exactly neutral; a positive value must change mortality pressure and cumulative deaths after the clean annual signal becomes active.",
         },
         "config.mortality_mult_lo": {
             "status": "activation_scenario_required",
@@ -1494,7 +1494,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "activation": "demographic_positive_income_transition",
             "horizon_days": 1460,
             "directions": {mortality_income_multiplier: "increase"},
-            "rationale": "The mortality floor limits health gains from a positive development transition. Raising it must keep the mortality multiplier closer to one once the unconstrained response would fall farther.",
+            "rationale": "The mortality floor limits health gains from a positive real-labor-income transition. Raising it must keep the mortality multiplier closer to one once the unconstrained response would fall farther.",
         },
         "config.mortality_mult_hi": {
             "status": "activation_scenario_required",
@@ -1502,7 +1502,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "activation": "demographic_negative_income_transition",
             "horizon_days": 1460,
             "directions": {mortality_income_multiplier: "increase"},
-            "rationale": "The mortality ceiling limits excess mortality under a persistent adverse real-wage transition. A higher ceiling must permit a larger multiplier when the lower ceiling would bind.",
+            "rationale": "The mortality ceiling limits excess mortality under a persistent adverse real-labor-income transition. A higher ceiling must permit a larger multiplier when the lower ceiling would bind.",
         },
         "config.demographic_adult_leaving_home_enabled": {
             "status": "activation_scenario_required",
