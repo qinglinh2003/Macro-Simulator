@@ -529,7 +529,10 @@ These six fields move from missing to mapped-native status. Their direct causal
 mechanisms are resolved. A subsequent 365-day, four-seed formal closure confirms
 all three sector trend overrides with resolved positive direct-index effects;
 the stochastic-volatility treatment passes the predeclared heterogeneous-path
-criterion in all paired paths. Learning-law formal confirmation, multi-year
+criterion in all paired paths. A separate 20-path, four-seed formal block also
+confirms that the learning-law regime and both low and high
+`tfp_learning_theta` arms move the maintained consumption-sector TFP index in
+their predeclared direction without a silent or inconclusive arm. Multi-year
 macro elasticities, sector spillovers, and million-person confirmation remain
 separate from this route-level result.
 
