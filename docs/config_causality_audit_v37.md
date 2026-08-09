@@ -1337,6 +1337,10 @@ A subsequent 12-path, four-seed formal block confirms both `wealth_effect`
 arms on the direct household-equity consumption addition. Both direction
 checks pass without a silent or statistically inconclusive arm, so the earlier
 two-seed repair result is not being retained on a single favorable seed pair.
+The five q/EMA mechanism contracts were likewise repeated in a 48-path,
+four-seed formal block. Every `lambda_q`, q cap, q floor, q smoothing, and
+equity-EMA arm remains non-silent; all monotonic checks pass, while the declared
+path-dependent smoothing response passes the heterogeneous-path gate.
 
 The accepted repair artifact executes 30 native worlds across six contracts,
 two paired seeds, 100,000 persons, and eight workers. Every treatment arm is
