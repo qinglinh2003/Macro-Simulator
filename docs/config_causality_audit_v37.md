@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: P0-P1 and the first package screen are complete; the P2 native-route repair loop and P4 million-person confirmation are in progress
+Status: static routing is closed with no missing native routes; the final long-horizon demographic contracts, combination packages, and million-person confirmation are in progress
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -94,8 +94,8 @@ The adjudicated P0 inventory reports:
 
 | Disposition | Fields |
 |---|---:|
-| Native route confirmed | 252 |
-| Native route missing or incomplete | 40 |
+| Native route confirmed | 294 |
+| Native route missing or incomplete | 0 |
 | Policy-owned; defer to Policy audit | 108 |
 | Shock-owned; defer to Shock audit | 4 |
 | Numerical or observability invariance | 20 |
@@ -104,8 +104,9 @@ The adjudicated P0 inventory reports:
 | Derived values | 2 |
 | Run control | 1 |
 
-The 40 missing or incomplete routes are real implementation work; they are not
-allowed to enter a dynamic run and be reported as small elasticities. The other
+All previously missing or incomplete routes have now been implemented or given
+an explicit non-treatment disposition. A missing route is never allowed to
+enter a dynamic run and be reported as a small elasticity. The remaining
 non-routed fields have been marked as exactly one of:
 
 - `real_gap`: missing or incomplete native implementation;
@@ -306,9 +307,10 @@ inside their certified operating range.
 
 ### 8.1 Product contract and routing
 
-The native product baseline comparison now projects every one of the 252
-currently routed Config fields into the exact C++ new-game contract at 100,000
-persons per country:
+The first native product baseline comparison projected all 252 fields routed at
+that checkpoint into the exact C++ new-game contract at 100,000 persons per
+country. Subsequent repair batches brought the current routed total to 294; the
+table below records the original comparison cohort:
 
 | Native baseline relationship | Fields |
 |---|---:|
@@ -387,6 +389,24 @@ test.
    obsolete `Config.v25()` constructor, and their passive planning surface have
    therefore been removed. The canonical inventory contracts this as a surface
    reduction instead of manufacturing a meaningless C++ response.
+7. A high-entry, large-market treatment exposed a false physical-stock
+   conservation failure. The market compared two independently accumulated
+   floating-point totals against a fixed `1e-12` tolerance, which is below the
+   attainable summation error after thousands of trades. The gate now scales
+   with trade count and stock magnitude, while remaining tight enough to catch
+   a real unit imbalance; a 10,000-trade native regression protects the fix.
+8. The monetary extension could pass log inflation directly into a wage rule
+   that constructs the gross factor as `1 + expected_inflation`. Severe
+   deflation could therefore create a nonpositive wage factor during long
+   demographic runs. The boundary now converts log points with `expm1`, while
+   exogenous price ratios always enter as ordinary proportional growth. A
+   lifecycle-aware extension test observes the value before the transient rule
+   override is restored at day end.
+9. Two invalid calibration windows were removed. A treatment equal to its
+   default control is now rejected by a registry test, and slow demographic
+   development contracts run for four years: year one is discarded, year two
+   establishes the real-wage anchor, year three updates the annual signal, and
+   year four exposes fertility and mortality outcomes.
 
 ### 8.3 Production and technology early screen
 
