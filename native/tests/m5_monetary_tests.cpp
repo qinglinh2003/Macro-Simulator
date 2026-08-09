@@ -23,7 +23,71 @@ using macro_sim::simulation::M5PolicyState;
 using macro_sim::simulation::M5Runtime;
 using macro_sim::simulation::M5SimulationSpec;
 using macro_sim::simulation::M5TickScratch;
+using macro_sim::simulation::M5TickExtension;
 using macro_sim::simulation::MonetaryRegime;
+
+class WageExpectationCapture final : public M5TickExtension {
+  public:
+    double observed{0.0};
+
+    macro_sim::Status prepare_tick(
+        const macro_sim::core::RootState &,
+        macro_sim::simulation::M4Runtime &real_runtime,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        observed = real_runtime.rules.wage_expected_inflation;
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status after_planning(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status run_labor(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &, bool &handled) override {
+        handled = false;
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status before_settlement(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status after_settlement(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status before_bank_resolution(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status close_institutions(
+        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+        Tick, macro_sim::PhiloxRng &) override {
+        return macro_sim::Status::success();
+    }
+    macro_sim::Status validate(
+        const macro_sim::core::RootState &,
+        const macro_sim::simulation::M4Runtime &,
+        const macro_sim::simulation::M4TickScratch &, const M5Runtime &,
+        const M5TickScratch &, Tick) const override {
+        return macro_sim::Status::success();
+    }
+    void commit(macro_sim::core::RootState &,
+                macro_sim::simulation::M4Runtime &,
+                macro_sim::simulation::M4TickScratch &, M5Runtime &,
+                M5TickScratch &, Tick,
+                const macro_sim::simulation::M5Metrics &) noexcept override {}
+};
 
 [[nodiscard]] M5SimulationSpec base_spec() {
     M5SimulationSpec spec;
@@ -106,6 +170,36 @@ void test_policy_validation() {
     auto spec = base_spec();
     spec.rules.run_fear_persistence = 1.1;
     assert(!macro_sim::simulation::validate_m5_spec(spec).ok());
+}
+
+void test_log_inflation_is_converted_at_the_wage_boundary() {
+    auto spec = base_spec();
+    spec.policy.monetary_regime = MonetaryRegime::exogenous;
+    spec.policy.logarithmic_inflation = true;
+    spec.real_economy.rules.wage_calvo_probability = 1.0;
+    spec.real_economy.rules.wage_downward_drift = 0.0;
+    auto harness = build(spec);
+    const auto warmup = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch,
+        harness.runtime, harness.scratch, harness.tick, 1);
+    assert(warmup.ok());
+    harness.runtime.previous_price_index = 1.0;
+    harness.runtime.last_metrics.economy.price_index = 0.25;
+    harness.runtime.policy.monetary_regime = MonetaryRegime::exogenous;
+    harness.runtime.policy.logarithmic_inflation = true;
+    harness.root.firms.for_each_alive(
+        [](macro_sim::FirmId, macro_sim::core::FirmComponent &firm) {
+            firm.posted_wage = macro_sim::Money(10.0);
+            firm.hired_previous = 1.0;
+            firm.labor_demand_previous = 1.0;
+            firm.shortage_adjustment = 0.0;
+        });
+    WageExpectationCapture capture;
+    const auto result = macro_sim::simulation::advance_m5_ticks_extended(
+        harness.root, harness.real_runtime, harness.real_scratch,
+        harness.runtime, harness.scratch, harness.tick, 1, capture);
+    assert(result.ok());
+    assert(std::abs(capture.observed + 0.75) < 1.0e-12);
 }
 
 void test_size_based_bank_assignment() {
@@ -691,6 +785,7 @@ void test_checkpoint_continuation() {
 
 int main() {
     test_policy_validation();
+    test_log_inflation_is_converted_at_the_wage_boundary();
     test_size_based_bank_assignment();
     test_banking_capability_and_market_run_signal();
     test_credit_and_monetary_tick();

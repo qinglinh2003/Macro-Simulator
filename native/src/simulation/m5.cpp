@@ -1880,14 +1880,19 @@ class M5Extension final : public M4TickExtension {
             if (current > algorithms::kEconomicEpsilon &&
                 previous > algorithms::kEconomicEpsilon) {
                 const double ratio = current / previous;
-                real_runtime.rules.wage_expected_inflation =
-                    runtime_.policy.logarithmic_inflation ? std::log(ratio)
-                                                          : ratio - 1.0;
+                // WagePlanInput is a simple proportional growth rate because
+                // it forms a gross factor as 1 + expected_inflation. Monetary
+                // policy may measure inflation in log points, but that unit
+                // must not leak across the wage-formation boundary.
+                real_runtime.rules.wage_expected_inflation = ratio - 1.0;
             } else {
                 real_runtime.rules.wage_expected_inflation = 0.0;
             }
         } else {
-            real_runtime.rules.wage_expected_inflation = runtime_.inflation_sensor;
+            real_runtime.rules.wage_expected_inflation =
+                runtime_.policy.logarithmic_inflation
+                    ? std::expm1(runtime_.inflation_sensor)
+                    : runtime_.inflation_sensor;
         }
         apply_fiscal_policy(real_runtime, runtime_);
         open_financial_books(state, real, runtime_, scratch_, tick);
