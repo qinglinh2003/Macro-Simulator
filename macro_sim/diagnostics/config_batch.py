@@ -264,6 +264,10 @@ def rejudge_contract_report(
         contract.treatment_values
     ):
         raise ValueError("treatment arms do not match the corrected contract")
+    if previous.get("activation_scenario") != contract.activation_scenario:
+        raise ValueError("activation scenario does not match the corrected contract")
+    if int(report.get("days", 0)) < contract.horizon_days:
+        raise ValueError("stored run is shorter than the corrected contract horizon")
 
     updated = deepcopy(dict(report))
     updated["contract"] = asdict(contract)

@@ -48,7 +48,9 @@ def test_rejudge_contract_report_reuses_effects_with_corrected_direction() -> No
             "scope": contract.scope,
             "baseline_value": contract.baseline_value,
             "treatment_values": list(contract.treatment_values),
+            "activation_scenario": contract.activation_scenario,
         },
+        "days": contract.horizon_days,
         "arms": [
             {
                 "treatment_value": contract.treatment_values[0],
