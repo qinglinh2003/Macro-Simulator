@@ -372,6 +372,29 @@ void test_real_wage_signal_updates_vital_multipliers_annually() {
     assert(neutral.runtime.demographic_signal_mortality_multiplier == 1.0);
 }
 
+void test_real_wage_signal_denominator_includes_unemployed_working_age_people() {
+    auto harness = build();
+    const auto calendar_day = base_spec().population.start_calendar_day + 1;
+    double working_age_population = 0.0;
+    for (const auto person_id : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(person_id);
+        const double age = std::max(
+            0.0, static_cast<double>(calendar_day - person->birth_day) / 365.0);
+        working_age_population +=
+            age >= static_cast<double>(harness.runtime.rules.working_age) &&
+                    age < static_cast<double>(harness.runtime.rules.retirement_age)
+                ? 1.0
+                : 0.0;
+    }
+
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    assert(std::abs(harness.runtime.demographic_signal_labor_sum -
+                    working_age_population) < 1.0e-12);
+    assert(harness.runtime.demographic_signal_labor_sum >=
+           result.get_if()->metrics.employed_fte);
+}
+
 void test_wealth_rank_gradients_apply_bounded_vital_risk() {
     auto spec = base_spec();
     spec.population.initial_persons = 2'000;
@@ -1460,6 +1483,7 @@ int main() {
     test_demography_projects_age_weighted_consumption_needs();
     test_lifecycle_consumption_replaces_the_standard_budget();
     test_real_wage_signal_updates_vital_multipliers_annually();
+    test_real_wage_signal_denominator_includes_unemployed_working_age_people();
     test_wealth_rank_gradients_apply_bounded_vital_risk();
     test_death_and_estate_settle_exactly_once();
     test_population_fault_is_atomic();

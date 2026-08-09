@@ -3482,19 +3482,32 @@ class M7Extension final : public M6TickExtension {
             scratch_.demographic_signal_year_ = signal_year;
         }
         double wage_sum = 0.0;
-        double labor_sum = 0.0;
         double price_sum = 0.0;
         std::size_t priced_firms = 0U;
         for (const auto &work : real.firm_work_) {
             wage_sum += std::max(0.0, work.wage_bill);
-            labor_sum += std::max(0.0, work.hired);
             if (work.posted_price > kLaborTolerance) {
                 price_sum += work.posted_price;
                 ++priced_firms;
             }
         }
+        // Use employment-adjusted labor income, not earnings conditional on
+        // having been hired.  The conditional quotient can rise in a deep
+        // contraction when low-paying or cash-constrained jobs disappear,
+        // causing the demographic feedback to misread mass job loss as an
+        // improvement in living standards.
+        double working_age_population = 0.0;
+        for (const auto person_id : scratch_.persons_.alive_ids()) {
+            const auto *person = scratch_.persons_.get(person_id);
+            const double age = completed_age(*person, calendar_day);
+            working_age_population +=
+                age >= static_cast<double>(runtime_.rules.working_age) &&
+                        age < static_cast<double>(runtime_.rules.retirement_age)
+                    ? 1.0
+                    : 0.0;
+        }
         scratch_.demographic_signal_wage_sum_ += wage_sum;
-        scratch_.demographic_signal_labor_sum_ += labor_sum;
+        scratch_.demographic_signal_labor_sum_ += working_age_population;
         scratch_.demographic_signal_price_sum_ +=
             priced_firms > 0U ? price_sum / static_cast<double>(priced_firms)
                               : std::max(kLaborTolerance,
