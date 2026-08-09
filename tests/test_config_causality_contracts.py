@@ -151,6 +151,8 @@ def test_firm_contracts_cover_every_mapped_causal_or_genesis_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+
+
 def test_consumption_contracts_cover_every_mapped_causal_field() -> None:
     neutral = screening_contracts(
         module="consumption_prices_and_expectations"
@@ -337,6 +339,15 @@ def test_demography_contracts_cover_every_mapped_causal_field() -> None:
         set(contract.expected_directions) <= set(contract.primary_metrics)
         for contract in (*neutral, *activated)
     )
+    child_capacity = next(
+        contract
+        for contract in activated
+        if contract.field_name == "max_children_per_parent"
+    )
+    assert child_capacity.expected_directions == {
+        "metric.source.m7.dual_parent_minor_share": "increase",
+        "metric.source.m7.maximum_household_size": "increase",
+    }
     lifecycle = next(
         row
         for row in build_contract_registry()["contracts"]

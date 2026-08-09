@@ -115,6 +115,7 @@ MODULE_PRIMARY_METRICS: Mapping[str, tuple[str, ...]] = {
         "metric.source.m7.top_wealth_quintile_births",
         "metric.source.m7.households_with_members",
         "metric.source.m7.mean_household_size",
+        "metric.source.m7.maximum_household_size",
         "metric.source.m7.working_age_share",
         "metric.source.m7.dependency_ratio",
         "metric.source.m7.active_unions",
@@ -1121,7 +1122,7 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
     partnered_share = "metric.source.m7.partnered_adult_share"
     partner_age_gap = "metric.source.m7.mean_partner_age_gap"
     dual_parent_share = "metric.source.m7.dual_parent_minor_share"
-    guardian_only_share = "metric.source.m7.guardian_only_minor_share"
+    maximum_household_size = "metric.source.m7.maximum_household_size"
     mother_age_gap = "metric.source.m7.mean_mother_age_gap"
     mother_age_gap_stddev = "metric.source.m7.mother_age_gap_stddev"
     father_age_gap = "metric.source.m7.mean_father_age_gap"
@@ -1166,9 +1167,9 @@ def _demography_contracts() -> Mapping[str, Mapping[str, Any]]:
             "horizon_days": 30,
             "directions": {
                 dual_parent_share: "increase",
-                guardian_only_share: "decrease",
+                maximum_household_size: "increase",
             },
-            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. It is identified under a shared high-fertility genesis population so the capacity is genuinely binding; more capacity should expand valid parent coverage and reduce guardian-only placement pressure.",
+            "rationale": "The biological-parent capacity limits how many genesis children can share a parent. It is identified under a shared high-fertility genesis population so the capacity is genuinely binding; more capacity should permit larger parent-child households and weakly expand dual-parent coverage. Guardian-only placement is deliberately not an outcome because the genesis fallback assigns unmatched children to alternative adult households.",
         },
         "config.relationship.parent_age_gap_sd": {
             "status": "screening_ready",
