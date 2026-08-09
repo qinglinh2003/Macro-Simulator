@@ -260,17 +260,33 @@ def rejudge_contract_report(
         raise ValueError("scope does not match the corrected contract")
     if previous.get("baseline_value") != contract.baseline_value:
         raise ValueError("baseline value does not match the corrected contract")
-    if tuple(previous.get("treatment_values", ())) != tuple(
-        contract.treatment_values
-    ):
-        raise ValueError("treatment arms do not match the corrected contract")
+    previous_values = tuple(previous.get("treatment_values", ()))
+    current_values = tuple(contract.treatment_values)
+    previous_keys = {_canonical_hash(value) for value in previous_values}
+    current_keys = {_canonical_hash(value) for value in current_values}
+    if len(current_keys) != len(current_values) or not current_keys <= previous_keys:
+        raise ValueError(
+            "corrected treatment arms must be a unique subset of stored arms"
+        )
     if previous.get("activation_scenario") != contract.activation_scenario:
         raise ValueError("activation scenario does not match the corrected contract")
-    if int(report.get("days", 0)) < contract.horizon_days:
+    if (
+        int(report.get("days", 0)) < contract.horizon_days
+        and int(previous.get("horizon_days", 0)) != contract.horizon_days
+    ):
         raise ValueError("stored run is shorter than the corrected contract horizon")
 
     updated = deepcopy(dict(report))
     updated["contract"] = asdict(contract)
+    arms_by_value = {
+        _canonical_hash(arm.get("treatment_value")): arm
+        for arm in updated.get("arms", ())
+    }
+    if any(key not in arms_by_value for key in current_keys):
+        raise ValueError("stored report is missing a corrected treatment arm")
+    updated["arms"] = [
+        arms_by_value[_canonical_hash(value)] for value in current_values
+    ]
     for arm in updated.get("arms", ()):
         if arm.get("stability_failure"):
             continue

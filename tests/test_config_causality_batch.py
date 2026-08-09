@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,46 @@ def test_rejudge_contract_report_reuses_effects_with_corrected_direction() -> No
     assert updated["arms"][0]["direction_checks"][metric_id]["result"] == "pass"
     assert updated["arms"][0]["causally_resolved_expected_metrics"] == [metric_id]
     assert "direction_checks" not in report["arms"][0]
+
+
+def test_rejudge_contract_report_can_prune_obsolete_stored_arms() -> None:
+    contract = next(
+        contract
+        for contract in activation_contracts(module="housing")
+        if contract.field_name == "housing_fertility_mult_hi"
+    )
+    metric_id = next(iter(contract.expected_directions))
+    retained_value = contract.treatment_values[0]
+    report = {
+        "contract": {
+            "field_name": contract.field_name,
+            "scope": contract.scope,
+            "baseline_value": contract.baseline_value,
+            "treatment_values": [retained_value, 1.25],
+            "activation_scenario": contract.activation_scenario,
+        },
+        "days": contract.horizon_days,
+        "arms": [
+            {
+                "treatment_value": retained_value,
+                "effects": {
+                    metric_id: {
+                        "last_window_mean": {
+                            "mean_difference": -0.2,
+                            "confidence_low": -0.3,
+                            "confidence_high": -0.1,
+                        }
+                    }
+                },
+                "time_responses": {},
+            },
+            {"treatment_value": 1.25, "effects": {}, "time_responses": {}},
+        ],
+    }
+    updated = rejudge_contract_report(report, replace(contract))
+    assert [arm["treatment_value"] for arm in updated["arms"]] == [
+        retained_value
+    ]
 
 
 @pytest.mark.parametrize(
