@@ -1108,10 +1108,10 @@ def apply_native_activation_scenario(
         population_rules.fertility_income_elasticity = 4.0
         population_rules.mortality_income_elasticity = 4.0
     elif scenario == "demographic_negative_income_transition":
-        # Establish the demographic anchor before applying a persistent demand
-        # inflation pulse. Freeze nominal posted wages so the scenario has an
-        # identified adverse real-wage sign instead of relying on an endogenous
-        # price/wage race that can reverse across calibrations.
+        # Establish the demographic anchor before applying a persistent adverse
+        # productivity transition. Freeze nominal posted wages so lower real
+        # output and the price response identify the intended real-wage sign,
+        # instead of relying on an endogenous price/wage race.
         rules.annual_tfp_growth = 0.0
         rules.wage_indexation = 0.0
         rules.wage_calvo_probability = 0.0
@@ -1124,11 +1124,11 @@ def apply_native_activation_scenario(
         native = native_backend._load_native()
         shock = native.ShockSpec()
         shock.id = 9_100_001
-        shock.kind = native.ShockKind.HOUSEHOLD_DEMAND
+        shock.kind = native.ShockKind.PRODUCTIVITY
         shock.economy_id = target_economy
         shock.start_tick = 730
         shock.duration = 730
-        shock.magnitude = -1.0
+        shock.magnitude = 0.50
         shock.shape = native.ShockShape.STEP
         native_spec.shocks = [*native_spec.shocks, shock]
     elif scenario == "bank_entry_eligible_founders":

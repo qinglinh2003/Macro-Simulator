@@ -1025,10 +1025,10 @@ def test_demographic_income_activation_builds_a_shared_wage_transition(
         assert real_rules.wage_downward_drift == 0.0
         assert len(native_spec.shocks) == 1
         shock = native_spec.shocks[0]
-        assert shock.kind == native_backend._load_native().ShockKind.HOUSEHOLD_DEMAND
+        assert shock.kind == native_backend._load_native().ShockKind.PRODUCTIVITY
         assert shock.start_tick == 730
         assert shock.duration == 730
-        assert shock.magnitude == pytest.approx(-1.0)
+        assert shock.magnitude == pytest.approx(0.50)
 
 
 @pytest.mark.parametrize(
