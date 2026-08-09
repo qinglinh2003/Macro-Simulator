@@ -1,6 +1,6 @@
 # Config causality and calibration audit v37
 
-Status: static routing is closed with no missing native routes; the final long-horizon demographic contracts, combination packages, and million-person confirmation are in progress
+Status: static routing and the seven combination packages are complete; the final long-horizon demographic contracts and million-person confirmation are in progress
 Scope: the latest native C++ engine, not a historical Python model  
 Branch: `audit/config-causality-v37`
 
@@ -402,11 +402,11 @@ test.
    exogenous price ratios always enter as ordinary proportional growth. A
    lifecycle-aware extension test observes the value before the transient rule
    override is restored at day end.
-9. Two invalid calibration windows were removed. A treatment equal to its
-   default control is now rejected by a registry test, and slow demographic
-   development contracts run for four years: year one is discarded, year two
-   establishes the real-wage anchor, year three updates the annual signal, and
-   year four exposes fertility and mortality outcomes.
+9. The contract registry now rejects any treatment equal to the final playable
+   Profile control, rather than comparing only against the dataclass fallback.
+   Slow demographic development contracts run for four years: year one is
+   discarded, year two establishes the real-wage anchor, year three updates the
+   annual signal, and year four exposes fertility and mortality outcomes.
 
 ### 8.3 Production and technology early screen
 
