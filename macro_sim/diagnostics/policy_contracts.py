@@ -282,6 +282,11 @@ def _treatment_batches(lever: Lever, baseline: Any) -> tuple[TreatmentBatch, ...
             actions = (("manual_policy_rate", 1.0e-4), ("monetary_regime", "manual"))
         elif lever.name == "fx_regime" and value == "peg":
             actions = (("peg_anchor", 1), ("fx_regime", "peg"))
+        elif lever.name == "peg_anchor":
+            # An anchor has no economic meaning while the currency floats and
+            # the native world invariant rejects that partial state.  Exercise
+            # the anchor through the smallest valid atomic transition.
+            actions = (("peg_anchor", value), ("fx_regime", "peg"))
         else:
             actions = ((lever.name, value),)
         batches.append(TreatmentBatch(f"arm_{index}", actions))

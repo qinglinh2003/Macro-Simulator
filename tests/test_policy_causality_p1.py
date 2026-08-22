@@ -22,7 +22,7 @@ from macro_sim.diagnostics.policy_routing import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FROZEN_ROUTE_LEDGER_HASH = "e1eb003349328505e77eee6b556824bba67959bf8e806231b4cb9bc9ce52948a"
-FROZEN_P1_ROOT_HASH = "d13edcc1b2e50d2a3865fd93aa2560e5f6dc8c2430ec5a6848b991dac5f02a4a"
+FROZEN_P1_ROOT_HASH = "385d738195f2260a57694c12293c1a267bf0fd3cc4221ffb47b489d5d5932906"
 
 
 def test_route_catalog_covers_registry_and_generated_contract() -> None:
