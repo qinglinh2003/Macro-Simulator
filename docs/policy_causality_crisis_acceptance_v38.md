@@ -752,6 +752,40 @@ is labeled.
 Exit: human, heuristic, and RL comparisons share the same causal environment and do not
 receive hidden information or privileged actions.
 
+## P0 milestone acceptance evidence
+
+P0 was accepted on 2026-08-22 on branch `audit/policy-causality-v38`. This is a
+contract and inventory milestone only. It does not claim that any policy has passed a
+dynamic causal experiment; P1 has not started.
+
+The generated P0 ledger reports:
+
+- 102 Registry levers and 102 causal contracts;
+- 12 decision groups and 21 activation fixtures;
+- 11 canonical crises with explicit readiness classifications and a complete scenario
+  role for every lever;
+- 108 declared materiality metrics, all present in the current native reporting source;
+- 28 closed failure classes;
+- zero unowned, unmapped, unclassified, or validation-error levers.
+
+The frozen component hashes are:
+
+| Component | SHA-256 |
+|---|---|
+| Registry | `06d7196502c818bd19c9381b73419ff6947512edbe3b518dd227bce27d1632b8` |
+| Contracts | `cefbe666a42980c3caf69c247ef2fd47acad7aa152f894d9e788878f3a3da543` |
+| Activation fixtures | `3645ae23f5fb0c632dc56f435683ec2e3fb1683fee3791b37d3f326b87c053a8` |
+| Scenarios | `fb73c66468d93a58bdff55a56a2e7eebf75eae2b54aa08c16429e25d04195bd5` |
+| Materiality | `66482a1fd0012dd99997ce4a3fafd1a7cdf4ee39c8fccd7261547dfe14cf3055` |
+| Failure taxonomy | `054bbeca2be2780c7926122b3a05c2b0b2bb081bed4bae89deaf707c1ac716d8` |
+| P0 root | `41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87` |
+
+The acceptance gate is `tests/test_policy_causality_p0.py`, run together with the
+existing Policy Registry and source-inventory gates. The combined focused suite passed
+13 tests. The source-inventory count was refreshed from 370 to 368 after confirming that
+the previously retired `symmetric_k` and `k_replacement_floor` fields were the exact two
+field removals and that every remaining field is classified exactly once.
+
 ## 17. Artifacts and provenance
 
 Generated results live under `artifacts/policy-audit/` and are not committed. Source
