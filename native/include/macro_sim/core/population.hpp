@@ -59,6 +59,7 @@ class PersonStore final {
     [[nodiscard]] const std::vector<PersonRecord> &records() const noexcept;
     [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
     [[nodiscard]] Status replace_records(std::vector<PersonRecord> records);
+    [[nodiscard]] Status restore_alive_order(std::vector<PersonId> alive_ids);
     [[nodiscard]] Status validate() const noexcept;
 
   private:

@@ -699,6 +699,10 @@ void decode_metrics(const Json &row, M7Metrics &value) {
     for (const auto &person : runtime.persons.records()) {
         output["persons"].push_back(encode_person(person));
     }
+    output["alive_order"] = Json::array();
+    for (const auto person : runtime.persons.alive_ids()) {
+        output["alive_order"].push_back(person.value());
+    }
     output["beneficial"] = Json::array();
     std::uint32_t beneficial_lot_id = 1U;
     for (const auto &lot : runtime.beneficial_ownership.records()) {
@@ -855,6 +859,14 @@ void decode_runtime(const Json &input, M7Runtime &runtime) {
     auto status = runtime.persons.replace_records(std::move(persons));
     if (!status.ok()) {
         throw std::runtime_error("invalid M7 person store");
+    }
+    std::vector<PersonId> alive_order;
+    for (const auto &person_id : input.at("alive_order")) {
+        alive_order.emplace_back(person_id.get<std::uint64_t>());
+    }
+    status = runtime.persons.restore_alive_order(std::move(alive_order));
+    if (!status.ok()) {
+        throw std::runtime_error("invalid M7 person alive order");
     }
     status = runtime.membership.rebuild(runtime.persons);
     if (!status.ok()) {

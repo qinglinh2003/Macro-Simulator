@@ -76,6 +76,29 @@ void test_primary_second_and_roster_indexes() {
     assert(employment.validate(value.persons, value.root, 1.0e-12).ok());
 }
 
+void test_person_alive_order_restoration() {
+    auto value = fixture();
+    assert(value.persons.mark_dead(PersonId(2), 10).ok());
+    assert(value.persons.mark_dead(PersonId(4), 11).ok());
+    const std::vector<PersonId> expected(
+        value.persons.alive_ids().begin(), value.persons.alive_ids().end());
+    assert(expected != std::vector<PersonId>({
+                           PersonId(1), PersonId(3), PersonId(5), PersonId(6)}));
+
+    PersonStore restored;
+    assert(restored.replace_records(value.persons.records()).ok());
+    assert(std::vector<PersonId>(restored.alive_ids().begin(),
+                                 restored.alive_ids().end()) != expected);
+    assert(restored.restore_alive_order(expected).ok());
+    assert(std::vector<PersonId>(restored.alive_ids().begin(),
+                                 restored.alive_ids().end()) == expected);
+    assert(restored.validate().ok());
+
+    auto duplicate = expected;
+    duplicate.back() = duplicate.front();
+    assert(!restored.restore_alive_order(std::move(duplicate)).ok());
+}
+
 void test_inactive_job_compaction_rebuilds_live_indexes() {
     auto value = fixture();
     EmploymentBook employment;
@@ -377,6 +400,7 @@ void test_indexed_marriage_matches_brute_force() {
 
 int main() {
     test_primary_second_and_roster_indexes();
+    test_person_alive_order_restoration();
     test_inactive_job_compaction_rebuilds_live_indexes();
     test_swap_erase_suspension_and_stable_ids();
     test_checkpoint_roster_order_restoration();

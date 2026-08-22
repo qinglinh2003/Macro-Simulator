@@ -756,7 +756,7 @@ receive hidden information or privileged actions.
 
 P0 was accepted on 2026-08-22 on branch `audit/policy-causality-v38`. This is a
 contract and inventory milestone only. It does not claim that any policy has passed a
-dynamic causal experiment; P1 has not started.
+dynamic causal experiment.
 
 The generated P0 ledger reports:
 
@@ -772,19 +772,86 @@ The frozen component hashes are:
 
 | Component | SHA-256 |
 |---|---|
-| Registry | `06d7196502c818bd19c9381b73419ff6947512edbe3b518dd227bce27d1632b8` |
-| Contracts | `cefbe666a42980c3caf69c247ef2fd47acad7aa152f894d9e788878f3a3da543` |
+| Registry | `e7719fec39b8e8bad451bb5cb70329a4516bd41fa165032eafef318a3643c81d` |
+| Contracts | `81e99e0e029ecfcbc00ec30b14921e168312ae2371dc77f5dc02d3dc0cd3edcb` |
 | Activation fixtures | `3645ae23f5fb0c632dc56f435683ec2e3fb1683fee3791b37d3f326b87c053a8` |
 | Scenarios | `fb73c66468d93a58bdff55a56a2e7eebf75eae2b54aa08c16429e25d04195bd5` |
 | Materiality | `66482a1fd0012dd99997ce4a3fafd1a7cdf4ee39c8fccd7261547dfe14cf3055` |
 | Failure taxonomy | `054bbeca2be2780c7926122b3a05c2b0b2bb081bed4bae89deaf707c1ac716d8` |
-| P0 root | `41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87` |
+| P0 root | `384aa82b14de97de39668327fae57abb6fe22f41b794070ef36ba4b23a3f6b63` |
 
 The acceptance gate is `tests/test_policy_causality_p0.py`, run together with the
 existing Policy Registry and source-inventory gates. The combined focused suite passed
 13 tests. The source-inventory count was refreshed from 370 to 368 after confirming that
 the previously retired `symmetric_k` and `k_replacement_floor` fields were the exact two
 field removals and that every remaining field is classified exactly once.
+
+### P0 read-point amendment discovered in P1
+
+P1 showed that the P0 Registry still named legacy Python read locations. The audit now
+replaces those strings with the first verified native C++ read point, or with an
+explicit native route defect. This is an evidence correction, not a treatment or
+scenario change.
+
+| Identity | Previous | Amended |
+|---|---|---|
+| Registry | `06d7196502c818bd19c9381b73419ff6947512edbe3b518dd227bce27d1632b8` | `e7719fec39b8e8bad451bb5cb70329a4516bd41fa165032eafef318a3643c81d` |
+| Contracts | `cefbe666a42980c3caf69c247ef2fd47acad7aa152f894d9e788878f3a3da543` | `81e99e0e029ecfcbc00ec30b14921e168312ae2371dc77f5dc02d3dc0cd3edcb` |
+| P0 root | `41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87` | `384aa82b14de97de39668327fae57abb6fe22f41b794070ef36ba4b23a3f6b63` |
+
+No P0 dynamic evidence is invalidated because P0 produced inventory and contract
+evidence only; the first dynamic native run belongs to P1.
+
+## P1 milestone acceptance evidence
+
+P1 was accepted on 2026-08-22 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. The formal smoke used one seed (`3801`), three
+economies, 100,000 initial persons per economy, and eight native engine workers.
+
+The generated route ledger reports:
+
+- all 102 Registry levers have generated native storage routes;
+- 99 levers have a verified first native economic read point;
+- all 102 values can be projected as non-noops and become effective in one atomic
+  next-day batch;
+- invalid partial manual-rate and peg batches reject without mutation;
+- the completed day remains immutable while a boundary is prepared;
+- exact no-op replay leaves both policy generation and the economic trajectory
+  unchanged;
+- checkpoint restore and continuation are exact after preserving the native
+  `PersonStore` live-order state.
+
+The three explicit route defects are:
+
+1. `fiscal_uses_national_accounts_gdp` is stored and checkpointed, but no fiscal
+   mechanism reads it;
+2. `mortgage_risk_weight` is stored and range-validated, but bank risk-weighted assets
+   never read it;
+3. `mortgage_min_capital_ratio` is stored and range-validated, but mortgage capital
+   gating never reads it.
+
+These rows are defects, not weak elasticities, and must be repaired or given a final
+non-player disposition before P2 can accept their mechanisms.
+
+The frozen P1 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Native control contract | `b871cbf679516a6012658e715ab0b3e099d31076e387fa70bd69b8edaaae23a4` |
+| Route ledger | `e1eb003349328505e77eee6b556824bba67959bf8e806231b4cb9bc9ce52948a` |
+| P1 route-contract root | `d13edcc1b2e50d2a3865fd93aa2560e5f6dc8c2430ec5a6848b991dac5f02a4a` |
+| Native smoke evidence | `820395e76f277519fc5e2369b7e1478c36ac185db8ed2db221a68d23811e3383` |
+| P1 acceptance root | `90c73d1ba38c3a166f1f78aefd09f8ba48978ae56d5618c60afacaa30b7f46bc` |
+
+The accepted run produced a 159,914,059-byte checkpoint and completed the audit smoke
+in 24.96 seconds on the acceptance machine. All twelve boundary, rejection, no-op,
+checkpoint, replay, and value-coverage checks passed. P2 ordinary-state and activation
+effect experiments have not started.
+
+Regression acceptance includes 18 focused Policy tests and all 74 native CTest targets.
+The configured interpreter initially resolved two binding tests through an editable
+install from another worktree; both passed when rerun against this worktree with isolated
+module paths. The other 72 CTest targets passed in the original eight-worker run.
 
 ## 17. Artifacts and provenance
 
@@ -807,15 +874,16 @@ Each run records:
 Required generated reports are:
 
 1. `policy_inventory.json` and `.md`;
-2. `policy_contracts.json` and `.md`;
-3. `activation_fixture_catalog.json` and `.md`;
-4. `scenario_catalog.json` and `.md`;
-5. `policy_scenario_matrix.json` and `.md`;
-6. `single_policy_evidence.json` and `.md`;
-7. `crisis_evidence.json` and `.md`;
-8. `combination_evidence.json` and `.md`;
-9. `scale_confirmation.json` and `.md`;
-10. `final_acceptance.json` and `.md`.
+2. `p1_route_ledger.json` and `.md`;
+3. `policy_contracts.json` and `.md`;
+4. `activation_fixture_catalog.json` and `.md`;
+5. `scenario_catalog.json` and `.md`;
+6. `policy_scenario_matrix.json` and `.md`;
+7. `single_policy_evidence.json` and `.md`;
+8. `crisis_evidence.json` and `.md`;
+9. `combination_evidence.json` and `.md`;
+10. `scale_confirmation.json` and `.md`;
+11. `final_acceptance.json` and `.md`.
 
 The final report must separate `experiment completed` from `lever accepted`. Counts of
 executed jobs, passing mechanisms, accepted player levers, known engine gaps, and

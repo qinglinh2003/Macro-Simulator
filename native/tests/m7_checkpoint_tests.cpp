@@ -163,10 +163,20 @@ save(const Harness &value) {
 
 void test_round_trip_and_continuation() {
     auto direct = build();
+    auto reversed_alive = std::vector<macro_sim::PersonId>(
+        direct.runtime.persons.alive_ids().rbegin(),
+        direct.runtime.persons.alive_ids().rend());
+    assert(direct.runtime.persons.restore_alive_order(reversed_alive).ok());
     advance(direct, 12);
     const auto bytes = save(direct);
     assert(macro_sim::simulation::is_m7_checkpoint(bytes));
     auto resumed = restore(bytes);
+    assert(std::vector<macro_sim::PersonId>(
+               resumed.runtime.persons.alive_ids().begin(),
+               resumed.runtime.persons.alive_ids().end()) ==
+           std::vector<macro_sim::PersonId>(
+               direct.runtime.persons.alive_ids().begin(),
+               direct.runtime.persons.alive_ids().end()));
     assert(save(resumed) == bytes);
     advance(direct, 15);
     advance(resumed, 15);

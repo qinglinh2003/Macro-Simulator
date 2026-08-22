@@ -461,6 +461,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
 # bootstrap, checkpoint migration and diagnostic mutation paths; the Coordinator
 # is the authority that enforces movement relative to its projected timeline.
 from macro_sim.core.policy_control_specs import CONTROL_SPECS
+from macro_sim.core.native_policy_routes import NATIVE_POLICY_ROUTES
 
 REGISTRY = {
     name: replace(
@@ -479,6 +480,7 @@ REGISTRY = {
         control_scale=CONTROL_SPECS[name].control_scale,
         admin_weight=CONTROL_SPECS[name].admin_weight,
         cost_class=CONTROL_SPECS[name].cost_class,
+        read_point=NATIVE_POLICY_ROUTES[name].read_point,
     )
     for name, lever in REGISTRY.items()
 }

@@ -26,7 +26,7 @@ from macro_sim.diagnostics.policy_contracts import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FROZEN_P0_ROOT_HASH = "41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87"
+FROZEN_P0_ROOT_HASH = "384aa82b14de97de39668327fae57abb6fe22f41b794070ef36ba4b23a3f6b63"
 
 
 def _maintained_metric_ids() -> set[str]:

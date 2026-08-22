@@ -133,6 +133,38 @@ Status PersonStore::replace_records(std::vector<PersonRecord> records) {
     return validate();
 }
 
+Status PersonStore::restore_alive_order(std::vector<PersonId> alive_ids) {
+    if (alive_ids.size() != alive_ids_.size() ||
+        alive_ids.size() >= std::numeric_limits<std::uint32_t>::max()) {
+        return Status(ErrorCode::corrupt_input,
+                      "person checkpoint alive order size is invalid");
+    }
+    std::vector<std::uint8_t> seen(records_.size(), 0U);
+    for (std::size_t dense = 0; dense < alive_ids.size(); ++dense) {
+        const auto id = alive_ids[dense];
+        const auto index = static_cast<std::size_t>(id.value());
+        if (!id.valid() || index == 0U || index >= records_.size() ||
+            !records_[index].alive || seen[index] != 0U) {
+            return Status(ErrorCode::corrupt_input,
+                          "person checkpoint alive order is invalid");
+        }
+        seen[index] = 1U;
+    }
+    for (std::size_t index = 1; index < records_.size(); ++index) {
+        if (records_[index].alive != (seen[index] != 0U)) {
+            return Status(ErrorCode::corrupt_input,
+                          "person checkpoint alive order coverage is invalid");
+        }
+    }
+    alive_ids_ = std::move(alive_ids);
+    std::fill(alive_dense_by_id_.begin(), alive_dense_by_id_.end(), kNoDense);
+    for (std::size_t dense = 0; dense < alive_ids_.size(); ++dense) {
+        alive_dense_by_id_[static_cast<std::size_t>(alive_ids_[dense].value())] =
+            static_cast<std::uint32_t>(dense);
+    }
+    return validate();
+}
+
 Status PersonStore::validate() const noexcept {
     if (records_.empty() || alive_dense_by_id_.size() != records_.size() ||
         next_id_ != records_.size()) {
