@@ -944,6 +944,110 @@ another worktree; both passed when rerun concurrently with `-S` and explicit pat
 this source tree, its native module, and the dependency site-packages. P2 stops here:
 no P3 scenario is accepted or used for a policy-efficacy claim.
 
+## P3 milestone acceptance evidence
+
+P3 was accepted on 2026-08-22 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This status accepts the scenario-library audit and
+its exclusion boundary; it does not accept every declared crisis. P4 must use only a
+crisis that passed all five P3 gates.
+
+The formal experiment used:
+
+- eight matched seeds (`5101`, `5113`, `5129`, `5143`, `5159`, `5177`, `5193`,
+  `5209`);
+- 100,000 initial persons per country and eight native engine workers per session;
+- four concurrent independent seed jobs;
+- 11 ordinary or structural state environments and 10 runnable crisis environments;
+- a matched no-response control plus mild, moderate, and severe shock tapes for every
+  runnable crisis and seed;
+- checkpoint replay for the moderate arm of seed `5101` in every runnable crisis; and
+- 168 fresh native run records with zero cache hits and no legacy Python simulator.
+
+All 11 state environments passed in all eight seeds: `BASE_NORMAL`, `BASE_SLACK`,
+`BASE_TIGHT`, `STRUCT_HIGH_POVERTY`, `STRUCT_HIGH_INEQUALITY`,
+`STRUCT_LOW_PARTICIPATION`, `STRUCT_HOUSING_SHORTAGE`, `STRUCT_LOW_PRODUCTIVITY`,
+`STRUCT_ENERGY_DEPENDENCE`, `STRUCT_POPULATION_AGING`, and
+`STRUCT_EXTERNAL_IMBALANCE`.
+
+The crisis gate results are:
+
+| Scenario | Entry | Propagation | Severity | Recovery | Integrity | P4 disposition |
+|---|---:|---:|---:|---:|---:|---|
+| `CR_DEMAND_RECESSION` | pass | pass | pass | pass | pass | accepted |
+| `CR_SUPPLY_STAGFLATION` | pass | pass | fail | fail | fail | excluded |
+| `CR_ENERGY_EMBARGO` | fail | pass | fail | pass | fail | excluded |
+| `CR_CREDIT_CRUNCH` | pass | fail | fail | pass | pass | excluded |
+| `CR_PANDEMIC` | pass | fail | fail | pass | fail | excluded |
+| `CR_NATURAL_DISASTER` | pass | pass | pass | fail | fail | excluded |
+| `CR_TRADE_INTERRUPTION` | pass | fail | fail | pass | fail | excluded |
+| `CR_PEG_PRESSURE` | fail | pass | fail | fail | fail | excluded |
+| `CR_BANK_RUN` | pass | fail | pass | pass | pass | excluded |
+| `CR_HOUSING_BUST` | fail | pass | fail | fail | fail | excluded |
+| `CR_SOVEREIGN_STRESS` | blocked | blocked | blocked | blocked | blocked | excluded |
+
+Only `CR_DEMAND_RECESSION` is frozen for P4. It passed entry, propagation, recovery,
+and integrity in all eight seeds; its primary real-output loss was strictly ordered in
+seven seeds and in aggregate, with mean peak losses of 1,651.78, 2,020.52, and 3,561.12
+for mild, moderate, and severe tapes.
+
+The excluded scenarios expose specific defects rather than missing generic coverage:
+
+1. supply stagflation has nearly flat and non-monotone real-output losses across
+   severity and does not recover under the declared rule;
+2. the energy embargo does not produce the declared transaction-price entry response,
+   and its unfilled-energy loss is explosively non-monotone across severity;
+3. credit crunch never produces the declared firm-default propagation event;
+4. pandemic never produces the declared poverty propagation response and has weak
+   per-seed severity ordering;
+5. natural disaster leaves its one-day capital-destruction shock reported as active at
+   the terminal boundary, failing both recovery and integrity;
+6. trade interruption produces the declared price-level propagation response in only
+   two of eight seeds and has weak per-seed severity ordering;
+7. peg pressure does not reliably move reserves or the exchange rate, and its primary
+   loss is zero at every severity;
+8. bank run never produces a bank-failure propagation event;
+9. housing bust does not reliably move house prices or foreclosures, and its primary
+   loss is identical at every severity; and
+10. sovereign stress remains blocked because sovereign risk-premium/default
+    transmission is absent.
+
+Checkpoint replay is exact for demand recession, credit crunch, bank run, and natural
+disaster. It is not exact for supply stagflation, energy embargo, pandemic, trade
+interruption, peg pressure, or housing bust. Those replay defects are independent
+integrity blockers even when another gate fails first. All captured series are finite,
+all required accounting metrics are present, and all recorded accounting residuals
+remain within their declared tolerances.
+
+The formal pandemic run initially exposed a native lifecycle defect at seed `5159`:
+a retired household could retain a nonzero deposit tail smaller than the accounting
+tolerance, pass the tolerance check, and then fail the posting book's exact-zero close
+contract. The commit path now transfers such tails through the rounding-residual
+account before closing. A dedicated regression test passes, and the previously
+deterministic 100,000-person, three-country, eight-worker severe-pandemic path now
+completes. All eight formal pandemic seeds subsequently completed all four paths.
+
+The frozen P3 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Experiment source revision | `e096064df93af33c1e098106159eb7432cd20ce9` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| Scenario manifest | `6ca7fe558b659ea08738da080433b8dec1b27ae91cf148d8c266793429c50285` |
+| P3 evidence | `0201ac50a650945f3d0077b492f4354a0f7c5b6cd4e947954c31e0ac8c8064b4` |
+| P3 acceptance | `f7e8b218a8d989a31af8a89bc97c2b12fe0a5780953d2fd013c2ea0289721933` |
+
+All 168 caches match the frozen source revision, population, and worker contract, and
+the three report hashes reproduce from their canonical payloads. The focused P0-P3,
+Registry, and source-inventory suite passes 33 tests. The eight-worker native CTest run
+passes 72 of 74 targets directly. The remaining two targets were redirected by an
+unrelated editable install from another worktree and both pass when rerun concurrently
+with `-S` and explicit paths to this source tree, native module, and dependency
+site-packages.
+
+P3 stops here. No single-policy crisis efficacy experiment has been run, and no
+excluded scenario may support a P4 efficacy claim until its earliest failed layer is
+repaired and the full P3 gate is rerun.
+
 ## 17. Artifacts and provenance
 
 Generated results live under `artifacts/policy-audit/` and are not committed. Source
