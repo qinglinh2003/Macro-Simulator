@@ -71,6 +71,29 @@ FINAL_DISPOSITIONS = frozenset({
 })
 
 
+# These are independent of causal efficacy: the experiment uses values that
+# both layers accept, but the player-facing Registry currently advertises a
+# wider legal domain than the native validator implements.
+VALIDATION_CONTRACT_DEFECTS: Mapping[str, str] = {
+    "import_quota": (
+        "Registry allows 0..100 while the native external-policy validator "
+        "accepts only 0..1"
+    ),
+    "immigration_cap": (
+        "Registry allows 0..10 while the native external-policy validator "
+        "accepts only 0..1"
+    ),
+    "margin_ltv": (
+        "Registry includes 1.0 while the native securities validator requires "
+        "margin_ltv < 1.0"
+    ),
+    "margin_max": (
+        "Registry allows values below 1.0 while the native securities validator "
+        "requires margin_max >= 1.0"
+    ),
+}
+
+
 # P0 fixture identifiers are economic contracts.  The names below select the
 # smallest already-audited native state builder that realizes each contract.
 FIXTURE_NATIVE_SCENARIOS: Mapping[str, str] = {
@@ -104,15 +127,50 @@ LEVER_NATIVE_SCENARIOS: Mapping[str, str] = {
     "energy_cap_compensation": "energy_rising_price",
     "energy_subsidy_rate": "energy_rising_price",
     "energy_subsidy_threshold": "energy_rising_price",
-    "bank_resolution_fund": "bank_run_pressure",
+    "lolr": "bank_run_health_screen",
+    "bank_resolution_fund": "bank_run_health_screen",
+    "bank_migrate_on_failure": "bank_run_health_screen",
+    "unified_bank_rwa": "bank_run_health_screen",
+    "bank_capital_constraint": "relationship_refinancing_pressure",
+    "bankrupt_persist": "firm_debt_service_pressure",
+    "household_bankruptcy": "household_arrears_pressure",
     "mortgage_foreclosure_ltv": "housing_distressed_market",
     "mortgage_arrears_floor": "housing_distressed_market",
     "rental_eviction_arrears": "housing_rental_pressure",
-    "unified_bank_rwa": "binding_bank_capital",
+    "capital_control": "world_capital_rate_gap",
+    "external_interest_settlement_fraction": "world_capital_rate_gap",
+    "infl_ema_lambda": "positive_wage_inflation_pulse",
+    "cb_uses_fixed_basket_cpi": "positive_wage_inflation_pulse",
+    "cb_log_inflation": "positive_wage_inflation_pulse",
+    "cb_core_inflation": "energy_rising_price",
     # A peg transition must begin from a float.  The treatment itself creates
     # the peg; using world_peg_pressure here would make that action a no-op.
     "fx_regime": "world_trade_integration",
     "peg_anchor": "world_trade_integration",
+}
+
+
+LEVER_TARGET_ECONOMY: Mapping[str, int] = {
+    "emigration_cap": 1,
+    "guest_worker_return": 1,
+    "remittance_tax": 1,
+}
+
+
+LEVER_ACTIVATION_DAYS: Mapping[str, int] = {
+    "margin_ltv": 90,
+    "margin_max": 90,
+    "lolr": 90,
+    "bank_resolution_fund": 90,
+    "bank_migrate_on_failure": 90,
+    "unified_bank_rwa": 90,
+    "bankrupt_persist": 90,
+    "household_bankruptcy": 90,
+    "external_interest_settlement_fraction": 90,
+    "housing_permits": 365,
+    "mortgage_foreclosure_ltv": 365,
+    "mortgage_arrears_floor": 90,
+    "rental_eviction_arrears": 365,
 }
 
 
@@ -133,12 +191,39 @@ class ExperimentArm:
         }
 
 
+def _arm_overrides(lever: str) -> tuple[ExperimentArm, ...]:
+    """Return threshold-crossing doses where ``None`` means unconstrained."""
+    values: Mapping[str, tuple[tuple[str, Any], ...]] = {
+        "deficit_u_cap": (("local", 2.0), ("meaningful", 0.5)),
+        "margin_ltv": (("local", 0.25), ("meaningful", 0.0)),
+        "margin_max": (("local", 1.50), ("meaningful", 1.0)),
+        "mortgage_ltv_cap": (("local", 0.50), ("meaningful", 0.0)),
+        "mortgage_foreclosure_ltv": (("local", 0.80), ("meaningful", 0.50)),
+        "mortgage_arrears_floor": (("local", 10.0), ("meaningful", 100.0)),
+        "housing_permits": (("local", 25), ("meaningful", 0)),
+        "bankrupt_persist": (("local", 90), ("meaningful", 1)),
+        "min_wage": (("local", 0.90), ("meaningful", 1.25)),
+        "import_quota": (("local", 0.25), ("meaningful", 0.0)),
+        "immigration_cap": (("local", 0.01), ("meaningful", 0.0)),
+        "emigration_cap": (("local", 0.01), ("meaningful", 0.0)),
+    }
+    return tuple(
+        ExperimentArm(
+            f"threshold_{dose_class}",
+            dose_class,
+            ((lever, value),),
+        )
+        for dose_class, value in values.get(lever, ())
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ExperimentGroup:
     group_id: str
     phase: str
     native_scenario: str
     countries: int
+    target_economy: int
     days: int
     burn_in_days: int
     withdrawal_days: int
@@ -200,6 +285,13 @@ def select_experiment_arms(
     """Select predeclared local and meaningful doses from the P0 contract."""
     if phase not in {"ordinary", "activation"}:
         raise ValueError(f"unknown P2 phase {phase!r}")
+    overrides = _arm_overrides(contract.lever)
+    if overrides:
+        if phase == "ordinary":
+            return tuple(
+                item for item in overrides if item.dose_class == "meaningful"
+            )
+        return overrides
     lever = REGISTRY[contract.lever]
     batches = contract.treatment_batches
     validation = lever.validation
@@ -231,6 +323,10 @@ def _countries(contract: PolicyCausalContract) -> int:
     return 3 if contract.scope == "external" else 1
 
 
+def _target_economy(contract: PolicyCausalContract) -> int:
+    return LEVER_TARGET_ECONOMY.get(contract.lever, 0)
+
+
 def _native_scenario(contract: PolicyCausalContract) -> str:
     return LEVER_NATIVE_SCENARIOS.get(
         contract.lever,
@@ -239,14 +335,45 @@ def _native_scenario(contract: PolicyCausalContract) -> str:
 
 
 def _setup_actions(contract: PolicyCausalContract) -> tuple[tuple[str, Any], ...]:
+    actions: dict[str, Any] = {}
+    if contract.lever == "gov_consumption_share":
+        actions["gov_deficit_target"] = 0.0
+    if contract.lever == "deficit_u_cap":
+        actions["deficit_u_ref"] = 0.001
+    if contract.lever == "spr_target_units":
+        actions["spr_flow_cap"] = 10_000.0
+    if contract.lever == "spr_flow_cap":
+        actions["spr_target_units"] = 100_000.0
+    if contract.lever == "energy_cap_compensation":
+        actions["energy_price_cap"] = 0.10
+    if contract.lever == "energy_subsidy_threshold":
+        actions["energy_subsidy_rate"] = 0.20
     if contract.lever == "soe_price_at_cost":
-        return (("soe_efirm", True),)
-    if (
-        contract.activation_fixture == "ACT_TAYLOR_INTERIOR"
-        and contract.lever != "r_max"
-    ):
-        return (("r_max", 0.02),)
-    return ()
+        actions["soe_efirm"] = True
+    if contract.lever == "soe_efirm":
+        actions["soe_price_at_cost"] = True
+    if contract.lever == "job_guarantee":
+        actions["jg_wage_ratio"] = 0.50
+    if contract.lever in {"jg_wage_ratio", "jg_public_works_share"}:
+        actions["job_guarantee"] = True
+        if contract.lever != "jg_wage_ratio":
+            actions["jg_wage_ratio"] = 0.50
+    if contract.activation_fixture == "ACT_TAYLOR_INTERIOR":
+        interior = {
+            "monetary_regime": "taylor",
+            "r_max": 0.02,
+            "r_neutral": 0.005,
+            "inflation_target": -0.001,
+            "u_natural": 0.50,
+            "rate_inertia": 0.50,
+        }
+        for name, value in interior.items():
+            if name != contract.lever:
+                actions[name] = value
+        # The regime is the fixture itself.  Keeping it active before T0 makes
+        # every alternative regime arm a genuine transition from Taylor.
+        actions["monetary_regime"] = "taylor"
+    return tuple(sorted(actions.items()))
 
 
 def build_experiment_groups(
@@ -266,11 +393,15 @@ def build_experiment_groups(
             continue
         scenario = "neutral_baseline" if phase == "ordinary" else _native_scenario(contract)
         setup = () if phase == "ordinary" else _setup_actions(contract)
-        days = ordinary_days if phase == "ordinary" else activation_days
-        key = (scenario, _countries(contract), days, setup)
+        days = ordinary_days if phase == "ordinary" else max(
+            activation_days,
+            LEVER_ACTIVATION_DAYS.get(contract.lever, activation_days),
+        )
+        target_economy = _target_economy(contract)
+        key = (scenario, _countries(contract), target_economy, days, setup)
         grouped.setdefault(key, []).append(contract)
     output = []
-    for (scenario, countries, days, setup), members in sorted(
+    for (scenario, countries, target_economy, days, setup), members in sorted(
         grouped.items(), key=lambda item: repr(item[0])
     ):
         identity = {
@@ -281,11 +412,21 @@ def build_experiment_groups(
             "setup": setup,
             "levers": [item.lever for item in members],
         }
+        if target_economy:
+            identity["target_economy"] = target_economy
+        arm_overrides = {
+            item.lever: [arm.to_dict() for arm in _arm_overrides(item.lever)]
+            for item in members
+            if _arm_overrides(item.lever)
+        }
+        if arm_overrides:
+            identity["arm_overrides"] = arm_overrides
         output.append(ExperimentGroup(
             group_id=_canonical_hash(identity)[:16],
             phase=phase,
             native_scenario=scenario,
             countries=countries,
+            target_economy=target_economy,
             days=days,
             burn_in_days=burn_in_days,
             withdrawal_days=withdrawal_days,
@@ -307,6 +448,8 @@ def _actions(
 def _restore_actions(
     arm: ExperimentArm,
     baseline: Mapping[str, Any],
+    *,
+    economy_id: int,
 ) -> tuple[dict[str, Any], ...]:
     names = {name for name, _value in arm.actions}
     if names & {"manual_policy_rate", "monetary_regime"}:
@@ -315,7 +458,11 @@ def _restore_actions(
         names.update({"fx_regime", "peg_anchor"})
     ordered = sorted(names)
     return tuple(
-        {"economy_id": 0, "lever": name, "value": _jsonable(baseline[name])}
+        {
+            "economy_id": economy_id,
+            "lever": name,
+            "value": _jsonable(baseline[name]),
+        }
         for name in ordered
     )
 
@@ -353,6 +500,7 @@ def _capture_window(
     days: int,
     metric_ids: Sequence[str],
     countries: int,
+    target_economy: int,
 ) -> dict[str, Any]:
     summaries_by_economy: dict[str, dict[str, Any]] = {}
     series_by_economy: dict[str, dict[str, Any]] = {}
@@ -389,9 +537,9 @@ def _capture_window(
         series_by_economy[str(economy_id)] = series
         missing_by_economy[str(economy_id)] = missing
     return {
-        "metric_summaries": summaries_by_economy["0"],
+        "metric_summaries": summaries_by_economy[str(target_economy)],
         "metric_summaries_by_economy": summaries_by_economy,
-        "metric_series": series_by_economy["0"],
+        "metric_series": series_by_economy[str(target_economy)],
         "metric_series_by_economy": series_by_economy,
         "missing_metrics_by_economy": missing_by_economy,
         "finite": finite,
@@ -402,8 +550,11 @@ def _terminal_metrics(
     session: NativeSimulationSession,
     *,
     metric_ids: Sequence[str],
+    economy_id: int,
 ) -> dict[str, float]:
-    row = derive_analysis_metrics(session.maintained_metrics()["economies"][0])
+    row = derive_analysis_metrics(
+        session.maintained_metrics()["economies"][economy_id]
+    )
     return {
         metric_id: float(row[metric_id])
         for metric_id in metric_ids
@@ -442,6 +593,8 @@ def _run_group_seed(
             "contracts": [item.to_dict() for item in group.contracts],
         },
     }
+    if group.target_economy:
+        signature_payload["group"]["target_economy"] = group.target_economy
     signature = _canonical_hash(signature_payload)
     if resume and cache_path.exists():
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -467,13 +620,18 @@ def _run_group_seed(
         history_capacity_frames=maximum_days + 4,
     )
     if group.setup_actions:
-        session.advance(1, actions=_actions(group.setup_actions))
+        session.advance(
+            1,
+            actions=_actions(
+                group.setup_actions, economy_id=group.target_economy
+            ),
+        )
         if group.burn_in_days > 1:
             session.advance(group.burn_in_days - 1)
     else:
         session.advance(group.burn_in_days)
     t0 = session.tick
-    baseline_values = session.policy_values(0)
+    baseline_values = session.policy_values(group.target_economy)
     metric_ids = tuple(sorted(set().union(*(
         set(contract.materiality_metrics)
         | set(ACTIVATION_FIXTURES[contract.activation_fixture].activation_metrics)
@@ -488,8 +646,13 @@ def _run_group_seed(
         days=group.days,
         metric_ids=metric_ids,
         countries=group.countries,
+        target_economy=group.target_economy,
     )
-    control_tail = _terminal_metrics(control, metric_ids=metric_ids)
+    control_tail = _terminal_metrics(
+        control,
+        metric_ids=metric_ids,
+        economy_id=group.target_economy,
+    )
 
     contracts: dict[str, Any] = {}
     for contract in group.contracts:
@@ -499,22 +662,30 @@ def _run_group_seed(
         arms = []
         for arm in select_experiment_arms(contract, phase=group.phase):
             branch = session.clone()
-            treatment_actions = _actions(arm.actions)
+            treatment_actions = _actions(
+                arm.actions,
+                economy_id=group.target_economy,
+            )
             try:
                 branch.advance(group.days, actions=treatment_actions)
-                policy_after = branch.policy_values(0)
+                policy_after = branch.policy_values(group.target_economy)
                 treatment_main = _capture_window(
                     branch,
                     t0=t0,
                     days=group.days,
                     metric_ids=contract_metrics,
                     countries=group.countries,
+                    target_economy=group.target_economy,
                 )
                 withdrawal = None
                 if arm.dose_class in {"meaningful", "transition"}:
-                    restore = _restore_actions(arm, baseline_values)
+                    restore = _restore_actions(
+                        arm,
+                        baseline_values,
+                        economy_id=group.target_economy,
+                    )
                     branch.advance(group.withdrawal_days, actions=restore)
-                    restored_values = branch.policy_values(0)
+                    restored_values = branch.policy_values(group.target_economy)
                     withdrawal = {
                         "actions": restore,
                         "policy_restored": all(
@@ -522,7 +693,9 @@ def _run_group_seed(
                             for name in {item["lever"] for item in restore}
                         ),
                         "terminal_metrics": _terminal_metrics(
-                            branch, metric_ids=contract_metrics
+                            branch,
+                            metric_ids=contract_metrics,
+                            economy_id=group.target_economy,
                         ),
                     }
                 arms.append({
@@ -563,6 +736,7 @@ def _run_group_seed(
         "phase": group.phase,
         "native_scenario": group.native_scenario,
         "countries": group.countries,
+        "target_economy": group.target_economy,
         "population_per_country": population,
         "workers": workers,
         "days": group.days,
@@ -630,6 +804,41 @@ def _run_groups(
     return results, cache_hits, executed
 
 
+def _experiment_manifest(
+    ordinary_groups: Sequence[ExperimentGroup],
+    activation_groups: Sequence[ExperimentGroup],
+) -> dict[str, Any]:
+    def describe(group: ExperimentGroup) -> dict[str, Any]:
+        return {
+            "group_id": group.group_id,
+            "phase": group.phase,
+            "native_scenario": group.native_scenario,
+            "countries": group.countries,
+            "target_economy": group.target_economy,
+            "days": group.days,
+            "burn_in_days": group.burn_in_days,
+            "withdrawal_days": group.withdrawal_days,
+            "setup_actions": _jsonable(group.setup_actions),
+            "contracts": [
+                {
+                    "lever": contract.lever,
+                    "arms": [
+                        arm.to_dict()
+                        for arm in select_experiment_arms(
+                            contract, phase=group.phase
+                        )
+                    ],
+                }
+                for contract in group.contracts
+            ],
+        }
+
+    return {
+        "ordinary": [describe(group) for group in ordinary_groups],
+        "activation": [describe(group) for group in activation_groups],
+    }
+
+
 def _contract_phase_runs(
     raw_runs: Sequence[Mapping[str, Any]],
     lever: str,
@@ -681,7 +890,7 @@ def _salient_metrics(
             if metric_id in run.get("metric_summaries", {})
         ]
         control_sd = stdev(control_values) if len(control_values) > 1 else 0.0
-        if (
+        if absolute > 1.0e-12 and (
             absolute >= materiality.absolute_floor
             or relative >= materiality.relative_floor
             or (control_sd > 0.0 and absolute >= materiality.standardized_floor * control_sd)
@@ -708,6 +917,34 @@ def _fixture_activation(
         "active_metrics_by_seed": per_seed,
         "activated_seed_count": sum(bool(items) for items in per_seed),
         "passed": len(per_seed) == 4 and all(per_seed),
+    }
+
+
+def _mechanism_opportunity(
+    controls: Sequence[Mapping[str, Any]],
+    contract: PolicyCausalContract,
+) -> dict[str, Any]:
+    """Check the most direct pre-treatment event or flow for each seed.
+
+    A broad fixture can be active while the actual policy gate is never
+    reached: housing sales do not imply that a construction permit was used,
+    and bank credit does not imply that a bank failed.  The first proximal
+    metric is preregistered as the direct gate/event observable, so use it to
+    distinguish a silent implementation from a fixture that never supplied an
+    opportunity for the lever to operate.
+    """
+    direct_metric = contract.mechanism_proximal_metrics[0]
+    active_by_seed = []
+    for run in controls:
+        values = run.get("metric_series", {}).get(direct_metric, {}).get(
+            "values", ()
+        )
+        active_by_seed.append(any(abs(float(value)) > 1.0e-12 for value in values))
+    return {
+        "direct_metric": direct_metric,
+        "active_by_seed": active_by_seed,
+        "activated_seed_count": sum(active_by_seed),
+        "passed": len(active_by_seed) == 4 and all(active_by_seed),
     }
 
 
@@ -821,6 +1058,7 @@ def analyze_p2(
         fixture = _fixture_activation(
             activation_controls, contract.activation_fixture
         )
+        opportunity = _mechanism_opportunity(activation_controls, contract)
         all_arms = ordinary_arms + activation_arms
         failed = any(item["failures"] for item in all_arms)
         applied = all(item["policy_applied_all_seeds"] for item in all_arms)
@@ -848,16 +1086,20 @@ def analyze_p2(
                 "aggregate metrics cannot prove that legacy and new contract "
                 "cohorts retained distinct terms"
             )
-        elif not fixture["passed"]:
+        elif not activation_changed and activation_declared:
+            disposition = "observable_defect"
+            reason = "the trajectory changed outside the declared proximal observables"
+        elif not activation_changed and not fixture["passed"]:
             disposition = "unsupported_by_current_engine"
             reason = "the declared activation fixture did not activate in all four seeds"
+        elif not activation_changed and not opportunity["passed"]:
+            disposition = "unsupported_by_current_engine"
+            reason = (
+                "the direct mechanism opportunity did not activate in all four seeds"
+            )
         elif not activation_changed:
-            if activation_declared:
-                disposition = "observable_defect"
-                reason = "the trajectory changed outside the declared proximal observables"
-            else:
-                disposition = "mechanism_defect"
-                reason = "no declared native observable changed in the binding fixture"
+            disposition = "mechanism_defect"
+            reason = "no declared native observable changed in the binding fixture"
         elif not salient:
             disposition = "accepted_expert_only"
             reason = "the mechanism is live but below the preregistered gameplay-salience screen"
@@ -878,6 +1120,9 @@ def analyze_p2(
             "owner_role": contract.owner_role,
             "decision_group": contract.decision_group,
             "semantics": contract.semantics,
+            "validation_contract_defect": VALIDATION_CONTRACT_DEFECTS.get(
+                contract.lever
+            ),
             "disposition": disposition,
             "reason": reason,
             "ordinary": {
@@ -888,6 +1133,7 @@ def analyze_p2(
                 "fixture_id": contract.activation_fixture,
                 "native_scenario": _native_scenario(contract),
                 "fixture_evidence": fixture,
+                "mechanism_opportunity_evidence": opportunity,
                 "changed_proximal_metrics": activation_changed,
                 "salient_proximal_metrics": salient,
                 "dose_ordering": _dose_ordering(activation_arms),
@@ -945,6 +1191,10 @@ def run_p2(
         burn_in_days=burn_in_days,
         withdrawal_days=withdrawal_days,
     )
+    experiment_manifest = _experiment_manifest(
+        ordinary_groups, activation_groups
+    )
+    experiment_manifest_hash = _canonical_hash(experiment_manifest)
     ordinary, ordinary_hits, ordinary_executed = _run_groups(
         ordinary_groups,
         seeds=tuple(seeds),
@@ -992,21 +1242,36 @@ def run_p2(
             "withdrawal_days": withdrawal_days,
             "ordinary_group_count": len(ordinary_groups),
             "activation_group_count": len(activation_groups),
+            "activation_horizons_days": sorted({
+                group.days for group in activation_groups
+            }),
+            "activation_day_overrides": {
+                contract.lever: group.days
+                for group in activation_groups
+                if group.days != activation_days
+                for contract in group.contracts
+            },
             "legacy_python_simulator_used": False,
         },
+        "experiment_manifest": experiment_manifest,
         "counts": {
             "levers": len(reports),
+            "validation_contract_defects": len(VALIDATION_CONTRACT_DEFECTS),
             "ordinary_native_runs": len(ordinary),
             "activation_native_runs": len(activation),
+            "native_run_records": len(ordinary) + len(activation),
             "executed_native_runs": ordinary_executed + activation_executed,
             "cache_hits": ordinary_hits + activation_hits,
             "dispositions": counts,
         },
         "hashes": {
+            "p2_experiment_manifest": experiment_manifest_hash,
             "p2_evidence": evidence_hash,
             "p2_acceptance": _canonical_hash({
                 "status": status,
                 "errors": errors,
+                "p0_root": p0["hashes"]["p0_root"],
+                "experiment_manifest": experiment_manifest_hash,
                 "protocol": {
                     "population": population,
                     "seeds": list(seeds),
@@ -1034,6 +1299,8 @@ def render_p2_markdown(payload: Mapping[str, Any]) -> str:
         f"- Population per country: {payload['protocol']['population_per_country']:,}",
         f"- Matched seeds: `{payload['protocol']['matched_seeds']}`",
         f"- Native engine workers: {payload['protocol']['native_engine_workers']}",
+        f"- Activation horizons: `{payload['protocol']['activation_horizons_days']}` days",
+        f"- Experiment manifest hash: `{payload['hashes']['p2_experiment_manifest']}`",
         f"- P2 acceptance hash: `{payload['hashes']['p2_acceptance']}`",
         "",
         "## Final dispositions",
@@ -1044,6 +1311,15 @@ def render_p2_markdown(payload: Mapping[str, Any]) -> str:
     for name, count in counts["dispositions"].items():
         if count:
             lines.append(f"| `{name}` | {count} |")
+    lines.extend([
+        "",
+        "## Validation-contract defects",
+        "",
+        "| Lever | Defect |",
+        "|---|---|",
+    ])
+    for lever, reason in sorted(VALIDATION_CONTRACT_DEFECTS.items()):
+        lines.append(f"| `{lever}` | {reason} |")
     lines.extend([
         "",
         "## Lever ledger",
@@ -1067,6 +1343,7 @@ __all__ = [
     "FIXTURE_NATIVE_SCENARIOS",
     "LEVER_NATIVE_SCENARIOS",
     "P2_SCHEMA_VERSION",
+    "VALIDATION_CONTRACT_DEFECTS",
     "ExperimentArm",
     "ExperimentGroup",
     "analyze_p2",

@@ -773,12 +773,12 @@ The frozen component hashes are:
 | Component | SHA-256 |
 |---|---|
 | Registry | `e7719fec39b8e8bad451bb5cb70329a4516bd41fa165032eafef318a3643c81d` |
-| Contracts | `81e99e0e029ecfcbc00ec30b14921e168312ae2371dc77f5dc02d3dc0cd3edcb` |
+| Contracts | `1b0d2be256765ba82e296a12c5d016d1f181e7b4396abaac758c6eb182948014` |
 | Activation fixtures | `3645ae23f5fb0c632dc56f435683ec2e3fb1683fee3791b37d3f326b87c053a8` |
 | Scenarios | `fb73c66468d93a58bdff55a56a2e7eebf75eae2b54aa08c16429e25d04195bd5` |
 | Materiality | `66482a1fd0012dd99997ce4a3fafd1a7cdf4ee39c8fccd7261547dfe14cf3055` |
 | Failure taxonomy | `054bbeca2be2780c7926122b3a05c2b0b2bb081bed4bae89deaf707c1ac716d8` |
-| P0 root | `384aa82b14de97de39668327fae57abb6fe22f41b794070ef36ba4b23a3f6b63` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
 
 The acceptance gate is `tests/test_policy_causality_p0.py`, run together with the
 existing Policy Registry and source-inventory gates. The combined focused suite passed
@@ -786,18 +786,20 @@ existing Policy Registry and source-inventory gates. The combined focused suite 
 the previously retired `symmetric_k` and `k_replacement_floor` fields were the exact two
 field removals and that every remaining field is classified exactly once.
 
-### P0 read-point amendment discovered in P1
+### P0 amendments discovered in P1 and P2
 
 P1 showed that the P0 Registry still named legacy Python read locations. The audit now
 replaces those strings with the first verified native C++ read point, or with an
-explicit native route defect. This is an evidence correction, not a treatment or
-scenario change.
+explicit native route defect. P2 then corrected `peg_anchor` from an invalid isolated
+change to the atomic `(fx_regime=peg, peg_anchor=<economy>)` transition required by the
+native boundary. These are evidence and treatment-contract corrections, not changes to
+the economic engine.
 
 | Identity | Previous | Amended |
 |---|---|---|
 | Registry | `06d7196502c818bd19c9381b73419ff6947512edbe3b518dd227bce27d1632b8` | `e7719fec39b8e8bad451bb5cb70329a4516bd41fa165032eafef318a3643c81d` |
-| Contracts | `cefbe666a42980c3caf69c247ef2fd47acad7aa152f894d9e788878f3a3da543` | `81e99e0e029ecfcbc00ec30b14921e168312ae2371dc77f5dc02d3dc0cd3edcb` |
-| P0 root | `41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87` | `384aa82b14de97de39668327fae57abb6fe22f41b794070ef36ba4b23a3f6b63` |
+| Contracts | `cefbe666a42980c3caf69c247ef2fd47acad7aa152f894d9e788878f3a3da543` | `1b0d2be256765ba82e296a12c5d016d1f181e7b4396abaac758c6eb182948014` |
+| P0 root | `41e248e00a04d871d285e2072c09209426e03041e08229e87dff4df252e81a87` | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
 
 No P0 dynamic evidence is invalidated because P0 produced inventory and contract
 evidence only; the first dynamic native run belongs to P1.
@@ -839,19 +841,108 @@ The frozen P1 identities are:
 |---|---|
 | Native control contract | `b871cbf679516a6012658e715ab0b3e099d31076e387fa70bd69b8edaaae23a4` |
 | Route ledger | `e1eb003349328505e77eee6b556824bba67959bf8e806231b4cb9bc9ce52948a` |
-| P1 route-contract root | `d13edcc1b2e50d2a3865fd93aa2560e5f6dc8c2430ec5a6848b991dac5f02a4a` |
+| P1 route-contract root | `385d738195f2260a57694c12293c1a267bf0fd3cc4221ffb47b489d5d5932906` |
 | Native smoke evidence | `820395e76f277519fc5e2369b7e1478c36ac185db8ed2db221a68d23811e3383` |
-| P1 acceptance root | `90c73d1ba38c3a166f1f78aefd09f8ba48978ae56d5618c60afacaa30b7f46bc` |
+| P1 acceptance root | `8d930386225337a1e5af100da92764d373d768356bb236160f4a095769c64d00` |
 
-The accepted run produced a 159,914,059-byte checkpoint and completed the audit smoke
-in 24.96 seconds on the acceptance machine. All twelve boundary, rejection, no-op,
-checkpoint, replay, and value-coverage checks passed. P2 ordinary-state and activation
-effect experiments have not started.
+The accepted rerun produced a 159,914,059-byte checkpoint and completed the audit smoke
+in 24.40 seconds on the acceptance machine. All twelve boundary, rejection, no-op,
+checkpoint, replay, and value-coverage checks passed.
 
 Regression acceptance includes 18 focused Policy tests and all 74 native CTest targets.
 The configured interpreter initially resolved two binding tests through an editable
 install from another worktree; both passed when rerun against this worktree with isolated
 module paths. The other 72 CTest targets passed in the original eight-worker run.
+
+## P2 milestone acceptance evidence
+
+P2 was accepted on 2026-08-22 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This milestone validates mechanism activation and
+ordinary-state safety; it does not claim crisis efficacy, empirical calibration, or
+long-run welfare optimality, which remain P3-P7 work.
+
+The frozen experiment used:
+
+- four matched seeds (`4201`, `4213`, `4231`, `4253`);
+- 100,000 initial persons per country and eight native engine workers per session;
+- four concurrent independent seed jobs;
+- a 7-day burn-in, 7-day ordinary-state window, and 7-day withdrawal window;
+- activation windows of 30, 90, or 365 days according to the preregistered mechanism
+  horizon;
+- three ordinary experiment groups and 48 activation groups, yielding 204 native run
+  records; and
+- no legacy Python simulator. Python only built specifications, branched native
+  checkpoints, and reduced maintained native metrics.
+
+All treatments were applied at the intended next-day boundary, every tested withdrawal
+restored the policy value, all recorded values were finite, and no treatment arm failed
+at runtime. The final ledger covers all 102 Registry levers with no pending disposition:
+
+| Final disposition | Count |
+|---|---:|
+| Accepted in ordinary and activation states | 45 |
+| Accepted in the activation state | 31 |
+| Accepted but below player-facing salience | 1 |
+| Accepted structural, long-horizon mechanism | 1 |
+| Native route defect | 3 |
+| Mechanism defect | 3 |
+| Observable/cohort-evidence defect | 11 |
+| Unsupported by the current activation state | 7 |
+
+The 78 accepted mechanisms include several corrections to false negatives from the
+first pass. Taylor coefficients were retested inside an actual Taylor regime; job
+guarantee, strategic-reserve, subsidy, SOE, migration, and capital-flow levers received
+their missing binding conditions; origin-owned migration policies were applied to the
+origin economy; and asymmetric constraints were tested on the binding side. In
+particular, `margin_ltv=0` eliminated margin balances in active seeds,
+`bankrupt_persist=1` generated firm-default exits in all four seeds,
+`mortgage_ltv_cap=0` eliminated new mortgages in all four seeds, and
+`mortgage_foreclosure_ltv=0.5` increased foreclosures in all four seeds.
+
+The three mechanism defects are:
+
+1. `bank_capital_constraint`: credit and capital were active, but disabling the gate
+   changed no declared observable;
+2. `mortgage_arrears_floor`: foreclosures were active, but doses spanning 0, 1, 1.5,
+   4, 10, and 100 changed no declared observable; and
+3. `deficit_u_cap`: government consumption and the unemployment multiplier were active,
+   but binding-side doses changed no realized fiscal observable.
+
+The eleven observable defects are `bond_coupon`, `bond_maturity`,
+`mortgage_underwriting`, `mortgage_dsti_cap`, `mortgage_stress_rate_addon`,
+`housing_in_wealth_tax`, `firm_credit_min_dscr`,
+`regulatory_firm_capital_haircut`, `regulatory_firm_inventory_haircut`,
+`land_fee_share`, and `land_fee_stock_elasticity`. Nine are new-contract mechanisms for
+which aggregate outcomes cannot prove cohort separation; the remaining two move the
+trajectory outside their declared proximal observables.
+
+The seven unsupported rows are `lolr`, `bank_resolution_fund`, `margin_max`,
+`housing_permits`, `household_bankruptcy`, `bank_migrate_on_failure`, and
+`unified_bank_rwa`. Their required direct event or binding state did not occur in all
+four controls, so P2 does not mislabel them as dead mechanisms. The three P1 route
+defects remain `fiscal_uses_national_accounts_gdp`, `mortgage_risk_weight`, and
+`mortgage_min_capital_ratio`.
+
+P2 also records four validation-contract defects that are independent of causal
+efficacy: the Registry/native legal domains disagree for `import_quota`,
+`immigration_cap`, `margin_ltv`, and `margin_max`. Experiments used values accepted by
+both layers; the player-facing domains still require repair before freeze.
+
+The frozen P2 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| Experiment manifest | `880233514e3cba3ba02e5890eaf342cc3970d962c3b01540f32012b64af2ea7d` |
+| P2 evidence | `3b6b2b8743ad9656ab802ff72bb7620c62dd345a262d73669a7252fce04a25b1` |
+| P2 acceptance | `0a112ee71733089ade75d7916dda6ccf9cfdc0ec64b40bcb5484c716a425949c` |
+
+The focused P0/P1/P2 acceptance suite contains 22 tests and passes in isolation. The
+eight-worker native CTest run passed 72 of 74 targets directly. The two remaining
+Python-binding targets were initially redirected by an unrelated editable install from
+another worktree; both passed when rerun concurrently with `-S` and explicit paths to
+this source tree, its native module, and the dependency site-packages. P2 stops here:
+no P3 scenario is accepted or used for a policy-efficacy claim.
 
 ## 17. Artifacts and provenance
 

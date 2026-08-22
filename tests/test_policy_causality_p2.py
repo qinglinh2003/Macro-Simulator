@@ -119,6 +119,73 @@ def test_numeric_arms_include_local_and_meaningful_activation_doses() -> None:
     assert [item.dose_class for item in ordinary] == ["meaningful"]
 
 
+def test_nullable_caps_use_binding_threshold_crossing_doses() -> None:
+    import_quota = select_experiment_arms(
+        _contract("import_quota"), phase="activation"
+    )
+    immigration_cap = select_experiment_arms(
+        _contract("immigration_cap"), phase="activation"
+    )
+    assert [item.actions for item in import_quota] == [
+        (("import_quota", 0.25),),
+        (("import_quota", 0.0),),
+    ]
+    assert [item.actions for item in immigration_cap] == [
+        (("immigration_cap", 0.01),),
+        (("immigration_cap", 0.0),),
+    ]
+
+    permits = select_experiment_arms(
+        _contract("housing_permits"), phase="activation"
+    )
+    mortgage_ltv = select_experiment_arms(
+        _contract("mortgage_ltv_cap"), phase="activation"
+    )
+    arrears_floor = select_experiment_arms(
+        _contract("mortgage_arrears_floor"), phase="activation"
+    )
+    assert [item.actions for item in permits] == [
+        (("housing_permits", 25),),
+        (("housing_permits", 0),),
+    ]
+    assert [item.actions for item in mortgage_ltv] == [
+        (("mortgage_ltv_cap", 0.50),),
+        (("mortgage_ltv_cap", 0.0),),
+    ]
+    assert [item.actions for item in arrears_floor] == [
+        (("mortgage_arrears_floor", 10.0),),
+        (("mortgage_arrears_floor", 100.0),),
+    ]
+
+
+def test_activation_groups_freeze_target_fixture_and_horizon_overrides() -> None:
+    groups = build_experiment_groups(
+        build_contracts(),
+        phase="activation",
+        ordinary_days=7,
+        activation_days=30,
+        burn_in_days=7,
+        withdrawal_days=7,
+    )
+    by_lever = {
+        contract.lever: group
+        for group in groups
+        for contract in group.contracts
+    }
+
+    remittance = by_lever["remittance_tax"]
+    assert remittance.target_economy == 1
+    assert remittance.native_scenario == "world_migration_wage_gap"
+
+    taylor = by_lever["taylor_phi_pi"]
+    assert dict(taylor.setup_actions)["monetary_regime"] == "taylor"
+    assert dict(taylor.setup_actions)["r_max"] == 0.02
+
+    foreclosure = by_lever["mortgage_foreclosure_ltv"]
+    assert foreclosure.days == 365
+    assert foreclosure.native_scenario == "housing_distressed_market"
+
+
 def test_peg_anchor_is_exercised_as_one_valid_atomic_transition() -> None:
     contract = _contract("peg_anchor")
     assert len(contract.treatment_batches) == 1
@@ -136,6 +203,44 @@ def test_analysis_accepts_live_salient_immediate_mechanism() -> None:
     assert errors == []
     assert reports[0]["disposition"] == "accepted"
     assert reports[0]["disposition"] in FINAL_DISPOSITIONS
+
+
+def test_analysis_never_labels_an_exact_zero_effect_as_salient() -> None:
+    contract = _contract("gov_consumption_share")
+    ordinary = _phase_runs(contract, changed=False)
+    activation = _phase_runs(contract, changed=False)
+    reports, errors = analyze_p2((contract,), ordinary, activation)
+    assert errors == []
+    assert reports[0]["disposition"] == "mechanism_defect"
+    for arm in reports[0]["activation"]["arms"]:
+        assert arm["salient_proximal_metrics"] == []
+
+
+def test_analysis_distinguishes_an_inactive_direct_gate_from_a_dead_mechanism() -> None:
+    contract = _contract("housing_permits")
+    ordinary = _phase_runs(contract, changed=False)
+    activation = _phase_runs(contract, changed=False)
+    direct = contract.mechanism_proximal_metrics[0]
+    for run in activation:
+        run["control"]["metric_summaries"][direct] = _metric_summary(0.0)
+        run["control"]["metric_series"][direct] = {
+            "ticks": [1, 2],
+            "values": [0.0, 0.0],
+        }
+        for arm in run["contracts"][contract.lever]["arms"]:
+            arm["run"]["metric_summaries"][direct] = _metric_summary(0.0)
+            arm["run"]["metric_series"][direct] = {
+                "ticks": [1, 2],
+                "values": [0.0, 0.0],
+            }
+    reports, errors = analyze_p2((contract,), ordinary, activation)
+    assert errors == []
+    assert reports[0]["disposition"] == "unsupported_by_current_engine"
+    assert reports[0]["activation"]["fixture_evidence"]["passed"] is True
+    assert (
+        reports[0]["activation"]["mechanism_opportunity_evidence"]["passed"]
+        is False
+    )
 
 
 def test_analysis_does_not_accept_aggregate_only_new_contract_evidence() -> None:
