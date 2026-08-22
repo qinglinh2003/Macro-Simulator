@@ -1048,6 +1048,106 @@ P3 stops here. No single-policy crisis efficacy experiment has been run, and no
 excluded scenario may support a P4 efficacy claim until its earliest failed layer is
 repaired and the full P3 gate is rerun.
 
+## P4 milestone acceptance evidence
+
+P4 was accepted on 2026-08-22 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This accepts completion and reproducibility of the
+single-policy crisis ledger. It does not mean that every policy is effective, that an
+accepted policy improves every objective, or that any package is ready for player
+recommendation.
+
+The formal experiment used only the P3-accepted moderate `CR_DEMAND_RECESSION` tape
+and its frozen per-seed checkpoints. It used:
+
+- eight matched seeds (`5101`, `5113`, `5129`, `5143`, `5159`, `5177`, `5193`,
+  `5209`);
+- 100,000 initial persons, eight native engine workers per session, and four concurrent
+  independent seed jobs;
+- 102 Policy-to-Scenario cells: 27 primary, 46 secondary, 28 safety, and one not
+  applicable;
+- 63 runnable cells, 118 preregistered dose arms, and 168 crisis timing arms;
+- an ordinary no-policy control, crisis no-policy control, policy-only negative
+  control, and policy-plus-crisis treatment for each applicable immediate arm; and
+- 2,304 fresh native branches, with no legacy Python simulator and no runtime,
+  action-boundary, checkpoint, shock-tape, missing-metric, non-finite, or accounting
+  integrity error.
+
+The complete ledger is:
+
+| Final P4 disposition | Count |
+|---|---:|
+| Accepted primary crisis efficacy | 4 |
+| Primary effect present but no supported crisis benefit | 7 |
+| Primary policy nonbinding in this crisis | 13 |
+| Secondary effect detected | 20 |
+| Secondary policy inactive in this crisis | 8 |
+| Safety screen passed | 9 |
+| Safety concern | 2 |
+| Blocked by a frozen P2 defect | 24 |
+| Blocked by the single-country scenario topology | 14 |
+| Not applicable | 1 |
+
+Four primary policies passed at least one preregistered paired benefit gate. The
+reported effects below are difference-in-differences interactions relative to both the
+ordinary policy-only path and the crisis no-policy path, not raw before-and-after
+changes:
+
+| Lever and tested arm | Supported primary benefit | Seed support | One-sided paired bound |
+|---|---|---:|---:|
+| `benefit_income_floor=0.20`, immediate | poverty rate lower by 0.387 percentage points | 8/8 | at least 0.354 percentage points |
+| `pension_replacement=0.40`, immediate | poverty rate lower by 0.215 percentage points | 8/8 | at least 0.192 percentage points |
+| `manual_policy_rate=0.001` with manual regime, immediate | unemployment lower by 0.0757 percentage points | 6/8 | at least 0.0175 percentage points |
+| `gov_investment_share=0.02`, immediate | poverty rate lower by 0.0410 percentage points | 7/8 | at least 0.00730 percentage points |
+
+These are partial efficacy findings, not unconditional endorsements. The meaningful
+`benefit_income_floor` arm also increased unemployment by 1.55 percentage points in
+all eight seeds, while the `pension_replacement` arm increased unemployment by 1.77
+percentage points in all eight seeds. The accepted manual-rate and government-
+investment arms passed only one of their three primary outcome gates. P5 must preserve
+these adverse or uncertain outcomes as explicit package guardrails rather than hiding
+them behind an aggregate score.
+
+Two safety-role policies failed their screen. `energy_price_cap=0.10` reduced real
+output by about 6.17 million units and raised unemployment by about 54.0 percentage
+points in all eight seeds. `energy_rationing=household_first` reduced real output by
+about 892,000 units and raised unemployment by about 1.35 percentage points in all
+eight seeds; the `industry_first` arm also raised unemployment by about 0.330
+percentage points in all eight seeds. These results apply to the accepted demand-
+recession environment. They do not substitute for the excluded energy-crisis
+validation that P3 still requires.
+
+The seven primary policies with a detectable response but no supported benefit are
+`gov_deficit_target`, `deficit_u_ref`, `benefit_replacement`, `min_wage`,
+`inflation_target`, `monetary_regime`, and `r_neutral`. Thirteen other primary rows
+were nonbinding at their preregistered doses in this crisis. This is a scenario-specific
+finding, not evidence that those mechanisms are globally silent.
+
+The 24 P2 defects remain upstream blockers. The 14 external policies remain blocked
+because the only P3-accepted crisis contains one economy and therefore cannot identify
+counterparty, exchange-rate, migration, remittance, sanction, or trade spillovers.
+P4 does not manufacture evidence for those cells from an invalid topology.
+
+The frozen P4 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Experiment source revision | `4dbcefa5c0b0ee6e90c7f8923d3d1cbe319f5dfe` |
+| Native `m11-release` extension | `2654ba58b61b4147f86bb7eea079d0cdd05b104d81cab4b9c7baf8e8000b9cd1` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| P4 manifest | `321339ec4e1eb0a12d1d67f22db816fe58167d10097197ad44455577e5456561` |
+| P4 evidence | `9a4aba45036517eecb1e613b5a9436cc72b311ead65e37692021f74aa143abbd` |
+| P4 acceptance | `38f3702aa2e45c8de274b15416a52e17b9d33bff2b390a8b5cc3ec3f546a8df2` |
+
+A complete cache replay hit all 2,304 branches and reproduced the same acceptance
+hash. The focused P0-P4 suite passes 33 tests with eight workers. The eight-worker
+native CTest run passes 72 of 74 targets directly. The remaining two targets are
+redirected by an unrelated editable install from the `config-audit` worktree; both
+pass when rerun concurrently with `-S` and explicit paths to this source tree, its
+`m11-release` native module, and this worktree's dependency site-packages.
+
+P4 stops here. No policy package, alternative crisis severity, finite-size claim, or
+P5 interaction result is accepted by this milestone.
+
 ## 17. Artifacts and provenance
 
 Generated results live under `artifacts/policy-audit/` and are not committed. Source
