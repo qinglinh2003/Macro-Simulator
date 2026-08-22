@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <numeric>
 #include <span>
@@ -23,6 +24,11 @@ constexpr double kDaysPerYear = 365.2425;
 constexpr std::size_t kAbsentIndex = std::numeric_limits<std::size_t>::max();
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
+
+[[noreturn]] void terminate_energy_commit(const char *reason) noexcept {
+    std::fprintf(stderr, "M8 energy commit invariant failed: %s\n", reason);
+    std::terminate();
+}
 
 [[nodiscard]] std::uint64_t housing_mix(std::uint64_t value) noexcept {
     value += 0x9e3779b97f4a7c15ULL;
@@ -1310,7 +1316,7 @@ class M8Extension final : public M7TickExtension {
             const auto index = static_cast<std::size_t>(event.destination.value());
             if (index >= runtime_.household_energy.size() ||
                 state.households.get(event.destination) == nullptr) {
-                std::terminate();
+                terminate_energy_commit("leaving-home household energy slot");
             }
             auto &record = runtime_.household_energy[index];
             record.household = event.destination;

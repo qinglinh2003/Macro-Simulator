@@ -579,6 +579,60 @@ void test_death_and_estate_settle_exactly_once() {
     assert(harness.runtime.estates == before_estates);
 }
 
+void test_retired_household_closes_tolerance_sized_account_residual() {
+    auto spec = base_spec();
+    spec.population.initial_persons = 40;
+    spec.population.target_household_size = 1.0;
+    spec.financial_economy.monetary_economy.rules.household_credit = false;
+    auto harness = build(spec);
+
+    PersonId deceased{};
+    HouseholdId household{};
+    for (const auto candidate : harness.runtime.persons.alive_ids()) {
+        const auto *person = harness.runtime.persons.get(candidate);
+        if (person != nullptr &&
+            harness.runtime.membership.members(person->household).size() == 1U) {
+            deceased = candidate;
+            household = person->household;
+            break;
+        }
+    }
+    assert(deceased.valid() && household.valid());
+    const auto account = harness.root.households.get(household)->primary_account;
+    const auto *opening = harness.root.postings.get(account);
+    assert(opening != nullptr && opening->balance.value() > 0.0);
+
+    macro_sim::core::SettlementTransaction drain(harness.root);
+    assert(drain
+               .transfer(account,
+                         harness.root.institutions.rounding_residual_account,
+                         opening->balance)
+               .ok());
+    assert(drain.commit_locally_validated().ok());
+    macro_sim::core::SettlementTransaction residual(harness.root);
+    assert(residual
+               .transfer(harness.root.institutions.rounding_residual_account,
+                         account,
+                         macro_sim::Money(harness.root.accounting_tolerance * 0.5))
+               .ok());
+    assert(residual.commit_locally_validated().ok());
+
+    M7AdvanceOptions options;
+    options.force_death = deceased;
+    const auto result = advance(harness, 1, options);
+    if (!result.ok()) {
+        std::cerr << "M7 residual-account retirement failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    assert(!harness.root.postings.contains(account));
+    assert(harness.root.households.get(household) == nullptr);
+    assert(macro_sim::simulation::validate_m7_state(
+               harness.root, harness.real_runtime, harness.monetary_runtime,
+               harness.financial_runtime, harness.runtime, harness.tick)
+               .ok());
+}
+
 void test_population_fault_is_atomic() {
     auto harness = build();
     const auto root_digest = macro_sim::core::state_digest(harness.root);
@@ -1625,6 +1679,7 @@ int main() {
     test_real_wage_signal_includes_job_guarantee_labor_income();
     test_wealth_rank_gradients_apply_bounded_vital_risk();
     test_death_and_estate_settle_exactly_once();
+    test_retired_household_closes_tolerance_sized_account_residual();
     test_population_fault_is_atomic();
     test_forced_birth_and_split_determinism();
     test_persistent_labor_and_death_separation();

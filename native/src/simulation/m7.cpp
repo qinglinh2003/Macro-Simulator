@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <numeric>
 #include <queue>
@@ -43,6 +44,11 @@ constexpr std::size_t kWealthQuintiles = 5U;
 constexpr std::uint8_t kUnrankedWealthQuintile = 5U;
 
 [[nodiscard]] bool finite(double value) noexcept { return std::isfinite(value); }
+
+[[noreturn]] void terminate_population_commit(const char *reason) noexcept {
+    std::fprintf(stderr, "M7 population commit invariant failed: %s\n", reason);
+    std::terminate();
+}
 
 [[nodiscard]] bool government_enabled(const M4Runtime &runtime) noexcept {
     return (runtime.capability_mask & capability_bit(M4Capability::government)) != 0U;
@@ -3726,21 +3732,39 @@ class M7Extension final : public M6TickExtension {
             const auto ownership_status = state.ownership.rekey_owner(
                 core::OwnerId::household(household), destination);
             if (!ownership_status.ok()) {
-                std::terminate();
+                terminate_population_commit("retired household ownership rekey");
             }
             const auto *account = state.postings.get(component->primary_account);
             if (account == nullptr ||
                 std::abs(account->balance.value()) > state.accounting_tolerance) {
-                std::terminate();
+                terminate_population_commit("retired household account balance");
+            }
+            if (account->balance.value() != 0.0) {
+                core::SettlementTransaction transaction(state);
+                const double residual = account->balance.value();
+                const auto transfer_status =
+                    residual > 0.0
+                        ? transaction.transfer(
+                              component->primary_account,
+                              state.institutions.rounding_residual_account,
+                              Money(residual))
+                        : transaction.transfer(
+                              state.institutions.rounding_residual_account,
+                              component->primary_account, Money(-residual));
+                if (!transfer_status.ok() ||
+                    !transaction.commit_locally_validated().ok()) {
+                    terminate_population_commit(
+                        "retired household account residual settlement");
+                }
             }
             const auto close_status =
                 state.postings.close_account(component->primary_account);
             if (!close_status.ok()) {
-                std::terminate();
+                terminate_population_commit("retired household account close");
             }
             const auto removed = state.households.remove(household);
             if (!removed.ok()) {
-                std::terminate();
+                terminate_population_commit("retired household removal");
             }
             const auto index = static_cast<std::size_t>(household.value());
             if (index < financial_runtime.watchlist_rows.size()) {
@@ -3754,11 +3778,11 @@ class M7Extension final : public M6TickExtension {
                 person->household != event.origin ||
                 state.households.allocator_state().next_id !=
                     event.destination.value()) {
-                std::terminate();
+                terminate_population_commit("leaving-home event precondition");
             }
             const auto *origin_account = state.postings.get(origin->primary_account);
             if (origin_account == nullptr) {
-                std::terminate();
+                terminate_population_commit("leaving-home origin account");
             }
             const auto origin_account_id = origin->primary_account;
             const auto origin_settlement_node = origin_account->key.settlement_node;
@@ -3769,7 +3793,7 @@ class M7Extension final : public M6TickExtension {
             component.income_adjustment = origin->income_adjustment;
             const auto created = state.households.create(component);
             if (!created.ok() || created.get_if()->id != event.destination) {
-                std::terminate();
+                terminate_population_commit("leaving-home household creation");
             }
             const auto financial_household_slots = static_cast<std::size_t>(
                 state.households.allocator_state().next_id);
@@ -3788,7 +3812,7 @@ class M7Extension final : public M6TickExtension {
                 },
                 Money(0.0));
             if (!account.ok()) {
-                std::terminate();
+                terminate_population_commit("leaving-home account creation");
             }
             state.households.get(event.destination)->primary_account =
                 *account.get_if();
@@ -3811,14 +3835,14 @@ class M7Extension final : public M6TickExtension {
             const auto family_owner = first_alive_member(
                 runtime_.membership, runtime_.persons, event.origin, event.person);
             if (!person_cash_lots.empty() && !family_owner.valid()) {
-                std::terminate();
+                terminate_population_commit("leaving-home family cash owner");
             }
             for (const auto lot_id : person_cash_lots) {
                 const auto *lot = runtime_.beneficial_ownership.get(lot_id);
                 const auto transfer_status = runtime_.beneficial_ownership.transfer(
                     lot_id, family_owner, lot->share);
                 if (!transfer_status.ok()) {
-                    std::terminate();
+                    terminate_population_commit("leaving-home beneficial transfer");
                 }
             }
             const core::BeneficialAssetKey destination_cash{
@@ -3829,7 +3853,7 @@ class M7Extension final : public M6TickExtension {
             const auto beneficial = runtime_.beneficial_ownership.create_lot(
                 destination_cash, event.person, 1.0);
             if (!beneficial.ok()) {
-                std::terminate();
+                terminate_population_commit("leaving-home beneficial lot creation");
             }
             const double cash = std::max(0.0, origin_balance * cash_share);
             if (cash > kLaborTolerance) {
@@ -3837,16 +3861,16 @@ class M7Extension final : public M6TickExtension {
                 const auto transfer_status = transaction.transfer(
                     origin_account_id, *account.get_if(), Money(cash));
                 if (!transfer_status.ok()) {
-                    std::terminate();
+                    terminate_population_commit("leaving-home cash transfer");
                 }
                 if (!transaction.commit_locally_validated().ok()) {
-                    std::terminate();
+                    terminate_population_commit("leaving-home cash settlement");
                 }
             }
             const auto move_status =
                 runtime_.membership.move(event.person, event.destination);
             if (!move_status.ok()) {
-                std::terminate();
+                terminate_population_commit("leaving-home membership move");
             }
             person->household = event.destination;
 
@@ -3861,7 +3885,7 @@ class M7Extension final : public M6TickExtension {
             destination_row.household = event.destination;
             const auto destination_offset = financial_runtime.watchlist_equities.size();
             if (destination_offset > std::numeric_limits<std::uint32_t>::max()) {
-                std::terminate();
+                terminate_population_commit("leaving-home watchlist offset");
             }
             destination_row.offset = static_cast<std::uint32_t>(destination_offset);
             if (origin_index < financial_runtime.watchlist_rows.size()) {
@@ -3872,7 +3896,7 @@ class M7Extension final : public M6TickExtension {
                 if (source_offset > financial_runtime.watchlist_equities.size() ||
                     source_count >
                         financial_runtime.watchlist_equities.size() - source_offset) {
-                    std::terminate();
+                    terminate_population_commit("leaving-home inherited watchlist range");
                 }
                 const std::vector<EquityId> inherited_watchlist(
                     financial_runtime.watchlist_equities.begin() +
