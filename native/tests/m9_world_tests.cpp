@@ -437,6 +437,37 @@ void test_all_eight_shock_channels_reach_their_native_seams() {
     assert(!baseline.schedule_shock(invalid_ramps).ok());
 }
 
+void test_household_demand_shock_survives_lifecycle_budget_projection() {
+    const auto build_lifecycle_world = []() {
+        auto economy = domestic_spec();
+        economy.domestic_economy.rules.lifecycle_consumption = true;
+        M9WorldSpec spec;
+        spec.economies.push_back(std::move(economy));
+        spec.external_policies.resize(1U);
+        auto result = M9World::create(spec);
+        assert(result.ok());
+        return std::move(*result.get_if());
+    };
+
+    auto baseline = build_lifecycle_world();
+    const auto baseline_result = baseline.advance(1U);
+    assert(baseline_result.ok());
+
+    auto treatment = build_lifecycle_world();
+    assert(treatment
+               .schedule_shock(
+                   adverse_shock(109U, ShockKind::household_demand, 0.50))
+               .ok());
+    const auto treatment_result = treatment.advance(1U);
+    assert(treatment_result.ok());
+    assert(treatment_result.get_if()
+               ->metrics.domestic[0]
+               .economy.economy.economy.economy.household_consumption_budget <
+           baseline_result.get_if()
+               ->metrics.domestic[0]
+               .economy.economy.economy.economy.household_consumption_budget);
+}
+
 void test_shock_lifecycle_events_are_ordered_and_checkpointed() {
     auto world = build_world(1);
     auto continuous = adverse_shock(201U, ShockKind::household_demand, 0.2);
@@ -636,6 +667,7 @@ int main() {
     test_faults_leave_the_complete_old_world();
     test_policy_peg_and_shock_contracts();
     test_all_eight_shock_channels_reach_their_native_seams();
+    test_household_demand_shock_survives_lifecycle_budget_projection();
     test_shock_lifecycle_events_are_ordered_and_checkpointed();
     test_packaged_crisis_scenarios_match_the_native_shock_contract();
     test_capital_and_migration_paths_are_live();

@@ -1882,15 +1882,19 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
     if (!status.ok()) {
         return status;
     }
-    for (auto &household : scratch.household_work_) {
-        household.consumption_budget *= options.household_demand_multiplier;
-    }
     PhiloxRng rng(runtime.rng_key, runtime.rng_counter);
     if (extension != nullptr) {
         status = extension->prepare_tick(state, runtime, scratch, tick, rng);
         if (!status.ok()) {
             return status;
         }
+    }
+    // Higher-level modules can replace the opening consumption plan during
+    // prepare_tick(), notably M7's finite-lifecycle household budget.  Apply
+    // the exogenous demand channel only after those plans are complete so the
+    // shock cannot be silently overwritten by an enabled module.
+    for (auto &household : scratch.household_work_) {
+        household.consumption_budget *= options.household_demand_multiplier;
     }
     capture_phase(state, scratch, options, M4Phase::open_books);
 

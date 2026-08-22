@@ -1452,6 +1452,44 @@ class NativeSimulationSession:
         self.bridge.acknowledge_receipt(operation_id)
         return str(receipt["result_hash"])
 
+    def schedule_shock(
+        self,
+        shock: Any,
+        *,
+        operation_id: str,
+        payload: bytes = b"{}",
+    ) -> dict[str, Any]:
+        """Atomically append one native shock through the controller bridge.
+
+        This is the diagnostics/runtime counterpart to the desktop shock command.
+        It deliberately preserves the current economic boundary and updates the
+        controller envelope together with the immutable shock tape.
+        """
+        if not isinstance(operation_id, str) or not operation_id:
+            raise ValueError("operation_id must be non-empty")
+        if not isinstance(payload, bytes):
+            raise TypeError("payload must be bytes")
+        native = _load_native()
+        previous = self.bridge.controller_envelope
+        envelope = native.CanonicalControllerEnvelope()
+        envelope.schema_version = previous.schema_version
+        envelope.boundary = self.tick
+        envelope.policy_generation = int(self.bridge.policy_generation)
+        envelope.event_sequence = int(previous.event_sequence) + 1
+        envelope.release_cursor = int(previous.release_cursor)
+        envelope.decision_versions = list(previous.decision_versions)
+        envelope.effective_versions = list(previous.effective_versions)
+        envelope.canonical_payload = payload
+        envelope.seal()
+        transition = native.ControllerEnvelopeTransition()
+        transition.operation_id = operation_id
+        transition.expected_prior_hash = previous.hash
+        transition.next = envelope
+        receipt = dict(self.bridge.schedule_shock(shock, transition))
+        self.bridge.acknowledge_receipt(operation_id)
+        receipt["acknowledged"] = True
+        return receipt
+
     def prepare_boundary(
         self,
         *,

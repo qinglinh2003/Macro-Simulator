@@ -94,6 +94,27 @@ def main() -> int:
     assert bridge.tick == 1
     assert bridge.public_metrics()["tick"] == 1
 
+    shock = native.ShockSpec()
+    shock.id = 10_001
+    shock.kind = native.ShockKind.HOUSEHOLD_DEMAND
+    shock.economy_id = 0
+    shock.start_tick = bridge.tick
+    shock.announcement_tick = bridge.tick
+    shock.duration = 1
+    shock.magnitude = 0.20
+    shock_envelope = bridge.controller_envelope
+    shock_envelope.event_sequence += 1
+    shock_envelope.canonical_payload = b'{"command":"schedule_shock"}'
+    shock_envelope.seal()
+    transition = native.ControllerEnvelopeTransition()
+    transition.operation_id = "m10-binding-shock"
+    transition.expected_prior_hash = bridge.controller_envelope.hash
+    transition.next = shock_envelope
+    shock_receipt = bridge.schedule_shock(shock, transition)
+    assert shock_receipt["operation_id"] == "m10-binding-shock"
+    assert shock_receipt["boundary"] == 1
+    bridge.acknowledge_receipt("m10-binding-shock")
+
     checkpoint = bridge.checkpoint(b'{"horizon":365}')
     restored = native.HybridControlledBridge.restore_checkpoint(checkpoint)
     loaded = restored["bridge"]

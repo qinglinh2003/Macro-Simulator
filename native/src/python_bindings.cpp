@@ -3171,6 +3171,23 @@ NB_MODULE(_native, module) {
             },
             nb::arg("transition"))
         .def(
+            "schedule_shock",
+            [](macro_sim::control::HybridControlledBridge &value,
+               const macro_sim::simulation::ShockSpec &shock,
+               const macro_sim::control::ControllerEnvelopeTransition &transition) {
+                auto result = value.schedule_shock(shock, transition);
+                require_status(result.status());
+                nb::dict output;
+                output["operation_id"] = result.get_if()->operation_id;
+                output["request_hash"] = result.get_if()->request_hash.hex();
+                output["prior_hash"] = result.get_if()->prior_hash.hex();
+                output["result_hash"] = result.get_if()->result_hash.hex();
+                output["boundary"] = result.get_if()->boundary.value();
+                output["acknowledged"] = result.get_if()->acknowledged;
+                return output;
+            },
+            nb::arg("shock"), nb::arg("transition"))
+        .def(
             "acknowledge_receipt",
             [](macro_sim::control::HybridControlledBridge &value,
                const std::string &operation_id) {
