@@ -20,6 +20,7 @@ import time
 from typing import Any, Iterable, Mapping, Sequence
 
 from macro_sim import native_backend
+from macro_sim.config import Config
 from macro_sim.diagnostics.config_experiment import (
     apply_native_activation_scenario,
     derive_analysis_metrics,
@@ -269,7 +270,7 @@ STATE_MANIFESTS: Mapping[str, StateManifest] = {
             "neutral_baseline",
             (StateCriterion("metric.source.m7.dependency_ratio", 0.65, None),),
             config_treatments=(
-                ("TFR", 1.20),
+                ("demographics_tfr", 1.20),
                 ("demographics_mortality_scale", 0.75),
             ),
         ),
@@ -1301,6 +1302,16 @@ def validate_manifest_catalogs() -> list[str]:
         errors.append("P3 state manifests do not exactly cover the P0 state catalog")
     if set(CRISIS_MANIFESTS) != set(SCENARIOS):
         errors.append("P3 crisis manifests do not exactly cover the P0 crisis catalog")
+    config_fields = set(Config.__dataclass_fields__)
+    for scenario_id, manifest in STATE_MANIFESTS.items():
+        unknown = sorted(
+            field for field, _value in manifest.config_treatments
+            if field not in config_fields
+        )
+        if unknown:
+            errors.append(
+                f"{scenario_id}: unknown Config treatments: {', '.join(unknown)}"
+            )
     for scenario_id, manifest in CRISIS_MANIFESTS.items():
         catalog = SCENARIOS[scenario_id]
         if manifest.readiness != catalog.readiness:

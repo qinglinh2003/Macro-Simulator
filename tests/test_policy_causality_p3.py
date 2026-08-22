@@ -14,6 +14,7 @@ from macro_sim.diagnostics.policy_scenarios import (
     analyze_crisis,
     validate_manifest_catalogs,
 )
+from macro_sim.config import Config
 
 
 def _series(value: float, days: int = 12) -> list[float]:
@@ -60,6 +61,11 @@ def test_p3_manifests_exactly_cover_the_frozen_p0_catalogs() -> None:
     assert set(STATE_MANIFESTS) == set(ORDINARY_SCENARIOS) | set(STRUCTURAL_SCENARIOS)
     assert set(CRISIS_MANIFESTS) == set(SCENARIOS)
     assert validate_manifest_catalogs() == []
+    assert all(
+        field in Config.__dataclass_fields__
+        for manifest in STATE_MANIFESTS.values()
+        for field, _value in manifest.config_treatments
+    )
 
 
 def test_every_runnable_crisis_freezes_three_ordered_tapes() -> None:
