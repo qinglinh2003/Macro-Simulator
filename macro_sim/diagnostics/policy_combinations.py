@@ -57,7 +57,11 @@ P5_SCHEMA_VERSION = "policy-causality-p5-v1"
 P5_CRISIS_ID = "CR_DEMAND_RECESSION"
 P5_MAIN_SEVERITY = "moderate"
 P5_SEVERITIES = ("mild", "moderate", "severe")
-P5_EVALUATION_DAYS = 150
+# Alternative-state branches must preserve the exact P3 checkpoint identity.
+# P3 freezes state sessions with horizon_days + 4 history frames, so the P5
+# evaluation window must fit in that retained history rather than silently
+# changing checkpoint state by enlarging the buffer.
+P5_EVALUATION_DAYS = 90
 P5_FACTOR_MASKS = (0b0001, 0b0010, 0b0100, 0b1000, 0b0111)
 ACCEPTED_P2_PREFIX = "accepted"
 
@@ -838,9 +842,7 @@ def _run_seed(
         state_session = NativeSimulationSession.create_from_native_spec(
             _state_native_spec(state_manifest, population=population, seed=seed),
             worker_count=workers,
-            history_capacity_frames=(
-                state_manifest.horizon_days + P5_EVALUATION_DAYS + 8
-            ),
+            history_capacity_frames=state_manifest.horizon_days + 4,
         )
         state_session.advance(state_manifest.horizon_days)
         state_checkpoint = hashlib.sha256(state_session.checkpoint()).hexdigest()
