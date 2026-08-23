@@ -1148,6 +1148,101 @@ pass when rerun concurrently with `-S` and explicit paths to this source tree, i
 P4 stops here. No policy package, alternative crisis severity, finite-size claim, or
 P5 interaction result is accepted by this milestone.
 
+## P5 milestone acceptance evidence
+
+P5 was accepted on 2026-08-23 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This accepts the completeness, integrity, and
+reproducibility of the nine-package ledger. It does not recommend either executed
+package, validate any package blocked by upstream evidence, or repair any P2 or P3
+defect.
+
+The frozen ledger contains nine preregistered packages. Only `recession_response` and
+`poverty_and_employment` were eligible because they use the P3-accepted
+`CR_DEMAND_RECESSION` scenario and only P4 arms with frozen evidence. The other seven
+packages remain blocked by their required P3 scenarios; bank liquidity, bank
+solvency, housing cycle, and debt sustainability also retain explicit P2 component
+blockers. P5 did not substitute a different scenario or silently remove a broken
+component to make any package executable.
+
+Each runnable package used a five-factor, 16-run regular Resolution IV fractional
+factorial design. Main effects are estimable, while the reported two-factor terms
+remain alias groups except for one preregistered pair per package that was rerun as a
+complete 2-by-2 follow-up. For every package and seed the experiment also ran the
+moderate crisis control, five component ablations, mild and severe control/treatment
+pairs, a withdrawal arm, and an accepted alternative initial-state control/treatment
+pair. This produced 33 branches per package and seed, or 528 formal branches in total.
+
+The formal run used:
+
+- eight matched seeds (`5101`, `5113`, `5129`, `5143`, `5159`, `5177`, `5193`,
+  `5209`);
+- 100,000 initial persons, eight native engine workers per session, and four concurrent
+  independent seed jobs;
+- exact P3 crisis checkpoints and mild, moderate, and severe shock tapes;
+- exact P3 `BASE_SLACK` and `STRUCT_HIGH_POVERTY` state checkpoints for alternative-
+  baseline evaluation; and
+- 528 fresh native branches with no legacy Python simulator and no runtime,
+  action-boundary, checkpoint, shock-tape, missing-metric, non-finite, or accounting
+  integrity error.
+
+Both runnable packages received `package_guardrail_failure`; no package was accepted
+for recommendation:
+
+| Package | Supported outcome | Material harm or guardrail failure | Other robustness evidence |
+|---|---|---|---|
+| `recession_response` | mean poverty lower by 0.366 percentage points; cumulative real output higher by about 68,804 | mean unemployment higher by 1.30 percentage points; debt/GDP higher by 0.502 percentage points; deficit/GDP higher by 2.91 percentage points | severe-crisis output becomes harmful; alternative-state and withdrawal screens fail fiscal guardrails |
+| `poverty_and_employment` | mean income Gini lower by 0.0789 | mean poverty higher by 0.314 percentage points; unemployment higher by 9.55 percentage points; debt/GDP higher by 1.25 percentage points; deficit/GDP higher by 9.52 percentage points; inflation higher by 0.0857 percentage points; cumulative real output lower by about 1.09 million | the Gini benefit repeats at all three severities, but alternative-state and withdrawal screens retain primary or guardrail harms |
+
+Every listed material benefit or harm occurred in all eight matched seeds. These are
+paired treatment-minus-control estimates at the preregistered statistic, not raw
+before-and-after movements. The inflation guardrail is a signed upper-side screen; it
+does not claim that lower inflation is always welfare-improving.
+
+Component ablation shows that `benefit_income_floor` alone accounts for at least 100%
+of each package's supported benefit under the preregistered dominance rule. The other
+components therefore do not establish an indispensable package contribution. The
+isolated `manual_policy_rate` by `gov_consumption_share` interaction is zero on every
+declared package outcome. The isolated `tax_income_rate` by `benefit_income_floor`
+interaction is materially adverse: it raises poverty by about 0.152 percentage
+points, unemployment by 2.55 percentage points, deficit/GDP by 1.54 percentage
+points, debt/GDP by 0.114 percentage points, and inflation by 0.0242 percentage
+points, while reducing cumulative real output by about 406,000. This interaction is
+not a recommendation.
+
+The complete package disposition ledger is:
+
+| Final P5 disposition | Count |
+|---|---:|
+| Package guardrail failure | 2 |
+| Blocked by frozen P3 scenario evidence | 7 |
+| Recommended package | 0 |
+
+The frozen P5 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Experiment source revision | `3c53b41b98fbae9a36ba9cb5506139668bc77aed` |
+| Native `m11-release` extension | `2654ba58b61b4147f86bb7eea079d0cdd05b104d81cab4b9c7baf8e8000b9cd1` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| P2 acceptance | `0a112ee71733089ade75d7916dda6ccf9cfdc0ec64b40bcb5484c716a425949c` |
+| P3 acceptance | `f7e8b218a8d989a31af8a89bc97c2b12fe0a5780953d2fd013c2ea0289721933` |
+| P4 acceptance | `38f3702aa2e45c8de274b15416a52e17b9d33bff2b390a8b5cc3ec3f546a8df2` |
+| P5 manifest | `37fef202cd9045cf7100e93465733a460f2fe87daa2e57f1e92f7039f23ed4f2` |
+| P5 evidence | `3fcca4d0c9092f12ca3f0326d6b5487e18c717244cb8647270b934e3b1b4b543` |
+| P5 acceptance | `26839f8523bbb508bf426b28cdc4afebf4688e1a220856e18eb48a5c56fb79c1` |
+
+A complete replay hit all 528 cached branches, executed no new simulation branch,
+and reproduced the same P5 acceptance hash. The focused P0-P5 suite passes 39 tests
+with eight workers. The eight-worker native CTest run passes 72 of 74 targets
+directly. The remaining two targets are redirected by an unrelated editable install
+from the `config-audit` worktree; both pass when rerun concurrently with `-S` and
+explicit paths to this source tree, its `m11-release` native module, and this
+worktree's dependency site-packages.
+
+P5 stops here. P6 finite-size and rare-event confirmation has not started, and the
+two rejected packages and seven blocked packages remain explicit inputs to future
+repair or redesign work.
+
 ## 17. Artifacts and provenance
 
 Generated results live under `artifacts/policy-audit/` and are not committed. Source
