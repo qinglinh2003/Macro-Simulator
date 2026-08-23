@@ -57,7 +57,6 @@ from macro_sim.diagnostics.policy_effects import (
     _target_economy,
     select_experiment_arms,
 )
-from macro_sim.diagnostics.policy_scenarios import _integrity
 from macro_sim.native_backend import NativeSimulationSession
 
 
@@ -67,6 +66,11 @@ P6_SEEDS = (5101, 5113, 5129, 5143, 5159, 5177, 5193, 5209)
 P6_TAIL_EXTRA_SEEDS = (5303, 5323, 5347, 5369, 5387, 5413, 5431, 5449)
 P6_BURN_IN_DAYS = 7
 P6_DEFAULT_DAYS = 30
+P6_REFERENCE_INTEGRITY_LIMITS: Mapping[str, float] = {
+    "metric.source.m4.conservation_drift": 1.0e-4,
+    "metric.source.m6.clearing_residual": 1.0e-5,
+    "metric.economy.na.production_reconciliation_residual": 1.0e-6,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,13 +280,59 @@ def _metric_ids(selection: Mapping[str, Any]) -> tuple[str, ...]:
         | ({selection["rare_event_metric"]} if selection["rare_event_metric"] else set())))
 
 
-def _integrity_by_economy(capture: Mapping[str, Any]) -> dict[str, Any]:
+def _integrity_by_economy(
+    capture: Mapping[str, Any], *, population: int
+) -> dict[str, Any]:
+    """Apply the frozen 100k tolerance at a constant per-person rate.
+
+    All three residuals are absolute economy totals.  Holding their absolute
+    threshold fixed while population grows tenfold would make floating-point
+    summation error look like an accounting violation.  Linear scaling keeps
+    the admissible residual per represented person unchanged.
+    """
+    scale = population / P6_POPULATIONS[0]
     output = {}
     for economy_id, series in capture["metric_series_by_economy"].items():
-        output[str(economy_id)] = _integrity({
+        values_by_metric = {
             metric_id: tuple(item["values"])
             for metric_id, item in series.items()
-        })
+        }
+        missing = [
+            metric_id for metric_id in P6_REFERENCE_INTEGRITY_LIMITS
+            if metric_id not in values_by_metric
+        ]
+        finite = all(
+            math.isfinite(value)
+            for values in values_by_metric.values() for value in values
+        )
+        maxima = {
+            metric_id: max(
+                (abs(value) for value in values_by_metric.get(metric_id, ())),
+                default=math.inf,
+            )
+            for metric_id in P6_REFERENCE_INTEGRITY_LIMITS
+        }
+        applied_limits = {
+            metric_id: limit * scale
+            for metric_id, limit in P6_REFERENCE_INTEGRITY_LIMITS.items()
+        }
+        per_person = {
+            metric_id: value / population for metric_id, value in maxima.items()
+        }
+        accounting = not missing and all(
+            maxima[metric_id] <= applied_limits[metric_id]
+            for metric_id in P6_REFERENCE_INTEGRITY_LIMITS
+        )
+        output[str(economy_id)] = {
+            "finite": finite,
+            "missing_accounting_metrics": missing,
+            "maximum_absolute_residuals": maxima,
+            "maximum_residuals_per_person": per_person,
+            "reference_100k_absolute_limits": dict(P6_REFERENCE_INTEGRITY_LIMITS),
+            "applied_absolute_limits": applied_limits,
+            "accounting_passed": accounting,
+            "passed": finite and accounting,
+        }
     return output
 
 
@@ -429,9 +479,11 @@ def _run_selection_seed(
         "policy_applied": policy_applied,
         "control": control_capture,
         "treatment": treatment_capture,
-        "control_integrity": _integrity_by_economy(control_capture),
+        "control_integrity": _integrity_by_economy(
+            control_capture, population=population
+        ),
         "treatment_integrity": (
-            _integrity_by_economy(treatment_capture)
+            _integrity_by_economy(treatment_capture, population=population)
             if treatment_capture is not None else {}
         ),
         "error": error,

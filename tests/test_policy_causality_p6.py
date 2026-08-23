@@ -125,3 +125,31 @@ def test_manifest_freezes_million_person_population() -> None:
     manifest = build_p6_manifest(P2, P5)
     assert manifest["populations"] == [100_000, 1_000_000]
     assert len(manifest["matched_seeds"]) == 8
+
+
+def test_integrity_gate_holds_per_person_tolerance_constant() -> None:
+    from macro_sim.diagnostics.policy_scale_confirmation import (
+        _integrity_by_economy,
+    )
+
+    capture = {
+        "metric_series_by_economy": {
+            "0": {
+                "metric.source.m4.conservation_drift": {"values": [1.9e-4]},
+                "metric.source.m6.clearing_residual": {"values": [2.0e-12]},
+                "metric.economy.na.production_reconciliation_residual": {
+                    "values": [0.0]
+                },
+            }
+        }
+    }
+    small = _integrity_by_economy(capture, population=100_000)["0"]
+    large = _integrity_by_economy(capture, population=1_000_000)["0"]
+    assert not small["passed"]
+    assert large["passed"]
+    assert large["applied_absolute_limits"][
+        "metric.source.m4.conservation_drift"
+    ] == pytest.approx(1.0e-3)
+    assert large["maximum_residuals_per_person"][
+        "metric.source.m4.conservation_drift"
+    ] == pytest.approx(1.9e-10)
