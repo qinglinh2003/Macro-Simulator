@@ -947,8 +947,13 @@ def _metric_assessment(
         for control, treatment in zip(controls, treatments, strict=True)
     ]
     signed_mean = favorable_sign * mean_difference
-    signed_bound = favorable_sign * float(
+    raw_bound = (
         effect["confidence_low"] if favorable_sign > 0 else effect["confidence_high"]
+    )
+    # A one-seed preflight has no estimable confidence interval.  Preserve the
+    # descriptive result without allowing it to pass the formal confidence gate.
+    signed_bound = (
+        favorable_sign * float(raw_bound) if raw_bound is not None else None
     )
     favorable = sum(value > 0.0 for value in seed_benefits)
     adverse = sum(value < 0.0 for value in seed_benefits)
@@ -964,7 +969,9 @@ def _metric_assessment(
         "seed_benefits": seed_benefits,
         **floors,
         "material": material,
-        "passed": material and signed_bound > 0.0 and favorable >= 6,
+        "passed": (
+            material and signed_bound is not None and signed_bound > 0.0 and favorable >= 6
+        ),
         "harm": material and signed_mean < 0.0 and adverse >= 6,
     }
 
@@ -1140,6 +1147,7 @@ def _dominance_analysis(
                     outcome["passed"]
                     and ratio is not None
                     and ratio >= 0.80
+                    and summary["confidence_low"] is not None
                     and float(summary["confidence_low"]) > 0.0
                 ),
             }
