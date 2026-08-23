@@ -119,3 +119,9 @@ def test_preflight_surfaces_raw_runtime_or_integrity_failures(
     )
     assert payload["status"] == "failed"
     assert "runtime or integrity defect" in payload["errors"][0]
+
+
+def test_manifest_freezes_million_person_population() -> None:
+    manifest = build_p6_manifest(P2, P5)
+    assert manifest["populations"] == [100_000, 1_000_000]
+    assert len(manifest["matched_seeds"]) == 8

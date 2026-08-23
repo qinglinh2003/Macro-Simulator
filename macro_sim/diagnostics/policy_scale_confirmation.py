@@ -344,7 +344,20 @@ def _run_selection_seed(
     else:
         session.advance(P6_BURN_IN_DAYS)
     t0 = session.tick
-    checkpoint_sha256 = hashlib.sha256(session.checkpoint()).hexdigest()
+    # The maintained M8 checkpoint format has a fixed serialized-size ceiling
+    # and cannot encode a one-million-person economy.  P6 branches directly
+    # through the native bridge's in-memory clone, which has no such limit.
+    # Preserve the limitation as evidence instead of either hiding it or
+    # changing the C++ checkpoint contract inside this milestone.
+    checkpoint_sha256 = (
+        hashlib.sha256(session.checkpoint()).hexdigest()
+        if population < P6_POPULATIONS[1] else None
+    )
+    checkpoint_disposition = (
+        "serialized_and_hashed"
+        if checkpoint_sha256 is not None
+        else "native_clone_only_m8_size_limit"
+    )
     metric_ids = _metric_ids(selection)
     countries = int(selection["countries"])
     target = int(selection["target_economy"])
@@ -409,6 +422,7 @@ def _run_selection_seed(
         "days": days,
         "t0": t0,
         "checkpoint_sha256": checkpoint_sha256,
+        "checkpoint_disposition": checkpoint_disposition,
         "metric_ids": list(metric_ids),
         "actions": treatment_actions,
         "policy_after": policy_after,
@@ -930,6 +944,7 @@ def run_p6(
             "small_jobs": small_jobs,
             "large_jobs": large_jobs,
             "legacy_python_simulator_used": False,
+            "million_person_branching": "native_in_memory_clone",
         },
         "counts": {
             "decision_groups": len({item["decision_group"] for item in selections if item["role"] == "group"}),
@@ -947,6 +962,11 @@ def run_p6(
         },
         "reports": reports,
         "rare_event_ledger": rare_ledger,
+        "infrastructure_notices": [
+            "The M8 serialized checkpoint size ceiling does not admit a "
+            "one-million-person economy; P6 uses the native in-memory clone "
+            "path and records this scale limitation explicitly."
+        ],
         "hashes": {
             "p6_manifest": manifest["manifest_hash"],
             "p6_evidence": _canonical_hash(evidence),
