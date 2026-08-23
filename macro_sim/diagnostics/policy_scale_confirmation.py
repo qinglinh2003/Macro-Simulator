@@ -359,6 +359,10 @@ def _run_selection_seed(
         countries=countries,
         target_economy=target,
     )
+    # The control session is no longer needed once its maintained metrics have
+    # been copied.  Releasing it before cloning the treatment bounds peak
+    # memory in million-person jobs and permits safe seed-level concurrency.
+    del control
 
     treatment = session.clone()
     treatment_actions = tuple(
@@ -830,11 +834,19 @@ def run_p6(
         hits += batch_hits
         executed += batch_executed
 
+    raw_integrity_errors = [
+        f"{item['lever']} population={item['population']} seed={item['seed']}: "
+        "runtime or integrity defect"
+        for item in all_runs
+        if not _all_integrity_passed(item)
+    ]
+    errors.extend(raw_integrity_errors)
+
     reports: list[dict[str, Any]] = []
     analysis_errors: list[str] = []
     if set(populations) == set(P6_POPULATIONS):
         reports, analysis_errors = analyze_base(manifest, all_runs)
-        errors.extend(analysis_errors)
+        errors.extend(item for item in analysis_errors if item not in errors)
 
     tail_runs: list[dict[str, Any]] = []
     tail_hits = 0

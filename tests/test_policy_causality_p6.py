@@ -84,3 +84,38 @@ def test_p5_identity_is_part_of_manifest_hash() -> None:
     p5["hashes"]["p5_acceptance"] = "changed"
     changed = build_p6_manifest(P2, p5)
     assert original["manifest_hash"] != changed["manifest_hash"]
+
+
+def test_preflight_surfaces_raw_runtime_or_integrity_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from macro_sim.diagnostics import policy_scale_confirmation as p6
+
+    manifest = build_p6_manifest(P2, P5)
+    broken = {
+        "lever": manifest["representatives"][0]["lever"],
+        "population": P6_POPULATIONS[0],
+        "seed": P6_SEEDS[0],
+        "error": {"type": "Synthetic", "message": "broken"},
+        "policy_applied": False,
+        "control_integrity": {},
+        "treatment_integrity": {},
+        "treatment": None,
+    }
+
+    monkeypatch.setattr(
+        p6,
+        "_run_batch",
+        lambda *args, **kwargs: ([broken], 0, 1),
+    )
+    payload = run_p6(
+        artifact_dir=tmp_path,
+        source_revision="test",
+        p2_source=P2,
+        p5_source=P5,
+        seeds=(P6_SEEDS[0],),
+        populations=(P6_POPULATIONS[0],),
+        formal=False,
+    )
+    assert payload["status"] == "failed"
+    assert "runtime or integrity defect" in payload["errors"][0]
