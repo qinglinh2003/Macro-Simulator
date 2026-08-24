@@ -1356,6 +1356,102 @@ worktree's dependency site-packages.
 P6 stops here. P7 production acceptance, UI truthfulness, governance, and release
 packaging have not started.
 
+## P7 milestone acceptance evidence
+
+P7 was accepted on 2026-08-24 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This milestone freezes evidence boundaries and
+player-facing policy provenance; it does not repair a P1-P6 defect, convert a tested
+dose into an empirical optimum, or assert that every policy has a validated welfare
+benefit.
+
+P7 is a deterministic reducer over the frozen P0-P6 artifacts. It executed no native
+or legacy Python simulation and performed no network fetch during acceptance. Its
+reviewed source catalog contains 11 entries: ten original research or official
+historical sources and one explicitly labelled research synthesis. Empirical
+estimates, official historical references, evidence syntheses, and model-design
+priors are stored as different claim bases and are never treated as interchangeable.
+
+The frozen player-facing ledger covers all 102 Registry levers. Every row binds the
+legal Registry domain, reference baseline, tested P2 doses, complete four-field
+economic explanation, mechanism and trade-off metrics, P2/P4/P6 dispositions,
+empirical source identifiers where available, a permitted claim scope, and an
+explicit uncertainty label. The resulting UI boundary is:
+
+| Player-facing surface | Count |
+|---|---:|
+| Complete policy explanations | 102 |
+| Tested UI presets available | 78 |
+| Presets withheld because of an upstream defect | 24 |
+| Crisis manifests in the ledger | 11 |
+| Crises accepted for policy-efficacy claims | 1 |
+
+Registry domains remain runtime invariants rather than empirically calibrated safe or
+optimal ranges. Available UI presets are the frozen P2 meaningful dose, or the last
+available tested dose when no meaningful arm exists. They are labelled as general,
+binding-state-only, expert-only, or long-horizon according to the P2 disposition. The
+24 rejected P2 mechanisms receive no recommended preset and may display only their
+economic definition and explicit implementation defect. Only
+`CR_DEMAND_RECESSION` may support a scenario-specific efficacy statement; all other
+scenario rows state that efficacy claims are not accepted.
+
+P7 makes ten scoped comparisons between frozen model evidence and reviewed empirical
+or historical references:
+
+| Comparison | Frozen disposition |
+|---|---|
+| Government spending and output | Direction and monotonicity conflict |
+| Income tax and output | Direction conflict |
+| Benefits, consumption, and poverty | Scope mismatch and missing primary outcome |
+| Minimum wage and employment | Qualitative tension with dose and outcome mismatch |
+| Manual policy rate in recession | Model direction only; no empirical magnitude crosswalk |
+| Open-market operations | Missing comparable long-yield outcome |
+| Bank capital and new credit | Qualitative direction only; magnitude is non-monotone |
+| Mortgage LTV and originations | Qualitative direction match at non-comparable extreme doses |
+| Tariffs and imports | Direction and magnitude conflict |
+| Demand-recession stylized facts | Partial match with a major horizon mismatch |
+
+Four of those rows are elevated as explicit P7 findings. First, the short P2 spending
+ratios change sign across dose: government consumption is negative at both frozen
+doses, while public investment changes from negative locally to positive at the
+meaningful dose. Second, the meaningful income-tax cut lowers both tax revenue and
+real output, opposite the conventional expansionary direction. Third, OMO changes
+reserves and flows but exposes neither a comparable long-term sovereign yield nor a
+duration-adjusted purchase dose. Fourth, a 5 percent tariff raises model imports by
+about 2.09 percent and a 25 percent tariff lowers them by only about 1.19 percent,
+which conflicts with the direction and scale of the reviewed official tariff
+evidence.
+
+The accepted demand-recession path has the correct output-loss and unemployment
+ordering, with a mean peak output loss of about 4.14 percent and a mean peak
+unemployment increase of about 1.40 percentage points across the eight P3 seeds. Its
+mean persistent recovery is only 28.25 days. P7 therefore treats the severe 2007-09
+U.S. recession as a historical reference, not as a calibration target, and records a
+substantial horizon and propagation mismatch.
+
+The frozen P7 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Reducer source revision | `c9b71435f009f938b70ae8d0084c76a5688fe5c6` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| Policy explanation catalog | `922cf801970c974a57933bf4680108c1d79eecc7641411c2b7a3d597dc58d297` |
+| P7 manifest | `5f5ef3ca606580c81d55d9c015c34d553df8547f54ed6283f5849899015e930e` |
+| P7 evidence | `ad3e8e05f7d5f5cfe5a21453fda33e27230f4789f684287a791c45ddaaee09ae` |
+| P7 acceptance | `c0107cee11076a681aa2f35363950beb9690b78f2adec46375bd3427209540af` |
+| Generated JSON artifact | `a80c4f5f3f0a4d3c03217f0ebb8ae078bbe6b98db72096c0431c4b6787f74972` |
+| Generated Markdown artifact | `6823e14d76209faab2cce32a89c2c993702c719de1b842c43d6df65b134376bc` |
+
+Two consecutive formal reductions reproduced the same JSON and Markdown artifact
+hashes and the same P7 acceptance hash. The focused P0-P7 suite passes 58 tests with
+eight workers. The eight-worker native CTest run passes 72 of 74 targets directly.
+The remaining two targets are redirected by the unrelated editable install from the
+`config-audit` worktree; both pass when rerun concurrently with `-S` and explicit paths
+to this source tree, its `m11-release` native module, and this worktree's dependency
+site-packages.
+
+P7 stops here. P8 institutional-delivery and Controller-occupant evaluation have not
+started.
+
 ## 17. Artifacts and provenance
 
 Generated results live under `artifacts/policy-audit/` and are not committed. Source
@@ -1386,7 +1482,8 @@ Required generated reports are:
 8. `crisis_evidence.json` and `.md`;
 9. `combination_evidence.json` and `.md`;
 10. `scale_confirmation.json` and `.md`;
-11. `final_acceptance.json` and `.md`.
+11. `empirical_and_gameplay_freeze.json` and `.md`;
+12. `final_acceptance.json` and `.md`.
 
 The final report must separate `experiment completed` from `lever accepted`. Counts of
 executed jobs, passing mechanisms, accepted player levers, known engine gaps, and
