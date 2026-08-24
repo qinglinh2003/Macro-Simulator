@@ -1239,9 +1239,122 @@ from the `config-audit` worktree; both pass when rerun concurrently with `-S` an
 explicit paths to this source tree, its `m11-release` native module, and this
 worktree's dependency site-packages.
 
-P5 stops here. P6 finite-size and rare-event confirmation has not started, and the
-two rejected packages and seven blocked packages remain explicit inputs to future
-repair or redesign work.
+P5 stops here. The two rejected packages and seven blocked packages remain explicit
+inputs to future repair or redesign work.
+
+## P6 milestone acceptance evidence
+
+P6 was accepted on 2026-08-24 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_defects`. This status accepts a complete and reproducible P6
+ledger, including its withheld claims and defects. It does not assert that every
+planned million-person cell completed, repair the newly observed accounting defect,
+or promote any P6 representative into a policy recommendation.
+
+The frozen design covers one representative from each of the 12 P4 decision groups,
+plus `mortgage_foreclosure_ltv` and `rental_eviction_arrears` as additional rare-event
+mechanisms. Each runnable record is a matched control/treatment pair. The formal run
+used:
+
+- 100,000 and 1,000,000 initial persons;
+- eight matched seeds (`5101`, `5113`, `5129`, `5143`, `5159`, `5177`, `5193`,
+  `5209`);
+- eight native engine workers per session and four concurrent independent records at
+  each population size; and
+- native in-memory cloning at one million persons, because the M8 serialized
+  checkpoint ceiling does not admit a world of that size.
+
+The frozen matrix planned 224 paired records, or 448 native branch paths. It completed
+192 paired records and 384 branch paths. The remaining 32 paired records and 64 branch
+paths are not missing evidence hidden by the reducer: they are explicitly classified
+as `scale_execution_blocked`, and P6 makes no million-person effect claim for them.
+The disposition ledger is:
+
+| P6 representative disposition | Count |
+|---|---:|
+| Finite-size confirmed | 7 |
+| Finite-size dependency | 3 |
+| Scale execution blocked | 4 |
+
+The seven effects confirmed across both frozen population sizes are
+`benefit_income_floor`, `tax_income_rate`, `energy_price_cap`,
+`manual_policy_rate`, `bond_finance_frac`, `omo`, and `bank_min_capital`. In each
+case the declared proximal effect preserved its sign, passed the frozen materiality
+gate, and had at least six of eight supporting seeds at both scales. This is a
+mechanism-and-scale result, not an economic-welfare endorsement. For example,
+`energy_price_cap` reliably lowers the transaction price and raises unfilled energy
+demand; P6 does not reinterpret the latter as a benefit.
+
+Three representatives are explicitly scale-dependent:
+
+| Lever | Observed scale dependence |
+|---|---|
+| `gov_investment_share` | The action activated in 8/8 seeds at both sizes, but the declared public-capital and fixed-capital-formation contrasts were nonzero at 100,000 persons and exactly zero at one million; neither scale gate passed. |
+| `bankrupt_persist` | Firm default and exit effects were material and sign-stable at both sizes, but the declared fixture-activation metrics were silent in all 16 seed-size cells; it therefore fails the complete mechanism gate. |
+| `soe_efirm` | Energy transaction price preserved the expected sign in 8/8 seeds at both sizes, but the production contrast changed sign and had only 4/8 supporting seeds at 100,000 and 3/8 at one million. |
+
+The four scale-execution blockers retain their valid 100,000-person evidence but no
+one-million-person conclusion:
+
+| Lever | Evidence boundary |
+|---|---|
+| `tariff` | Direct observation: four concurrent one-million-person records remained CPU-active and produced no record after more than 12 wall-clock hours. Its 100,000-person reference record took 47.245 seconds. |
+| `fx_regime` | Conservative projection: it uses the same three-economy topology as `tariff`, and its 100,000-person reference record was slower at 49.252 seconds. |
+| `mortgage_foreclosure_ltv` | Conservative projection: its 100,000-person reference record already took 280.881 seconds, more than five times the directly blocked tariff reference. |
+| `rental_eviction_arrears` | Conservative projection: its 100,000-person reference record already took 159.594 seconds, more than three times the directly blocked tariff reference. |
+
+Only the tariff limit is a direct one-million-person observation. The other three are
+deliberately conservative projections from the directly observed blocker and the
+frozen 100,000-person timings. They must not be cited as completed one-million-person
+runs. This boundary prevents an unbounded audit from being mistaken for stronger
+causal evidence and records a concrete native performance backlog for later work.
+
+P6 also inventories all 13 count-first rare-event mechanisms from the runtime
+contract. Four were eligible under P2: `bank_min_capital`,
+`mortgage_foreclosure_ltv`, `bankrupt_persist`, and
+`rental_eviction_arrears`. The latter two housing mechanisms inherit their explicit
+scale-execution blockers. `bank_min_capital` is finite-size confirmed, while
+`bankrupt_persist` retains the scale-dependent classification above. The other nine
+mechanisms keep their frozen P2 blocker rather than receiving manufactured scale
+evidence. Neither of the two completed rare-event comparisons materially changed
+event incidence or per-person frequency, so the preregistered extra-seed long-tail
+gate did not open and P6 executed zero tail records.
+
+One underlying accounting-integrity defect remains explicit. In the
+`mortgage_foreclosure_ltv` treatment at 100,000 persons and seed `5159`, maximum M4
+conservation drift was `0.00011181086301803589`, above the frozen `0.0001` absolute
+limit; the matched control passed, the action was applied, and no runtime error
+occurred. The report contains both the seed-level defect entry and the representative
+prerequisite entry for this same finding. P6 records but does not repair it, in line
+with the milestone boundary. Integrity limits at one million persons scale from the
+frozen 100,000-person absolute limits so that the allowed residual per person remains
+constant; this avoids making the larger experiment fail merely because it contains
+ten times as many agents.
+
+The frozen P6 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Experiment source revision | `3e4fcd1d9d26c32f0c7c1ada86e2e388873ca317` |
+| Native `m11-release` extension | `2654ba58b61b4147f86bb7eea079d0cdd05b104d81cab4b9c7baf8e8000b9cd1` |
+| P0 root | `6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6` |
+| P2 acceptance | `0a112ee71733089ade75d7916dda6ccf9cfdc0ec64b40bcb5484c716a425949c` |
+| P3 acceptance | `f7e8b218a8d989a31af8a89bc97c2b12fe0a5780953d2fd013c2ea0289721933` |
+| P4 acceptance | `38f3702aa2e45c8de274b15416a52e17b9d33bff2b390a8b5cc3ec3f546a8df2` |
+| P5 acceptance | `26839f8523bbb508bf426b28cdc4afebf4688e1a220856e18eb48a5c56fb79c1` |
+| P6 manifest | `64c9af0a62ce6ac5384821d0ce9258b2dcfc404c9f942ae603f03b2f935319e7` |
+| P6 evidence | `f8338da45aeda7fe1a6656b1a6dfcd85d5a15502a2c114e48595be83d0595e77` |
+| P6 acceptance | `2558901f5fd9192b8b12ade4fb499dd2de64d8b36f4a929ceeebb4cf43c4a5fb` |
+
+A complete replay hit all 192 available cached paired records, executed no new native
+branch, and reproduced the same P6 acceptance hash. The focused P0-P6 suite passes 49
+tests with eight workers. The eight-worker native CTest run passes 72 of 74 targets
+directly. The remaining two targets are redirected by the unrelated editable install
+from the `config-audit` worktree; both pass when rerun concurrently with `-S` and
+explicit paths to this source tree, its `m11-release` native module, and this
+worktree's dependency site-packages.
+
+P6 stops here. P7 production acceptance, UI truthfulness, governance, and release
+packaging have not started.
 
 ## 17. Artifacts and provenance
 

@@ -7,6 +7,7 @@ import pytest
 
 from macro_sim.diagnostics.policy_scale_confirmation import (
     P6_POPULATIONS,
+    P6_SCALE_EXECUTION_BLOCKERS,
     P6_SEEDS,
     RARE_EVENT_MECHANISMS,
     REPRESENTATIVES,
@@ -153,3 +154,58 @@ def test_integrity_gate_holds_per_person_tolerance_constant() -> None:
     assert large["maximum_residuals_per_person"][
         "metric.source.m4.conservation_drift"
     ] == pytest.approx(1.9e-10)
+
+
+def test_scale_execution_blockers_are_explicit_and_selected() -> None:
+    manifest = build_p6_manifest(P2, P5)
+    selected = {item["lever"] for item in manifest["representatives"]}
+    assert set(P6_SCALE_EXECUTION_BLOCKERS) == {
+        "tariff",
+        "fx_regime",
+        "mortgage_foreclosure_ltv",
+        "rental_eviction_arrears",
+    }
+    assert set(P6_SCALE_EXECUTION_BLOCKERS) <= selected
+    assert P6_SCALE_EXECUTION_BLOCKERS["tariff"]["evidence_kind"] == "direct_observation"
+    assert all(
+        item["reference_100k_elapsed_seconds"] > 0.0
+        for item in P6_SCALE_EXECUTION_BLOCKERS.values()
+    )
+
+
+def test_analyzer_withholds_large_scale_claim_for_execution_blocker() -> None:
+    from macro_sim.diagnostics.policy_scale_confirmation import analyze_base
+
+    selection = {
+        "lever": "tariff",
+        "decision_group": "trade_and_migration",
+        "role": "group",
+        "arm_label": "arm_2",
+        "activation_metrics": ["metric.activation"],
+        "salient_metrics": ["metric.activation"],
+        "rare_event_metric": None,
+    }
+    runs = []
+    for seed in P6_SEEDS:
+        capture = {
+            "metric_series": {"metric.activation": {"values": [1.0]}},
+        }
+        runs.append({
+            "lever": "tariff",
+            "population": P6_POPULATIONS[0],
+            "seed": seed,
+            "error": None,
+            "policy_applied": True,
+            "control": capture,
+            "treatment": capture,
+            "control_integrity": {"0": {"passed": True}},
+            "treatment_integrity": {"0": {"passed": True}},
+        })
+    reports, errors = analyze_base(
+        {"representatives": [selection], "matched_seeds": list(P6_SEEDS)},
+        runs,
+    )
+    assert errors == []
+    assert reports[0]["disposition"] == "scale_execution_blocked"
+    assert reports[0]["million_person_effect_claimed"] is False
+    assert reports[0]["missing_run_count"] == len(P6_SEEDS)

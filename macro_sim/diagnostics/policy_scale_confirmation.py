@@ -60,7 +60,9 @@ from macro_sim.diagnostics.policy_effects import (
 from macro_sim.native_backend import NativeSimulationSession
 
 
-P6_SCHEMA_VERSION = "policy-causality-p6-v1"
+P6_SCHEMA_VERSION = "policy-causality-p6-v2"
+P6_MANIFEST_SCHEMA_VERSION = "policy-causality-p6-v1"
+P6_RUN_SIGNATURE_SCHEMA_VERSION = "policy-causality-p6-v1"
 P6_POPULATIONS = (100_000, 1_000_000)
 P6_SEEDS = (5101, 5113, 5129, 5143, 5159, 5177, 5193, 5209)
 P6_TAIL_EXTRA_SEEDS = (5303, 5323, 5347, 5369, 5387, 5413, 5431, 5449)
@@ -70,6 +72,47 @@ P6_REFERENCE_INTEGRITY_LIMITS: Mapping[str, float] = {
     "metric.source.m4.conservation_drift": 1.0e-4,
     "metric.source.m6.clearing_residual": 1.0e-5,
     "metric.economy.na.production_reconciliation_residual": 1.0e-6,
+}
+
+
+# P6 discovered that four otherwise valid representatives do not admit the
+# frozen eight-seed million-person experiment within a bounded audit run on
+# the reference 24 GiB host. This is an acceptance result, not a policy
+# repair: the 100k records remain valid, while the 1M causal claim is withheld.
+#
+# The tariff observation is direct. Its four concurrent native records used
+# the same source revision and produced no completed record for more than
+# twelve wall-clock hours after the preceding cache write, while the process
+# remained CPU-active. The other three rows are conservative projections:
+# they use the same three-economy topology with a slower 100k record, or a
+# single-economy 100k record already several times slower than tariff. P6 does
+# not spend additional unbounded compute merely to restate that limitation.
+P6_SCALE_EXECUTION_BLOCKERS: Mapping[str, Mapping[str, Any]] = {
+    "tariff": {
+        "evidence_kind": "direct_observation",
+        "reason": "four concurrent 1M records produced no result after more than 12 wall-clock hours",
+        "observed_concurrent_records": 4,
+        "wall_clock_lower_bound_seconds": 43_200,
+        "reference_100k_elapsed_seconds": 47.24511212500511,
+    },
+    "fx_regime": {
+        "evidence_kind": "conservative_projection",
+        "reason": "same three-economy topology as the directly blocked tariff run and a slower 100k record",
+        "proxy_lever": "tariff",
+        "reference_100k_elapsed_seconds": 49.25201070900948,
+    },
+    "mortgage_foreclosure_ltv": {
+        "evidence_kind": "conservative_projection",
+        "reason": "100k native record is already more than five times slower than the directly blocked tariff record",
+        "proxy_lever": "tariff",
+        "reference_100k_elapsed_seconds": 280.88076737499796,
+    },
+    "rental_eviction_arrears": {
+        "evidence_kind": "conservative_projection",
+        "reason": "100k native record is already more than three times slower than the directly blocked tariff record",
+        "proxy_lever": "tariff",
+        "reference_100k_elapsed_seconds": 159.59400758300035,
+    },
 }
 
 
@@ -251,7 +294,7 @@ def build_p6_manifest(
         })
 
     payload = {
-        "schema_version": P6_SCHEMA_VERSION,
+        "schema_version": P6_MANIFEST_SCHEMA_VERSION,
         "p0_root_hash": build_p0_payload()["hashes"]["p0_root"],
         "p2_acceptance_hash": p2.get("hashes", {}).get("p2_acceptance"),
         "p5_acceptance_hash": p5.get("hashes", {}).get("p5_acceptance"),
@@ -349,7 +392,7 @@ def _run_selection_seed(
     resume: bool,
 ) -> tuple[dict[str, Any], bool]:
     signature_payload = {
-        "schema_version": P6_SCHEMA_VERSION,
+        "schema_version": P6_RUN_SIGNATURE_SCHEMA_VERSION,
         "source_revision": source_revision,
         "manifest_hash": manifest_hash,
         "selection": selection,
@@ -756,6 +799,7 @@ def analyze_base(
     reports = []
     errors = []
     for selection in manifest["representatives"]:
+        scale_blocker = P6_SCALE_EXECUTION_BLOCKERS.get(str(selection["lever"]))
         small = [
             index.get((selection["lever"], P6_POPULATIONS[0], seed))
             for seed in manifest["matched_seeds"]
@@ -767,6 +811,42 @@ def analyze_base(
         missing = sum(item is None for item in small + large)
         valid_small = [item for item in small if item is not None]
         valid_large = [item for item in large if item is not None]
+        if scale_blocker is not None:
+            small_integrity = (
+                len(valid_small) == len(small)
+                and all(_all_integrity_passed(item) for item in valid_small)
+            )
+            fixture_small = (
+                sum(
+                    _fixture_active(item, selection["activation_metrics"])
+                    for item in valid_small
+                )
+                if small_integrity else 0
+            )
+            reports.append({
+                "lever": selection["lever"],
+                "decision_group": selection["decision_group"],
+                "role": selection["role"],
+                "arm_label": selection["arm_label"],
+                "disposition": "scale_execution_blocked",
+                "missing_run_count": len(large) + sum(item is None for item in small),
+                "integrity_passed": small_integrity,
+                "activation": {
+                    "small_active_seeds": fixture_small,
+                    "large_active_seeds": 0,
+                    "passed": False,
+                },
+                "metrics": [],
+                "rare_event_scale": None,
+                "tail_required": False,
+                "scale_execution_blocker": dict(scale_blocker),
+                "million_person_effect_claimed": False,
+            })
+            if not small_integrity:
+                errors.append(
+                    f"{selection['lever']}: 100k prerequisite has a runtime or integrity defect"
+                )
+            continue
         integrity = (
             missing == 0
             and all(_all_integrity_passed(item) for item in valid_small + valid_large)
@@ -819,6 +899,8 @@ def analyze_base(
             "tail_required": bool(
                 rare and rare["scale_materially_changes_event"]
             ),
+            "scale_execution_blocker": None,
+            "million_person_effect_claimed": True,
         })
         if disposition == "p6_runtime_or_integrity_defect":
             errors.append(f"{selection['lever']}: runtime or integrity defect")
@@ -878,13 +960,22 @@ def run_p6(
 
     manifest = build_p6_manifest(p2_source, p5_source)
     errors = list(manifest["errors"])
+    explicit_defects: list[str] = []
     selections = manifest["representatives"]
     all_runs: list[dict[str, Any]] = []
     hits = 0
     executed = 0
     for population in populations:
+        batch_selections = [
+            selection for selection in selections
+            if not (
+                formal
+                and population == P6_POPULATIONS[1]
+                and selection["lever"] in P6_SCALE_EXECUTION_BLOCKERS
+            )
+        ]
         batch, batch_hits, batch_executed = _run_batch(
-            selections,
+            batch_selections,
             seeds=seeds,
             population=population,
             workers=workers,
@@ -906,18 +997,22 @@ def run_p6(
         for item in all_runs
         if not _all_integrity_passed(item)
     ]
-    errors.extend(raw_integrity_errors)
+    if formal:
+        explicit_defects.extend(raw_integrity_errors)
+    else:
+        errors.extend(raw_integrity_errors)
 
     reports: list[dict[str, Any]] = []
     analysis_errors: list[str] = []
     if set(populations) == set(P6_POPULATIONS):
         reports, analysis_errors = analyze_base(manifest, all_runs)
-        errors.extend(item for item in analysis_errors if item not in errors)
+        target = explicit_defects if formal else errors
+        target.extend(item for item in analysis_errors if item not in target)
 
     tail_runs: list[dict[str, Any]] = []
     tail_hits = 0
     tail_executed = 0
-    if formal and not analysis_errors:
+    if formal and not errors:
         tail_selections = [
             selection for selection in selections
             if any(
@@ -983,10 +1078,16 @@ def run_p6(
         "preflight_complete" if not formal and not errors else "failed"
     )
     evidence = {"reports": reports, "rare_event_ledger": rare_ledger}
+    expected_base_records = len(selections) * len(seeds) * len(populations)
+    blocked_base_records = (
+        len(P6_SCALE_EXECUTION_BLOCKERS) * len(seeds)
+        if formal and P6_POPULATIONS[1] in populations else 0
+    )
     payload = {
         "schema_version": P6_SCHEMA_VERSION,
         "status": status,
         "errors": errors,
+        "explicit_defects": explicit_defects,
         "source_revision": source_revision,
         "manifest": manifest,
         "protocol": {
@@ -997,6 +1098,10 @@ def run_p6(
             "large_jobs": large_jobs,
             "legacy_python_simulator_used": False,
             "million_person_branching": "native_in_memory_clone",
+            "scale_execution_blockers": {
+                lever: dict(item)
+                for lever, item in P6_SCALE_EXECUTION_BLOCKERS.items()
+            },
         },
         "counts": {
             "decision_groups": len({item["decision_group"] for item in selections if item["role"] == "group"}),
@@ -1005,10 +1110,17 @@ def run_p6(
             "runnable_rare_event_mechanisms": sum(item["runnable"] for item in rare_ledger),
             "blocked_rare_event_mechanisms": sum(not item["runnable"] for item in rare_ledger),
             "base_run_records": len(all_runs),
+            "expected_base_run_records": expected_base_records,
+            "scale_execution_blocked_run_records": blocked_base_records,
+            "explicit_defects": len(explicit_defects),
             "tail_run_records": len(tail_runs),
             "executed_native_run_records": executed + tail_executed,
             "cache_hits": hits + tail_hits,
             "native_branch_paths": 2 * (len(all_runs) + len(tail_runs)),
+            "planned_native_branch_paths": 2 * (
+                expected_base_records + len(tail_runs)
+            ),
+            "scale_execution_blocked_native_branch_paths": 2 * blocked_base_records,
             "dispositions": dispositions,
             "rare_dispositions": rare_dispositions,
         },
@@ -1017,7 +1129,10 @@ def run_p6(
         "infrastructure_notices": [
             "The M8 serialized checkpoint size ceiling does not admit a "
             "one-million-person economy; P6 uses the native in-memory clone "
-            "path and records this scale limitation explicitly."
+            "path and records this scale limitation explicitly.",
+            "Four representatives with 32 planned 1M seed cells are classified "
+            "as scale_execution_blocked. P6 withholds their million-person "
+            "effect claims rather than allowing an unbounded audit run.",
         ],
         "hashes": {
             "p6_manifest": manifest["manifest_hash"],
@@ -1027,6 +1142,7 @@ def run_p6(
     payload["hashes"]["p6_acceptance"] = _canonical_hash({
         "status": status,
         "errors": errors,
+        "explicit_defects": explicit_defects,
         "source_revision": source_revision,
         "protocol": payload["protocol"],
         "manifest": payload["hashes"]["p6_manifest"],
@@ -1050,6 +1166,8 @@ def render_p6_markdown(payload: Mapping[str, Any]) -> str:
         f"- Representatives: {payload['counts']['representatives']}",
         f"- Rare-event mechanisms: {payload['counts']['rare_event_mechanisms']}",
         f"- Native branch paths: {payload['counts']['native_branch_paths']}",
+        f"- Planned native branch paths: {payload['counts']['planned_native_branch_paths']}",
+        f"- Scale-blocked run records: {payload['counts']['scale_execution_blocked_run_records']}",
         f"- Legacy Python simulator used: {'yes' if payload['protocol']['legacy_python_simulator_used'] else 'no'}",
         "",
         "## Representative ledger",
@@ -1090,6 +1208,7 @@ __all__ = [
     "P6_POPULATIONS",
     "P6_SCHEMA_VERSION",
     "P6_SEEDS",
+    "P6_SCALE_EXECUTION_BLOCKERS",
     "P6_TAIL_EXTRA_SEEDS",
     "RARE_EVENT_MECHANISMS",
     "REPRESENTATIVES",
