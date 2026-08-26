@@ -1,0 +1,3673 @@
+{
+  "baseline_revision": "390fbcb6517e99251239c3ded5cf956701a860c6",
+  "counts": {
+    "behavior_review": 36,
+    "levers": 102,
+    "mandatory_phase_occurrences": 28,
+    "mandatory_repair": 27,
+    "no_change_evidence": 39,
+    "phases": 10
+  },
+  "errors": [],
+  "hashes": {
+    "r0_acceptance": "28986b8a65829cb2b525bb8f48cd13fb266318a6f84119e11edc917d4dfe6436",
+    "r0_evidence": "b33e19a37d3ef9eafa90da9de665f9372c04e139fc0daa07a02f54370ca589e6"
+  },
+  "invalidation_graph": [
+    {
+      "invalidates_audit_stages": [],
+      "repair_phase": "R0",
+      "rule": "Planning-only; no frozen empirical evidence is invalidated."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R1",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R2",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R3",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R4",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R5",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P2",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R6",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R7",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P5",
+        "P7",
+        "P8"
+      ],
+      "repair_phase": "R8",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    },
+    {
+      "invalidates_audit_stages": [
+        "P8"
+      ],
+      "repair_phase": "R9",
+      "rule": "Any material implementation change in this phase requires the listed audit stages to be regenerated before claims are restored."
+    }
+  ],
+  "limitations": [
+    "R0 changes no Registry domain, native route, economic equation, scenario, or controller behavior.",
+    "The 36 behavior candidates are hypotheses for retesting, not a declaration that all 36 mechanisms are broken.",
+    "The 39 no-change entries have no current modification evidence; they remain subject to final regression and future evidence.",
+    "P8 human paths are transport fixtures rather than participant performance data, and its RL run is only a transfer probe."
+  ],
+  "phases": [
+    {
+      "exit_criteria": [
+        "All 102 Registry levers appear exactly once in the primary ledger.",
+        "The 27/36/39 classification and source hashes reproduce deterministically.",
+        "Every repair queue has explicit gates and an evidence invalidation rule."
+      ],
+      "invalidates_audit_stages": [],
+      "phase_id": "R0",
+      "policy_levers": [
+        "gov_consumption_share",
+        "gov_deficit_target",
+        "deficit_u_ref",
+        "benefit_replacement",
+        "benefit_income_floor",
+        "pension_replacement",
+        "tax_profit_rate",
+        "tax_income_rate",
+        "income_allowance",
+        "tax_consumption_rate",
+        "tax_necessity_rate",
+        "tax_luxury_rate",
+        "tax_wealth_rate",
+        "wealth_allowance",
+        "tax_energy_rate",
+        "tax_energy_windfall",
+        "spr_target_units",
+        "spr_flow_cap",
+        "soe_price_at_cost",
+        "energy_price_cap",
+        "energy_rationing",
+        "energy_cap_compensation",
+        "energy_subsidy_rate",
+        "energy_subsidy_threshold",
+        "min_wage",
+        "job_guarantee",
+        "jg_wage_ratio",
+        "inflation_target",
+        "taylor_phi_pi",
+        "taylor_phi_u",
+        "rate_inertia",
+        "manual_policy_rate",
+        "monetary_regime",
+        "r_neutral",
+        "u_natural",
+        "r_max",
+        "infl_ema_lambda",
+        "cb_core_inflation",
+        "cb_uses_fixed_basket_cpi",
+        "cb_log_inflation",
+        "fiscal_uses_national_accounts_gdp",
+        "bond_finance_frac",
+        "bond_coupon",
+        "bond_maturity",
+        "omo",
+        "omo_reserve_target",
+        "omo_drain_frac",
+        "lolr",
+        "bank_capital_constraint",
+        "bank_leverage_cap",
+        "bank_target_capital_ratio",
+        "bank_exposure_limit",
+        "bank_min_capital",
+        "bank_bond_duration_limit",
+        "bank_resolution_fund",
+        "reserve_floor_frac",
+        "margin_ltv",
+        "margin_max",
+        "kappa",
+        "hh_credit_limit",
+        "mortgage_ltv_cap",
+        "mortgage_underwriting",
+        "mortgage_dsti_cap",
+        "mortgage_stress_rate_addon",
+        "mortgage_risk_weight",
+        "mortgage_min_capital_ratio",
+        "mortgage_foreclosure_ltv",
+        "mortgage_arrears_floor",
+        "housing_permits",
+        "housing_transfer_tax",
+        "housing_property_tax",
+        "housing_in_wealth_tax",
+        "jg_public_works_share",
+        "deposit_rate_floor",
+        "deficit_u_cap",
+        "gov_investment_share",
+        "omo_index_deposits",
+        "bankrupt_persist",
+        "household_bankruptcy",
+        "rental_eviction_arrears",
+        "bank_migrate_on_failure",
+        "unified_bank_rwa",
+        "firm_credit_min_dscr",
+        "regulatory_firm_capital_haircut",
+        "regulatory_firm_inventory_haircut",
+        "land_fee_share",
+        "land_fee_stock_elasticity",
+        "soe_efirm",
+        "tariff",
+        "import_quota",
+        "export_subsidy",
+        "capital_control",
+        "external_interest_settlement_fraction",
+        "sanctions_imposed_on",
+        "immigration_cap",
+        "emigration_cap",
+        "remittance_tax",
+        "outward_remittance_tax",
+        "guest_worker_return",
+        "fx_regime",
+        "peg_anchor",
+        "peg_reserve_scale"
+      ],
+      "prerequisites": [
+        "P8 accepted with explicit limitations"
+      ],
+      "purpose": "Freeze scope, ordering, acceptance gates, and provenance before mechanism edits.",
+      "title": "Remediation ledger and evidence invalidation map"
+    },
+    {
+      "exit_criteria": [
+        "Boundary and near-boundary values agree across Registry, controller, checkpoint, and native validators.",
+        "Invalid values fail before dispatch with one canonical reason."
+      ],
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R1",
+      "policy_levers": [
+        "margin_ltv",
+        "margin_max",
+        "import_quota",
+        "immigration_cap"
+      ],
+      "prerequisites": [
+        "R0"
+      ],
+      "purpose": "Make the player-facing domain equal the native acceptance domain.",
+      "title": "Registry and native validation parity"
+    },
+    {
+      "exit_criteria": [
+        "Every repaired lever has a declared proximal observable that changes at the correct read point.",
+        "Stock-versus-new-contract semantics are distinguishable without proxy inference.",
+        "OMO has a comparable sovereign-duration or long-yield outcome."
+      ],
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R2",
+      "policy_levers": [
+        "bond_coupon",
+        "bond_maturity",
+        "omo",
+        "mortgage_underwriting",
+        "mortgage_dsti_cap",
+        "mortgage_stress_rate_addon",
+        "housing_in_wealth_tax",
+        "firm_credit_min_dscr",
+        "regulatory_firm_capital_haircut",
+        "regulatory_firm_inventory_haircut",
+        "land_fee_share",
+        "land_fee_stock_elasticity"
+      ],
+      "prerequisites": [
+        "R1"
+      ],
+      "purpose": "Expose enough native observables to prove cohort terms, gates, flows, and long-yield transmission.",
+      "title": "Contract-level observability"
+    },
+    {
+      "exit_criteria": [
+        "Each repaired route is read by the intended native mechanism.",
+        "Local and meaningful doses move the declared proximal metric in matched-seed tests.",
+        "Withdrawal or restoration returns the mechanism to its reference behavior where applicable."
+      ],
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R3",
+      "policy_levers": [
+        "fiscal_uses_national_accounts_gdp",
+        "bank_capital_constraint",
+        "mortgage_risk_weight",
+        "mortgage_min_capital_ratio",
+        "mortgage_arrears_floor",
+        "deficit_u_cap"
+      ],
+      "prerequisites": [
+        "R2"
+      ],
+      "purpose": "Connect stored Policy state to the intended native decision and settlement paths.",
+      "title": "Direct route and mechanism repair"
+    },
+    {
+      "exit_criteria": [
+        "The intended opportunity occurs in every preregistered seed.",
+        "The treatment changes the event decision or state transition, not merely a downstream proxy.",
+        "Activation, non-activation, and withdrawal paths are all covered."
+      ],
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R4",
+      "policy_levers": [
+        "lolr",
+        "bank_resolution_fund",
+        "margin_max",
+        "housing_permits",
+        "household_bankruptcy",
+        "bank_migrate_on_failure",
+        "unified_bank_rwa"
+      ],
+      "prerequisites": [
+        "R3"
+      ],
+      "purpose": "Create deterministic binding fixtures for rare legal, liquidity, housing, and failure transitions.",
+      "title": "Opportunity and state-machine repair"
+    },
+    {
+      "exit_criteria": [
+        "Each scenario passes activation, severity, persistence, contamination, and accounting gates.",
+        "Crisis calibration remains separate from policy calibration."
+      ],
+      "invalidates_audit_stages": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R5",
+      "policy_levers": [],
+      "prerequisites": [
+        "R4"
+      ],
+      "purpose": "Accept the ten crisis scenarios that P3 withheld before policy-efficacy retesting.",
+      "title": "Crisis and structural-state library repair"
+    },
+    {
+      "exit_criteria": [
+        "Each candidate is classified as effective, conditional, expert-only, structural, or removed from the player surface.",
+        "Direction, magnitude, timing, guardrails, and empirical scope are reported separately.",
+        "No lever is retained solely because a statistically detectable but gameplay-silent effect exists."
+      ],
+      "invalidates_audit_stages": [
+        "P2",
+        "P4",
+        "P5",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R6",
+      "policy_levers": [
+        "gov_consumption_share",
+        "gov_deficit_target",
+        "deficit_u_ref",
+        "benefit_replacement",
+        "benefit_income_floor",
+        "pension_replacement",
+        "tax_income_rate",
+        "energy_price_cap",
+        "energy_rationing",
+        "min_wage",
+        "job_guarantee",
+        "jg_wage_ratio",
+        "inflation_target",
+        "taylor_phi_pi",
+        "taylor_phi_u",
+        "rate_inertia",
+        "manual_policy_rate",
+        "monetary_regime",
+        "r_neutral",
+        "u_natural",
+        "r_max",
+        "infl_ema_lambda",
+        "cb_core_inflation",
+        "cb_uses_fixed_basket_cpi",
+        "cb_log_inflation",
+        "omo",
+        "bank_min_capital",
+        "mortgage_ltv_cap",
+        "mortgage_foreclosure_ltv",
+        "jg_public_works_share",
+        "gov_investment_share",
+        "bankrupt_persist",
+        "rental_eviction_arrears",
+        "soe_efirm",
+        "tariff",
+        "fx_regime"
+      ],
+      "prerequisites": [
+        "R5"
+      ],
+      "purpose": "Retest the 36 behavior candidates across relevant states, doses, and horizons.",
+      "title": "Single-policy calibration and reclassification"
+    },
+    {
+      "exit_criteria": [
+        "100k and 1M matched-seed signs agree or the scale dependency is explicitly modeled.",
+        "All previously blocked paths finish within the preregistered wall-clock and memory budgets."
+      ],
+      "invalidates_audit_stages": [
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R7",
+      "policy_levers": [
+        "mortgage_foreclosure_ltv",
+        "gov_investment_share",
+        "bankrupt_persist",
+        "rental_eviction_arrears",
+        "soe_efirm",
+        "tariff",
+        "fx_regime"
+      ],
+      "prerequisites": [
+        "R6"
+      ],
+      "purpose": "Close finite-size dependencies and previously blocked million-person paths.",
+      "title": "Scale and rare-event confirmation"
+    },
+    {
+      "exit_criteria": [
+        "Every package passes primary, guardrail, withdrawal, severity, and alternative-state gates.",
+        "Factorial and ablation evidence identifies essential, redundant, and harmful components."
+      ],
+      "invalidates_audit_stages": [
+        "P5",
+        "P7",
+        "P8"
+      ],
+      "phase_id": "R8",
+      "policy_levers": [],
+      "prerequisites": [
+        "R7"
+      ],
+      "purpose": "Rebuild crisis packages only from accepted single-policy and scenario evidence.",
+      "title": "Policy packages and interaction robustness"
+    },
+    {
+      "exit_criteria": [
+        "The UI domain and definitions match the accepted Registry and evidence scope.",
+        "Free-immediate and institutional delivery paths share identical economic execution after their documented lags.",
+        "The full native acceptance suite passes with eight test workers."
+      ],
+      "invalidates_audit_stages": [
+        "P8"
+      ],
+      "phase_id": "R9",
+      "policy_levers": [],
+      "prerequisites": [
+        "R8"
+      ],
+      "purpose": "Refresh delivery timing, human ingress, heuristic, random, and RL transfer evidence after engine repair.",
+      "title": "Controller, UI, and final acceptance"
+    }
+  ],
+  "policies": [
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        },
+        {
+          "code": "direction_and_monotonicity_conflict",
+          "comparison_id": "fiscal_spending_multiplier",
+          "reason": "Government-consumption and investment responses change sign across local and meaningful doses; only the meaningful investment contrast has the conventional positive spending/output sign.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "gov_consumption_share",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "recession_response"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "gov_deficit_target",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "recession_response",
+        "anti_inflation",
+        "debt_sustainability"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "deficit_u_ref",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        },
+        {
+          "code": "scope_mismatch_and_missing_primary_outcome",
+          "comparison_id": "benefit_consumption_and_poverty",
+          "reason": "The in-work income floor has state-dependent poverty effects and a material unemployment trade-off, but P2/P4 do not provide the directly comparable recipient-consumption estimand from the UI evidence.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "benefit_replacement",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [
+        "poverty_and_employment"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "accepted_crisis_efficacy",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "demand_recession_efficacy_with_tradeoffs",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "accepted_crisis_efficacy",
+          "reason": "At least one preregistered dose materially improves a primary loss with paired support.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "scope_mismatch_and_missing_primary_outcome",
+          "comparison_id": "benefit_consumption_and_poverty",
+          "reason": "The in-work income floor has state-dependent poverty effects and a material unemployment trade-off, but P2/P4 do not provide the directly comparable recipient-consumption estimand from the UI evidence.",
+          "stage": "P7"
+        },
+        {
+          "code": "institutional_delivery_scope_limited",
+          "reason": "Delivery ingress and timing were validated, but no human performance claim was accepted.",
+          "stage": "P8"
+        }
+      ],
+      "lever": "benefit_income_floor",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [
+        "recession_response",
+        "poverty_and_employment"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "accepted_crisis_efficacy",
+        "p6_disposition": null,
+        "p7_claim_scope": "demand_recession_efficacy_with_tradeoffs",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "accepted_crisis_efficacy",
+          "reason": "At least one preregistered dose materially improves a primary loss with paired support.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "pension_replacement",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_profit_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [
+        {
+          "code": "secondary_effect_detected",
+          "reason": "A material secondary, proximal, or trade-off effect was detected.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "direction_conflict",
+          "comparison_id": "income_tax_output_response",
+          "reason": "The meaningful income-tax cut lowers both tax revenue and real output in P2, opposite the conventional expansionary sign of an exogenous tax cut.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "tax_income_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "poverty_and_employment"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "income_allowance",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_consumption_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_necessity_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_luxury_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_wealth_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "wealth_allowance",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_energy_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "tax_energy_windfall",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "energy_emergency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "energy_operations",
+      "findings": [],
+      "lever": "spr_target_units",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [
+        "energy_emergency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "energy_operations",
+      "findings": [],
+      "lever": "spr_flow_cap",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "energy_operations",
+      "findings": [],
+      "lever": "soe_price_at_cost",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_concern",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_concern",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "energy_operations",
+      "findings": [
+        {
+          "code": "safety_concern",
+          "reason": "A tested dose materially worsened a primary crisis loss in at least six seeds.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "energy_price_cap",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [
+        "energy_emergency"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_concern",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_concern",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "energy_operations",
+      "findings": [
+        {
+          "code": "safety_concern",
+          "reason": "A tested dose materially worsened a primary crisis loss in at least six seeds.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "energy_rationing",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [
+        "energy_emergency"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "energy_cap_compensation",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "energy_emergency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "energy_subsidy_rate",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "anti_inflation",
+        "energy_emergency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "energy_subsidy_threshold",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        },
+        {
+          "code": "qualitative_tension_with_dose_scope_mismatch",
+          "comparison_id": "minimum_wage_employment",
+          "reason": "The local model dose has no unemployment effect, while the larger 1.25 reference-wage floor raises unemployment; the empirical sample does not identify that extreme model dose.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "min_wage",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [
+        "poverty_and_employment"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "job_guarantee",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [
+        "recession_response",
+        "poverty_and_employment"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "jg_wage_ratio",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "inflation_target",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "anti_inflation"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "taylor_phi_pi",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "anti_inflation"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "taylor_phi_u",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "rate_inertia",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "accepted_crisis_efficacy",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "demand_recession_efficacy_with_tradeoffs",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "accepted_crisis_efficacy",
+          "reason": "At least one preregistered dose materially improves a primary loss with paired support.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "model_direction_only_no_empirical_magnitude_crosswalk",
+          "comparison_id": "manual_rate_recession_response",
+          "reason": "The lower manual-rate arm improves unemployment and cumulative output in the accepted demand recession, matching the design-prior direction.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "manual_policy_rate",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "recession_response",
+        "external_crisis"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "monetary_regime",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_no_supported_benefit",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_no_supported_benefit",
+          "reason": "The policy moved declared outcomes but no dose passed the crisis-benefit gate.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "r_neutral",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "u_natural",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "r_max",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "infl_ema_lambda",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_expert_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_expert_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "cb_core_inflation",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "cb_uses_fixed_basket_cpi",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "monetary_stance",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "cb_log_inflation",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "engine_route_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "engine_route_defect",
+          "reason": "P1 lists the lever as an explicit native route defect.",
+          "stage": "P1"
+        },
+        {
+          "code": "engine_route_defect",
+          "reason": "native state is stored and checkpointed but no fiscal mechanism reads it",
+          "stage": "P2"
+        }
+      ],
+      "lever": "fiscal_uses_national_accounts_gdp",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_engine_route_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "debt_management",
+      "findings": [],
+      "lever": "bond_finance_frac",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "debt_sustainability"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "debt_management",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "bond_coupon",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "debt_sustainability"
+      ],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "debt_management",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "bond_maturity",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "debt_sustainability"
+      ],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [
+        {
+          "code": "safety_passed",
+          "reason": "No tested dose met the preregistered material-worsening screen.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "missing_empirical_outcome",
+          "comparison_id": "open_market_operations_yield_channel",
+          "reason": "The OMO route is live, but the model does not report a comparable long-term sovereign yield or duration-adjusted purchase dose.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "omo",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "bank_liquidity",
+        "debt_sustainability"
+      ],
+      "phase_ids": [
+        "R2",
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect.",
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [],
+      "lever": "omo_reserve_target",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [],
+      "lever": "omo_drain_frac",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the direct mechanism opportunity did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "lolr",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "bank_liquidity"
+      ],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "mechanism_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "mechanism_defect",
+          "reason": "no declared native observable changed in the binding fixture",
+          "stage": "P2"
+        }
+      ],
+      "lever": "bank_capital_constraint",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_solvency"
+      ],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_mechanism_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "bank_leverage_cap",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_solvency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "bank_target_capital_ratio",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "bank_exposure_limit",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_solvency"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": "finite_size_confirmed",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "secondary_inactive_in_crisis",
+          "reason": "No material declared effect was detected in this accepted crisis.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_confirmed",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "qualitative_direction_only_nonmonotonic_magnitude",
+          "comparison_id": "bank_capital_credit",
+          "reason": "Both target-capital-ratio increases reduce new credit, but the larger dose has the smaller response, so the empirical annual magnitude cannot be matched.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "bank_min_capital",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "bank_bond_duration_limit",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the declared activation fixture did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "bank_resolution_fund",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_solvency"
+      ],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [],
+      "lever": "reserve_floor_frac",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "bank_liquidity"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "validation_contract_defect",
+          "reason": "Registry includes 1.0 while the native securities validator requires margin_ltv < 1.0",
+          "stage": "P2"
+        }
+      ],
+      "lever": "margin_ltv",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R1"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Registry, controller, checkpoint, and native boundary values must agree."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the declared activation fixture did not activate in all four seeds",
+          "stage": "P2"
+        },
+        {
+          "code": "validation_contract_defect",
+          "reason": "Registry allows values below 1.0 while the native securities validator requires margin_max >= 1.0",
+          "stage": "P2"
+        }
+      ],
+      "lever": "margin_max",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R1",
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Registry, controller, checkpoint, and native boundary values must agree.",
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "kappa",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "hh_credit_limit",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "secondary_effect_detected",
+          "reason": "A material secondary, proximal, or trade-off effect was detected.",
+          "stage": "P4"
+        },
+        {
+          "code": "qualitative_match_extreme_dose_mismatch",
+          "comparison_id": "mortgage_ltv_credit",
+          "reason": "Tighter LTV caps sharply reduce mortgage originations in the model, matching the empirical direction but at non-comparable, extreme fixture doses.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "mortgage_ltv_cap",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "the trajectory changed outside the declared proximal observables",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_underwriting",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_dsti_cap",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_stress_rate_addon",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "engine_route_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "engine_route_defect",
+          "reason": "P1 lists the lever as an explicit native route defect.",
+          "stage": "P1"
+        },
+        {
+          "code": "engine_route_defect",
+          "reason": "native state is stored and range-validated but bank RWA never reads it",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_risk_weight",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_engine_route_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "engine_route_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "engine_route_defect",
+          "reason": "P1 lists the lever as an explicit native route defect.",
+          "stage": "P1"
+        },
+        {
+          "code": "engine_route_defect",
+          "reason": "native state is stored and range-validated but mortgage capital gating never reads it",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_min_capital_ratio",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_engine_route_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": "scale_execution_blocked",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "secondary_inactive_in_crisis",
+          "reason": "No material declared effect was detected in this accepted crisis.",
+          "stage": "P4"
+        },
+        {
+          "code": "scale_execution_blocked",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "mortgage_foreclosure_ltv",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "mechanism_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "mechanism_defect",
+          "reason": "no declared native observable changed in the binding fixture",
+          "stage": "P2"
+        }
+      ],
+      "lever": "mortgage_arrears_floor",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_mechanism_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the direct mechanism opportunity did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "housing_permits",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "housing_transfer_tax",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "housing_cycle"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [],
+      "lever": "housing_property_tax",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "the trajectory changed outside the declared proximal observables",
+          "stage": "P2"
+        }
+      ],
+      "lever": "housing_in_wealth_tax",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "primary_nonbinding_in_crisis",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "labor_and_welfare",
+      "findings": [
+        {
+          "code": "primary_nonbinding_in_crisis",
+          "reason": "No preregistered dose produced a material declared effect in the accepted crisis.",
+          "stage": "P4"
+        }
+      ],
+      "lever": "jg_public_works_share",
+      "owner_role": "labor_social",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "macroprudential",
+      "findings": [],
+      "lever": "deposit_rate_floor",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_liquidity"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "mechanism_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "mechanism_defect",
+          "reason": "no declared native observable changed in the binding fixture",
+          "stage": "P2"
+        }
+      ],
+      "lever": "deficit_u_cap",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R3"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Matched-seed local and meaningful doses must move the intended native read path."
+        ],
+        "intent": "repair_mechanism_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "accepted_crisis_efficacy",
+        "p6_disposition": "finite_size_dependency",
+        "p7_claim_scope": "demand_recession_efficacy_with_tradeoffs",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "fiscal_stance",
+      "findings": [
+        {
+          "code": "accepted_crisis_efficacy",
+          "reason": "At least one preregistered dose materially improves a primary loss with paired support.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_dependency",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "direction_and_monotonicity_conflict",
+          "comparison_id": "fiscal_spending_multiplier",
+          "reason": "Government-consumption and investment responses change sign across local and meaningful doses; only the meaningful investment contrast has the conventional positive spending/output sign.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "gov_investment_share",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [
+        "anti_inflation"
+      ],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "safety_passed",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_and_demand_recession_safety_only",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "liquidity_operations",
+      "findings": [],
+      "lever": "omo_index_deposits",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "secondary_effect_detected",
+        "p6_disposition": "finite_size_dependency",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "secondary_effect_detected",
+          "reason": "A material secondary, proximal, or trade-off effect was detected.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_dependency",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "bankrupt_persist",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the direct mechanism opportunity did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "household_bankruptcy",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "secondary_inactive_in_crisis",
+        "p6_disposition": "scale_execution_blocked",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "secondary_inactive_in_crisis",
+          "reason": "No material declared effect was detected in this accepted crisis.",
+          "stage": "P4"
+        },
+        {
+          "code": "scale_execution_blocked",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "rental_eviction_arrears",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the direct mechanism opportunity did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "bank_migrate_on_failure",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [
+        "bank_solvency"
+      ],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "unsupported_by_current_engine",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "structural_law",
+      "findings": [
+        {
+          "code": "unsupported_by_current_engine",
+          "reason": "the declared activation fixture did not activate in all four seeds",
+          "stage": "P2"
+        }
+      ],
+      "lever": "unified_bank_rwa",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R4"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "The binding event must occur in every preregistered activation seed and change the intended transition."
+        ],
+        "intent": "repair_unsupported_by_current_engine"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "firm_credit_min_dscr",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "regulatory_firm_capital_haircut",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "macroprudential",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "regulatory_firm_inventory_haircut",
+      "owner_role": "regulator",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "land_fee_share",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "observable_defect",
+        "p4_disposition": "blocked_by_p2_defect",
+        "p6_disposition": null,
+        "p7_claim_scope": "economic_definition_only",
+        "p7_preset_status": "withheld_upstream_defect"
+      },
+      "decision_group": "tax_and_transfers",
+      "findings": [
+        {
+          "code": "observable_defect",
+          "reason": "aggregate metrics cannot prove that legacy and new contract cohorts retained distinct terms",
+          "stage": "P2"
+        }
+      ],
+      "lever": "land_fee_stock_elasticity",
+      "owner_role": "treasury",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R2"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "A direct proximal observable must distinguish the intended contract, flow, or cohort effect."
+        ],
+        "intent": "repair_observable_defect"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_structural_long_horizon",
+        "p4_disposition": "not_applicable",
+        "p6_disposition": "finite_size_dependency",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_long_horizon"
+      },
+      "decision_group": "energy_structure",
+      "findings": [
+        {
+          "code": "not_applicable",
+          "reason": "The frozen P0 matrix declares no demand-recession role.",
+          "stage": "P4"
+        },
+        {
+          "code": "finite_size_dependency",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "soe_efirm",
+      "owner_role": "energy",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": "scale_execution_blocked",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [
+        {
+          "code": "blocked_by_scenario_topology",
+          "reason": "The only accepted P3 crisis has one economy, while this external lever requires a multi-economy counterparty and spillover path.",
+          "stage": "P4"
+        },
+        {
+          "code": "scale_execution_blocked",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        },
+        {
+          "code": "direction_and_magnitude_conflict",
+          "comparison_id": "tariff_import_response",
+          "reason": "A 5 percent model tariff raises imports by about 2.09 percent; a 25 percent tariff lowers them by only about 1.19 percent. The local sign conflicts with the official estimate and the larger response is far weaker.",
+          "stage": "P7"
+        }
+      ],
+      "lever": "tariff",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [
+        "external_crisis"
+      ],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [
+        {
+          "code": "validation_contract_defect",
+          "reason": "Registry allows 0..100 while the native external-policy validator accepts only 0..1",
+          "stage": "P2"
+        }
+      ],
+      "lever": "import_quota",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R1"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Registry, controller, checkpoint, and native boundary values must agree."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "export_subsidy",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "fx_operations",
+      "findings": [],
+      "lever": "capital_control",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "external_crisis"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "fx_operations",
+      "findings": [],
+      "lever": "external_interest_settlement_fraction",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "external_crisis"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "sanctions_imposed_on",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [
+        {
+          "code": "validation_contract_defect",
+          "reason": "Registry allows 0..10 while the native external-policy validator accepts only 0..1",
+          "stage": "P2"
+        }
+      ],
+      "lever": "immigration_cap",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [
+        "R1"
+      ],
+      "remediation_class": "mandatory_repair",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Registry, controller, checkpoint, and native boundary values must agree."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "emigration_cap",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "remittance_tax",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "outward_remittance_tax",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "trade_and_migration",
+      "findings": [],
+      "lever": "guest_worker_return",
+      "owner_role": "external_affairs",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": "scale_execution_blocked",
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "fx_operations",
+      "findings": [
+        {
+          "code": "blocked_by_scenario_topology",
+          "reason": "The only accepted P3 crisis has one economy, while this external lever requires a multi-economy counterparty and spillover path.",
+          "stage": "P4"
+        },
+        {
+          "code": "scale_execution_blocked",
+          "reason": "Scale result retained from the frozen P6 representative ledger.",
+          "stage": "P6"
+        }
+      ],
+      "lever": "fx_regime",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "external_crisis"
+      ],
+      "phase_ids": [
+        "R6",
+        "R7"
+      ],
+      "remediation_class": "behavior_review",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Relevant normal, structural, and crisis states must be tested with preregistered local and meaningful doses.",
+          "Direction, magnitude, timing, guardrails, and empirical comparability must be reported separately.",
+          "The accepted sign and materiality must survive the 100k-to-1M scale check or be explicitly scale-conditional."
+        ],
+        "intent": "recalibrate_or_reclassify"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_general"
+      },
+      "decision_group": "fx_operations",
+      "findings": [],
+      "lever": "peg_anchor",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    },
+    {
+      "audit_snapshot": {
+        "p2_disposition": "accepted_activation_only",
+        "p4_disposition": "blocked_by_scenario_topology",
+        "p6_disposition": null,
+        "p7_claim_scope": "mechanism_with_scenario_specific_result",
+        "p7_preset_status": "tested_binding_state_only"
+      },
+      "decision_group": "fx_operations",
+      "findings": [],
+      "lever": "peg_reserve_scale",
+      "owner_role": "central_bank",
+      "package_ids_for_later_validation": [
+        "external_crisis"
+      ],
+      "phase_ids": [],
+      "remediation_class": "no_change_evidence",
+      "repair_contract": {
+        "acceptance_gates": [
+          "Remain covered by the final 102-lever Registry and native regression suite.",
+          "Any later semantic change must move this lever back into a repair or calibration queue."
+        ],
+        "intent": "preserve_current_behavior"
+      }
+    }
+  ],
+  "protocol": {
+    "legacy_python_simulator_used": false,
+    "native_simulation_executed": false,
+    "network_fetch_during_acceptance": false,
+    "planning_only": true,
+    "test_workers": 8
+  },
+  "schema_version": "policy-remediation-r0-v1",
+  "source_freeze": {
+    "acceptance_hashes": {
+      "p1": "8d930386225337a1e5af100da92764d373d768356bb236160f4a095769c64d00",
+      "p2": "0a112ee71733089ade75d7916dda6ccf9cfdc0ec64b40bcb5484c716a425949c",
+      "p3": "f7e8b218a8d989a31af8a89bc97c2b12fe0a5780953d2fd013c2ea0289721933",
+      "p4": "38f3702aa2e45c8de274b15416a52e17b9d33bff2b390a8b5cc3ec3f546a8df2",
+      "p5": "26839f8523bbb508bf426b28cdc4afebf4688e1a220856e18eb48a5c56fb79c1",
+      "p6": "2558901f5fd9192b8b12ade4fb499dd2de64d8b36f4a929ceeebb4cf43c4a5fb",
+      "p7": "c0107cee11076a681aa2f35363950beb9690b78f2adec46375bd3427209540af",
+      "p8": "49da53cbf12e9b4723494ae072a9dac81e97bebe81c0f7d4d27b712a923d3cf3"
+    },
+    "accepted_crises": [
+      "CR_DEMAND_RECESSION"
+    ],
+    "p0_root_hash": "6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6",
+    "provenance_notes": [
+      "P0 identity is the common root exposed by P1-P7, not a copied standalone ignored artifact.",
+      "P2 does not expose a P1 acceptance binding; R0 pins P1 and P2 independently on the same P0 root.",
+      "R0 verifies exposed cross-stage identities but does not rerun upstream native experiments."
+    ],
+    "source_revisions": {
+      "p1": null,
+      "p2": "484b6df49daf13a871fa669268663bfc7e8bdbfb",
+      "p3": "e096064df93af33c1e098106159eb7432cd20ce9",
+      "p4": "4dbcefa5c0b0ee6e90c7f8923d3d1cbe319f5dfe",
+      "p5": "3c53b41b98fbae9a36ba9cb5506139668bc77aed",
+      "p6": "3e4fcd1d9d26c32f0c7c1ada86e2e388873ca317",
+      "p7": "c9b71435f009f938b70ae8d0084c76a5688fe5c6",
+      "p8": "25e7e68ff5b1791ad0310867d434bee4812a3a22"
+    },
+    "statuses": {
+      "p1": "accepted_with_explicit_defects",
+      "p2": "accepted_with_explicit_defects",
+      "p3": "accepted_with_explicit_defects",
+      "p4": "accepted_with_explicit_defects",
+      "p5": "accepted_with_explicit_defects",
+      "p6": "accepted_with_explicit_defects",
+      "p7": "accepted_with_explicit_defects",
+      "p8": "accepted_with_explicit_limitations"
+    }
+  },
+  "status": "accepted"
+}
