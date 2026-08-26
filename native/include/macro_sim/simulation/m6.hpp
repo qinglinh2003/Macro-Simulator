@@ -154,6 +154,11 @@ struct M6Metrics final {
     double bond_issuance{0.0};
     double bond_redemption{0.0};
     double bond_coupon_paid{0.0};
+    double bond_issued_coupon_rate{0.0};
+    double bond_issued_maturity_days{0.0};
+    double bond_weighted_coupon_rate{0.0};
+    double bond_weighted_remaining_maturity_days{0.0};
+    double bond_duration_adjusted_omo_flow{0.0};
     double household_bond_market_value{0.0};
     double bank_bond_market_value{0.0};
     double firm_equity_market_cap{0.0};
@@ -171,6 +176,11 @@ struct M6Metrics final {
     double margin_repaid{0.0};
     double margin_writeoffs{0.0};
     double total_firm_book_equity{0.0};
+    double firm_capital_collateral_gross{0.0};
+    double firm_inventory_collateral_gross{0.0};
+    double firm_eligible_collateral_value{0.0};
+    double firm_capital_haircut_applied{0.0};
+    double firm_inventory_haircut_applied{0.0};
     double clearing_residual{0.0};
     double sector_retool_capital{0.0};
     double mean_tobin_q_ema{1.0};

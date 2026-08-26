@@ -132,6 +132,11 @@ struct M5Metrics final {
     double investment_user_cost_multiplier_mean{1.0};
     double household_debt_service_reserved{0.0};
     double firm_dscr_credit_shortfall{0.0};
+    double firm_credit_applications{0.0};
+    double firm_credit_requested{0.0};
+    double firm_credit_existing_principal{0.0};
+    double firm_credit_min_dscr_applied{0.0};
+    double firm_credit_originated{0.0};
     double principal_repaid{0.0};
     double loan_interest_paid{0.0};
     double household_interest_paid{0.0};
@@ -288,9 +293,9 @@ class M5TickExtension {
     // been sized.  Financial-market extensions use this seam for valuation
     // channels (for example Tobin's q) that must alter both the physical
     // investment target and the financing request built from that target.
-    [[nodiscard]] virtual Status
-    before_credit(const core::RootState &, M4Runtime &, M4TickScratch &,
-                  M5Runtime &, M5TickScratch &, Tick, PhiloxRng &) {
+    [[nodiscard]] virtual Status before_credit(const core::RootState &, M4Runtime &,
+                                               M4TickScratch &, M5Runtime &,
+                                               M5TickScratch &, Tick, PhiloxRng &) {
         return Status::success();
     }
     [[nodiscard]] virtual Status

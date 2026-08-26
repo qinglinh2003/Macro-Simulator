@@ -1,5 +1,22 @@
 # Policy Remediation Plan v39
 
+## R2 acceptance
+
+- Status: `accepted`
+- Base revision: `6848cd67b5bb3ef9b58b7596e76d1cc572bcd905` (accepted R1)
+- R2 acceptance hash: `1ae7b90f8cd5b28f0ce7c7c8a2a1574a1a0bad5d1d806cb812114bee11d6a522`
+- Machine report: `docs/policy_remediation_r2_acceptance_v39.json`
+- Scope: 12 Policy levers, 27 declared proximal metrics, and 28 new maintained native source metrics.
+- Verification: 46/46 native tests and 3/3 deterministic R2 contract tests passed with eight workers.
+- Evidence consequence: frozen P0-P8 results remain historical but are invalidated for current product claims until regenerated.
+
+R2 distinguishes issuance terms from the weighted outstanding sovereign-bond stock,
+records mortgage underwriting terms on each originated contract, exposes current
+firm-credit and collateral gates, and reports housing wealth-tax and construction
+land-fee assessment bases directly. OMO now has a duration-adjusted sovereign-flow
+observable. These are observability repairs only; causal size and gameplay value
+remain subject to R6 recalibration.
+
 ## R1 acceptance
 
 - Status: `accepted`

@@ -208,6 +208,33 @@ NATIVE_POLICY_ROUTES.update(_section_routes(
     read_phase="world_coupling",
 ))
 
+# R2 contract-observability routes name the economic decision boundary rather
+# than the policy-state member expression.  This makes cohort and gate evidence
+# auditable at the point where the term is stamped or applied.
+_R2_MECHANISM_ANCHORS = {
+    "bond_coupon": "run_bond_issuance",
+    "bond_maturity": "run_bond_issuance",
+    "omo": "run_omo",
+    "firm_credit_min_dscr": "extend_firm_credit",
+    "regulatory_firm_capital_haircut": "build_firm_statements",
+    "regulatory_firm_inventory_haircut": "build_firm_statements",
+    "mortgage_underwriting": "buy_listing",
+    "mortgage_dsti_cap": "buy_listing",
+    "mortgage_stress_rate_addon": "buy_listing",
+    "housing_in_wealth_tax": "prepare_household_net_wealth",
+    "land_fee_share": "complete_construction",
+    "land_fee_stock_elasticity": "complete_construction",
+}
+for _lever, _anchor in _R2_MECHANISM_ANCHORS.items():
+    _route = NATIVE_POLICY_ROUTES[_lever]
+    NATIVE_POLICY_ROUTES[_lever] = NativePolicyRoute(
+        route_section=_route.route_section,
+        route_field=_route.route_field,
+        source_path=_route.source_path,
+        source_anchor=_anchor,
+        read_phase=_route.read_phase,
+    )
+
 # External policies are validated through a local ``policy`` reference, so use
 # the concrete world-coupling expression rather than allowing validation to
 # masquerade as an economic read point.

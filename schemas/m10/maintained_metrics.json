@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 296,
+    "native_stage_sources": 324,
     "public_sources": 41,
-    "total": 520
+    "total": 548
   },
   "metrics": [
     {
@@ -1999,6 +1999,51 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m5.firm_credit_applications",
+      "parity_rule": "simulation::M5Metrics::firm_credit_applications",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "applications_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.firm_credit_requested",
+      "parity_rule": "simulation::M5Metrics::firm_credit_requested",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.firm_credit_existing_principal",
+      "parity_rule": "simulation::M5Metrics::firm_credit_existing_principal",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.firm_credit_min_dscr_applied",
+      "parity_rule": "simulation::M5Metrics::firm_credit_min_dscr_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.firm_credit_originated",
+      "parity_rule": "simulation::M5Metrics::firm_credit_originated",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.principal_repaid",
       "parity_rule": "simulation::M5Metrics::principal_repaid",
       "source_kind": "committed_native_stage",
@@ -2296,6 +2341,51 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_issued_coupon_rate",
+      "parity_rule": "simulation::M6Metrics::bond_issued_coupon_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_issued_maturity_days",
+      "parity_rule": "simulation::M6Metrics::bond_issued_maturity_days",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_weighted_coupon_rate",
+      "parity_rule": "simulation::M6Metrics::bond_weighted_coupon_rate",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_weighted_remaining_maturity_days",
+      "parity_rule": "simulation::M6Metrics::bond_weighted_remaining_maturity_days",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "days"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.bond_duration_adjusted_omo_flow",
+      "parity_rule": "simulation::M6Metrics::bond_duration_adjusted_omo_flow",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_years_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m6.household_bond_market_value",
       "parity_rule": "simulation::M6Metrics::household_bond_market_value",
       "source_kind": "committed_native_stage",
@@ -2445,6 +2535,51 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_capital_collateral_gross",
+      "parity_rule": "simulation::M6Metrics::firm_capital_collateral_gross",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_inventory_collateral_gross",
+      "parity_rule": "simulation::M6Metrics::firm_inventory_collateral_gross",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_eligible_collateral_value",
+      "parity_rule": "simulation::M6Metrics::firm_eligible_collateral_value",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_capital_haircut_applied",
+      "parity_rule": "simulation::M6Metrics::firm_capital_haircut_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.firm_inventory_haircut_applied",
+      "parity_rule": "simulation::M6Metrics::firm_inventory_haircut_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
     },
     {
       "aggregation": "last",
@@ -3718,6 +3853,78 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_applications",
+      "parity_rule": "simulation::HousingMetrics::mortgage_applications",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "applications_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_underwriting_applications",
+      "parity_rule": "simulation::HousingMetrics::mortgage_underwriting_applications",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "applications_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_dsti_rejections",
+      "parity_rule": "simulation::HousingMetrics::mortgage_dsti_rejections",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "applications_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_dsti_cap_applied",
+      "parity_rule": "simulation::HousingMetrics::mortgage_dsti_cap_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_stress_rate_addon_applied",
+      "parity_rule": "simulation::HousingMetrics::mortgage_stress_rate_addon_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_underwritten_principal_share",
+      "parity_rule": "simulation::HousingMetrics::mortgage_underwritten_principal_share",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_cohort_weighted_dsti_cap",
+      "parity_rule": "simulation::HousingMetrics::mortgage_cohort_weighted_dsti_cap",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_cohort_weighted_stress_rate_addon",
+      "parity_rule": "simulation::HousingMetrics::mortgage_cohort_weighted_stress_rate_addon",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "rate_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m8.housing.foreclosures",
       "parity_rule": "simulation::HousingMetrics::foreclosures",
       "source_kind": "committed_native_stage",
@@ -3772,6 +3979,15 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_wealth_tax_base_included",
+      "parity_rule": "simulation::HousingMetrics::housing_wealth_tax_base_included",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m8.housing.transfer_tax_paid",
       "parity_rule": "simulation::HousingMetrics::transfer_tax_paid",
       "source_kind": "committed_native_stage",
@@ -3786,6 +4002,42 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.land_fee_assessments",
+      "parity_rule": "simulation::HousingMetrics::land_fee_assessments",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.land_fee_share_applied",
+      "parity_rule": "simulation::HousingMetrics::land_fee_share_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.land_fee_stock_elasticity_applied",
+      "parity_rule": "simulation::HousingMetrics::land_fee_stock_elasticity_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "elasticity"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.land_fee_stock_pressure_applied",
+      "parity_rule": "simulation::HousingMetrics::land_fee_stock_pressure_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "multiplier"
     },
     {
       "aggregation": "last",

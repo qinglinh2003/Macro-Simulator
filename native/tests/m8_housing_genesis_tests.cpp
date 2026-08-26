@@ -216,7 +216,8 @@ void test_builders_create_permitted_real_stock() {
     value.housing_rules.builder_demand_seed = 5.0;
     value.housing_rules.initial_builder_cash_buffer = 1'000.0;
     value.housing_rules.market_interval_days = 30;
-    value.housing_policy.land_fee_share = 0.0;
+    value.housing_policy.land_fee_share = 0.02;
+    value.housing_policy.land_fee_stock_elasticity = 0.75;
     value.housing_policy.annual_housing_permits = 2;
     auto harness = build(value);
     assert(harness.runtime.builders.size() == 1);
@@ -226,7 +227,26 @@ void test_builders_create_permitted_real_stock() {
     assert(firm->sector == macro_sim::core::FirmSector::construction);
     const auto stock_before = harness.runtime.properties.active_count();
     const auto money_before = harness.root.genesis_money;
-    const auto result = advance(harness, 200);
+    auto result = advance(harness, 1);
+    double assessed = 0.0;
+    double fees_paid = 0.0;
+    for (std::uint64_t day = 0; day < 200; ++day) {
+        if (day > 0) {
+            result = advance(harness, 1);
+        }
+        if (!result.ok()) {
+            break;
+        }
+        const auto &metrics = result.get_if()->metrics.housing;
+        if (metrics.land_fee_assessments > 0.0) {
+            assert(std::abs(metrics.land_fee_share_applied - 0.02) < 1.0e-12);
+            assert(std::abs(metrics.land_fee_stock_elasticity_applied - 0.75) <
+                   1.0e-12);
+            assert(metrics.land_fee_stock_pressure_applied > 0.0);
+        }
+        assessed += metrics.land_fee_assessments;
+        fees_paid += metrics.land_fee_paid;
+    }
     if (!result.ok()) {
         std::cerr << "builder advance failed: " << result.status().message() << "\n";
     }
@@ -241,6 +261,8 @@ void test_builders_create_permitted_real_stock() {
     assert(harness.runtime.properties.active_count() == stock_before + 2);
     assert(harness.runtime.permits_used == 2);
     assert(harness.runtime.builders.front().dwellings_minted == 2);
+    assert(assessed == 2.0);
+    assert(fees_paid > 0.0);
     assert(harness.runtime.properties
                .dwellings_for_owner(macro_sim::core::OwnerId::firm(builder))
                .size() == 2);

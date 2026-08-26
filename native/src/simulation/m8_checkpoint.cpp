@@ -92,7 +92,7 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(land_fee_share)                                                                  \
     X(land_fee_stock_elasticity)                                                       \
     X(transfer_tax_rate)                                                               \
-    X(property_tax_rate)                                                              \
+    X(property_tax_rate)                                                               \
     X(include_housing_in_wealth_tax)                                                   \
     X(wealth_tax_rate)
 
@@ -211,14 +211,27 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(mortgage_originations)                                                           \
     X(mortgage_principal_originated)                                                   \
     X(mortgage_principal_outstanding)                                                  \
+    X(mortgage_applications)                                                           \
+    X(mortgage_underwriting_applications)                                              \
+    X(mortgage_dsti_rejections)                                                        \
+    X(mortgage_dsti_cap_applied)                                                       \
+    X(mortgage_stress_rate_addon_applied)                                              \
+    X(mortgage_underwritten_principal_share)                                           \
+    X(mortgage_cohort_weighted_dsti_cap)                                               \
+    X(mortgage_cohort_weighted_stress_rate_addon)                                      \
     X(foreclosures)                                                                    \
     X(rent_paid)                                                                       \
     X(rent_unpaid)                                                                     \
     X(evictions)                                                                       \
     X(property_tax_paid)                                                               \
-    X(housing_wealth_tax_paid)                                                        \
+    X(housing_wealth_tax_paid)                                                         \
+    X(housing_wealth_tax_base_included)                                                \
     X(transfer_tax_paid)                                                               \
     X(land_fee_paid)                                                                   \
+    X(land_fee_assessments)                                                            \
+    X(land_fee_share_applied)                                                          \
+    X(land_fee_stock_elasticity_applied)                                               \
+    X(land_fee_stock_pressure_applied)                                                 \
     X(construction_output)                                                             \
     X(dwellings_completed)                                                             \
     X(permits_used)                                                                    \
@@ -518,6 +531,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
             row.purchase_price,
             row.qualifying_income,
             row.stressed_payment,
+            row.underwriting_applied,
+            row.dsti_cap_at_origination,
+            row.stress_rate_addon_at_origination,
             row.originated_tick.value(),
             row.active,
             row.foreclosed,
@@ -691,7 +707,7 @@ void decode_runtime(const Json &input, M8Runtime &runtime) {
         });
     }
     for (const auto &row : input.at("mortgages")) {
-        if (!row.is_array() || row.size() != 11U) {
+        if (!row.is_array() || row.size() != 14U) {
             throw std::runtime_error("invalid M8 mortgage");
         }
         runtime.mortgages.push_back({
@@ -703,9 +719,12 @@ void decode_runtime(const Json &input, M8Runtime &runtime) {
             row[5].get<double>(),
             row[6].get<double>(),
             row[7].get<double>(),
-            Tick(row[8].get<std::uint64_t>()),
-            row[9].get<bool>(),
-            row[10].get<bool>(),
+            row[8].get<bool>(),
+            row[9].get<double>(),
+            row[10].get<double>(),
+            Tick(row[11].get<std::uint64_t>()),
+            row[12].get<bool>(),
+            row[13].get<bool>(),
         });
     }
     for (const auto &row : input.at("tenancies")) {

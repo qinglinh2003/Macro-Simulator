@@ -259,6 +259,96 @@ void test_genesis_and_multiday_advance() {
     assert(closing_validation.ok());
 }
 
+void test_bond_cohorts_and_duration_adjusted_omo_are_observable() {
+    auto spec = base_spec();
+    spec.policy.bond_finance_fraction = 1.0;
+    spec.policy.bond_coupon_rate = 0.0013;
+    spec.policy.bond_maturity_days = 367;
+    auto harness = build(spec);
+
+    macro_sim::simulation::M6Metrics first_metrics;
+    bool observed_first_issue = false;
+    for (std::uint64_t day = 0; day < 120 && !observed_first_issue; ++day) {
+        const auto result = advance(harness, 1);
+        assert(result.ok());
+        first_metrics = result.get_if()->metrics;
+        observed_first_issue = first_metrics.bond_issuance > 0.0;
+    }
+    assert(observed_first_issue);
+    assert(std::abs(first_metrics.bond_issued_coupon_rate - 0.0013) < 1.0e-12);
+    assert(first_metrics.bond_issued_maturity_days >= 367.0);
+    assert(first_metrics.bond_issued_maturity_days < 372.0);
+    assert(first_metrics.bond_weighted_coupon_rate > 0.0);
+    assert(first_metrics.bond_weighted_remaining_maturity_days > 0.0);
+    const auto legacy_bonds = harness.runtime.securities.bonds();
+    assert(!legacy_bonds.empty());
+
+    harness.runtime.policy.bond_coupon_rate = 0.0042;
+    harness.runtime.policy.bond_maturity_days = 731;
+    harness.monetary_runtime.policy.open_market_operations = true;
+    harness.monetary_runtime.policy.reserve_target = 0.0;
+    harness.monetary_runtime.policy.reserve_gap_close = 1.0;
+
+    bool observed_new_issue = false;
+    bool observed_duration_adjusted_omo = false;
+    for (std::uint64_t day = 0; day < 120 && !observed_new_issue; ++day) {
+        const auto result = advance(harness, 1);
+        assert(result.ok());
+        const auto &metrics = result.get_if()->metrics;
+        const double expected_duration_adjusted_omo =
+            metrics.economy.omo_flow * metrics.bond_weighted_remaining_maturity_days /
+            365.0;
+        assert(std::abs(metrics.bond_duration_adjusted_omo_flow -
+                        expected_duration_adjusted_omo) < 1.0e-9);
+        observed_duration_adjusted_omo =
+            observed_duration_adjusted_omo ||
+            std::abs(metrics.bond_duration_adjusted_omo_flow) > 1.0e-12;
+        if (metrics.bond_issuance > 0.0 &&
+            std::abs(metrics.bond_issued_coupon_rate - 0.0042) < 1.0e-12) {
+            assert(metrics.bond_issued_maturity_days >= 731.0);
+            assert(metrics.bond_issued_maturity_days < 736.0);
+            observed_new_issue = true;
+        }
+    }
+    assert(observed_new_issue);
+    assert(observed_duration_adjusted_omo);
+    for (const auto &legacy : legacy_bonds) {
+        const auto *current = harness.runtime.securities.get(legacy.id);
+        assert(current != nullptr);
+        assert(current->coupon_rate == legacy.coupon_rate);
+        assert(current->maturity_tick == legacy.maturity_tick);
+    }
+}
+
+void test_firm_collateral_haircuts_report_the_applied_borrowing_base() {
+    auto low_spec = base_spec();
+    low_spec.policy.regulatory_capital_haircut = 0.0;
+    low_spec.policy.regulatory_inventory_haircut = 0.0;
+    auto high_spec = low_spec;
+    high_spec.policy.regulatory_capital_haircut = 1.0;
+    high_spec.policy.regulatory_inventory_haircut = 1.0;
+    auto low = build(low_spec);
+    auto high = build(high_spec);
+
+    const auto low_result = advance(low, 1);
+    const auto high_result = advance(high, 1);
+    assert(low_result.ok());
+    assert(high_result.ok());
+    const auto &low_metrics = low_result.get_if()->metrics;
+    const auto &high_metrics = high_result.get_if()->metrics;
+    assert(std::abs(low_metrics.firm_capital_haircut_applied) < 1.0e-12);
+    assert(std::abs(low_metrics.firm_inventory_haircut_applied) < 1.0e-12);
+    assert(std::abs(high_metrics.firm_capital_haircut_applied - 1.0) < 1.0e-12);
+    assert(std::abs(high_metrics.firm_inventory_haircut_applied - 1.0) < 1.0e-12);
+    assert(std::abs(low_metrics.firm_capital_collateral_gross -
+                    high_metrics.firm_capital_collateral_gross) < 1.0e-9);
+    assert(std::abs(low_metrics.firm_inventory_collateral_gross -
+                    high_metrics.firm_inventory_collateral_gross) < 1.0e-9);
+    assert(low_metrics.firm_eligible_collateral_value >
+           high_metrics.firm_eligible_collateral_value);
+    assert(std::abs(high_metrics.firm_eligible_collateral_value) < 1.0e-9);
+}
+
 void test_bank_equity_uses_lagged_closed_income() {
     auto slow_spec = base_spec();
     slow_spec.rules.bank_equity_lambda = 0.001;
@@ -319,19 +409,18 @@ void test_fault_is_atomic() {
 }
 
 void prepare_q_probe(Harness &harness, double q) {
-    harness.root.firms.for_each_alive(
-        [&](FirmId id, macro_sim::core::FirmComponent &firm) {
-            if (firm.sector != macro_sim::core::FirmSector::consumption) {
-                return;
-            }
-            firm.demand_expected = 100.0;
-            firm.physical_capital = macro_sim::Capital(1.0);
-            firm.investment_adjustment = 0.10;
-            firm.capital_depreciation = 0.0;
-            auto &lifecycle = harness.runtime.firms[
-                static_cast<std::size_t>(id.value())];
-            lifecycle.tobin_q_ema = q;
-        });
+    harness.root.firms.for_each_alive([&](FirmId id,
+                                          macro_sim::core::FirmComponent &firm) {
+        if (firm.sector != macro_sim::core::FirmSector::consumption) {
+            return;
+        }
+        firm.demand_expected = 100.0;
+        firm.physical_capital = macro_sim::Capital(1.0);
+        firm.investment_adjustment = 0.10;
+        firm.capital_depreciation = 0.0;
+        auto &lifecycle = harness.runtime.firms[static_cast<std::size_t>(id.value())];
+        lifecycle.tobin_q_ema = q;
+    });
 }
 
 void test_tobin_q_changes_real_investment_before_credit() {
@@ -369,8 +458,7 @@ void test_tobin_q_changes_real_investment_before_credit() {
     assert(std::abs(high_metrics.mean_q_investment_multiplier - 1.5) < 1.0e-12);
     assert(std::abs(high_metrics.q_adjusted_investment_target /
                         neutral_metrics.q_adjusted_investment_target -
-                    1.5) <
-           1.0e-10);
+                    1.5) < 1.0e-10);
     assert(std::abs(capped_result.get_if()->metrics.mean_q_investment_multiplier -
                     1.20) < 1.0e-12);
     assert(std::abs(floored_result.get_if()->metrics.mean_q_investment_multiplier -
@@ -388,9 +476,9 @@ void test_equity_wealth_smoothing_and_consumption_channel() {
     on_spec.rules.household_equity_wealth_effect = 1.0;
     auto off = build(off_spec);
     auto on = build(on_spec);
-    const double expected_addition = std::accumulate(
-        on.runtime.household_equity_value_ema.begin(),
-        on.runtime.household_equity_value_ema.end(), 0.0) *
+    const double expected_addition =
+        std::accumulate(on.runtime.household_equity_value_ema.begin(),
+                        on.runtime.household_equity_value_ema.end(), 0.0) *
         on.real_runtime.rules.wealth_propensity;
     assert(expected_addition > 0.0);
     const auto off_result = advance(off, 1);
@@ -398,10 +486,8 @@ void test_equity_wealth_smoothing_and_consumption_channel() {
     assert(off_result.ok());
     assert(on_result.ok());
     assert(off_result.get_if()->metrics.household_equity_consumption_addition == 0.0);
-    assert(std::abs(on_result.get_if()->metrics
-                        .household_equity_consumption_addition -
-                    expected_addition) <
-           1.0e-10);
+    assert(std::abs(on_result.get_if()->metrics.household_equity_consumption_addition -
+                    expected_addition) < 1.0e-10);
 
     auto slow_spec = base_spec();
     slow_spec.rules.household_equity_wealth_smoothing = 0.25;
@@ -607,11 +693,9 @@ void test_consumption_firm_entry_selects_the_stronger_return_stratum() {
     const auto result = advance(harness, 1);
     assert(result.ok());
     assert(result.get_if()->metrics.firm_births == 1U);
-    const auto &entrant =
-        harness.runtime.firms[static_cast<std::size_t>(next_id)];
+    const auto &entrant = harness.runtime.firms[static_cast<std::size_t>(next_id)];
     assert(entrant.active);
-    assert(entrant.stratum ==
-           macro_sim::simulation::ConsumptionStratum::luxury);
+    assert(entrant.stratum == macro_sim::simulation::ConsumptionStratum::luxury);
 }
 
 void test_capital_firms_are_not_idle_consumption_shells() {
@@ -986,8 +1070,7 @@ void test_margin_policy_boundaries_round_trip_through_checkpoint() {
         harness.root, harness.real_runtime, harness.monetary_runtime, harness.runtime,
         harness.tick);
     assert(checkpoint.ok());
-    auto restored =
-        macro_sim::simulation::load_m6_checkpoint(*checkpoint.get_if());
+    auto restored = macro_sim::simulation::load_m6_checkpoint(*checkpoint.get_if());
     assert(restored.ok());
     assert(restored.get_if()->runtime.policy.margin_ltv == 1.0);
     assert(restored.get_if()->runtime.policy.margin_max == 10.0);
@@ -998,6 +1081,8 @@ void test_margin_policy_boundaries_round_trip_through_checkpoint() {
 int main() {
     test_validation_and_prices();
     test_genesis_and_multiday_advance();
+    test_bond_cohorts_and_duration_adjusted_omo_are_observable();
+    test_firm_collateral_haircuts_report_the_applied_borrowing_base();
     test_bank_equity_uses_lagged_closed_income();
     test_fault_is_atomic();
     test_tobin_q_changes_real_investment_before_credit();

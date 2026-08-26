@@ -120,8 +120,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         {"q_investment_sensitivity", value.q_investment_sensitivity},
         {"q_investment_floor", value.q_investment_floor},
         {"q_investment_cap", value.q_investment_cap},
-        {"household_equity_wealth_smoothing",
-         value.household_equity_wealth_smoothing},
+        {"household_equity_wealth_smoothing", value.household_equity_wealth_smoothing},
         {"household_equity_wealth_effect", value.household_equity_wealth_effect},
         {"fundamental_weight", value.fundamental_weight},
         {"chartist_weight", value.chartist_weight},
@@ -242,6 +241,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.bond_issuance,
         value.bond_redemption,
         value.bond_coupon_paid,
+        value.bond_issued_coupon_rate,
+        value.bond_issued_maturity_days,
+        value.bond_weighted_coupon_rate,
+        value.bond_weighted_remaining_maturity_days,
+        value.bond_duration_adjusted_omo_flow,
         value.household_bond_market_value,
         value.bank_bond_market_value,
         value.firm_equity_market_cap,
@@ -259,6 +263,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.margin_repaid,
         value.margin_writeoffs,
         value.total_firm_book_equity,
+        value.firm_capital_collateral_gross,
+        value.firm_inventory_collateral_gross,
+        value.firm_eligible_collateral_value,
+        value.firm_capital_haircut_applied,
+        value.firm_inventory_haircut_applied,
         value.clearing_residual,
         value.sector_retool_capital,
         value.mean_tobin_q_ema,
@@ -278,7 +287,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M6Metrics &value) {
-    if (!row.is_array() || row.size() != 37) {
+    if (!row.is_array() || row.size() != 47) {
         throw std::runtime_error("invalid M6 metrics");
     }
     std::size_t i = 0;
@@ -287,6 +296,11 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.bond_issuance = row[i++].get<double>();
     value.bond_redemption = row[i++].get<double>();
     value.bond_coupon_paid = row[i++].get<double>();
+    value.bond_issued_coupon_rate = row[i++].get<double>();
+    value.bond_issued_maturity_days = row[i++].get<double>();
+    value.bond_weighted_coupon_rate = row[i++].get<double>();
+    value.bond_weighted_remaining_maturity_days = row[i++].get<double>();
+    value.bond_duration_adjusted_omo_flow = row[i++].get<double>();
     value.household_bond_market_value = row[i++].get<double>();
     value.bank_bond_market_value = row[i++].get<double>();
     value.firm_equity_market_cap = row[i++].get<double>();
@@ -304,6 +318,11 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.margin_repaid = row[i++].get<double>();
     value.margin_writeoffs = row[i++].get<double>();
     value.total_firm_book_equity = row[i++].get<double>();
+    value.firm_capital_collateral_gross = row[i++].get<double>();
+    value.firm_inventory_collateral_gross = row[i++].get<double>();
+    value.firm_eligible_collateral_value = row[i++].get<double>();
+    value.firm_capital_haircut_applied = row[i++].get<double>();
+    value.firm_inventory_haircut_applied = row[i++].get<double>();
     value.clearing_residual = row[i++].get<double>();
     value.sector_retool_capital = row[i++].get<double>();
     value.mean_tobin_q_ema = row[i++].get<double>();

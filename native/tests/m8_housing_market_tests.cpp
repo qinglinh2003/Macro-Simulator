@@ -148,7 +148,11 @@ void test_cash_resale_moves_money_title_and_occupancy() {
 }
 
 void test_mortgage_origination_is_canonical_and_collateralized() {
-    auto harness = build(market_spec(true, false));
+    auto spec = market_spec(true, false);
+    spec.housing_policy.mortgage_underwriting = true;
+    spec.housing_policy.mortgage_dsti_cap = 2.0;
+    spec.housing_policy.mortgage_stress_rate_addon = 0.001;
+    auto harness = build(spec);
     const auto result = advance(harness, 1);
     if (!result.ok()) {
         std::cerr << "mortgage housing session failed: " << result.status().message()
@@ -169,6 +173,38 @@ void test_mortgage_origination_is_canonical_and_collateralized() {
            mortgage.collateral);
     assert(result.get_if()->metrics.housing.mortgage_originations > 0.0);
     assert(result.get_if()->metrics.housing.mortgage_principal_originated > 0.0);
+    assert(result.get_if()->metrics.housing.mortgage_applications > 0.0);
+    assert(result.get_if()->metrics.housing.mortgage_underwriting_applications > 0.0);
+    assert(result.get_if()->metrics.housing.mortgage_dsti_rejections <
+           result.get_if()->metrics.housing.mortgage_underwriting_applications);
+    assert(std::abs(result.get_if()->metrics.housing.mortgage_dsti_cap_applied - 2.0) <
+           1.0e-12);
+    assert(
+        std::abs(result.get_if()->metrics.housing.mortgage_stress_rate_addon_applied -
+                 0.001) < 1.0e-12);
+    assert(mortgage.underwriting_applied);
+    assert(std::abs(mortgage.dsti_cap_at_origination - 2.0) < 1.0e-12);
+    assert(std::abs(mortgage.stress_rate_addon_at_origination - 0.001) < 1.0e-12);
+
+    harness.runtime.housing_policy.mortgage_underwriting = false;
+    harness.runtime.housing_policy.mortgage_dsti_cap = 0.25;
+    harness.runtime.housing_policy.mortgage_stress_rate_addon = 0.004;
+    const auto cohort_result = advance(harness, 1);
+    assert(cohort_result.ok());
+    const auto &legacy = harness.runtime.mortgages.front();
+    assert(legacy.underwriting_applied);
+    assert(std::abs(legacy.dsti_cap_at_origination - 2.0) < 1.0e-12);
+    assert(std::abs(legacy.stress_rate_addon_at_origination - 0.001) < 1.0e-12);
+    assert(std::abs(cohort_result.get_if()
+                        ->metrics.housing.mortgage_underwritten_principal_share -
+                    1.0) < 1.0e-12);
+    assert(
+        std::abs(
+            cohort_result.get_if()->metrics.housing.mortgage_cohort_weighted_dsti_cap -
+            2.0) < 1.0e-12);
+    assert(std::abs(cohort_result.get_if()
+                        ->metrics.housing.mortgage_cohort_weighted_stress_rate_addon -
+                    0.001) < 1.0e-12);
 }
 
 void test_mortgage_follows_heir_when_borrower_household_retires() {
@@ -382,6 +418,12 @@ void test_housing_enters_the_integrated_net_wealth_tax_base_once() {
         total_housing += housing_value[index];
     }
     assert(total_housing > 0.0);
+    assert(std::abs(excluded_result.get_if()
+                        ->metrics.housing.housing_wealth_tax_base_included) < 1.0e-12);
+    assert(
+        std::abs(
+            included_result.get_if()->metrics.housing.housing_wealth_tax_base_included -
+            total_housing) < 1.0e-7);
     assert(included_result.get_if()->metrics.economy.economy.economy.economy.tax_total >
            excluded_result.get_if()->metrics.economy.economy.economy.economy.tax_total);
 }
@@ -683,12 +725,8 @@ void test_broader_housing_search_changes_the_observed_opportunity_set() {
     assert(broad_result.ok());
     assert(narrow_result.get_if()->metrics.housing.session_sales > 0.0);
     assert(broad_result.get_if()->metrics.housing.session_sales > 0.0);
-    assert(
-        std::abs(
-            narrow_result.get_if()->metrics.housing.session_volume -
-            broad_result.get_if()->metrics.housing.session_volume
-        ) > 1.0e-9
-    );
+    assert(std::abs(narrow_result.get_if()->metrics.housing.session_volume -
+                    broad_result.get_if()->metrics.housing.session_volume) > 1.0e-9);
 }
 
 void test_housing_wealth_effect_adds_owner_consumption_budget() {

@@ -61,7 +61,7 @@ void test_catalog_is_complete_and_sorted() {
     const auto levers = m11_policy_levers();
     assert(levers.size() == 102U);
     assert(kM11PolicyContractSha256 ==
-           "5298b7d1d20d7a441dd2a68530daf155bc042e31726ae67e707e4ff14fbb4084");
+           "2b580bc22b9af0bf896e33c6acf4f7c958ded69b097b257114a78ee0727f0475");
     std::set<std::string_view> seats;
     std::set<std::string_view> groups;
     for (std::size_t index = 0; index < levers.size(); ++index) {

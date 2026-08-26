@@ -294,6 +294,11 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.investment_user_cost_multiplier_mean,
         value.household_debt_service_reserved,
         value.firm_dscr_credit_shortfall,
+        value.firm_credit_applications,
+        value.firm_credit_requested,
+        value.firm_credit_existing_principal,
+        value.firm_credit_min_dscr_applied,
+        value.firm_credit_originated,
         value.principal_repaid,
         value.loan_interest_paid,
         value.household_interest_paid,
@@ -326,7 +331,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M5Metrics &value) {
-    if (!row.is_array() || row.size() != 35) {
+    if (!row.is_array() || row.size() != 40) {
         throw std::runtime_error("invalid M5 metrics");
     }
     std::size_t i = 0;
@@ -337,6 +342,11 @@ void decode_metrics(const Json &row, M5Metrics &value) {
     value.investment_user_cost_multiplier_mean = row[i++].get<double>();
     value.household_debt_service_reserved = row[i++].get<double>();
     value.firm_dscr_credit_shortfall = row[i++].get<double>();
+    value.firm_credit_applications = row[i++].get<double>();
+    value.firm_credit_requested = row[i++].get<double>();
+    value.firm_credit_existing_principal = row[i++].get<double>();
+    value.firm_credit_min_dscr_applied = row[i++].get<double>();
+    value.firm_credit_originated = row[i++].get<double>();
     value.principal_repaid = row[i++].get<double>();
     value.loan_interest_paid = row[i++].get<double>();
     value.household_interest_paid = row[i++].get<double>();

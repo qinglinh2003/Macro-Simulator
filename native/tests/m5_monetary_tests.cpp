@@ -22,71 +22,75 @@ using macro_sim::simulation::M5AdvanceOptions;
 using macro_sim::simulation::M5PolicyState;
 using macro_sim::simulation::M5Runtime;
 using macro_sim::simulation::M5SimulationSpec;
-using macro_sim::simulation::M5TickScratch;
 using macro_sim::simulation::M5TickExtension;
+using macro_sim::simulation::M5TickScratch;
 using macro_sim::simulation::MonetaryRegime;
 
 class WageExpectationCapture final : public M5TickExtension {
   public:
     double observed{0.0};
 
-    macro_sim::Status prepare_tick(
-        const macro_sim::core::RootState &,
-        macro_sim::simulation::M4Runtime &real_runtime,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status prepare_tick(const macro_sim::core::RootState &,
+                                   macro_sim::simulation::M4Runtime &real_runtime,
+                                   macro_sim::simulation::M4TickScratch &, M5Runtime &,
+                                   M5TickScratch &, Tick,
+                                   macro_sim::PhiloxRng &) override {
         observed = real_runtime.rules.wage_expected_inflation;
         return macro_sim::Status::success();
     }
-    macro_sim::Status after_planning(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status after_planning(const macro_sim::core::RootState &,
+                                     macro_sim::simulation::M4Runtime &,
+                                     macro_sim::simulation::M4TickScratch &,
+                                     M5Runtime &, M5TickScratch &, Tick,
+                                     macro_sim::PhiloxRng &) override {
         return macro_sim::Status::success();
     }
-    macro_sim::Status run_labor(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &, bool &handled) override {
+    macro_sim::Status run_labor(const macro_sim::core::RootState &,
+                                macro_sim::simulation::M4Runtime &,
+                                macro_sim::simulation::M4TickScratch &, M5Runtime &,
+                                M5TickScratch &, Tick, macro_sim::PhiloxRng &,
+                                bool &handled) override {
         handled = false;
         return macro_sim::Status::success();
     }
-    macro_sim::Status before_settlement(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status before_settlement(const macro_sim::core::RootState &,
+                                        macro_sim::simulation::M4Runtime &,
+                                        macro_sim::simulation::M4TickScratch &,
+                                        M5Runtime &, M5TickScratch &, Tick,
+                                        macro_sim::PhiloxRng &) override {
         return macro_sim::Status::success();
     }
-    macro_sim::Status after_settlement(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status after_settlement(const macro_sim::core::RootState &,
+                                       macro_sim::simulation::M4Runtime &,
+                                       macro_sim::simulation::M4TickScratch &,
+                                       M5Runtime &, M5TickScratch &, Tick,
+                                       macro_sim::PhiloxRng &) override {
         return macro_sim::Status::success();
     }
-    macro_sim::Status before_bank_resolution(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status before_bank_resolution(const macro_sim::core::RootState &,
+                                             macro_sim::simulation::M4Runtime &,
+                                             macro_sim::simulation::M4TickScratch &,
+                                             M5Runtime &, M5TickScratch &, Tick,
+                                             macro_sim::PhiloxRng &) override {
         return macro_sim::Status::success();
     }
-    macro_sim::Status close_institutions(
-        const macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
-        macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
-        Tick, macro_sim::PhiloxRng &) override {
+    macro_sim::Status close_institutions(const macro_sim::core::RootState &,
+                                         macro_sim::simulation::M4Runtime &,
+                                         macro_sim::simulation::M4TickScratch &,
+                                         M5Runtime &, M5TickScratch &, Tick,
+                                         macro_sim::PhiloxRng &) override {
         return macro_sim::Status::success();
     }
-    macro_sim::Status validate(
-        const macro_sim::core::RootState &,
-        const macro_sim::simulation::M4Runtime &,
-        const macro_sim::simulation::M4TickScratch &, const M5Runtime &,
-        const M5TickScratch &, Tick) const override {
+    macro_sim::Status validate(const macro_sim::core::RootState &,
+                               const macro_sim::simulation::M4Runtime &,
+                               const macro_sim::simulation::M4TickScratch &,
+                               const M5Runtime &, const M5TickScratch &,
+                               Tick) const override {
         return macro_sim::Status::success();
     }
-    void commit(macro_sim::core::RootState &,
-                macro_sim::simulation::M4Runtime &,
-                macro_sim::simulation::M4TickScratch &, M5Runtime &,
-                M5TickScratch &, Tick,
-                const macro_sim::simulation::M5Metrics &) noexcept override {}
+    void commit(macro_sim::core::RootState &, macro_sim::simulation::M4Runtime &,
+                macro_sim::simulation::M4TickScratch &, M5Runtime &, M5TickScratch &,
+                Tick, const macro_sim::simulation::M5Metrics &) noexcept override {}
 };
 
 [[nodiscard]] M5SimulationSpec base_spec() {
@@ -180,8 +184,8 @@ void test_log_inflation_is_converted_at_the_wage_boundary() {
     spec.real_economy.rules.wage_downward_drift = 0.0;
     auto harness = build(spec);
     const auto warmup = macro_sim::simulation::advance_m5_ticks(
-        harness.root, harness.real_runtime, harness.real_scratch,
-        harness.runtime, harness.scratch, harness.tick, 1);
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1);
     assert(warmup.ok());
     harness.runtime.previous_price_index = 1.0;
     harness.runtime.last_metrics.economy.price_index = 0.25;
@@ -196,8 +200,8 @@ void test_log_inflation_is_converted_at_the_wage_boundary() {
         });
     WageExpectationCapture capture;
     const auto result = macro_sim::simulation::advance_m5_ticks_extended(
-        harness.root, harness.real_runtime, harness.real_scratch,
-        harness.runtime, harness.scratch, harness.tick, 1, capture);
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1, capture);
     assert(result.ok());
     assert(std::abs(capture.observed + 0.75) < 1.0e-12);
 }
@@ -243,8 +247,8 @@ void test_banking_capability_and_market_run_signal() {
     disabled_spec.rules.banking_enabled = false;
     auto disabled = build(disabled_spec);
     auto disabled_result = macro_sim::simulation::advance_m5_ticks(
-        disabled.root, disabled.real_runtime, disabled.real_scratch,
-        disabled.runtime, disabled.scratch, disabled.tick, 8);
+        disabled.root, disabled.real_runtime, disabled.real_scratch, disabled.runtime,
+        disabled.scratch, disabled.tick, 8);
     assert(disabled_result.ok());
     assert(disabled_result.get_if()->metrics.new_credit == 0.0);
     assert(disabled_result.get_if()->metrics.total_loan_principal == 0.0);
@@ -309,6 +313,50 @@ void test_credit_and_monetary_tick() {
     assert(result.ok());
     assert(std::abs(result.get_if()->metrics.policy_rate -
                     harness.runtime.initial_policy_rate) < 1.0e-12);
+}
+
+void test_firm_credit_reports_existing_stock_and_current_dscr_gate() {
+    auto spec = base_spec();
+    spec.rules.direct_monetary_transmission = true;
+    spec.real_economy.rules.initial_firm_money = 0.1;
+    spec.real_economy.rules.initial_expected_demand = 20.0;
+    spec.policy.firm_minimum_dscr = 1.75;
+    auto harness = build(spec);
+
+    const auto firm_id = macro_sim::FirmId(1);
+    const auto *firm = harness.root.firms.get(firm_id);
+    assert(firm != nullptr);
+    const auto node = harness.root.postings.settlement_node(firm->primary_account);
+    assert(node.ok());
+    BankId lender{};
+    harness.root.banks.for_each_alive([&](BankId id, const auto &bank) {
+        if (bank.settlement_node == *node.get_if()) {
+            lender = id;
+        }
+    });
+    assert(lender.valid());
+
+    constexpr double legacy_principal = 5.0;
+    macro_sim::core::SettlementTransaction origination(harness.root);
+    assert(origination
+               .originate_loan(lender, macro_sim::core::OwnerId::firm(firm_id),
+                               firm->primary_account,
+                               macro_sim::Money(legacy_principal),
+                               macro_sim::core::LoanTerms{macro_sim::Rate(0.001),
+                                                          Tick(0), Tick(365)})
+               .ok());
+    assert(origination.commit().ok());
+
+    const auto result = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1);
+    assert(result.ok());
+    const auto &metrics = result.get_if()->metrics;
+    assert(metrics.firm_credit_existing_principal >= legacy_principal);
+    assert(metrics.firm_credit_applications > 0.0);
+    assert(metrics.firm_credit_requested > 0.0);
+    assert(std::abs(metrics.firm_credit_min_dscr_applied - 1.75) < 1.0e-12);
+    assert(metrics.firm_credit_originated >= 0.0);
 }
 
 struct DirectTransmissionResponse final {
@@ -705,17 +753,15 @@ void test_household_interest_arrears_waterfall_and_writeoff() {
         macro_sim::core::LoanPurpose::general,
     });
     harness.root.loans.replace_records(loans);
-    harness.root.postings.get(household->primary_account)->balance =
-        macro_sim::Money(
-            harness.root.postings.get(household->primary_account)->balance.value() +
-            100.0);
+    harness.root.postings.get(household->primary_account)->balance = macro_sim::Money(
+        harness.root.postings.get(household->primary_account)->balance.value() + 100.0);
 
     auto accrued = macro_sim::simulation::advance_m5_ticks(
         harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
         harness.scratch, harness.tick, 1);
     if (!accrued.ok()) {
-        std::cerr << "household arrears tick failed: "
-                  << accrued.status().message() << "\n";
+        std::cerr << "household arrears tick failed: " << accrued.status().message()
+                  << "\n";
     }
     assert(accrued.ok());
     const auto &metrics = accrued.get_if()->metrics;
@@ -730,8 +776,7 @@ void test_household_interest_arrears_waterfall_and_writeoff() {
         harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
         harness.scratch, harness.tick, 1, options);
     assert(written_off.ok());
-    assert(written_off.get_if()->metrics.household_interest_arrears_extinguished >
-           0.0);
+    assert(written_off.get_if()->metrics.household_interest_arrears_extinguished > 0.0);
     assert(written_off.get_if()->metrics.household_interest_arrears_closing == 0.0);
     assert(std::abs(written_off.get_if()
                         ->metrics.household_interest_arrears_stock_flow_residual) <
@@ -789,6 +834,7 @@ int main() {
     test_size_based_bank_assignment();
     test_banking_capability_and_market_run_signal();
     test_credit_and_monetary_tick();
+    test_firm_credit_reports_existing_stock_and_current_dscr_gate();
     test_direct_monetary_transmission_changes_investment_and_household_service();
     test_interbank_clearing();
     test_realized_and_legacy_bank_pnl_paths();

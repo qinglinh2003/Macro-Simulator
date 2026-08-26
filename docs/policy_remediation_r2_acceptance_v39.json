@@ -1,0 +1,324 @@
+{
+  "base_revision": "6848cd67b5bb3ef9b58b7596e76d1cc572bcd905",
+  "checkpoint_schema_versions": {
+    "m5": 3,
+    "m6": 3,
+    "m8": 3
+  },
+  "contract_checks": {
+    "bond_coupon": {
+      "all_metrics_maintained": true,
+      "handler_id": "bond_coupon_cohort",
+      "metrics": [
+        "metric.source.m6.bond_issued_coupon_rate",
+        "metric.source.m6.bond_weighted_coupon_rate"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::run_bond_issuance",
+      "semantics": "new-contracts-only"
+    },
+    "bond_maturity": {
+      "all_metrics_maintained": true,
+      "handler_id": "bond_tenor_at_issuance",
+      "metrics": [
+        "metric.source.m6.bond_issued_maturity_days",
+        "metric.source.m6.bond_weighted_remaining_maturity_days"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::run_bond_issuance",
+      "semantics": "new-contracts-only"
+    },
+    "firm_credit_min_dscr": {
+      "all_metrics_maintained": true,
+      "handler_id": "underwriting_read_at_origination",
+      "metrics": [
+        "metric.source.m5.firm_credit_min_dscr_applied",
+        "metric.source.m5.firm_credit_applications",
+        "metric.source.m5.firm_dscr_credit_shortfall",
+        "metric.source.m5.firm_credit_originated"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::extend_firm_credit",
+      "semantics": "new-contracts-only"
+    },
+    "housing_in_wealth_tax": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.housing_wealth_tax_base_included",
+        "metric.source.m8.housing.housing_wealth_tax_paid"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::prepare_household_net_wealth",
+      "semantics": "immediate"
+    },
+    "land_fee_share": {
+      "all_metrics_maintained": true,
+      "handler_id": "land_fee_at_construction_completion",
+      "metrics": [
+        "metric.source.m8.housing.land_fee_share_applied",
+        "metric.source.m8.housing.land_fee_assessments",
+        "metric.source.m8.housing.land_fee_paid"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "new-contracts-only"
+    },
+    "land_fee_stock_elasticity": {
+      "all_metrics_maintained": true,
+      "handler_id": "land_fee_at_construction_completion",
+      "metrics": [
+        "metric.source.m8.housing.land_fee_stock_elasticity_applied",
+        "metric.source.m8.housing.land_fee_stock_pressure_applied",
+        "metric.source.m8.housing.land_fee_assessments"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_dsti_cap": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_dsti_cap_applied",
+        "metric.source.m8.housing.mortgage_cohort_weighted_dsti_cap",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_stress_rate_addon": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_stress_rate_addon_applied",
+        "metric.source.m8.housing.mortgage_cohort_weighted_stress_rate_addon",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_underwriting": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_underwriting_applications",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "immediate"
+    },
+    "omo": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.bond_duration_adjusted_omo_flow",
+        "metric.source.m5.omo_flow",
+        "metric.source.m5.total_reserves"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::run_omo",
+      "semantics": "immediate"
+    },
+    "regulatory_firm_capital_haircut": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.firm_capital_haircut_applied",
+        "metric.source.m6.firm_eligible_collateral_value"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::build_firm_statements",
+      "semantics": "immediate"
+    },
+    "regulatory_firm_inventory_haircut": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.firm_inventory_haircut_applied",
+        "metric.source.m6.firm_eligible_collateral_value"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::build_firm_statements",
+      "semantics": "immediate"
+    }
+  },
+  "contracts": {
+    "bond_coupon": {
+      "handler_id": "bond_coupon_cohort",
+      "metrics": [
+        "metric.source.m6.bond_issued_coupon_rate",
+        "metric.source.m6.bond_weighted_coupon_rate"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::run_bond_issuance",
+      "semantics": "new-contracts-only"
+    },
+    "bond_maturity": {
+      "handler_id": "bond_tenor_at_issuance",
+      "metrics": [
+        "metric.source.m6.bond_issued_maturity_days",
+        "metric.source.m6.bond_weighted_remaining_maturity_days"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::run_bond_issuance",
+      "semantics": "new-contracts-only"
+    },
+    "firm_credit_min_dscr": {
+      "handler_id": "underwriting_read_at_origination",
+      "metrics": [
+        "metric.source.m5.firm_credit_min_dscr_applied",
+        "metric.source.m5.firm_credit_applications",
+        "metric.source.m5.firm_dscr_credit_shortfall",
+        "metric.source.m5.firm_credit_originated"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::extend_firm_credit",
+      "semantics": "new-contracts-only"
+    },
+    "housing_in_wealth_tax": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.housing_wealth_tax_base_included",
+        "metric.source.m8.housing.housing_wealth_tax_paid"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::prepare_household_net_wealth",
+      "semantics": "immediate"
+    },
+    "land_fee_share": {
+      "handler_id": "land_fee_at_construction_completion",
+      "metrics": [
+        "metric.source.m8.housing.land_fee_share_applied",
+        "metric.source.m8.housing.land_fee_assessments",
+        "metric.source.m8.housing.land_fee_paid"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "new-contracts-only"
+    },
+    "land_fee_stock_elasticity": {
+      "handler_id": "land_fee_at_construction_completion",
+      "metrics": [
+        "metric.source.m8.housing.land_fee_stock_elasticity_applied",
+        "metric.source.m8.housing.land_fee_stock_pressure_applied",
+        "metric.source.m8.housing.land_fee_assessments"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_dsti_cap": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_dsti_cap_applied",
+        "metric.source.m8.housing.mortgage_cohort_weighted_dsti_cap",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_stress_rate_addon": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_stress_rate_addon_applied",
+        "metric.source.m8.housing.mortgage_cohort_weighted_stress_rate_addon",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "new-contracts-only"
+    },
+    "mortgage_underwriting": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_underwriting_applications",
+        "metric.source.m8.housing.mortgage_dsti_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::buy_listing",
+      "semantics": "immediate"
+    },
+    "omo": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.bond_duration_adjusted_omo_flow",
+        "metric.source.m5.omo_flow",
+        "metric.source.m5.total_reserves"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::run_omo",
+      "semantics": "immediate"
+    },
+    "regulatory_firm_capital_haircut": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.firm_capital_haircut_applied",
+        "metric.source.m6.firm_eligible_collateral_value"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::build_firm_statements",
+      "semantics": "immediate"
+    },
+    "regulatory_firm_inventory_haircut": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.firm_inventory_haircut_applied",
+        "metric.source.m6.firm_eligible_collateral_value"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::build_firm_statements",
+      "semantics": "immediate"
+    }
+  },
+  "errors": [],
+  "hashes": {
+    "r2_acceptance": "1ae7b90f8cd5b28f0ce7c7c8a2a1574a1a0bad5d1d806cb812114bee11d6a522"
+  },
+  "invalidated_audit_stages": [
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8"
+  ],
+  "invalidation": {
+    "current_contract_root": "1537900dd4a934db233f471f62fd4b81f2905a8f66d5b27f9468b7cefa121532",
+    "historical_evidence_invalidated": true,
+    "historical_p0_root": "6f71f6debc79e8d64862a2cf3c7c351a791fecee0cd50d64f69dfad6dbf0e5a6"
+  },
+  "native_behavior_test_markers": {
+    "native/tests/m5_monetary_tests.cpp": [
+      "test_firm_credit_reports_existing_stock_and_current_dscr_gate"
+    ],
+    "native/tests/m6_simulation_tests.cpp": [
+      "test_bond_cohorts_and_duration_adjusted_omo_are_observable",
+      "test_firm_collateral_haircuts_report_the_applied_borrowing_base"
+    ],
+    "native/tests/m8_housing_genesis_tests.cpp": [
+      "test_builders_create_permitted_real_stock"
+    ],
+    "native/tests/m8_housing_market_tests.cpp": [
+      "test_mortgage_origination_is_canonical_and_collateralized",
+      "test_housing_enters_the_integrated_net_wealth_tax_base_once"
+    ]
+  },
+  "phase": "R2",
+  "schema_version": "policy-remediation-r2-v1",
+  "source_sha256": {
+    "macro_sim/core/native_policy_routes.py": "e71e78480587924e61f6b58711caa9bdf4afaa89c62309efaf5410eefe230f0f",
+    "macro_sim/core/policy_registry.py": "467df9dc37b1b39905433a1f830ba397a3d85b469bc8681a1764d046cb8e57e6",
+    "macro_sim/diagnostics/policy_catalog.py": "5e5b40bb3688065450ff86289b798f2b68c47c15e2ab0113e661920b6b699e21",
+    "macro_sim/diagnostics/policy_observability.py": "04803faf3e475e35f93c21ef7cd84d90ba13f1969d96f1a54a03a2339e91e063",
+    "native/include/macro_sim/reporting/m10_metric_sources.inc": "283e89a7923b24466b61033dc4bb19bc8dba176f639b6504fa98d8b44db7ee08",
+    "native/include/macro_sim/simulation/m5.hpp": "e503474ab9acab9aa63709f69d546ac0934e395b350cef29063c3474bc320fe4",
+    "native/include/macro_sim/simulation/m5_checkpoint.hpp": "7217c9f79eefc7eeb811049a385f6e24ecf087243ae75a5cceb06b1fce12a8a7",
+    "native/include/macro_sim/simulation/m6.hpp": "756de17584f6b1ffd40151aaf4271f97c5214b13ec0a1f064d49c383a33b9166",
+    "native/include/macro_sim/simulation/m6_checkpoint.hpp": "8b1d0fd21224a24028f78e2512d0edd58fbe8e8b8925da0bcefe564d66daa902",
+    "native/include/macro_sim/simulation/m8.hpp": "837bde8ac78432d9a01f52d5b7ad93aab0dc92b0586dd0a0558577ee5711476c",
+    "native/include/macro_sim/simulation/m8_checkpoint.hpp": "37d7cdcb38fbfe6a17adef36b93f036d69fc64da447b30ef2cb68f5caa1699ad",
+    "native/src/simulation/m5.cpp": "2d4c6e13b58bd31a7ce448cfaeea54b789737e545fdc719d63c4e2872a396d01",
+    "native/src/simulation/m5_checkpoint.cpp": "9b92bb006ef42395f09dfb960b32263ba5f7d4d81ffec9b7dc3eb2ef9d0566d2",
+    "native/src/simulation/m6.cpp": "91e516b22651b4e6319c683be5038c4110d122348a79338845ac7b9bd36ea06f",
+    "native/src/simulation/m6_checkpoint.cpp": "0df6c7c691b3910b46d822b76a41dff0fd76b44defa92c893861466f642bee47",
+    "native/src/simulation/m8.cpp": "4336e7fd2c482d10f3b7b8b25de2e5f5dfd425e99bfd3023155a00d40bec8b2f",
+    "native/src/simulation/m8_checkpoint.cpp": "8a31f4c07ec217f0d0dc28faed25e71548c1163aa0c9959ff26e444d0c87b03c",
+    "native/tests/m5_monetary_tests.cpp": "4b99649a8dedd458471c01aef31ecfd38e3e3d8aea168cd5a93a14adf09a19a7",
+    "native/tests/m6_simulation_tests.cpp": "53570c5e01482fc4933e6563f421e05d0e97f5fbff225c7cb89c96306dbf75a5",
+    "native/tests/m8_housing_genesis_tests.cpp": "915c283b5a10666718b4e78f11d024cccb7410cc931b1cff5db81816d0974c1a",
+    "native/tests/m8_housing_market_tests.cpp": "90c79fd3ae5fd5ddc9f33da99f280f5a19f604d8d5c73a63ff884d962188f75d",
+    "schemas/m10/maintained_metrics.json": "1f14991c1ed983fedf556ab61bf3433797f6a9b7b142a5f4bf66d73ed76db011"
+  },
+  "status": "accepted",
+  "verification_commands": [
+    "uv run pytest -n 8 tests/test_policy_remediation_r2.py",
+    "uv run python tools/m10/metric_contract.py --check",
+    "uv run python tools/m11/generate_control_contract.py --check",
+    "cmake --build build/native/m11-release --parallel 8",
+    "ctest --test-dir build/native/m11-release --parallel 8 --output-on-failure"
+  ]
+}
