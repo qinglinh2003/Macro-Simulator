@@ -1,5 +1,27 @@
 # Policy Remediation Plan v39
 
+## R1 acceptance
+
+- Status: `accepted`
+- Base revision: `585b1e87043eb0564562e19b28cb520576e4a516` (accepted R0)
+- R1 acceptance hash: `0cc75df491985c44e99c7be6d0f7eafb9872898284f3a804e80e5e34976241ce`
+- Machine report: `docs/policy_remediation_r1_acceptance_v39.json`
+- Verification: 46/46 native tests and 3/3 R1 parity tests passed with eight workers.
+- Evidence consequence: frozen P0-P8 results remain historical but are invalidated for current product claims until regenerated.
+
+### Canonical R1 domains
+
+| Lever | Canonical domain | Controller scale / maximum step | Ruling |
+|---|---|---|---|
+| `margin_ltv` | `[0, 1]` | `0.025 / 0.10` | A 100% loan-to-value ceiling is risky but economically coherent, so the native validator now accepts the closed upper boundary. |
+| `margin_max` | `[0, 10]` | `0.25 / 1.0` | Exposure below net worth is a legal macroprudential stance; the native lower bound is therefore zero rather than one. |
+| `import_quota` | `null or [0, 1]` | `0.05 / 0.20` | The value is a share of normal import capacity. Values above one previously expanded capacity and contradicted quota semantics. |
+| `immigration_cap` | `null or [0, 1]` | `0.025 / 0.10` | The value is a hosted migrant-stock ceiling as a share of host population; `null` remains the explicit open-border state. |
+
+Registry, controller metadata, M0 inventory, M1 generated contracts, M11 player-facing contracts, native validators, and checkpoint round trips now agree on these domains. Invalid M11 actions are rejected by the generated contract before policy dispatch with `ErrorCode::out_of_range` and the canonical numeric-domain message.
+
+R1 changes validation and reachability only. It does not claim that the four policies have accepted causal magnitude or gameplay value; `margin_max` still proceeds to R4 opportunity testing, while all affected empirical claims must be rebuilt under the invalidation rule.
+
 ## R0 acceptance
 
 - Status: `accepted`

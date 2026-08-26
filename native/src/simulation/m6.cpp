@@ -3414,8 +3414,9 @@ Status validate_m6_policy(const M6PolicyState &policy) noexcept {
         policy.bond_maturity_days == 0 || policy.household_bond_target < 0.0 ||
         policy.household_bond_target > 1.0 || policy.bank_bond_appetite < 0.0 ||
         policy.bank_bond_appetite > 1.0 || policy.bank_bond_duration_limit < 0.0 ||
-        policy.margin_ltv < 0.0 || policy.margin_ltv >= 1.0 ||
-        policy.margin_max < 1.0 || policy.bank_minimum_capital < 0.0 ||
+        policy.margin_ltv < 0.0 || policy.margin_ltv > 1.0 ||
+        policy.margin_max < 0.0 || policy.margin_max > 10.0 ||
+        policy.bank_minimum_capital < 0.0 ||
         policy.bankrupt_persistence == 0U || policy.bankrupt_persistence > 3650U ||
         policy.regulatory_capital_haircut < 0.0 ||
         policy.regulatory_capital_haircut > 1.0 ||

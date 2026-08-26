@@ -1,0 +1,193 @@
+{
+  "base_revision": "585b1e87043eb0564562e19b28cb520576e4a516",
+  "contract_checks": {
+    "controller": {
+      "immigration_cap": {
+        "control_scale": 0.025,
+        "max_step": 0.1
+      },
+      "import_quota": {
+        "control_scale": 0.05,
+        "max_step": 0.2
+      },
+      "margin_ltv": {
+        "control_scale": 0.025,
+        "max_step": 0.1
+      },
+      "margin_max": {
+        "control_scale": 0.25,
+        "max_step": 1.0
+      }
+    },
+    "m0_inventory": {
+      "immigration_cap": {
+        "control_scale": 0.025,
+        "max_step": 0.1,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "import_quota": {
+        "control_scale": 0.05,
+        "max_step": 0.2,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "margin_ltv": {
+        "control_scale": 0.025,
+        "max_step": 0.1,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": false
+      },
+      "margin_max": {
+        "control_scale": 0.25,
+        "max_step": 1.0,
+        "maximum": 10.0,
+        "minimum": 0.0,
+        "nullable": false
+      }
+    },
+    "m11_contract": {
+      "immigration_cap": {
+        "control_scale": 0.025,
+        "max_step": 0.1,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "import_quota": {
+        "control_scale": 0.05,
+        "max_step": 0.2,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "margin_ltv": {
+        "control_scale": 0.025,
+        "max_step": 0.1,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": false
+      },
+      "margin_max": {
+        "control_scale": 0.25,
+        "max_step": 1.0,
+        "maximum": 10.0,
+        "minimum": 0.0,
+        "nullable": false
+      }
+    },
+    "m1_contract": {
+      "immigration_cap": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "import_quota": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "margin_ltv": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": false
+      },
+      "margin_max": {
+        "maximum": 10.0,
+        "minimum": 0.0,
+        "nullable": false
+      }
+    },
+    "registry": {
+      "immigration_cap": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "import_quota": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": true
+      },
+      "margin_ltv": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "nullable": false
+      },
+      "margin_max": {
+        "maximum": 10.0,
+        "minimum": 0.0,
+        "nullable": false
+      }
+    }
+  },
+  "domains": {
+    "immigration_cap": {
+      "control_scale": 0.025,
+      "max_step": 0.1,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "nullable": true
+    },
+    "import_quota": {
+      "control_scale": 0.05,
+      "max_step": 0.2,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "nullable": true
+    },
+    "margin_ltv": {
+      "control_scale": 0.025,
+      "max_step": 0.1,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "nullable": false
+    },
+    "margin_max": {
+      "control_scale": 0.25,
+      "max_step": 1.0,
+      "maximum": 10.0,
+      "minimum": 0.0,
+      "nullable": false
+    }
+  },
+  "errors": [],
+  "hashes": {
+    "r1_acceptance": "0cc75df491985c44e99c7be6d0f7eafb9872898284f3a804e80e5e34976241ce"
+  },
+  "invalidated_audit_stages": [
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8"
+  ],
+  "phase": "R1",
+  "schema_version": "policy-remediation-r1-v1",
+  "source_sha256": {
+    "macro_sim/config/model.py": "6265b48e352945e289564ffe6bf36fdd4d4824736c6b9cdd2615547cadca1304",
+    "macro_sim/core/policy_control_specs.py": "77619cef130f932efd4fb5c1d183da89af85e39f43e34104b074afd4bad81665",
+    "macro_sim/core/policy_registry.py": "1c4023f9325e753c7e1bb50fcd20a1d1e40d75b70d047ba85251dd5008884eb8",
+    "macro_sim/world/world.py": "a820a20728ec20bc73170764a7325e771f42f7553b14c29c67e787dc3ce9f3c5",
+    "native/src/simulation/m6.cpp": "a272b12d90a88356027eb3a0003e41f2b644acee0115f834b1149c2cf74c5b33",
+    "native/src/simulation/m9.cpp": "581a95b03c7c55de5e1c54d4634428990d8a245a3009008f8def5f5d53b36736",
+    "native/tests/m11_policy_contract_tests.cpp": "c670018230a183f901a007d0f8f28122f37713ac5aa06f824b288d0eb1cfc604",
+    "native/tests/m6_simulation_tests.cpp": "5727e5462ba884360ab3029fd2b1bb9136d0f09268f8ac164242abe37d0e0abc",
+    "native/tests/m9_world_tests.cpp": "260cb1fb46152b66d050ad307b575aaf578ba0a1c107b6666b672bfa5fcd08fc",
+    "schemas/m0/inventory/policy.json": "d6d5b3287ace3849e3cee025ffe60a4ef9eac69dfcb9622bbfd67dea804fd1e6",
+    "schemas/m1/generated/contracts.json": "bdbf0d9f5503d2a5d6e092568a3f599e190304468b55bd144e494808f6076cdb",
+    "schemas/m11/control_contract.json": "dd56be987799d00c7aff45a7e2f972d7d64f70ef7b852e58c5d581bd1088a53e"
+  },
+  "status": "accepted",
+  "verification_commands": [
+    "uv run pytest -n 8 tests/test_policy_remediation_r1.py",
+    "ctest --test-dir build/native/r1-release -j 8 --output-on-failure"
+  ]
+}

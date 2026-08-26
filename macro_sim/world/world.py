@@ -161,13 +161,15 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         _bounded_number(f"capital_control[{index}]", item, lower=0.0, upper=1.0)
 
     # immigration_cap: None => open borders everywhere; a scalar broadcasts; a vector caps each HOST
-    # separately (a host admits <= cap x its population). A very large per-host value = effectively open.
+    # separately (a host admits <= cap x its population). The cap is a population share.
     immigration_cap = values["immigration_cap"]
     if immigration_cap is not None:
         for index, item in enumerate(_per_economy_values("immigration_cap", immigration_cap, n)):
             if item is None:
                 continue      # B5a: per-economy None = that host is open (legal mix)
-            _bounded_number(f"immigration_cap[{index}]", item, lower=0.0)
+            _bounded_number(
+                f"immigration_cap[{index}]", item, lower=0.0, upper=1.0
+            )
 
     emigration_cap = values["emigration_cap"]
     if emigration_cap is not None:
@@ -187,7 +189,9 @@ def _validate_world_domains(n: int, values: dict[str, object]) -> None:
         ):
             if item is None:
                 continue      # B5a: per-economy None = that importer is open (legal mix)
-            _bounded_number(f"import_quota[{index}]", item, lower=0.0)
+            _bounded_number(
+                f"import_quota[{index}]", item, lower=0.0, upper=1.0
+            )
 
     _validate_sanctions(values["sanctions"], n)
     # This existing validator also covers scalar/vector shape, finiteness, and

@@ -61,7 +61,7 @@ void test_catalog_is_complete_and_sorted() {
     const auto levers = m11_policy_levers();
     assert(levers.size() == 102U);
     assert(kM11PolicyContractSha256 ==
-           "b871cbf679516a6012658e715ab0b3e099d31076e387fa70bd69b8edaaae23a4");
+           "5298b7d1d20d7a441dd2a68530daf155bc042e31726ae67e707e4ff14fbb4084");
     std::set<std::string_view> seats;
     std::set<std::string_view> groups;
     for (std::size_t index = 0; index < levers.size(); ++index) {
@@ -172,6 +172,30 @@ void test_type_range_and_duplicate_rejection() {
     };
     assert(project_m11_policy_actions(world, out_of_range).status().code() ==
            ErrorCode::out_of_range);
+
+    const std::array<NativePolicyAction, 4U> accepted_boundaries{{
+        {EconomyId(0U), "margin_ltv", 1.0},
+        {EconomyId(0U), "margin_max", 0.0},
+        {EconomyId(0U), "import_quota", 1.0},
+        {EconomyId(0U), "immigration_cap", 1.0},
+    }};
+    for (const auto &action : accepted_boundaries) {
+        assert(project_m11_policy_actions(world, std::span(&action, 1U)).ok());
+    }
+
+    const std::array<NativePolicyAction, 4U> rejected_boundaries{{
+        {EconomyId(0U), "margin_ltv", 1.0 + 1.0e-9},
+        {EconomyId(0U), "margin_max", 10.0 + 1.0e-9},
+        {EconomyId(0U), "import_quota", 1.0 + 1.0e-9},
+        {EconomyId(0U), "immigration_cap", 1.0 + 1.0e-9},
+    }};
+    for (const auto &action : rejected_boundaries) {
+        const auto result =
+            project_m11_policy_actions(world, std::span(&action, 1U));
+        assert(result.status().code() == ErrorCode::out_of_range);
+        assert(result.status().message() ==
+               "M11 numeric policy value is outside its contract");
+    }
     const std::vector<NativePolicyAction> duplicate{
         {EconomyId(0U), "tariff", 0.1},
         {EconomyId(0U), "tariff", 0.2},

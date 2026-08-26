@@ -10,7 +10,7 @@
 namespace macro_sim::generated {
 
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
-inline constexpr std::string_view kM0ContractSha256 = "7198d8f17c5199ea097b94897d9c168e4949f1f95f2b858c2e66695f50e92ea5";
+inline constexpr std::string_view kM0ContractSha256 = "4aa07798e227e7781b02eb56d5fb4824f343c79080403d50814ec3d5a5151dfd";
 
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };
@@ -1360,8 +1360,8 @@ inline constexpr std::array<ContractSpec, 1538> kContractSpecs{{
     {"policy.housing_permits", "policy", ScalarKind::integer, false, true, true, 0, 100000, ""},
     {"policy.housing_property_tax", "policy", ScalarKind::number, false, true, true, 0, 0.10000000000000001, ""},
     {"policy.housing_transfer_tax", "policy", ScalarKind::number, false, true, true, 0, 0.29999999999999999, ""},
-    {"policy.immigration_cap", "external_policy", ScalarKind::number, true, true, true, 0, 10, ""},
-    {"policy.import_quota", "external_policy", ScalarKind::number, true, true, true, 0, 100, ""},
+    {"policy.immigration_cap", "external_policy", ScalarKind::number, true, true, true, 0, 1, ""},
+    {"policy.import_quota", "external_policy", ScalarKind::number, true, true, true, 0, 1, ""},
     {"policy.income_allowance", "policy", ScalarKind::number, false, true, true, 0, 5, ""},
     {"policy.infl_ema_lambda", "policy", ScalarKind::number, false, true, true, 0.0001, 1, ""},
     {"policy.inflation_target", "policy", ScalarKind::number, false, true, true, -0.02, 0.02, ""},

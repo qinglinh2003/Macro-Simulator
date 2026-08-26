@@ -178,6 +178,15 @@ class HouseholdCashDrain final : public macro_sim::simulation::M6TickExtension {
 void test_validation_and_prices() {
     auto spec = base_spec();
     spec.policy.margin_ltv = 1.0;
+    assert(macro_sim::simulation::validate_m6_spec(spec).ok());
+    spec.policy.margin_ltv = 1.0 + 1.0e-9;
+    assert(!macro_sim::simulation::validate_m6_spec(spec).ok());
+    spec = base_spec();
+    spec.policy.margin_max = 0.0;
+    assert(macro_sim::simulation::validate_m6_spec(spec).ok());
+    spec.policy.margin_max = 10.0;
+    assert(macro_sim::simulation::validate_m6_spec(spec).ok());
+    spec.policy.margin_max = 10.0 + 1.0e-9;
     assert(!macro_sim::simulation::validate_m6_spec(spec).ok());
     spec = base_spec();
     spec.rules.shares_per_firm = 0.0;
@@ -968,6 +977,22 @@ void test_checkpoint_and_split_determinism() {
     assert(!macro_sim::simulation::load_m6_checkpoint(corrupt).ok());
 }
 
+void test_margin_policy_boundaries_round_trip_through_checkpoint() {
+    auto spec = base_spec();
+    spec.policy.margin_ltv = 1.0;
+    spec.policy.margin_max = 10.0;
+    auto harness = build(spec);
+    auto checkpoint = macro_sim::simulation::save_m6_checkpoint(
+        harness.root, harness.real_runtime, harness.monetary_runtime, harness.runtime,
+        harness.tick);
+    assert(checkpoint.ok());
+    auto restored =
+        macro_sim::simulation::load_m6_checkpoint(*checkpoint.get_if());
+    assert(restored.ok());
+    assert(restored.get_if()->runtime.policy.margin_ltv == 1.0);
+    assert(restored.get_if()->runtime.policy.margin_max == 10.0);
+}
+
 } // namespace
 
 int main() {
@@ -992,6 +1017,7 @@ int main() {
     test_capital_firm_entry_responds_to_sector_capacity_pressure();
     test_subscale_exit_consolidates_without_extinguishing_a_sector();
     test_checkpoint_and_split_determinism();
+    test_margin_policy_boundaries_round_trip_through_checkpoint();
     std::cout << "m6 simulation tests passed\n";
     return 0;
 }

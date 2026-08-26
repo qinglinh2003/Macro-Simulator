@@ -498,7 +498,7 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
     ),
     "import_quota": _S(
         "external_affairs", "trade_and_migration", 14, 91,
-        control_scale=1.0, max_step=10.0,
+        control_scale=0.05, max_step=0.20,
     ),
     "export_subsidy": _S(
         "external_affairs", "trade_and_migration", 14, 91,
@@ -524,7 +524,7 @@ CONTROL_SPECS: dict[str, LeverControlSpec] = {
     ),
     "immigration_cap": _S(
         "external_affairs", "trade_and_migration", 30, 91, emergency=True,
-        emergency_implementation_lag=1, control_scale=0.05, max_step=0.25,
+        emergency_implementation_lag=1, control_scale=0.025, max_step=0.10,
         admin_weight=2.0, cost_class="major",
     ),
     "emigration_cap": _S(

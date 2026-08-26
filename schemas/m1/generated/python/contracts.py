@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 CANONICAL_ENCODING_VERSION = 1
-M0_CONTRACT_SHA256 = '7198d8f17c5199ea097b94897d9c168e4949f1f95f2b858c2e66695f50e92ea5'
+M0_CONTRACT_SHA256 = '4aa07798e227e7781b02eb56d5fb4824f343c79080403d50814ec3d5a5151dfd'
 CONTRACTS = ({'choices': [],
   'family': 'checkpoint',
   'id': 'checkpoint.field.canonical_encoding_version',
@@ -14454,7 +14454,7 @@ CONTRACTS = ({'choices': [],
   'id': 'policy.immigration_cap',
   'index': 1313,
   'kind': 'policy',
-  'maximum': 10.0,
+  'maximum': 1.0,
   'minimum': 0.0,
   'nullable': True,
   'owner_milestone': 'm9',
@@ -14465,7 +14465,7 @@ CONTRACTS = ({'choices': [],
   'id': 'policy.import_quota',
   'index': 1314,
   'kind': 'policy',
-  'maximum': 100.0,
+  'maximum': 1.0,
   'minimum': 0.0,
   'nullable': True,
   'owner_milestone': 'm9',

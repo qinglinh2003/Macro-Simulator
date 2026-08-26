@@ -2124,8 +2124,9 @@ class Config:
             "valuation discount floor must be positive per tick"
         assert self.valuation_risk_premium >= 0.0, \
             "valuation risk premium must be non-negative per tick"
-        assert 0.0 <= self.margin_ltv < 1.0, "margin LTV in [0,1)"
-        assert self.margin_max >= 1.0, "margin_max (leverage ceiling) must be >= 1"
+        assert 0.0 <= self.margin_ltv <= 1.0, "margin LTV must be in [0,1]"
+        assert 0.0 <= self.margin_max <= 10.0, \
+            "margin_max (equity exposure ceiling) must be in [0,10]"
         # v8.1 guards
         assert self.gibrat_sigma >= 0.0, "gibrat_sigma must be >= 0"
         assert self.pref_attach_beta >= 0.0, "preferential-attachment beta must be >= 0"

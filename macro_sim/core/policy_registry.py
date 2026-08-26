@@ -415,7 +415,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
     #    mutations take effect ATOMICALLY at the next coupling barrier --
     _L("tariff", Range(0.0, 5.0), scope="external",
        read_point="world/trade.py::_tariff_rate (importer's own rate)"),
-    _L("import_quota", NullableRange(0.0, 100.0), scope="external",
+    _L("import_quota", NullableRange(0.0, 1.0), scope="external",
        read_point="world/trade.py::import volume cap (None = open)"),
     _L("export_subsidy", Range(-0.99, 0.99), scope="external",
        read_point="world/trade.py::exporter subsidy (<0 = export tax)"),
@@ -428,7 +428,7 @@ REGISTRY: dict[str, Lever] = {lv.name: lv for lv in [
        state_notes="A6: unilateral ownership, symmetric effect; an imposer can lift "
                    "only its own stance; scope TODAY = trade partner choice + "
                    "migration destinations (capital flows do NOT consult it)"),
-    _L("immigration_cap", NullableRange(0.0, 10.0), scope="external",
+    _L("immigration_cap", NullableRange(0.0, 1.0), scope="external",
        read_point="world/migration.py::per-host admission ceiling (None = open)"),
     _L("emigration_cap", NullableRange(0.0, 1.0), scope="external",   # World bound: share of pop
        read_point="world/migration.py::origin exit cap (None = open)"),

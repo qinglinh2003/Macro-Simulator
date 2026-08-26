@@ -631,6 +631,33 @@ void test_checkpoint_round_trip_and_continuation_are_exact() {
     assert(!M9World::restore(corrupted).ok());
 }
 
+void test_optional_share_policy_boundaries_validate_and_checkpoint() {
+    ExternalPolicyState boundary;
+    boundary.import_quota = 1.0;
+    boundary.immigration_cap = 1.0;
+    assert(validate_external_policy(boundary, 2U, EconomyId(0U)).ok());
+
+    auto invalid_import = boundary;
+    invalid_import.import_quota = 1.0 + 1.0e-9;
+    assert(!validate_external_policy(invalid_import, 2U, EconomyId(0U)).ok());
+    auto invalid_immigration = boundary;
+    invalid_immigration.immigration_cap = 1.0 + 1.0e-9;
+    assert(!validate_external_policy(invalid_immigration, 2U, EconomyId(0U)).ok());
+
+    auto world = build_world(2);
+    auto policies = world.external_policies();
+    policies[0].import_quota = 1.0;
+    policies[0].immigration_cap = 0.0;
+    policies[1].import_quota = 0.0;
+    policies[1].immigration_cap = 1.0;
+    assert(world.update_external_policies(policies).ok());
+    auto checkpoint = world.checkpoint();
+    assert(checkpoint.ok());
+    auto restored = M9World::restore(*checkpoint.get_if());
+    assert(restored.ok());
+    assert(restored.get_if()->external_policies() == policies);
+}
+
 void test_worker_count_does_not_change_semantics() {
     WorldRules rules;
     rules.trade = true;
@@ -673,6 +700,7 @@ int main() {
     test_capital_and_migration_paths_are_live();
     test_dealer_loss_mutualization_posts_an_explicit_fiscal_levy();
     test_checkpoint_round_trip_and_continuation_are_exact();
+    test_optional_share_policy_boundaries_validate_and_checkpoint();
     test_worker_count_does_not_change_semantics();
     std::cout << "M9 World tests passed\n";
     return 0;
