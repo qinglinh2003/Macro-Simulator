@@ -359,6 +359,40 @@ void test_firm_credit_reports_existing_stock_and_current_dscr_gate() {
     assert(metrics.firm_credit_originated >= 0.0);
 }
 
+void test_bank_capital_constraint_has_dose_and_withdrawal_contract() {
+    const auto run_with_constraint = [](bool enabled) {
+        auto spec = base_spec();
+        spec.rules.opening_capital_per_bank = 0.01;
+        spec.rules.bank_leverage_mean = 1.0;
+        spec.rules.household_credit = false;
+        spec.rules.direct_monetary_transmission = true;
+        spec.real_economy.rules.initial_firm_money = 0.0;
+        spec.real_economy.rules.initial_consumption_inventory = 0.0;
+        spec.real_economy.rules.initial_capital_inventory = 0.0;
+        spec.real_economy.rules.initial_expected_demand = 50.0;
+        spec.policy.bank_capital_constraint = enabled;
+        spec.policy.bank_leverage_cap = 1.0;
+        spec.policy.firm_leverage_limit = 100.0;
+        spec.policy.firm_minimum_dscr = 0.0;
+        auto harness = build(spec);
+        const auto result = macro_sim::simulation::advance_m5_ticks(
+            harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+            harness.scratch, harness.tick, 1);
+        assert(result.ok());
+        return result.get_if()->metrics;
+    };
+
+    const auto unconstrained = run_with_constraint(false);
+    const auto constrained = run_with_constraint(true);
+    const auto withdrawn = run_with_constraint(false);
+    assert(unconstrained.bank_capital_constraint_applied == 0.0);
+    assert(constrained.bank_capital_constraint_applied == 1.0);
+    assert(constrained.bank_gross_capital_headroom >= 0.0);
+    assert(constrained.bank_gross_capital_credit_shortfall > 0.0);
+    assert(unconstrained.new_credit > constrained.new_credit);
+    assert(std::abs(withdrawn.new_credit - unconstrained.new_credit) < 1.0e-12);
+}
+
 struct DirectTransmissionResponse final {
     double investment_target{0.0};
     double investment_user_cost_multiplier_mean{1.0};
@@ -835,6 +869,7 @@ int main() {
     test_banking_capability_and_market_run_signal();
     test_credit_and_monetary_tick();
     test_firm_credit_reports_existing_stock_and_current_dscr_gate();
+    test_bank_capital_constraint_has_dose_and_withdrawal_contract();
     test_direct_monetary_transmission_changes_investment_and_household_service();
     test_interbank_clearing();
     test_realized_and_legacy_bank_pnl_paths();

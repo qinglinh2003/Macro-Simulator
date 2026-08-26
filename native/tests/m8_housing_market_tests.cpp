@@ -207,6 +207,42 @@ void test_mortgage_origination_is_canonical_and_collateralized() {
                     0.001) < 1.0e-12);
 }
 
+void test_mortgage_capital_rules_have_dose_and_withdrawal_contract() {
+    const auto run_with_capital_rules = [](double risk_weight,
+                                           double minimum_capital_ratio) {
+        auto spec = market_spec(true, false);
+        spec.domestic_economy.financial_economy.monetary_economy.rules
+            .opening_capital_per_bank = 10.0;
+        spec.housing_policy.mortgage_underwriting = true;
+        spec.housing_policy.mortgage_dsti_cap = 2.0;
+        spec.housing_policy.mortgage_risk_weight = risk_weight;
+        spec.housing_policy.mortgage_minimum_capital_ratio = minimum_capital_ratio;
+        auto harness = build(spec);
+        const auto result = advance(harness, 1);
+        assert(result.ok());
+        return result.get_if()->metrics.housing;
+    };
+
+    const auto loose = run_with_capital_rules(0.10, 0.01);
+    const auto binding = run_with_capital_rules(2.0, 1.0);
+    const auto withdrawn = run_with_capital_rules(0.10, 0.01);
+    assert(loose.mortgage_underwriting_applications > 0.0);
+    assert(binding.mortgage_underwriting_applications > 0.0);
+    assert(std::abs(loose.mortgage_risk_weight_applied - 0.10) < 1.0e-12);
+    assert(std::abs(loose.mortgage_minimum_capital_ratio_applied - 0.01) <
+           1.0e-12);
+    assert(std::abs(binding.mortgage_risk_weight_applied - 2.0) < 1.0e-12);
+    assert(std::abs(binding.mortgage_minimum_capital_ratio_applied - 1.0) <
+           1.0e-12);
+    assert(loose.mortgage_rwa_principal_capacity >
+           binding.mortgage_rwa_principal_capacity);
+    assert(binding.mortgage_rwa_rejections > 0.0);
+    assert(loose.mortgage_originations > binding.mortgage_originations);
+    assert(std::abs(withdrawn.mortgage_rwa_principal_capacity -
+                    loose.mortgage_rwa_principal_capacity) < 1.0e-12);
+    assert(withdrawn.mortgage_originations == loose.mortgage_originations);
+}
+
 void test_mortgage_follows_heir_when_borrower_household_retires() {
     auto spec = market_spec(true, false);
     spec.domestic_economy.population.target_household_size = 1.0;
@@ -615,6 +651,35 @@ void test_price_shock_forecloses_into_bank_title() {
     assert(harness.monetary_runtime.last_metrics.realized_credit_losses > loss_before);
 }
 
+void test_mortgage_arrears_floor_has_dose_and_withdrawal_contract() {
+    const auto run_with_floor = [](double floor) {
+        auto harness = build(market_spec(true, false));
+        auto result = advance(harness, 1);
+        assert(result.ok());
+        assert(!harness.runtime.mortgages.empty());
+        harness.runtime.housing_rules.market_interval_days = 30;
+        harness.runtime.housing_policy.mortgage_arrears_floor = floor;
+        harness.runtime.housing_input.house_price_reference_multiplier = 0.1;
+        result = advance(harness, 1);
+        assert(result.ok());
+        return result.get_if()->metrics.housing;
+    };
+
+    const auto protected_households = run_with_floor(0.0);
+    const auto binding = run_with_floor(100.0);
+    const auto withdrawn = run_with_floor(0.0);
+    assert(protected_households.mortgage_arrears_floor_applied == 0.0);
+    assert(binding.mortgage_arrears_floor_applied == 100.0);
+    assert(protected_households.mortgage_foreclosure_candidates > 0.0);
+    assert(binding.mortgage_foreclosure_candidates > 0.0);
+    assert(protected_households.mortgage_foreclosures_prevented_by_liquidity >
+           binding.mortgage_foreclosures_prevented_by_liquidity);
+    assert(binding.foreclosures > protected_households.foreclosures);
+    assert(withdrawn.mortgage_foreclosures_prevented_by_liquidity ==
+           protected_households.mortgage_foreclosures_prevented_by_liquidity);
+    assert(withdrawn.foreclosures == protected_households.foreclosures);
+}
+
 void test_homeless_owner_does_not_buy_own_listing() {
     auto spec = market_spec(false, false);
     spec.housing_rules.ask_floor_annual_wage_share = 0.0;
@@ -780,6 +845,7 @@ void test_failed_market_tick_is_atomic() {
 int main() {
     test_cash_resale_moves_money_title_and_occupancy();
     test_mortgage_origination_is_canonical_and_collateralized();
+    test_mortgage_capital_rules_have_dose_and_withdrawal_contract();
     test_mortgage_follows_heir_when_borrower_household_retires();
     test_mortgaged_resale_discharge_precedes_new_collateral();
     test_rent_moves_cash_without_minting_money();
@@ -790,6 +856,7 @@ int main() {
     test_forced_sale_does_not_rebase_house_price_index();
     test_tenant_can_buy_and_end_previous_tenancy();
     test_price_shock_forecloses_into_bank_title();
+    test_mortgage_arrears_floor_has_dose_and_withdrawal_contract();
     test_homeless_owner_does_not_buy_own_listing();
     test_broader_housing_search_changes_the_observed_opportunity_set();
     test_housing_wealth_effect_adds_owner_consumption_budget();

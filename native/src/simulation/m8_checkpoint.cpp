@@ -216,10 +216,17 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(mortgage_dsti_rejections)                                                        \
     X(mortgage_dsti_cap_applied)                                                       \
     X(mortgage_stress_rate_addon_applied)                                              \
+    X(mortgage_risk_weight_applied)                                                    \
+    X(mortgage_minimum_capital_ratio_applied)                                          \
+    X(mortgage_rwa_principal_capacity)                                                 \
+    X(mortgage_rwa_rejections)                                                         \
     X(mortgage_underwritten_principal_share)                                           \
     X(mortgage_cohort_weighted_dsti_cap)                                               \
     X(mortgage_cohort_weighted_stress_rate_addon)                                      \
     X(foreclosures)                                                                    \
+    X(mortgage_foreclosure_candidates)                                                 \
+    X(mortgage_foreclosures_prevented_by_liquidity)                                    \
+    X(mortgage_arrears_floor_applied)                                                  \
     X(rent_paid)                                                                       \
     X(rent_unpaid)                                                                     \
     X(evictions)                                                                       \

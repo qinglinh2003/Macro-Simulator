@@ -137,6 +137,9 @@ struct M5Metrics final {
     double firm_credit_existing_principal{0.0};
     double firm_credit_min_dscr_applied{0.0};
     double firm_credit_originated{0.0};
+    double bank_capital_constraint_applied{0.0};
+    double bank_gross_capital_headroom{0.0};
+    double bank_gross_capital_credit_shortfall{0.0};
     double principal_repaid{0.0};
     double loan_interest_paid{0.0};
     double household_interest_paid{0.0};
@@ -255,6 +258,12 @@ quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,
                 AccountId borrower_account, Money requested, Money borrower_limit,
                 double credit_supply_multiplier = 1.0);
+[[nodiscard]] double
+m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
+                               double mortgage_risk_weight,
+                               double minimum_capital_ratio,
+                               double new_loan_risk_weight,
+                               bool unified_bank_rwa) noexcept;
 [[nodiscard]] Result<LoanId>
 stage_m5_credit(const core::RootState &state, M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,

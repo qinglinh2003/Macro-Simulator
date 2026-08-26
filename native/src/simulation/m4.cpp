@@ -166,7 +166,11 @@ technology_for(core::FirmTechnology technology) noexcept {
                                              const M4TickScratch &scratch) noexcept {
     const double genesis_reference = runtime.rules.initial_price *
                                      static_cast<double>(scratch.household_ids_.size());
-    if (runtime.previous_nominal_output <= algorithms::kEconomicEpsilon) {
+    const double observed_output =
+        runtime.rules.fiscal_uses_national_accounts_gdp
+            ? runtime.previous_national_accounts_nominal_gdp
+            : runtime.previous_nominal_output;
+    if (observed_output <= algorithms::kEconomicEpsilon) {
         return genesis_reference;
     }
     // Fiscal demand is specified against potential output, not the already
@@ -180,7 +184,7 @@ technology_for(core::FirmTechnology technology) noexcept {
     const double labor_elasticity =
         std::clamp(1.0 - runtime.rules.capital_share, 0.10, 1.0);
     const double potential =
-        runtime.previous_nominal_output / std::pow(employment_rate, labor_elasticity);
+        observed_output / std::pow(employment_rate, labor_elasticity);
     return std::max(genesis_reference, potential);
 }
 
@@ -571,6 +575,10 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     scratch.supplemental_nontax_receipts_ = 0.0;
     scratch.supplemental_government_consumption_ = 0.0;
     scratch.supplemental_transfer_payments_ = 0.0;
+    scratch.fiscal_output_reference_applied_ = 0.0;
+    scratch.fiscal_unemployment_multiplier_applied_ = 1.0;
+    scratch.fiscal_deficit_target_applied_ = 0.0;
+    scratch.government_procurement_budget_ = 0.0;
     std::fill(scratch.household_need_units_.begin(),
               scratch.household_need_units_.end(), 1.0);
     std::fill(scratch.household_goods_outlay_remaining_.begin(),
@@ -1348,6 +1356,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
                   return scratch.firm_ids_[left] < scratch.firm_ids_[right];
               });
     const double output_reference = fiscal_output_reference(runtime, scratch);
+    scratch.fiscal_output_reference_applied_ = output_reference;
     const double committed_outlays =
         runtime.rules.government_investment_share * output_reference +
         runtime.last_metrics.transfer_payments;
@@ -1355,10 +1364,13 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     if (runtime.rules.government_deficit_target > 0.0) {
         double target = runtime.rules.government_deficit_target;
         if (runtime.rules.deficit_unemployment_reference > 0.0) {
-            target *= std::min(runtime.rules.deficit_unemployment_cap,
-                               runtime.last_metrics.unemployment_rate /
-                                   runtime.rules.deficit_unemployment_reference);
+            scratch.fiscal_unemployment_multiplier_applied_ =
+                std::min(runtime.rules.deficit_unemployment_cap,
+                         runtime.last_metrics.unemployment_rate /
+                             runtime.rules.deficit_unemployment_reference);
+            target *= scratch.fiscal_unemployment_multiplier_applied_;
         }
+        scratch.fiscal_deficit_target_applied_ = target;
         // Deficit targeting and quantity targeting are separate fiscal
         // regimes. In deficit mode, discretionary procurement is the residual
         // that makes total spending approach tax receipts plus the target
@@ -1368,6 +1380,7 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
     } else {
         budget = runtime.rules.government_consumption_share * output_reference;
     }
+    scratch.government_procurement_budget_ = budget;
     const auto treasury = state.institutions.treasury_account;
     std::size_t last_contractor = kAbsentFirmIndex;
     for (const auto index : scratch.firm_order_) {
@@ -1851,6 +1864,14 @@ void commit_capital(const core::RootState &state, M4TickScratch &scratch) noexce
         scratch.supplemental_transfer_payments_;
     metrics.government_deficit = metrics.government_spending - metrics.tax_total -
                                  scratch.supplemental_nontax_receipts_;
+    metrics.fiscal_output_reference_applied =
+        scratch.fiscal_output_reference_applied_;
+    metrics.fiscal_unemployment_multiplier_applied =
+        scratch.fiscal_unemployment_multiplier_applied_;
+    metrics.fiscal_deficit_target_applied =
+        scratch.fiscal_deficit_target_applied_;
+    metrics.government_procurement_budget =
+        scratch.government_procurement_budget_;
     metrics.public_capital = public_capital;
     metrics.job_guarantee_spending = job_guarantee_spending;
     metrics.job_guarantee_labor = job_guarantee_labor;
@@ -2524,6 +2545,7 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
         runtime.public_capital,
         runtime.public_capital_reference,
         runtime.previous_nominal_output,
+        runtime.previous_national_accounts_nominal_gdp,
         runtime.last_metrics.real_output,
         runtime.last_metrics.nominal_output,
         runtime.last_metrics.price_index,
@@ -2538,6 +2560,10 @@ Status validate_m4_state(const core::RootState &root, const M4Runtime &runtime,
         runtime.last_metrics.tax_total,
         runtime.last_metrics.government_spending,
         runtime.last_metrics.government_deficit,
+        runtime.last_metrics.fiscal_output_reference_applied,
+        runtime.last_metrics.fiscal_unemployment_multiplier_applied,
+        runtime.last_metrics.fiscal_deficit_target_applied,
+        runtime.last_metrics.government_procurement_budget,
         runtime.last_metrics.public_capital,
         runtime.last_metrics.gross_output_nominal,
         runtime.last_metrics.consumption_output_nominal,

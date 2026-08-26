@@ -104,6 +104,7 @@ struct M4Rules final {
     double government_deficit_target{0.0};
     double deficit_unemployment_reference{0.0};
     double deficit_unemployment_cap{1.0};
+    bool fiscal_uses_national_accounts_gdp{false};
     double government_investment_share{0.04};
     double public_capital_gamma{0.0};
     double public_capital_depreciation{2.28e-4};
@@ -179,6 +180,10 @@ struct M4Metrics final {
     double tax_consumption{0.0};
     double government_spending{0.0};
     double government_deficit{0.0};
+    double fiscal_output_reference_applied{0.0};
+    double fiscal_unemployment_multiplier_applied{1.0};
+    double fiscal_deficit_target_applied{0.0};
+    double government_procurement_budget{0.0};
     double public_capital{0.0};
     double gross_output_nominal{0.0};
     double consumption_output_nominal{0.0};
@@ -286,6 +291,7 @@ struct M4Runtime final {
     double public_capital{0.0};
     double public_capital_reference{1.0};
     double previous_nominal_output{0.0};
+    double previous_national_accounts_nominal_gdp{0.0};
     M4Metrics last_metrics{};
     std::vector<M4PhaseSummary> last_phase_trace;
 };
@@ -387,6 +393,10 @@ class M4TickScratch final {
     double supplemental_nontax_receipts_{0.0};
     double supplemental_government_consumption_{0.0};
     double supplemental_transfer_payments_{0.0};
+    double fiscal_output_reference_applied_{0.0};
+    double fiscal_unemployment_multiplier_applied_{1.0};
+    double fiscal_deficit_target_applied_{0.0};
+    double government_procurement_budget_{0.0};
     double external_goods_stock_remaining_{0.0};
 };
 

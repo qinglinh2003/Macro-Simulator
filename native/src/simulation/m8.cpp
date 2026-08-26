@@ -1361,6 +1361,15 @@ class M8Extension final : public M7TickExtension {
         scratch_.working_metrics_.economy.economy.economy.economy
             .cumulative_output_energy = real_runtime.cumulative_sector_output[2];
         runtime_.last_metrics = scratch_.working_metrics_;
+        const auto &real_metrics =
+            runtime_.last_metrics.economy.economy.economy.economy;
+        real_runtime.previous_national_accounts_nominal_gdp = std::max(
+            0.0, real_metrics.gross_output_nominal +
+                     runtime_.last_metrics.energy.production *
+                         runtime_.last_metrics.energy.transaction_price +
+                     runtime_.last_metrics.housing.construction_output *
+                         runtime_.last_metrics.housing.house_price -
+                     runtime_.last_metrics.energy.industry_spending);
         const double core_price =
             std::max(kEconomicEpsilon, metrics.economy.economy.economy.price_index);
         double energy_weight = 0.0;
@@ -1800,6 +1809,8 @@ class M8Extension final : public M7TickExtension {
                                                M4TickScratch &real,
                                                M5TickScratch &monetary, Tick tick) {
         double outstanding = 0.0;
+        scratch_.working_metrics_.housing.mortgage_arrears_floor_applied =
+            runtime_.housing_policy.mortgage_arrears_floor;
         for (auto &mortgage : scratch_.mortgages_) {
             if (!mortgage.active) {
                 continue;
@@ -1835,8 +1846,13 @@ class M8Extension final : public M7TickExtension {
                     ? 0.0
                     : projected_balance(real, borrower->primary_account);
             if (principal / collateral_value <=
-                    runtime_.housing_policy.mortgage_foreclosure_ltv ||
-                liquid > runtime_.housing_policy.mortgage_arrears_floor) {
+                runtime_.housing_policy.mortgage_foreclosure_ltv) {
+                continue;
+            }
+            ++scratch_.working_metrics_.housing.mortgage_foreclosure_candidates;
+            if (liquid >= runtime_.housing_policy.mortgage_arrears_floor) {
+                ++scratch_.working_metrics_.housing
+                      .mortgage_foreclosures_prevented_by_liquidity;
                 continue;
             }
             const auto writeoff =
@@ -2214,11 +2230,6 @@ class M8Extension final : public M7TickExtension {
                 return Status(ErrorCode::insufficient_funds,
                               "M8 mortgage credit is unavailable");
             }
-            const double stressed_rate =
-                quote.get_if()->annual_rate.value() +
-                runtime_.housing_policy.mortgage_stress_rate_addon;
-            stressed_payment = quote.get_if()->principal.value() *
-                               (std::max(0.0, stressed_rate) + 0.1) / kDaysPerYear;
             ++scratch_.working_metrics_.housing.mortgage_applications;
             scratch_.working_metrics_.housing.mortgage_dsti_cap_applied =
                 runtime_.housing_policy.mortgage_dsti_cap;
@@ -2226,7 +2237,30 @@ class M8Extension final : public M7TickExtension {
                 runtime_.housing_policy.mortgage_stress_rate_addon;
             if (runtime_.housing_policy.mortgage_underwriting) {
                 ++scratch_.working_metrics_.housing.mortgage_underwriting_applications;
+                const double rwa_capacity = m5_bank_rwa_principal_capacity(
+                    monetary_scratch, quote.get_if()->lender,
+                    runtime_.housing_policy.mortgage_risk_weight,
+                    runtime_.housing_policy.mortgage_minimum_capital_ratio,
+                    runtime_.housing_policy.mortgage_risk_weight,
+                    monetary.policy.unified_bank_rwa);
+                scratch_.working_metrics_.housing.mortgage_risk_weight_applied =
+                    runtime_.housing_policy.mortgage_risk_weight;
+                scratch_.working_metrics_.housing
+                    .mortgage_minimum_capital_ratio_applied =
+                    runtime_.housing_policy.mortgage_minimum_capital_ratio;
+                scratch_.working_metrics_.housing.mortgage_rwa_principal_capacity =
+                    rwa_capacity;
+                if (required > rwa_capacity + kTolerance) {
+                    ++scratch_.working_metrics_.housing.mortgage_rwa_rejections;
+                    return Status(ErrorCode::insufficient_funds,
+                                  "M8 mortgage RWA capital is binding");
+                }
             }
+            const double stressed_rate =
+                quote.get_if()->annual_rate.value() +
+                runtime_.housing_policy.mortgage_stress_rate_addon;
+            stressed_payment = quote.get_if()->principal.value() *
+                               (std::max(0.0, stressed_rate) + 0.1) / kDaysPerYear;
             if (runtime_.housing_policy.mortgage_underwriting &&
                 stressed_payment > runtime_.housing_policy.mortgage_dsti_cap * income) {
                 ++scratch_.working_metrics_.housing.mortgage_dsti_rejections;

@@ -146,33 +146,11 @@ def verify_p1_static() -> list[str]:
         else:
             errors.append(f"{name}: unknown route disposition {route.disposition!r}")
 
-    m8_source = (ROOT / "native/src/simulation/m8.cpp").read_text(encoding="utf-8")
-    mechanism_sources = {
-        path: path.read_text(encoding="utf-8")
-        for path in (ROOT / "native/src/simulation").glob("*.cpp")
-        if "checkpoint" not in path.name
-    }
-    if any(
-        "fiscal_uses_national_accounts_gdp" in source
-        for source in mechanism_sources.values()
-    ):
+    if NATIVE_ROUTE_DEFECTS:
         errors.append(
-            "fiscal_uses_national_accounts_gdp is marked defective but now has a "
-            "simulation read"
+            "native route defects remain after R3: "
+            + ", ".join(sorted(NATIVE_ROUTE_DEFECTS))
         )
-    expected_validation_reads = {
-        "mortgage_risk_weight": 2,
-        "mortgage_minimum_capital_ratio": 3,
-    }
-    for field, expected in expected_validation_reads.items():
-        total_reads = sum(
-            source.count(field) for source in mechanism_sources.values()
-        )
-        if total_reads != expected or m8_source.count(f"policy.{field}") != expected:
-            errors.append(
-                f"{field} defective-route evidence changed; inspect for a new "
-                "economic consumer"
-            )
     return errors
 
 

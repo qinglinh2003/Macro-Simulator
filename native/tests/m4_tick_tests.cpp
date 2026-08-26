@@ -380,6 +380,75 @@ void test_fiscal_deficit_responds_to_unemployment() {
     assert(slack_economy > full_employment);
 }
 
+void test_fiscal_output_basis_has_dose_and_withdrawal_contract() {
+    const auto run_with_basis = [](bool use_national_accounts) {
+        auto spec = v1_spec(2'083);
+        spec.rules.government_investment_share = 0.0;
+        spec.rules.government_consumption_share = 0.10;
+        spec.rules.government_deficit_target = 0.0;
+        spec.rules.fiscal_uses_national_accounts_gdp = use_national_accounts;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto state = std::move(initialization).take();
+        state.runtime.previous_nominal_output = 100.0;
+        state.runtime.previous_national_accounts_nominal_gdp = 250.0;
+        state.runtime.last_metrics.unemployment_rate = 0.0;
+        M4TickScratch scratch;
+        Tick tick{};
+        const auto result = advance_ticks(state.root, state.runtime, scratch, tick, 1);
+        assert(result.ok());
+        return result.get_if()->metrics;
+    };
+
+    const auto legacy = run_with_basis(false);
+    const auto national_accounts = run_with_basis(true);
+    const auto withdrawn = run_with_basis(false);
+    assert_close(legacy.fiscal_output_reference_applied, 100.0);
+    assert_close(national_accounts.fiscal_output_reference_applied, 250.0);
+    assert(national_accounts.government_procurement_budget >
+           legacy.government_procurement_budget);
+    assert_close(withdrawn.fiscal_output_reference_applied,
+                 legacy.fiscal_output_reference_applied);
+    assert_close(withdrawn.government_procurement_budget,
+                 legacy.government_procurement_budget);
+}
+
+void test_deficit_unemployment_cap_has_dose_and_withdrawal_contract() {
+    const auto run_with_cap = [](double cap) {
+        auto spec = v1_spec(2'084);
+        spec.rules.government_investment_share = 0.0;
+        spec.rules.government_consumption_share = 0.0;
+        spec.rules.government_deficit_target = 0.05;
+        spec.rules.deficit_unemployment_reference = 0.05;
+        spec.rules.deficit_unemployment_cap = cap;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto state = std::move(initialization).take();
+        state.runtime.previous_nominal_output = 100.0;
+        state.runtime.last_metrics.unemployment_rate = 0.20;
+        state.runtime.last_metrics.tax_total = 0.0;
+        state.runtime.last_metrics.transfer_payments = 0.0;
+        M4TickScratch scratch;
+        Tick tick{};
+        const auto result = advance_ticks(state.root, state.runtime, scratch, tick, 1);
+        assert(result.ok());
+        return result.get_if()->metrics;
+    };
+
+    const auto narrow = run_with_cap(0.5);
+    const auto wide = run_with_cap(2.0);
+    const auto withdrawn = run_with_cap(0.5);
+    assert_close(narrow.fiscal_unemployment_multiplier_applied, 0.5);
+    assert_close(wide.fiscal_unemployment_multiplier_applied, 2.0);
+    assert_close(narrow.fiscal_deficit_target_applied, 0.025);
+    assert_close(wide.fiscal_deficit_target_applied, 0.10);
+    assert(wide.government_procurement_budget > narrow.government_procurement_budget);
+    assert_close(withdrawn.fiscal_unemployment_multiplier_applied,
+                 narrow.fiscal_unemployment_multiplier_applied);
+    assert_close(withdrawn.government_procurement_budget,
+                 narrow.government_procurement_budget);
+}
+
 void test_deficit_envelope_includes_transfer_spending() {
     auto spec = v1_spec(209);
     spec.rules.government_investment_share = 0.0;
@@ -925,6 +994,8 @@ int main() {
     test_preferential_beta_and_price_elasticity_change_market_share();
     test_fiscal_quantity_and_deficit_regimes_are_distinct();
     test_fiscal_deficit_responds_to_unemployment();
+    test_fiscal_output_basis_has_dose_and_withdrawal_contract();
+    test_deficit_unemployment_cap_has_dose_and_withdrawal_contract();
     test_deficit_envelope_includes_transfer_spending();
     test_consumption_price_index_excludes_capital_goods();
     test_consumption_tax_follows_each_household_purchase_basket();

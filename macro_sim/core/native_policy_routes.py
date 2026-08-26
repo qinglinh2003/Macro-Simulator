@@ -68,6 +68,7 @@ _FISCAL_MONETARY_FIELDS = {
     "deficit_u_ref": "deficit_unemployment_reference",
     "deposit_rate_floor": "deposit_rate_floor",
     "firm_credit_min_dscr": "firm_minimum_dscr",
+    "fiscal_uses_national_accounts_gdp": "fiscal_uses_national_accounts_gdp",
     "gov_consumption_share": "government_consumption_share",
     "gov_deficit_target": "government_deficit_target",
     "gov_investment_share": "government_investment_share",
@@ -141,6 +142,8 @@ _HOUSING_FIELDS = {
     "mortgage_dsti_cap": "mortgage_dsti_cap",
     "mortgage_foreclosure_ltv": "mortgage_foreclosure_ltv",
     "mortgage_ltv_cap": "mortgage_ltv_cap",
+    "mortgage_min_capital_ratio": "mortgage_minimum_capital_ratio",
+    "mortgage_risk_weight": "mortgage_risk_weight",
     "mortgage_stress_rate_addon": "mortgage_stress_rate_addon",
     "mortgage_underwriting": "mortgage_underwriting",
     "rental_eviction_arrears": "rental_eviction_arrears",
@@ -215,7 +218,7 @@ _R2_MECHANISM_ANCHORS = {
     "bond_coupon": "run_bond_issuance",
     "bond_maturity": "run_bond_issuance",
     "omo": "run_omo",
-    "firm_credit_min_dscr": "extend_firm_credit",
+    "firm_credit_min_dscr": "stage_m5_firm_plan_credit",
     "regulatory_firm_capital_haircut": "build_firm_statements",
     "regulatory_firm_inventory_haircut": "build_firm_statements",
     "mortgage_underwriting": "buy_listing",
@@ -233,6 +236,50 @@ for _lever, _anchor in _R2_MECHANISM_ANCHORS.items():
         source_path=_route.source_path,
         source_anchor=_anchor,
         read_phase=_route.read_phase,
+    )
+
+# R3 closes the remaining native route gaps and names the repaired decision
+# boundary for policies whose earlier read point was only storage or validation.
+_R3_MECHANISM_ANCHORS = {
+    "fiscal_uses_national_accounts_gdp": (
+        "native/src/simulation/m4.cpp",
+        "fiscal_output_reference",
+        "domestic_fiscal_budgeting",
+    ),
+    "bank_capital_constraint": (
+        "native/src/simulation/m5.cpp",
+        "bank_capacity",
+        "domestic_credit_allocation",
+    ),
+    "mortgage_risk_weight": (
+        "native/src/simulation/m8.cpp",
+        "m5_bank_rwa_principal_capacity",
+        "housing_mortgage_underwriting",
+    ),
+    "mortgage_min_capital_ratio": (
+        "native/src/simulation/m8.cpp",
+        "m5_bank_rwa_principal_capacity",
+        "housing_mortgage_underwriting",
+    ),
+    "mortgage_arrears_floor": (
+        "native/src/simulation/m8.cpp",
+        "synchronize_mortgages",
+        "housing_mortgage_resolution",
+    ),
+    "deficit_u_cap": (
+        "native/src/simulation/m4.cpp",
+        "run_government_procurement",
+        "domestic_fiscal_budgeting",
+    ),
+}
+for _lever, (_source, _anchor, _phase) in _R3_MECHANISM_ANCHORS.items():
+    _route = NATIVE_POLICY_ROUTES[_lever]
+    NATIVE_POLICY_ROUTES[_lever] = NativePolicyRoute(
+        route_section=_route.route_section,
+        route_field=_route.route_field,
+        source_path=_source,
+        source_anchor=_anchor,
+        read_phase=_phase,
     )
 
 # External policies are validated through a local ``policy`` reference, so use
@@ -318,26 +365,6 @@ NATIVE_POLICY_ROUTES.update({
         "monetary.policy.fixed_basket_cpi", "energy_and_housing",
     ),
 })
-
-# P1 found storage routes but no economic consumer in the current native engine.
-NATIVE_POLICY_ROUTES.update({
-    "fiscal_uses_national_accounts_gdp": NativePolicyRoute(
-        "fiscal_monetary", "fiscal_uses_national_accounts_gdp", "", "", "",
-        ENGINE_ROUTE_DEFECT,
-        "native state is stored and checkpointed but no fiscal mechanism reads it",
-    ),
-    "mortgage_risk_weight": NativePolicyRoute(
-        "housing", "mortgage_risk_weight", "", "", "",
-        ENGINE_ROUTE_DEFECT,
-        "native state is stored and range-validated but bank RWA never reads it",
-    ),
-    "mortgage_min_capital_ratio": NativePolicyRoute(
-        "housing", "mortgage_minimum_capital_ratio", "", "", "",
-        ENGINE_ROUTE_DEFECT,
-        "native state is stored and range-validated but mortgage capital gating never reads it",
-    ),
-})
-
 
 NATIVE_ROUTE_DEFECTS = frozenset(
     name

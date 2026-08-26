@@ -1,0 +1,218 @@
+{
+  "base_revision": "78a384f701d751f017054be9eb7314d14e6f18a1",
+  "checkpoint_schema_versions": {
+    "m4": 11,
+    "m5": 4,
+    "m8": 4
+  },
+  "contract_checks": {
+    "bank_capital_constraint": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.bank_capital_constraint_applied",
+        "metric.source.m5.bank_gross_capital_headroom",
+        "metric.source.m5.bank_gross_capital_credit_shortfall",
+        "metric.source.m5.new_credit"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::bank_capacity",
+      "semantics": "immediate"
+    },
+    "deficit_u_cap": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m4.fiscal_unemployment_multiplier_applied",
+        "metric.source.m4.fiscal_deficit_target_applied",
+        "metric.source.m4.government_procurement_budget",
+        "metric.source.m4.government_deficit"
+      ],
+      "read_point": "native/src/simulation/m4.cpp::run_government_procurement",
+      "semantics": "immediate"
+    },
+    "fiscal_uses_national_accounts_gdp": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m4.fiscal_output_reference_applied",
+        "metric.economy.na.nominal_gdp"
+      ],
+      "read_point": "native/src/simulation/m4.cpp::fiscal_output_reference",
+      "semantics": "immediate"
+    },
+    "mortgage_arrears_floor": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_arrears_floor_applied",
+        "metric.source.m8.housing.mortgage_foreclosure_candidates",
+        "metric.source.m8.housing.mortgage_foreclosures_prevented_by_liquidity",
+        "metric.source.m8.housing.foreclosures"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::synchronize_mortgages",
+      "semantics": "immediate"
+    },
+    "mortgage_min_capital_ratio": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_minimum_capital_ratio_applied",
+        "metric.source.m8.housing.mortgage_rwa_principal_capacity",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::m5_bank_rwa_principal_capacity",
+      "semantics": "immediate"
+    },
+    "mortgage_risk_weight": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_risk_weight_applied",
+        "metric.source.m8.housing.mortgage_rwa_principal_capacity",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::m5_bank_rwa_principal_capacity",
+      "semantics": "immediate"
+    }
+  },
+  "contracts": {
+    "bank_capital_constraint": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.bank_capital_constraint_applied",
+        "metric.source.m5.bank_gross_capital_headroom",
+        "metric.source.m5.bank_gross_capital_credit_shortfall",
+        "metric.source.m5.new_credit"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::bank_capacity",
+      "semantics": "immediate"
+    },
+    "deficit_u_cap": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m4.fiscal_unemployment_multiplier_applied",
+        "metric.source.m4.fiscal_deficit_target_applied",
+        "metric.source.m4.government_procurement_budget",
+        "metric.source.m4.government_deficit"
+      ],
+      "read_point": "native/src/simulation/m4.cpp::run_government_procurement",
+      "semantics": "immediate"
+    },
+    "fiscal_uses_national_accounts_gdp": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m4.fiscal_output_reference_applied",
+        "metric.economy.na.nominal_gdp"
+      ],
+      "read_point": "native/src/simulation/m4.cpp::fiscal_output_reference",
+      "semantics": "immediate"
+    },
+    "mortgage_arrears_floor": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_arrears_floor_applied",
+        "metric.source.m8.housing.mortgage_foreclosure_candidates",
+        "metric.source.m8.housing.mortgage_foreclosures_prevented_by_liquidity",
+        "metric.source.m8.housing.foreclosures"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::synchronize_mortgages",
+      "semantics": "immediate"
+    },
+    "mortgage_min_capital_ratio": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_minimum_capital_ratio_applied",
+        "metric.source.m8.housing.mortgage_rwa_principal_capacity",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::m5_bank_rwa_principal_capacity",
+      "semantics": "immediate"
+    },
+    "mortgage_risk_weight": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.mortgage_risk_weight_applied",
+        "metric.source.m8.housing.mortgage_rwa_principal_capacity",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::m5_bank_rwa_principal_capacity",
+      "semantics": "immediate"
+    }
+  },
+  "errors": [],
+  "hashes": {
+    "r3_acceptance": "4f5631b6f63ebc43d984dbb43bd1c077c58d5d48bb5fe7bdf9d13933f3b198ec"
+  },
+  "invalidated_audit_stages": [
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8"
+  ],
+  "invalidation": {
+    "current_contract_root": "9f680833f206ddf7ebc1bb2594824f21a0bd6c1d1bace207e798c35a81bc46cf",
+    "historical_evidence_invalidated": true,
+    "previous_contract_root": "1537900dd4a934db233f471f62fd4b81f2905a8f66d5b27f9468b7cefa121532"
+  },
+  "maintained_metric_counts": {
+    "national_accounts": 63,
+    "native_dashboard_analytics": 120,
+    "native_stage_sources": 338,
+    "public_sources": 41,
+    "total": 562
+  },
+  "native_behavior_test_markers": {
+    "native/tests/m4_tick_tests.cpp": [
+      "test_fiscal_output_basis_has_dose_and_withdrawal_contract",
+      "test_deficit_unemployment_cap_has_dose_and_withdrawal_contract"
+    ],
+    "native/tests/m5_monetary_tests.cpp": [
+      "test_bank_capital_constraint_has_dose_and_withdrawal_contract"
+    ],
+    "native/tests/m8_housing_market_tests.cpp": [
+      "test_mortgage_capital_rules_have_dose_and_withdrawal_contract",
+      "test_mortgage_arrears_floor_has_dose_and_withdrawal_contract"
+    ]
+  },
+  "native_route_defects": [],
+  "phase": "R3",
+  "schema_version": "policy-remediation-r3-v1",
+  "source_sha256": {
+    "macro_sim/core/native_policy_routes.py": "626f1f2c89f6bae36683ebf26c3acf792d0060097481cbb499107a6c1b1b4b57",
+    "macro_sim/diagnostics/policy_catalog.py": "82d6777897c3fc2dabeb1b6394e7e8bf43ec4134c0652f6b807cb938c338ce4f",
+    "macro_sim/diagnostics/policy_mechanisms.py": "411760343a5e005fc62c8bb9cd2b17ee538ac6958bfd1ff9e044422b0fce85a8",
+    "macro_sim/diagnostics/policy_routing.py": "b59d8090b7b0e2e4e5d7f847617507eebeba74ae2af8b1d05d0aff625b94e206",
+    "native/include/macro_sim/reporting/m10_metric_sources.inc": "9d847f30c3c2e840c8b8fb58b8d4c5d3b2320a9387aa0f32d06646e6d06705db",
+    "native/include/macro_sim/simulation/m4.hpp": "5f3e93bd0fe22fdff2796129b583e5844466ee84f39867b31803a6a2baadad75",
+    "native/include/macro_sim/simulation/m4_checkpoint.hpp": "9b357fddfce36dfebdb40c0469c10f36d9229bb4afddf40aac6d34be72396a7a",
+    "native/include/macro_sim/simulation/m5.hpp": "8d88d423406bff3485b18c1947380610d382d3ec09e30785efccbfda2f4b9bf0",
+    "native/include/macro_sim/simulation/m5_checkpoint.hpp": "f00abfcffe97844871ae1698e1b261d33548940336fe519bb8bf44b356538293",
+    "native/include/macro_sim/simulation/m8.hpp": "3844143ef5790f9adb69b069c2e39404fc7f1023b0c97b24e144d314225ec73f",
+    "native/include/macro_sim/simulation/m8_checkpoint.hpp": "adb64e13b078fbc48ae3823349a4b7a349c0f2bcdaf8b7435211e1446853d9ef",
+    "native/src/simulation/m4.cpp": "1e5dd36cda627bfad78241205de8e14b866d2835ec5a9913280e4531eda6399b",
+    "native/src/simulation/m4_checkpoint.cpp": "15e9bbf247e0e2ef3e98e7d34a5390a00ccde8516341eaffedaa3a2ab6c295c6",
+    "native/src/simulation/m5.cpp": "2a1d041709d013bcce11dc03da1253463e7567ba0403e2ab6a7935d1a1cfe9d9",
+    "native/src/simulation/m5_checkpoint.cpp": "0aa61da0800f4771d80b83f47a026c2b4c200784d09036a2b52c5f08ea3b81c6",
+    "native/src/simulation/m8.cpp": "c5b52a65f2f3c11a1ef1be49cb75306b98b373f7c46d1c5cac31e1cfedb36308",
+    "native/src/simulation/m8_checkpoint.cpp": "d7c5ed556b885c755539cbec7b98a73b283c8573218aa05446d51abcf3b6ecf7",
+    "native/tests/m10_reporting_tests.cpp": "a4e58a50c4f242d8cf941232e61e08e5da8b3ebc80f0dd4c713cdb21c5d7d4cd",
+    "native/tests/m4_tick_tests.cpp": "7cbe06da1f8c9426413880ccd29b6827175c26250f54b818d7573be9b30ddb00",
+    "native/tests/m5_monetary_tests.cpp": "f571a9a85f0db577cbef18cea1740b78aa2a27520b2bb0e4c22f0839bc2a7277",
+    "native/tests/m8_housing_market_tests.cpp": "bdf80844616c66f57b7a1eeb855b896e0890d3dcbd7d5aebc64a93fac9dcab3f",
+    "schemas/m10/maintained_metrics.json": "0172750b36fb24fbc541cea991fed2ddf500a963f583978b5ebf01cfc65fed99",
+    "tools/m10/metric_contract.py": "0a29c63a54fc9d20299d07244741d4b237cbf96bae9f1d803f437fb2918dd2e6"
+  },
+  "status": "accepted",
+  "verification_commands": [
+    "uv run pytest -n 8 tests/test_policy_remediation_r3.py",
+    "uv run python tools/m10/metric_contract.py --check",
+    "uv run python tools/m11/generate_control_contract.py --check",
+    "cmake --build build/native/m11-release --parallel 8",
+    "ctest --test-dir build/native/m11-release --parallel 8 --output-on-failure"
+  ]
+}

@@ -358,10 +358,17 @@ struct HousingMetrics final {
     double mortgage_dsti_rejections{0.0};
     double mortgage_dsti_cap_applied{0.0};
     double mortgage_stress_rate_addon_applied{0.0};
+    double mortgage_risk_weight_applied{0.0};
+    double mortgage_minimum_capital_ratio_applied{0.0};
+    double mortgage_rwa_principal_capacity{0.0};
+    double mortgage_rwa_rejections{0.0};
     double mortgage_underwritten_principal_share{0.0};
     double mortgage_cohort_weighted_dsti_cap{0.0};
     double mortgage_cohort_weighted_stress_rate_addon{0.0};
     double foreclosures{0.0};
+    double mortgage_foreclosure_candidates{0.0};
+    double mortgage_foreclosures_prevented_by_liquidity{0.0};
+    double mortgage_arrears_floor_applied{0.0};
     double rent_paid{0.0};
     double rent_unpaid{0.0};
     double evictions{0.0};

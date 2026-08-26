@@ -1,5 +1,28 @@
 # Policy Remediation Plan v39
 
+## R3 acceptance
+
+- Status: `accepted`
+- Base revision: `78a384f701d751f017054be9eb7314d14e6f18a1` (accepted R2)
+- R3 acceptance hash: `4f5631b6f63ebc43d984dbb43bd1c077c58d5d48bb5fe7bdf9d13933f3b198ec`
+- Machine report: `docs/policy_remediation_r3_acceptance_v39.json`
+- Scope: 6 Policy levers, 14 maintained native source metrics, and 5 matched-seed dose/withdrawal mechanism fixtures.
+- Verification: 46/46 native tests and 3/3 deterministic R3 contract tests passed with eight workers.
+- Evidence consequence: frozen P0-P8 results remain historical but are invalidated for current product claims until regenerated.
+
+R3 closes every native route defect recorded by P1. Fiscal policy can now select
+the lagged full national-accounts GDP basis; the unemployment-sensitive deficit
+ceiling reports the multiplier, effective target, and procurement budget it applies.
+The general bank-capital switch exposes gross lending headroom and rejected credit.
+Mortgage underwriting now applies bank-level risk-weighted capital capacity, while
+the arrears floor is observable as a liquidity-protection boundary before
+foreclosure. Zero mortgage risk weight or zero minimum capital ratio explicitly
+means that this RWA gate is non-binding rather than rejecting all applications.
+
+These are direct route and mechanism repairs. Their local dose and withdrawal
+behavior is accepted; economy-wide effect magnitude and gameplay calibration remain
+reserved for R6, and unified whole-bank RWA state-machine behavior remains in R4.
+
 ## R2 acceptance
 
 - Status: `accepted`

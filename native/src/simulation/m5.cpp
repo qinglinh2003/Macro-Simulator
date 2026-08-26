@@ -542,6 +542,8 @@ void apply_fiscal_policy(M4Runtime &real, const M5Runtime &runtime) noexcept {
     real.rules.deficit_unemployment_reference =
         runtime.policy.deficit_unemployment_reference;
     real.rules.deficit_unemployment_cap = runtime.policy.deficit_unemployment_cap;
+    real.rules.fiscal_uses_national_accounts_gdp =
+        runtime.policy.fiscal_uses_national_accounts_gdp;
     real.rules.government_investment_share = runtime.policy.government_investment_share;
     real.rules.profit_tax_rate = runtime.policy.profit_tax_rate;
     real.rules.income_tax_rate = runtime.policy.income_tax_rate;
@@ -841,6 +843,15 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
     if (!runtime.rules.banking_enabled) {
         refresh_aggregates(state, real, scratch);
         return Status::success();
+    }
+    scratch.working_metrics_.bank_capital_constraint_applied =
+        runtime.policy.bank_capital_constraint ? 1.0 : 0.0;
+    if (runtime.policy.bank_capital_constraint) {
+        double aggregate_headroom = 0.0;
+        state.banks.for_each_alive([&](BankId bank, const core::BankComponent &) {
+            aggregate_headroom += bank_capacity(state, runtime, scratch, bank);
+        });
+        scratch.working_metrics_.bank_gross_capital_headroom = aggregate_headroom;
     }
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(real.firm_ids_[index]);
@@ -2312,6 +2323,43 @@ std::uint64_t M5TickScratch::capacity_signature() const noexcept {
     return signature;
 }
 
+double m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
+                                      double mortgage_risk_weight,
+                                      double minimum_capital_ratio,
+                                      double new_loan_risk_weight,
+                                      bool unified_bank_rwa) noexcept {
+    const auto slot = bank_index(bank);
+    if (!bank.valid() || slot >= scratch.bank_alive_.size() ||
+        slot >= scratch.bank_capital_live_.size() ||
+        scratch.bank_alive_[slot] == 0U || !finite(mortgage_risk_weight) ||
+        !finite(minimum_capital_ratio) || !finite(new_loan_risk_weight) ||
+        mortgage_risk_weight < 0.0 || minimum_capital_ratio < 0.0 ||
+        new_loan_risk_weight < 0.0) {
+        return 0.0;
+    }
+    if (minimum_capital_ratio <= algorithms::kEconomicEpsilon ||
+        new_loan_risk_weight <= algorithms::kEconomicEpsilon) {
+        return std::numeric_limits<double>::max();
+    }
+    double risk_weighted_assets = 0.0;
+    for (const auto &loan : scratch.loans_) {
+        if (!loan.active || loan.lender != bank ||
+            loan.principal.value() <= algorithms::kEconomicEpsilon) {
+            continue;
+        }
+        if (loan.purpose == core::LoanPurpose::mortgage) {
+            risk_weighted_assets +=
+                mortgage_risk_weight * loan.principal.value();
+        } else if (unified_bank_rwa) {
+            risk_weighted_assets += loan.principal.value();
+        }
+    }
+    const double capital = std::max(0.0, scratch.bank_capital_live_[slot]);
+    const double risk_weighted_headroom =
+        capital / minimum_capital_ratio - risk_weighted_assets;
+    return std::max(0.0, risk_weighted_headroom / new_loan_risk_weight);
+}
+
 Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
                                       const M4TickScratch &real_economy,
                                       const M5Runtime &runtime, M5TickScratch &scratch,
@@ -2349,7 +2397,13 @@ Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
         scratch.bank_alive_[lender_slot] == 0U) {
         return Status(ErrorCode::insufficient_funds, "M5 credit lender is unavailable");
     }
-    double room = bank_capacity(state, runtime, scratch, lender);
+    const double gross_capital_room = bank_capacity(state, runtime, scratch, lender);
+    if (runtime.policy.bank_capital_constraint) {
+        scratch.working_metrics_.bank_gross_capital_credit_shortfall += std::max(
+            0.0, requested_principal * std::min(1.0, credit_supply_multiplier) -
+                     std::max(0.0, gross_capital_room));
+    }
+    double room = gross_capital_room;
     if (runtime.policy.bank_exposure_limit > 0.0) {
         if (lender_slot >= scratch.bank_capital_live_.size()) {
             return Status(ErrorCode::internal_error,

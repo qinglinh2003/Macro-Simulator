@@ -195,6 +195,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
     writer.f64(rules.government_deficit_target);
     writer.f64(rules.deficit_unemployment_reference);
     writer.f64(rules.deficit_unemployment_cap);
+    writer.boolean(rules.fiscal_uses_national_accounts_gdp);
     writer.f64(rules.government_investment_share);
     writer.f64(rules.public_capital_gamma);
     writer.f64(rules.public_capital_depreciation);
@@ -287,6 +288,7 @@ void write_rules(Writer& writer, const M4Rules& rules) {
         && reader.f64(rules.government_deficit_target)
         && reader.f64(rules.deficit_unemployment_reference)
         && reader.f64(rules.deficit_unemployment_cap)
+        && reader.boolean(rules.fiscal_uses_national_accounts_gdp)
         && reader.f64(rules.government_investment_share)
         && reader.f64(rules.public_capital_gamma)
         && reader.f64(rules.public_capital_depreciation)
@@ -362,6 +364,10 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
     writer.f64(metrics.tax_consumption);
     writer.f64(metrics.government_spending);
     writer.f64(metrics.government_deficit);
+    writer.f64(metrics.fiscal_output_reference_applied);
+    writer.f64(metrics.fiscal_unemployment_multiplier_applied);
+    writer.f64(metrics.fiscal_deficit_target_applied);
+    writer.f64(metrics.government_procurement_budget);
     writer.f64(metrics.public_capital);
     writer.f64(metrics.gross_output_nominal);
     writer.f64(metrics.consumption_output_nominal);
@@ -426,6 +432,10 @@ void write_metrics(Writer& writer, const M4Metrics& metrics) {
         && reader.f64(metrics.tax_consumption)
         && reader.f64(metrics.government_spending)
         && reader.f64(metrics.government_deficit)
+        && reader.f64(metrics.fiscal_output_reference_applied)
+        && reader.f64(metrics.fiscal_unemployment_multiplier_applied)
+        && reader.f64(metrics.fiscal_deficit_target_applied)
+        && reader.f64(metrics.government_procurement_budget)
         && reader.f64(metrics.public_capital)
         && reader.f64(metrics.gross_output_nominal)
         && reader.f64(metrics.consumption_output_nominal)
@@ -635,6 +645,7 @@ Result<std::vector<std::uint8_t>> save_m4_checkpoint(
     writer.f64(runtime.public_capital);
     writer.f64(runtime.public_capital_reference);
     writer.f64(runtime.previous_nominal_output);
+    writer.f64(runtime.previous_national_accounts_nominal_gdp);
     write_rules(writer, runtime.rules);
     write_metrics(writer, runtime.last_metrics);
     writer.u64(runtime.last_phase_trace.size());
@@ -754,6 +765,7 @@ Result<M4Checkpoint> load_m4_checkpoint(
         || !reader.f64(runtime.public_capital)
         || !reader.f64(runtime.public_capital_reference)
         || !reader.f64(runtime.previous_nominal_output)
+        || !reader.f64(runtime.previous_national_accounts_nominal_gdp)
         || !read_rules(reader, runtime.rules)
         || !read_metrics(reader, runtime.last_metrics)) {
         return corrupt("M4 checkpoint runtime is invalid");
