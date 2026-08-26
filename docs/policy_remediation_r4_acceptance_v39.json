@@ -1,0 +1,254 @@
+{
+  "base_revision": "160dcbcfe2380679c4ab5ecab36a3f27e3a26e38",
+  "checkpoint_schema_versions": {
+    "m5": 5,
+    "m6": 4,
+    "m8": 5
+  },
+  "contract_checks": {
+    "bank_migrate_on_failure": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.failed_account_migration_candidates",
+        "metric.source.m5.failed_accounts_migrated",
+        "metric.source.m5.failed_loan_migration_candidates",
+        "metric.source.m5.failed_loans_migrated"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::resolve_bank",
+      "semantics": "immediate"
+    },
+    "bank_resolution_fund": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.resolution_funding_need",
+        "metric.source.m5.resolution_cost",
+        "metric.source.m5.resolution_mutualized_cost",
+        "metric.source.m5.bank_failures"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::resolve_bank",
+      "semantics": "immediate"
+    },
+    "household_bankruptcy": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.household_bankruptcy_candidates",
+        "metric.source.m6.household_bankruptcies_blocked_by_policy",
+        "metric.source.m6.household_bankruptcies",
+        "metric.source.m6.margin_writeoffs"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::service_margin",
+      "semantics": "immediate"
+    },
+    "housing_permits": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.housing_permit_cap_applied",
+        "metric.source.m8.housing.housing_units_ready_for_permits",
+        "metric.source.m8.housing.housing_units_blocked_by_permits",
+        "metric.source.m8.housing.permits_used",
+        "metric.source.m8.housing.dwellings_completed"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "immediate"
+    },
+    "lolr": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.lolr_liquidity_shortfall",
+        "metric.source.m5.lolr_advances",
+        "metric.source.m5.bank_failures"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::close_end_of_day_liquidity",
+      "semantics": "immediate"
+    },
+    "margin_max": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.margin_max_applied",
+        "metric.source.m6.margin_target_equity",
+        "metric.source.m6.margin_max_binding_shortfall",
+        "metric.source.m6.margin_originated"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::generate_firm_equity_orders",
+      "semantics": "immediate"
+    },
+    "unified_bank_rwa": {
+      "all_metrics_maintained": true,
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.unified_bank_rwa_applied",
+        "metric.source.m5.bank_rwa_headroom",
+        "metric.source.m5.bank_rwa_credit_shortfall",
+        "metric.source.m8.housing.mortgage_bank_risk_weighted_assets",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::bank_rwa_capacity",
+      "semantics": "immediate"
+    }
+  },
+  "contracts": {
+    "bank_migrate_on_failure": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.failed_account_migration_candidates",
+        "metric.source.m5.failed_accounts_migrated",
+        "metric.source.m5.failed_loan_migration_candidates",
+        "metric.source.m5.failed_loans_migrated"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::resolve_bank",
+      "semantics": "immediate"
+    },
+    "bank_resolution_fund": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.resolution_funding_need",
+        "metric.source.m5.resolution_cost",
+        "metric.source.m5.resolution_mutualized_cost",
+        "metric.source.m5.bank_failures"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::resolve_bank",
+      "semantics": "immediate"
+    },
+    "household_bankruptcy": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.household_bankruptcy_candidates",
+        "metric.source.m6.household_bankruptcies_blocked_by_policy",
+        "metric.source.m6.household_bankruptcies",
+        "metric.source.m6.margin_writeoffs"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::service_margin",
+      "semantics": "immediate"
+    },
+    "housing_permits": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m8.housing.housing_permit_cap_applied",
+        "metric.source.m8.housing.housing_units_ready_for_permits",
+        "metric.source.m8.housing.housing_units_blocked_by_permits",
+        "metric.source.m8.housing.permits_used",
+        "metric.source.m8.housing.dwellings_completed"
+      ],
+      "read_point": "native/src/simulation/m8.cpp::complete_construction",
+      "semantics": "immediate"
+    },
+    "lolr": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.lolr_liquidity_shortfall",
+        "metric.source.m5.lolr_advances",
+        "metric.source.m5.bank_failures"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::close_end_of_day_liquidity",
+      "semantics": "immediate"
+    },
+    "margin_max": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m6.margin_max_applied",
+        "metric.source.m6.margin_target_equity",
+        "metric.source.m6.margin_max_binding_shortfall",
+        "metric.source.m6.margin_originated"
+      ],
+      "read_point": "native/src/simulation/m6.cpp::generate_firm_equity_orders",
+      "semantics": "immediate"
+    },
+    "unified_bank_rwa": {
+      "handler_id": null,
+      "metrics": [
+        "metric.source.m5.unified_bank_rwa_applied",
+        "metric.source.m5.bank_rwa_headroom",
+        "metric.source.m5.bank_rwa_credit_shortfall",
+        "metric.source.m8.housing.mortgage_bank_risk_weighted_assets",
+        "metric.source.m8.housing.mortgage_rwa_rejections"
+      ],
+      "read_point": "native/src/simulation/m5.cpp::bank_rwa_capacity",
+      "semantics": "immediate"
+    }
+  },
+  "errors": [],
+  "hashes": {
+    "r4_acceptance": "6d3f463d8f6b30ec35fe2800fc171707705b95a898aa46a0bd04b594d77bdb50"
+  },
+  "invalidated_audit_stages": [
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8"
+  ],
+  "invalidation": {
+    "current_contract_root": "cadea02085c955c8b8780f9434a7bd7fc34b611cd9319efde88e59bc3f39765d",
+    "historical_evidence_invalidated": true,
+    "previous_contract_root": "9f680833f206ddf7ebc1bb2594824f21a0bd6c1d1bace207e798c35a81bc46cf"
+  },
+  "maintained_metric_counts": {
+    "national_accounts": 63,
+    "native_dashboard_analytics": 120,
+    "native_stage_sources": 358,
+    "public_sources": 41,
+    "total": 582
+  },
+  "native_behavior_test_markers": {
+    "native/tests/m5_monetary_tests.cpp": [
+      "test_bank_resolution_fund_has_activation_nonactivation_and_withdrawal_contract",
+      "test_bank_migration_has_activation_nonactivation_and_withdrawal_contract",
+      "test_lolr_has_activation_nonactivation_and_withdrawal_contract",
+      "test_unified_bank_rwa_has_activation_nonactivation_and_withdrawal_contract",
+      "test_unified_bank_rwa_weights_one_common_asset_envelope"
+    ],
+    "native/tests/m6_simulation_tests.cpp": [
+      "test_margin_max_has_activation_nonactivation_and_withdrawal_contract",
+      "test_household_bankruptcy_has_activation_nonactivation_and_withdrawal_contract"
+    ],
+    "native/tests/m8_housing_genesis_tests.cpp": [
+      "test_housing_permits_have_activation_nonactivation_and_withdrawal_contract"
+    ]
+  },
+  "native_route_defects": [],
+  "phase": "R4",
+  "schema_version": "policy-remediation-r4-v1",
+  "source_sha256": {
+    "macro_sim/core/native_policy_routes.py": "7fa9d5a477a7ee7f5f036e637fb92a5bb840d90208b6ac872b942b07d4c0bb5a",
+    "macro_sim/diagnostics/policy_catalog.py": "342a073701abb5be8470fd8e6af80af9e428e96cb9fb9977fe30d3f269400a21",
+    "macro_sim/diagnostics/policy_routing.py": "b59d8090b7b0e2e4e5d7f847617507eebeba74ae2af8b1d05d0aff625b94e206",
+    "macro_sim/diagnostics/policy_state_machines.py": "fbe21907cf69baddb3b4346ad034dfbdfce9f355b4bfaaeca363b9d12507861f",
+    "native/include/macro_sim/reporting/m10_metric_sources.inc": "82958d5f434bddf5dde451a3b1be4d1f861ec883ba16bb25dad770b8d5cf7142",
+    "native/include/macro_sim/simulation/m5.hpp": "5e8397e358a8d10931a5c83f269f11ab89d2cd14af23959c976a7a32d6d0a988",
+    "native/include/macro_sim/simulation/m5_checkpoint.hpp": "ec4ff481fb3164fb79be313cd0dafa5e214ed789fe0ff5b25955499ed6dce557",
+    "native/include/macro_sim/simulation/m6.hpp": "23c90d4f55bda1e51794124677612da4d744bf3de453b2dc80bea6b5795ff64e",
+    "native/include/macro_sim/simulation/m6_checkpoint.hpp": "0c91d9c9212dbd12b64f334bf1205a15fb539d6b8ecfcb03aa0facb75b8fc260",
+    "native/include/macro_sim/simulation/m8.hpp": "b86e9a8d51a854b314690a85e668c92b8bf7dfe0313b67044332b5e2deaa845d",
+    "native/include/macro_sim/simulation/m8_checkpoint.hpp": "3d2907588f35eb8dee1b771e74d510c175b03667151b97a7bb60217f3e1bda19",
+    "native/src/simulation/m5.cpp": "0ce5588e688ae2d3312df03d1eafdd0a1738b13aa15c210366ec5a9f6c9d4305",
+    "native/src/simulation/m5_checkpoint.cpp": "e3c0fb48f75b1f3b352de3aa506d211e19932f068c0c18c9e3507a93e278991e",
+    "native/src/simulation/m6.cpp": "cde58c0123c1224b823173825897919518832f5acf87b4103c8abbee8a43fae9",
+    "native/src/simulation/m6_checkpoint.cpp": "bd85eaa51259af14053b72fcc5707ff386ac17bd8dce580c0b97c201184a207d",
+    "native/src/simulation/m8.cpp": "0b3f25dd57e7ec129d58e76d3b13ed08bf1674e14e90cb94b05926bb3fcdeb84",
+    "native/src/simulation/m8_checkpoint.cpp": "b8bc7f3fdf2a6e33bf24aa5ac90dac6e96ce608bb3e5802d50fab5e6c0538445",
+    "native/tests/m10_reporting_tests.cpp": "a5ee8eb38071c3cee128fb73f9b86f5a27135842187ca72b9e728f855f9dfeba",
+    "native/tests/m5_monetary_tests.cpp": "c5696c5849096a2e85930234556e53ae6324a083968d0d5c257a068c551a348b",
+    "native/tests/m6_simulation_tests.cpp": "b53820ea3794047cfd1117f1c56c5116d64fdf52f0e9444b0df676a7a57c0d3d",
+    "native/tests/m8_housing_genesis_tests.cpp": "b10b78bb837244e0ae64517103aae5a188f9ee9ef6043c7b376927ff5cbe77f1",
+    "schemas/m10/maintained_metrics.json": "47e8bafe8266aafb6c85ca4fb8265cdb16a8f2e0cafb0a8fc59b0468ad9607e2",
+    "tools/m10/metric_contract.py": "28a01fde17e0f92ec948993da3132ee46c9be6375fb11f371e297945c4d5ccfa"
+  },
+  "status": "accepted",
+  "verification_commands": [
+    "uv run pytest -n 8 tests/test_policy_remediation_r4.py",
+    "uv run python tools/m10/metric_contract.py --check",
+    "uv run python tools/m11/generate_control_contract.py --check",
+    "cmake --build build/native/m11-release --parallel 8",
+    "ctest --test-dir build/native/m11-release --parallel 8 --output-on-failure"
+  ]
+}

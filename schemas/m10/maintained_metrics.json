@@ -2,9 +2,9 @@
   "counts": {
     "national_accounts": 63,
     "native_dashboard_analytics": 120,
-    "native_stage_sources": 338,
+    "native_stage_sources": 358,
     "public_sources": 41,
-    "total": 562
+    "total": 582
   },
   "metrics": [
     {
@@ -2269,6 +2269,15 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m5.lolr_liquidity_shortfall",
+      "parity_rule": "simulation::M5Metrics::lolr_liquidity_shortfall",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.lolr_advances",
       "parity_rule": "simulation::M5Metrics::lolr_advances",
       "source_kind": "committed_native_stage",
@@ -2314,8 +2323,89 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m5.resolution_funding_need",
+      "parity_rule": "simulation::M5Metrics::resolution_funding_need",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m5.resolution_cost",
       "parity_rule": "simulation::M5Metrics::resolution_cost",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.resolution_mutualized_cost",
+      "parity_rule": "simulation::M5Metrics::resolution_mutualized_cost",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.failed_account_migration_candidates",
+      "parity_rule": "simulation::M5Metrics::failed_account_migration_candidates",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "accounts_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.failed_accounts_migrated",
+      "parity_rule": "simulation::M5Metrics::failed_accounts_migrated",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "accounts_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.failed_loan_migration_candidates",
+      "parity_rule": "simulation::M5Metrics::failed_loan_migration_candidates",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "loans_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.failed_loans_migrated",
+      "parity_rule": "simulation::M5Metrics::failed_loans_migrated",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "loans_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.unified_bank_rwa_applied",
+      "parity_rule": "simulation::M5Metrics::unified_bank_rwa_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "flag"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.bank_rwa_headroom",
+      "parity_rule": "simulation::M5Metrics::bank_rwa_headroom",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m5.bank_rwa_credit_shortfall",
+      "parity_rule": "simulation::M5Metrics::bank_rwa_credit_shortfall",
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "currency_per_tick"
@@ -2566,6 +2656,33 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_max_applied",
+      "parity_rule": "simulation::M6Metrics::margin_max_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "ratio"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_target_equity",
+      "parity_rule": "simulation::M6Metrics::margin_target_equity",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.margin_max_binding_shortfall",
+      "parity_rule": "simulation::M6Metrics::margin_max_binding_shortfall",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m6.margin_originated",
       "parity_rule": "simulation::M6Metrics::margin_originated",
       "source_kind": "committed_native_stage",
@@ -2715,6 +2832,24 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "lots"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_bankruptcy_candidates",
+      "parity_rule": "simulation::M6Metrics::household_bankruptcy_candidates",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m6.household_bankruptcies_blocked_by_policy",
+      "parity_rule": "simulation::M6Metrics::household_bankruptcies_blocked_by_policy",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "households_per_tick"
     },
     {
       "aggregation": "last",
@@ -3979,6 +4114,24 @@
     {
       "aggregation": "last",
       "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_unified_bank_rwa_applied",
+      "parity_rule": "simulation::HousingMetrics::mortgage_unified_bank_rwa_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "flag"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.mortgage_bank_risk_weighted_assets",
+      "parity_rule": "simulation::HousingMetrics::mortgage_bank_risk_weighted_assets",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "currency"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
       "id": "metric.source.m8.housing.mortgage_rwa_principal_capacity",
       "parity_rule": "simulation::HousingMetrics::mortgage_rwa_principal_capacity",
       "source_kind": "committed_native_stage",
@@ -4182,6 +4335,33 @@
       "source_kind": "committed_native_stage",
       "tier": "analytic",
       "unit": "dwellings_per_tick"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_permit_cap_applied",
+      "parity_rule": "simulation::HousingMetrics::housing_permit_cap_applied",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "permits_per_year"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_units_ready_for_permits",
+      "parity_rule": "simulation::HousingMetrics::housing_units_ready_for_permits",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.source.m8.housing.housing_units_blocked_by_permits",
+      "parity_rule": "simulation::HousingMetrics::housing_units_blocked_by_permits",
+      "source_kind": "committed_native_stage",
+      "tier": "analytic",
+      "unit": "dwellings"
     },
     {
       "aggregation": "last",

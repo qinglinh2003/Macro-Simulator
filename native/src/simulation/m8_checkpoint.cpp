@@ -218,6 +218,8 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(mortgage_stress_rate_addon_applied)                                              \
     X(mortgage_risk_weight_applied)                                                    \
     X(mortgage_minimum_capital_ratio_applied)                                          \
+    X(mortgage_unified_bank_rwa_applied)                                               \
+    X(mortgage_bank_risk_weighted_assets)                                              \
     X(mortgage_rwa_principal_capacity)                                                 \
     X(mortgage_rwa_rejections)                                                         \
     X(mortgage_underwritten_principal_share)                                           \
@@ -241,6 +243,9 @@ constexpr std::size_t kMaximumCheckpointBytes = 512U * 1024U * 1024U;
     X(land_fee_stock_pressure_applied)                                                 \
     X(construction_output)                                                             \
     X(dwellings_completed)                                                             \
+    X(housing_permit_cap_applied)                                                      \
+    X(housing_units_ready_for_permits)                                                 \
+    X(housing_units_blocked_by_permits)                                                \
     X(permits_used)                                                                    \
     X(price_to_income_ratio)                                                           \
     X(rent_burden_ratio)                                                               \

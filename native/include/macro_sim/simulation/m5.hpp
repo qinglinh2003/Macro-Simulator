@@ -158,12 +158,22 @@ struct M5Metrics final {
     double total_reserves{0.0};
     double reserve_stock{0.0};
     double omo_flow{0.0};
+    double lolr_liquidity_shortfall{0.0};
     double lolr_advances{0.0};
     double lolr_outstanding{0.0};
     double interbank_volume{0.0};
     double interbank_rate{0.0};
     double run_flight_volume{0.0};
+    double resolution_funding_need{0.0};
     double resolution_cost{0.0};
+    double resolution_mutualized_cost{0.0};
+    double failed_account_migration_candidates{0.0};
+    double failed_accounts_migrated{0.0};
+    double failed_loan_migration_candidates{0.0};
+    double failed_loans_migrated{0.0};
+    double unified_bank_rwa_applied{0.0};
+    double bank_rwa_headroom{0.0};
+    double bank_rwa_credit_shortfall{0.0};
     double realized_credit_losses{0.0};
     double realized_interbank_losses{0.0};
     std::uint64_t alive_banks{0};
@@ -201,6 +211,10 @@ struct M5Runtime final {
     double previous_unemployment{0.0};
     double reserve_genesis{0.0};
     double bank_fear{0.0};
+    // M8 synchronizes these live regulatory terms before M5 credit allocation.
+    // Pure M5 simulations use the canonical whole-bank RWA defaults.
+    double unified_rwa_mortgage_risk_weight{0.35};
+    double unified_rwa_minimum_capital_ratio{0.08};
     // Dense by BankId. Index zero is the invalid-identity sentinel. M6 updates
     // this projection from the previous close's listed-bank price/peak ratio.
     // Pure M5 simulations retain the neutral value of one.
@@ -258,12 +272,16 @@ quote_m5_credit(const core::RootState &state, const M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,
                 AccountId borrower_account, Money requested, Money borrower_limit,
                 double credit_supply_multiplier = 1.0);
-[[nodiscard]] double
-m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
-                               double mortgage_risk_weight,
-                               double minimum_capital_ratio,
-                               double new_loan_risk_weight,
-                               bool unified_bank_rwa) noexcept;
+[[nodiscard]] double m5_bank_rwa_principal_capacity(const M5TickScratch &scratch,
+                                                    BankId bank,
+                                                    double mortgage_risk_weight,
+                                                    double minimum_capital_ratio,
+                                                    double new_loan_risk_weight,
+                                                    bool unified_bank_rwa) noexcept;
+[[nodiscard]] double m5_bank_risk_weighted_assets(const M5TickScratch &scratch,
+                                                  BankId bank,
+                                                  double mortgage_risk_weight,
+                                                  bool unified_bank_rwa) noexcept;
 [[nodiscard]] Result<LoanId>
 stage_m5_credit(const core::RootState &state, M4TickScratch &real_economy,
                 const M5Runtime &runtime, M5TickScratch &scratch,

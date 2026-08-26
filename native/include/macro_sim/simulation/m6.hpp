@@ -172,6 +172,9 @@ struct M6Metrics final {
     double bank_equity_fundamental_value{0.0};
     double primary_equity_raised{0.0};
     double margin_principal{0.0};
+    double margin_max_applied{0.0};
+    double margin_target_equity{0.0};
+    double margin_max_binding_shortfall{0.0};
     double margin_originated{0.0};
     double margin_repaid{0.0};
     double margin_writeoffs{0.0};
@@ -189,6 +192,8 @@ struct M6Metrics final {
     double household_equity_wealth_ema{0.0};
     double household_equity_consumption_addition{0.0};
     std::uint64_t active_security_lots{0};
+    std::uint64_t household_bankruptcy_candidates{0};
+    std::uint64_t household_bankruptcies_blocked_by_policy{0};
     std::uint64_t household_bankruptcies{0};
     std::uint64_t firm_births{0};
     std::uint64_t firm_exits{0};

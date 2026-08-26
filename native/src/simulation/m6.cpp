@@ -994,10 +994,18 @@ void generate_firm_equity_orders(const core::RootState &state, M4TickScratch &re
         const double maximum_share = runtime.rules.margin_credit
                                          ? runtime.policy.margin_max
                                          : kMaximumUnleveredEquityShare;
-        const double target_share =
-            std::clamp(runtime.rules.household_equity_target * (1.0 + average_pressure),
-                       0.0, maximum_share);
+        const double unconstrained_share = std::max(
+            0.0, runtime.rules.household_equity_target * (1.0 + average_pressure));
+        const double target_share = std::min(unconstrained_share, maximum_share);
         const double target_equity = std::max(0.0, target_share * net_worth);
+        const double unconstrained_target_equity =
+            std::max(0.0, unconstrained_share * net_worth);
+        if (runtime.rules.margin_credit) {
+            scratch.working_metrics_.margin_max_applied = runtime.policy.margin_max;
+            scratch.working_metrics_.margin_target_equity += target_equity;
+            scratch.working_metrics_.margin_max_binding_shortfall +=
+                std::max(0.0, unconstrained_target_equity - target_equity);
+        }
         double buy_cash = 0.0;
         for (std::size_t index = 0; index < watch.size(); ++index) {
             const auto equity_id = watch[index];
@@ -1426,6 +1434,8 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
     rebuild_debt_views(state, monetary, scratch);
     scratch.working_metrics_.margin_repaid = 0.0;
     scratch.working_metrics_.margin_writeoffs = 0.0;
+    scratch.working_metrics_.household_bankruptcy_candidates = 0;
+    scratch.working_metrics_.household_bankruptcies_blocked_by_policy = 0;
     scratch.working_metrics_.household_bankruptcies = 0;
     state.households.for_each_alive([&](HouseholdId household_id,
                                         const core::HouseholdComponent &household) {
@@ -1464,9 +1474,13 @@ void generate_bank_equity_orders(const core::RootState &state, M4TickScratch &re
             monetary.working_metrics_.principal_repaid += paid;
         }
         const double remaining_margin = outstanding_margin(scratch, account);
-        if (!runtime.policy.household_bankruptcy ||
-            remaining_margin <= kEconomicEpsilon ||
+        if (remaining_margin <= kEconomicEpsilon ||
             projected_balance(real, account) + equity - remaining_margin > 0.0) {
+            return;
+        }
+        ++scratch.working_metrics_.household_bankruptcy_candidates;
+        if (!runtime.policy.household_bankruptcy) {
+            ++scratch.working_metrics_.household_bankruptcies_blocked_by_policy;
             return;
         }
         double cash = projected_balance(real, account);

@@ -393,6 +393,79 @@ void test_bank_capital_constraint_has_dose_and_withdrawal_contract() {
     assert(std::abs(withdrawn.new_credit - unconstrained.new_credit) < 1.0e-12);
 }
 
+[[nodiscard]] macro_sim::simulation::M5Metrics
+run_unified_rwa_fixture(bool enabled, std::uint64_t seed) {
+    auto spec = base_spec();
+    spec.real_economy.seed = seed;
+    spec.real_economy.rules.initial_firm_money = 0.0;
+    spec.real_economy.rules.initial_expected_demand = 30.0;
+    spec.rules.opening_capital_per_bank = 2.0;
+    spec.rules.rate_competition = false;
+    spec.policy.bank_capital_constraint = false;
+    spec.policy.unified_bank_rwa = enabled;
+    spec.policy.firm_leverage_limit = 100.0;
+    auto harness = build(spec);
+    harness.runtime.unified_rwa_minimum_capital_ratio = 1.0;
+    harness.runtime.unified_rwa_mortgage_risk_weight = 0.35;
+    const auto result = macro_sim::simulation::advance_m5_ticks(
+        harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
+        harness.scratch, harness.tick, 1);
+    assert(result.ok());
+    return result.get_if()->metrics;
+}
+
+void test_unified_bank_rwa_has_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {51U, 52U, 53U, 54U}) {
+        const auto legacy = run_unified_rwa_fixture(false, seed);
+        const auto unified = run_unified_rwa_fixture(true, seed);
+        const auto withdrawn = run_unified_rwa_fixture(false, seed);
+        assert(legacy.unified_bank_rwa_applied == 0.0);
+        assert(unified.unified_bank_rwa_applied == 1.0);
+        assert(unified.bank_rwa_headroom > 0.0);
+        assert(unified.bank_rwa_credit_shortfall > 0.0);
+        assert(unified.new_credit < legacy.new_credit);
+        assert(withdrawn.unified_bank_rwa_applied == 0.0);
+        assert(withdrawn.bank_rwa_credit_shortfall == 0.0);
+        assert(withdrawn.new_credit == legacy.new_credit);
+    }
+}
+
+void test_unified_bank_rwa_weights_one_common_asset_envelope() {
+    M5TickScratch scratch;
+    scratch.loans_ = {
+        {
+            macro_sim::LoanId(1),
+            BankId(1),
+            macro_sim::core::OwnerId::household(macro_sim::HouseholdId(1)),
+            AccountId(1),
+            macro_sim::Money(40.0),
+            0.0,
+            0.0,
+            {},
+            true,
+            macro_sim::core::LoanPurpose::general,
+        },
+        {
+            macro_sim::LoanId(2),
+            BankId(1),
+            macro_sim::core::OwnerId::household(macro_sim::HouseholdId(2)),
+            AccountId(2),
+            macro_sim::Money(20.0),
+            0.0,
+            0.0,
+            {},
+            true,
+            macro_sim::core::LoanPurpose::mortgage,
+        },
+    };
+    const double mortgage_only = macro_sim::simulation::m5_bank_risk_weighted_assets(
+        scratch, BankId(1), 0.35, false);
+    const double whole_bank = macro_sim::simulation::m5_bank_risk_weighted_assets(
+        scratch, BankId(1), 0.35, true);
+    assert(std::abs(mortgage_only - 7.0) < 1.0e-12);
+    assert(std::abs(whole_bank - 47.0) < 1.0e-12);
+}
+
 struct DirectTransmissionResponse final {
     double investment_target{0.0};
     double investment_user_cost_multiplier_mean{1.0};
@@ -562,12 +635,16 @@ void test_phase_fault_is_atomic() {
     assert(harness.runtime == runtime_before);
 }
 
-void test_default_resolution() {
+[[nodiscard]] macro_sim::simulation::M5Metrics
+run_resolution_fixture(bool state_backstop, bool migrate_relationships,
+                       std::uint64_t seed) {
     auto spec = base_spec();
+    spec.real_economy.seed = seed;
     spec.rules.opening_capital_per_bank = 1.0;
     spec.policy.bank_leverage_cap = 50.0;
     spec.rules.bank_leverage_mean = 50.0;
-    spec.policy.state_resolution_backstop = true;
+    spec.policy.state_resolution_backstop = state_backstop;
+    spec.policy.migrate_relationships_on_failure = migrate_relationships;
     spec.rules.direct_monetary_transmission = false;
     spec.real_economy.rules.initial_firm_money = 0.0;
     spec.real_economy.rules.initial_consumption_inventory = 0.0;
@@ -600,12 +677,47 @@ void test_default_resolution() {
         harness.root, harness.real_runtime, harness.real_scratch, harness.runtime,
         harness.scratch, harness.tick, 1, options);
     assert(crisis.ok());
-    assert(crisis.get_if()->metrics.realized_credit_losses > 0.0);
-    assert(crisis.get_if()->metrics.bank_failures >= 1);
-    assert(crisis.get_if()->metrics.resolution_cost >= 0.0);
+    return crisis.get_if()->metrics;
 }
 
-void test_run_and_lolr() {
+void test_bank_resolution_fund_has_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {51U, 52U, 53U, 54U}) {
+        const auto inactive = run_resolution_fixture(false, true, seed);
+        const auto active = run_resolution_fixture(true, true, seed);
+        const auto withdrawn = run_resolution_fixture(false, true, seed);
+        assert(inactive.realized_credit_losses > 0.0);
+        assert(inactive.bank_failures >= 1U);
+        assert(inactive.resolution_funding_need > 0.0);
+        assert(active.resolution_funding_need > 0.0);
+        assert(inactive.resolution_cost == 0.0);
+        assert(active.resolution_cost > 0.0);
+        assert(inactive.resolution_mutualized_cost > 0.0);
+        assert(active.resolution_mutualized_cost == 0.0);
+        assert(withdrawn.resolution_cost == inactive.resolution_cost);
+        assert(withdrawn.resolution_mutualized_cost ==
+               inactive.resolution_mutualized_cost);
+    }
+}
+
+void test_bank_migration_has_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {51U, 52U, 53U, 54U}) {
+        const auto stranded = run_resolution_fixture(true, false, seed);
+        const auto migrated = run_resolution_fixture(true, true, seed);
+        const auto withdrawn = run_resolution_fixture(true, false, seed);
+        assert(stranded.failed_account_migration_candidates > 0.0);
+        assert(migrated.failed_account_migration_candidates > 0.0);
+        assert(stranded.failed_accounts_migrated == 0.0);
+        assert(migrated.failed_accounts_migrated ==
+               migrated.failed_account_migration_candidates);
+        assert(stranded.failed_loans_migrated == 0.0);
+        assert(migrated.failed_loans_migrated ==
+               migrated.failed_loan_migration_candidates);
+        assert(withdrawn.failed_accounts_migrated == 0.0);
+        assert(withdrawn.failed_loans_migrated == 0.0);
+    }
+}
+
+void test_lolr_has_activation_nonactivation_and_withdrawal_contract() {
     auto spec = base_spec();
     spec.rules.bank_runs = true;
     spec.policy.open_market_operations = true;
@@ -639,6 +751,8 @@ void test_run_and_lolr() {
         without_lolr.root, without_lolr.real_runtime, without_lolr.real_scratch,
         without_lolr.runtime, without_lolr.scratch, without_lolr.tick, 1, run);
     assert(failed.ok());
+    assert(failed.get_if()->metrics.lolr_liquidity_shortfall > 0.0);
+    assert(failed.get_if()->metrics.lolr_advances == 0.0);
     assert(failed.get_if()->metrics.bank_failures >= 1);
     assert(std::abs(failed.get_if()->metrics.realized_interbank_losses) < 1.0e-9);
     assert(std::abs(without_lolr.root.reserves.total_reserves().value() -
@@ -664,8 +778,23 @@ void test_run_and_lolr() {
         with_lolr.root, with_lolr.real_runtime, with_lolr.real_scratch,
         with_lolr.runtime, with_lolr.scratch, with_lolr.tick, 1, run);
     assert(rescued.ok());
+    assert(rescued.get_if()->metrics.lolr_liquidity_shortfall > 0.0);
     assert(rescued.get_if()->metrics.lolr_advances > 0.0);
     assert(rescued.get_if()->metrics.bank_failures == 0);
+
+    spec.policy.lender_of_last_resort = false;
+    auto withdrawn = build(spec);
+    drain = macro_sim::simulation::advance_m5_ticks(
+        withdrawn.root, withdrawn.real_runtime, withdrawn.real_scratch,
+        withdrawn.runtime, withdrawn.scratch, withdrawn.tick, 1);
+    assert(drain.ok());
+    const auto withdrawn_crisis = macro_sim::simulation::advance_m5_ticks(
+        withdrawn.root, withdrawn.real_runtime, withdrawn.real_scratch,
+        withdrawn.runtime, withdrawn.scratch, withdrawn.tick, 1, run);
+    assert(withdrawn_crisis.ok());
+    assert(withdrawn_crisis.get_if()->metrics.lolr_liquidity_shortfall > 0.0);
+    assert(withdrawn_crisis.get_if()->metrics.lolr_advances == 0.0);
+    assert(withdrawn_crisis.get_if()->metrics.bank_failures >= 1U);
 }
 
 void test_lolr_advance_matures_and_retires_reserves() {
@@ -870,12 +999,15 @@ int main() {
     test_credit_and_monetary_tick();
     test_firm_credit_reports_existing_stock_and_current_dscr_gate();
     test_bank_capital_constraint_has_dose_and_withdrawal_contract();
+    test_unified_bank_rwa_has_activation_nonactivation_and_withdrawal_contract();
+    test_unified_bank_rwa_weights_one_common_asset_envelope();
     test_direct_monetary_transmission_changes_investment_and_household_service();
     test_interbank_clearing();
     test_realized_and_legacy_bank_pnl_paths();
     test_phase_fault_is_atomic();
-    test_default_resolution();
-    test_run_and_lolr();
+    test_bank_resolution_fund_has_activation_nonactivation_and_withdrawal_contract();
+    test_bank_migration_has_activation_nonactivation_and_withdrawal_contract();
+    test_lolr_has_activation_nonactivation_and_withdrawal_contract();
     test_lolr_advance_matures_and_retires_reserves();
     test_external_settlement_recloses_reserve_liquidity();
     test_household_interest_arrears_waterfall_and_writeoff();

@@ -213,16 +213,17 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
         });
 }
 
-[[nodiscard]] double bank_capacity(const core::RootState &state,
-                                   const M5Runtime &runtime,
-                                   const M5TickScratch &scratch, BankId bank) noexcept {
+[[nodiscard]] double bank_gross_capacity(const core::RootState &state,
+                                         const M5Runtime &runtime,
+                                         const M5TickScratch &scratch,
+                                         BankId bank) noexcept {
     const auto index = bank_index(bank);
     const auto *component = bank_component(state, bank);
     if (component == nullptr || index >= scratch.bank_alive_.size() ||
         scratch.bank_alive_[index] == 0U) {
         return 0.0;
     }
-    if (!runtime.policy.bank_capital_constraint && !runtime.policy.unified_bank_rwa) {
+    if (!runtime.policy.bank_capital_constraint) {
         return std::numeric_limits<double>::max();
     }
     double leverage = component->leverage_appetite;
@@ -231,6 +232,24 @@ void refresh_aggregates(const core::RootState &state, const M4TickScratch &real,
     }
     const double capital = std::max(0.0, scratch.bank_capital_live_[index]);
     return std::max(0.0, leverage * capital - scratch.exposure_by_bank_[index]);
+}
+
+[[nodiscard]] double bank_rwa_capacity(const M5Runtime &runtime,
+                                       const M5TickScratch &scratch,
+                                       BankId bank) noexcept {
+    if (!runtime.policy.unified_bank_rwa) {
+        return std::numeric_limits<double>::max();
+    }
+    return m5_bank_rwa_principal_capacity(
+        scratch, bank, runtime.unified_rwa_mortgage_risk_weight,
+        runtime.unified_rwa_minimum_capital_ratio, 1.0, true);
+}
+
+[[nodiscard]] double bank_capacity(const core::RootState &state,
+                                   const M5Runtime &runtime,
+                                   const M5TickScratch &scratch, BankId bank) noexcept {
+    return std::min(bank_gross_capacity(state, runtime, scratch, bank),
+                    bank_rwa_capacity(runtime, scratch, bank));
 }
 
 [[nodiscard]] BankId relationship_bank(const core::RootState &state,
@@ -846,12 +865,21 @@ void add_cb_operation(M5TickScratch &scratch, core::CentralBankOperationKind kin
     }
     scratch.working_metrics_.bank_capital_constraint_applied =
         runtime.policy.bank_capital_constraint ? 1.0 : 0.0;
+    scratch.working_metrics_.unified_bank_rwa_applied =
+        runtime.policy.unified_bank_rwa ? 1.0 : 0.0;
     if (runtime.policy.bank_capital_constraint) {
         double aggregate_headroom = 0.0;
         state.banks.for_each_alive([&](BankId bank, const core::BankComponent &) {
-            aggregate_headroom += bank_capacity(state, runtime, scratch, bank);
+            aggregate_headroom += bank_gross_capacity(state, runtime, scratch, bank);
         });
         scratch.working_metrics_.bank_gross_capital_headroom = aggregate_headroom;
+    }
+    if (runtime.policy.unified_bank_rwa) {
+        double aggregate_headroom = 0.0;
+        state.banks.for_each_alive([&](BankId bank, const core::BankComponent &) {
+            aggregate_headroom += bank_rwa_capacity(runtime, scratch, bank);
+        });
+        scratch.working_metrics_.bank_rwa_headroom = aggregate_headroom;
     }
     for (std::size_t index = 0; index < real.firm_ids_.size(); ++index) {
         const auto *firm = state.firms.get(real.firm_ids_[index]);
@@ -1221,7 +1249,7 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
                                                 M5Runtime &runtime, M4TickScratch &real,
                                                 M5TickScratch &scratch, Tick tick) {
     auto status = run_interbank(state, runtime, real, scratch, tick);
-    if (!status.ok() || !runtime.policy.lender_of_last_resort) {
+    if (!status.ok()) {
         return status;
     }
     state.banks.for_each_alive(
@@ -1234,7 +1262,10 @@ void add_lolr(M5Runtime &runtime, M5TickScratch &scratch, M4TickScratch &real,
             const auto node_slot = node_index(bank.settlement_node);
             const double shortfall = std::max(0.0, -real.reserve_balances_[node_slot]);
             if (shortfall > algorithms::kEconomicEpsilon) {
-                add_lolr(runtime, scratch, real, bank, id, shortfall, tick);
+                scratch.working_metrics_.lolr_liquidity_shortfall += shortfall;
+                if (runtime.policy.lender_of_last_resort) {
+                    add_lolr(runtime, scratch, real, bank, id, shortfall, tick);
+                }
             }
         });
     return Status::success();
@@ -1348,14 +1379,26 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
         pnl_for(scratch, receiver)->resolution_flow += principal;
         record.lender = receiver;
     }
+    const auto *failed_bank = state.banks.get(failed);
+    for (const auto &account : state.postings.records()) {
+        const auto index = account_index(account.id);
+        if (account.id != failed_bank->cash_account &&
+            real.account_nodes_[index] == failed_bank->settlement_node) {
+            ++scratch.working_metrics_.failed_account_migration_candidates;
+        }
+    }
+    for (const auto &loan : scratch.loans_) {
+        if (loan.active && loan.lender == failed) {
+            ++scratch.working_metrics_.failed_loan_migration_candidates;
+        }
+    }
     if (runtime.policy.migrate_relationships_on_failure &&
         !scratch.alive_banks_.empty()) {
         std::size_t next = 0;
         for (auto &account : state.postings.records()) {
             const auto index = account_index(account.id);
-            if (account.id == state.banks.get(failed)->cash_account ||
-                real.account_nodes_[index] !=
-                    state.banks.get(failed)->settlement_node) {
+            if (account.id == failed_bank->cash_account ||
+                real.account_nodes_[index] != failed_bank->settlement_node) {
                 continue;
             }
             const auto target =
@@ -1364,16 +1407,17 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
             if (!status.ok()) {
                 return status;
             }
+            ++scratch.working_metrics_.failed_accounts_migrated;
         }
         next = 0;
         for (auto &loan : scratch.loans_) {
             if (loan.active && loan.lender == failed) {
                 loan.lender =
                     scratch.alive_banks_[next++ % scratch.alive_banks_.size()];
+                ++scratch.working_metrics_.failed_loans_migrated;
             }
         }
     }
-    const auto *failed_bank = state.banks.get(failed);
     const auto failed_account = account_index(failed_bank->cash_account);
     if (real.balances_[failed_account] > algorithms::kEconomicEpsilon) {
         AccountId receiver_account = state.institutions.treasury_account;
@@ -1394,6 +1438,7 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
         }
     }
     double hole = std::max(0.0, -real.balances_[failed_account]);
+    scratch.working_metrics_.resolution_funding_need += hole;
     if (hole > algorithms::kEconomicEpsilon && allow_state_support &&
         runtime.policy.state_resolution_backstop &&
         state.institutions.treasury_account.valid()) {
@@ -1427,6 +1472,7 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
             }
             pnl_for(scratch, bank)->resolution_flow -= amount;
             pnl_for(scratch, failed)->resolution_flow += amount;
+            scratch.working_metrics_.resolution_mutualized_cost += amount;
             hole -= amount;
         }
     }
@@ -1514,10 +1560,13 @@ void extinguish_household_interest_arrears(M5TickScratch &scratch,
             const auto account = account_index(household->primary_account);
             const double withdrawal = std::max(0.0, real.balances_[account]);
             auto &reserves = real.reserve_balances_[node_index(bank.settlement_node)];
-            if (reserves + kTolerance < withdrawal && allow_state_support &&
-                runtime.policy.lender_of_last_resort &&
-                scratch.bank_capital_live_[bank_index(id)] > 0.0) {
-                add_lolr(runtime, scratch, real, bank, id, withdrawal - reserves, tick);
+            if (reserves + kTolerance < withdrawal) {
+                const double shortfall = withdrawal - reserves;
+                scratch.working_metrics_.lolr_liquidity_shortfall += shortfall;
+                if (allow_state_support && runtime.policy.lender_of_last_resort &&
+                    scratch.bank_capital_live_[bank_index(id)] > 0.0) {
+                    add_lolr(runtime, scratch, real, bank, id, shortfall, tick);
+                }
             }
             if (reserves + kTolerance >= withdrawal) {
                 static_cast<void>(migrate_account(
@@ -2323,23 +2372,11 @@ std::uint64_t M5TickScratch::capacity_signature() const noexcept {
     return signature;
 }
 
-double m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
-                                      double mortgage_risk_weight,
-                                      double minimum_capital_ratio,
-                                      double new_loan_risk_weight,
-                                      bool unified_bank_rwa) noexcept {
-    const auto slot = bank_index(bank);
-    if (!bank.valid() || slot >= scratch.bank_alive_.size() ||
-        slot >= scratch.bank_capital_live_.size() ||
-        scratch.bank_alive_[slot] == 0U || !finite(mortgage_risk_weight) ||
-        !finite(minimum_capital_ratio) || !finite(new_loan_risk_weight) ||
-        mortgage_risk_weight < 0.0 || minimum_capital_ratio < 0.0 ||
-        new_loan_risk_weight < 0.0) {
+double m5_bank_risk_weighted_assets(const M5TickScratch &scratch, BankId bank,
+                                    double mortgage_risk_weight,
+                                    bool unified_bank_rwa) noexcept {
+    if (!bank.valid() || !finite(mortgage_risk_weight) || mortgage_risk_weight < 0.0) {
         return 0.0;
-    }
-    if (minimum_capital_ratio <= algorithms::kEconomicEpsilon ||
-        new_loan_risk_weight <= algorithms::kEconomicEpsilon) {
-        return std::numeric_limits<double>::max();
     }
     double risk_weighted_assets = 0.0;
     for (const auto &loan : scratch.loans_) {
@@ -2348,12 +2385,33 @@ double m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
             continue;
         }
         if (loan.purpose == core::LoanPurpose::mortgage) {
-            risk_weighted_assets +=
-                mortgage_risk_weight * loan.principal.value();
+            risk_weighted_assets += mortgage_risk_weight * loan.principal.value();
         } else if (unified_bank_rwa) {
             risk_weighted_assets += loan.principal.value();
         }
     }
+    return risk_weighted_assets;
+}
+
+double m5_bank_rwa_principal_capacity(const M5TickScratch &scratch, BankId bank,
+                                      double mortgage_risk_weight,
+                                      double minimum_capital_ratio,
+                                      double new_loan_risk_weight,
+                                      bool unified_bank_rwa) noexcept {
+    const auto slot = bank_index(bank);
+    if (!bank.valid() || slot >= scratch.bank_alive_.size() ||
+        slot >= scratch.bank_capital_live_.size() || scratch.bank_alive_[slot] == 0U ||
+        !finite(mortgage_risk_weight) || !finite(minimum_capital_ratio) ||
+        !finite(new_loan_risk_weight) || mortgage_risk_weight < 0.0 ||
+        minimum_capital_ratio < 0.0 || new_loan_risk_weight < 0.0) {
+        return 0.0;
+    }
+    if (minimum_capital_ratio <= algorithms::kEconomicEpsilon ||
+        new_loan_risk_weight <= algorithms::kEconomicEpsilon) {
+        return std::numeric_limits<double>::max();
+    }
+    const double risk_weighted_assets = m5_bank_risk_weighted_assets(
+        scratch, bank, mortgage_risk_weight, unified_bank_rwa);
     const double capital = std::max(0.0, scratch.bank_capital_live_[slot]);
     const double risk_weighted_headroom =
         capital / minimum_capital_ratio - risk_weighted_assets;
@@ -2397,13 +2455,21 @@ Result<M5CreditQuote> quote_m5_credit(const core::RootState &state,
         scratch.bank_alive_[lender_slot] == 0U) {
         return Status(ErrorCode::insufficient_funds, "M5 credit lender is unavailable");
     }
-    const double gross_capital_room = bank_capacity(state, runtime, scratch, lender);
+    const double gross_capital_room =
+        bank_gross_capacity(state, runtime, scratch, lender);
+    const double rwa_room = bank_rwa_capacity(runtime, scratch, lender);
+    const double capital_room = std::min(gross_capital_room, rwa_room);
     if (runtime.policy.bank_capital_constraint) {
         scratch.working_metrics_.bank_gross_capital_credit_shortfall += std::max(
             0.0, requested_principal * std::min(1.0, credit_supply_multiplier) -
                      std::max(0.0, gross_capital_room));
     }
-    double room = gross_capital_room;
+    if (runtime.policy.unified_bank_rwa) {
+        scratch.working_metrics_.bank_rwa_credit_shortfall += std::max(
+            0.0, requested_principal * std::min(1.0, credit_supply_multiplier) -
+                     std::max(0.0, rwa_room));
+    }
+    double room = capital_room;
     if (runtime.policy.bank_exposure_limit > 0.0) {
         if (lender_slot >= scratch.bank_capital_live_.size()) {
             return Status(ErrorCode::internal_error,
@@ -3049,10 +3115,15 @@ Status validate_m5_state(const core::RootState &state,
         runtime.headline_price_index <= 0.0 ||
         runtime.previous_headline_price_index <= 0.0 ||
         !finite(runtime.previous_unemployment) || !finite(runtime.reserve_genesis) ||
-        !finite(runtime.bank_fear) || !all_finite(runtime.bank_market_health) ||
-        std::any_of(runtime.bank_market_health.begin(),
-                    runtime.bank_market_health.end(),
-                    [](double value) { return value < 0.0 || value > 1.0; }) ||
+        !finite(runtime.bank_fear) ||
+        !finite(runtime.unified_rwa_mortgage_risk_weight) ||
+        !finite(runtime.unified_rwa_minimum_capital_ratio) ||
+        runtime.unified_rwa_mortgage_risk_weight < 0.0 ||
+        runtime.unified_rwa_minimum_capital_ratio < 0.0 ||
+        !all_finite(runtime.bank_market_health) ||
+        std::any_of(
+            runtime.bank_market_health.begin(), runtime.bank_market_health.end(),
+            [](double value) { return value < 0.0 || value > 1.0; }) ||
         !state.interbank.validate_finite().ok() ||
         !state.central_bank_operations.validate_finite().ok() ||
         !state.bank_pnl.validate_finite().ok() ||

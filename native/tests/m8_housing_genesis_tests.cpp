@@ -269,6 +269,44 @@ void test_builders_create_permitted_real_stock() {
     assert(harness.root.genesis_money == money_before);
 }
 
+[[nodiscard]] HousingMetrics run_housing_permit_fixture(std::uint64_t permit_cap,
+                                                        std::uint64_t seed) {
+    auto value = housing_spec();
+    value.domestic_economy.financial_economy.monetary_economy.real_economy.seed = seed;
+    value.housing_rules.resale_market = true;
+    value.housing_rules.construction = true;
+    value.housing_rules.builder_count = 1;
+    value.housing_rules.builder_productivity = 0.001;
+    value.housing_rules.builder_demand_seed = 0.0;
+    value.housing_rules.initial_builder_cash_buffer = 1'000.0;
+    value.housing_policy.land_fee_share = 0.0;
+    value.housing_policy.annual_housing_permits = permit_cap;
+    auto harness = build(value);
+    harness.runtime.builders.front().work_in_progress = 3.0;
+    const auto result = advance(harness, 1);
+    assert(result.ok());
+    return result.get_if()->metrics.housing;
+}
+
+void test_housing_permits_have_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {8100U, 8101U, 8102U, 8103U}) {
+        const auto restricted = run_housing_permit_fixture(0U, seed);
+        const auto authorized = run_housing_permit_fixture(10U, seed);
+        const auto withdrawn = run_housing_permit_fixture(0U, seed);
+        assert(restricted.housing_permit_cap_applied == 0.0);
+        assert(authorized.housing_permit_cap_applied == 10.0);
+        assert(restricted.housing_units_ready_for_permits >= 3.0);
+        assert(authorized.housing_units_ready_for_permits >= 3.0);
+        assert(restricted.housing_units_blocked_by_permits >= 3.0);
+        assert(restricted.dwellings_completed == 0.0);
+        assert(authorized.housing_units_blocked_by_permits == 0.0);
+        assert(authorized.dwellings_completed >= 3.0);
+        assert(withdrawn.housing_units_blocked_by_permits ==
+               restricted.housing_units_blocked_by_permits);
+        assert(withdrawn.dwellings_completed == restricted.dwellings_completed);
+    }
+}
+
 void test_builder_plan_can_finance_work_in_progress() {
     auto value = housing_spec();
     value.housing_rules.resale_market = true;
@@ -445,6 +483,7 @@ int main() {
     test_quiet_days_preserve_title_exactly();
     test_capability_dependencies_are_rejected();
     test_builders_create_permitted_real_stock();
+    test_housing_permits_have_activation_nonactivation_and_withdrawal_contract();
     test_builder_plan_can_finance_work_in_progress();
     test_builder_exit_transfers_work_in_progress();
     test_idle_builder_sector_consolidates();

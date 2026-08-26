@@ -360,6 +360,8 @@ struct HousingMetrics final {
     double mortgage_stress_rate_addon_applied{0.0};
     double mortgage_risk_weight_applied{0.0};
     double mortgage_minimum_capital_ratio_applied{0.0};
+    double mortgage_unified_bank_rwa_applied{0.0};
+    double mortgage_bank_risk_weighted_assets{0.0};
     double mortgage_rwa_principal_capacity{0.0};
     double mortgage_rwa_rejections{0.0};
     double mortgage_underwritten_principal_share{0.0};
@@ -383,6 +385,9 @@ struct HousingMetrics final {
     double land_fee_stock_pressure_applied{0.0};
     double construction_output{0.0};
     double dwellings_completed{0.0};
+    double housing_permit_cap_applied{0.0};
+    double housing_units_ready_for_permits{0.0};
+    double housing_units_blocked_by_permits{0.0};
     double permits_used{0.0};
     double price_to_income_ratio{1.0};
     double rent_burden_ratio{1.0};

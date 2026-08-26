@@ -670,13 +670,17 @@ class M8Extension final : public M7TickExtension {
     }
 
     Status prepare_tick(const core::RootState &state, M4Runtime &real_runtime,
-                        M4TickScratch &real, M5Runtime &, M5TickScratch &, M6Runtime &,
-                        M6TickScratch &, M7Runtime &, M7TickScratch &population, Tick,
-                        PhiloxRng &) override {
+                        M4TickScratch &real, M5Runtime &monetary, M5TickScratch &,
+                        M6Runtime &, M6TickScratch &, M7Runtime &,
+                        M7TickScratch &population, Tick, PhiloxRng &) override {
         memory_efficient_staging_ =
             options_.base.base.base.base.memory_efficient_staging;
         government_enabled_ = (real_runtime.capability_mask &
                                capability_bit(M4Capability::government)) != 0U;
+        monetary.unified_rwa_mortgage_risk_weight =
+            runtime_.housing_policy.mortgage_risk_weight;
+        monetary.unified_rwa_minimum_capital_ratio =
+            runtime_.housing_policy.mortgage_minimum_capital_ratio;
         if (memory_efficient_staging_) {
             scratch_.energy_producers_ = std::move(runtime_.energy_producers);
             scratch_.energy_inputs_ = std::move(runtime_.energy_inputs);
@@ -2038,6 +2042,23 @@ class M8Extension final : public M7TickExtension {
             scratch_.permits_used_ = 0;
         }
         const auto permit_cap = runtime_.housing_policy.annual_housing_permits;
+        std::uint64_t ready_units = 0U;
+        for (const auto &builder : scratch_.builders_) {
+            if (builder.active) {
+                ready_units += static_cast<std::uint64_t>(
+                    std::floor(std::max(0.0, builder.work_in_progress)));
+            }
+        }
+        const auto remaining_permits = scratch_.permits_used_ < permit_cap
+                                           ? permit_cap - scratch_.permits_used_
+                                           : 0U;
+        scratch_.working_metrics_.housing.housing_permit_cap_applied =
+            static_cast<double>(permit_cap);
+        scratch_.working_metrics_.housing.housing_units_ready_for_permits =
+            static_cast<double>(ready_units);
+        scratch_.working_metrics_.housing.housing_units_blocked_by_permits =
+            static_cast<double>(
+                ready_units > remaining_permits ? ready_units - remaining_permits : 0U);
         if (scratch_.permits_used_ >= permit_cap) {
             return Status::success();
         }
@@ -2248,6 +2269,13 @@ class M8Extension final : public M7TickExtension {
                 scratch_.working_metrics_.housing
                     .mortgage_minimum_capital_ratio_applied =
                     runtime_.housing_policy.mortgage_minimum_capital_ratio;
+                scratch_.working_metrics_.housing.mortgage_unified_bank_rwa_applied =
+                    monetary.policy.unified_bank_rwa ? 1.0 : 0.0;
+                scratch_.working_metrics_.housing.mortgage_bank_risk_weighted_assets =
+                    m5_bank_risk_weighted_assets(
+                        monetary_scratch, quote.get_if()->lender,
+                        runtime_.housing_policy.mortgage_risk_weight,
+                        monetary.policy.unified_bank_rwa);
                 scratch_.working_metrics_.housing.mortgage_rwa_principal_capacity =
                     rwa_capacity;
                 if (required > rwa_capacity + kTolerance) {

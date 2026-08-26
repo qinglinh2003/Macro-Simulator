@@ -259,6 +259,9 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.bank_equity_fundamental_value,
         value.primary_equity_raised,
         value.margin_principal,
+        value.margin_max_applied,
+        value.margin_target_equity,
+        value.margin_max_binding_shortfall,
         value.margin_originated,
         value.margin_repaid,
         value.margin_writeoffs,
@@ -276,6 +279,8 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.household_equity_wealth_ema,
         value.household_equity_consumption_addition,
         value.active_security_lots,
+        value.household_bankruptcy_candidates,
+        value.household_bankruptcies_blocked_by_policy,
         value.household_bankruptcies,
         value.firm_births,
         value.firm_exits,
@@ -287,7 +292,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M6Metrics &value) {
-    if (!row.is_array() || row.size() != 47) {
+    if (!row.is_array() || row.size() != 52) {
         throw std::runtime_error("invalid M6 metrics");
     }
     std::size_t i = 0;
@@ -314,6 +319,9 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.bank_equity_fundamental_value = row[i++].get<double>();
     value.primary_equity_raised = row[i++].get<double>();
     value.margin_principal = row[i++].get<double>();
+    value.margin_max_applied = row[i++].get<double>();
+    value.margin_target_equity = row[i++].get<double>();
+    value.margin_max_binding_shortfall = row[i++].get<double>();
     value.margin_originated = row[i++].get<double>();
     value.margin_repaid = row[i++].get<double>();
     value.margin_writeoffs = row[i++].get<double>();
@@ -331,6 +339,8 @@ void decode_metrics(const Json &row, M6Metrics &value) {
     value.household_equity_wealth_ema = row[i++].get<double>();
     value.household_equity_consumption_addition = row[i++].get<double>();
     value.active_security_lots = row[i++].get<std::uint64_t>();
+    value.household_bankruptcy_candidates = row[i++].get<std::uint64_t>();
+    value.household_bankruptcies_blocked_by_policy = row[i++].get<std::uint64_t>();
     value.household_bankruptcies = row[i++].get<std::uint64_t>();
     value.firm_births = row[i++].get<std::uint64_t>();
     value.firm_exits = row[i++].get<std::uint64_t>();

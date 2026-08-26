@@ -320,12 +320,22 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
         value.total_reserves,
         value.reserve_stock,
         value.omo_flow,
+        value.lolr_liquidity_shortfall,
         value.lolr_advances,
         value.lolr_outstanding,
         value.interbank_volume,
         value.interbank_rate,
         value.run_flight_volume,
+        value.resolution_funding_need,
         value.resolution_cost,
+        value.resolution_mutualized_cost,
+        value.failed_account_migration_candidates,
+        value.failed_accounts_migrated,
+        value.failed_loan_migration_candidates,
+        value.failed_loans_migrated,
+        value.unified_bank_rwa_applied,
+        value.bank_rwa_headroom,
+        value.bank_rwa_credit_shortfall,
         value.realized_credit_losses,
         value.realized_interbank_losses,
         value.alive_banks,
@@ -334,7 +344,7 @@ void append_u64(std::vector<std::uint8_t> &bytes, std::uint64_t value) {
 }
 
 void decode_metrics(const Json &row, M5Metrics &value) {
-    if (!row.is_array() || row.size() != 43) {
+    if (!row.is_array() || row.size() != 53) {
         throw std::runtime_error("invalid M5 metrics");
     }
     std::size_t i = 0;
@@ -371,12 +381,22 @@ void decode_metrics(const Json &row, M5Metrics &value) {
     value.total_reserves = row[i++].get<double>();
     value.reserve_stock = row[i++].get<double>();
     value.omo_flow = row[i++].get<double>();
+    value.lolr_liquidity_shortfall = row[i++].get<double>();
     value.lolr_advances = row[i++].get<double>();
     value.lolr_outstanding = row[i++].get<double>();
     value.interbank_volume = row[i++].get<double>();
     value.interbank_rate = row[i++].get<double>();
     value.run_flight_volume = row[i++].get<double>();
+    value.resolution_funding_need = row[i++].get<double>();
     value.resolution_cost = row[i++].get<double>();
+    value.resolution_mutualized_cost = row[i++].get<double>();
+    value.failed_account_migration_candidates = row[i++].get<double>();
+    value.failed_accounts_migrated = row[i++].get<double>();
+    value.failed_loan_migration_candidates = row[i++].get<double>();
+    value.failed_loans_migrated = row[i++].get<double>();
+    value.unified_bank_rwa_applied = row[i++].get<double>();
+    value.bank_rwa_headroom = row[i++].get<double>();
+    value.bank_rwa_credit_shortfall = row[i++].get<double>();
     value.realized_credit_losses = row[i++].get<double>();
     value.realized_interbank_losses = row[i++].get<double>();
     value.alive_banks = row[i++].get<std::uint64_t>();
@@ -397,6 +417,8 @@ void decode_metrics(const Json &row, M5Metrics &value) {
         runtime.previous_unemployment,
         runtime.reserve_genesis,
         runtime.bank_fear,
+        runtime.unified_rwa_mortgage_risk_weight,
+        runtime.unified_rwa_minimum_capital_ratio,
         runtime.bank_market_health,
     });
     output["metrics"] = encode_metrics(runtime.last_metrics);
@@ -472,7 +494,7 @@ void decode_state(const Json &input, core::RootState &root, M5Runtime &runtime) 
     runtime.policy = decode_policy(input.at("policy"));
     runtime.rules = decode_rules(input.at("rules"));
     const auto &state = input.at("runtime");
-    if (!state.is_array() || state.size() != 10) {
+    if (!state.is_array() || state.size() != 12) {
         throw std::runtime_error("invalid M5 runtime");
     }
     runtime.initial_policy_rate = state[0].get<double>();
@@ -484,7 +506,9 @@ void decode_state(const Json &input, core::RootState &root, M5Runtime &runtime) 
     runtime.previous_unemployment = state[6].get<double>();
     runtime.reserve_genesis = state[7].get<double>();
     runtime.bank_fear = state[8].get<double>();
-    runtime.bank_market_health = state[9].get<std::vector<double>>();
+    runtime.unified_rwa_mortgage_risk_weight = state[9].get<double>();
+    runtime.unified_rwa_minimum_capital_ratio = state[10].get<double>();
+    runtime.bank_market_health = state[11].get<std::vector<double>>();
     decode_metrics(input.at("metrics"), runtime.last_metrics);
 
     for (const auto &row : input.at("banks")) {

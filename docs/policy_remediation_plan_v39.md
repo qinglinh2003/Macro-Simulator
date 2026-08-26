@@ -1,5 +1,30 @@
 # Policy Remediation Plan v39
 
+## R4 acceptance
+
+- Status: `accepted`
+- Base revision: `160dcbcfe2380679c4ab5ecab36a3f27e3a26e38` (accepted R3)
+- R4 acceptance hash: `6d3f463d8f6b30ec35fe2800fc171707705b95a898aa46a0bd04b594d77bdb50`
+- Machine report: `docs/policy_remediation_r4_acceptance_v39.json`
+- Scope: 7 Policy levers, 29 declared proximal metrics, 20 new maintained native source metrics, and 8 direct native behavior checks.
+- Verification: 46/46 native tests and 3/3 deterministic R4 contract tests passed with eight workers.
+- Evidence consequence: frozen P0-P8 results remain historical but are invalidated for current product claims until regenerated.
+
+R4 provides deterministic opportunities for bank liquidity support, bank resolution
+funding, failed-bank account and loan migration, margin allocation, household
+bankruptcy, and housing permits. Each policy now records the eligible opportunity
+before the policy decision, so non-activation is distinguishable from a scenario in
+which nothing could happen. The fixtures cover activation, non-activation, and
+withdrawal at the direct event or state-transition boundary.
+
+Unified bank RWA now uses one common bank-level asset envelope: ordinary credit
+enters at full weight and mortgages enter at the configured mortgage risk weight.
+The general-credit and mortgage paths share the same live capital ratio and asset
+stock, while the legacy non-unified path remains available when the policy is off.
+
+These are local state-machine repairs. Economy-wide effect magnitude and gameplay
+calibration remain reserved for R6; crisis-library repair remains reserved for R5.
+
 ## R3 acceptance
 
 - Status: `accepted`

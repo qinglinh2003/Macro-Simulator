@@ -282,6 +282,62 @@ for _lever, (_source, _anchor, _phase) in _R3_MECHANISM_ANCHORS.items():
         read_phase=_phase,
     )
 
+# R4 names the rare-event decision boundary rather than the policy storage
+# expression. These anchors are paired with deterministic opportunity fixtures.
+NATIVE_POLICY_ROUTES["bank_resolution_fund"] = NativePolicyRoute(
+    "special",
+    "bank_resolution_fund",
+    "native/src/simulation/m6.cpp",
+    "runtime.policy.bank_resolution_fund",
+    "domestic_financial_and_securities",
+)
+_R4_MECHANISM_ANCHORS = {
+    "lolr": (
+        "native/src/simulation/m5.cpp",
+        "close_end_of_day_liquidity",
+        "bank_liquidity_resolution",
+    ),
+    "bank_resolution_fund": (
+        "native/src/simulation/m5.cpp",
+        "resolve_bank",
+        "bank_failure_resolution",
+    ),
+    "margin_max": (
+        "native/src/simulation/m6.cpp",
+        "generate_firm_equity_orders",
+        "household_margin_allocation",
+    ),
+    "housing_permits": (
+        "native/src/simulation/m8.cpp",
+        "complete_construction",
+        "housing_construction_completion",
+    ),
+    "household_bankruptcy": (
+        "native/src/simulation/m6.cpp",
+        "service_margin",
+        "household_margin_resolution",
+    ),
+    "bank_migrate_on_failure": (
+        "native/src/simulation/m5.cpp",
+        "resolve_bank",
+        "bank_failure_resolution",
+    ),
+    "unified_bank_rwa": (
+        "native/src/simulation/m5.cpp",
+        "bank_rwa_capacity",
+        "domestic_credit_allocation",
+    ),
+}
+for _lever, (_source, _anchor, _phase) in _R4_MECHANISM_ANCHORS.items():
+    _route = NATIVE_POLICY_ROUTES[_lever]
+    NATIVE_POLICY_ROUTES[_lever] = NativePolicyRoute(
+        route_section=_route.route_section,
+        route_field=_route.route_field,
+        source_path=_source,
+        source_anchor=_anchor,
+        read_phase=_phase,
+    )
+
 # External policies are validated through a local ``policy`` reference, so use
 # the concrete world-coupling expression rather than allowing validation to
 # masquerade as an economic read point.
@@ -348,10 +404,6 @@ NATIVE_POLICY_ROUTES.update(_section_routes(
 
 # These generated-contract special routes map to concrete native policy fields.
 NATIVE_POLICY_ROUTES.update({
-    "bank_resolution_fund": NativePolicyRoute(
-        "special", "bank_resolution_fund", "native/src/simulation/m6.cpp",
-        "runtime.policy.bank_resolution_fund", "domestic_financial_and_securities",
-    ),
     "energy_rationing": NativePolicyRoute(
         "special", "energy_rationing", "native/src/simulation/m8.cpp",
         "runtime_.energy_policy.rationing", "energy_and_housing",

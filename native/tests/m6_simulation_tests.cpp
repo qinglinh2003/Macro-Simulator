@@ -199,6 +199,132 @@ void test_validation_and_prices() {
                     12.0) < 1.0e-12);
 }
 
+[[nodiscard]] macro_sim::simulation::M6Metrics
+run_margin_max_fixture(double margin_max, std::uint64_t seed) {
+    auto spec = base_spec();
+    spec.monetary_economy.real_economy.seed = seed;
+    spec.policy.margin_max = margin_max;
+    spec.policy.margin_ltv = 1.0;
+    spec.rules.margin_credit = true;
+    spec.rules.bank_equity = false;
+    spec.rules.bank_equity_trading = false;
+    spec.rules.portfolio_review_interval_days = 1U;
+    spec.rules.household_equity_target = 1.0;
+    spec.rules.portfolio_adjustment = 1.0;
+    auto harness = build(spec);
+    const auto result = advance(harness, 1U);
+    assert(result.ok());
+    return result.get_if()->metrics;
+}
+
+void test_margin_max_has_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {61U, 62U, 63U, 64U}) {
+        const auto binding = run_margin_max_fixture(0.0, seed);
+        const auto relaxed = run_margin_max_fixture(10.0, seed);
+        const auto withdrawn = run_margin_max_fixture(0.0, seed);
+        assert(binding.margin_max_applied == 0.0);
+        assert(relaxed.margin_max_applied == 10.0);
+        assert(binding.margin_max_binding_shortfall > 0.0);
+        assert(relaxed.margin_target_equity > binding.margin_target_equity);
+        assert(withdrawn.margin_max_applied == binding.margin_max_applied);
+        assert(withdrawn.margin_target_equity == binding.margin_target_equity);
+        assert(withdrawn.margin_max_binding_shortfall ==
+               binding.margin_max_binding_shortfall);
+    }
+}
+
+[[nodiscard]] macro_sim::simulation::M6Metrics
+run_household_bankruptcy_fixture(bool enabled, std::uint64_t seed) {
+    auto spec = base_spec();
+    spec.monetary_economy.real_economy.seed = seed;
+    spec.monetary_economy.rules.opening_capital_per_bank = 1'000'000.0;
+    spec.monetary_economy.rules.household_amortization = 0.0;
+    spec.monetary_economy.initial_policy_rate = 0.0;
+    spec.rules.margin_credit = true;
+    spec.rules.bank_equity = false;
+    spec.rules.bank_equity_trading = false;
+    spec.rules.portfolio_review_interval_days = 1U;
+    spec.rules.portfolio_adjustment = 0.0;
+    spec.policy.margin_max = 0.0;
+    spec.policy.margin_ltv = 0.0;
+    spec.policy.household_bankruptcy = enabled;
+    auto harness = build(spec);
+    const auto *household = harness.root.households.get(macro_sim::HouseholdId(1U));
+    assert(household != nullptr);
+    const auto node = harness.root.postings.settlement_node(household->primary_account);
+    assert(node.ok());
+    macro_sim::BankId lender{};
+    harness.root.banks.for_each_alive([&](macro_sim::BankId id, const auto &bank) {
+        if (bank.settlement_node == *node.get_if()) {
+            lender = id;
+        }
+    });
+    assert(lender.valid());
+    macro_sim::core::SettlementTransaction origination(harness.root);
+    assert(
+        origination
+            .originate_loan(
+                lender, macro_sim::core::OwnerId::household(macro_sim::HouseholdId(1U)),
+                household->primary_account, macro_sim::Money(10'000.0),
+                macro_sim::core::LoanTerms{macro_sim::Rate(0.0), Tick(0U), Tick(3650U)})
+            .ok());
+    const auto receipt = origination.commit();
+    assert(receipt.ok());
+    const auto loan_id = receipt.get_if()->created_loans.front();
+    auto *loan = harness.root.loans.get(loan_id);
+    assert(loan != nullptr);
+    loan->purpose = macro_sim::core::LoanPurpose::margin;
+    macro_sim::AccountId recipient{};
+    harness.root.households.for_each_alive(
+        [&](macro_sim::HouseholdId id,
+            const macro_sim::core::HouseholdComponent &candidate) {
+            if (recipient.valid() || id == macro_sim::HouseholdId(1U)) {
+                return;
+            }
+            const auto candidate_node =
+                harness.root.postings.settlement_node(candidate.primary_account);
+            if (candidate_node.ok() && *candidate_node.get_if() == *node.get_if()) {
+                recipient = candidate.primary_account;
+            }
+        });
+    assert(recipient.valid());
+    const auto cash = harness.root.postings.balance(household->primary_account);
+    assert(cash.ok());
+    macro_sim::core::SettlementTransaction drain(harness.root);
+    assert(drain
+               .transfer(household->primary_account, recipient,
+                         macro_sim::Money(cash.get_if()->value()))
+               .ok());
+    assert(drain.commit().ok());
+    harness.runtime.margin_loans.push_back(loan_id);
+    const auto result = advance(harness, 1U);
+    if (!result.ok()) {
+        std::cerr << "household bankruptcy fixture failed: "
+                  << result.status().message() << "\n";
+    }
+    assert(result.ok());
+    return result.get_if()->metrics;
+}
+
+void test_household_bankruptcy_has_activation_nonactivation_and_withdrawal_contract() {
+    for (const auto seed : {61U, 62U, 63U, 64U}) {
+        const auto blocked = run_household_bankruptcy_fixture(false, seed);
+        const auto discharged = run_household_bankruptcy_fixture(true, seed);
+        const auto withdrawn = run_household_bankruptcy_fixture(false, seed);
+        assert(blocked.household_bankruptcy_candidates > 0U);
+        assert(discharged.household_bankruptcy_candidates > 0U);
+        assert(blocked.household_bankruptcies_blocked_by_policy ==
+               blocked.household_bankruptcy_candidates);
+        assert(blocked.household_bankruptcies == 0U);
+        assert(blocked.margin_writeoffs == 0.0);
+        assert(discharged.household_bankruptcies > 0U);
+        assert(discharged.margin_writeoffs > 0.0);
+        assert(withdrawn.household_bankruptcies == 0U);
+        assert(withdrawn.household_bankruptcies_blocked_by_policy ==
+               blocked.household_bankruptcies_blocked_by_policy);
+    }
+}
+
 void test_genesis_and_multiday_advance() {
     auto harness = build();
     assert(harness.runtime.securities.equities().size() == 9);
@@ -1080,6 +1206,8 @@ void test_margin_policy_boundaries_round_trip_through_checkpoint() {
 
 int main() {
     test_validation_and_prices();
+    test_margin_max_has_activation_nonactivation_and_withdrawal_contract();
+    test_household_bankruptcy_has_activation_nonactivation_and_withdrawal_contract();
     test_genesis_and_multiday_advance();
     test_bond_cohorts_and_duration_adjusted_omo_are_observable();
     test_firm_collateral_haircuts_report_the_applied_borrowing_base();
