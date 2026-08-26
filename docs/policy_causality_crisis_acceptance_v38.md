@@ -1449,8 +1449,112 @@ The remaining two targets are redirected by the unrelated editable install from 
 to this source tree, its `m11-release` native module, and this worktree's dependency
 site-packages.
 
-P7 stops here. P8 institutional-delivery and Controller-occupant evaluation have not
-started.
+P7 stopped at this boundary. P8 institutional-delivery and Controller-occupant
+evaluation subsequently started and is recorded below.
+
+## P8 milestone acceptance evidence
+
+P8 was accepted on 2026-08-26 on branch `audit/policy-causality-v38` with status
+`accepted_with_explicit_limitations`. It validates one representative institutional
+delivery experiment and a common native occupant benchmark; it does not claim that
+all occupants are competent, that the shipped RL artifact is native-trained, or that
+the representative policy is welfare improving.
+
+The delivery experiment reuses the frozen P3 `CR_DEMAND_RECESSION` checkpoint and
+shock tape and the P4 meaningful `benefit_income_floor=0.20` action. Eight matched
+100,000-person seeds each execute eight native paths, for 64 paths in total. Every
+native session uses eight workers. The economic engine is C++; Python is restricted
+to Controller institutional state, orchestration, and reduction. The legacy Python
+economic simulator is not used.
+
+The delivery paths and first effective policy boundaries are:
+
+| Path | Effective boundary | Interpretation |
+|---|---:|---|
+| Crisis control | None | Frozen crisis without the policy action |
+| Free immediate | 31 | Unrestricted economic-causality reference |
+| Precommitted regular | 37 | Decision at boundary 30 plus seven-day implementation lag |
+| Emergency | 32 | Public crisis disclosure at boundary 31 plus one-day emergency lag |
+| Scheduled regular | 98 | First ordinary meeting at boundary 91 plus seven-day lag |
+| Delayed regular | 128 | Delayed meeting at boundary 121 plus seven-day lag |
+| Missed meeting | None | No action delivered |
+| Recorded human ingress | 98 | Same released context and action as scheduled regular delivery |
+
+All six preregistered delivery gates pass: effective boundaries match the Registry
+contract, the human transport path has exact economic parity with the scheduled path,
+no future or oracle value enters a decision, the free-policy paths exactly reproduce
+the P4 result over the shared P8 metric projection, every branch reaches its expected
+policy state, and all native integrity checks pass. The 112 Controller contexts carry
+112 fixed-schema `oracle_daily_output` shells marked `access_denied`; exposed oracle
+values, future releases, and future bulletins are all zero.
+
+P8 found and repaired one real bridge defect before acceptance. Native shocks already
+changed C++ economic state, but `ControlledSimulationSession` only sent legacy
+ShockEngine trigger metrics to `DecisionScheduler`. A native demand crisis therefore
+could not open an emergency Controller context. The native observation adapter now
+projects disclosed native shock severities into the scheduler trigger contract, and a
+regression test proves that the disclosure opens the expected emergency context. The
+repair changes institutional delivery only; the frozen shock tape and P3/P4 economic
+paths remain unchanged.
+
+The first provisional P8 information audit also treated an `access_denied` oracle
+schema shell as if it were an exposed value. That failed report was not accepted. P8
+schema v2 separates denied oracle field identities from exposed oracle releases and
+invalidates every provisional v1 P8 cache. No P0-P7 evidence is invalidated.
+
+The paired delivery decomposition exposes a material policy trade-off. Relative to
+the crisis control, immediate `benefit_income_floor=0.20` lowers the mean poverty rate
+by `0.00386648` (about 0.387 percentage points; 8/8 seeds) and raises mean
+unemployment by `0.0154510` (about 1.545 percentage points; 8/8 seeds). It also raises
+the mean government-deficit-to-GDP ratio by `0.0165775` and increases cumulative real
+output by `47,893` on average, although the output interval crosses zero and one seed
+is negative. These are model responses under the frozen demand-recession scenario,
+not empirical welfare weights.
+
+Institutional timing is economically visible. The seven-day regular implementation
+lag erodes the poverty improvement by about `0.000310915`; waiting from the
+precommitted boundary to the ordinary meeting erodes it by another `0.00292268`; an
+additional delayed meeting erodes another `0.000495228`. The recorded-human transport
+gap is exactly zero for every outcome and every seed because it intentionally submits
+the same frozen action; this proves ingress and timing parity, not human decision
+quality. Ordinary Controller delivery reserves `1.25` administrative units and incurs
+`1.17` adjustment cost; emergency delivery reserves the same administration and
+incurs `1.755` adjustment cost.
+
+The occupant benchmark evaluates heuristic, recorded-human hold, no-action, random,
+and the shipped RL policy on the same eight-seed native
+`fiscal_stabilization_v1` environment with released human-comparable observations.
+The shipped artifact's action and observation vector contracts match, but its training
+environment hash belongs to the pre-native backend and does not match the current
+native environment. P8 therefore classifies it as an
+`explicit_cross_backend_transfer_probe` and forbids an RL superiority claim. The
+random occupant has the best mean discounted return in this small benchmark, while
+the heuristic, hold, no-action, and transferred RL policies tie; no ranking is
+promoted to a player-facing claim because the environment contract mismatch and lack
+of participant data are explicit limitations.
+
+The frozen P8 identities are:
+
+| Component | SHA-256 |
+|---|---|
+| Experiment source revision | `25e7e68ff5b1791ad0310867d434bee4812a3a22` |
+| P8 manifest | `3ddc6684b14fd40ff0bbc7533fc5020b4b0df3fa066e0c9a45deeaca6abbbc08` |
+| P8 evidence | `d97a3ae98803f7a13c26a2e0a23ec3203549265a12a0d1a0c55293d17cf9b41d` |
+| P8 acceptance | `49da53cbf12e9b4723494ae072a9dac81e97bebe81c0f7d4d27b712a923d3cf3` |
+| Generated JSON artifact | `8de58cd32d922558c697640624e9191c76a4abddfa68bdfae506cd555ebe5eb6` |
+| Generated Markdown artifact | `af9abfc5e1a29ea6faf9c5b9a1e29f232e89e7f5da5166fb04a2b105b82e25d4` |
+
+Two consecutive formal reductions reused all eight frozen seed caches and reproduced
+the same P8 acceptance hash. The focused P0-P8 suite passes 62 tests with eight
+workers, and the P8/native-shock focused suite passes five tests. The eight-worker
+native CTest run passes 72 of 74 targets directly. Its two failures are build-directory
+commands pinned to the unrelated `config-audit` worktree's editable virtual
+environment; both smoke programs pass when rerun concurrently with this worktree's
+Python executable and explicit current source/native paths.
+
+P8 stops here. The remaining work is not another audit milestone: it is repair of the
+explicit P1-P7 engine defects, native retraining or formal migration of the RL policy,
+and genuine participant studies if human decision-quality claims are desired.
 
 ## 17. Artifacts and provenance
 

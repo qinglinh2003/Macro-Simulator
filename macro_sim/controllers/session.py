@@ -628,6 +628,32 @@ class ControlledSimulationSession:
                     metrics.update(shock_engine.trigger_metrics(
                         economy_id, self.boundary_tick, role="public",
                     ))
+                native_trigger_metrics = getattr(
+                    self.world, "native_shock_trigger_metrics", None,
+                )
+                if callable(native_trigger_metrics):
+                    metrics.update(native_trigger_metrics(
+                        economy_id, self.boundary_tick, role="public",
+                    ))
+                else:
+                    native_shock_observable = getattr(
+                        self.world, "native_shock_observable", None,
+                    )
+                    if callable(native_shock_observable):
+                        for trigger in self.scheduler.triggers:
+                            if not trigger.series_id.startswith("shock_"):
+                                continue
+                            try:
+                                metrics[trigger.series_id] = native_shock_observable(
+                                    trigger.series_id,
+                                    economy_id,
+                                    self.boundary_tick,
+                                    role="public",
+                                )
+                            except KeyError:
+                                # A missing native channel is an unavailable
+                                # trigger input, not a boundary failure.
+                                continue
                 notices_by_economy[economy_id] = self.scheduler.evaluate_triggers(
                     self.boundary_tick, economy_id, metrics
                 )

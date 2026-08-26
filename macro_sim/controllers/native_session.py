@@ -256,6 +256,13 @@ class NativeControlledWorld:
             key, economy_id, as_of_tick, role=role,
         )
 
+    def native_shock_trigger_metrics(
+        self, economy_id: int, as_of_tick: int, *, role: str = "public",
+    ) -> dict[str, float]:
+        return self.source.native_shock_trigger_metrics(
+            economy_id, as_of_tick, role=role,
+        )
+
     def native_shock_bulletins(
         self, economy_id: int, as_of_tick: int, *, role: str = "public",
     ):

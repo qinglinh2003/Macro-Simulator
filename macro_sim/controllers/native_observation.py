@@ -215,6 +215,30 @@ class NativeObservationSource:
         except KeyError as exc:
             raise KeyError(f"unknown native shock observable {key!r}") from exc
 
+    def native_shock_trigger_metrics(
+        self, economy_id: int, as_of_tick: int, *, role: str = "public",
+    ) -> dict[str, float]:
+        """Project native disclosure fields into the scheduler trigger contract."""
+        def severity(kind: str) -> float:
+            return self.native_shock_observable(
+                f"severity.{kind}", economy_id, as_of_tick, role=role,
+            )
+
+        return {
+            "shock_supply_severity": max(
+                severity("productivity"),
+                severity("labor_availability"),
+                severity("capital_destruction"),
+            ),
+            "shock_energy_severity": severity("energy_capacity"),
+            "shock_financial_severity": severity("credit_supply"),
+            "shock_trade_severity": max(
+                severity("import_capacity"),
+                severity("export_capacity"),
+            ),
+            "shock_demand_severity": severity("household_demand"),
+        }
+
     def native_shock_bulletins(
         self, economy_id: int, as_of_tick: int, *, role: str = "public",
     ) -> tuple[dict[str, Any], ...]:

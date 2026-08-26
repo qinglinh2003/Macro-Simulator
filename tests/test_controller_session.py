@@ -39,6 +39,17 @@ def _world(seed: int = 12) -> World:
     return World([_config(seed)])
 
 
+class _NativeShockObservable:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int, int, str]] = []
+
+    def __call__(
+        self, key: str, economy_id: int, as_of_tick: int, *, role: str,
+    ) -> float:
+        self.calls.append((key, economy_id, as_of_tick, role))
+        return 0.25
+
+
 def _treasury_scheduler() -> DecisionScheduler:
     # Only fiscal_stance meets at genesis.  The other Treasury calendars have a
     # far-away offset, keeping each acceptance test focused on one context.
@@ -172,6 +183,34 @@ def test_trigger_hysteresis_persistence_and_cooldown_prevent_repeat_sessions():
     second = scheduler.evaluate_triggers(6, 0, {"stress": 12.0})
     assert [notice.trigger_id for notice in second] == ["bank_stress"]
     assert second[0].seats == ("central_bank", "regulator")
+
+
+def test_native_shock_disclosure_opens_emergency_context() -> None:
+    world = _world()
+    observable = _NativeShockObservable()
+    world.native_shock_observable = observable
+    trigger = TriggerSpec(
+        trigger_id="native_demand_crisis",
+        series_id="shock_demand_severity",
+        enter_threshold=0.20,
+        exit_threshold=0.05,
+        min_persist_ticks=1,
+        cooldown_ticks=30,
+        authorized_seats=("treasury",),
+        decision_group="emergency",
+    )
+    session = ControlledSimulationSession(
+        world,
+        scheduler=DecisionScheduler(triggers=(trigger,)),
+    )
+    session.assign_seat(0, "treasury", NullOccupant(), actor="test")
+
+    result = session.advance()
+
+    emergencies = [context for context in result.contexts if context.emergency]
+    assert len(emergencies) == 1
+    assert emergencies[0].emergency_trigger == "native_demand_crisis"
+    assert ("shock_demand_severity", 0, 0, "public") in observable.calls
 
 
 def test_idempotent_retry_does_not_double_reserve_cost_or_append_events():
