@@ -15,10 +15,14 @@ from scripts.policy_remediation_r6_lib import (
     R6_CLASSIFICATIONS,
     _classification,
     build_r6_design,
+    validate_r6_acceptance,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
+P2_EVIDENCE = ROOT / "docs/policy_remediation_r6_p2_evidence_v39.json"
+CRISIS_EVIDENCE = ROOT / "docs/policy_remediation_r6_crisis_evidence_v39.json"
+ACCEPTANCE = ROOT / "docs/policy_remediation_r6_acceptance_v39.json"
 
 
 def _inputs() -> tuple[dict[str, object], dict[str, object]]:
@@ -165,3 +169,38 @@ def test_manual_rate_atomicity_is_not_an_economic_structural_class() -> None:
     )
     assert contract.semantics == "state-transition"
     assert classification == "expert_only"
+
+
+def test_committed_r6_evidence_is_fresh_native_and_complete() -> None:
+    p2 = json.loads(P2_EVIDENCE.read_text(encoding="utf-8"))
+    crisis = json.loads(CRISIS_EVIDENCE.read_text(encoding="utf-8"))
+    acceptance = json.loads(ACCEPTANCE.read_text(encoding="utf-8"))
+    assert p2["counts"]["executed_native_runs"] == 104
+    assert crisis["counts"]["executed_native_branches"] == 704
+    assert p2["counts"]["cache_hits"] == 0
+    assert crisis["counts"]["cache_hits"] == 0
+    assert p2["protocol"]["native_build"] == crisis["protocol"]["native_build"]
+    assert acceptance["counts"]["classifications"] == {
+        "conditional": 22,
+        "effective": 2,
+        "expert_only": 9,
+        "removed": 0,
+        "structural": 3,
+    }
+
+
+def test_committed_r6_acceptance_reproduces_from_frozen_evidence() -> None:
+    p2 = json.loads(P2_EVIDENCE.read_text(encoding="utf-8"))
+    crisis = json.loads(CRISIS_EVIDENCE.read_text(encoding="utf-8"))
+    acceptance = json.loads(ACCEPTANCE.read_text(encoding="utf-8"))
+    p3 = json.loads(
+        (ROOT / "docs/policy_remediation_r5_p3_evidence_v39.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert validate_r6_acceptance(
+        acceptance,
+        p2_payload=p2,
+        crisis_payload=crisis,
+        p3_payload=p3,
+    ) == []

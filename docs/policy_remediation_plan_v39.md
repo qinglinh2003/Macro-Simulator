@@ -1,5 +1,43 @@
 # Policy Remediation Plan v39
 
+## R6 acceptance
+
+- Status: `accepted`
+- Mechanism revision: `6a4b14555ed06b36a5b467d2f9bf4d16472927dc`
+- Crisis reduction revision: `e5d8b81aeb6ec552f8ffa12304d324b77abd9af0`
+- Classification revision: `eb2a674a9f05adbaa7f4ad96babcd3e30107cf2f`
+- R6 acceptance hash: `cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0`
+- Machine report: `docs/policy_remediation_r6_acceptance_v39.json`
+- Mechanism evidence: `docs/policy_remediation_r6_p2_evidence_v39.json`
+- Crisis evidence: `docs/policy_remediation_r6_crisis_evidence_v39.json`
+- Scope: 36 behavior candidates, 72 preregistered policy-state cells, 68 runnable crisis cells, and four explicit job-guarantee binding-state exclusions.
+- Formal protocol: 100,000 persons per country, four matched mechanism seeds, eight matched crisis seeds, eight native workers per session, eight concurrent crisis seed jobs, 104 fresh mechanism runs, 704 fresh crisis branches, and zero cache hits.
+
+All 36 candidates have a final player-surface classification: two `effective`,
+22 `conditional`, nine `expert_only`, three `structural`, and zero `removed`.
+Every retained non-structural lever either crosses the preregistered gameplay
+salience floor or passes an anchor-crisis benefit gate; no lever is retained on
+statistical detectability alone. `manual_policy_rate` remains an expert policy,
+not a structural policy: its Registry state-transition label enforces atomic
+manual-regime validation and does not change its economic meaning as an
+adjustable interest rate.
+
+R6 reports mechanism direction, effect-to-materiality-floor magnitude, first
+response and peak timing, adverse-state guardrails, and empirical scope
+separately. `effective` is deliberately strict: only `benefit_income_floor` and
+`pension_replacement` are salient in ordinary and binding states, pass an
+anchor-crisis benefit gate, and avoid a supported adverse-state harm. A
+`conditional` or `expert_only` classification is not a claim of general crisis
+efficacy; the UI must expose the recorded binding state and trade-off.
+
+The formal diagnostics loaded and hashed the extension under the current
+worktree `build/native/m11-release/native` directory. An installed wheel or
+stale virtual-environment extension now fails before R6 simulation begins.
+Python only orchestrates native C++ checkpoints, branches, and metric reduction;
+the legacy Python economic simulator is not used. These results are model-based
+calibration evidence, not external empirical estimates. The seven scale- and
+rare-event-sensitive candidates remain explicitly pending R7.
+
 ## R5 acceptance
 
 - Status: `accepted`
