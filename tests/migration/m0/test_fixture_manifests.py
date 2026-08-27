@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from macro_sim.controllers.coordinator import SEATS
 from scripts.cpp_migration.common import canonical_json_bytes
 from scripts.cpp_migration.fixtures import (
     build_fixture_manifest,
@@ -30,7 +31,7 @@ def test_policy_shock_action_and_realization_tapes_are_typed_and_current():
     checked = json.loads(path.read_text(encoding="utf-8"))
     expected = load_tape_bundle()
     assert path.read_bytes() == canonical_json_bytes(expected)
-    assert len(checked["policy"]) == 5
+    assert {row["seat"] for row in checked["policy"]} == set(SEATS)
     assert len(checked["shock"]["specs"]) == 8
     assert checked["action"]
     assert checked["realization"]

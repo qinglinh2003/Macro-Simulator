@@ -51,9 +51,21 @@ policy:
     declared_lag_ticks: 7
     expected_effective_date: "2000-03-08"
     expected_event_ids: [event.controller.policy_transaction_effective]
-  - transaction_id: tape-policy-treasury-001
+  - transaction_id: tape-policy-labor-social-001
     decision_date: "2000-03-11"
     reference_tick: 70
+    economy_id: 0
+    seat: labor_social
+    group: labor_and_welfare
+    emergency: false
+    actions:
+      - {lever: benefit_income_floor, value: 0.1}
+    declared_lag_ticks: 7
+    expected_effective_date: "2000-03-18"
+    expected_event_ids: [event.controller.policy_transaction_effective]
+  - transaction_id: tape-policy-treasury-001
+    decision_date: "2000-03-21"
+    reference_tick: 80
     economy_id: 0
     seat: treasury
     group: fiscal_stance
@@ -61,7 +73,7 @@ policy:
     actions:
       - {lever: gov_deficit_target, value: 0.005}
     declared_lag_ticks: 7
-    expected_effective_date: "2000-03-18"
+    expected_effective_date: "2000-03-28"
     expected_event_ids: [event.controller.policy_transaction_effective]
 shock:
   name: m0-all-default-kinds
