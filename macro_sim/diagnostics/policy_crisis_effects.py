@@ -835,7 +835,7 @@ def _arm_analysis(
         if metric_id in crisis_effects and metric_id in METRIC_MATERIALITY
     }
 
-    if timing == "immediate":
+    if timing == "immediate" and policy_only_negative_control:
         policy_runs = [item["run"] for item in policy_records]
         ordinary_control_runs = [ordinary_controls[seed] for seed in seeds]
         output["ordinary_effects"] = summarize_paired_runs(

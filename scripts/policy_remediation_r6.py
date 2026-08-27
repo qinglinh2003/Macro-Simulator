@@ -65,6 +65,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--run", action="store_true")
+    mode.add_argument("--run-crises", action="store_true")
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
     parser.add_argument("--artifact-dir", type=Path, default=DEFAULT_ARTIFACT_DIR)
@@ -106,6 +107,23 @@ def main() -> int:
             "cache_hits": (
                 p2["counts"]["cache_hits"] + crisis["counts"]["cache_hits"]
             ),
+        }, indent=2, sort_keys=True))
+        return 0 if crisis["status"] == "accepted" else 1
+
+    if args.run_crises:
+        p2 = _load(args.artifact_dir / "mechanism/p2_report.json")
+        crisis = run_r6_crises(
+            artifact_dir=args.artifact_dir / "crisis",
+            p2_payload=p2,
+            p3_payload=p3,
+            source_revision=_revision(),
+            resume=not args.no_resume,
+            progress=_crisis_progress,
+        )
+        print(json.dumps({
+            "crisis_status": crisis["status"],
+            "crisis_branches": crisis["counts"]["executed_native_branches"],
+            "cache_hits": crisis["counts"]["cache_hits"],
         }, indent=2, sort_keys=True))
         return 0 if crisis["status"] == "accepted" else 1
 
