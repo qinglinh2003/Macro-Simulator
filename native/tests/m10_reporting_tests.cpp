@@ -70,7 +70,7 @@ void test_descriptors_are_stable_and_complete() {
     assert(kM10NativeSourceMetricCount == 358U);
     assert(kM10DashboardMetricCount == 85U);
     assert(kM10NationalAccountMetricCount == 63U);
-    assert(kM10MetricCount == 582U);
+    assert(kM10MetricCount == 583U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());
@@ -314,6 +314,71 @@ void test_shock_metrics_respect_announcement_boundary() {
     assert(!probe_shock_bulletins(world, EconomyId(0U), Tick(6U)).ok());
 }
 
+void test_capital_destruction_is_active_for_realization_boundary_only() {
+    auto world = build_world();
+    ShockSpec shock;
+    shock.id = 802U;
+    shock.kind = ShockKind::capital_destruction;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(2U);
+    shock.announcement = Tick(0U);
+    shock.duration = 1U;
+    shock.magnitude = 0.10;
+    shock.sector = ShockSector::capital;
+    assert(world.schedule_shock(shock).ok());
+
+    auto announced = build_metric_frame(world);
+    assert(announced.ok());
+    assert(
+        *announced.get_if()->value(0U, metric("metric.shock.active_count")).get_if() ==
+        0.0);
+
+    assert(world.advance(2U).ok());
+    auto realized = build_metric_frame(world, announced.get_if());
+    assert(realized.ok());
+    assert(
+        *realized.get_if()->value(0U, metric("metric.shock.active_count")).get_if() ==
+        1.0);
+
+    assert(world.advance(1U).ok());
+    auto terminal = build_metric_frame(world, realized.get_if());
+    assert(terminal.ok());
+    assert(
+        *terminal.get_if()->value(0U, metric("metric.shock.active_count")).get_if() ==
+        0.0);
+    assert(
+        *terminal.get_if()->value(0U, metric("metric.shock.max_severity")).get_if() ==
+        0.0);
+}
+
+void test_sovereign_risk_premium_is_reported_on_its_stable_metric() {
+    auto world = build_world();
+    ShockSpec shock;
+    shock.id = 803U;
+    shock.kind = ShockKind::sovereign_risk_premium;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(1U);
+    shock.announcement = Tick(0U);
+    shock.duration = 4U;
+    shock.magnitude = 0.003;
+    assert(world.schedule_shock(shock).ok());
+
+    auto announced = build_metric_frame(world);
+    assert(announced.ok());
+    assert(*announced.get_if()
+                ->value(0U, metric("metric.shock.severity.sovereign_risk_premium"))
+                .get_if() == 0.003);
+
+    assert(world.advance(1U).ok());
+    auto active = build_metric_frame(world, announced.get_if());
+    assert(active.ok());
+    assert(*active.get_if()
+                ->value(0U, metric("metric.shock.severity.sovereign_risk_premium"))
+                .get_if() == 0.003);
+    assert(*active.get_if()->value(0U, metric("metric.shock.active_count")).get_if() ==
+           1.0);
+}
+
 void test_typed_probes_are_stable_and_paged() {
     auto world = build_world();
     auto first = probe_households(world, EconomyId(0U), 0U, 5U);
@@ -474,6 +539,8 @@ int main() {
     test_history_is_bounded_and_cursor_checked();
     test_inflation_uses_only_previous_committed_frame();
     test_shock_metrics_respect_announcement_boundary();
+    test_capital_destruction_is_active_for_realization_boundary_only();
+    test_sovereign_risk_premium_is_reported_on_its_stable_metric();
     test_typed_probes_are_stable_and_paged();
     test_firm_scoped_employment_probes_return_exact_contracts();
     test_household_scoped_probes_return_every_member();

@@ -198,6 +198,9 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
     {"metric.economy.consumption_decile_10_share", "share", 30U,
      MetricTier::analytic, MetricAggregation::last,
      "top population equivalized-consumption decile share"},
+    {"metric.shock.severity.sovereign_risk_premium", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed sovereign-risk-premium shock severity"},
 #define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule)   \
     {stable_id, unit, 30U, MetricTier::analytic,                          \
      MetricAggregation::last, parity_rule},
@@ -2037,7 +2040,7 @@ build_metric_frame(const simulation::M9World &world,
         std::size_t active_count = 0U;
         double maximum_severity = 0.0;
         std::uint64_t time_to_next = std::numeric_limits<std::uint64_t>::max();
-        std::array<double, 8U> kind_severity{};
+        std::array<double, 9U> kind_severity{};
         for (const auto &shock : world.shocks()) {
             if (!shock_relevant(shock, economy) ||
                 !shock_disclosed(shock, world.tick())) {
@@ -2059,7 +2062,7 @@ build_metric_frame(const simulation::M9World &world,
                 shock_severity(shock, world.tick(), false);
             const bool active =
                 shock.kind == simulation::ShockKind::capital_destruction
-                    ? world.tick().value() >= shock.start.value()
+                    ? world.tick() == shock.start
                     : active_severity > 0.0;
             if (active) {
                 ++active_count;
@@ -2074,9 +2077,10 @@ build_metric_frame(const simulation::M9World &world,
             time_to_next == std::numeric_limits<std::uint64_t>::max()
                 ? 0.0
                 : static_cast<double>(time_to_next));
-        for (std::size_t kind = 0U; kind < kind_severity.size(); ++kind) {
+        for (std::size_t kind = 0U; kind < 8U; ++kind) {
             set(frame, economy, 33U + kind, kind_severity[kind]);
         }
+        set(frame, economy, 76U, kind_severity[8U]);
 
         std::size_t source_metric = kM10PublicMetricCount;
 #define MACRO_SIM_M4_SOURCE(field, unit)                                  \

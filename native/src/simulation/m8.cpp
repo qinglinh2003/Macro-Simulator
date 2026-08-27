@@ -37,6 +37,11 @@ constexpr std::size_t kAbsentIndex = std::numeric_limits<std::size_t>::max();
     return value ^ (value >> 31U);
 }
 
+[[nodiscard]] double housing_unit_interval(std::uint64_t value) noexcept {
+    constexpr double kInverse53 = 1.0 / 9007199254740992.0;
+    return static_cast<double>(housing_mix(value) >> 11U) * kInverse53;
+}
+
 template <std::size_t Size>
 [[nodiscard]] bool all_finite(const std::array<double, Size> &values) noexcept {
     return std::all_of(values.begin(), values.end(), finite);
@@ -2242,6 +2247,16 @@ class M8Extension final : public M7TickExtension {
                 return Status(ErrorCode::insufficient_funds,
                               "M8 mortgage LTV is binding");
             }
+            const double mortgage_supply =
+                options_.mortgage_credit_supply_multiplier;
+            const auto approval_key =
+                housing_mix(buyer.value()) ^
+                housing_mix(listing.dwelling.value() + 0x6a09e667f3bcc909ULL) ^
+                housing_mix(tick.value() + 0xbb67ae8584caa73bULL);
+            if (housing_unit_interval(approval_key) >= mortgage_supply) {
+                return Status(ErrorCode::insufficient_funds,
+                              "M8 mortgage credit is rationed");
+            }
             const auto quote = quote_m5_credit(
                 state, real, monetary, monetary_scratch, household->primary_account,
                 Money(required), Money(ltv_room),
@@ -4166,6 +4181,13 @@ advance_m8_ticks(core::RootState &state, M4Runtime &real_economy_runtime,
                  const M8AdvanceOptions &options) {
     if (!valid_fault_point(options.fault_point)) {
         return Status(ErrorCode::invalid_argument, "M8 fault point is invalid");
+    }
+    if (!finite(options.mortgage_credit_supply_multiplier) ||
+        options.mortgage_credit_supply_multiplier < 0.0 ||
+        options.mortgage_credit_supply_multiplier > 1.0) {
+        return Status(
+            ErrorCode::invalid_argument,
+            "M8 mortgage credit supply multiplier must be in [0, 1]");
     }
     if (count == 0) {
         return M8AdvanceResult{

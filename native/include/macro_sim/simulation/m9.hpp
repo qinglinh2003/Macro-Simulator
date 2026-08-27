@@ -31,6 +31,7 @@ enum class ShockKind : std::uint8_t {
     export_capacity = 5,
     credit_supply = 6,
     capital_destruction = 7,
+    sovereign_risk_premium = 8,
 };
 
 enum class ShockShape : std::uint8_t {

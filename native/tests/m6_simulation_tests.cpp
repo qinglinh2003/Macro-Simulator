@@ -446,6 +446,47 @@ void test_bond_cohorts_and_duration_adjusted_omo_are_observable() {
     }
 }
 
+void test_sovereign_risk_premium_reprices_existing_bonds() {
+    auto spec = base_spec();
+    spec.policy.bond_finance_fraction = 1.0;
+    spec.policy.bond_coupon_rate = 0.0013;
+    spec.policy.bond_maturity_days = 367;
+    auto control = build(spec);
+    auto stressed = build(spec);
+
+    bool observed_issue = false;
+    for (std::uint64_t day = 0; day < 120 && !observed_issue; ++day) {
+        const auto control_result = advance(control, 1);
+        const auto stressed_result = advance(stressed, 1);
+        assert(control_result.ok());
+        assert(stressed_result.ok());
+        observed_issue = control_result.get_if()->metrics.bond_outstanding_face > 0.0;
+    }
+    assert(observed_issue);
+
+    M6AdvanceOptions stress;
+    stress.sovereign_risk_premium = 0.002;
+    const auto control_result = advance(control, 1);
+    const auto stressed_result = advance(stressed, 1, stress);
+    assert(control_result.ok());
+    assert(stressed_result.ok());
+    assert(stressed_result.get_if()->metrics.bond_market_value <
+           control_result.get_if()->metrics.bond_market_value);
+    assert(stressed_result.get_if()->metrics.household_bond_market_value <=
+           control_result.get_if()->metrics.household_bond_market_value);
+    assert(stressed_result.get_if()->metrics.bank_bond_market_value <=
+           control_result.get_if()->metrics.bank_bond_market_value);
+
+    stress.sovereign_risk_premium = -0.001;
+    const auto rejected = advance(stressed, 1, stress);
+    assert(!rejected.ok());
+    assert(rejected.status().code() == macro_sim::ErrorCode::invalid_argument);
+    stress.sovereign_risk_premium = 1.0;
+    const auto excessive = advance(stressed, 1, stress);
+    assert(!excessive.ok());
+    assert(excessive.status().code() == macro_sim::ErrorCode::invalid_argument);
+}
+
 void test_firm_collateral_haircuts_report_the_applied_borrowing_base() {
     auto low_spec = base_spec();
     low_spec.policy.regulatory_capital_haircut = 0.0;
@@ -1210,6 +1251,7 @@ int main() {
     test_household_bankruptcy_has_activation_nonactivation_and_withdrawal_contract();
     test_genesis_and_multiday_advance();
     test_bond_cohorts_and_duration_adjusted_omo_are_observable();
+    test_sovereign_risk_premium_reprices_existing_bonds();
     test_firm_collateral_haircuts_report_the_applied_borrowing_base();
     test_bank_equity_uses_lagged_closed_income();
     test_fault_is_atomic();

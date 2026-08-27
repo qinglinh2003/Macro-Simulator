@@ -11,6 +11,7 @@ from macro_sim.diagnostics.policy_scenarios import (
     CRISIS_MANIFESTS,
     SEVERITIES,
     STATE_MANIFESTS,
+    _compare_replay_frames,
     analyze_crisis,
     validate_manifest_catalogs,
 )
@@ -107,9 +108,57 @@ def test_analysis_rejects_a_non_ordered_or_treatment_only_label() -> None:
     assert report["disposition"] == "crisis_severity_failure"
 
 
-def test_blocked_sovereign_scenario_never_runs_or_enters_p4() -> None:
+def test_sovereign_scenario_has_an_observed_risk_premium_tape() -> None:
     manifest = CRISIS_MANIFESTS["CR_SOVEREIGN_STRESS"]
-    report = analyze_crisis(manifest, ())
-    assert report["accepted"] is False
-    assert report["disposition"] == "blocked_engine_gap"
-    assert "risk-premium" in report["reason"]
+    assert manifest.readiness == "ready_to_calibrate"
+    assert [leg.kind for leg in manifest.shock_legs] == [
+        "sovereign_risk_premium"
+    ]
+    assert "metric.source.m6.bond_market_value" in manifest.metric_ids
+    assert (
+        "metric.shock.severity.sovereign_risk_premium"
+        in manifest.metric_ids
+    )
+
+
+def test_housing_severity_uses_the_acute_mortgage_window() -> None:
+    manifest = CRISIS_MANIFESTS["CR_HOUSING_BUST"]
+    assert manifest.severity_window_days == 30
+    assert manifest.primary_damage.persistence_days == 1
+
+
+def test_replay_comparison_accepts_only_roundoff_scale_metric_drift() -> None:
+    expected = [{
+        "tick": 34,
+        "economy_count": 1,
+        "economies": [{
+            "metric.source.m7.inheritance_tax_paid": 0.0025030794658754516,
+            "metric.economy.real_output": 100.0,
+        }],
+    }]
+    roundoff = [{
+        "tick": 34,
+        "economy_count": 1,
+        "economies": [{
+            "metric.source.m7.inheritance_tax_paid": 0.002503079465875451,
+            "metric.economy.real_output": 100.0,
+        }],
+    }]
+    material = [{
+        "tick": 34,
+        "economy_count": 1,
+        "economies": [{
+            "metric.source.m7.inheritance_tax_paid": 0.002503079465875451,
+            "metric.economy.real_output": 99.0,
+        }],
+    }]
+
+    accepted = _compare_replay_frames(expected, roundoff)
+    rejected = _compare_replay_frames(expected, material)
+    assert accepted["passed"] is True
+    assert accepted["different_value_count"] == 1
+    assert accepted["out_of_tolerance_count"] == 0
+    assert rejected["passed"] is False
+    assert rejected["first_out_of_tolerance"]["metric_id"] == (
+        "metric.economy.real_output"
+    )

@@ -452,6 +452,7 @@ struct M8AdvanceOptions final {
     M7AdvanceOptions base{};
     std::optional<EnergyExogenousInput> energy_input{};
     std::optional<HousingExogenousInput> housing_input{};
+    double mortgage_credit_supply_multiplier{1.0};
     M8FaultPoint fault_point{M8FaultPoint::none};
 };
 

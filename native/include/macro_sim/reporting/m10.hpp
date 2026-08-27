@@ -16,7 +16,7 @@ namespace macro_sim::reporting {
 // statistics. ``oracle_daily_output`` deliberately aliases the same committed
 // ``real_output`` source; access control belongs to the release layer rather
 // than to a duplicate economic measurement.
-inline constexpr std::size_t kM10BasePublicMetricCount = 76U;
+inline constexpr std::size_t kM10BasePublicMetricCount = 77U;
 inline constexpr std::size_t kM10DashboardMetricCount =
     0U
 #define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule) +1U

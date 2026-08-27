@@ -916,8 +916,21 @@ def apply_native_activation_scenario(
         if scenario == "world_migration_cap_pressure":
             world_rules.migration_rate = 0.05
             world_rules.wage_smoothing = 0.20
-        elif scenario in {"world_peg_pressure", "world_dealer_loss"}:
+        elif scenario == "world_dealer_loss":
             world_rules.fx_adjustment = 0.25
+        elif scenario == "world_peg_pressure":
+            # Preserve a live peg through the common burn-in.  The historical
+            # fixed 5,000-unit reserve pool was exhausted before the crisis
+            # tape began at realistic population scale, making every reserve
+            # response identically zero.
+            initial_people = int(
+                economies[0].domestic_economy.population.initial_persons
+            )
+            world_rules.initial_peg_reserves = max(
+                world_rules.initial_peg_reserves,
+                10.0 * float(initial_people),
+            )
+            world_rules.fx_adjustment = 0.05
         native_spec.rules = world_rules
         if scenario == "world_peg_pressure":
             external = list(native_spec.external_policies)
@@ -1280,10 +1293,10 @@ def apply_native_activation_scenario(
     elif scenario == "wealth_dispersion":
         financial_rules.household_equity_wealth_effect = 0.02
     elif scenario == "energy_inventory_gap":
-        rules.initial_consumption_inventory = 0.0
-        rules.initial_capital_inventory = 0.0
-        rules.demand_adjustment = 0.10
-        energy_rules.downstream_coverage_days = 30.0
+        rules.initial_consumption_inventory *= 0.50
+        rules.initial_capital_inventory *= 0.50
+        rules.demand_adjustment = 0.02
+        energy_rules.downstream_coverage_days = 10.0
     elif scenario == "energy_rising_price":
         rules.initial_consumption_inventory = 0.0
         rules.initial_capital_inventory = 0.0
@@ -1333,10 +1346,28 @@ def apply_native_activation_scenario(
         monetary_rules.deposit_rate = 1.5e-4
         rules.initial_household_money = 260.0
     elif scenario == "housing_distressed_market":
-        housing_rules.initial_dwellings_per_household = 1.10
+        housing_rules.initial_dwellings_per_household = 1.20
+        housing_rules.initial_homeownership_share = 0.55
         housing_rules.location_count = 8
-        housing_rules.distress_deposit_floor = 2_000.0
-        rules.initial_household_money = 1_000.0
+        housing_rules.distress_deposit_floor = 150.0
+        housing_rules.voluntary_ask_markup = 0.10
+        housing_rules.ask_decay = 0.02
+        housing_rules.demand_price_step = 0.05
+        rules.initial_household_money = 250.0
+        monetary_rules.household_credit = True
+        monetary_policy.household_credit_limit = 5.0
+    elif scenario == "sovereign_refinancing_pressure":
+        # Build a policy-independent stock of tradable debt with regular
+        # refinancing.  The crisis tape changes only the required sovereign
+        # return; fiscal settings are shared by every matched branch.
+        financial_rules.bonds = True
+        financial_policy.bond_finance_fraction = 1.0
+        financial_policy.bond_coupon_rate = 2.0e-4
+        financial_policy.bond_maturity_days = 90
+        financial_policy.household_bond_target = 0.25
+        financial_policy.bank_bond_appetite = 0.20
+        monetary_policy.government_deficit_target = 0.05
+        rules.initial_household_money = max(rules.initial_household_money, 50.0)
     elif scenario == "housing_rental_pressure":
         housing_rules.initial_dwellings_per_household = 0.90
         housing_rules.rental_vacancy_deadband = 0.0

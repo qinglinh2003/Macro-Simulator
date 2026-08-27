@@ -300,6 +300,8 @@ M11ReleaseService::trigger_samples(const M11ReleaseStream &stream, EconomyId eco
     const auto energy_shock =
         latest_release(stream, economy, "shock_energy_capacity", as_of);
     const auto credit = latest_release(stream, economy, "shock_credit_supply", as_of);
+    const auto sovereign =
+        latest_release(stream, economy, "shock_sovereign_risk_premium", as_of);
     const auto import_shock =
         latest_release(stream, economy, "shock_import_capacity", as_of);
     const auto export_shock =
@@ -312,7 +314,7 @@ M11ReleaseService::trigger_samples(const M11ReleaseStream &stream, EconomyId eco
         {"energy_unfilled", energy},
         {"shock_supply_severity", maximum_optional({productivity, labor, capital})},
         {"shock_energy_severity", maximum_optional({energy_shock})},
-        {"shock_financial_severity", maximum_optional({credit})},
+        {"shock_financial_severity", maximum_optional({credit, sovereign})},
         {"shock_trade_severity", maximum_optional({import_shock, export_shock})},
         {"shock_demand_severity", maximum_optional({demand})},
     };

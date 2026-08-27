@@ -1481,6 +1481,7 @@ struct M11ProtocolWorker::Impl final {
             simulation::ShockKind::export_capacity,
             simulation::ShockKind::credit_supply,
             simulation::ShockKind::capital_destruction,
+            simulation::ShockKind::sovereign_risk_premium,
         };
         authority.allow_all_economies = true;
         authority.allow_global = true;
@@ -1844,6 +1845,9 @@ struct M11ProtocolWorker::Impl final {
         }
         if (value == "capital_destruction") {
             return simulation::ShockKind::capital_destruction;
+        }
+        if (value == "sovereign_risk_premium") {
+            return simulation::ShockKind::sovereign_risk_premium;
         }
         throw ProtocolFault{"invalid_argument", "The shock kind is invalid.", false};
     }

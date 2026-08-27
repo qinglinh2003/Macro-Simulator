@@ -1086,7 +1086,8 @@ typedef enum macro_sim_m9_shock_kind {
     MACRO_SIM_M9_SHOCK_IMPORT_CAPACITY = 4,
     MACRO_SIM_M9_SHOCK_EXPORT_CAPACITY = 5,
     MACRO_SIM_M9_SHOCK_CREDIT_SUPPLY = 6,
-    MACRO_SIM_M9_SHOCK_CAPITAL_DESTRUCTION = 7
+    MACRO_SIM_M9_SHOCK_CAPITAL_DESTRUCTION = 7,
+    MACRO_SIM_M9_SHOCK_SOVEREIGN_RISK_PREMIUM = 8
 } macro_sim_m9_shock_kind;
 
 typedef enum macro_sim_m9_shock_shape {

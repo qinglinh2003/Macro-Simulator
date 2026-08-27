@@ -10,7 +10,7 @@
 namespace macro_sim::generated {
 
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
-inline constexpr std::string_view kM0ContractSha256 = "4aa07798e227e7781b02eb56d5fb4824f343c79080403d50814ec3d5a5151dfd";
+inline constexpr std::string_view kM0ContractSha256 = "e732df292e19e6b045963b955874b368dd516e9fa0ddc38049ab2e39a655016d";
 
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };
@@ -46,7 +46,7 @@ struct ScalarValue final {
     std::string_view text{};
 };
 
-inline constexpr std::array<ContractSpec, 1538> kContractSpecs{{
+inline constexpr std::array<ContractSpec, 1540> kContractSpecs{{
     {"checkpoint.field.canonical_encoding_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.engine_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.payload", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -1199,6 +1199,7 @@ inline constexpr std::array<ContractSpec, 1538> kContractSpecs{{
     {"observation.release.shock_labor_availability", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_max_severity", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_productivity", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"observation.release.shock_sovereign_risk_premium", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_time_to_next", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.unemployment_rate", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.rl.fiscal-stabilization-v1.feature-000", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -1585,6 +1586,7 @@ inline constexpr std::array<ContractSpec, 1538> kContractSpecs{{
     {"shock.import_capacity", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.labor_availability", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.productivity", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"shock.sovereign_risk_premium", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
 }};
 
 struct AliasSpec final { std::string_view alias; std::string_view canonical; };

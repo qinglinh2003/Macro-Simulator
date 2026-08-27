@@ -630,7 +630,7 @@ seat_operation(const M11ControlledState &state,
     }
     for (const auto kind : authority.allowed_kinds) {
         if (static_cast<std::uint8_t>(kind) >
-            static_cast<std::uint8_t>(simulation::ShockKind::capital_destruction)) {
+            static_cast<std::uint8_t>(simulation::ShockKind::sovereign_risk_premium)) {
             return false;
         }
     }

@@ -707,7 +707,7 @@ external_policy_from_c(const macro_sim_m9_external_policy &value) {
 
 bool valid_m9_shock(const macro_sim_m9_shock &value) noexcept {
     return value.struct_size == sizeof(value) &&
-           value.kind <= MACRO_SIM_M9_SHOCK_CAPITAL_DESTRUCTION &&
+           value.kind <= MACRO_SIM_M9_SHOCK_SOVEREIGN_RISK_PREMIUM &&
            value.shape <= MACRO_SIM_M9_SHOCK_TRIANGULAR &&
            valid_flag(value.has_economy) && valid_flag(value.has_announcement) &&
            valid_flag(value.has_sector) &&

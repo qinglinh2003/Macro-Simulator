@@ -108,13 +108,14 @@ struct Harness final {
     return result;
 }
 
-[[nodiscard]] macro_sim::Result<M8AdvanceResult> advance(Harness &harness,
-                                                         std::uint64_t count) {
+[[nodiscard]] macro_sim::Result<M8AdvanceResult>
+advance(Harness &harness, std::uint64_t count, const M8AdvanceOptions &options = {}) {
     return advance_m8_ticks(harness.root, harness.real_runtime, harness.real_scratch,
                             harness.monetary_runtime, harness.monetary_scratch,
                             harness.financial_runtime, harness.financial_scratch,
                             harness.population_runtime, harness.population_scratch,
-                            harness.runtime, harness.scratch, harness.tick, count);
+                            harness.runtime, harness.scratch, harness.tick, count,
+                            options);
 }
 
 [[nodiscard]] std::vector<std::uint8_t> base_checkpoint(const Harness &harness) {
@@ -207,6 +208,27 @@ void test_mortgage_origination_is_canonical_and_collateralized() {
                     0.001) < 1.0e-12);
 }
 
+void test_mortgage_credit_supply_multiplier_is_sector_specific() {
+    auto control = build(market_spec(true, false));
+    auto constrained = build(market_spec(true, false));
+    M8AdvanceOptions options;
+    options.mortgage_credit_supply_multiplier = 0.0;
+
+    const auto control_result = advance(control, 1);
+    const auto constrained_result = advance(constrained, 1, options);
+    assert(control_result.ok());
+    assert(constrained_result.ok());
+    assert(control_result.get_if()->metrics.housing.mortgage_originations > 0.0);
+    assert(constrained_result.get_if()->metrics.housing.mortgage_originations == 0.0);
+    assert(constrained_result.get_if()->metrics.economy.economy.economy.new_credit <=
+           control_result.get_if()->metrics.economy.economy.economy.new_credit);
+
+    options.mortgage_credit_supply_multiplier = 1.01;
+    const auto rejected = advance(constrained, 1, options);
+    assert(!rejected.ok());
+    assert(rejected.status().code() == macro_sim::ErrorCode::invalid_argument);
+}
+
 void test_mortgage_capital_rules_have_dose_and_withdrawal_contract() {
     const auto run_with_capital_rules = [](double risk_weight,
                                            double minimum_capital_ratio) {
@@ -229,11 +251,9 @@ void test_mortgage_capital_rules_have_dose_and_withdrawal_contract() {
     assert(loose.mortgage_underwriting_applications > 0.0);
     assert(binding.mortgage_underwriting_applications > 0.0);
     assert(std::abs(loose.mortgage_risk_weight_applied - 0.10) < 1.0e-12);
-    assert(std::abs(loose.mortgage_minimum_capital_ratio_applied - 0.01) <
-           1.0e-12);
+    assert(std::abs(loose.mortgage_minimum_capital_ratio_applied - 0.01) < 1.0e-12);
     assert(std::abs(binding.mortgage_risk_weight_applied - 2.0) < 1.0e-12);
-    assert(std::abs(binding.mortgage_minimum_capital_ratio_applied - 1.0) <
-           1.0e-12);
+    assert(std::abs(binding.mortgage_minimum_capital_ratio_applied - 1.0) < 1.0e-12);
     assert(loose.mortgage_rwa_principal_capacity >
            binding.mortgage_rwa_principal_capacity);
     assert(binding.mortgage_rwa_rejections > 0.0);
@@ -845,6 +865,7 @@ void test_failed_market_tick_is_atomic() {
 int main() {
     test_cash_resale_moves_money_title_and_occupancy();
     test_mortgage_origination_is_canonical_and_collateralized();
+    test_mortgage_credit_supply_multiplier_is_sector_specific();
     test_mortgage_capital_rules_have_dose_and_withdrawal_contract();
     test_mortgage_follows_heir_when_borrower_household_retires();
     test_mortgaged_resale_discharge_precedes_new_collateral();

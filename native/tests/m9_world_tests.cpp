@@ -1,3 +1,4 @@
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -454,10 +455,9 @@ void test_household_demand_shock_survives_lifecycle_budget_projection() {
     assert(baseline_result.ok());
 
     auto treatment = build_lifecycle_world();
-    assert(treatment
-               .schedule_shock(
-                   adverse_shock(109U, ShockKind::household_demand, 0.50))
-               .ok());
+    assert(
+        treatment.schedule_shock(adverse_shock(109U, ShockKind::household_demand, 0.50))
+            .ok());
     const auto treatment_result = treatment.advance(1U);
     assert(treatment_result.ok());
     assert(treatment_result.get_if()
@@ -589,8 +589,8 @@ void test_dealer_loss_mutualization_posts_an_explicit_fiscal_levy() {
     const auto settlement = world.advance(1);
     assert(settlement.ok());
     const auto &external = settlement.get_if()->metrics.external;
-    const double paid = external[0].fx_mutualization_paid +
-                        external[1].fx_mutualization_paid;
+    const double paid =
+        external[0].fx_mutualization_paid + external[1].fx_mutualization_paid;
     assert(paid > 0.0);
     assert(world.validate().ok());
 }
@@ -629,6 +629,61 @@ void test_checkpoint_round_trip_and_continuation_are_exact() {
     auto corrupted = *bytes.get_if();
     corrupted[corrupted.size() / 2U] ^= 0x5aU;
     assert(!M9World::restore(corrupted).ok());
+}
+
+void test_checkpoint_continuation_is_exact_with_all_shock_channels() {
+    WorldRules rules;
+    rules.trade = true;
+    rules.capital = true;
+    rules.migration = true;
+    rules.capital_mobility = 0.4;
+    rules.migration_rate = 0.05;
+    rules.wage_smoothing = 1.0;
+    auto world = build_world(3, rules);
+
+    constexpr std::array<ShockKind, 9U> kinds{
+        ShockKind::productivity,           ShockKind::labor_availability,
+        ShockKind::energy_capacity,        ShockKind::household_demand,
+        ShockKind::import_capacity,        ShockKind::export_capacity,
+        ShockKind::credit_supply,          ShockKind::capital_destruction,
+        ShockKind::sovereign_risk_premium,
+    };
+    for (std::size_t index = 0U; index < kinds.size(); ++index) {
+        ShockSpec shock;
+        shock.id = 900U + index;
+        shock.kind = kinds[index];
+        shock.economy = EconomyId(index % 3U);
+        shock.start = Tick(5U);
+        shock.announcement = Tick(1U);
+        shock.duration = shock.kind == ShockKind::capital_destruction ? 1U : 12U;
+        shock.magnitude = 0.05 + 0.01 * static_cast<double>(index);
+        shock.ramp_out_ticks = shock.kind == ShockKind::capital_destruction ? 0U : 4U;
+        if (shock.kind == ShockKind::energy_capacity) {
+            shock.sector = ShockSector::energy;
+        } else if (shock.kind == ShockKind::credit_supply) {
+            shock.sector = ShockSector::housing;
+        } else if (shock.kind == ShockKind::capital_destruction) {
+            shock.sector = ShockSector::capital;
+        }
+        assert(world.schedule_shock(shock).ok());
+    }
+
+    assert(world.advance(3U).ok());
+    auto checkpoint = world.checkpoint();
+    assert(checkpoint.ok());
+    auto restored = M9World::restore(*checkpoint.get_if());
+    assert(restored.ok());
+    auto round_trip = restored.get_if()->checkpoint();
+    assert(round_trip.ok());
+    assert(*round_trip.get_if() == *checkpoint.get_if());
+
+    assert(world.advance(30U).ok());
+    assert(restored.get_if()->advance(30U).ok());
+    auto original_end = world.checkpoint();
+    auto restored_end = restored.get_if()->checkpoint();
+    assert(original_end.ok());
+    assert(restored_end.ok());
+    assert(*original_end.get_if() == *restored_end.get_if());
 }
 
 void test_optional_share_policy_boundaries_validate_and_checkpoint() {
@@ -700,6 +755,7 @@ int main() {
     test_capital_and_migration_paths_are_live();
     test_dealer_loss_mutualization_posts_an_explicit_fiscal_levy();
     test_checkpoint_round_trip_and_continuation_are_exact();
+    test_checkpoint_continuation_is_exact_with_all_shock_channels();
     test_optional_share_policy_boundaries_validate_and_checkpoint();
     test_worker_count_does_not_change_semantics();
     std::cout << "M9 World tests passed\n";

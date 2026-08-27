@@ -15,7 +15,7 @@ from macro_sim.config import Config
 from macro_sim.controllers.costs import AdjustmentCostSpec
 from macro_sim.controllers.native_observation import NativeObservationSource
 from macro_sim.controllers.observation import (
-    DEFAULT_OBSERVATION_SPEC,
+    FISCAL_STABILIZATION_V1_OBSERVATION_SPEC,
     ObjectiveEvaluator,
     ReleaseService,
 )
@@ -42,7 +42,7 @@ def _finite_reward(name: str, value: Any) -> float:
 
 
 def _fiscal_codecs() -> tuple[ContextCodec, DirectionalActionCodec]:
-    fields = tuple(DEFAULT_OBSERVATION_SPEC.fields)
+    fields = tuple(FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.fields)
     scales = {
         field.series_id: (
             1.0 if field.normalization_scale is None
@@ -56,7 +56,9 @@ def _fiscal_codecs() -> tuple[ContextCodec, DirectionalActionCodec]:
         action_levers=("gov_deficit_target",),
         observation_series=tuple(scales),
         normalization_scales=scales,
-        observation_schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
+        observation_schema_version=(
+            FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.schema_version
+        ),
     )
     return context, DirectionalActionCodec.from_context_codec(context)
 
@@ -154,9 +156,11 @@ class NativeFiscalStabilizationEnv:
 
     def _reset_publication_state(self) -> None:
         self.source = NativeObservationSource(self._session)
-        self.release_service = ReleaseService(DEFAULT_OBSERVATION_SPEC)
+        self.release_service = ReleaseService(
+            FISCAL_STABILIZATION_V1_OBSERVATION_SPEC
+        )
         self.objective_evaluator = ObjectiveEvaluator(
-            self.objective_spec, DEFAULT_OBSERVATION_SPEC,
+            self.objective_spec, FISCAL_STABILIZATION_V1_OBSERVATION_SPEC,
         )
 
     @property
@@ -269,7 +273,9 @@ class NativeFiscalStabilizationEnv:
                     "up": self._direction_cost(current, 1),
                 }
             },
-            observation_schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
+            observation_schema_version=(
+                FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.schema_version
+            ),
         )
 
     def _direction_cost(self, current: float, direction: int) -> float:
@@ -616,7 +622,7 @@ class NativeFiscalStabilizationEnvFactory:
     def environment_contract(self) -> dict[str, Any]:
         """Declare the native dynamics instead of impersonating the old task."""
         observation_json = canonical_json(
-            DEFAULT_OBSERVATION_SPEC.to_dict()
+            FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.to_dict()
         )
         return {
             "action_levers": ["gov_deficit_target"],

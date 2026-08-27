@@ -97,6 +97,7 @@ DEFAULT_SHOCK_REGISTRY = ShockRegistry((
     ),
     ShockDefinition(
         "credit_supply", "credit_supply", "Bank loan-origination supply disturbance.",
+        allowed_sectors=frozenset({"housing"}),
         required_capability="bank_enabled",
         emergency_seats=("central_bank", "regulator", "treasury"),
     ),
@@ -106,5 +107,12 @@ DEFAULT_SHOCK_REGISTRY = ShockRegistry((
         magnitude_min=0.0, magnitude_max=0.99, one_shot=True,
         allowed_sectors=frozenset(SECTORS),
         emergency_seats=("treasury",),
+    ),
+    ShockDefinition(
+        "sovereign_risk_premium", "sovereign_risk_premium",
+        "Additive required-return spread on sovereign debt.",
+        magnitude_min=0.0, magnitude_max=0.99,
+        required_capability="bonds",
+        emergency_seats=("central_bank", "regulator", "treasury"),
     ),
 ))

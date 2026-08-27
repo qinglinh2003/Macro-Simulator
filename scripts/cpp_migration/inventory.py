@@ -20,7 +20,10 @@ import yaml
 from macro_sim.config import Config
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.costs import AdjustmentCostSpec
-from macro_sim.controllers.observation import DEFAULT_OBSERVATION_SPEC
+from macro_sim.controllers.observation import (
+    DEFAULT_OBSERVATION_SPEC,
+    FISCAL_STABILIZATION_V1_OBSERVATION_SPEC,
+)
 from macro_sim.controllers.protocol import (
     CONTROLLER_SCHEMA_VERSION,
     OBSERVATION_SCHEMA_VERSION,
@@ -616,8 +619,16 @@ def build_shock_inventory() -> dict[str, Any]:
                 allowed_sectors=sorted(definition.allowed_sectors),
                 required_capability=definition.required_capability,
                 emergency_seats=list(definition.emergency_seats),
-                combination_rule="multiplicative_factor_or_registered_one_shot",
-                lifecycle_source="macro_sim/shocks/engine.py::ShockEngine",
+                combination_rule=(
+                    "additive_required_return_spread"
+                    if kind == "sovereign_risk_premium"
+                    else "multiplicative_factor_or_registered_one_shot"
+                ),
+                lifecycle_source=(
+                    "native/src/simulation/m9.cpp::shock_addition"
+                    if kind == "sovereign_risk_premium"
+                    else "macro_sim/shocks/engine.py::ShockEngine"
+                ),
                 replay_source="macro_sim/shocks/spec.py::ShockTape",
             )
         )
@@ -735,7 +746,7 @@ def build_metrics_inventory() -> dict[str, Any]:
 
 
 def _fiscal_codecs() -> tuple[ContextCodec, DirectionalActionCodec]:
-    fields_ = tuple(DEFAULT_OBSERVATION_SPEC.fields)
+    fields_ = tuple(FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.fields)
     scales = {
         field.series_id: (
             1.0 if field.normalization_scale is None else field.normalization_scale
@@ -748,7 +759,9 @@ def _fiscal_codecs() -> tuple[ContextCodec, DirectionalActionCodec]:
         action_levers=("gov_deficit_target",),
         observation_series=tuple(scales),
         normalization_scales=scales,
-        observation_schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
+        observation_schema_version=(
+            FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.schema_version
+        ),
     )
     return context, DirectionalActionCodec.from_context_codec(context)
 

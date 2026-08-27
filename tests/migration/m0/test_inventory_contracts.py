@@ -39,8 +39,8 @@ def test_policy_tripwires_and_aliases():
     assert metadata["domestic_count"] == 88
     assert metadata["external_count"] == 14
     assert metadata["semantic_counts"] == {
-        "immediate": 88,
-        "new-contracts-only": 9,
+        "immediate": 90,
+        "new-contracts-only": 7,
         "state-transition": 5,
     }
     assert metadata["seats"] == [
@@ -74,9 +74,10 @@ def test_shock_observation_and_rl_tripwires():
         "import_capacity",
         "labor_availability",
         "productivity",
+        "sovereign_risk_premium",
     ]
     metadata = observations["metadata"]
-    assert metadata["release_series_count"] == 42
+    assert metadata["release_series_count"] == 43
     assert metadata["fiscal_v1_feature_count"] == 101
     assert metadata["fiscal_v1_action_dimension_count"] == 1
     assert metadata["fiscal_v1_direction_count"] == 3

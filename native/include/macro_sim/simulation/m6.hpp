@@ -216,6 +216,7 @@ struct M6AdvanceOptions final {
     std::optional<FirmId> force_firm_exit{};
     std::vector<FirmId> protected_firm_exits;
     bool force_bank_entry{false};
+    double sovereign_risk_premium{0.0};
 };
 
 struct M6AdvanceResult final {

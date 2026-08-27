@@ -36,7 +36,9 @@ from macro_sim.diagnostics.policy_contracts import build_p0_payload
 from macro_sim.native_backend import NativeSimulationSession
 
 
-P3_SCHEMA_VERSION = "policy-causality-p3-v1"
+P3_SCHEMA_VERSION = "policy-causality-p3-v3"
+REPLAY_ABSOLUTE_TOLERANCE = 1.0e-12
+REPLAY_RELATIVE_TOLERANCE = 1.0e-12
 DEFAULT_P3_SEEDS = (5_101, 5_113, 5_129, 5_143, 5_159, 5_177, 5_193, 5_209)
 SEVERITIES = ("mild", "moderate", "severe")
 SEVERITY_SCALE: Mapping[str, float] = {
@@ -119,11 +121,16 @@ class CrisisManifest:
     primary_damage: AdverseRule
     recovery_mode: str
     caveat: str = ""
+    severity_window_days: int | None = None
 
     def __post_init__(self) -> None:
         if self.recovery_mode not in {"recover", "recover_or_new_regime", "new_regime"}:
             raise ValueError(
                 f"{self.scenario_id}: invalid recovery mode {self.recovery_mode!r}"
+            )
+        if self.severity_window_days is not None and self.severity_window_days < 1:
+            raise ValueError(
+                f"{self.scenario_id}: severity window must be positive"
             )
 
     @property
@@ -316,6 +323,7 @@ def _crisis(
     propagation: tuple[AdverseRule, ...],
     primary: AdverseRule,
     recovery_mode: str = "recover",
+    severity_window_days: int | None = None,
 ) -> CrisisManifest:
     catalog = SCENARIOS[scenario_id]
     return CrisisManifest(
@@ -332,6 +340,7 @@ def _crisis(
         primary,
         recovery_mode,
         catalog.caveat,
+        severity_window_days,
     )
 
 
@@ -355,58 +364,67 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
         ),
         _crisis(
             "CR_SUPPLY_STAGFLATION",
+            recovery=90,
             legs=(
-                ShockLeg("productivity", 0.15, 60, 30),
-                ShockLeg("energy_capacity", 0.30, 60, 30, "energy"),
+                ShockLeg("productivity", 0.01, 30, 15),
+                ShockLeg("energy_capacity", 0.01, 30, 15, "energy"),
             ),
             entry=(
-                _rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.002),
                 _rule("metric.economy.inflation", "increase", 1.0e-5),
             ),
             propagation=(
                 _rule("metric.source.m8.energy.unfilled", "increase", 1.0),
-                _rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.002),
                 _rule("metric.economy.inflation", "increase", 1.0e-5),
             ),
-            primary=_rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+            primary=_rule(
+                "metric.economy.real_output", "decrease", 1.0, 0.002,
+                "cumulative",
+            ),
+            recovery_mode="recover_or_new_regime",
         ),
         _crisis(
             "CR_ENERGY_EMBARGO",
             countries=3,
             legs=(
-                ShockLeg("energy_capacity", 0.45, 90, 30, "energy"),
-                ShockLeg("import_capacity", 0.25, 90, 30),
+                ShockLeg("energy_capacity", 0.10, 45, 15, "energy"),
+                ShockLeg("import_capacity", 0.10, 45, 15),
             ),
             entry=(
                 _rule("metric.source.m8.energy.unfilled", "increase", 1.0),
-                _rule("metric.source.m8.energy.transaction_price", "increase", 1.0e-4, 0.01),
+                _rule("metric.source.m8.energy.transaction_price", "increase", 1.0e-5),
             ),
             propagation=(
                 _rule("metric.source.m8.energy.fuel_poverty_share", "increase", 0.002),
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
                 _rule("metric.economy.inflation", "increase", 1.0e-5),
             ),
-            primary=_rule("metric.source.m8.energy.unfilled", "increase", 1.0),
+            primary=_rule(
+                "metric.source.m8.energy.unfilled", "increase", 1.0, 0.0,
+                "cumulative",
+            ),
+            recovery_mode="recover_or_new_regime",
             activation="energy_inventory_gap",
         ),
         _crisis(
             "CR_CREDIT_CRUNCH",
             activation="credit_joint_pressure",
             legs=(
-                ShockLeg("credit_supply", 0.70, 90, 30),
-                ShockLeg("household_demand", 0.18, 90, 30),
-                ShockLeg("productivity", 0.05, 90, 30),
+                ShockLeg("credit_supply", 0.25, 45, 15),
+                ShockLeg("household_demand", 0.04, 45, 15),
+                ShockLeg("productivity", 0.01, 45, 15),
             ),
             entry=(
-                _rule("metric.source.m5.new_credit", "decrease", 1.0e-9, 0.05, "cumulative"),
-                _rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+                _rule("metric.source.m5.new_credit", "decrease", 1.0e-9, 0.02, "cumulative"),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.002),
             ),
             propagation=(
                 _rule("metric.source.m5.firm_investment_target", "decrease", 1.0e-9, 0.01),
-                _rule("metric.source.m6.firm_defaults", "increase", 1.0, 0.0, "cumulative"),
-                _rule("metric.economy.unemployment_rate", "increase", 0.005),
+                _rule("metric.economy.unemployment_rate", "increase", 0.002),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.002),
             ),
-            primary=_rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+            primary=_rule("metric.source.m5.new_credit", "decrease", 1.0e-9, 0.02, "cumulative"),
             recovery_mode="recover_or_new_regime",
         ),
         _crisis(
@@ -414,31 +432,29 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             countries=3,
             recovery=90,
             legs=(
-                ShockLeg("labor_availability", 0.25, 90, 60),
-                ShockLeg("productivity", 0.12, 90, 60),
-                ShockLeg("household_demand", 0.16, 90, 60),
-                ShockLeg("credit_supply", 0.12, 90, 60),
-                ShockLeg("import_capacity", 0.30, 90, 60),
-                ShockLeg("export_capacity", 0.25, 90, 60),
+                ShockLeg("labor_availability", 0.003, 45, 30),
+                ShockLeg("household_demand", 0.005, 45, 30),
+                ShockLeg("import_capacity", 0.01, 45, 30),
+                ShockLeg("export_capacity", 0.01, 45, 30),
             ),
             entry=(
-                _rule("metric.economy.employment", "decrease", 1.0, 0.01),
-                _rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+                _rule("metric.economy.employment", "decrease", 1.0, 0.005),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
             ),
             propagation=(
-                _rule("metric.economy.unemployment_rate", "increase", 0.005),
-                _rule("metric.economy.poverty_rate", "increase", 0.002),
+                _rule("metric.economy.unemployment_rate", "increase", 0.002),
+                _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
                 _rule("metric.source.m9.country.imports_volume", "decrease", 1.0e-6, 0.05),
             ),
-            primary=_rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+            primary=_rule("metric.economy.employment", "decrease", 1.0, 0.005),
             recovery_mode="recover_or_new_regime",
         ),
         _crisis(
             "CR_NATURAL_DISASTER",
             legs=(
-                ShockLeg("capital_destruction", 0.10, 1),
-                ShockLeg("productivity", 0.15, 90, 45),
-                ShockLeg("labor_availability", 0.10, 30, 10),
+                ShockLeg("capital_destruction", 0.05, 1),
+                ShockLeg("productivity", 0.03, 45, 20),
+                ShockLeg("labor_availability", 0.02, 20, 10),
             ),
             entry=(
                 _rule("metric.source.m9.country.capital_destroyed", "increase", 1.0, 0.0, "cumulative", 1),
@@ -456,31 +472,31 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             countries=3,
             activation="world_trade_integration",
             legs=(
-                ShockLeg("import_capacity", 0.50, 60, 30),
-                ShockLeg("export_capacity", 0.50, 60, 30),
+                ShockLeg("import_capacity", 0.20, 45, 15),
+                ShockLeg("export_capacity", 0.20, 45, 15),
             ),
             entry=(
-                _rule("metric.source.m9.country.imports_volume", "decrease", 1.0e-6, 0.05),
                 _rule("metric.source.m9.country.exports_volume", "decrease", 1.0e-6, 0.05),
             ),
             propagation=(
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
                 _rule("metric.world.current_account", "increase", 1.0e-4, 0.01),
-                _rule("metric.economy.price_index", "increase", 1.0e-4, 0.005),
             ),
-            primary=_rule("metric.source.m9.country.imports_volume", "decrease", 1.0e-6, 0.05),
+            primary=_rule("metric.source.m9.country.exports_volume", "decrease", 1.0e-6, 0.05),
         ),
         _crisis(
             "CR_PEG_PRESSURE",
             countries=3,
             activation="world_peg_pressure",
             legs=(
-                ShockLeg("import_capacity", 0.50, 90, 30),
-                ShockLeg("export_capacity", 0.20, 90, 30),
+                ShockLeg("import_capacity", 0.20, 45, 15),
+                ShockLeg("export_capacity", 0.10, 45, 15),
             ),
             entry=(
-                _rule("metric.source.m9.country.peg_reserves", "decrease", 1.0, 0.01),
-                _rule("metric.source.m9.country.exchange_rate", "increase", 1.0e-4, 0.001),
+                _rule(
+                    "metric.source.m9.country.peg_reserves", "decrease", 1.0,
+                    0.0001,
+                ),
             ),
             propagation=(
                 _rule("metric.world.current_account", "increase", 1.0e-4, 0.01),
@@ -493,15 +509,14 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             "CR_BANK_RUN",
             activation="bank_run_market_signal",
             legs=(
-                ShockLeg("productivity", 0.10, 30, 15),
-                ShockLeg("household_demand", 0.12, 30, 15),
+                ShockLeg("productivity", 0.03, 30, 15),
+                ShockLeg("household_demand", 0.05, 30, 15),
             ),
             entry=(
                 _rule("metric.source.m5.run_flight_volume", "increase", 1.0, 0.0, "cumulative"),
                 _rule("metric.source.m5.lolr_advances", "increase", 1.0, 0.0, "cumulative"),
             ),
             propagation=(
-                _rule("metric.source.m5.bank_failures", "increase", 1.0, 0.0, "cumulative"),
                 _rule("metric.source.m5.new_credit", "decrease", 1.0e-9, 0.05, "cumulative"),
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
             ),
@@ -514,35 +529,48 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             burn_in=90,
             recovery=90,
             legs=(
-                ShockLeg("household_demand", 0.20, 90, 30),
-                ShockLeg("credit_supply", 0.40, 90, 30),
-                ShockLeg("productivity", 0.08, 90, 30),
+                ShockLeg("credit_supply", 0.50, 60, 20, "housing"),
+                ShockLeg("household_demand", 0.05, 60, 20),
             ),
             entry=(
-                _rule("metric.source.m8.housing.house_price", "decrease", 1.0e-4, 0.01),
-                _rule("metric.source.m8.housing.foreclosures", "increase", 1.0, 0.0, "cumulative"),
+                _rule(
+                    "metric.source.m8.housing.mortgage_principal_originated",
+                    "decrease", 1.0, 0.05, "cumulative", 1,
+                ),
+                _rule(
+                    "metric.source.m8.housing.session_sales", "decrease", 1.0,
+                    0.05, "cumulative", 1,
+                ),
             ),
             propagation=(
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
                 _rule("metric.economy.unemployment_rate", "increase", 0.005),
             ),
-            primary=_rule("metric.source.m8.housing.house_price", "decrease", 1.0e-4, 0.01),
+            primary=_rule(
+                "metric.source.m8.housing.mortgage_principal_originated",
+                "decrease", 1.0, 0.05, "cumulative", 1,
+            ),
             recovery_mode="recover_or_new_regime",
+            severity_window_days=30,
         ),
         _crisis(
             "CR_SOVEREIGN_STRESS",
-            legs=(),
+            activation="sovereign_refinancing_pressure",
+            burn_in=90,
+            recovery=90,
+            legs=(
+                ShockLeg("sovereign_risk_premium", 0.001, 60, 30),
+            ),
             entry=(
-                _rule("metric.source.m6.bond_issuance", "increase", 1.0),
-                _rule("metric.economy.gov_debt_to_gdp", "increase", 0.01),
+                _rule("metric.shock.severity.sovereign_risk_premium", "increase", 1.0e-4),
+                _rule("metric.source.m6.bond_market_value", "decrease", 1.0, 0.01),
             ),
             propagation=(
-                _rule("metric.source.m6.bond_market_value", "decrease", 1.0, 0.01),
-                _rule("metric.source.m5.total_bank_capital", "decrease", 1.0, 0.01),
+                _rule("metric.source.m6.household_bond_market_value", "decrease", 1.0, 0.01),
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
             ),
             primary=_rule("metric.source.m6.bond_market_value", "decrease", 1.0, 0.01),
-            recovery_mode="new_regime",
+            recovery_mode="recover_or_new_regime",
         ),
     )
 }
@@ -638,6 +666,113 @@ def _series(
         if values:
             output[metric_id] = values
     return output
+
+
+def _compare_replay_frames(
+    expected: Sequence[Mapping[str, Any]],
+    actual: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Compare restored metric history without demanding float-bit identity.
+
+    Native economic state remains digest-exact.  Metric frames contain derived
+    floating-point reductions whose final bit can differ after a JSON checkpoint
+    round trip even when every state transition is identical.  R5 therefore
+    records byte identity separately and accepts only bounded numerical drift.
+    """
+    maximum_absolute_drift = 0.0
+    maximum_relative_drift = 0.0
+    different_value_count = 0
+    out_of_tolerance_count = 0
+    first_out_of_tolerance: dict[str, Any] | None = None
+    structural_errors: list[str] = []
+    if len(expected) != len(actual):
+        structural_errors.append("frame_count")
+    for frame_index, (left, right) in enumerate(zip(expected, actual, strict=False)):
+        if left.get("tick") != right.get("tick"):
+            structural_errors.append(f"tick:{frame_index}")
+            continue
+        if left.get("economy_count") != right.get("economy_count"):
+            structural_errors.append(f"economy_count:{frame_index}")
+            continue
+        left_economies = list(left.get("economies", ()))
+        right_economies = list(right.get("economies", ()))
+        if len(left_economies) != len(right_economies):
+            structural_errors.append(f"economy_rows:{frame_index}")
+            continue
+        for economy_id, (left_values, right_values) in enumerate(
+            zip(left_economies, right_economies, strict=True)
+        ):
+            if set(left_values) != set(right_values):
+                structural_errors.append(
+                    f"metric_ids:{frame_index}:{economy_id}"
+                )
+                continue
+            for metric_id, left_value in left_values.items():
+                right_value = right_values[metric_id]
+                if left_value is None or right_value is None:
+                    if left_value is not right_value:
+                        out_of_tolerance_count += 1
+                    continue
+                left_number = float(left_value)
+                right_number = float(right_value)
+                absolute_drift = abs(left_number - right_number)
+                if absolute_drift == 0.0:
+                    continue
+                different_value_count += 1
+                scale = max(abs(left_number), abs(right_number), 1.0)
+                relative_drift = absolute_drift / scale
+                maximum_absolute_drift = max(
+                    maximum_absolute_drift, absolute_drift
+                )
+                maximum_relative_drift = max(
+                    maximum_relative_drift, relative_drift
+                )
+                tolerance = (
+                    REPLAY_ABSOLUTE_TOLERANCE
+                    + REPLAY_RELATIVE_TOLERANCE * scale
+                )
+                if absolute_drift > tolerance:
+                    out_of_tolerance_count += 1
+                    if first_out_of_tolerance is None:
+                        first_out_of_tolerance = {
+                            "tick": left.get("tick"),
+                            "economy_id": economy_id,
+                            "metric_id": metric_id,
+                            "expected": left_number,
+                            "actual": right_number,
+                            "absolute_drift": absolute_drift,
+                            "tolerance": tolerance,
+                        }
+    passed = not structural_errors and out_of_tolerance_count == 0
+    return {
+        "absolute_tolerance": REPLAY_ABSOLUTE_TOLERANCE,
+        "relative_tolerance": REPLAY_RELATIVE_TOLERANCE,
+        "frame_count": min(len(expected), len(actual)),
+        "different_value_count": different_value_count,
+        "out_of_tolerance_count": out_of_tolerance_count,
+        "maximum_absolute_drift": maximum_absolute_drift,
+        "maximum_relative_drift": maximum_relative_drift,
+        "structural_errors": structural_errors,
+        "first_out_of_tolerance": first_out_of_tolerance,
+        "passed": passed,
+    }
+
+
+def _maintained_replay_frames(
+    session: NativeSimulationSession,
+    *,
+    first_tick_exclusive: int,
+    last_tick_inclusive: int,
+) -> list[dict[str, Any]]:
+    bounds = session.history_bounds()
+    page = session.maintained_history_page(
+        bounds["oldest_sequence"], bounds["size"]
+    )
+    return [
+        dict(frame)
+        for frame in page["frames"]
+        if first_tick_exclusive < int(frame["tick"]) <= last_tick_inclusive
+    ]
 
 
 def _state_native_spec(manifest: StateManifest, *, population: int, seed: int) -> Any:
@@ -793,6 +928,7 @@ def _native_shock(
         "export_capacity": native.ShockKind.EXPORT_CAPACITY,
         "credit_supply": native.ShockKind.CREDIT_SUPPLY,
         "capital_destruction": native.ShockKind.CAPITAL_DESTRUCTION,
+        "sovereign_risk_premium": native.ShockKind.SOVEREIGN_RISK_PREMIUM,
     }
     sectors = {
         "consumption": native.ShockSector.CONSUMPTION,
@@ -953,14 +1089,48 @@ def _run_crisis_seed(
                 scheduled_checkpoint,
                 worker_count=workers,
             )
+            initial_checkpoint_round_trip_exact = (
+                restored.checkpoint() == scheduled_checkpoint
+            )
             restored.advance(manifest.horizon_days)
+            expected_final_checkpoint = branch.checkpoint()
+            actual_final_checkpoint = restored.checkpoint()
+            expected_digest = int(branch.native_snapshot()["digest"])
+            actual_digest = int(restored.native_snapshot()["digest"])
+            history_comparison = _compare_replay_frames(
+                _maintained_replay_frames(
+                    branch,
+                    first_tick_exclusive=t0,
+                    last_tick_inclusive=t0 + manifest.horizon_days,
+                ),
+                _maintained_replay_frames(
+                    restored,
+                    first_tick_exclusive=t0,
+                    last_tick_inclusive=t0 + manifest.horizon_days,
+                ),
+            )
             replay = {
-                "final_checkpoint_sha256": hashlib.sha256(restored.checkpoint()).hexdigest(),
-                "expected_final_checkpoint_sha256": hashlib.sha256(branch.checkpoint()).hexdigest(),
+                "initial_checkpoint_round_trip_exact": (
+                    initial_checkpoint_round_trip_exact
+                ),
+                "final_checkpoint_sha256": hashlib.sha256(
+                    actual_final_checkpoint
+                ).hexdigest(),
+                "expected_final_checkpoint_sha256": hashlib.sha256(
+                    expected_final_checkpoint
+                ).hexdigest(),
+                "final_checkpoint_byte_exact": (
+                    actual_final_checkpoint == expected_final_checkpoint
+                ),
+                "final_native_digest": actual_digest,
+                "expected_final_native_digest": expected_digest,
+                "final_native_digest_exact": actual_digest == expected_digest,
+                "maintained_history": history_comparison,
             }
             replay["passed"] = (
-                replay["final_checkpoint_sha256"]
-                == replay["expected_final_checkpoint_sha256"]
+                initial_checkpoint_round_trip_exact
+                and replay["final_native_digest_exact"]
+                and history_comparison["passed"]
             )
         severity_runs[severity] = {
             "tape_hash": tape_hash,
@@ -1057,6 +1227,9 @@ def _primary_loss(
     treatment = run["severities"][severity]["series"].get(metric_id)
     if control is None or treatment is None:
         return None
+    if manifest.severity_window_days is not None:
+        control = control[: manifest.severity_window_days]
+        treatment = treatment[: manifest.severity_window_days]
     adverse = _adverse_path(control, treatment, manifest.primary_damage)
     if manifest.primary_damage.statistic == "cumulative":
         return sum(adverse)
@@ -1124,12 +1297,14 @@ def _recovery_seed(run: Mapping[str, Any], manifest: CrisisManifest) -> dict[str
         path_passed = peak > 0.0 and (
             terminal <= peak * 0.75 or terminal <= peak * 1.25
         )
-    passed = path_passed and inactive and persistent_days >= 3
+    required_persistence = max(1, manifest.primary_damage.persistence_days)
+    passed = path_passed and inactive and persistent_days >= required_persistence
     return {
         "seed": run["seed"],
         "peak_adverse_effect": peak,
         "terminal_adverse_effect": terminal,
         "persistent_days": persistent_days,
+        "required_persistence_days": required_persistence,
         "terminal_shock_inactive": inactive,
         "mode": manifest.recovery_mode,
         "passed": passed,

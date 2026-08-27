@@ -33,6 +33,10 @@ class ControllerEnv(_EnvBase):
 
     metadata = {"render_modes": []}
 
+    def close(self) -> None:
+        """Release adapter state even when Gymnasium is not installed."""
+        self.context = None
+
     def __init__(
         self,
         session: ControlledSimulationSession,

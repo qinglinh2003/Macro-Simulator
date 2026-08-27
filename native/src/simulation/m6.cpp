@@ -2358,7 +2358,7 @@ void stage_capital_firm_entry(const core::RootState &state, const M4TickScratch 
                                        M4TickScratch &real,
                                        const M5TickScratch &monetary,
                                        M6Runtime &runtime, M6TickScratch &scratch,
-                                       Tick tick) {
+                                       Tick tick, double sovereign_risk_premium) {
     if (!runtime.rules.bonds || runtime.policy.bond_finance_fraction <= 0.0) {
         return Status::success();
     }
@@ -2380,9 +2380,9 @@ void stage_capital_firm_entry(const core::RootState &state, const M4TickScratch 
             const double deposits = std::max(
                 0.0, projected_balance(real, household.primary_account) -
                          entry_capital_reserved(scratch, household.primary_account));
-            const double bonds =
-                household_bond_value(scratch.securities_, holder, tick,
-                                     runtime.last_metrics.economy.policy_rate);
+            const double bonds = household_bond_value(
+                scratch.securities_, holder, tick,
+                runtime.last_metrics.economy.policy_rate + sovereign_risk_premium);
             const double buffer =
                 std::max(household.income_expected, runtime.rules.startup_deposits);
             const double room = std::max(
@@ -2440,7 +2440,8 @@ void stage_capital_firm_entry(const core::RootState &state, const M4TickScratch 
     contract.currency = state.currency;
     contract.issued_tick = tick;
     contract.maturity_tick = Tick(maturity);
-    contract.coupon_rate = Rate(runtime.policy.bond_coupon_rate);
+    contract.coupon_rate =
+        Rate(runtime.policy.bond_coupon_rate + sovereign_risk_premium);
     contract.original_face = Money(issue);
     const auto clearing_owner =
         core::OwnerId::institutional(core::OwnerKind::institution, 2);
@@ -2512,7 +2513,8 @@ void stage_capital_firm_entry(const core::RootState &state, const M4TickScratch 
 }
 
 void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
-                M6Runtime &runtime, M6TickScratch &scratch, Tick tick) {
+                M6Runtime &runtime, M6TickScratch &scratch, Tick tick,
+                double sovereign_risk_premium) {
     scratch.working_metrics_.bond_outstanding_face =
         scratch.securities_.total_bond_face().value();
     scratch.working_metrics_.bond_market_value = 0.0;
@@ -2548,7 +2550,8 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
                                        ? contract->maturity_tick.value() - tick.value()
                                        : 0;
             const double market_value = bond_price(
-                lot.units, remaining, runtime.last_metrics.economy.policy_rate,
+                lot.units, remaining,
+                runtime.last_metrics.economy.policy_rate + sovereign_risk_premium,
                 contract->coupon_rate.value());
             if (lot.holder.kind() == core::OwnerKind::household) {
                 scratch.working_metrics_.household_bond_market_value += market_value;
@@ -2578,7 +2581,8 @@ void measure_m6(const core::RootState &state, const M5TickScratch &monetary,
                                    : 0;
         scratch.working_metrics_.bond_market_value += bond_price(
             bond.outstanding_face.value(), remaining,
-            runtime.last_metrics.economy.policy_rate, bond.coupon_rate.value());
+            runtime.last_metrics.economy.policy_rate + sovereign_risk_premium,
+            bond.coupon_rate.value());
         scratch.working_metrics_.bond_weighted_coupon_rate +=
             bond.outstanding_face.value() * bond.coupon_rate.value();
         scratch.working_metrics_.bond_weighted_remaining_maturity_days +=
@@ -3152,7 +3156,15 @@ class M6Extension final : public M5TickExtension {
                 const auto *contract =
                     scratch_.securities_.get(BondId(lot.security.value()));
                 if (contract != nullptr && contract->active) {
-                    market_value = lot.units;
+                    const auto remaining =
+                        contract->maturity_tick.value() > tick.value()
+                            ? contract->maturity_tick.value() - tick.value()
+                            : 0U;
+                    market_value =
+                        bond_price(lot.units, remaining,
+                                   runtime_.last_metrics.economy.policy_rate +
+                                       options_.sovereign_risk_premium,
+                                   contract->coupon_rate.value());
                 }
             }
             net_wealth[household_index] += market_value;
@@ -3218,7 +3230,8 @@ class M6Extension final : public M5TickExtension {
             return finish_security_batch(status);
         }
         run_sector_switching(state, real, runtime_, scratch_, lifecycle_counter_);
-        status = run_bond_issuance(state, real, monetary, runtime_, scratch_, tick);
+        status = run_bond_issuance(state, real, monetary, runtime_, scratch_, tick,
+                                   options_.sovereign_risk_premium);
         if (!status.ok()) {
             return finish_security_batch(status);
         }
@@ -3264,7 +3277,8 @@ class M6Extension final : public M5TickExtension {
                 return status;
             }
         }
-        measure_m6(state, monetary, runtime_, scratch_, tick);
+        measure_m6(state, monetary, runtime_, scratch_, tick,
+                   options_.sovereign_risk_premium);
         return Status::success();
     }
 
@@ -3989,6 +4003,11 @@ advance_m6_ticks_impl(core::RootState &state, M4Runtime &real_economy_runtime,
         return M6AdvanceResult{
             tick, tick, 0, runtime.last_metrics, scratch.capacity_signature(), 0, 0,
         };
+    }
+    if (!finite(options.sovereign_risk_premium) ||
+        options.sovereign_risk_premium < 0.0 || options.sovereign_risk_premium > 0.99) {
+        return Status(ErrorCode::invalid_argument,
+                      "M6 sovereign risk premium must be in [0, 0.99]");
     }
     if (options.base.base.validate_preconditions &&
         !validate_m6_state_fast(state, real_economy_runtime, monetary_runtime, runtime,

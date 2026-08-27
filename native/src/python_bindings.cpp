@@ -407,6 +407,8 @@ std::string_view shock_kind_id(macro_sim::simulation::ShockKind kind) noexcept {
         return "credit_supply";
     case ShockKind::capital_destruction:
         return "capital_destruction";
+    case ShockKind::sovereign_risk_premium:
+        return "sovereign_risk_premium";
     }
     return "unknown";
 }
@@ -2338,7 +2340,9 @@ NB_MODULE(_native, module) {
         .value("EXPORT_CAPACITY", macro_sim::simulation::ShockKind::export_capacity)
         .value("CREDIT_SUPPLY", macro_sim::simulation::ShockKind::credit_supply)
         .value("CAPITAL_DESTRUCTION",
-               macro_sim::simulation::ShockKind::capital_destruction);
+               macro_sim::simulation::ShockKind::capital_destruction)
+        .value("SOVEREIGN_RISK_PREMIUM",
+               macro_sim::simulation::ShockKind::sovereign_risk_premium);
     nb::enum_<macro_sim::simulation::ShockShape>(module, "ShockShape")
         .value("STEP", macro_sim::simulation::ShockShape::step)
         .value("LINEAR", macro_sim::simulation::ShockShape::linear)

@@ -1,10 +1,10 @@
 {
   "counts": {
     "national_accounts": 63,
-    "native_dashboard_analytics": 120,
+    "native_dashboard_analytics": 121,
     "native_stage_sources": 358,
     "public_sources": 41,
-    "total": 582
+    "total": 583
   },
   "metrics": [
     {
@@ -690,6 +690,15 @@
       "source_kind": "derived_or_release",
       "tier": "analytic",
       "unit": "share"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.sovereign_risk_premium",
+      "parity_rule": "max disclosed sovereign-risk-premium shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "analytic",
+      "unit": "fraction"
     },
     {
       "aggregation": "last",

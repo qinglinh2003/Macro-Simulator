@@ -18,10 +18,11 @@ from macro_sim.config import Config
 from macro_sim.controllers.gym_adapter import ControllerEnv
 from macro_sim.controllers.protocol import canonical_json
 from macro_sim.controllers.observation import (
-    DEFAULT_OBSERVATION_SPEC,
+    FISCAL_STABILIZATION_V1_OBSERVATION_SPEC,
     ObjectiveEvaluator,
     ObjectiveSpec,
     ObjectiveTerm,
+    ReleaseService,
 )
 from macro_sim.controllers.scheduler import (
     DEFAULT_CALENDARS,
@@ -143,7 +144,9 @@ class FiscalStabilizationEnvFactory:
     @property
     def environment_contract(self) -> dict[str, Any]:
         """Return every experiment assumption not captured by vector codecs."""
-        observation_json = canonical_json(DEFAULT_OBSERVATION_SPEC.to_dict())
+        observation_json = canonical_json(
+            FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.to_dict()
+        )
         return {
             "action_levers": ["gov_deficit_target"],
             "config": self.config.to_dict(),
@@ -202,9 +205,12 @@ class FiscalStabilizationEnvFactory:
         session = ControlledSimulationSession(
             World([world_config]),
             scheduler=DecisionScheduler(calendars=calendars, triggers=()),
+            release_service=ReleaseService(
+                FISCAL_STABILIZATION_V1_OBSERVATION_SPEC
+            ),
         )
 
-        fields = tuple(DEFAULT_OBSERVATION_SPEC.fields)
+        fields = tuple(FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.fields)
         scales = {
             field.series_id: (
                 1.0 if field.normalization_scale is None
@@ -218,7 +224,9 @@ class FiscalStabilizationEnvFactory:
             action_levers=("gov_deficit_target",),
             observation_series=tuple(scales),
             normalization_scales=scales,
-            observation_schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
+            observation_schema_version=(
+                FISCAL_STABILIZATION_V1_OBSERVATION_SPEC.schema_version
+            ),
         )
         action_codec = DirectionalActionCodec.from_context_codec(context_codec)
         return ControllerEnv(
@@ -226,7 +234,8 @@ class FiscalStabilizationEnvFactory:
             economy_id=0,
             seat="treasury",
             objective_evaluator=ObjectiveEvaluator(
-                fiscal_stabilization_objective(), DEFAULT_OBSERVATION_SPEC,
+                fiscal_stabilization_objective(),
+                FISCAL_STABILIZATION_V1_OBSERVATION_SPEC,
             ),
             max_boundary_tick=cfg.horizon_ticks,
             terminate_on_horizon=True,

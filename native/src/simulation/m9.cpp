@@ -51,7 +51,7 @@ nested_capacity_bytes(const std::vector<std::vector<Value>> &values) noexcept {
 
 [[nodiscard]] bool valid_kind(ShockKind kind) noexcept {
     return static_cast<std::uint8_t>(kind) <=
-           static_cast<std::uint8_t>(ShockKind::capital_destruction);
+           static_cast<std::uint8_t>(ShockKind::sovereign_risk_premium);
 }
 
 [[nodiscard]] bool valid_shape(ShockShape shape) noexcept {
@@ -127,6 +127,23 @@ nested_capacity_bytes(const std::vector<std::vector<Value>> &values) noexcept {
         }
     }
     return result;
+}
+
+[[nodiscard]] double shock_addition(std::span<const ShockSpec> shocks,
+                                    ShockKind kind, std::size_t economy,
+                                    Tick tick) noexcept {
+    double result = 0.0;
+    for (const auto &shock : shocks) {
+        if (shock.kind != kind ||
+            (shock.economy.has_value() && shock.economy->value() != economy)) {
+            continue;
+        }
+        const double progress = shock_progress(shock, tick);
+        if (progress > 0.0) {
+            result += shock.magnitude * progress;
+        }
+    }
+    return std::clamp(result, 0.0, 0.99);
 }
 
 [[nodiscard]] double country_price(const M8Metrics &metrics) noexcept {
@@ -439,6 +456,7 @@ Status validate_shock_spec(const ShockSpec &shock, std::size_t economy_count) no
     const bool sector_allowed = shock.kind == ShockKind::productivity ||
                                 shock.kind == ShockKind::labor_availability ||
                                 shock.kind == ShockKind::energy_capacity ||
+                                shock.kind == ShockKind::credit_supply ||
                                 shock.kind == ShockKind::capital_destruction;
     if (shock.sector.has_value() && !sector_allowed) {
         return Status(ErrorCode::invalid_argument,
@@ -448,6 +466,11 @@ Status validate_shock_spec(const ShockSpec &shock, std::size_t economy_count) no
         *shock.sector != ShockSector::energy) {
         return Status(ErrorCode::invalid_argument,
                       "energy capacity only accepts the energy sector");
+    }
+    if (shock.kind == ShockKind::credit_supply && shock.sector.has_value() &&
+        *shock.sector != ShockSector::housing) {
+        return Status(ErrorCode::invalid_argument,
+                      "credit supply only accepts the housing sector");
     }
     if (shock.start.value() >
             std::numeric_limits<std::uint64_t>::max() - shock.duration ||
@@ -1507,6 +1530,11 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         const double credit_supply =
             shock_factor(staged.shocks_, ShockKind::credit_supply, index, staged.tick_,
                          std::nullopt);
+        const double mortgage_credit_supply = shock_factor(
+            staged.shocks_, ShockKind::credit_supply, index, staged.tick_,
+            ShockSector::housing);
+        const double sovereign_risk_premium = shock_addition(
+            staged.shocks_, ShockKind::sovereign_risk_premium, index, staged.tick_);
         auto energy_input = staged.economies_[index].domestic.energy_input;
         energy_input.capacity_multiplier *= energy_capacity;
         energy_input.labor_availability_multiplier *= labor_energy;
@@ -1520,6 +1548,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
             shock_factor(staged.shocks_, ShockKind::labor_availability, index,
                          staged.tick_, ShockSector::housing);
         domestic_options.housing_input = housing_input;
+        domestic_options.mortgage_credit_supply_multiplier *=
+            mortgage_credit_supply;
 
         auto &m4_options = domestic_options.base.base.base.base;
         m4_options.memory_efficient_staging = true;
@@ -1548,6 +1578,8 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
                              staged.tick_, sector);
         }
         auto &protected_firms = domestic_options.base.base.protected_firm_exits;
+        domestic_options.base.base.sovereign_risk_premium +=
+            sovereign_risk_premium;
         for (const auto &reservation : staged.trade_reservations_) {
             if (reservation.exporter.value() == index) {
                 protected_firms.push_back(reservation.firm);

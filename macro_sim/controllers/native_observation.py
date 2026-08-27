@@ -231,7 +231,10 @@ class NativeObservationSource:
                 severity("capital_destruction"),
             ),
             "shock_energy_severity": severity("energy_capacity"),
-            "shock_financial_severity": severity("credit_supply"),
+            "shock_financial_severity": max(
+                severity("credit_supply"),
+                severity("sovereign_risk_premium"),
+            ),
             "shock_trade_severity": max(
                 severity("import_capacity"),
                 severity("export_capacity"),

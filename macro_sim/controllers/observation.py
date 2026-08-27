@@ -1696,6 +1696,9 @@ def default_observation_spec() -> ObservationSpec:
         F("shock_capital_destruction", "severity.capital_destruction", source="shock", unit="fraction",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=0.25),
+        F("shock_sovereign_risk_premium", "severity.sovereign_risk_premium", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.01),
         F("oracle_daily_output", "real_output", access_class="oracle",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=100.0),
@@ -1703,3 +1706,15 @@ def default_observation_spec() -> ObservationSpec:
 
 
 DEFAULT_OBSERVATION_SPEC = default_observation_spec()
+
+# The deployed fiscal-stabilization-v1 artifact predates the sovereign spread
+# release.  Keep its vector and environment contracts immutable while allowing
+# the general controller surface to grow new public observations.
+FISCAL_STABILIZATION_V1_OBSERVATION_SPEC = ObservationSpec(
+    tuple(
+        field
+        for field in DEFAULT_OBSERVATION_SPEC.fields
+        if field.series_id != "shock_sovereign_risk_premium"
+    ),
+    schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
+)
