@@ -10,7 +10,7 @@
 namespace macro_sim::generated {
 
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
-inline constexpr std::string_view kM0ContractSha256 = "cdb4e4c2fcc22273468bb2f1b85e5d00d0c9252236f7a2c4faabfa98958977de";
+inline constexpr std::string_view kM0ContractSha256 = "91e90807391ca84b63e4286b15c6688dba3a327bb25adfd0be3fe36e4ff5854b";
 
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };

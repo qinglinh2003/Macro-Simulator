@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 CANONICAL_ENCODING_VERSION = 1
-M0_CONTRACT_SHA256 = 'cdb4e4c2fcc22273468bb2f1b85e5d00d0c9252236f7a2c4faabfa98958977de'
+M0_CONTRACT_SHA256 = '91e90807391ca84b63e4286b15c6688dba3a327bb25adfd0be3fe36e4ff5854b'
 CONTRACTS = ({'choices': [],
   'family': 'checkpoint',
   'id': 'checkpoint.field.canonical_encoding_version',

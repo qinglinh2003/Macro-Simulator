@@ -1,0 +1,537 @@
+{
+  "accepted_crises": [
+    "CR_BANK_RUN",
+    "CR_CREDIT_CRUNCH",
+    "CR_DEMAND_RECESSION",
+    "CR_ENERGY_EMBARGO",
+    "CR_HOUSING_BUST",
+    "CR_NATURAL_DISASTER",
+    "CR_PANDEMIC",
+    "CR_PEG_PRESSURE",
+    "CR_SOVEREIGN_STRESS",
+    "CR_SUPPLY_STAGFLATION",
+    "CR_TRADE_INTERRUPTION"
+  ],
+  "base_revision": "6f3a007bd7b6b7d447923109375cf07eb3e9e4f2",
+  "counts": {
+    "accepted_crises": 11,
+    "accepted_states": 11,
+    "cache_hits": 0,
+    "crises": 11,
+    "executed_native_runs": 176,
+    "native_run_records": 176,
+    "ordinary_states": 3,
+    "structural_states": 8,
+    "unaccepted_crises": 0
+  },
+  "crisis_checks": {
+    "CR_BANK_RUN": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "conditional",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m5.new_credit",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "household_demand",
+        "productivity"
+      ]
+    },
+    "CR_CREDIT_CRUNCH": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m5.new_credit",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "credit_supply",
+        "household_demand",
+        "productivity"
+      ]
+    },
+    "CR_DEMAND_RECESSION": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m4.household_consumption",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "household_demand"
+      ]
+    },
+    "CR_ENERGY_EMBARGO": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 3,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m8.energy.unfilled",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "energy_capacity",
+        "import_capacity"
+      ]
+    },
+    "CR_HOUSING_BUST": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "conditional",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m8.housing.mortgage_principal_originated",
+      "propagation_passed_seed_count": 6,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "credit_supply",
+        "household_demand"
+      ]
+    },
+    "CR_NATURAL_DISASTER": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m4.aggregate_capital",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "capital_destruction",
+        "labor_availability",
+        "productivity"
+      ]
+    },
+    "CR_PANDEMIC": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 3,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.economy.real_output",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "export_capacity",
+        "household_demand",
+        "import_capacity",
+        "labor_availability"
+      ]
+    },
+    "CR_PEG_PRESSURE": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 3,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m9.country.peg_reserves",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "capital_outflow_pressure",
+        "export_capacity",
+        "import_capacity"
+      ]
+    },
+    "CR_SOVEREIGN_STRESS": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m6.bond_market_value",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "sovereign_risk_premium"
+      ]
+    },
+    "CR_SUPPLY_STAGFLATION": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 1,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.economy.real_output",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 8,
+      "shock_kinds": [
+        "energy_capacity",
+        "productivity"
+      ]
+    },
+    "CR_TRADE_INTERRUPTION": {
+      "accepted": true,
+      "all_integrity_rows_passed": true,
+      "countries": 3,
+      "declared_readiness": "ready_to_calibrate",
+      "disposition": "accepted",
+      "entry_passed_seed_count": 8,
+      "gates": {
+        "entry": true,
+        "integrity": true,
+        "propagation": true,
+        "recovery": true,
+        "severity": true
+      },
+      "primary_metric": "metric.source.m9.country.exports_volume",
+      "propagation_passed_seed_count": 8,
+      "recovery_passed_seed_count": 8,
+      "replay_evidence_count": 1,
+      "severity_ordered_seed_count": 7,
+      "shock_kinds": [
+        "export_capacity",
+        "import_capacity"
+      ]
+    }
+  },
+  "errors": [],
+  "excluded_crises": [],
+  "hashes": {
+    "r5_acceptance": "3994937b842cf731152887735158e181a4cfb280fe7e471466118fb7f94cac07"
+  },
+  "implementation_revision": "95930333ce7ae8df11933af6c3d7be9e391cfbc5",
+  "legacy_p3_status": "accepted_with_explicit_defects",
+  "legacy_status_note": "P3 v3 uses this historical completion label regardless of the number of excluded crises; R5 acceptance is determined by the explicit gates.",
+  "native_behavior_test_markers": {
+    "native/tests/m10_reporting_tests.cpp": [
+      "test_capital_destruction_is_active_for_realization_boundary_only",
+      "test_sovereign_risk_premium_is_reported_on_its_stable_metric",
+      "test_capital_outflow_pressure_is_reported_on_its_stable_metric"
+    ],
+    "native/tests/m6_simulation_tests.cpp": [
+      "test_sovereign_risk_premium_reprices_existing_bonds"
+    ],
+    "native/tests/m8_housing_market_tests.cpp": [
+      "test_mortgage_credit_supply_multiplier_is_sector_specific"
+    ],
+    "native/tests/m9_world_tests.cpp": [
+      "test_capital_outflow_pressure_drains_peg_reserves"
+    ],
+    "tests/test_config_causality_experiment.py": [
+      "test_world_activation_scenarios_create_the_shared_identification_state",
+      "test_energy_activation_preserves_the_audited_field"
+    ],
+    "tests/test_policy_causality_p3.py": [
+      "test_every_runnable_crisis_freezes_three_ordered_tapes",
+      "test_sovereign_scenario_has_an_observed_risk_premium_tape",
+      "test_peg_scenario_uses_capital_outflow_pressure",
+      "test_housing_severity_uses_the_acute_mortgage_window",
+      "test_replay_comparison_accepts_only_roundoff_scale_metric_drift"
+    ]
+  },
+  "p0_root_hash": "34620bb631de39ec9721cbc9262cd4aa31c2190edb7f9dc3d3c5ce447413e3af",
+  "p3_evidence_file": "docs/policy_remediation_r5_p3_evidence_v39.json",
+  "p3_evidence_file_sha256": "ae9a3e46a5f853d7fc4741749c32e05fc784a57daf123d28db068373567ef845",
+  "p3_hashes": {
+    "p3_acceptance": "239f130858fa3224c0bac7743461f131c1947531a15f8b8b41af50c2718e4a3f",
+    "p3_evidence": "c1829a43b93843f94d89b1d50cd55d75c978d852361a668f898f3e2b3ecc9e9e",
+    "p3_manifest": "28ebe46a4b6ac351fb8e2c3fe3629791f2901186248e96b10cac7aa58b0185d9"
+  },
+  "phase": "R5",
+  "protocol": {
+    "entry_required_seeds": 6,
+    "independent_seed_jobs": 8,
+    "legacy_python_simulator_used": false,
+    "matched_seeds": [
+      5101,
+      5113,
+      5129,
+      5143,
+      5159,
+      5177,
+      5193,
+      5209
+    ],
+    "native_engine_workers": 8,
+    "population_per_country": 100000
+  },
+  "schema_version": "policy-remediation-r5-v1",
+  "shock_kinds": [
+    "capital_destruction",
+    "capital_outflow_pressure",
+    "credit_supply",
+    "energy_capacity",
+    "export_capacity",
+    "household_demand",
+    "import_capacity",
+    "labor_availability",
+    "productivity",
+    "sovereign_risk_premium"
+  ],
+  "source_sha256": {
+    "macro_sim/controllers/gym_adapter.py": "a41669516f8fdaa5cfb1a06d0e423a70c5acb62ae858a52259bf5bab5ce504bc",
+    "macro_sim/controllers/native_observation.py": "ac97972c349a2145b8302935906933c79f8fa6083a39aff329e02f753e1e6006",
+    "macro_sim/controllers/observation.py": "99ec03aaed6f4b62f1c536a425dda715669afff7903252d9e81af2119de33ac6",
+    "macro_sim/diagnostics/config_experiment.py": "cff5a0aee8f85750b306e2b9afd7d6a2df5020bc9a41f471eac38701cdf6b729",
+    "macro_sim/diagnostics/policy_catalog.py": "0f7daf168e71863d866db4c2680065d706521d4a2da5efa15c343bc7deae0145",
+    "macro_sim/diagnostics/policy_scenarios.py": "007a18248f5eaadc73d73fcfddd0c1d2cd88fc8014feec22a465942eb458e417",
+    "macro_sim/native_backend.py": "70eaeee6e6877f02737cfe196c53631e6ed29ccfe1a451eb668de489ef483253",
+    "macro_sim/rl/envs.py": "2488ef0546a403aad55d1c46b3bad6075d0f917b2b11394c72d3529339e2bc21",
+    "macro_sim/rl/native_envs.py": "c4cdb35adbfa4241b9c2b00e9737fe08549b1419328e5e28867726f6aae1137f",
+    "macro_sim/shocks/registry.py": "9268adda8b2fc417710890c87bd00ff3a50bd2fb9679358fa6f253f985ebf406",
+    "native/include/macro_sim/c_api.h": "196abec77c8b3162e6ce6746401a5dfa123a70c585b403af2a21cd79fe7e23e0",
+    "native/include/macro_sim/control/generated_m11_observation_contract.inc": "0641f029970e6a5129824aec58aa36fd04aade1906b24e5a2dbda8273d21b634",
+    "native/include/macro_sim/generated/contracts.hpp": "9efe9a3d280ea9cfe218a6d86595ee4cdf39990ad29e161b8faf38c7d0294783",
+    "native/include/macro_sim/reporting/m10.hpp": "e32218706bd21e411f326859b97f00f45272f4331a5dbf622fc1e19fb97fd6cb",
+    "native/include/macro_sim/simulation/m6.hpp": "c2308ddef8ea182bc43ccc9da72bc8e1b13f86f2d1ab8f9233ad122657e5dc79",
+    "native/include/macro_sim/simulation/m8.hpp": "378b5a033510524adec24ef67c8728e912d21ce3a89ce0b60e8763e6fab59ce2",
+    "native/include/macro_sim/simulation/m9.hpp": "e49987aeb85e8cdc0b791b9022cdbb7b36f94af6a5d4386dc6a667d5ec0a0113",
+    "native/src/c_api.cpp": "f432c0057a3f299a6819b7940ec9a55863f9167db1e1aaf84187e1b6e194d430",
+    "native/src/control/m11_checkpoint.cpp": "db2247b76897d4e507cd917c1dc273239eed77bd435253a3c3a20ecac423a084",
+    "native/src/control/m11_release.cpp": "bc8c9c42fb8c5068f3e8e2e4c34fd7e05da5c796563b8c7ad51129a1200d3cb3",
+    "native/src/control/m11_session.cpp": "f40e7d2c8c6a267c4db2946b60094900020d4e1157f8341d266a4f330cf9c232",
+    "native/src/desktop/m11_protocol.cpp": "b6d3b2f702dc2172b57ccc6e3cdb6052fac1ad2f0ebc24e25486148c32bd4c29",
+    "native/src/python_bindings.cpp": "f16fa1d0bc29f00850bda43a99f797f7a8561a06105b0c5856961b1a01991e9c",
+    "native/src/reporting/m10.cpp": "975a2231c671b06a65a32a8d3dcde933fca4b5766713d1c88a43e728f5d60264",
+    "native/src/simulation/m6.cpp": "4490ced6f805143da28744598d38f2aaa356e41aaa579d99a8fac665eafda97d",
+    "native/src/simulation/m8.cpp": "88ccbc90eea6188df0ad3f5952506ff2eec70cda3a1714c2d58c68c1b1718184",
+    "native/src/simulation/m9.cpp": "bb25bf7e99c2bdc874cac1acb559a2c30ef8ccd21a9d4cab339f541d9b685b79",
+    "native/tests/m10_reporting_tests.cpp": "61438819f826dcb3568ec65065dcf87d5e8d6d73a188adb18f7a59bb429c173f",
+    "native/tests/m11_release_tests.cpp": "289fb24b404e9668f7733a8eaaca08f20e9b2a13d437eedcee65497d5dc4c890",
+    "native/tests/m6_simulation_tests.cpp": "47602e1d3d7d05c8b8b327ddbbae9d70da23fa9cdcbb02959216e6682ad93832",
+    "native/tests/m8_housing_market_tests.cpp": "fd402ad47be423dadb9ce38be9f1db85770cc15e32c5c353d1c6a4dfdb25088a",
+    "native/tests/m9_world_tests.cpp": "964ed8685ce5d71c5b7654ba8574a4a5f2c8f977379cb072e7880500b113b5e6",
+    "schemas/m0/hashes.lock.json": "ca5ec0c6a1771aa51cb35867464a6070e5dec39cf490d77bc3245af0384880ef",
+    "schemas/m0/inventory/modules.json": "74fd28a8e360eaf24286e8590e13b26a9e95370004be93ea28de9f5e7498dae3",
+    "schemas/m0/inventory/observations.json": "5bc4e5d5ad4c8a5de7f3945c88a72b5f596c77beb0f67c29829c86f3276d40ed",
+    "schemas/m0/inventory/policy.json": "dcfe3b933cf33b3169c31aef433e18f68bab74f02afd055018ffd4bb3a128f88",
+    "schemas/m0/inventory/shocks.json": "144e81472a301b6dc69d4fea4a759a5104640f8bc65da681b17624de5fd61353",
+    "schemas/m1/generated/contracts.json": "85d3cf028a67490ab7e1b9bdd21047584d01e6653444ab908f85c5a007aefc04",
+    "schemas/m1/generated/python/contracts.py": "63f4651b0429e27db5fb8f44e4b89ceba42c05ba0b1d489c8962816dd4dd8972",
+    "schemas/m1/hashes.lock.json": "8b4588411f00b12d2848076f08797252e21d818eb570c5258cd06b31faa41b50",
+    "schemas/m1/invalid_contract_cases.json": "816b948741d726c425a5e8deb89371b99eadac052321b50f6730d9d079d08b66",
+    "schemas/m10/maintained_metrics.json": "e4e3d3896b373bf8618ae956e5f0f10d31b6603f5241bf1cb8885206c3d57458",
+    "schemas/m10/performance_budget.json": "778d24bdd04becbfcce3d979bae9344e3398867d7790b1d3b7a081f35dd8e748",
+    "schemas/m11/observation_contract.json": "9205c5570e5ce3c040d2135c35738ec5c84733111cb75c43d068ce54160db584",
+    "scripts/cpp_migration/inventory.py": "05f2ca54a83c1106b9625dfff506cb3f6b4336d1ff03af9b720b779234f077d2",
+    "tests/fixtures/m0/clients/contracts.json": "f14d473445b5b6e83856d192468686771b4226116b7f57f4cc18cf5d25a3ed12",
+    "tests/migration/m0/test_inventory_contracts.py": "3a5358b99e89bccb75f4b887b211794aad2d60d51cfa3a50e87ff3596021f115",
+    "tests/native/test_generated_contracts.py": "e12410fd823a0af3e320b7a9fbb2d0cf15f6f91da700ed161a2c05020f2cbab0",
+    "tests/test_config_causality_experiment.py": "292aa2d41dc7999349068042a74dd927f1dbbe6c06ad643131f8d5cc365e4d1b",
+    "tests/test_policy_causality_p3.py": "5a33f0fa3e435c4d48373de07aa6acb61005d7e09f5cc37b4ee9f6c5711714b8",
+    "tools/m10/metric_contract.py": "166e4842455fd87ba4d3ade1b4c9269c523fdbbe3605206dd5d2c3c1eff225a3"
+  },
+  "state_checks": {
+    "BASE_NORMAL": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "ordinary"
+    },
+    "BASE_SLACK": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "ordinary"
+    },
+    "BASE_TIGHT": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "ordinary"
+    },
+    "STRUCT_ENERGY_DEPENDENCE": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_EXTERNAL_IMBALANCE": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_HIGH_INEQUALITY": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_HIGH_POVERTY": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_HOUSING_SHORTAGE": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_LOW_PARTICIPATION": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_LOW_PRODUCTIVITY": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    },
+    "STRUCT_POPULATION_AGING": {
+      "accepted": true,
+      "all_seed_rows_passed": true,
+      "checkpoint_count": 8,
+      "disposition": "accepted",
+      "passed_seed_count": 8,
+      "required_seed_count": 6,
+      "scenario_class": "structural"
+    }
+  },
+  "status": "accepted",
+  "supersession": {
+    "current_accepted_crisis_count": 11,
+    "historical_p3_evidence_superseded": true,
+    "policy_calibration_performed": false,
+    "previous_accepted_crisis_count": 1
+  },
+  "verification_commands": [
+    "PYTHONPATH=build/native/m11-release/native:. .venv/bin/python scripts/policy_causality_p3.py --artifact-dir artifacts/policy-remediation/r5/p3-final --population 100000 --workers 8 --jobs 8 --no-resume --fail-on-incomplete",
+    "ctest --preset m11-release -j 8 --output-on-failure",
+    "PYTHONPATH=build/native/m11-release/native:. .venv/bin/python -m pytest -q tests/test_policy_causality_p3.py tests/test_policy_remediation_r5.py",
+    "PYTHONPATH=build/native/m11-release/native:. .venv/bin/python scripts/policy_remediation_r5.py --check"
+  ]
+}

@@ -1,5 +1,35 @@
 # Policy Remediation Plan v39
 
+## R5 acceptance
+
+- Status: `accepted`
+- Base revision: `6f3a007bd7b6b7d447923109375cf07eb3e9e4f2` (accepted R4)
+- Implementation revision: `95930333ce7ae8df11933af6c3d7be9e391cfbc5`
+- Machine report: `docs/policy_remediation_r5_acceptance_v39.json`
+- Full P3 evidence: `docs/policy_remediation_r5_p3_evidence_v39.json`
+- Scope: 11 structural/ordinary states, 11 crisis scenarios, 10 native shock kinds, 8 fixed seeds, and five acceptance gates per crisis.
+- Formal protocol: 100,000 persons per country, eight native workers per session, eight concurrent seed jobs, 176 fresh native runs, and zero cache hits.
+- Verification: 74/74 native tests, 156/156 focused Python/native-binding tests, and all five contract generators/checkers passed.
+
+Every state and crisis is accepted. Each crisis passes entry, propagation,
+severity, recovery, and replay/accounting integrity. Ten crisis severity checks
+are ordered in 8/8 seeds; trade interruption is ordered in 7/8 seeds and passes
+the preregistered 6/8 threshold. Every crisis includes at least one native replay
+check, and every per-seed integrity row passes.
+
+R5 repairs shock lifecycle and replay semantics, sovereign-risk repricing,
+housing-specific mortgage credit rationing, and fixed-exchange-rate reserve defense
+under exogenous capital outflow pressure. It also replaces noisy peak statistics
+with mechanism-aligned cumulative or acute-window measures where the earlier P3
+gate did not measure the declared crisis reliably.
+
+The P3 v3 payload retains its historical workflow label
+`accepted_with_explicit_defects`; that enum is emitted for every error-free P3 run
+and is not conditional on exclusions. The R5 acceptance report therefore freezes
+the explicit result: `errors=[]`, 11/11 accepted crises, zero exclusions, and all
+five gates passing. Crisis calibration contains no Policy treatment. Single-policy
+effect size and gameplay calibration remain reserved for R6.
+
 ## R4 acceptance
 
 - Status: `accepted`

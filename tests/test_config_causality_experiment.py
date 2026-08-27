@@ -590,7 +590,9 @@ def test_world_activation_scenarios_create_the_shared_identification_state(
     if expected == "peg":
         assert native_spec.external_policies[0].peg_anchor == 1
         assert str(native_spec.external_policies[0].fx_regime).endswith("PEG")
-    if expected in {"peg", "dealer"}:
+        assert native_spec.rules.fx_adjustment == pytest.approx(0.05)
+        assert native_spec.rules.initial_peg_reserves >= 1_000_000.0
+    if expected == "dealer":
         assert native_spec.rules.fx_adjustment == pytest.approx(0.25)
 
 
@@ -1326,7 +1328,7 @@ def test_deprivation_activation_preserves_the_audited_measurement_field(
             "energy_gap_close",
             0.20,
             "downstream_coverage_days",
-            30.0,
+            10.0,
         ),
         (
             "energy_rising_price",
