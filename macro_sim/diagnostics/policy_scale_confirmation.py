@@ -319,6 +319,7 @@ def _selection_contracts() -> dict[str, PolicyCausalContract]:
 def _metric_ids(selection: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(set(selection["salient_metrics"])
         | set(selection["activation_metrics"])
+        | set(selection.get("exploratory_metrics", ()))
         | set(ACCOUNTING_METRICS)
         | ({selection["rare_event_metric"]} if selection["rare_event_metric"] else set())))
 

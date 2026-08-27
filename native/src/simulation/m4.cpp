@@ -1357,8 +1357,21 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
               });
     const double output_reference = fiscal_output_reference(runtime, scratch);
     scratch.fiscal_output_reference_applied_ = output_reference;
+    const double planned_public_investment =
+        runtime.rules.government_investment_share * output_reference;
+    double available_public_investment = 0.0;
+    for (const auto index : scratch.capital_firm_indices_) {
+        const auto &work = scratch.firm_work_[index];
+        // Match run_public_investment's per-supplier economic threshold. A
+        // large population can otherwise sum thousands of individually
+        // untradeable floating crumbs into a fictitious committed outlay.
+        if (work.closing_inventory > algorithms::kEconomicEpsilon) {
+            available_public_investment +=
+                work.closing_inventory * work.posted_price;
+        }
+    }
     const double committed_outlays =
-        runtime.rules.government_investment_share * output_reference +
+        std::min(planned_public_investment, available_public_investment) +
         runtime.last_metrics.transfer_payments;
     double budget = 0.0;
     if (runtime.rules.government_deficit_target > 0.0) {
@@ -1374,7 +1387,9 @@ void commit_working_state(core::RootState &state, M4Runtime &runtime,
         // Deficit targeting and quantity targeting are separate fiscal
         // regimes. In deficit mode, discretionary procurement is the residual
         // that makes total spending approach tax receipts plus the target
-        // deficit after transfers and public investment.
+        // deficit after transfers and realizable public investment. An
+        // unfunded capital-goods tender is not a cash outlay and must not crowd
+        // out current government consumption before any supplier can fill it.
         budget = std::max(0.0, runtime.last_metrics.tax_total +
                                    target * output_reference - committed_outlays);
     } else {
@@ -2016,6 +2031,18 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
         if (!status.ok()) {
             return status;
         }
+        // Government procurement is an order in the capital-goods market, not
+        // a claim on whatever private buyers happen to leave behind. Clear the
+        // public tender first under this deterministic matcher, then expose
+        // the residual inventory to private investment. This gives the fiscal
+        // share a direct quantity channel while preserving conservation and
+        // explicit private crowding out when supply is scarce.
+        status =
+            run_public_investment(state, runtime, scratch, government_spending,
+                                  public_capital_addition, public_investment_spending);
+        if (!status.ok()) {
+            return status;
+        }
         status = apply_market(state, runtime, scratch, rng, tick, true, options);
         if (!status.ok()) {
             return status;
@@ -2037,12 +2064,6 @@ advance_one(core::RootState &state, M4Runtime &runtime, M4TickScratch &scratch,
             for (const auto index : scratch.capital_firm_indices_) {
                 scratch.firm_work_[index].rationed_demand += share;
             }
-        }
-        status =
-            run_public_investment(state, runtime, scratch, government_spending,
-                                  public_capital_addition, public_investment_spending);
-        if (!status.ok()) {
-            return status;
         }
         capture_phase(state, scratch, options, M4Phase::capital_market);
     }

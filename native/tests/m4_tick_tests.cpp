@@ -142,6 +142,33 @@ void test_v1_without_government_retains_private_capital_economy() {
     assert(core::run_invariants(*session.root()).ok());
 }
 
+void test_public_investment_competes_for_current_capital_supply() {
+    const auto run = [](double investment_share) {
+        auto spec = v1_spec(2073);
+        spec.rules.government_investment_share = investment_share;
+        spec.rules.capital_rationed_signal = true;
+        auto initialization = build_m4_genesis(spec);
+        assert(initialization.ok());
+        auto value = std::move(initialization).take();
+        M4TickScratch scratch;
+        Tick tick(0);
+        const auto advanced = advance_tick(
+            value.root, value.runtime, scratch, tick
+        );
+        assert(advanced.ok());
+        return advanced.get_if()->metrics;
+    };
+
+    const auto private_only = run(0.0);
+    const auto low_public_buyer = run(0.02);
+    const auto high_public_buyer = run(0.20);
+    assert(low_public_buyer.public_fixed_capital_formation > 0.0);
+    assert(high_public_buyer.public_fixed_capital_formation >=
+           low_public_buyer.public_fixed_capital_formation);
+    assert(high_public_buyer.fixed_capital_formation_real <=
+           private_only.fixed_capital_formation_real + 1.0e-9);
+}
+
 void test_sector_specific_firm_opening_cash() {
     auto spec = v1_spec(2071);
     spec.rules.initial_firm_money = 200.0;
@@ -985,6 +1012,7 @@ int main() {
     test_v0_genesis_and_tick();
     test_v1_fiscal_and_capital_tick();
     test_v1_without_government_retains_private_capital_economy();
+    test_public_investment_competes_for_current_capital_supply();
     test_sector_specific_firm_opening_cash();
     test_dividend_payout_is_reported_directly();
     test_capital_clock_demand_smoothing_scales_the_source_ema();

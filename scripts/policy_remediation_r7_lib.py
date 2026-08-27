@@ -86,18 +86,28 @@ R7_SCALE_METRIC_OVERRIDES: Mapping[str, tuple[str, ...]] = {
     "rental_eviction_arrears": (
         "metric.source.m8.housing.evictions",
     ),
+    # SOE ownership plus at-cost pricing has a direct, signed price channel.
+    # Physical output remains an endogenous equilibrium response and did not
+    # preserve one direction across the frozen R7 seeds, so retain it as an
+    # exploratory side effect rather than an acceptance gate.
+    "soe_efirm": (
+        "metric.source.m8.energy.transaction_price",
+    ),
+}
+R7_EXPLORATORY_METRICS: Mapping[str, tuple[str, ...]] = {
+    "soe_efirm": (
+        "metric.source.m8.energy.production",
+    ),
 }
 
 # These are economy totals or event counts. Their first-order scale reference
-# is proportionality to population; exchange rates are the only intensive
-# selected outcome in R7.
+# is proportionality to population. Prices and exchange rates are intensive.
 R7_EXTENSIVE_METRICS = frozenset({
     "metric.source.m4.public_capital",
     "metric.source.m4.public_fixed_capital_formation",
     "metric.source.m6.firm_defaults",
     "metric.source.m6.firm_exits",
     "metric.source.m8.energy.production",
-    "metric.source.m8.energy.transaction_price",
     "metric.source.m8.housing.evictions",
     "metric.source.m8.housing.foreclosures",
     "metric.source.m8.housing.rent_unpaid",
@@ -203,6 +213,9 @@ def build_r7_manifest(
                 lever, tuple(arm["salient_proximal_metrics"])
             )
         ))
+        exploratory_metrics = tuple(sorted(
+            R7_EXPLORATORY_METRICS.get(lever, ())
+        ))
         selections.append({
             "lever": lever,
             "arm_label": R7_ARM_LABELS[lever],
@@ -215,6 +228,7 @@ def build_r7_manifest(
             "setup_actions": _jsonable(setup),
             "actions": _jsonable(actions),
             "salient_metrics": list(metrics),
+            "exploratory_metrics": list(exploratory_metrics),
             "activation_fixture": contract.activation_fixture,
             "activation_metrics": list(
                 ACTIVATION_FIXTURES[contract.activation_fixture].activation_metrics
@@ -222,7 +236,7 @@ def build_r7_manifest(
             "rare_event_metric": R7_RARE_EVENT_METRICS.get(lever),
             "r6_frozen_effects": {
                 metric_id: arm["effects"][metric_id]
-                for metric_id in metrics
+                for metric_id in (*metrics, *exploratory_metrics)
             },
             "time_compression": (
                 {
@@ -393,8 +407,10 @@ def _metric_scale_report(
     }
 
 
-def _event_total(run: Mapping[str, Any], metric_id: str) -> float:
-    values = run["treatment"]["metric_series"].get(metric_id, {}).get(
+def _event_total(
+    run: Mapping[str, Any], metric_id: str, branch: str
+) -> float:
+    values = run[branch]["metric_series"].get(metric_id, {}).get(
         "values", ()
     )
     return sum(max(0.0, float(value)) for value in values)
@@ -408,8 +424,15 @@ def _rare_event_report(
     metric_id = selection.get("rare_event_metric")
     if not metric_id:
         return None
-    small_totals = [_event_total(row, metric_id) for row in small]
-    large_totals = [_event_total(row, metric_id) for row in large]
+    small_control = [_event_total(row, metric_id, "control") for row in small]
+    small_treatment = [_event_total(row, metric_id, "treatment") for row in small]
+    large_control = [_event_total(row, metric_id, "control") for row in large]
+    large_treatment = [_event_total(row, metric_id, "treatment") for row in large]
+    # Event policies can work by creating an eligible transition or preventing
+    # one. Opportunity therefore means at least one matched branch realizes
+    # the event; treatment-only counting rejects successful prevention.
+    small_totals = [max(a, b) for a, b in zip(small_control, small_treatment)]
+    large_totals = [max(a, b) for a, b in zip(large_control, large_treatment)]
     small_mean = fmean(small_totals)
     large_mean = fmean(large_totals)
     raw_ratio = large_mean / small_mean if small_mean > 0.0 else None
@@ -419,6 +442,10 @@ def _rare_event_report(
     )
     return {
         "metric_id": metric_id,
+        "small_control_event_totals": small_control,
+        "small_treatment_event_totals": small_treatment,
+        "large_control_event_totals": large_control,
+        "large_treatment_event_totals": large_treatment,
         "small_event_totals": small_totals,
         "large_event_totals": large_totals,
         "small_incidence": sum(value > 0.0 for value in small_totals) / len(small),
@@ -430,6 +457,25 @@ def _rare_event_report(
         "estimated_count_elasticity": elasticity,
         "nonzero_at_both_scales": small_mean > 0.0 and large_mean > 0.0,
     }
+
+
+def _activation_present(
+    run: Mapping[str, Any], selection: Mapping[str, Any]
+) -> bool:
+    metric_ids = list(selection["activation_metrics"])
+    rare_metric = selection.get("rare_event_metric")
+    if rare_metric and rare_metric not in metric_ids:
+        metric_ids.append(rare_metric)
+    return any(
+        any(
+            abs(float(value)) > 1.0e-12
+            for branch in ("control", "treatment")
+            for value in run[branch]["metric_series"].get(
+                metric_id, {}
+            ).get("values", ())
+        )
+        for metric_id in metric_ids
+    )
 
 
 def analyze_r7(
@@ -470,17 +516,11 @@ def analyze_r7(
         budget_passed = complete and all(row["passed"] for row in budgets)
         activation = {
             "small_active_seeds": sum(
-                any(
-                    any(abs(float(value)) > 1.0e-12 for value in run["control"]["metric_series"].get(metric_id, {}).get("values", ()))
-                    for metric_id in selection["activation_metrics"]
-                )
+                _activation_present(run, selection)
                 for run in valid_small
             ),
             "large_active_seeds": sum(
-                any(
-                    any(abs(float(value)) > 1.0e-12 for value in run["control"]["metric_series"].get(metric_id, {}).get("values", ()))
-                    for metric_id in selection["activation_metrics"]
-                )
+                _activation_present(run, selection)
                 for run in valid_large
             ),
         }
@@ -496,6 +536,15 @@ def analyze_r7(
                     selection, metric_id, valid_small, valid_large
                 )
                 for metric_id in selection["salient_metrics"]
+            ]
+            if integrity else []
+        )
+        exploratory_metrics = (
+            [
+                _metric_scale_report(
+                    selection, metric_id, valid_small, valid_large
+                )
+                for metric_id in selection.get("exploratory_metrics", ())
             ]
             if integrity else []
         )
@@ -529,6 +578,7 @@ def analyze_r7(
             "execution_budget_passed": budget_passed,
             "activation": activation,
             "metrics": metrics,
+            "exploratory_metrics": exploratory_metrics,
             "rare_event": rare,
             "time_compression": selection["time_compression"],
             "execution_records": budgets,
@@ -757,6 +807,20 @@ def build_r7_acceptance(evidence: Mapping[str, Any]) -> dict[str, Any]:
                 }
                 for metric in row["metrics"]
             ],
+            "exploratory_metric_models": [
+                {
+                    "metric_id": metric["metric_id"],
+                    "passed": metric["passed"],
+                    "estimated_population_elasticity": metric[
+                        "estimated_population_elasticity"
+                    ],
+                    "first_order_scale_confirmed": metric[
+                        "first_order_scale_confirmed"
+                    ],
+                    "scale_model": metric["scale_model"],
+                }
+                for metric in row.get("exploratory_metrics", ())
+            ],
         }
         for row in reports
     ]
@@ -793,8 +857,11 @@ def build_r7_acceptance(evidence: Mapping[str, Any]) -> dict[str, Any]:
         },
     }
     payload["hashes"]["r7_acceptance"] = _canonical_hash({
-        key: value for key, value in payload.items()
-        if key != "hashes"
+        **{
+            key: value for key, value in payload.items()
+            if key != "hashes"
+        },
+        "r7_evidence": payload["hashes"]["r7_evidence"],
     })
     return payload
 
