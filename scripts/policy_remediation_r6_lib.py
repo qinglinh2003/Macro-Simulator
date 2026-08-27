@@ -88,6 +88,11 @@ R6_SCALE_PENDING = frozenset({
     "tariff",
     "fx_regime",
 })
+R6_STRUCTURAL_LEVERS = frozenset({
+    "monetary_regime",
+    "soe_efirm",
+    "fx_regime",
+})
 R6_ACTIVATION_ONLY_CRISIS_EXCLUSIONS = frozenset({
     "jg_wage_ratio",
     "jg_public_works_share",
@@ -582,7 +587,8 @@ def _classification(
     anchor_benefit = _has_benefit(crisis, "anchor")
     adverse_harm = _has_harm(crisis, "adverse")
     structural = (
-        contract.semantics in {"state-transition", "new-contracts-only"}
+        lever in R6_STRUCTURAL_LEVERS
+        or contract.semantics == "new-contracts-only"
         or disposition == "accepted_structural_long_horizon"
     )
     if structural and live:

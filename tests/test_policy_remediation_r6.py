@@ -147,3 +147,21 @@ def test_r6_classification_vocabulary_and_silent_lever_rule() -> None:
     )
     assert classification == "removed"
     assert classification in R6_CLASSIFICATIONS
+
+
+def test_manual_rate_atomicity_is_not_an_economic_structural_class() -> None:
+    contract = next(
+        item for item in build_contracts()
+        if item.lever == "manual_policy_rate"
+    )
+    classification, _reason = _classification(
+        lever=contract.lever,
+        contract=contract,
+        mechanism={
+            "disposition": "accepted",
+            "salient_proximal_metrics": ["metric.economy.policy_rate"],
+        },
+        crisis={"states": []},
+    )
+    assert contract.semantics == "state-transition"
+    assert classification == "expert_only"
