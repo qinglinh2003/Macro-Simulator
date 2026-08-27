@@ -70,7 +70,7 @@ void test_descriptors_are_stable_and_complete() {
     assert(kM10NativeSourceMetricCount == 358U);
     assert(kM10DashboardMetricCount == 85U);
     assert(kM10NationalAccountMetricCount == 63U);
-    assert(kM10MetricCount == 583U);
+    assert(kM10MetricCount == 584U);
     for (std::size_t index = 0; index < descriptors.size(); ++index) {
         assert(!descriptors[index].stable_id.empty());
         assert(!descriptors[index].unit.empty());
@@ -379,6 +379,34 @@ void test_sovereign_risk_premium_is_reported_on_its_stable_metric() {
            1.0);
 }
 
+void test_capital_outflow_pressure_is_reported_on_its_stable_metric() {
+    auto world = build_world();
+    ShockSpec shock;
+    shock.id = 804U;
+    shock.kind = ShockKind::capital_outflow_pressure;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(1U);
+    shock.announcement = Tick(0U);
+    shock.duration = 4U;
+    shock.magnitude = 0.005;
+    assert(world.schedule_shock(shock).ok());
+
+    auto announced = build_metric_frame(world);
+    assert(announced.ok());
+    assert(*announced.get_if()
+                ->value(0U,
+                        metric("metric.shock.severity.capital_outflow_pressure"))
+                .get_if() == 0.005);
+
+    assert(world.advance(1U).ok());
+    auto active = build_metric_frame(world, announced.get_if());
+    assert(active.ok());
+    assert(*active.get_if()
+                ->value(0U,
+                        metric("metric.shock.severity.capital_outflow_pressure"))
+                .get_if() == 0.005);
+}
+
 void test_typed_probes_are_stable_and_paged() {
     auto world = build_world();
     auto first = probe_households(world, EconomyId(0U), 0U, 5U);
@@ -541,6 +569,7 @@ int main() {
     test_shock_metrics_respect_announcement_boundary();
     test_capital_destruction_is_active_for_realization_boundary_only();
     test_sovereign_risk_premium_is_reported_on_its_stable_metric();
+    test_capital_outflow_pressure_is_reported_on_its_stable_metric();
     test_typed_probes_are_stable_and_paged();
     test_firm_scoped_employment_probes_return_exact_contracts();
     test_household_scoped_probes_return_every_member();

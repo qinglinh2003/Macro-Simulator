@@ -362,12 +362,11 @@ SCENARIOS: Mapping[str, ScenarioSpec] = MappingProxyType({
         ),
         _scenario(
             "CR_PEG_PRESSURE",
-            "A defended peg absorbs external-flow pressure through reserve losses while holding its exchange-rate anchor.",
-            "conditional",
-            ("valid peg burn-in", "external-flow pressure", "live rate differential"),
-            ("metric.source.m9.country.peg_reserves",),
+            "A defended peg absorbs capital-outflow and trade pressure through reserve losses while holding its exchange-rate anchor.",
+            "ready_to_calibrate",
+            ("valid peg burn-in", "capital_outflow_pressure shock", "external trade pressure"),
+            ("metric.shock.severity.capital_outflow_pressure", "metric.source.m9.country.peg_reserves"),
             ("metric.source.m9.country.peg_reserves", "metric.world.current_account", "metric.economy.real_output"),
-            "Requires a repeatable endogenous reserve-drain path before use for efficacy.",
         ),
         _scenario(
             "CR_BANK_RUN",

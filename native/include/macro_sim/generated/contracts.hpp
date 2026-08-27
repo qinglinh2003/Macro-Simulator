@@ -10,7 +10,7 @@
 namespace macro_sim::generated {
 
 inline constexpr std::uint32_t kCanonicalEncodingVersion = 1;
-inline constexpr std::string_view kM0ContractSha256 = "e732df292e19e6b045963b955874b368dd516e9fa0ddc38049ab2e39a655016d";
+inline constexpr std::string_view kM0ContractSha256 = "cdb4e4c2fcc22273468bb2f1b85e5d00d0c9252236f7a2c4faabfa98958977de";
 
 enum class ScalarKind : std::uint8_t { any, boolean, integer, number, string, choice, id_set };
 enum class InputKind : std::uint8_t { null_value, boolean, integer, number, string, id_set };
@@ -46,7 +46,7 @@ struct ScalarValue final {
     std::string_view text{};
 };
 
-inline constexpr std::array<ContractSpec, 1540> kContractSpecs{{
+inline constexpr std::array<ContractSpec, 1542> kContractSpecs{{
     {"checkpoint.field.canonical_encoding_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.engine_version", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"checkpoint.field.payload", "checkpoint", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -1191,6 +1191,7 @@ inline constexpr std::array<ContractSpec, 1540> kContractSpecs{{
     {"observation.release.shock_active_count", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_announced_count", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_capital_destruction", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"observation.release.shock_capital_outflow_pressure", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_credit_supply", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_energy_capacity", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"observation.release.shock_export_capacity", "observation", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
@@ -1579,6 +1580,7 @@ inline constexpr std::array<ContractSpec, 1540> kContractSpecs{{
     {"scenario.shock.oil_embargo", "scenario", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"scenario.shock.pandemic", "scenario", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.capital_destruction", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
+    {"shock.capital_outflow_pressure", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.credit_supply", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.energy_capacity", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},
     {"shock.export_capacity", "shock", ScalarKind::any, false, false, false, 0.0, 0.0, ""},

@@ -115,4 +115,10 @@ DEFAULT_SHOCK_REGISTRY = ShockRegistry((
         required_capability="bonds",
         emergency_seats=("central_bank", "regulator", "treasury"),
     ),
+    ShockDefinition(
+        "capital_outflow_pressure", "capital_outflow_pressure",
+        "Additive exchange-rate pressure from exogenous capital outflows.",
+        magnitude_min=0.0, magnitude_max=0.99,
+        emergency_seats=("central_bank", "regulator", "treasury"),
+    ),
 ))

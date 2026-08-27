@@ -84,7 +84,7 @@ def test_every_runnable_crisis_freezes_three_ordered_tapes() -> None:
 
 def test_analysis_requires_six_of_eight_matched_seeds_and_ordered_severity() -> None:
     manifest = CRISIS_MANIFESTS["CR_DEMAND_RECESSION"]
-    assert manifest.primary_damage.statistic == "peak"
+    assert manifest.primary_damage.statistic == "cumulative"
     runs = [
         _synthetic_run(manifest, seed, {"mild": 2.0, "moderate": 3.0, "severe": 4.0})
         for seed in range(1, 9)
@@ -117,6 +117,16 @@ def test_sovereign_scenario_has_an_observed_risk_premium_tape() -> None:
     assert "metric.source.m6.bond_market_value" in manifest.metric_ids
     assert (
         "metric.shock.severity.sovereign_risk_premium"
+        in manifest.metric_ids
+    )
+
+
+def test_peg_scenario_uses_capital_outflow_pressure() -> None:
+    manifest = CRISIS_MANIFESTS["CR_PEG_PRESSURE"]
+    assert manifest.readiness == "ready_to_calibrate"
+    assert manifest.shock_legs[0].kind == "capital_outflow_pressure"
+    assert (
+        "metric.shock.severity.capital_outflow_pressure"
         in manifest.metric_ids
     )
 

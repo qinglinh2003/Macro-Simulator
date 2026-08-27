@@ -19,6 +19,7 @@ compile_commands.json
 /artifacts/diagnostics/
 /artifacts/config-audit/
 /artifacts/policy-audit/
+/artifacts/policy-remediation/
 /artifacts/migration/*
 !/artifacts/migration/README.md
 

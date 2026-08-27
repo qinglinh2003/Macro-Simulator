@@ -54,9 +54,9 @@ using namespace macro_sim::simulation;
 
 void test_contract_and_access() {
     const auto fields = m11_observation_fields();
-    assert(fields.size() == 43U);
+    assert(fields.size() == 44U);
     assert(kM11ObservationContractSha256 ==
-           "cc459556f24952c4b3380d1b63a465c0d38c8afafa8fdc6bec509145bb3c5064");
+           "96c2dfa72b50420fc6b9e7d628088c74d6ca2ab16fd00d2e76cb3094704782a2");
     for (std::size_t index = 0U; index < fields.size(); ++index) {
         assert(find_m11_observation_field(fields[index].series_id) == &fields[index]);
         if (index > 0U) {

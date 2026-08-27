@@ -360,7 +360,10 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
                 _rule("metric.economy.unemployment_rate", "increase", 0.005),
                 _rule("metric.economy.poverty_rate", "increase", 0.002),
             ),
-            primary=_rule("metric.economy.real_output", "decrease", 1.0, 0.01),
+            primary=_rule(
+                "metric.source.m4.household_consumption", "decrease", 1.0,
+                0.01, "cumulative",
+            ),
         ),
         _crisis(
             "CR_SUPPLY_STAGFLATION",
@@ -446,7 +449,10 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
                 _rule("metric.source.m9.country.imports_volume", "decrease", 1.0e-6, 0.05),
             ),
-            primary=_rule("metric.economy.employment", "decrease", 1.0, 0.005),
+            primary=_rule(
+                "metric.economy.real_output", "decrease", 1.0, 0.005,
+                "cumulative",
+            ),
             recovery_mode="recover_or_new_regime",
         ),
         _crisis(
@@ -489,10 +495,15 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             countries=3,
             activation="world_peg_pressure",
             legs=(
+                ShockLeg("capital_outflow_pressure", 0.005, 45, 15),
                 ShockLeg("import_capacity", 0.20, 45, 15),
                 ShockLeg("export_capacity", 0.10, 45, 15),
             ),
             entry=(
+                _rule(
+                    "metric.shock.severity.capital_outflow_pressure",
+                    "increase", 0.001,
+                ),
                 _rule(
                     "metric.source.m9.country.peg_reserves", "decrease", 1.0,
                     0.0001,
@@ -520,7 +531,10 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
                 _rule("metric.source.m5.new_credit", "decrease", 1.0e-9, 0.05, "cumulative"),
                 _rule("metric.economy.real_output", "decrease", 1.0, 0.005),
             ),
-            primary=_rule("metric.source.m5.run_flight_volume", "increase", 1.0, 0.0, "cumulative"),
+            primary=_rule(
+                "metric.source.m5.new_credit", "decrease", 1.0e-9, 0.05,
+                "cumulative",
+            ),
             recovery_mode="recover_or_new_regime",
         ),
         _crisis(
@@ -535,11 +549,11 @@ CRISIS_MANIFESTS: Mapping[str, CrisisManifest] = {
             entry=(
                 _rule(
                     "metric.source.m8.housing.mortgage_principal_originated",
-                    "decrease", 1.0, 0.05, "cumulative", 1,
+                    "decrease", 1.0, 0.05, "peak", 1,
                 ),
                 _rule(
                     "metric.source.m8.housing.session_sales", "decrease", 1.0,
-                    0.05, "cumulative", 1,
+                    0.05, "peak", 1,
                 ),
             ),
             propagation=(
@@ -929,6 +943,7 @@ def _native_shock(
         "credit_supply": native.ShockKind.CREDIT_SUPPLY,
         "capital_destruction": native.ShockKind.CAPITAL_DESTRUCTION,
         "sovereign_risk_premium": native.ShockKind.SOVEREIGN_RISK_PREMIUM,
+        "capital_outflow_pressure": native.ShockKind.CAPITAL_OUTFLOW_PRESSURE,
     }
     sectors = {
         "consumption": native.ShockSector.CONSUMPTION,

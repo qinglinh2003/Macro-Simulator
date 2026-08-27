@@ -238,6 +238,7 @@ class NativeObservationSource:
             "shock_trade_severity": max(
                 severity("import_capacity"),
                 severity("export_capacity"),
+                severity("capital_outflow_pressure"),
             ),
             "shock_demand_severity": severity("household_demand"),
         }

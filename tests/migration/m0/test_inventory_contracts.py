@@ -67,6 +67,7 @@ def test_shock_observation_and_rl_tripwires():
     observations = _inventory("observations")
     assert [row["shock_kind"] for row in shocks["rows"]] == [
         "capital_destruction",
+        "capital_outflow_pressure",
         "credit_supply",
         "energy_capacity",
         "export_capacity",
@@ -77,7 +78,7 @@ def test_shock_observation_and_rl_tripwires():
         "sovereign_risk_premium",
     ]
     metadata = observations["metadata"]
-    assert metadata["release_series_count"] == 43
+    assert metadata["release_series_count"] == 44
     assert metadata["fiscal_v1_feature_count"] == 101
     assert metadata["fiscal_v1_action_dimension_count"] == 1
     assert metadata["fiscal_v1_direction_count"] == 3

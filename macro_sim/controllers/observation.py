@@ -1699,6 +1699,9 @@ def default_observation_spec() -> ObservationSpec:
         F("shock_sovereign_risk_premium", "severity.sovereign_risk_premium", source="shock", unit="fraction",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=0.01),
+        F("shock_capital_outflow_pressure", "severity.capital_outflow_pressure", source="shock", unit="fraction",
+          window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
+          normalization_scale=0.01),
         F("oracle_daily_output", "real_output", access_class="oracle",
           window_ticks=1, frequency_ticks=1, publication_lag_ticks=0,
           normalization_scale=100.0),
@@ -1714,7 +1717,10 @@ FISCAL_STABILIZATION_V1_OBSERVATION_SPEC = ObservationSpec(
     tuple(
         field
         for field in DEFAULT_OBSERVATION_SPEC.fields
-        if field.series_id != "shock_sovereign_risk_premium"
+        if field.series_id not in {
+            "shock_sovereign_risk_premium",
+            "shock_capital_outflow_pressure",
+        }
     ),
     schema_version=DEFAULT_OBSERVATION_SPEC.schema_version,
 )

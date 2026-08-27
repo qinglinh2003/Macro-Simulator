@@ -806,6 +806,7 @@ def _native_shocks(
         "credit_supply": native.ShockKind.CREDIT_SUPPLY,
         "capital_destruction": native.ShockKind.CAPITAL_DESTRUCTION,
         "sovereign_risk_premium": native.ShockKind.SOVEREIGN_RISK_PREMIUM,
+        "capital_outflow_pressure": native.ShockKind.CAPITAL_OUTFLOW_PRESSURE,
     }
     ordinal = 0
     for shock in tape.specs:

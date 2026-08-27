@@ -622,11 +622,16 @@ def build_shock_inventory() -> dict[str, Any]:
                 combination_rule=(
                     "additive_required_return_spread"
                     if kind == "sovereign_risk_premium"
+                    else "additive_exchange_rate_pressure"
+                    if kind == "capital_outflow_pressure"
                     else "multiplicative_factor_or_registered_one_shot"
                 ),
                 lifecycle_source=(
                     "native/src/simulation/m9.cpp::shock_addition"
-                    if kind == "sovereign_risk_premium"
+                    if kind in {
+                        "sovereign_risk_premium",
+                        "capital_outflow_pressure",
+                    }
                     else "macro_sim/shocks/engine.py::ShockEngine"
                 ),
                 replay_source="macro_sim/shocks/spec.py::ShockTape",

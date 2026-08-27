@@ -612,7 +612,7 @@ template <typename Enum>
     for (const auto &entry : value.at("allowed_kinds")) {
         result.allowed_kinds.push_back(checked_enum<simulation::ShockKind>(
             entry,
-            static_cast<std::uint8_t>(simulation::ShockKind::sovereign_risk_premium)));
+            static_cast<std::uint8_t>(simulation::ShockKind::capital_outflow_pressure)));
     }
     for (const auto economy :
          value.at("allowed_economies").get<std::vector<std::uint64_t>>()) {

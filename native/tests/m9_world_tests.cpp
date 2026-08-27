@@ -296,6 +296,36 @@ void test_policy_peg_and_shock_contracts() {
     assert(result.get_if()->metrics.external[0].active_shocks > 0U);
 }
 
+void test_capital_outflow_pressure_drains_peg_reserves() {
+    const auto build_peg_world = []() {
+        auto world = build_world(2);
+        auto policies = world.external_policies();
+        policies[0].fx_regime = FxRegime::peg;
+        policies[0].peg_anchor = EconomyId(1U);
+        assert(world.update_external_policies(policies).ok());
+        return world;
+    };
+    auto baseline = build_peg_world();
+    auto stressed = build_peg_world();
+
+    ShockSpec shock;
+    shock.id = 92U;
+    shock.kind = ShockKind::capital_outflow_pressure;
+    shock.economy = EconomyId(0U);
+    shock.start = Tick(0U);
+    shock.duration = 1U;
+    shock.magnitude = 0.01;
+    assert(stressed.schedule_shock(shock).ok());
+
+    const auto baseline_result = baseline.advance(1U);
+    const auto stressed_result = stressed.advance(1U);
+    assert(baseline_result.ok());
+    assert(stressed_result.ok());
+    assert(stressed_result.get_if()->metrics.external[0].peg_reserves <
+           baseline_result.get_if()->metrics.external[0].peg_reserves);
+    assert(stressed.pegs().front().intact);
+}
+
 [[nodiscard]] ShockSpec adverse_shock(std::uint64_t id, ShockKind kind,
                                       double magnitude = 0.5) {
     ShockSpec shock;
@@ -641,12 +671,12 @@ void test_checkpoint_continuation_is_exact_with_all_shock_channels() {
     rules.wage_smoothing = 1.0;
     auto world = build_world(3, rules);
 
-    constexpr std::array<ShockKind, 9U> kinds{
+    constexpr std::array<ShockKind, 10U> kinds{
         ShockKind::productivity,           ShockKind::labor_availability,
         ShockKind::energy_capacity,        ShockKind::household_demand,
         ShockKind::import_capacity,        ShockKind::export_capacity,
         ShockKind::credit_supply,          ShockKind::capital_destruction,
-        ShockKind::sovereign_risk_premium,
+        ShockKind::sovereign_risk_premium, ShockKind::capital_outflow_pressure,
     };
     for (std::size_t index = 0U; index < kinds.size(); ++index) {
         ShockSpec shock;
@@ -748,6 +778,7 @@ int main() {
     test_unilateral_sanction_has_symmetric_effect();
     test_faults_leave_the_complete_old_world();
     test_policy_peg_and_shock_contracts();
+    test_capital_outflow_pressure_drains_peg_reserves();
     test_all_eight_shock_channels_reach_their_native_seams();
     test_household_demand_shock_survives_lifecycle_budget_projection();
     test_shock_lifecycle_events_are_ordered_and_checkpointed();

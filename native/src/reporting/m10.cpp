@@ -201,6 +201,9 @@ constexpr std::array<MetricDescriptor, kM10MetricCount> kDescriptors{{
     {"metric.shock.severity.sovereign_risk_premium", "fraction", 1U,
      MetricTier::release, MetricAggregation::last,
      "max disclosed sovereign-risk-premium shock severity"},
+    {"metric.shock.severity.capital_outflow_pressure", "fraction", 1U,
+     MetricTier::release, MetricAggregation::last,
+     "max disclosed capital-outflow-pressure shock severity"},
 #define MACRO_SIM_DASHBOARD_METRIC(symbol, stable_id, unit, parity_rule)   \
     {stable_id, unit, 30U, MetricTier::analytic,                          \
      MetricAggregation::last, parity_rule},
@@ -2040,7 +2043,7 @@ build_metric_frame(const simulation::M9World &world,
         std::size_t active_count = 0U;
         double maximum_severity = 0.0;
         std::uint64_t time_to_next = std::numeric_limits<std::uint64_t>::max();
-        std::array<double, 9U> kind_severity{};
+        std::array<double, 10U> kind_severity{};
         for (const auto &shock : world.shocks()) {
             if (!shock_relevant(shock, economy) ||
                 !shock_disclosed(shock, world.tick())) {
@@ -2081,6 +2084,7 @@ build_metric_frame(const simulation::M9World &world,
             set(frame, economy, 33U + kind, kind_severity[kind]);
         }
         set(frame, economy, 76U, kind_severity[8U]);
+        set(frame, economy, 77U, kind_severity[9U]);
 
         std::size_t source_metric = kM10PublicMetricCount;
 #define MACRO_SIM_M4_SOURCE(field, unit)                                  \

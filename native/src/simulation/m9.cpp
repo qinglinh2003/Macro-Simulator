@@ -51,7 +51,7 @@ nested_capacity_bytes(const std::vector<std::vector<Value>> &values) noexcept {
 
 [[nodiscard]] bool valid_kind(ShockKind kind) noexcept {
     return static_cast<std::uint8_t>(kind) <=
-           static_cast<std::uint8_t>(ShockKind::sovereign_risk_premium);
+           static_cast<std::uint8_t>(ShockKind::capital_outflow_pressure);
 }
 
 [[nodiscard]] bool valid_shape(ShockShape shape) noexcept {
@@ -2078,14 +2078,22 @@ Status M9World::advance_one(const M9AdvanceOptions &options) {
         const std::size_t anchor = static_cast<std::size_t>(peg.anchor.value());
         const double floated_spread =
             staged.rates_.log_rates[pegger] - staged.rates_.log_rates[anchor];
+        const double external_pressure = shock_addition(
+            staged.shocks_, ShockKind::capital_outflow_pressure, pegger,
+            staged.tick_);
         const double pressure = floated_spread - peg.target_log_spread;
+        const double reserve_scale =
+            staged.external_policies_[pegger].peg_reserve_scale;
+        const double endogenous_reserve_need = std::abs(pressure) * reserve_scale;
+        const double capital_outflow_reserve_need = external_pressure * reserve_scale;
         const double reserve_need =
-            std::abs(pressure) * staged.external_policies_[pegger].peg_reserve_scale;
+            endogenous_reserve_need + capital_outflow_reserve_need;
         const double defense = std::min(peg.reserves, reserve_need);
         if (reserve_need > kEpsilon) {
             const double defended_share = defense / reserve_need;
             staged.rates_.log_rates[pegger] -= pressure * defended_share;
-            peg.pressure += pressure * (1.0 - defended_share);
+            peg.pressure +=
+                (pressure + external_pressure) * (1.0 - defended_share);
             peg.reserves -= defense;
         }
         if (defense + kTolerance < reserve_need) {
