@@ -160,7 +160,12 @@ void test_large_stock_roundoff_is_not_a_conservation_failure() {
     orders.reserve(10'000);
     for (std::uint64_t index = 0; index < 10'000; ++index) {
         orders.push_back(
-            {index + 1, AccountId(index + 20), Goods(1.0 / 3'000.0), Money(1.0)}
+            {
+                index + 1,
+                AccountId(index + 20),
+                Goods(100'000'000.0001),
+                Money(200'000'000.0),
+            }
         );
     }
     const std::vector<SellOffer> offers{
@@ -169,6 +174,8 @@ void test_large_stock_roundoff_is_not_a_conservation_failure() {
     MarketConfig config;
     config.protocol = MatchingProtocol::price_sorted;
     const auto clearing = take(clear_market(orders, offers, config));
+    assert(clearing.stock_commands.size() == 1);
+    assert(std::abs(clearing.stock_commands[0].closing.value()) <= 1.0e-9);
     assert(validate_market_clearing(orders, offers, clearing).ok());
 }
 

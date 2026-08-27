@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <limits>
 #include <new>
 #include <numeric>
@@ -19,6 +20,22 @@ struct LiveOffer final {
     double stock{0.0};
     double sold{0.0};
 };
+
+[[nodiscard]] double stock_roundoff_tolerance(
+    std::size_t sale_count,
+    std::initializer_list<double> values
+) noexcept {
+    double stock_scale = 1.0;
+    for (const double value : values) {
+        stock_scale = std::max(stock_scale, std::abs(value));
+    }
+    return std::max(
+        kEconomicEpsilon,
+        32.0 * std::numeric_limits<double>::epsilon()
+            * static_cast<double>(std::max<std::size_t>(1, sale_count))
+            * stock_scale
+    );
+}
 
 class CountingRng final {
 public:
@@ -886,9 +903,13 @@ Status validate_market_clearing(
             }
         }
         for (const auto& offer : offers) {
+            const double sold_quantity = sold[offer.offer_id];
+            const double stock_tolerance = stock_roundoff_tolerance(
+                sale_counts[offer.offer_id],
+                {offer.stock.value(), sold_quantity}
+            );
             if (
-                sold[offer.offer_id]
-                > offer.stock.value() + kEconomicEpsilon
+                sold_quantity > offer.stock.value() + stock_tolerance
             ) {
                 return Status(
                     ErrorCode::invariant_violation,
@@ -958,22 +979,17 @@ Status validate_market_clearing(
         for (const auto& command : clearing.stock_commands) {
             const auto offer = offers_by_id.find(command.offer_id);
             const double expected_sold = sold[command.offer_id];
-            const double stock_scale = std::max({
-                1.0,
-                std::abs(command.opening.value()),
-                std::abs(command.sold.value()),
-                std::abs(command.closing.value()),
-                std::abs(expected_sold),
-            });
             // A large market accumulates sold quantities in a different order
             // from the live-offer decrement. Both paths conserve the same stock,
             // but their floating-point round-off grows with the stock scale.
-            const double stock_tolerance = std::max(
-                kEconomicEpsilon,
-                32.0 * std::numeric_limits<double>::epsilon()
-                    * static_cast<double>(std::max<std::size_t>(
-                        1, sale_counts[command.offer_id]))
-                    * stock_scale
+            const double stock_tolerance = stock_roundoff_tolerance(
+                sale_counts[command.offer_id],
+                {
+                    command.opening.value(),
+                    command.sold.value(),
+                    command.closing.value(),
+                    expected_sold,
+                }
             );
             if (
                 offer == offers_by_id.end()
