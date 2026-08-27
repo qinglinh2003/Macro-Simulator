@@ -107,7 +107,7 @@ def test_groups_cover_every_routed_lever_exactly_once_per_phase() -> None:
             withdrawal_days=7,
         )
         names = [contract.lever for group in groups for contract in group.contracts]
-        assert len(names) == len(set(names)) == 99
+        assert len(names) == len(set(names)) == len(routed)
         assert set(names) == routed
 
 
@@ -252,8 +252,8 @@ def test_analysis_does_not_accept_aggregate_only_new_contract_evidence() -> None
     assert reports[0]["disposition"] == "observable_defect"
 
 
-def test_analysis_preserves_known_route_defect_without_running_it() -> None:
+def test_analysis_requires_evidence_for_a_repaired_route() -> None:
     contract = _contract("mortgage_risk_weight")
     reports, errors = analyze_p2((contract,), (), ())
     assert errors == []
-    assert reports[0]["disposition"] == "engine_route_defect"
+    assert reports[0]["disposition"] == "unsupported_by_current_engine"

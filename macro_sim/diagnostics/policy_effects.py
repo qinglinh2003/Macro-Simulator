@@ -1151,6 +1151,7 @@ def run_p2(
     *,
     artifact_dir: Path,
     source_revision: str,
+    levers: Sequence[str] | None = None,
     seeds: Sequence[int] = DEFAULT_SEEDS,
     population: int = 100_000,
     workers: int = 8,
@@ -1173,7 +1174,18 @@ def run_p2(
     if min(ordinary_days, activation_days, burn_in_days, withdrawal_days) < 1:
         raise ValueError("P2 experiment windows must be positive")
 
-    contracts = build_contracts()
+    all_contracts = build_contracts()
+    if levers is None:
+        contracts = all_contracts
+    else:
+        requested = tuple(str(lever) for lever in levers)
+        if not requested or len(set(requested)) != len(requested):
+            raise ValueError("P2 lever subset must be non-empty and unique")
+        by_lever = {contract.lever: contract for contract in all_contracts}
+        unknown = sorted(set(requested) - set(by_lever))
+        if unknown:
+            raise ValueError(f"P2 lever subset contains unknown levers: {unknown}")
+        contracts = tuple(by_lever[lever] for lever in requested)
     p0 = build_p0_payload()
     ordinary_groups = build_experiment_groups(
         contracts,
@@ -1252,11 +1264,15 @@ def run_p2(
                 for contract in group.contracts
             },
             "legacy_python_simulator_used": False,
+            "lever_subset": [contract.lever for contract in contracts],
         },
         "experiment_manifest": experiment_manifest,
         "counts": {
             "levers": len(reports),
-            "validation_contract_defects": len(VALIDATION_CONTRACT_DEFECTS),
+            "validation_contract_defects": sum(
+                contract.lever in VALIDATION_CONTRACT_DEFECTS
+                for contract in contracts
+            ),
             "ordinary_native_runs": len(ordinary),
             "activation_native_runs": len(activation),
             "native_run_records": len(ordinary) + len(activation),

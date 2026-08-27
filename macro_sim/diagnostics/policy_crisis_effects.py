@@ -125,17 +125,21 @@ def _p2_reports(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return output
 
 
-def _accepted_p3_report(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+def _accepted_p3_report(
+    payload: Mapping[str, Any],
+    *,
+    scenario_id: str = P4_SCENARIO_ID,
+) -> Mapping[str, Any]:
     accepted = payload.get("accepted_crises_for_p4")
-    if not isinstance(accepted, list) or P4_SCENARIO_ID not in accepted:
-        raise ValueError(f"P3 did not accept {P4_SCENARIO_ID} for P4")
+    if not isinstance(accepted, list) or scenario_id not in accepted:
+        raise ValueError(f"P3 did not accept {scenario_id} for P4")
     reports = payload.get("reports", {}).get("crises", ())
     report = next(
-        (item for item in reports if item.get("scenario_id") == P4_SCENARIO_ID),
+        (item for item in reports if item.get("scenario_id") == scenario_id),
         None,
     )
     if report is None or not report.get("accepted"):
-        raise ValueError(f"P3 acceptance evidence is missing for {P4_SCENARIO_ID}")
+        raise ValueError(f"P3 acceptance evidence is missing for {scenario_id}")
     return report
 
 
@@ -257,14 +261,19 @@ def build_p4_manifest(
     }
 
 
-def _contract_metrics(contract: PolicyCausalContract) -> tuple[str, ...]:
-    scenario = SCENARIOS[P4_SCENARIO_ID]
+def _contract_metrics(
+    contract: PolicyCausalContract,
+    *,
+    scenario_id: str = P4_SCENARIO_ID,
+    primary_outcomes: Mapping[str, int] = P4_PRIMARY_OUTCOMES,
+) -> tuple[str, ...]:
+    scenario = SCENARIOS[scenario_id]
     return tuple(sorted(set(
         contract.mechanism_proximal_metrics
         + contract.tradeoff_metrics
         + scenario.entry_metrics
         + scenario.damage_metrics
-        + tuple(P4_PRIMARY_OUTCOMES)
+        + tuple(primary_outcomes)
         + ACCOUNTING_METRICS
         + ("metric.shock.active_count",)
     )))
@@ -325,6 +334,7 @@ def _run_control_branch(
     t0: int,
     with_crisis: bool,
     metric_ids: Sequence[str],
+    severity: str = P4_SEVERITY,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     branch = session.clone()
@@ -333,7 +343,7 @@ def _run_control_branch(
         tape_hash = _schedule_tape(
             branch,
             manifest,
-            severity=P4_SEVERITY,
+            severity=severity,
             start_tick=t0 + 1,
         )
     branch.advance(manifest.horizon_days)
@@ -363,6 +373,8 @@ def _run_treatment_branch(
     timing: str,
     with_crisis: bool,
     metric_ids: Sequence[str],
+    severity: str = P4_SEVERITY,
+    timing_offsets: Mapping[str, int] = P4_TIMINGS,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     branch = session.clone()
@@ -371,10 +383,10 @@ def _run_treatment_branch(
         tape_hash = _schedule_tape(
             branch,
             manifest,
-            severity=P4_SEVERITY,
+            severity=severity,
             start_tick=t0 + 1,
         )
-    delay = P4_TIMINGS[timing]
+    delay = timing_offsets[timing]
     actions = _actions(
         ((str(item["lever"]), item["value"]) for item in arm["actions"]),
         economy_id=0,
@@ -424,7 +436,8 @@ def _run_treatment_branch(
 
 def _row_arm_lookup(row: Mapping[str, Any]) -> Iterable[tuple[Mapping[str, Any], str, bool]]:
     for arm in row["arms"]:
-        yield arm, "immediate", False
+        if row.get("policy_only_negative_control", True):
+            yield arm, "immediate", False
         for timing in arm["timings"]:
             yield arm, timing, True
 
@@ -454,8 +467,12 @@ def _run_seed(
     artifact_dir: Path,
     resume: bool,
     progress: Callable[[int, str, str, str, bool], None] | None,
+    scenario_id: str = P4_SCENARIO_ID,
+    severity: str = P4_SEVERITY,
+    primary_outcomes: Mapping[str, int] = P4_PRIMARY_OUTCOMES,
+    timing_offsets: Mapping[str, int] = P4_TIMINGS,
 ) -> dict[str, Any]:
-    manifest = CRISIS_MANIFESTS[P4_SCENARIO_ID]
+    manifest = CRISIS_MANIFESTS[scenario_id]
     started = time.perf_counter()
     session = NativeSimulationSession.create_from_native_spec(
         _crisis_native_spec(manifest, population=population, seed=seed),
@@ -473,7 +490,7 @@ def _run_seed(
         raise RuntimeError(
             f"seed {seed}: P4 common checkpoint {checkpoint_hash} != frozen P3 {expected}"
         )
-    frozen_tapes = tuple(p3_report["frozen_tape_hashes"][P4_SEVERITY])
+    frozen_tapes = tuple(p3_report["frozen_tape_hashes"][severity])
     if len(frozen_tapes) != 1:
         raise RuntimeError("P3 did not freeze exactly one moderate shock tape hash")
     expected_tape_hash = str(frozen_tapes[0])
@@ -481,7 +498,11 @@ def _run_seed(
     contracts = {contract.lever: contract for contract in build_contracts()}
     runnable = [row for row in matrix if row["runnable"]]
     all_metrics = tuple(sorted(set().union(*(
-        set(_contract_metrics(contracts[row["lever"]])) for row in runnable
+        set(_contract_metrics(
+            contracts[row["lever"]],
+            scenario_id=scenario_id,
+            primary_outcomes=primary_outcomes,
+        )) for row in runnable
     ))))
     common_signature = {
         "schema_version": P4_SCHEMA_VERSION,
@@ -514,6 +535,7 @@ def _run_seed(
                 t0=t0,
                 with_crisis=crisis,
                 metric_ids=all_metrics,
+                severity=severity,
             ),
         )
         cache_hits += int(cached)
@@ -529,7 +551,11 @@ def _run_seed(
     paths: list[str] = []
     for row in runnable:
         contract = contracts[row["lever"]]
-        metric_ids = _contract_metrics(contract)
+        metric_ids = _contract_metrics(
+            contract,
+            scenario_id=scenario_id,
+            primary_outcomes=primary_outcomes,
+        )
         for arm, timing, with_crisis in _row_arm_lookup(row):
             path = _branch_path(
                 artifact_dir,
@@ -559,6 +585,8 @@ def _run_seed(
                     timing=t,
                     with_crisis=crisis,
                     metric_ids=ids,
+                    severity=severity,
+                    timing_offsets=timing_offsets,
                 ),
             )
             cache_hits += int(cached)
@@ -710,6 +738,7 @@ def _arm_analysis(
     artifact_dir: Path,
     ordinary_controls: Mapping[int, Mapping[str, Any]],
     crisis_controls: Mapping[int, Mapping[str, Any]],
+    primary_outcomes: Mapping[str, int] = P4_PRIMARY_OUTCOMES,
 ) -> dict[str, Any]:
     crisis_records = [
         _read_result(_branch_path(
@@ -722,8 +751,11 @@ def _arm_analysis(
         ))
         for seed in seeds
     ]
+    policy_only_negative_control = bool(
+        row.get("policy_only_negative_control", True)
+    )
     policy_records: list[dict[str, Any]] = []
-    if timing == "immediate":
+    if timing == "immediate" and policy_only_negative_control:
         policy_records = [
             _read_result(_branch_path(
                 artifact_dir,
@@ -741,14 +773,14 @@ def _arm_analysis(
         if item.get("error")
     ]
     required_metrics = set(
-        P4_PRIMARY_OUTCOMES
+        primary_outcomes
     ) | set(row["mechanism_proximal_metrics"]) | set(row["tradeoff_metrics"])
     compared_runs = [
         *crisis_records,
         *policy_records,
         *({"run": crisis_controls[seed]} for seed in seeds),
     ]
-    if timing == "immediate":
+    if timing == "immediate" and policy_only_negative_control:
         compared_runs.extend({"run": ordinary_controls[seed]} for seed in seeds)
     missing_metrics = sorted(set().union(*(
         set(item["run"]["missing_metrics_by_economy"].get("0", ()))
@@ -793,7 +825,7 @@ def _arm_analysis(
         crisis_control_runs, crisis_runs
     )
     metrics = tuple(dict.fromkeys(
-        list(P4_PRIMARY_OUTCOMES)
+        list(primary_outcomes)
         + list(row["mechanism_proximal_metrics"])
         + list(row["tradeoff_metrics"])
     ))
@@ -826,7 +858,7 @@ def _arm_analysis(
         output["crisis_interactions"] = None
 
     primary: dict[str, Any] = {}
-    for metric_id, favorable_sign in P4_PRIMARY_OUTCOMES.items():
+    for metric_id, favorable_sign in primary_outcomes.items():
         if metric_id not in crisis_effects:
             continue
         material = output["materiality"][metric_id]
@@ -880,7 +912,11 @@ def _dose_ordering(arms: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _timing_summary(arms: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def _timing_summary(
+    arms: Sequence[Mapping[str, Any]],
+    *,
+    primary_outcomes: Mapping[str, int] = P4_PRIMARY_OUTCOMES,
+) -> dict[str, Any]:
     candidates = [
         item for item in arms
         if item["dose_class"] in {"meaningful", "transition"}
@@ -889,7 +925,7 @@ def _timing_summary(arms: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     if not any(item["timing"] != "immediate" for item in candidates):
         return {"tested": False, "best_timing_by_metric": {}}
     best: dict[str, dict[str, Any]] = {}
-    for metric_id in P4_PRIMARY_OUTCOMES:
+    for metric_id in primary_outcomes:
         values = [
             (float(item["primary_benefit"][metric_id]["signed_mean_benefit"]), item)
             for item in candidates
@@ -911,6 +947,7 @@ def analyze_p4(
     matrix: Sequence[Mapping[str, Any]],
     seeds: Sequence[int],
     artifact_dir: Path,
+    primary_outcomes: Mapping[str, int] = P4_PRIMARY_OUTCOMES,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     ordinary_control_records = {
         seed: _read_result(
@@ -952,6 +989,7 @@ def analyze_p4(
                     artifact_dir=artifact_dir,
                     ordinary_controls=ordinary_controls,
                     crisis_controls=crisis_controls,
+                    primary_outcomes=primary_outcomes,
                 ))
         runtime_failed = any(
             item["errors"]
@@ -1013,7 +1051,10 @@ def analyze_p4(
             "reason": reason,
             "arm_results": arm_results,
             "dose_ordering": _dose_ordering(arm_results),
-            "timing_summary": _timing_summary(arm_results),
+            "timing_summary": _timing_summary(
+                arm_results,
+                primary_outcomes=primary_outcomes,
+            ),
         })
 
     if len(reports) != len(matrix):
