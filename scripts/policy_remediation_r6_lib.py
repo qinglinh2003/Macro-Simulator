@@ -9,6 +9,7 @@ crisis library.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -36,6 +37,7 @@ from macro_sim.diagnostics.policy_scenarios import (
     CRISIS_MANIFESTS,
     DEFAULT_P3_SEEDS,
 )
+from macro_sim import native_backend
 
 
 R6_SCHEMA_VERSION = "policy-remediation-r6-v1"
@@ -137,6 +139,26 @@ R6_STATE_DESIGN: Mapping[tuple[str, str], tuple[str, str]] = {
         "CR_TRADE_INTERRUPTION", "CR_ENERGY_EMBARGO",
     ),
 }
+
+
+def assert_r6_native_build(repo_root: Path) -> dict[str, str]:
+    """Reject an installed wheel when formal evidence targets this checkout."""
+    module = native_backend._load_native()
+    loaded = Path(str(module.__file__)).resolve()
+    expected_dir = (
+        repo_root / "build/native/m11-release/native"
+    ).resolve()
+    if loaded.parent != expected_dir:
+        raise RuntimeError(
+            "R6 formal evidence must load the current worktree native extension; "
+            f"loaded {loaded}, expected a module under {expected_dir}. "
+            "Prefix the command with "
+            "PYTHONPATH=build/native/m11-release/native:."
+        )
+    return {
+        "extension_path": loaded.relative_to(repo_root.resolve()).as_posix(),
+        "extension_sha256": hashlib.sha256(loaded.read_bytes()).hexdigest(),
+    }
 
 
 def _jsonable(value: Any) -> Any:
@@ -308,7 +330,8 @@ def run_r6_mechanism(
     resume: bool = True,
     progress: Any = None,
 ) -> dict[str, Any]:
-    return run_p2(
+    native_build = assert_r6_native_build(Path(__file__).resolve().parents[1])
+    payload = run_p2(
         artifact_dir=artifact_dir,
         source_revision=source_revision,
         levers=R6_CANDIDATES,
@@ -318,6 +341,9 @@ def run_r6_mechanism(
         resume=resume,
         progress=progress,
     )
+    payload["protocol"]["native_build"] = native_build
+    _atomic_json(artifact_dir / "p2_report.json", payload)
+    return payload
 
 
 def run_r6_crises(
@@ -329,6 +355,7 @@ def run_r6_crises(
     resume: bool = True,
     progress: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, Any]:
+    native_build = assert_r6_native_build(Path(__file__).resolve().parents[1])
     design = build_r6_design(p3_payload=p3_payload, p2_payload=p2_payload)
     rows = tuple(row for row in design["rows"] if row["runnable"])
     scenario_ids = tuple(sorted({str(row["scenario_id"]) for row in rows}))
@@ -405,6 +432,14 @@ def run_r6_crises(
         "status": "accepted" if not errors else "failed",
         "source_revision": source_revision,
         "p0_root_hash": design["p0_root_hash"],
+        "protocol": {
+            "population_per_country": 100_000,
+            "matched_seeds": list(DEFAULT_P3_SEEDS),
+            "native_engine_workers": 8,
+            "independent_seed_jobs": 8,
+            "legacy_python_simulator_used": False,
+            "native_build": native_build,
+        },
         "design": design,
         "scenario_outcomes": {
             scenario_id: _scenario_outcomes(scenario_id)
@@ -618,6 +653,10 @@ def build_r6_acceptance(
         errors.append("formal R6 mechanism evidence used cached runs")
     if crisis_payload.get("counts", {}).get("cache_hits") != 0:
         errors.append("formal R6 crisis evidence used cached runs")
+    p2_native = p2_payload.get("protocol", {}).get("native_build")
+    crisis_native = crisis_payload.get("protocol", {}).get("native_build")
+    if not p2_native or p2_native != crisis_native:
+        errors.append("R6 mechanism and crisis evidence used different native builds")
 
     by_contract = _contracts()
     p2_by = {str(row["lever"]): row for row in p2_payload.get("reports", ())}
@@ -713,6 +752,7 @@ def build_r6_acceptance(
             "independent_seed_jobs": 8,
             "legacy_python_simulator_used": False,
             "real_world_empirical_calibration_claimed": False,
+            "native_build": p2_native,
         },
         "counts": {
             "classifications": counts,
@@ -802,6 +842,7 @@ __all__ = [
     "R6_CLASSIFICATIONS",
     "R6_SCHEMA_VERSION",
     "R6_STATE_DESIGN",
+    "assert_r6_native_build",
     "build_r6_acceptance",
     "build_r6_design",
     "render_r6_markdown",
