@@ -1,0 +1,515 @@
+{
+  "counts": {
+    "delivery_native_paths": 48,
+    "delivery_seeds": 8,
+    "occupant_evaluation_seeds": 8,
+    "occupant_policies": 5,
+    "registry_levers": 102
+  },
+  "delivery_gates": {
+    "documented_delivery_ticks": true,
+    "emergency_exact_native_parity": true,
+    "free_immediate_exact_native_parity": true,
+    "human_ingress_exact_native_parity": true,
+    "institutional_regular_exact_native_parity": true,
+    "policies_reached_expected_state": true,
+    "released_observations_only": true
+  },
+  "delivery_seed_evidence": [
+    {
+      "digests": {
+        "emergency": 2105338028772448678,
+        "emergency_direct": 2105338028772448678,
+        "free_immediate": 3066948495134790747,
+        "free_immediate_direct": 3066948495134790747,
+        "human_regular": 6884492685975804835,
+        "regular": 6884492685975804835,
+        "regular_direct": 6884492685975804835
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5101
+    },
+    {
+      "digests": {
+        "emergency": 18052050472333052683,
+        "emergency_direct": 18052050472333052683,
+        "free_immediate": 7691151359912802226,
+        "free_immediate_direct": 7691151359912802226,
+        "human_regular": 15689042582508276714,
+        "regular": 15689042582508276714,
+        "regular_direct": 15689042582508276714
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5113
+    },
+    {
+      "digests": {
+        "emergency": 2181902155550894469,
+        "emergency_direct": 2181902155550894469,
+        "free_immediate": 1373359422801407649,
+        "free_immediate_direct": 1373359422801407649,
+        "human_regular": 825308358202672384,
+        "regular": 825308358202672384,
+        "regular_direct": 825308358202672384
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5129
+    },
+    {
+      "digests": {
+        "emergency": 8886738664447262336,
+        "emergency_direct": 8886738664447262336,
+        "free_immediate": 8129090969673004121,
+        "free_immediate_direct": 8129090969673004121,
+        "human_regular": 7147964373760293375,
+        "regular": 7147964373760293375,
+        "regular_direct": 7147964373760293375
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5143
+    },
+    {
+      "digests": {
+        "emergency": 16763840830656506162,
+        "emergency_direct": 16763840830656506162,
+        "free_immediate": 2804171755476197790,
+        "free_immediate_direct": 2804171755476197790,
+        "human_regular": 8439690402430640717,
+        "regular": 8439690402430640717,
+        "regular_direct": 8439690402430640717
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5159
+    },
+    {
+      "digests": {
+        "emergency": 9048355581104956426,
+        "emergency_direct": 9048355581104956426,
+        "free_immediate": 4336681233129164780,
+        "free_immediate_direct": 4336681233129164780,
+        "human_regular": 9132720294581925643,
+        "regular": 9132720294581925643,
+        "regular_direct": 9132720294581925643
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5177
+    },
+    {
+      "digests": {
+        "emergency": 5461010239590694996,
+        "emergency_direct": 5461010239590694996,
+        "free_immediate": 7458296677190162935,
+        "free_immediate_direct": 7458296677190162935,
+        "human_regular": 17719674250824039499,
+        "regular": 17719674250824039499,
+        "regular_direct": 17719674250824039499
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5193
+    },
+    {
+      "digests": {
+        "emergency": 6738465257547908391,
+        "emergency_direct": 6738465257547908391,
+        "free_immediate": 6020820724091594559,
+        "free_immediate_direct": 6020820724091594559,
+        "human_regular": 14016820707718321075,
+        "regular": 14016820707718321075,
+        "regular_direct": 14016820707718321075
+      },
+      "effective_ticks": {
+        "emergency": 32,
+        "free_immediate": 1,
+        "human_regular": 37,
+        "regular": 37
+      },
+      "seed": 5209
+    }
+  ],
+  "errors": [],
+  "execution_hashes": {
+    "r9_acceptance": "7324d8dd6136f85cfbf94b8d9a476379bc34b904c29bab182380310ace0c58c2",
+    "r9_evidence": "80d1789dca306a72652e9b02b9d15c024644bd7c355e7f900fbc2118c1a16405",
+    "r9_manifest": "8456e15ef6ae994d97987a128558b5b1db38d685b316b8a67e5d1f523e38ca7b"
+  },
+  "limitations": [
+    "Recorded human ingress validates transport, authority, timing, and native execution parity; it is not participant performance data.",
+    "The shipped RL artifact matches the vector codecs but not the native training-environment contract; R9 treats it only as a transfer probe and makes no superiority claim."
+  ],
+  "manifest": {
+    "action": {
+      "emergency_implementation_lag": 1,
+      "implementation_lag": 7,
+      "lever": "benefit_income_floor",
+      "owner_role": "labor_social",
+      "value": 0.2
+    },
+    "delivery_paths": [
+      "free_immediate",
+      "institutional_emergency",
+      "institutional_regular",
+      "recorded_human_regular"
+    ],
+    "manifest_sha256": "8456e15ef6ae994d97987a128558b5b1db38d685b316b8a67e5d1f523e38ca7b",
+    "occupants": [
+      "heuristic",
+      "human_recorded_hold",
+      "no_action",
+      "random",
+      "rl_transfer"
+    ],
+    "policy_evidence_sha256": "ef9101ea1514bb0c445fed0ba197be7ad43980765e1ee33e497a8de66bfe43db",
+    "population_per_country": 100000,
+    "registry_contract_sha256": "f0be26e7f1aedbdc3b1c0d1692addaf5b3fdaa510a5a72ac115afac98f210241",
+    "rl_artifact_sha256": "1cfc9b0f3b0d2f18ea9b54bbc4130ff447936cbb685aa14e01dd35ef28d107e6",
+    "schema_version": "policy-remediation-r9-v1",
+    "seeds": [
+      5101,
+      5113,
+      5129,
+      5143,
+      5159,
+      5177,
+      5193,
+      5209
+    ],
+    "upstream_acceptance_hashes": {
+      "R6": "cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0",
+      "R7": "60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3",
+      "R8": "46c91525839f2bdf2114dbb565803d509ca9b9b4193b06f97527ff4272454aad"
+    },
+    "workers": {
+      "concurrent_seed_jobs": 8,
+      "native_workers_per_session": 8
+    }
+  },
+  "occupant_contract_assessment": {
+    "action_codec_match": true,
+    "classification": "explicit_cross_backend_transfer_probe",
+    "context_codec_match": true,
+    "superiority_claim_allowed": false,
+    "training_environment_match": false
+  },
+  "occupant_gates": {
+    "action_codec_match": true,
+    "context_codec_match": true,
+    "released_observations_only": true
+  },
+  "occupant_summaries": {
+    "heuristic": {
+      "discounted_return": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -822.6130277998411,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -332.96865293854233
+        },
+        "count": 8,
+        "maximum": -181.08547039781593,
+        "mean": -544.9465495252373,
+        "median": -448.8655315243302,
+        "minimum": -1321.0661756703792,
+        "standard_deviation": 373.2432400328259,
+        "standard_error": 131.9614130296247
+      },
+      "reward_per_tick": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1.6147307985163888,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -0.6377315555532329
+        },
+        "count": 8,
+        "maximum": -0.3411088972851546,
+        "mean": -1.0920097743104797,
+        "median": -0.8270369217595588,
+        "minimum": -2.6161783641487353,
+        "standard_deviation": 0.8076414205513383,
+        "standard_error": 0.28554436261949373
+      },
+      "total_reward": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1210.9728142228282,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -452.5218089527078
+        },
+        "count": 8,
+        "maximum": -249.00949501816285,
+        "mean": -797.1671352466501,
+        "median": -603.7369528844779,
+        "minimum": -1909.8102058285767,
+        "standard_deviation": 589.578237002477,
+        "standard_error": 208.44738471223044
+      }
+    },
+    "human_recorded_hold": {
+      "discounted_return": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -823.0120251462774,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -338.32342987499413
+        },
+        "count": 8,
+        "maximum": -181.08547039781593,
+        "mean": -544.9465495252373,
+        "median": -448.8655315243302,
+        "minimum": -1321.0661756703792,
+        "standard_deviation": 373.2432400328259,
+        "standard_error": 131.9614130296247
+      },
+      "reward_per_tick": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1.6579778924290618,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -0.6105186610230809
+        },
+        "count": 8,
+        "maximum": -0.3411088972851546,
+        "mean": -1.0920097743104797,
+        "median": -0.8270369217595588,
+        "minimum": -2.6161783641487353,
+        "standard_deviation": 0.8076414205513383,
+        "standard_error": 0.28554436261949373
+      },
+      "total_reward": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1204.2453623463055,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -471.5879861700721
+        },
+        "count": 8,
+        "maximum": -249.00949501816285,
+        "mean": -797.1671352466501,
+        "median": -603.7369528844779,
+        "minimum": -1909.8102058285767,
+        "standard_deviation": 589.578237002477,
+        "standard_error": 208.44738471223044
+      }
+    },
+    "no_action": {
+      "discounted_return": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -794.3512101927411,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -338.25551842771245
+        },
+        "count": 8,
+        "maximum": -181.08547039781593,
+        "mean": -544.9465495252373,
+        "median": -448.8655315243302,
+        "minimum": -1321.0661756703792,
+        "standard_deviation": 373.2432400328259,
+        "standard_error": 131.9614130296247
+      },
+      "reward_per_tick": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1.6616178201756948,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -0.6250270565345964
+        },
+        "count": 8,
+        "maximum": -0.3411088972851546,
+        "mean": -1.0920097743104797,
+        "median": -0.8270369217595588,
+        "minimum": -2.6161783641487353,
+        "standard_deviation": 0.8076414205513383,
+        "standard_error": 0.28554436261949373
+      },
+      "total_reward": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1210.654106764875,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -458.0271798987373
+        },
+        "count": 8,
+        "maximum": -249.00949501816285,
+        "mean": -797.1671352466501,
+        "median": -603.7369528844779,
+        "minimum": -1909.8102058285767,
+        "standard_deviation": 589.578237002477,
+        "standard_error": 208.44738471223044
+      }
+    },
+    "random": {
+      "discounted_return": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1860.902363488057,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": 30.69901089892008
+        },
+        "count": 8,
+        "maximum": 131.8826447094877,
+        "mean": -660.2895415949215,
+        "median": -64.45858139516923,
+        "minimum": -4752.175321447828,
+        "standard_deviation": 1665.4627472694604,
+        "standard_error": 588.8300012039062
+      },
+      "reward_per_tick": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -3.463098373347564,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": 0.09279202089075617
+        },
+        "count": 8,
+        "maximum": 0.3781942173957086,
+        "mean": -1.1802831658026336,
+        "median": -0.10245861324208624,
+        "minimum": -8.935397472946091,
+        "standard_deviation": 3.1532661306616645,
+        "standard_error": 1.1148479319383644
+      },
+      "total_reward": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -2542.532832662458,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": 74.46983031229031
+        },
+        "count": 8,
+        "maximum": 276.08177869886725,
+        "mean": -861.6067110359226,
+        "median": -74.79478766672295,
+        "minimum": -6522.840155250647,
+        "standard_deviation": 2301.8842753830154,
+        "standard_error": 813.8389903150062
+      }
+    },
+    "rl_transfer": {
+      "discounted_return": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -816.296717778847,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -345.18394945951746
+        },
+        "count": 8,
+        "maximum": -181.08547039781593,
+        "mean": -544.9465495252373,
+        "median": -448.8655315243302,
+        "minimum": -1321.0661756703792,
+        "standard_deviation": 373.2432400328259,
+        "standard_error": 131.9614130296247
+      },
+      "reward_per_tick": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1.6753870026540856,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -0.638756928505527
+        },
+        "count": 8,
+        "maximum": -0.3411088972851546,
+        "mean": -1.0920097743104797,
+        "median": -0.8270369217595588,
+        "minimum": -2.6161783641487353,
+        "standard_deviation": 0.8076414205513383,
+        "standard_error": 0.28554436261949373
+      },
+      "total_reward": {
+        "confidence_interval": {
+          "level": 0.95,
+          "lower": -1175.8294104234415,
+          "method": "percentile_bootstrap",
+          "resamples": 1000,
+          "upper": -442.45349925891276
+        },
+        "count": 8,
+        "maximum": -249.00949501816285,
+        "mean": -797.1671352466501,
+        "median": -603.7369528844779,
+        "minimum": -1909.8102058285767,
+        "standard_deviation": 589.578237002477,
+        "standard_error": 208.44738471223044
+      }
+    }
+  },
+  "protocol": {
+    "actual_human_performance_claim": false,
+    "concurrent_seed_jobs": 8,
+    "legacy_python_simulator_used": false,
+    "native_economic_engine": true,
+    "native_workers_per_session": 8,
+    "population_per_country": 100000,
+    "python_role": "orchestration_reduction_and_controller_state",
+    "rl_superiority_claim": false
+  },
+  "schema_version": "policy-remediation-r9-v1",
+  "source_revision": "16620d43ca96e20f440d932f395585985280d2d6",
+  "status": "accepted_with_explicit_limitations",
+  "ui_contract": {
+    "all_definitions_complete": true,
+    "all_evidence_scopes_complete": true,
+    "all_registry_domains_present": true,
+    "control_mode": "free_policy",
+    "evidence_catalog_sha256": "ef9101ea1514bb0c445fed0ba197be7ad43980765e1ee33e497a8de66bfe43db",
+    "lever_count": 102,
+    "read_points_complete": true
+  },
+  "ui_gates": {
+    "definitions_complete": true,
+    "evidence_catalog_bound": true,
+    "evidence_scopes_complete": true,
+    "free_policy_mode": true,
+    "read_points_complete": true,
+    "registry_domains_complete": true
+  }
+}

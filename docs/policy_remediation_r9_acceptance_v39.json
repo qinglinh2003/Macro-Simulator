@@ -1,0 +1,67 @@
+{
+  "counts": {
+    "delivery_native_paths": 48,
+    "delivery_seeds": 8,
+    "occupant_evaluation_seeds": 8,
+    "occupant_policies": 5,
+    "registry_levers": 102
+  },
+  "delivery_gates": {
+    "documented_delivery_ticks": true,
+    "emergency_exact_native_parity": true,
+    "free_immediate_exact_native_parity": true,
+    "human_ingress_exact_native_parity": true,
+    "institutional_regular_exact_native_parity": true,
+    "policies_reached_expected_state": true,
+    "released_observations_only": true
+  },
+  "errors": [],
+  "hashes": {
+    "policy_evidence": "ef9101ea1514bb0c445fed0ba197be7ad43980765e1ee33e497a8de66bfe43db",
+    "r9_acceptance": "0b8c1009539bb60ce522d5967e806cfa834d701e6829424e135d83fe325f605a",
+    "r9_evidence": "5d4c132d3fc5fb199c8b3821ed23a157737f23b1c4fe5518eecab7663cd74f58",
+    "r9_manifest": "8456e15ef6ae994d97987a128558b5b1db38d685b316b8a67e5d1f523e38ca7b"
+  },
+  "limitations": [
+    "Recorded human ingress validates transport, authority, timing, and native execution parity; it is not participant performance data.",
+    "The shipped RL artifact matches the vector codecs but not the native training-environment contract; R9 treats it only as a transfer probe and makes no superiority claim."
+  ],
+  "occupant_contract_assessment": {
+    "action_codec_match": true,
+    "classification": "explicit_cross_backend_transfer_probe",
+    "context_codec_match": true,
+    "superiority_claim_allowed": false,
+    "training_environment_match": false
+  },
+  "occupant_gates": {
+    "action_codec_match": true,
+    "context_codec_match": true,
+    "released_observations_only": true
+  },
+  "protocol": {
+    "actual_human_performance_claim": false,
+    "concurrent_seed_jobs": 8,
+    "legacy_python_simulator_used": false,
+    "native_economic_engine": true,
+    "native_workers_per_session": 8,
+    "population_per_country": 100000,
+    "python_role": "orchestration_reduction_and_controller_state",
+    "rl_superiority_claim": false
+  },
+  "schema_version": "policy-remediation-r9-v1",
+  "source_revision": "16620d43ca96e20f440d932f395585985280d2d6",
+  "status": "accepted_with_explicit_limitations",
+  "ui_gates": {
+    "definitions_complete": true,
+    "evidence_catalog_bound": true,
+    "evidence_scopes_complete": true,
+    "free_policy_mode": true,
+    "read_points_complete": true,
+    "registry_domains_complete": true
+  },
+  "upstream_acceptance_hashes": {
+    "R6": "cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0",
+    "R7": "60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3",
+    "R8": "46c91525839f2bdf2114dbb565803d509ca9b9b4193b06f97527ff4272454aad"
+  }
+}

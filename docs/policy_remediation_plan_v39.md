@@ -1,5 +1,42 @@
 # Policy Remediation Plan v39
 
+## R9 acceptance
+
+- Status: `accepted_with_explicit_limitations`
+- Source revision: `16620d43ca96e20f440d932f395585985280d2d6`
+- R9 acceptance hash: `0b8c1009539bb60ce522d5967e806cfa834d701e6829424e135d83fe325f605a`
+- Policy-evidence catalog hash: `ef9101ea1514bb0c445fed0ba197be7ad43980765e1ee33e497a8de66bfe43db`
+- Machine report: `docs/policy_remediation_r9_acceptance_v39.json`
+- Reduced evidence: `docs/policy_remediation_r9_delivery_evidence_v39.json`
+- Player catalog: `macro_sim/data/policy_evidence_v39.json`
+- Scope: all 102 Registry levers, eight matched delivery seeds, 48 native delivery paths, and five Controller occupants over eight native evaluation seeds.
+- Formal protocol: 100,000 persons per country for delivery identity, eight native workers per session, eight concurrent seed jobs, and no legacy Python economic simulation.
+
+Every required delivery and UI gate passes. Free-immediate, regular
+institutional, emergency institutional, and recorded-human ingress paths all
+produce the same native World digest as direct native execution when compared
+at the same documented economic boundary. The experiment also confirms the
+registered effective ticks, expected policy state, and released-information-only
+observation contract in all eight seeds.
+
+The native product schema now exposes the complete Registry domain, read point,
+state notes, localized economic definition, and R6-R8 evidence scope for every
+lever. The packaged evidence catalog preserves the distinction between
+single-policy classifications and package-local interaction roles; it explicitly
+states that these are simulator experiments rather than real-world causal
+estimates. The Godot policy detail view renders that scope alongside the economic
+definition and trade-offs.
+
+Heuristic, random, recorded hold, no-action, and RL occupants were refreshed on
+one common native environment. Context and action codecs match and no occupant
+sees future or oracle observations. The shipped RL artifact still carries its
+pre-native training-environment contract, so R9 accepts it only as an explicit
+cross-backend transfer probe and makes no RL-superiority claim. Recorded human
+ingress proves transport and execution parity, not participant decision quality.
+
+R9 is complete at this checkpoint. No subsequent remediation milestone is in
+scope for this acceptance freeze.
+
 ## R8 acceptance
 
 - Status: `accepted`
@@ -25,8 +62,8 @@ zero as essential, 12 as supportive, 12 as redundant, and 21 as harmful. These
 labels are conditional on the declared crisis, package, dose range, and outcome
 gates. They do not revoke the accepted single-policy mechanisms from R6 or the
 scale evidence from R7. Instead, they reject the proposed combination recipes
-and provide the component-level search directions for R9 or a later package
-redesign. In particular, the evidence must not be summarized as “all policies
+and provide the component-level search directions for a later package redesign.
+In particular, the evidence must not be summarized as “all policies
 are ineffective.”
 
 R7 changed current engine checkpoints after the historical R5 crisis and state
