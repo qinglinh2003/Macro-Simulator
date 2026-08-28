@@ -1,0 +1,2652 @@
+{
+  "counts": {
+    "cache_hits": 0,
+    "candidates": 7,
+    "dispositions": {
+      "finite_size_confirmed": 4,
+      "finite_size_dependency_modeled": 3
+    },
+    "executed_native_run_records": 56,
+    "native_branch_paths": 112,
+    "planned_run_records": 56,
+    "previously_blocked_paths_completed": 4,
+    "run_records": 56
+  },
+  "errors": [],
+  "hashes": {
+    "r7_acceptance": "a39df0a7bcbbae38cdc42072c901e6433b58b0464541fdb321dea5d9718c6d12",
+    "r7_evidence": "e4336d79fb142f537a312c0eecaf0f8589ffd419de8c8270d54b45651d7c67a0",
+    "r7_manifest": "0f32afd8cabc3407dc0bda1f367a5eb33f1707cd04f1f613de395ba902dc6510"
+  },
+  "manifest": {
+    "budgets": {
+      "maximum_estimated_peak_bytes": 17179869184,
+      "maximum_record_seconds": 1200.0
+    },
+    "errors": [],
+    "large_jobs": 1,
+    "manifest_hash": "0f32afd8cabc3407dc0bda1f367a5eb33f1707cd04f1f613de395ba902dc6510",
+    "matched_seeds": [
+      6203,
+      6221,
+      6247,
+      6271
+    ],
+    "native_workers": 8,
+    "p0_root_hash": "34620bb631de39ec9721cbc9262cd4aa31c2190edb7f9dc3d3c5ce447413e3af",
+    "populations_per_country": [
+      100000,
+      1000000
+    ],
+    "r6_acceptance_hash": "cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0",
+    "r6_p2_acceptance_hash": "9ec83b160c4619f03281a2e1ffd1fff689a480959c5c4a80b7ec3621bb1b158f",
+    "schema_version": "policy-remediation-r7-v1",
+    "selections": [
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "mortgage_foreclosure_ltv",
+            "value": 0.5
+          }
+        ],
+        "activation_fixture": "ACT_MORTGAGE_CREDIT",
+        "activation_metrics": [
+          "metric.source.m8.housing.mortgage_originations",
+          "metric.source.m8.housing.mortgage_principal_originated",
+          "metric.source.m8.housing.foreclosures"
+        ],
+        "arm_label": "threshold_meaningful",
+        "countries": 1,
+        "days": 90,
+        "decision_group": "structural_law",
+        "exploratory_metrics": [],
+        "lever": "mortgage_foreclosure_ltv",
+        "r6_classification": "conditional",
+        "r6_frozen_effects": {
+          "metric.source.m8.housing.foreclosures": {
+            "cumulative": {
+              "confidence_high": 677.5828408764346,
+              "confidence_low": 594.9171591235654,
+              "mean_absolute_difference": 636.25,
+              "mean_absolute_relative_difference": 625.5,
+              "mean_difference": 636.25,
+              "mean_relative_difference": 625.5,
+              "paired_standard_deviation": 25.979158313283875,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 1.0455,
+              "confidence_low": -0.5455,
+              "mean_absolute_difference": 0.25,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.25,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.5,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 0.0,
+              "confidence_low": 0.0,
+              "mean_absolute_difference": 0.0,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.0,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": 0.2989049926035651,
+              "confidence_low": 0.11776167406310156,
+              "mean_absolute_difference": 0.20833333333333334,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.20833333333333334,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0569275042553311,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "mean": {
+              "confidence_high": 1.8563913448669442,
+              "confidence_low": 1.6299100249960694,
+              "mean_absolute_difference": 1.7431506849315068,
+              "mean_absolute_relative_difference": 625.5,
+              "mean_difference": 1.7431506849315068,
+              "mean_relative_difference": 625.5,
+              "paired_standard_deviation": 0.07117577620077775,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": 1.8563913448669442,
+              "confidence_low": 1.6299100249960694,
+              "mean_absolute_difference": 1.7431506849315068,
+              "mean_absolute_relative_difference": 625.5,
+              "mean_difference": 1.7431506849315068,
+              "mean_relative_difference": 625.5,
+              "paired_standard_deviation": 0.07117577620077775,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 3.34161367151253,
+              "confidence_low": 2.8398584952746613,
+              "mean_absolute_difference": 3.0907360833935957,
+              "mean_absolute_relative_difference": 59.27977639934262,
+              "mean_difference": 3.0907360833935957,
+              "mean_relative_difference": 59.27977639934262,
+              "paired_standard_deviation": 0.1576854733619952,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": 3.34161367151253,
+              "confidence_low": 2.8398584952746613,
+              "mean_absolute_difference": 3.0907360833935957,
+              "mean_absolute_relative_difference": 59.27977639934262,
+              "mean_difference": 3.0907360833935957,
+              "mean_relative_difference": 59.27977639934262,
+              "paired_standard_deviation": 0.1576854733619952,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          }
+        },
+        "rare_event_metric": "metric.source.m8.housing.foreclosures",
+        "salient_metrics": [
+          "metric.source.m8.housing.foreclosures"
+        ],
+        "scenario": "housing_distressed_market",
+        "setup_actions": [],
+        "target_economy": 0,
+        "time_compression": null
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "gov_investment_share",
+            "value": 0.02
+          }
+        ],
+        "activation_fixture": "ACT_FISCAL_RESOURCE_SLACK",
+        "activation_metrics": [
+          "metric.source.m4.government_spending",
+          "metric.economy.unemployment_rate",
+          "metric.economy.real_output"
+        ],
+        "arm_label": "arm_3",
+        "countries": 1,
+        "days": 30,
+        "decision_group": "fiscal_stance",
+        "exploratory_metrics": [],
+        "lever": "gov_investment_share",
+        "r6_classification": "expert_only",
+        "r6_frozen_effects": {
+          "metric.source.m4.public_capital": {
+            "cumulative": {
+              "confidence_high": 11610.149288152705,
+              "confidence_low": -21603.85219943406,
+              "mean_absolute_difference": 8620.31720154145,
+              "mean_absolute_relative_difference": 0.10943451249701533,
+              "mean_difference": -4996.851455640677,
+              "mean_relative_difference": -0.05583541160586008,
+              "paired_standard_deviation": 10438.089719543295,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 3987.406218888962,
+              "confidence_low": -5549.978235968387,
+              "mean_absolute_difference": 2592.8123203946175,
+              "mean_absolute_relative_difference": 0.7028623145389516,
+              "mean_difference": -781.2860085397123,
+              "mean_relative_difference": 0.10369648320872898,
+              "paired_standard_deviation": 2997.2924119601976,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "first_window_mean": {
+              "confidence_high": 387.00497627175673,
+              "confidence_low": -720.1284066478017,
+              "mean_absolute_difference": 287.3439067180483,
+              "mean_absolute_relative_difference": 0.10943451249701533,
+              "mean_difference": -166.5617151880225,
+              "mean_relative_difference": -0.055835411605860065,
+              "paired_standard_deviation": 347.9363239847764,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "last_window_mean": {
+              "confidence_high": 387.00497627175673,
+              "confidence_low": -720.1284066478017,
+              "mean_absolute_difference": 287.3439067180483,
+              "mean_absolute_relative_difference": 0.10943451249701533,
+              "mean_difference": -166.5617151880225,
+              "mean_relative_difference": -0.055835411605860065,
+              "paired_standard_deviation": 347.9363239847764,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": 387.00497627175673,
+              "confidence_low": -720.1284066478017,
+              "mean_absolute_difference": 287.3439067180483,
+              "mean_absolute_relative_difference": 0.10943451249701533,
+              "mean_difference": -166.5617151880225,
+              "mean_relative_difference": -0.055835411605860065,
+              "paired_standard_deviation": 347.9363239847764,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": 387.00497627175673,
+              "confidence_low": -720.1284066478017,
+              "mean_absolute_difference": 287.3439067180483,
+              "mean_absolute_relative_difference": 0.10943451249701533,
+              "mean_difference": -166.5617151880225,
+              "mean_relative_difference": -0.055835411605860065,
+              "paired_standard_deviation": 347.9363239847764,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 1140.929467776205,
+              "confidence_low": -1839.489079411609,
+              "mean_absolute_difference": 802.4702688611474,
+              "mean_absolute_relative_difference": 50.5904499537693,
+              "mean_difference": -349.2798058177021,
+              "mean_relative_difference": 49.59446095971348,
+              "paired_standard_deviation": 936.6494491476474,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": 1140.929467776205,
+              "confidence_low": -1839.489079411609,
+              "mean_absolute_difference": 802.4702688611474,
+              "mean_absolute_relative_difference": 50.5904499537693,
+              "mean_difference": -349.2798058177021,
+              "mean_relative_difference": 49.59446095971348,
+              "paired_standard_deviation": 936.6494491476474,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          },
+          "metric.source.m4.public_fixed_capital_formation": {
+            "cumulative": {
+              "confidence_high": 2881.140955244011,
+              "confidence_low": -4156.92791923531,
+              "mean_absolute_difference": 1915.4447841784904,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -637.8934819956496,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 2211.838112658492,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 0.0,
+              "confidence_low": 0.0,
+              "mean_absolute_difference": 0.0,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.0,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 96.03803184146705,
+              "confidence_low": -138.56426397451034,
+              "mean_absolute_difference": 63.848159472616345,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -21.26311606652165,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 73.7279370886164,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "last_window_mean": {
+              "confidence_high": 96.03803184146705,
+              "confidence_low": -138.56426397451034,
+              "mean_absolute_difference": 63.848159472616345,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -21.26311606652165,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 73.7279370886164,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": 96.03803184146705,
+              "confidence_low": -138.56426397451034,
+              "mean_absolute_difference": 63.848159472616345,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -21.26311606652165,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 73.7279370886164,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": 96.03803184146705,
+              "confidence_low": -138.56426397451034,
+              "mean_absolute_difference": 63.848159472616345,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -21.26311606652165,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 73.7279370886164,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 526.0219641797091,
+              "confidence_low": -758.9477304293976,
+              "mean_absolute_difference": 349.7107719833912,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -116.46288312484427,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 403.82454261756965,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": 526.0219641797091,
+              "confidence_low": -758.9477304293976,
+              "mean_absolute_difference": 349.7107719833912,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -116.46288312484427,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 403.82454261756965,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          }
+        },
+        "rare_event_metric": null,
+        "salient_metrics": [
+          "metric.source.m4.public_capital",
+          "metric.source.m4.public_fixed_capital_formation"
+        ],
+        "scenario": "labor_demand_contraction",
+        "setup_actions": [],
+        "target_economy": 0,
+        "time_compression": null
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "bankrupt_persist",
+            "value": 1
+          }
+        ],
+        "activation_fixture": "ACT_INSOLVENCY_ARREARS",
+        "activation_metrics": [
+          "metric.source.m6.firm_defaults",
+          "metric.source.m6.household_bankruptcies",
+          "metric.source.m8.housing.evictions"
+        ],
+        "arm_label": "threshold_meaningful",
+        "countries": 1,
+        "days": 60,
+        "decision_group": "structural_law",
+        "exploratory_metrics": [],
+        "lever": "bankrupt_persist",
+        "r6_classification": "conditional",
+        "r6_frozen_effects": {
+          "metric.source.m6.firm_defaults": {
+            "cumulative": {
+              "confidence_high": 359.126819567638,
+              "confidence_low": 327.373180432362,
+              "mean_absolute_difference": 343.25,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 343.25,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 9.97914491994847,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "final": {
+              "confidence_high": 11.3185,
+              "confidence_low": 0.18149999999999977,
+              "mean_absolute_difference": 5.75,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 5.75,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 3.5,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 1.3968251765545243,
+              "confidence_low": 1.2031748234454758,
+              "mean_absolute_difference": 1.3,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1.3,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.06085806194501844,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": 3.258528254955887,
+              "confidence_low": 2.1248050783774457,
+              "mean_absolute_difference": 2.6916666666666664,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2.6916666666666664,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.35629263877386597,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "mean": {
+              "confidence_high": 3.9902979951959776,
+              "confidence_low": 3.6374797825817997,
+              "mean_absolute_difference": 3.8138888888888887,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 3.8138888888888887,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.11087938799942745,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_mean": {
+              "confidence_high": 3.9902979951959776,
+              "confidence_low": 3.6374797825817997,
+              "mean_absolute_difference": 3.8138888888888887,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 3.8138888888888887,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.11087938799942745,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 4.549874603855597,
+              "confidence_low": 3.6284911614806132,
+              "mean_absolute_difference": 4.089182882668105,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 4.089182882668105,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.2895611069688823,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "volatility": {
+              "confidence_high": 4.549874603855597,
+              "confidence_low": 3.6284911614806132,
+              "mean_absolute_difference": 4.089182882668105,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 4.089182882668105,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.2895611069688823,
+              "pairs": 4,
+              "pathwise_material_share": null
+            }
+          },
+          "metric.source.m6.firm_exits": {
+            "cumulative": {
+              "confidence_high": 359.126819567638,
+              "confidence_low": 327.373180432362,
+              "mean_absolute_difference": 343.25,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 343.25,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 9.97914491994847,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "final": {
+              "confidence_high": 11.3185,
+              "confidence_low": 0.18149999999999977,
+              "mean_absolute_difference": 5.75,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 5.75,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 3.5,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 1.3968251765545243,
+              "confidence_low": 1.2031748234454758,
+              "mean_absolute_difference": 1.3,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1.3,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.06085806194501844,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": 3.258528254955887,
+              "confidence_low": 2.1248050783774457,
+              "mean_absolute_difference": 2.6916666666666664,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2.6916666666666664,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.35629263877386597,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "mean": {
+              "confidence_high": 3.9902979951959776,
+              "confidence_low": 3.6374797825817997,
+              "mean_absolute_difference": 3.8138888888888887,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 3.8138888888888887,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.11087938799942745,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_mean": {
+              "confidence_high": 3.9902979951959776,
+              "confidence_low": 3.6374797825817997,
+              "mean_absolute_difference": 3.8138888888888887,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 3.8138888888888887,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.11087938799942745,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 4.549874603855597,
+              "confidence_low": 3.6284911614806132,
+              "mean_absolute_difference": 4.089182882668105,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 4.089182882668105,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.2895611069688823,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "volatility": {
+              "confidence_high": 4.549874603855597,
+              "confidence_low": 3.6284911614806132,
+              "mean_absolute_difference": 4.089182882668105,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 4.089182882668105,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.2895611069688823,
+              "pairs": 4,
+              "pathwise_material_share": null
+            }
+          }
+        },
+        "rare_event_metric": "metric.source.m6.firm_defaults",
+        "salient_metrics": [
+          "metric.source.m6.firm_defaults",
+          "metric.source.m6.firm_exits"
+        ],
+        "scenario": "firm_debt_service_pressure",
+        "setup_actions": [],
+        "target_economy": 0,
+        "time_compression": null
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "rental_eviction_arrears",
+            "value": 3
+          }
+        ],
+        "activation_fixture": "ACT_HOUSING_TRANSACTIONS",
+        "activation_metrics": [
+          "metric.source.m8.housing.session_sales",
+          "metric.source.m8.housing.transfer_tax_paid",
+          "metric.source.m8.housing.property_tax_paid"
+        ],
+        "arm_label": "arm_4",
+        "countries": 1,
+        "days": 60,
+        "decision_group": "structural_law",
+        "exploratory_metrics": [],
+        "lever": "rental_eviction_arrears",
+        "r6_classification": "conditional",
+        "r6_frozen_effects": {
+          "metric.source.m8.housing.evictions": {
+            "cumulative": {
+              "confidence_high": -8.496335171673504,
+              "confidence_low": -28.003664828326496,
+              "mean_absolute_difference": 18.25,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -18.25,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 6.13052471924984,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 0.5455,
+              "confidence_low": -1.0455,
+              "mean_absolute_difference": 0.25,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.25,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.5,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "first_window_mean": {
+              "confidence_high": 0.0,
+              "confidence_low": 0.0,
+              "mean_absolute_difference": 0.0,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.0,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": -0.20342872730773215,
+              "confidence_low": -0.4632379393589346,
+              "mean_absolute_difference": 0.33333333333333337,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.33333333333333337,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.08164965809277261,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": -0.023277630607324663,
+              "confidence_low": -0.07672236939267532,
+              "mean_absolute_difference": 0.049999999999999996,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.049999999999999996,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.01679595813493107,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": -0.023277630607324663,
+              "confidence_low": -0.07672236939267532,
+              "mean_absolute_difference": 0.049999999999999996,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.049999999999999996,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.01679595813493107,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": -0.16869057421219066,
+              "confidence_low": -0.3138835106719192,
+              "mean_absolute_difference": 0.24128704244205496,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.24128704244205496,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.045629458346866304,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": -0.16869057421219066,
+              "confidence_low": -0.3138835106719192,
+              "mean_absolute_difference": 0.24128704244205496,
+              "mean_absolute_relative_difference": 1.0,
+              "mean_difference": -0.24128704244205496,
+              "mean_relative_difference": -1.0,
+              "paired_standard_deviation": 0.045629458346866304,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          }
+        },
+        "rare_event_metric": "metric.source.m8.housing.evictions",
+        "salient_metrics": [
+          "metric.source.m8.housing.evictions"
+        ],
+        "scenario": "housing_rental_pressure",
+        "setup_actions": [
+          [
+            "rental_eviction_arrears",
+            1
+          ]
+        ],
+        "target_economy": 0,
+        "time_compression": {
+          "kind": "proportional_threshold_clock",
+          "r6_control": 90,
+          "r6_treatment": 270,
+          "r7_control": 1,
+          "r7_treatment": 3,
+          "ratio": 3.0
+        }
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "soe_efirm",
+            "value": true
+          }
+        ],
+        "activation_fixture": "ACT_OWNERSHIP_TRANSITION",
+        "activation_metrics": [
+          "metric.source.m8.energy.production",
+          "metric.source.m8.energy.transaction_price"
+        ],
+        "arm_label": "arm_1",
+        "countries": 1,
+        "days": 21,
+        "decision_group": "energy_structure",
+        "exploratory_metrics": [
+          "metric.source.m8.energy.production"
+        ],
+        "lever": "soe_efirm",
+        "r6_classification": "structural",
+        "r6_frozen_effects": {
+          "metric.source.m8.energy.production": {
+            "cumulative": {
+              "confidence_high": 2105.108197182109,
+              "confidence_low": -3002.759158572929,
+              "mean_absolute_difference": 1377.3665060864332,
+              "mean_absolute_relative_difference": 0.014068073297984802,
+              "mean_difference": -448.8254806954101,
+              "mean_relative_difference": -0.0044767176710142145,
+              "paired_standard_deviation": 1605.2380124937267,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 55.75501806787226,
+              "confidence_low": -61.51387796903238,
+              "mean_absolute_difference": 25.56305838458252,
+              "mean_absolute_relative_difference": 0.007164697649062101,
+              "mean_difference": -2.879429950580061,
+              "mean_relative_difference": -0.0008522301940013094,
+              "paired_standard_deviation": 36.85383282115168,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "first_window_mean": {
+              "confidence_high": 70.17027323940405,
+              "confidence_low": -100.09197195243118,
+              "mean_absolute_difference": 45.91221686954782,
+              "mean_absolute_relative_difference": 0.014068073297984816,
+              "mean_difference": -14.960849356513563,
+              "mean_relative_difference": -0.00447671767101418,
+              "paired_standard_deviation": 53.507933749791086,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "last_window_mean": {
+              "confidence_high": 70.17027323940405,
+              "confidence_low": -100.09197195243118,
+              "mean_absolute_difference": 45.91221686954782,
+              "mean_absolute_relative_difference": 0.014068073297984816,
+              "mean_difference": -14.960849356513563,
+              "mean_relative_difference": -0.00447671767101418,
+              "paired_standard_deviation": 53.507933749791086,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": 70.17027323940405,
+              "confidence_low": -100.09197195243118,
+              "mean_absolute_difference": 45.91221686954782,
+              "mean_absolute_relative_difference": 0.014068073297984816,
+              "mean_difference": -14.960849356513563,
+              "mean_relative_difference": -0.00447671767101418,
+              "paired_standard_deviation": 53.507933749791086,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": 70.17027323940405,
+              "confidence_low": -100.09197195243118,
+              "mean_absolute_difference": 45.91221686954782,
+              "mean_absolute_relative_difference": 0.014068073297984816,
+              "mean_difference": -14.960849356513563,
+              "mean_relative_difference": -0.00447671767101418,
+              "paired_standard_deviation": 53.507933749791086,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 5.8813893083390205,
+              "confidence_low": -28.92878160952291,
+              "mean_absolute_difference": 11.83466505304824,
+              "mean_absolute_relative_difference": 0.036797167258766854,
+              "mean_difference": -11.523696150591945,
+              "mean_relative_difference": -0.0358474274685294,
+              "paired_standard_deviation": 10.939714304796333,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": 5.8813893083390205,
+              "confidence_low": -28.92878160952291,
+              "mean_absolute_difference": 11.83466505304824,
+              "mean_absolute_relative_difference": 0.036797167258766854,
+              "mean_difference": -11.523696150591945,
+              "mean_relative_difference": -0.0358474274685294,
+              "paired_standard_deviation": 10.939714304796333,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          },
+          "metric.source.m8.energy.transaction_price": {
+            "cumulative": {
+              "confidence_high": -0.002637382093922426,
+              "confidence_low": -0.09447257862681399,
+              "mean_absolute_difference": 0.048554980360368205,
+              "mean_absolute_relative_difference": 0.000669546003929547,
+              "mean_difference": -0.048554980360368205,
+              "mean_relative_difference": -0.000669546003929547,
+              "paired_standard_deviation": 0.028860841147986035,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "final": {
+              "confidence_high": -3.480375501572889e-05,
+              "confidence_low": -0.0037600966495321565,
+              "mean_absolute_difference": 0.0018974502022739426,
+              "mean_absolute_relative_difference": 0.0007784652267563325,
+              "mean_difference": -0.0018974502022739426,
+              "mean_relative_difference": -0.0007784652267563325,
+              "paired_standard_deviation": 0.001170739438880084,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "first_window_mean": {
+              "confidence_high": -8.79127364639496e-05,
+              "confidence_low": -0.003149085954226879,
+              "mean_absolute_difference": 0.0016184993453454144,
+              "mean_absolute_relative_difference": 0.0006695460039294675,
+              "mean_difference": -0.0016184993453454144,
+              "mean_relative_difference": -0.0006695460039294675,
+              "paired_standard_deviation": 0.0009620280382661627,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "last_window_mean": {
+              "confidence_high": -8.79127364639496e-05,
+              "confidence_low": -0.003149085954226879,
+              "mean_absolute_difference": 0.0016184993453454144,
+              "mean_absolute_relative_difference": 0.0006695460039294675,
+              "mean_difference": -0.0016184993453454144,
+              "mean_relative_difference": -0.0006695460039294675,
+              "paired_standard_deviation": 0.0009620280382661627,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "mean": {
+              "confidence_high": -8.79127364639496e-05,
+              "confidence_low": -0.003149085954226879,
+              "mean_absolute_difference": 0.0016184993453454144,
+              "mean_absolute_relative_difference": 0.0006695460039294675,
+              "mean_difference": -0.0016184993453454144,
+              "mean_relative_difference": -0.0006695460039294675,
+              "paired_standard_deviation": 0.0009620280382661627,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "post_burnin_mean": {
+              "confidence_high": -8.79127364639496e-05,
+              "confidence_low": -0.003149085954226879,
+              "mean_absolute_difference": 0.0016184993453454144,
+              "mean_absolute_relative_difference": 0.0006695460039294675,
+              "mean_difference": -0.0016184993453454144,
+              "mean_relative_difference": -0.0006695460039294675,
+              "paired_standard_deviation": 0.0009620280382661627,
+              "pairs": 4,
+              "pathwise_material_share": 0.25
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 2.0500983995197617e-05,
+              "confidence_low": -0.0004165488230789238,
+              "mean_absolute_difference": 0.0001980239195418631,
+              "mean_absolute_relative_difference": 0.015316950359691951,
+              "mean_difference": -0.0001980239195418631,
+              "mean_relative_difference": -0.015316950359691951,
+              "paired_standard_deviation": 0.00013735066218545613,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": 2.0500983995197617e-05,
+              "confidence_low": -0.0004165488230789238,
+              "mean_absolute_difference": 0.0001980239195418631,
+              "mean_absolute_relative_difference": 0.015316950359691951,
+              "mean_difference": -0.0001980239195418631,
+              "mean_relative_difference": -0.015316950359691951,
+              "paired_standard_deviation": 0.00013735066218545613,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          }
+        },
+        "rare_event_metric": null,
+        "salient_metrics": [
+          "metric.source.m8.energy.transaction_price"
+        ],
+        "scenario": "energy_joint_pressure",
+        "setup_actions": [
+          [
+            "soe_price_at_cost",
+            true
+          ]
+        ],
+        "target_economy": 0,
+        "time_compression": null
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "tariff",
+            "value": 0.25
+          }
+        ],
+        "activation_fixture": "ACT_TRADE_FLOWS",
+        "activation_metrics": [
+          "metric.source.m9.country.imports_volume",
+          "metric.source.m9.country.exports_volume",
+          "metric.source.m9.world.trade_routes"
+        ],
+        "arm_label": "arm_2",
+        "countries": 3,
+        "days": 30,
+        "decision_group": "trade_and_migration",
+        "exploratory_metrics": [],
+        "lever": "tariff",
+        "r6_classification": "expert_only",
+        "r6_frozen_effects": {
+          "metric.source.m9.country.imports_volume": {
+            "cumulative": {
+              "confidence_high": 3196.1434484825404,
+              "confidence_low": -14924.917648273808,
+              "mean_absolute_difference": 6899.832749223999,
+              "mean_absolute_relative_difference": 0.02857292341341223,
+              "mean_difference": -5864.387099895634,
+              "mean_relative_difference": -0.024316267476889968,
+              "paired_standard_deviation": 5694.865209540021,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": 0.0,
+              "confidence_low": 0.0,
+              "mean_absolute_difference": 0.0,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.0,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 106.53811494941812,
+              "confidence_low": -497.49725494245996,
+              "mean_absolute_difference": 229.99442497413315,
+              "mean_absolute_relative_difference": 0.028572923413412214,
+              "mean_difference": -195.47956999652092,
+              "mean_relative_difference": -0.02431626747688994,
+              "paired_standard_deviation": 189.82884031800066,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "last_window_mean": {
+              "confidence_high": 106.53811494941812,
+              "confidence_low": -497.49725494245996,
+              "mean_absolute_difference": 229.99442497413315,
+              "mean_absolute_relative_difference": 0.028572923413412214,
+              "mean_difference": -195.47956999652092,
+              "mean_relative_difference": -0.02431626747688994,
+              "paired_standard_deviation": 189.82884031800066,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": 106.53811494941812,
+              "confidence_low": -497.49725494245996,
+              "mean_absolute_difference": 229.99442497413315,
+              "mean_absolute_relative_difference": 0.028572923413412214,
+              "mean_difference": -195.47956999652092,
+              "mean_relative_difference": -0.02431626747688994,
+              "paired_standard_deviation": 189.82884031800066,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": 106.53811494941812,
+              "confidence_low": -497.49725494245996,
+              "mean_absolute_difference": 229.99442497413315,
+              "mean_absolute_relative_difference": 0.028572923413412214,
+              "mean_difference": -195.47956999652092,
+              "mean_relative_difference": -0.02431626747688994,
+              "paired_standard_deviation": 189.82884031800066,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": -106.7947063951824,
+              "confidence_low": -530.1530278515331,
+              "mean_absolute_difference": 318.47386712335776,
+              "mean_absolute_relative_difference": 0.0716937471582648,
+              "mean_difference": -318.47386712335776,
+              "mean_relative_difference": -0.0716937471582648,
+              "paired_standard_deviation": 133.04786972229752,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": -106.7947063951824,
+              "confidence_low": -530.1530278515331,
+              "mean_absolute_difference": 318.47386712335776,
+              "mean_absolute_relative_difference": 0.0716937471582648,
+              "mean_difference": -318.47386712335776,
+              "mean_relative_difference": -0.0716937471582648,
+              "paired_standard_deviation": 133.04786972229752,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          },
+          "metric.source.m9.country.tariff_revenue": {
+            "cumulative": {
+              "confidence_high": 41103.99283111172,
+              "confidence_low": 36687.32526843489,
+              "mean_absolute_difference": 38895.659049773305,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 38895.659049773305,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 1388.0162044867457,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "final": {
+              "confidence_high": 0.0,
+              "confidence_low": 0.0,
+              "mean_absolute_difference": 0.0,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 0.0,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 0.0,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 1370.1330943703904,
+              "confidence_low": 1222.910842281163,
+              "mean_absolute_difference": 1296.5219683257767,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1296.5219683257767,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 46.26720681622485,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": 1370.1330943703904,
+              "confidence_low": 1222.910842281163,
+              "mean_absolute_difference": 1296.5219683257767,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1296.5219683257767,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 46.26720681622485,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "mean": {
+              "confidence_high": 1370.1330943703904,
+              "confidence_low": 1222.910842281163,
+              "mean_absolute_difference": 1296.5219683257767,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1296.5219683257767,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 46.26720681622485,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_mean": {
+              "confidence_high": 1370.1330943703904,
+              "confidence_low": 1222.910842281163,
+              "mean_absolute_difference": 1296.5219683257767,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1296.5219683257767,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 46.26720681622485,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 709.5199787573099,
+              "confidence_low": 604.7994321610302,
+              "mean_absolute_difference": 657.15970545917,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 657.15970545917,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 32.91029119933364,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "volatility": {
+              "confidence_high": 709.5199787573099,
+              "confidence_low": 604.7994321610302,
+              "mean_absolute_difference": 657.15970545917,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 657.15970545917,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 32.91029119933364,
+              "pairs": 4,
+              "pathwise_material_share": null
+            }
+          }
+        },
+        "rare_event_metric": null,
+        "salient_metrics": [
+          "metric.source.m9.country.imports_volume",
+          "metric.source.m9.country.tariff_revenue"
+        ],
+        "scenario": "world_trade_integration",
+        "setup_actions": [],
+        "target_economy": 0,
+        "time_compression": null
+      },
+      {
+        "actions": [
+          {
+            "economy_id": 0,
+            "lever": "peg_anchor",
+            "value": 1
+          },
+          {
+            "economy_id": 0,
+            "lever": "fx_regime",
+            "value": "peg"
+          }
+        ],
+        "activation_fixture": "ACT_PEG_PRESSURE",
+        "activation_metrics": [
+          "metric.source.m9.country.peg_reserves",
+          "metric.source.m9.country.exchange_rate",
+          "metric.source.m9.country.capital_flow"
+        ],
+        "arm_label": "arm_1",
+        "countries": 3,
+        "days": 30,
+        "decision_group": "fx_operations",
+        "exploratory_metrics": [],
+        "lever": "fx_regime",
+        "r6_classification": "structural",
+        "r6_frozen_effects": {
+          "metric.source.m9.country.exchange_rate": {
+            "cumulative": {
+              "confidence_high": -0.4357226948769082,
+              "confidence_low": -0.44542917245962954,
+              "mean_absolute_difference": 0.44057593366826886,
+              "mean_absolute_relative_difference": 0.014508328259514758,
+              "mean_difference": -0.44057593366826886,
+              "mean_relative_difference": -0.014508328259514758,
+              "paired_standard_deviation": 0.0030504329298307264,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "final": {
+              "confidence_high": -0.03293936147867126,
+              "confidence_low": -0.033723934195683765,
+              "mean_absolute_difference": 0.033331647837177514,
+              "mean_absolute_relative_difference": 0.03243565044946605,
+              "mean_difference": -0.033331647837177514,
+              "mean_relative_difference": -0.03243565044946605,
+              "paired_standard_deviation": 0.0002465659072949411,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "first_window_mean": {
+              "confidence_high": -0.014524089829230208,
+              "confidence_low": -0.014847639081987713,
+              "mean_absolute_difference": 0.01468586445560896,
+              "mean_absolute_relative_difference": 0.014508328259514758,
+              "mean_difference": -0.01468586445560896,
+              "mean_relative_difference": -0.014508328259514758,
+              "paired_standard_deviation": 0.00010168109766106361,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "last_window_mean": {
+              "confidence_high": -0.014524089829230208,
+              "confidence_low": -0.014847639081987713,
+              "mean_absolute_difference": 0.01468586445560896,
+              "mean_absolute_relative_difference": 0.014508328259514758,
+              "mean_difference": -0.01468586445560896,
+              "mean_relative_difference": -0.014508328259514758,
+              "paired_standard_deviation": 0.00010168109766106361,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "mean": {
+              "confidence_high": -0.014524089829230208,
+              "confidence_low": -0.014847639081987713,
+              "mean_absolute_difference": 0.01468586445560896,
+              "mean_absolute_relative_difference": 0.014508328259514758,
+              "mean_difference": -0.01468586445560896,
+              "mean_relative_difference": -0.014508328259514758,
+              "paired_standard_deviation": 0.00010168109766106361,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_mean": {
+              "confidence_high": -0.014524089829230208,
+              "confidence_low": -0.014847639081987713,
+              "mean_absolute_difference": 0.01468586445560896,
+              "mean_absolute_relative_difference": 0.014508328259514758,
+              "mean_difference": -0.01468586445560896,
+              "mean_relative_difference": -0.014508328259514758,
+              "paired_standard_deviation": 0.00010168109766106361,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "post_burnin_volatility": {
+              "confidence_high": -0.006110082546990623,
+              "confidence_low": -0.006252904776805015,
+              "mean_absolute_difference": 0.006181493661897819,
+              "mean_absolute_relative_difference": 0.738537615852206,
+              "mean_difference": -0.006181493661897819,
+              "mean_relative_difference": -0.738537615852206,
+              "paired_standard_deviation": 4.488442168899798e-05,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            },
+            "volatility": {
+              "confidence_high": -0.006110082546990623,
+              "confidence_low": -0.006252904776805015,
+              "mean_absolute_difference": 0.006181493661897819,
+              "mean_absolute_relative_difference": 0.738537615852206,
+              "mean_difference": -0.006181493661897819,
+              "mean_relative_difference": -0.738537615852206,
+              "paired_standard_deviation": 4.488442168899798e-05,
+              "pairs": 4,
+              "pathwise_material_share": 1.0
+            }
+          },
+          "metric.source.m9.country.peg_reserves": {
+            "cumulative": {
+              "confidence_high": 85252.92304189524,
+              "confidence_low": 83524.9273405881,
+              "mean_absolute_difference": 84388.92519124167,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 84388.92519124167,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 543.0533316490028,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "final": {
+              "confidence_high": 128.18075862940762,
+              "confidence_low": -33.5112679716031,
+              "mean_absolute_difference": 47.334745328902265,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 47.334745328902265,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 50.8145903837243,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "first_window_mean": {
+              "confidence_high": 2841.7641013965076,
+              "confidence_low": 2784.1642446862706,
+              "mean_absolute_difference": 2812.964173041389,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2812.964173041389,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 18.101777721633326,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "last_window_mean": {
+              "confidence_high": 2841.7641013965076,
+              "confidence_low": 2784.1642446862706,
+              "mean_absolute_difference": 2812.964173041389,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2812.964173041389,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 18.101777721633326,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "mean": {
+              "confidence_high": 2841.7641013965076,
+              "confidence_low": 2784.1642446862706,
+              "mean_absolute_difference": 2812.964173041389,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2812.964173041389,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 18.101777721633326,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_mean": {
+              "confidence_high": 2841.7641013965076,
+              "confidence_low": 2784.1642446862706,
+              "mean_absolute_difference": 2812.964173041389,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 2812.964173041389,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 18.101777721633326,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "post_burnin_volatility": {
+              "confidence_high": 1589.668566273173,
+              "confidence_low": 1541.3393723172271,
+              "mean_absolute_difference": 1565.5039692952,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1565.5039692952,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 15.18830734002065,
+              "pairs": 4,
+              "pathwise_material_share": null
+            },
+            "volatility": {
+              "confidence_high": 1589.668566273173,
+              "confidence_low": 1541.3393723172271,
+              "mean_absolute_difference": 1565.5039692952,
+              "mean_absolute_relative_difference": null,
+              "mean_difference": 1565.5039692952,
+              "mean_relative_difference": null,
+              "paired_standard_deviation": 15.18830734002065,
+              "pairs": 4,
+              "pathwise_material_share": null
+            }
+          }
+        },
+        "rare_event_metric": null,
+        "salient_metrics": [
+          "metric.source.m9.country.exchange_rate",
+          "metric.source.m9.country.peg_reserves"
+        ],
+        "scenario": "world_trade_integration",
+        "setup_actions": [],
+        "target_economy": 0,
+        "time_compression": null
+      }
+    ],
+    "small_jobs": 4
+  },
+  "protocol": {
+    "estimated_peak_memory_budget_bytes": 17179869184,
+    "large_jobs": 1,
+    "legacy_python_simulator_used": false,
+    "matched_seeds": [
+      6203,
+      6221,
+      6247,
+      6271
+    ],
+    "million_person_branching": "native_in_memory_clone",
+    "native_build": {
+      "extension_path": "build/native/m11-release/native/_native.abi3.so",
+      "extension_sha256": "c9e15a31f1fabc57f2fa7b8a627893efeaced7631395f30dfa2020545de992f4"
+    },
+    "native_engine_workers": 8,
+    "populations_per_country": [
+      100000,
+      1000000
+    ],
+    "small_jobs": 4,
+    "wall_clock_budget_seconds_per_record": 1200.0
+  },
+  "reports": [
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_confirmed",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 45.139656624989584,
+          "estimated_peak_known_bytes": 246022387,
+          "memory_passed": true,
+          "one_world_known_bytes": 109343283,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 50.541955874999985,
+          "estimated_peak_known_bytes": 232032002,
+          "memory_passed": true,
+          "one_world_known_bytes": 103125334,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 44.05913312500343,
+          "estimated_peak_known_bytes": 233278729,
+          "memory_passed": true,
+          "one_world_known_bytes": 103679435,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 42.76784204202704,
+          "estimated_peak_known_bytes": 248277742,
+          "memory_passed": true,
+          "one_world_known_bytes": 110345663,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 616.7398942090222,
+          "estimated_peak_known_bytes": 2728585546,
+          "memory_passed": true,
+          "one_world_known_bytes": 1212704687,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 604.5448668340105,
+          "estimated_peak_known_bytes": 2731636060,
+          "memory_passed": true,
+          "one_world_known_bytes": 1214060471,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 624.5019630420138,
+          "estimated_peak_known_bytes": 2709211354,
+          "memory_passed": true,
+          "one_world_known_bytes": 1204093935,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 630.6653560409904,
+          "estimated_peak_known_bytes": 2710091212,
+          "memory_passed": true,
+          "one_world_known_bytes": 1204484983,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "mortgage_foreclosure_ltv",
+      "metrics": [
+        {
+          "elasticity_gap": 0.10324063024078534,
+          "estimated_population_elasticity": 1.1032406302407853,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 250.5,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "large_mean_difference": 250.5,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m8.housing.foreclosures",
+          "passed": true,
+          "r6_expected_sign": 1,
+          "raw_large_to_small_ratio": 12.683544303797468,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 19.75,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "small_mean_difference": 19.75,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.1032406302407853,
+        "large_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "large_event_totals": [
+          248.0,
+          261.0,
+          243.0,
+          250.0
+        ],
+        "large_events_per_person": 0.0002505,
+        "large_incidence": 1.0,
+        "large_mean_events": 250.5,
+        "large_treatment_event_totals": [
+          248.0,
+          261.0,
+          243.0,
+          250.0
+        ],
+        "metric_id": "metric.source.m8.housing.foreclosures",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "small_event_totals": [
+          18.0,
+          15.0,
+          21.0,
+          25.0
+        ],
+        "small_events_per_person": 0.0001975,
+        "small_incidence": 1.0,
+        "small_mean_events": 19.75,
+        "small_treatment_event_totals": [
+          18.0,
+          15.0,
+          21.0,
+          25.0
+        ]
+      },
+      "time_compression": null
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_confirmed",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 18.584671541990247,
+          "estimated_peak_known_bytes": 227964191,
+          "memory_passed": true,
+          "one_world_known_bytes": 101317418,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 17.603992916003335,
+          "estimated_peak_known_bytes": 226206734,
+          "memory_passed": true,
+          "one_world_known_bytes": 100536326,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 19.66105879098177,
+          "estimated_peak_known_bytes": 229294681,
+          "memory_passed": true,
+          "one_world_known_bytes": 101908747,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 19.12530058302218,
+          "estimated_peak_known_bytes": 243832750,
+          "memory_passed": true,
+          "one_world_known_bytes": 108370111,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 165.31441558303777,
+          "estimated_peak_known_bytes": 2669642665,
+          "memory_passed": true,
+          "one_world_known_bytes": 1186507851,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 203.04643483401742,
+          "estimated_peak_known_bytes": 2690731960,
+          "memory_passed": true,
+          "one_world_known_bytes": 1195880871,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 165.4787835830357,
+          "estimated_peak_known_bytes": 2686239727,
+          "memory_passed": true,
+          "one_world_known_bytes": 1193884323,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 163.86173766700085,
+          "estimated_peak_known_bytes": 2669170057,
+          "memory_passed": true,
+          "one_world_known_bytes": 1186297803,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "gov_investment_share",
+      "metrics": [
+        {
+          "elasticity_gap": 0.010877192779303768,
+          "estimated_population_elasticity": 0.9891228072206962,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 7327433.7072724765,
+            "control_standard_deviation": 450868.9153060756,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.29143995322387545
+          },
+          "large_mean_difference": -7327433.7072724765,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m4.public_capital",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 9.752653784953317,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 751327.1637487488,
+            "control_standard_deviation": 98441.27995009896,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.29130956240808353
+          },
+          "small_mean_difference": -751327.1637487488,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        },
+        {
+          "elasticity_gap": 0.0014182087340584015,
+          "estimated_population_elasticity": 0.9985817912659416,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 378613.87081986514,
+            "control_standard_deviation": 550.4416465691393,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.5011221923593094
+          },
+          "large_mean_difference": -378613.87081986514,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m4.public_fixed_capital_formation",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 9.967397798073725,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 37985.22728700917,
+            "control_standard_deviation": 690.5010152727681,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.5020008436404901
+          },
+          "small_mean_difference": -37985.22728700917,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "expert_only",
+      "rare_event": null,
+      "time_compression": null
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_confirmed",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 26.207661791995633,
+          "estimated_peak_known_bytes": 227917688,
+          "memory_passed": true,
+          "one_world_known_bytes": 101296750,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 25.03565658297157,
+          "estimated_peak_known_bytes": 243416257,
+          "memory_passed": true,
+          "one_world_known_bytes": 108185003,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 26.4964884169749,
+          "estimated_peak_known_bytes": 229243705,
+          "memory_passed": true,
+          "one_world_known_bytes": 101886091,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 25.375186207995284,
+          "estimated_peak_known_bytes": 243775339,
+          "memory_passed": true,
+          "one_world_known_bytes": 108344595,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 334.43763000000035,
+          "estimated_peak_known_bytes": 2687207533,
+          "memory_passed": true,
+          "one_world_known_bytes": 1194314459,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 285.9777274579974,
+          "estimated_peak_known_bytes": 2690276902,
+          "memory_passed": true,
+          "one_world_known_bytes": 1195678623,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 277.5982134590158,
+          "estimated_peak_known_bytes": 2685839704,
+          "memory_passed": true,
+          "one_world_known_bytes": 1193706535,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 281.54030449996935,
+          "estimated_peak_known_bytes": 2668723864,
+          "memory_passed": true,
+          "one_world_known_bytes": 1186099495,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "bankrupt_persist",
+      "metrics": [
+        {
+          "elasticity_gap": 0.027589084323762725,
+          "estimated_population_elasticity": 1.0275890843237627,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 2879.75,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "large_mean_difference": 2879.75,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m6.firm_defaults",
+          "passed": true,
+          "r6_expected_sign": 1,
+          "raw_large_to_small_ratio": 10.655874190564292,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 270.25,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "small_mean_difference": 270.25,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        },
+        {
+          "elasticity_gap": 0.027589084323762725,
+          "estimated_population_elasticity": 1.0275890843237627,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 2879.75,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "large_mean_difference": 2879.75,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m6.firm_exits",
+          "passed": true,
+          "r6_expected_sign": 1,
+          "raw_large_to_small_ratio": 10.655874190564292,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 270.25,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": null
+          },
+          "small_mean_difference": 270.25,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.0275890843237627,
+        "large_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "large_event_totals": [
+          2891.0,
+          2906.0,
+          2826.0,
+          2896.0
+        ],
+        "large_events_per_person": 0.00287975,
+        "large_incidence": 1.0,
+        "large_mean_events": 2879.75,
+        "large_treatment_event_totals": [
+          2891.0,
+          2906.0,
+          2826.0,
+          2896.0
+        ],
+        "metric_id": "metric.source.m6.firm_defaults",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "small_event_totals": [
+          307.0,
+          283.0,
+          249.0,
+          242.0
+        ],
+        "small_events_per_person": 0.0027025,
+        "small_incidence": 1.0,
+        "small_mean_events": 270.25,
+        "small_treatment_event_totals": [
+          307.0,
+          283.0,
+          249.0,
+          242.0
+        ]
+      },
+      "time_compression": null
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_confirmed",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 32.94649641698925,
+          "estimated_peak_known_bytes": 271595293,
+          "memory_passed": true,
+          "one_world_known_bytes": 120709019,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 32.9810530829709,
+          "estimated_peak_known_bytes": 255037694,
+          "memory_passed": true,
+          "one_world_known_bytes": 113350086,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 38.19078012503451,
+          "estimated_peak_known_bytes": 252953071,
+          "memory_passed": true,
+          "one_world_known_bytes": 112423587,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 33.08054641599301,
+          "estimated_peak_known_bytes": 270184318,
+          "memory_passed": true,
+          "one_world_known_bytes": 120081919,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 681.5650162089732,
+          "estimated_peak_known_bytes": 3156790701,
+          "memory_passed": true,
+          "one_world_known_bytes": 1403018089,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 777.5252324169851,
+          "estimated_peak_known_bytes": 2964218155,
+          "memory_passed": true,
+          "one_world_known_bytes": 1317430291,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 755.8484753330122,
+          "estimated_peak_known_bytes": 3137071791,
+          "memory_passed": true,
+          "one_world_known_bytes": 1394254129,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 676.1036799580324,
+          "estimated_peak_known_bytes": 3155083824,
+          "memory_passed": true,
+          "one_world_known_bytes": 1402259477,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "rental_eviction_arrears",
+      "metrics": [
+        {
+          "elasticity_gap": 0.019883149267654332,
+          "estimated_population_elasticity": 1.0198831492676543,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 290.5,
+            "control_standard_deviation": 9.146948489341495,
+            "effective_floor": 1.0,
+            "passed": true,
+            "relative_difference": -1.0
+          },
+          "large_mean_difference": -290.5,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m8.housing.evictions",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 10.468468468468469,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 27.75,
+            "control_standard_deviation": 2.6299556396765835,
+            "effective_floor": 0.5259911279353168,
+            "passed": true,
+            "relative_difference": -1.0
+          },
+          "small_mean_difference": -27.75,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.0198831492676543,
+        "large_control_event_totals": [
+          301.0,
+          295.0,
+          285.0,
+          281.0
+        ],
+        "large_event_totals": [
+          301.0,
+          295.0,
+          285.0,
+          281.0
+        ],
+        "large_events_per_person": 0.0002905,
+        "large_incidence": 1.0,
+        "large_mean_events": 290.5,
+        "large_treatment_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metric_id": "metric.source.m8.housing.evictions",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          26.0,
+          25.0,
+          30.0,
+          30.0
+        ],
+        "small_event_totals": [
+          26.0,
+          25.0,
+          30.0,
+          30.0
+        ],
+        "small_events_per_person": 0.0002775,
+        "small_incidence": 1.0,
+        "small_mean_events": 27.75,
+        "small_treatment_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "time_compression": {
+        "kind": "proportional_threshold_clock",
+        "r6_control": 90,
+        "r6_treatment": 270,
+        "r7_control": 1,
+        "r7_treatment": 3,
+        "ratio": 3.0
+      }
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_dependency_modeled",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 17.55423583299853,
+          "estimated_peak_known_bytes": 254213024,
+          "memory_passed": true,
+          "one_world_known_bytes": 112983566,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 16.87351829104591,
+          "estimated_peak_known_bytes": 255004754,
+          "memory_passed": true,
+          "one_world_known_bytes": 113335446,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 12.712500916968565,
+          "estimated_peak_known_bytes": 255275152,
+          "memory_passed": true,
+          "one_world_known_bytes": 113455623,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 25.061710750043858,
+          "estimated_peak_known_bytes": 254648912,
+          "memory_passed": true,
+          "one_world_known_bytes": 113177294,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 138.8585469170357,
+          "estimated_peak_known_bytes": 3005641940,
+          "memory_passed": true,
+          "one_world_known_bytes": 1335840862,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 138.14533600001596,
+          "estimated_peak_known_bytes": 2849295942,
+          "memory_passed": true,
+          "one_world_known_bytes": 1266353752,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 138.35680125001818,
+          "estimated_peak_known_bytes": 3021700158,
+          "memory_passed": true,
+          "one_world_known_bytes": 1342977848,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 138.05169312504586,
+          "estimated_peak_known_bytes": 3023622608,
+          "memory_passed": true,
+          "one_world_known_bytes": 1343832270,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [
+        {
+          "elasticity_gap": null,
+          "estimated_population_elasticity": null,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": false,
+          "large_materiality": {
+            "absolute_difference": 452.6246408886509,
+            "control_standard_deviation": 4475.933992460129,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": 0.0007179254472178933
+          },
+          "large_mean_difference": 452.6246408886509,
+          "large_supporting_seeds": 2,
+          "metric_id": "metric.source.m8.energy.production",
+          "passed": false,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": -0.9156835101652221,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": false,
+          "small_materiality": {
+            "absolute_difference": 494.30249192429073,
+            "control_standard_deviation": 1285.2897623880033,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.007443695720421245
+          },
+          "small_mean_difference": -494.30249192429073,
+          "small_supporting_seeds": 2,
+          "statistic": "cumulative"
+        }
+      ],
+      "integrity_passed": true,
+      "lever": "soe_efirm",
+      "metrics": [
+        {
+          "elasticity_gap": 1.037576623043744,
+          "estimated_population_elasticity": -1.037576623043744,
+          "expected_population_elasticity": 0.0,
+          "first_order_scale_confirmed": false,
+          "large_materiality": {
+            "absolute_difference": 0.0001547223555730115,
+            "control_standard_deviation": 4.488908796434551e-05,
+            "effective_floor": 8.977817592869103e-06,
+            "passed": true,
+            "relative_difference": -6.417392235395914e-05
+          },
+          "large_mean_difference": -0.0001547223555730115,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m8.energy.transaction_price",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 0.09171141136830042,
+          "required_supporting_seeds": 3,
+          "scale_model": {
+            "alpha": -1.037576623043744,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 0.0016870567496957145,
+            "reference_population": 100000
+          },
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 0.0016870567496957145,
+            "control_standard_deviation": 3.49381770055875e-05,
+            "effective_floor": 6.9876354011175e-06,
+            "passed": true,
+            "relative_difference": -0.000699744571245787
+          },
+          "small_mean_difference": -0.0016870567496957145,
+          "small_supporting_seeds": 4,
+          "statistic": "post_burnin_mean"
+        }
+      ],
+      "r6_classification": "structural",
+      "rare_event": null,
+      "time_compression": null
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_dependency_modeled",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 46.318862374988385,
+          "estimated_peak_known_bytes": 724090935,
+          "memory_passed": true,
+          "one_world_known_bytes": 321818193,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 44.53385416598758,
+          "estimated_peak_known_bytes": 676602864,
+          "memory_passed": true,
+          "one_world_known_bytes": 300712384,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 65.56979104096536,
+          "estimated_peak_known_bytes": 695966092,
+          "memory_passed": true,
+          "one_world_known_bytes": 309318263,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 65.02893633302301,
+          "estimated_peak_known_bytes": 709151916,
+          "memory_passed": true,
+          "one_world_known_bytes": 315178629,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 324.2036612079828,
+          "estimated_peak_known_bytes": 8006222757,
+          "memory_passed": true,
+          "one_world_known_bytes": 3558321225,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 338.40028849994997,
+          "estimated_peak_known_bytes": 8015592850,
+          "memory_passed": true,
+          "one_world_known_bytes": 3562485711,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 350.21182183304336,
+          "estimated_peak_known_bytes": 8016790908,
+          "memory_passed": true,
+          "one_world_known_bytes": 3563018181,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 337.09127320803236,
+          "estimated_peak_known_bytes": 7969935009,
+          "memory_passed": true,
+          "one_world_known_bytes": 3542193337,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "tariff",
+      "metrics": [
+        {
+          "elasticity_gap": 0.7759700485591693,
+          "estimated_population_elasticity": 0.22402995144083068,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": false,
+          "large_materiality": {
+            "absolute_difference": 30818.523841870367,
+            "control_standard_deviation": 78599.98439843373,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.012341100114843137
+          },
+          "large_mean_difference": -30818.523841870367,
+          "large_supporting_seeds": 3,
+          "metric_id": "metric.source.m9.country.imports_volume",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 1.6750583936866354,
+          "required_supporting_seeds": 3,
+          "scale_model": {
+            "alpha": 0.22402995144083068,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 18398.47730564299,
+            "reference_population": 100000
+          },
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 18398.47730564299,
+            "control_standard_deviation": 2991.63657691888,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": -0.07735114467248397
+          },
+          "small_mean_difference": -18398.47730564299,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        },
+        {
+          "elasticity_gap": 0.03314908996155297,
+          "estimated_population_elasticity": 1.033149089961553,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 385318.9958808819,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": null
+          },
+          "large_mean_difference": 385318.9958808819,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m9.country.tariff_revenue",
+          "passed": true,
+          "r6_expected_sign": 1,
+          "raw_large_to_small_ratio": 10.793171799404881,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 35700.25596202664,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": null
+          },
+          "small_mean_difference": 35700.25596202664,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "expert_only",
+      "rare_event": null,
+      "time_compression": null
+    },
+    {
+      "activation": {
+        "large_active_seeds": 4,
+        "passed": true,
+        "small_active_seeds": 4
+      },
+      "complete": true,
+      "disposition": "finite_size_dependency_modeled",
+      "execution_budget_passed": true,
+      "execution_records": [
+        {
+          "elapsed_seconds": 55.264148999995086,
+          "estimated_peak_known_bytes": 724090935,
+          "memory_passed": true,
+          "one_world_known_bytes": 321818193,
+          "passed": true,
+          "population": 100000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 52.86943624995183,
+          "estimated_peak_known_bytes": 676602864,
+          "memory_passed": true,
+          "one_world_known_bytes": 300712384,
+          "passed": true,
+          "population": 100000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 40.075894584006164,
+          "estimated_peak_known_bytes": 695966092,
+          "memory_passed": true,
+          "one_world_known_bytes": 309318263,
+          "passed": true,
+          "population": 100000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 28.96868429199094,
+          "estimated_peak_known_bytes": 709151916,
+          "memory_passed": true,
+          "one_world_known_bytes": 315178629,
+          "passed": true,
+          "population": 100000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 335.9437272499781,
+          "estimated_peak_known_bytes": 8006222757,
+          "memory_passed": true,
+          "one_world_known_bytes": 3558321225,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6203,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 438.3044238750008,
+          "estimated_peak_known_bytes": 8015592850,
+          "memory_passed": true,
+          "one_world_known_bytes": 3562485711,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6221,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 499.17093433398986,
+          "estimated_peak_known_bytes": 8016790908,
+          "memory_passed": true,
+          "one_world_known_bytes": 3563018181,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6247,
+          "wall_clock_passed": true
+        },
+        {
+          "elapsed_seconds": 321.9124365840107,
+          "estimated_peak_known_bytes": 7969935009,
+          "memory_passed": true,
+          "one_world_known_bytes": 3542193337,
+          "passed": true,
+          "population": 1000000,
+          "seed": 6271,
+          "wall_clock_passed": true
+        }
+      ],
+      "exploratory_metrics": [],
+      "integrity_passed": true,
+      "lever": "fx_regime",
+      "metrics": [
+        {
+          "elasticity_gap": 0.005514468180201395,
+          "estimated_population_elasticity": 0.005514468180201395,
+          "expected_population_elasticity": 0.0,
+          "first_order_scale_confirmed": true,
+          "large_materiality": {
+            "absolute_difference": 0.014707493221839008,
+            "control_standard_deviation": 7.015579715483263e-05,
+            "effective_floor": 1.4031159430966526e-05,
+            "passed": true,
+            "relative_difference": -0.014529155164901678
+          },
+          "large_mean_difference": -0.014707493221839008,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m9.country.exchange_rate",
+          "passed": true,
+          "r6_expected_sign": -1,
+          "raw_large_to_small_ratio": 1.0127784881738982,
+          "required_supporting_seeds": 3,
+          "scale_model": null,
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 0.014521924975280154,
+            "control_standard_deviation": 0.0001194024358897357,
+            "effective_floor": 2.3880487177947142e-05,
+            "passed": true,
+            "relative_difference": -0.014348317530982561
+          },
+          "small_mean_difference": -0.014521924975280154,
+          "small_supporting_seeds": 4,
+          "statistic": "post_burnin_mean"
+        },
+        {
+          "elasticity_gap": 1.0038425051962656,
+          "estimated_population_elasticity": -0.0038425051962657102,
+          "expected_population_elasticity": 1.0,
+          "first_order_scale_confirmed": false,
+          "large_materiality": {
+            "absolute_difference": 84433.67583134156,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": null
+          },
+          "large_mean_difference": 84433.67583134156,
+          "large_supporting_seeds": 4,
+          "metric_id": "metric.source.m9.country.peg_reserves",
+          "passed": true,
+          "r6_expected_sign": 1,
+          "raw_large_to_small_ratio": 0.9911913304897986,
+          "required_supporting_seeds": 3,
+          "scale_model": {
+            "alpha": -0.0038425051962657102,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 85184.03383292159,
+            "reference_population": 100000
+          },
+          "sign_passed": true,
+          "small_materiality": {
+            "absolute_difference": 85184.03383292159,
+            "control_standard_deviation": 0.0,
+            "effective_floor": 1e-09,
+            "passed": true,
+            "relative_difference": null
+          },
+          "small_mean_difference": 85184.03383292159,
+          "small_supporting_seeds": 4,
+          "statistic": "cumulative"
+        }
+      ],
+      "r6_classification": "structural",
+      "rare_event": null,
+      "time_compression": null
+    }
+  ],
+  "schema_version": "policy-remediation-r7-v1",
+  "source_revision": "243be5a79daa02114eced9129382e4a97c5074ca",
+  "status": "accepted"
+}

@@ -1,0 +1,339 @@
+{
+  "counts": {
+    "candidates": 7,
+    "classifications_unchanged": 7,
+    "finite_size_confirmed": 4,
+    "finite_size_dependencies_modeled": 3,
+    "previously_blocked_paths_completed": 4
+  },
+  "errors": [],
+  "hashes": {
+    "r7_acceptance": "60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3",
+    "r7_evidence": "e4336d79fb142f537a312c0eecaf0f8589ffd419de8c8270d54b45651d7c67a0"
+  },
+  "protocol": {
+    "estimated_peak_memory_budget_bytes": 17179869184,
+    "large_jobs": 1,
+    "legacy_python_simulator_used": false,
+    "matched_seeds": [
+      6203,
+      6221,
+      6247,
+      6271
+    ],
+    "million_person_branching": "native_in_memory_clone",
+    "native_build": {
+      "extension_path": "build/native/m11-release/native/_native.abi3.so",
+      "extension_sha256": "c9e15a31f1fabc57f2fa7b8a627893efeaced7631395f30dfa2020545de992f4"
+    },
+    "native_engine_workers": 8,
+    "populations_per_country": [
+      100000,
+      1000000
+    ],
+    "small_jobs": 4,
+    "wall_clock_budget_seconds_per_record": 1200.0
+  },
+  "reports": [
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "mortgage_foreclosure_ltv",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 1.1032406302407853,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m8.housing.foreclosures",
+          "scale_model": null
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.1032406302407853,
+        "large_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "large_event_totals": [
+          248.0,
+          261.0,
+          243.0,
+          250.0
+        ],
+        "large_events_per_person": 0.0002505,
+        "large_incidence": 1.0,
+        "large_mean_events": 250.5,
+        "large_treatment_event_totals": [
+          248.0,
+          261.0,
+          243.0,
+          250.0
+        ],
+        "metric_id": "metric.source.m8.housing.foreclosures",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "small_event_totals": [
+          18.0,
+          15.0,
+          21.0,
+          25.0
+        ],
+        "small_events_per_person": 0.0001975,
+        "small_incidence": 1.0,
+        "small_mean_events": 19.75,
+        "small_treatment_event_totals": [
+          18.0,
+          15.0,
+          21.0,
+          25.0
+        ]
+      },
+      "scale_disposition": "finite_size_confirmed"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "gov_investment_share",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 0.9891228072206962,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m4.public_capital",
+          "scale_model": null
+        },
+        {
+          "estimated_population_elasticity": 0.9985817912659416,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m4.public_fixed_capital_formation",
+          "scale_model": null
+        }
+      ],
+      "r6_classification": "expert_only",
+      "rare_event": null,
+      "scale_disposition": "finite_size_confirmed"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "bankrupt_persist",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 1.0275890843237627,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m6.firm_defaults",
+          "scale_model": null
+        },
+        {
+          "estimated_population_elasticity": 1.0275890843237627,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m6.firm_exits",
+          "scale_model": null
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.0275890843237627,
+        "large_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "large_event_totals": [
+          2891.0,
+          2906.0,
+          2826.0,
+          2896.0
+        ],
+        "large_events_per_person": 0.00287975,
+        "large_incidence": 1.0,
+        "large_mean_events": 2879.75,
+        "large_treatment_event_totals": [
+          2891.0,
+          2906.0,
+          2826.0,
+          2896.0
+        ],
+        "metric_id": "metric.source.m6.firm_defaults",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "small_event_totals": [
+          307.0,
+          283.0,
+          249.0,
+          242.0
+        ],
+        "small_events_per_person": 0.0027025,
+        "small_incidence": 1.0,
+        "small_mean_events": 270.25,
+        "small_treatment_event_totals": [
+          307.0,
+          283.0,
+          249.0,
+          242.0
+        ]
+      },
+      "scale_disposition": "finite_size_confirmed"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "rental_eviction_arrears",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 1.0198831492676543,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m8.housing.evictions",
+          "scale_model": null
+        }
+      ],
+      "r6_classification": "conditional",
+      "rare_event": {
+        "estimated_count_elasticity": 1.0198831492676543,
+        "large_control_event_totals": [
+          301.0,
+          295.0,
+          285.0,
+          281.0
+        ],
+        "large_event_totals": [
+          301.0,
+          295.0,
+          285.0,
+          281.0
+        ],
+        "large_events_per_person": 0.0002905,
+        "large_incidence": 1.0,
+        "large_mean_events": 290.5,
+        "large_treatment_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "metric_id": "metric.source.m8.housing.evictions",
+        "nonzero_at_both_scales": true,
+        "small_control_event_totals": [
+          26.0,
+          25.0,
+          30.0,
+          30.0
+        ],
+        "small_event_totals": [
+          26.0,
+          25.0,
+          30.0,
+          30.0
+        ],
+        "small_events_per_person": 0.0002775,
+        "small_incidence": 1.0,
+        "small_mean_events": 27.75,
+        "small_treatment_event_totals": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "scale_disposition": "finite_size_confirmed"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [
+        {
+          "estimated_population_elasticity": null,
+          "first_order_scale_confirmed": false,
+          "metric_id": "metric.source.m8.energy.production",
+          "passed": false,
+          "scale_model": null
+        }
+      ],
+      "lever": "soe_efirm",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": -1.037576623043744,
+          "first_order_scale_confirmed": false,
+          "metric_id": "metric.source.m8.energy.transaction_price",
+          "scale_model": {
+            "alpha": -1.037576623043744,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 0.0016870567496957145,
+            "reference_population": 100000
+          }
+        }
+      ],
+      "r6_classification": "structural",
+      "rare_event": null,
+      "scale_disposition": "finite_size_dependency_modeled"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "tariff",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 0.22402995144083068,
+          "first_order_scale_confirmed": false,
+          "metric_id": "metric.source.m9.country.imports_volume",
+          "scale_model": {
+            "alpha": 0.22402995144083068,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 18398.47730564299,
+            "reference_population": 100000
+          }
+        },
+        {
+          "estimated_population_elasticity": 1.033149089961553,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m9.country.tariff_revenue",
+          "scale_model": null
+        }
+      ],
+      "r6_classification": "expert_only",
+      "rare_event": null,
+      "scale_disposition": "finite_size_dependency_modeled"
+    },
+    {
+      "execution_budget_passed": true,
+      "exploratory_metric_models": [],
+      "lever": "fx_regime",
+      "metric_models": [
+        {
+          "estimated_population_elasticity": 0.005514468180201395,
+          "first_order_scale_confirmed": true,
+          "metric_id": "metric.source.m9.country.exchange_rate",
+          "scale_model": null
+        },
+        {
+          "estimated_population_elasticity": -0.0038425051962657102,
+          "first_order_scale_confirmed": false,
+          "metric_id": "metric.source.m9.country.peg_reserves",
+          "scale_model": {
+            "alpha": -0.0038425051962657102,
+            "form": "absolute_effect_equals_beta_times_population_to_alpha",
+            "reference_absolute_effect": 85184.03383292159,
+            "reference_population": 100000
+          }
+        }
+      ],
+      "r6_classification": "structural",
+      "rare_event": null,
+      "scale_disposition": "finite_size_dependency_modeled"
+    }
+  ],
+  "schema_version": "policy-remediation-r7-v1",
+  "source_revision": "243be5a79daa02114eced9129382e4a97c5074ca",
+  "status": "accepted"
+}

@@ -1,5 +1,37 @@
 # Policy Remediation Plan v39
 
+## R7 acceptance
+
+- Status: `accepted`
+- Source revision: `243be5a79daa02114eced9129382e4a97c5074ca`
+- Native extension SHA-256: `c9e15a31f1fabc57f2fa7b8a627893efeaced7631395f30dfa2020545de992f4`
+- R7 acceptance hash: `60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3`
+- Machine report: `docs/policy_remediation_r7_acceptance_v39.json`
+- Scale evidence: `docs/policy_remediation_r7_scale_evidence_v39.json`
+- Scope: seven scale- or rare-event-sensitive policies, 56 matched native records, 112 control/treatment branches, and zero cache hits.
+- Formal protocol: 100,000 and 1,000,000 persons per country, four matched seeds, eight native workers per session, one concurrent million-person record, and no legacy Python economic simulation.
+
+All seven candidates pass their preregistered direct-effect and execution gates.
+`mortgage_foreclosure_ltv`, `gov_investment_share`, `bankrupt_persist`, and
+`rental_eviction_arrears` follow first-order population scaling.
+`soe_efirm`, `tariff`, and `fx_regime` preserve the required matched-seed
+direction and materiality but require an explicit fitted finite-size dependency.
+The largest record took 777.5 seconds and the largest estimated paired-world
+peak was 8,016,790,908 bytes, below the 1,200-second and 16-GiB budgets.
+
+R7 also fixes the fiscal allocation defect exposed by the scale run. Public
+investment now competes directly for current capital-goods supply, and only
+realizable investment outlays reduce the residual deficit-targeted government
+consumption budget. A change from a 4% to a 2% investment share consequently
+reduces both public fixed-capital formation and the public-capital stock in all
+four matched seeds at both scales, with estimated population elasticities of
+0.999 and 0.989 respectively. Rare-event opportunity detection now recognizes
+both event creation and event prevention, so a stricter eviction-protection
+threshold is not rejected merely because treatment successfully produces zero
+evictions. SOE acceptance is gated on its direct transaction-price channel;
+the mixed-direction energy-production response remains explicit exploratory
+evidence rather than being hidden or used as a false direct-mechanism gate.
+
 ## R6 acceptance
 
 - Status: `accepted`
@@ -35,8 +67,9 @@ worktree `build/native/m11-release/native` directory. An installed wheel or
 stale virtual-environment extension now fails before R6 simulation begins.
 Python only orchestrates native C++ checkpoints, branches, and metric reduction;
 the legacy Python economic simulator is not used. These results are model-based
-calibration evidence, not external empirical estimates. The seven scale- and
-rare-event-sensitive candidates remain explicitly pending R7.
+calibration evidence, not external empirical estimates. R7 subsequently
+confirms or explicitly models the finite-size behavior of all seven scale- and
+rare-event-sensitive candidates.
 
 ## R5 acceptance
 
