@@ -1,0 +1,459 @@
+{
+  "component_role_counts": {
+    "essential": 0,
+    "harmful": 21,
+    "redundant": 12,
+    "supportive": 12
+  },
+  "counts": {
+    "cache_hits": 0,
+    "checkpoint_identity": {
+      "crisis_current_matches": 0,
+      "crisis_current_mismatches": 56,
+      "state_current_matches": 0,
+      "state_current_mismatches": 72
+    },
+    "dispositions": {
+      "package_guardrail_failure": 2,
+      "package_no_supported_benefit": 7
+    },
+    "executed_native_branches": 2376,
+    "packages": 9
+  },
+  "errors": [],
+  "evidence_hash": "c7339b8452c7d3d2e2320f37bf2566851eff14d2f151468ddcdd383b68576aa3",
+  "gate_counts": {
+    "ablations_complete": 9,
+    "alternative_state": 0,
+    "factorial_complete": 9,
+    "guardrails": 0,
+    "primary_benefit": 2,
+    "severity": 2,
+    "withdrawal": 2
+  },
+  "hashes": {
+    "r8_acceptance": "46c91525839f2bdf2114dbb565803d509ca9b9b4193b06f97527ff4272454aad",
+    "r8_evidence": "c7339b8452c7d3d2e2320f37bf2566851eff14d2f151468ddcdd383b68576aa3"
+  },
+  "protocol": {
+    "concurrent_jobs": 8,
+    "legacy_python_simulator_used": false,
+    "native_build": {
+      "extension_path": "build/native/m11-release/native/_native.abi3.so",
+      "extension_sha256": "c9e15a31f1fabc57f2fa7b8a627893efeaced7631395f30dfa2020545de992f4"
+    },
+    "native_workers": 8,
+    "population_per_country": 100000,
+    "r5_checkpoint_policy": "record_expected_and_current_identity; branch_from_current_R8_source",
+    "seeds": [
+      5101,
+      5113,
+      5129,
+      5143,
+      5159,
+      5177,
+      5193,
+      5209
+    ]
+  },
+  "reports": [
+    {
+      "alternative_state": "BASE_SLACK",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "gov_deficit_target",
+          "benefit_income_floor"
+        ],
+        "redundant": [
+          "gov_consumption_share",
+          "job_guarantee"
+        ],
+        "supportive": [
+          "manual_policy_rate"
+        ]
+      },
+      "disposition": "package_guardrail_failure",
+      "dominant_components": [
+        "benefit_income_floor"
+      ],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": true,
+        "severity": true,
+        "withdrawal": false
+      },
+      "guardrail_failures": [
+        "metric.economy.gov_debt_to_gdp",
+        "metric.economy.gov_deficit_to_gdp"
+      ],
+      "isolated_pair": [
+        "gov_consumption_share",
+        "benefit_income_floor"
+      ],
+      "package_id": "recession_response",
+      "primary_harms": [
+        "metric.economy.unemployment_rate"
+      ],
+      "reason": "The full package has a material primary or guardrail harm.",
+      "scenario_id": "CR_DEMAND_RECESSION",
+      "supported_primary_metrics": [
+        "metric.economy.poverty_rate"
+      ]
+    },
+    {
+      "alternative_state": "BASE_TIGHT",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "energy_price_cap",
+          "gov_investment_share"
+        ],
+        "redundant": [
+          "inflation_target",
+          "taylor_phi_pi"
+        ],
+        "supportive": [
+          "gov_deficit_target"
+        ]
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": false
+      },
+      "guardrail_failures": [
+        "metric.economy.gov_debt_to_gdp",
+        "metric.economy.gov_deficit_to_gdp",
+        "metric.economy.unemployment_rate"
+      ],
+      "isolated_pair": [
+        "inflation_target",
+        "gov_deficit_target"
+      ],
+      "package_id": "anti_inflation",
+      "primary_harms": [
+        "metric.economy.real_output",
+        "metric.source.m8.energy.unfilled"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_SUPPLY_STAGFLATION",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "BASE_NORMAL",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "deposit_rate_floor"
+        ],
+        "redundant": [],
+        "supportive": [
+          "omo",
+          "reserve_floor_frac",
+          "lolr",
+          "omo_reserve_target"
+        ]
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": true
+      },
+      "guardrail_failures": [],
+      "isolated_pair": [
+        "omo",
+        "lolr"
+      ],
+      "package_id": "bank_liquidity",
+      "primary_harms": [
+        "metric.source.m5.new_credit"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_BANK_RUN",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "STRUCT_LOW_PRODUCTIVITY",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "bank_capital_constraint",
+          "bank_leverage_cap"
+        ],
+        "redundant": [
+          "bank_migrate_on_failure"
+        ],
+        "supportive": [
+          "bank_exposure_limit",
+          "bank_resolution_fund"
+        ]
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": false
+      },
+      "guardrail_failures": [],
+      "isolated_pair": [
+        "bank_capital_constraint",
+        "bank_resolution_fund"
+      ],
+      "package_id": "bank_solvency",
+      "primary_harms": [
+        "metric.source.m5.new_credit"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_BANK_RUN",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "STRUCT_HOUSING_SHORTAGE",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "mortgage_underwriting",
+          "mortgage_ltv_cap",
+          "housing_permits"
+        ],
+        "redundant": [
+          "mortgage_min_capital_ratio"
+        ],
+        "supportive": [
+          "mortgage_dsti_cap"
+        ]
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": true
+      },
+      "guardrail_failures": [
+        "metric.economy.gov_deficit_to_gdp"
+      ],
+      "isolated_pair": [
+        "mortgage_ltv_cap",
+        "housing_permits"
+      ],
+      "package_id": "housing_cycle",
+      "primary_harms": [
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate",
+        "metric.source.m8.housing.mortgage_principal_originated"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_HOUSING_BUST",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "STRUCT_ENERGY_DEPENDENCE",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "spr_target_units",
+          "energy_rationing",
+          "energy_price_cap",
+          "energy_cap_compensation",
+          "energy_subsidy_rate"
+        ],
+        "redundant": [],
+        "supportive": []
+      },
+      "disposition": "package_guardrail_failure",
+      "dominant_components": [
+        "energy_cap_compensation",
+        "energy_rationing"
+      ],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": true,
+        "severity": true,
+        "withdrawal": false
+      },
+      "guardrail_failures": [
+        "metric.economy.unemployment_rate"
+      ],
+      "isolated_pair": [
+        "energy_price_cap",
+        "energy_cap_compensation"
+      ],
+      "package_id": "energy_emergency",
+      "primary_harms": [
+        "metric.economy.real_output",
+        "metric.source.m8.energy.unfilled"
+      ],
+      "reason": "The full package has a material primary or guardrail harm.",
+      "scenario_id": "CR_ENERGY_EMBARGO",
+      "supported_primary_metrics": [
+        "metric.source.m8.energy.fuel_poverty_share"
+      ]
+    },
+    {
+      "alternative_state": "STRUCT_EXTERNAL_IMBALANCE",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "peg_reserve_scale",
+          "manual_policy_rate"
+        ],
+        "redundant": [],
+        "supportive": [
+          "fx_regime",
+          "capital_control",
+          "tariff"
+        ]
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": false
+      },
+      "guardrail_failures": [],
+      "isolated_pair": [
+        "manual_policy_rate",
+        "capital_control"
+      ],
+      "package_id": "external_crisis",
+      "primary_harms": [
+        "metric.source.m9.country.peg_reserves",
+        "metric.world.current_account"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_PEG_PRESSURE",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "STRUCT_HIGH_POVERTY",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "tax_income_rate",
+          "benefit_income_floor",
+          "benefit_replacement"
+        ],
+        "redundant": [
+          "min_wage",
+          "job_guarantee"
+        ],
+        "supportive": []
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": false
+      },
+      "guardrail_failures": [
+        "metric.economy.gov_debt_to_gdp",
+        "metric.economy.gov_deficit_to_gdp"
+      ],
+      "isolated_pair": [
+        "tax_income_rate",
+        "benefit_income_floor"
+      ],
+      "package_id": "poverty_and_employment",
+      "primary_harms": [
+        "metric.economy.poverty_rate",
+        "metric.economy.real_output",
+        "metric.economy.unemployment_rate"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_DEMAND_RECESSION",
+      "supported_primary_metrics": []
+    },
+    {
+      "alternative_state": "STRUCT_POPULATION_AGING",
+      "component_roles": {
+        "essential": [],
+        "harmful": [
+          "gov_deficit_target"
+        ],
+        "redundant": [
+          "bond_finance_frac",
+          "bond_coupon",
+          "bond_maturity",
+          "omo"
+        ],
+        "supportive": []
+      },
+      "disposition": "package_no_supported_benefit",
+      "dominant_components": [],
+      "gate_summary": {
+        "ablations_complete": true,
+        "alternative_state": false,
+        "factorial_complete": true,
+        "guardrails": false,
+        "primary_benefit": false,
+        "severity": false,
+        "withdrawal": false
+      },
+      "guardrail_failures": [
+        "metric.economy.unemployment_rate"
+      ],
+      "isolated_pair": [
+        "gov_deficit_target",
+        "bond_maturity"
+      ],
+      "package_id": "debt_sustainability",
+      "primary_harms": [
+        "metric.economy.real_output"
+      ],
+      "reason": "The full package passed no preregistered primary benefit gate.",
+      "scenario_id": "CR_SOVEREIGN_STRESS",
+      "supported_primary_metrics": []
+    }
+  ],
+  "schema_version": "policy-remediation-r8-v1",
+  "source_revision": "3d6a5408bc763fcefc1712bcb15fd4a3887d325d",
+  "status": "accepted",
+  "upstream_acceptance_hashes": {
+    "R1": "0cc75df491985c44e99c7be6d0f7eafb9872898284f3a804e80e5e34976241ce",
+    "R2": "1ae7b90f8cd5b28f0ce7c7c8a2a1574a1a0bad5d1d806cb812114bee11d6a522",
+    "R3": "4f5631b6f63ebc43d984dbb43bd1c077c58d5d48bb5fe7bdf9d13933f3b198ec",
+    "R4": "6d3f463d8f6b30ec35fe2800fc171707705b95a898aa46a0bd04b594d77bdb50",
+    "R5": "3994937b842cf731152887735158e181a4cfb280fe7e471466118fb7f94cac07",
+    "R6": "cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0",
+    "R7": "60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3"
+  }
+}

@@ -1,5 +1,42 @@
 # Policy Remediation Plan v39
 
+## R8 acceptance
+
+- Status: `accepted`
+- Source revision: `3d6a5408bc763fcefc1712bcb15fd4a3887d325d`
+- Native extension SHA-256: `c9e15a31f1fabc57f2fa7b8a627893efeaced7631395f30dfa2020545de992f4`
+- R8 acceptance hash: `46c91525839f2bdf2114dbb565803d509ca9b9b4193b06f97527ff4272454aad`
+- Machine report: `docs/policy_remediation_r8_acceptance_v39.json`
+- Reduced evidence: `docs/policy_remediation_r8_package_evidence_v39.json`
+- Scope: nine five-lever packages, eight matched seeds, and 33 branches per package and seed: one moderate control, 16 resolution-IV factorial arms, five leave-one-out ablations, four severity branches, one withdrawal branch, four isolated-pair branches, and two alternative-state branches.
+- Formal protocol: 100,000 persons per country, eight native workers per session, eight concurrent seed jobs, 2,376 fresh native branches, zero cache hits, and no legacy Python economic simulation.
+
+R8 accepts the experiment and its negative findings; it does **not** approve any
+of the nine preregistered packages for player-facing recommendation. The
+recession-response and energy-emergency packages produce a supported primary
+benefit across crisis severities but fail material harm or guardrail gates. The
+other seven packages produce no supported primary benefit at their registered
+doses. No package passes the full guardrail or alternative-state gate; two pass
+the severity gate and two pass the withdrawal gate. All nine factorial and
+leave-one-out designs are complete.
+
+Across the 45 tested package components, the within-package analysis classifies
+zero as essential, 12 as supportive, 12 as redundant, and 21 as harmful. These
+labels are conditional on the declared crisis, package, dose range, and outcome
+gates. They do not revoke the accepted single-policy mechanisms from R6 or the
+scale evidence from R7. Instead, they reject the proposed combination recipes
+and provide the component-level search directions for R9 or a later package
+redesign. In particular, the evidence must not be summarized as “all policies
+are ineffective.”
+
+R7 changed current engine checkpoints after the historical R5 crisis and state
+hashes were frozen. R8 therefore records both identities: 56 crisis and 72 state
+comparisons differ from the R5 byte hashes, while every branch is created from
+the current R8 source and bound to its source revision, native extension hash,
+accepted upstream hashes, and replay/integrity contract. The historical R5
+checkpoint identities remain provenance references rather than false equality
+gates.
+
 ## R7 acceptance
 
 - Status: `accepted`
