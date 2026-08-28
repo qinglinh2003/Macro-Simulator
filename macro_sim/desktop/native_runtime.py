@@ -10,6 +10,11 @@ from macro_sim.controllers import DEFAULT_OBSERVATION_SPEC, ReleaseService
 from macro_sim.controllers.coordinator import SEATS
 from macro_sim.controllers.native_observation import NativeObservationSource
 from macro_sim.controllers.protocol import CONTROLLER_SCHEMA_VERSION
+from macro_sim.core.policy_evidence import (
+    POLICY_EVIDENCE,
+    POLICY_EVIDENCE_SHA256,
+)
+from macro_sim.core.policy_explanations import POLICY_EXPLANATIONS
 from macro_sim.core.policy_registry import (
     Bool,
     Choices,
@@ -206,6 +211,8 @@ class NativeSimulationRuntime:
         row = {
                 "name": name,
                 "current_value": current_values[name],
+                "evidence_scope": POLICY_EVIDENCE[name],
+                "player_help": POLICY_EXPLANATIONS[name].to_dict(),
                 "scope": lever.scope,
                 "owner_role": lever.owner_role,
                 "decision_group": lever.decision_group,
@@ -222,6 +229,8 @@ class NativeSimulationRuntime:
                 "requires": sorted(lever.requires),
                 "enabled_if": sorted(lever.enabled_if),
                 "shadowed_by": list(lever.shadowed_by),
+                "read_point": lever.read_point,
+                "state_notes": lever.state_notes,
                 "help_key": f"policy.{name}",
         }
         row.update(_validation_schema(lever.validation))
@@ -257,6 +266,7 @@ class NativeSimulationRuntime:
         return {
             "protocol_version": NATIVE_DESKTOP_PROTOCOL_VERSION,
             "control_mode": "free_policy",
+            "policy_evidence_sha256": POLICY_EVIDENCE_SHA256,
             "seats": seats,
             "levers": seats["treasury"]["levers"],
             "seat": "treasury",

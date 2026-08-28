@@ -47,6 +47,8 @@
     {"id": "metric.shock.severity.import_capacity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed import-capacity shock severity"},
     {"id": "metric.shock.severity.export_capacity", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed export-capacity shock severity"},
     {"id": "metric.shock.severity.credit_supply", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed credit-supply shock severity"},
-    {"id": "metric.shock.severity.capital_destruction", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed capital-destruction shock severity"}
+    {"id": "metric.shock.severity.capital_destruction", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed capital-destruction shock severity"},
+    {"id": "metric.shock.severity.sovereign_risk_premium", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed sovereign-risk-premium shock severity"},
+    {"id": "metric.shock.severity.capital_outflow_pressure", "unit": "fraction", "aggregation": "last", "parity_rule": "max disclosed capital-outflow-pressure shock severity"}
   ]
 }

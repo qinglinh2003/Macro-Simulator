@@ -11,6 +11,7 @@ from macro_sim.core.policy_explanations import (
     POLICY_EXPLANATIONS,
     load_policy_explanations,
 )
+from macro_sim.core.policy_evidence import POLICY_EVIDENCE
 from macro_sim.core.policy_registry import REGISTRY
 from macro_sim.world import World
 
@@ -64,6 +65,9 @@ def test_policy_schema_distinguishes_integer_nullable_and_dynamic_reference_type
         "tradeoffs": POLICY_EXPLANATIONS["gov_consumption_share"].tradeoffs,
         "watch": POLICY_EXPLANATIONS["gov_consumption_share"].watch,
     }
+    assert treasury["gov_consumption_share"]["evidence_scope"] == (
+        POLICY_EVIDENCE["gov_consumption_share"]
+    )
 
     central_bank = {
         row["name"]: row

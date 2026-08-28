@@ -1,9 +1,9 @@
 {
   "counts": {
     "national_accounts": 63,
-    "native_dashboard_analytics": 122,
+    "native_dashboard_analytics": 120,
     "native_stage_sources": 358,
-    "public_sources": 41,
+    "public_sources": 43,
     "total": 584
   },
   "metrics": [
@@ -378,6 +378,24 @@
     },
     {
       "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.sovereign_risk_premium",
+      "parity_rule": "max disclosed sovereign-risk-premium shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
+      "cadence_ticks": 1,
+      "id": "metric.shock.severity.capital_outflow_pressure",
+      "parity_rule": "max disclosed capital-outflow-pressure shock severity",
+      "source_kind": "derived_or_release",
+      "tier": "public_source",
+      "unit": "fraction"
+    },
+    {
+      "aggregation": "last",
       "cadence_ticks": 30,
       "id": "metric.economy.hh_wealth_gini",
       "parity_rule": "gini(nonnegative household deposits + securities + housing - debt)",
@@ -690,24 +708,6 @@
       "source_kind": "derived_or_release",
       "tier": "analytic",
       "unit": "share"
-    },
-    {
-      "aggregation": "last",
-      "cadence_ticks": 1,
-      "id": "metric.shock.severity.sovereign_risk_premium",
-      "parity_rule": "max disclosed sovereign-risk-premium shock severity",
-      "source_kind": "derived_or_release",
-      "tier": "analytic",
-      "unit": "fraction"
-    },
-    {
-      "aggregation": "last",
-      "cadence_ticks": 1,
-      "id": "metric.shock.severity.capital_outflow_pressure",
-      "parity_rule": "max disclosed capital-outflow-pressure shock severity",
-      "source_kind": "derived_or_release",
-      "tier": "analytic",
-      "unit": "fraction"
     },
     {
       "aggregation": "last",

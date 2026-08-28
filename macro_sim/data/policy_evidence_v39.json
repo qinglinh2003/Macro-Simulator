@@ -1,0 +1,1339 @@
+{
+  "catalog_sha256": "ef9101ea1514bb0c445fed0ba197be7ad43980765e1ee33e497a8de66bfe43db",
+  "policies": {
+    "bank_bond_duration_limit": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_capital_constraint": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_solvency",
+          "role": "harmful",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_exposure_limit": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_solvency",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_leverage_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_solvency",
+          "role": "harmful",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_migrate_on_failure": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_solvency",
+          "role": "redundant",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_min_capital": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_CREDIT_CRUNCH",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "bank_resolution_fund": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_solvency",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bank_target_capital_ratio": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bankrupt_persist": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_confirmed",
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_HOUSING_BUST"
+      ]
+    },
+    "benefit_income_floor": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "effective",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "poverty_and_employment",
+          "role": "harmful",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        },
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "recession_response",
+          "role": "harmful",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "benefit_replacement": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "poverty_and_employment",
+          "role": "harmful",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "bond_coupon": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "debt_sustainability",
+          "role": "redundant",
+          "scenario_id": "CR_SOVEREIGN_STRESS"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bond_finance_frac": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "debt_sustainability",
+          "role": "redundant",
+          "scenario_id": "CR_SOVEREIGN_STRESS"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "bond_maturity": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "debt_sustainability",
+          "role": "redundant",
+          "scenario_id": "CR_SOVEREIGN_STRESS"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "capital_control": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "external_crisis",
+          "role": "supportive",
+          "scenario_id": "CR_PEG_PRESSURE"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "cb_core_inflation": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "cb_log_inflation": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "cb_uses_fixed_basket_cpi": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "deficit_u_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "deficit_u_ref": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "deposit_rate_floor": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_liquidity",
+          "role": "harmful",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "emigration_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "energy_cap_compensation": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "energy_emergency",
+          "role": "harmful",
+          "scenario_id": "CR_ENERGY_EMBARGO"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "energy_price_cap": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "anti_inflation",
+          "role": "harmful",
+          "scenario_id": "CR_SUPPLY_STAGFLATION"
+        },
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "energy_emergency",
+          "role": "harmful",
+          "scenario_id": "CR_ENERGY_EMBARGO"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "energy_rationing": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "energy_emergency",
+          "role": "harmful",
+          "scenario_id": "CR_ENERGY_EMBARGO"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "energy_subsidy_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "energy_emergency",
+          "role": "harmful",
+          "scenario_id": "CR_ENERGY_EMBARGO"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "energy_subsidy_threshold": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "export_subsidy": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "external_interest_settlement_fraction": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "firm_credit_min_dscr": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "fiscal_uses_national_accounts_gdp": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "fx_regime": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "structural",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "external_crisis",
+          "role": "supportive",
+          "scenario_id": "CR_PEG_PRESSURE"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_dependency_modeled",
+      "tested_crisis_states": [
+        "CR_PEG_PRESSURE",
+        "CR_TRADE_INTERRUPTION"
+      ]
+    },
+    "gov_consumption_share": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "recession_response",
+          "role": "redundant",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "gov_deficit_target": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "anti_inflation",
+          "role": "supportive",
+          "scenario_id": "CR_SUPPLY_STAGFLATION"
+        },
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "debt_sustainability",
+          "role": "harmful",
+          "scenario_id": "CR_SOVEREIGN_STRESS"
+        },
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "recession_response",
+          "role": "harmful",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "gov_investment_share": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "anti_inflation",
+          "role": "harmful",
+          "scenario_id": "CR_SUPPLY_STAGFLATION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_confirmed",
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "guest_worker_return": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "hh_credit_limit": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "household_bankruptcy": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "housing_in_wealth_tax": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "housing_permits": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "housing_cycle",
+          "role": "harmful",
+          "scenario_id": "CR_HOUSING_BUST"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "housing_property_tax": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "housing_transfer_tax": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "immigration_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "import_quota": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "income_allowance": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "infl_ema_lambda": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "inflation_target": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "anti_inflation",
+          "role": "redundant",
+          "scenario_id": "CR_SUPPLY_STAGFLATION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "jg_public_works_share": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "jg_wage_ratio": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "job_guarantee": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "poverty_and_employment",
+          "role": "redundant",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        },
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "recession_response",
+          "role": "redundant",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "kappa": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "land_fee_share": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "land_fee_stock_elasticity": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "lolr": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_liquidity",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "manual_policy_rate": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "external_crisis",
+          "role": "harmful",
+          "scenario_id": "CR_PEG_PRESSURE"
+        },
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "recession_response",
+          "role": "supportive",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "margin_ltv": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "margin_max": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "min_wage": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "poverty_and_employment",
+          "role": "redundant",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "monetary_regime": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "structural",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "mortgage_arrears_floor": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "mortgage_dsti_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "housing_cycle",
+          "role": "supportive",
+          "scenario_id": "CR_HOUSING_BUST"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "mortgage_foreclosure_ltv": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_confirmed",
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_HOUSING_BUST"
+      ]
+    },
+    "mortgage_ltv_cap": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "housing_cycle",
+          "role": "harmful",
+          "scenario_id": "CR_HOUSING_BUST"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_CREDIT_CRUNCH",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "mortgage_min_capital_ratio": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "housing_cycle",
+          "role": "redundant",
+          "scenario_id": "CR_HOUSING_BUST"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "mortgage_risk_weight": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "mortgage_stress_rate_addon": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "mortgage_underwriting": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "housing_cycle",
+          "role": "harmful",
+          "scenario_id": "CR_HOUSING_BUST"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "omo": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_liquidity",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        },
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "debt_sustainability",
+          "role": "redundant",
+          "scenario_id": "CR_SOVEREIGN_STRESS"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_BANK_RUN",
+        "CR_DEMAND_RECESSION"
+      ]
+    },
+    "omo_drain_frac": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "omo_index_deposits": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "omo_reserve_target": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_liquidity",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "outward_remittance_tax": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "peg_anchor": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "peg_reserve_scale": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "external_crisis",
+          "role": "harmful",
+          "scenario_id": "CR_PEG_PRESSURE"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "pension_replacement": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "effective",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "r_max": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "r_neutral": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "rate_inertia": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "regulatory_firm_capital_haircut": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "regulatory_firm_inventory_haircut": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "remittance_tax": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "rental_eviction_arrears": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_confirmed",
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_HOUSING_BUST"
+      ]
+    },
+    "reserve_floor_frac": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "bank_liquidity",
+          "role": "supportive",
+          "scenario_id": "CR_BANK_RUN"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "sanctions_imposed_on": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "soe_efirm": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "structural",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_dependency_modeled",
+      "tested_crisis_states": [
+        "CR_ENERGY_EMBARGO",
+        "CR_SUPPLY_STAGFLATION"
+      ]
+    },
+    "soe_price_at_cost": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "spr_flow_cap": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "spr_target_units": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [
+        {
+          "package_disposition": "package_guardrail_failure",
+          "package_id": "energy_emergency",
+          "role": "harmful",
+          "scenario_id": "CR_ENERGY_EMBARGO"
+        }
+      ],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tariff": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "expert_only",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "external_crisis",
+          "role": "supportive",
+          "scenario_id": "CR_PEG_PRESSURE"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": "finite_size_dependency_modeled",
+      "tested_crisis_states": [
+        "CR_ENERGY_EMBARGO",
+        "CR_TRADE_INTERRUPTION"
+      ]
+    },
+    "tax_consumption_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_energy_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_energy_windfall": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_income_rate": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "poverty_and_employment",
+          "role": "harmful",
+          "scenario_id": "CR_DEMAND_RECESSION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_CREDIT_CRUNCH",
+        "CR_DEMAND_RECESSION"
+      ]
+    },
+    "tax_luxury_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_necessity_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_profit_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "tax_wealth_rate": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "taylor_phi_pi": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [
+        {
+          "package_disposition": "package_no_supported_benefit",
+          "package_id": "anti_inflation",
+          "role": "redundant",
+          "scenario_id": "CR_SUPPLY_STAGFLATION"
+        }
+      ],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "taylor_phi_u": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "u_natural": {
+      "coverage": "single_policy_calibrated",
+      "individual_classification": "conditional",
+      "package_findings": [],
+      "population_per_country": 100000,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": [
+        "CR_DEMAND_RECESSION",
+        "CR_ENERGY_EMBARGO"
+      ]
+    },
+    "unified_bank_rwa": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    },
+    "wealth_allowance": {
+      "coverage": "registry_and_route_only",
+      "individual_classification": "not_reclassified",
+      "package_findings": [],
+      "population_per_country": null,
+      "real_world_empirical_claim": false,
+      "scale_disposition": null,
+      "tested_crisis_states": []
+    }
+  },
+  "schema_version": "policy-evidence-v39-v1",
+  "upstream_acceptance_hashes": {
+    "R6": "cb4a5bdea705804f17db6fa7665525fbfbaa99490316d9cc219c656b82ecfac0",
+    "R7": "60d079d45a39084cab5c5af0cb59c07d1b76676702bfc91a5e71cda8d6e150d3",
+    "R8": "46c91525839f2bdf2114dbb565803d509ca9b9b4193b06f97527ff4272454aad"
+  }
+}

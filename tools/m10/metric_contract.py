@@ -160,8 +160,8 @@ def build_contract() -> dict:
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("M10 maintained metric IDs are not unique")
     if (
-        len(public["metrics"]) != 41
-        or len(extra_literal_rows) != 37
+        len(public["metrics"]) != 43
+        or len(extra_literal_rows) != 35
         or len(dashboard_rows) != 85
         or source_count != 358
         or national_account_count != 63

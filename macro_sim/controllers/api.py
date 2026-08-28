@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from macro_sim.core.policy_evidence import (
+    POLICY_EVIDENCE,
+    POLICY_EVIDENCE_SHA256,
+)
 from macro_sim.core.policy_explanations import POLICY_EXPLANATIONS
 from macro_sim.core.policy_registry import (
     Bool,
@@ -80,6 +84,7 @@ class ControllerService:
             row: dict[str, Any] = {
                 "name": name,
                 "current_value": canonical_value(getattr(holder, name)),
+                "evidence_scope": POLICY_EVIDENCE[name],
                 "player_help": POLICY_EXPLANATIONS[name].to_dict(),
                 "scope": lever.scope,
                 "owner_role": lever.owner_role,
@@ -153,6 +158,7 @@ class ControllerService:
             "schema_version": CONTROLLER_SCHEMA_VERSION,
             "economy_id": economy_id,
             "seat": seat,
+            "policy_evidence_sha256": POLICY_EVIDENCE_SHA256,
             "levers": levers,
         })
 

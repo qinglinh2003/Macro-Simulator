@@ -3368,6 +3368,57 @@ func _lever_watch_text(lever: Dictionary) -> String:
 	return "@{desktop.main.fragment.8b13fd9c72b17bbb}"
 
 
+func _lever_evidence_text(lever: Dictionary) -> String:
+	var evidence: Dictionary = lever.get("evidence_scope", {})
+	if evidence.is_empty():
+		return LocaleCatalogScript.text("desktop.policy.evidence.registry_only")
+	var lines: Array[String] = []
+	var coverage := str(evidence.get("coverage", "registry_and_route_only"))
+	if coverage == "single_policy_calibrated":
+		var classification := str(evidence.get(
+			"individual_classification", "not_reclassified"))
+		var classification_label := LocaleCatalogScript.text(
+			"desktop.policy.evidence.classification.%s" % classification,
+			classification)
+		var states: Array = evidence.get("tested_crisis_states", [])
+		lines.append(LocaleCatalogScript.format(
+			"desktop.policy.evidence.single_summary",
+			[classification_label, states.size()]))
+	else:
+		lines.append(LocaleCatalogScript.text(
+			"desktop.policy.evidence.registry_only"))
+	var scale_disposition := str(evidence.get("scale_disposition", ""))
+	if not scale_disposition.is_empty():
+		var scale_label := LocaleCatalogScript.text(
+			"desktop.policy.evidence.scale.%s" % scale_disposition,
+			scale_disposition)
+		lines.append(LocaleCatalogScript.format(
+			"desktop.policy.evidence.scale_summary", scale_label))
+	var findings: Array = evidence.get("package_findings", [])
+	if not findings.is_empty():
+		var package_labels: Array[String] = []
+		for finding_raw in findings:
+			if not finding_raw is Dictionary:
+				continue
+			var finding: Dictionary = finding_raw
+			var package_id := str(finding.get("package_id", ""))
+			var role := str(finding.get("role", ""))
+			package_labels.append(LocaleCatalogScript.format(
+				"desktop.policy.evidence.package_item", [
+					LocaleCatalogScript.text(
+						"desktop.policy.evidence.package.%s" % package_id,
+						package_id),
+					LocaleCatalogScript.text(
+						"desktop.policy.evidence.role.%s" % role, role),
+				]))
+		if not package_labels.is_empty():
+			lines.append(
+				LocaleCatalogScript.text("desktop.policy.evidence.package_prefix")
+				+ " · ".join(package_labels))
+	lines.append(LocaleCatalogScript.text("desktop.policy.evidence.disclaimer"))
+	return "\n".join(lines)
+
+
 func _lever_info_tooltip(lever: Dictionary, current: Variant) -> String:
 	return "%s  ·  @{desktop.main.fragment.cb62ebd689ee8f20} %s\n\n@{desktop.main.fragment.1157213b813000e2}\n%s\n\n@{desktop.main.fragment.245ab851face3d9b}\n%s\n\n@{desktop.main.fragment.48ca9369c9040c19}\n%s\n\n@{desktop.main.fragment.83f2cdb2592b380c}" % [
 		_cn(str(lever.get("name", ""))), _lever_value_text(lever, current),
@@ -3563,6 +3614,9 @@ func _render_policy_brief(lever_raw: Variant, current: Variant) -> void:
 			watch_flow.add_child(_chip(metric, Color("355d5f"), Color.WHITE, Color("cbdcdb"), 9))
 	watch_col.add_child(watch_flow)
 	content.add_child(watch_panel)
+	content.add_child(_brief_panel(
+		"@desktop.policy.evidence.heading",
+		_lever_evidence_text(lever), Color("536f8d"), Color("f7f9fc")))
 
 	var rule_heading := HBoxContainer.new()
 	rule_heading.add_theme_constant_override("separation", 8)

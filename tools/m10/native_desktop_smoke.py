@@ -60,14 +60,32 @@ def main() -> int:
         len(seat["levers"]) for seat in schema["seats"].values()
     ) == 102
     assert all(
-        "help_key" in lever
+        set(lever["player_help"]) == {
+            "meaning", "mechanics", "tradeoffs", "watch",
+        }
+        and isinstance(lever["evidence_scope"], dict)
+        and lever["read_point"]
+        and "state_notes" in lever
+        and "help_key" in lever
         for seat in schema["seats"].values()
         for lever in seat["levers"]
     )
+    assert len(schema["policy_evidence_sha256"]) == 64
+    structural_schema = json.loads(json.dumps(schema))
+    for seat in structural_schema["seats"].values():
+        for lever in seat["levers"]:
+            # Localized economics prose is a packaged data resource.  Stable
+            # wire identifiers and executable state remain language-neutral.
+            lever.pop("player_help", None)
+    structural_schema["levers"] = structural_schema["seats"]["treasury"][
+        "levers"
+    ]
     assert not re.search(
         r"[\u3400-\u9fff]",
-        json.dumps({"snapshot": opening, "schema": schema},
-                   ensure_ascii=False),
+        json.dumps(
+            {"snapshot": opening, "schema": structural_schema},
+            ensure_ascii=False,
+        ),
     )
 
     staged = runtime.stage_policy([

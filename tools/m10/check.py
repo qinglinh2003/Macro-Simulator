@@ -134,9 +134,9 @@ def validate_contracts() -> None:
     if metrics["schema_version"] != "m10-public-metrics-v2":
         raise AssertionError("M10 public metric contract changed")
     metric_ids = [item["id"] for item in metrics["metrics"]]
-    if len(metric_ids) != 41 or len(metric_ids) != len(set(metric_ids)):
+    if len(metric_ids) != 43 or len(metric_ids) != len(set(metric_ids)):
         raise AssertionError(
-            "M10 must expose exactly 41 unique native observation sources"
+            "M10 must expose exactly 43 unique native observation sources"
         )
     from macro_sim.controllers.observation import DEFAULT_OBSERVATION_SPEC
 
@@ -171,9 +171,9 @@ def validate_contracts() -> None:
     if maintained["counts"] != {
         "national_accounts": 63,
         "native_dashboard_analytics": 120,
-        "native_stage_sources": 296,
-        "public_sources": 41,
-        "total": 520,
+        "native_stage_sources": 358,
+        "public_sources": 43,
+        "total": 584,
     }:
         raise AssertionError("M10 maintained metric coverage is incomplete")
     maintained_ids = [item["id"] for item in maintained["metrics"]]

@@ -556,6 +556,7 @@ def test_get_schema_covers_all_seats(runtime: SimulationRuntime) -> None:
     for key in (
         "name", "decision_group", "implementation_lag", "min_hold_ticks",
         "read_point", "state_notes", "shadowed_by", "player_help",
+        "evidence_scope",
     ):
         assert key in sample
     assert set(sample["player_help"]) == {

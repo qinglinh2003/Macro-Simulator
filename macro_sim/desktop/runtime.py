@@ -471,6 +471,9 @@ class SimulationRuntime:
         return {
             "protocol_version": PROTOCOL_VERSION,
             "control_mode": "free_policy" if self.free_policy_mode else "controller",
+            "policy_evidence_sha256": seats["treasury"][
+                "policy_evidence_sha256"
+            ],
             "seats": seats,
             # protocol v1 clients read a flat treasury schema
             "levers": seats["treasury"]["levers"],
