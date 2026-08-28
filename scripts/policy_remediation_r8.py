@@ -156,7 +156,7 @@ def main() -> int:
     parser.add_argument("--evidence", type=Path, default=DEFAULT_EVIDENCE)
     parser.add_argument("--acceptance", type=Path, default=DEFAULT_ACCEPTANCE)
     parser.add_argument("--markdown", type=Path, default=DEFAULT_MARKDOWN)
-    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--no-resume", action="store_true")
     arguments = parser.parse_args()
     if arguments.run:

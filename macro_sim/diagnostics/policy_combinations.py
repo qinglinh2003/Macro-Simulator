@@ -661,6 +661,15 @@ def _read_result(path: Path) -> dict[str, Any]:
     return dict(json.loads(path.read_text(encoding="utf-8"))["result"])
 
 
+def _known_memory_bytes(value: Any) -> int:
+    if not isinstance(value, Mapping):
+        return 0
+    direct = value.get("total_known")
+    if isinstance(direct, (int, float)):
+        return int(direct)
+    return sum(_known_memory_bytes(item) for item in value.values())
+
+
 def _run_seed(
     *,
     seed: int,
@@ -674,13 +683,18 @@ def _run_seed(
     resume: bool,
     progress: Callable[[int, str, str, bool], None] | None,
     execution_schema_version: str = P5_SCHEMA_VERSION,
+    require_frozen_checkpoints: bool = True,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     cache_hits = 0
     executed = 0
     paths: list[str] = []
     crisis_checkpoints: dict[str, str] = {}
+    expected_crisis_checkpoints: dict[str, str] = {}
+    crisis_checkpoint_matches: dict[str, bool] = {}
     state_checkpoints: dict[str, str] = {}
+    expected_state_checkpoints: dict[str, str] = {}
+    state_checkpoint_matches: dict[str, bool] = {}
     peak_memory_bytes = 0
     package_runs: dict[str, list[str]] = {}
     for package in runnable_packages:
@@ -700,12 +714,15 @@ def _run_seed(
         expected_crisis_checkpoint = _expected_hash_by_seed(
             crisis_report, "frozen_common_checkpoint_hashes"
         )[seed]
-        if crisis_checkpoint != expected_crisis_checkpoint:
+        checkpoint_matches = crisis_checkpoint == expected_crisis_checkpoint
+        if require_frozen_checkpoints and not checkpoint_matches:
             raise RuntimeError(
                 f"seed {seed}/{package_id}: crisis checkpoint "
                 f"{crisis_checkpoint} != frozen R5 {expected_crisis_checkpoint}"
             )
         crisis_checkpoints[scenario_id] = crisis_checkpoint
+        expected_crisis_checkpoints[scenario_id] = expected_crisis_checkpoint
+        crisis_checkpoint_matches[scenario_id] = checkpoint_matches
         expected_tapes = {
             severity: str(tuple(crisis_report["frozen_tape_hashes"][severity])[0])
             for severity in P5_SEVERITIES
@@ -719,7 +736,7 @@ def _run_seed(
             )
         peak_memory_bytes = max(
             peak_memory_bytes,
-            int(crisis_session.memory_usage().get("estimated_bytes", 0)),
+            _known_memory_bytes(crisis_session.memory_usage()),
         )
         metric_ids = _package_metric_ids(package)
         factors = package["factors"]
@@ -732,6 +749,7 @@ def _run_seed(
             "source_revision": source_revision,
             "manifest_hash": _canonical_hash(manifest_payload),
             "p3_crisis_checkpoint_sha256": expected_crisis_checkpoint,
+            "current_crisis_checkpoint_sha256": crisis_checkpoint,
             "p3_tape_sha256": expected_tapes,
             "seed": seed,
             "population": population,
@@ -865,17 +883,20 @@ def _run_seed(
         state_session.advance(state_manifest.horizon_days)
         peak_memory_bytes = max(
             peak_memory_bytes,
-            int(state_session.memory_usage().get("estimated_bytes", 0)),
+            _known_memory_bytes(state_session.memory_usage()),
         )
         state_checkpoint = hashlib.sha256(state_session.checkpoint()).hexdigest()
         expected_state_checkpoint = _expected_hash_by_seed(
             state_report, "frozen_checkpoint_hashes"
         )[seed]
-        if state_checkpoint != expected_state_checkpoint:
+        state_matches = state_checkpoint == expected_state_checkpoint
+        if require_frozen_checkpoints and not state_matches:
             raise RuntimeError(
                 f"seed {seed}/{package_id}: alternative-state checkpoint drift"
             )
         state_checkpoints[state_id] = state_checkpoint
+        expected_state_checkpoints[state_id] = expected_state_checkpoint
+        state_checkpoint_matches[state_id] = state_matches
 
         def state_cached(path: Path, *, branch_id: str, actions: Sequence[Mapping[str, Any]]) -> None:
             nonlocal cache_hits, executed
@@ -886,6 +907,7 @@ def _run_seed(
                     "branch_id": branch_id,
                     "alternative_state": state_id,
                     "p3_state_checkpoint_sha256": expected_state_checkpoint,
+                    "current_state_checkpoint_sha256": state_checkpoint,
                     "actions": actions,
                 },
                 resume=resume,
@@ -917,7 +939,11 @@ def _run_seed(
     return {
         "seed": seed,
         "crisis_checkpoint_sha256": crisis_checkpoints,
+        "expected_crisis_checkpoint_sha256": expected_crisis_checkpoints,
+        "crisis_checkpoint_matches_r5": crisis_checkpoint_matches,
         "state_checkpoint_sha256": state_checkpoints,
+        "expected_state_checkpoint_sha256": expected_state_checkpoints,
+        "state_checkpoint_matches_r5": state_checkpoint_matches,
         "package_run_paths": package_runs,
         "all_run_paths": paths,
         "cache_hits": cache_hits,

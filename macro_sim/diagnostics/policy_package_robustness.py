@@ -606,7 +606,7 @@ def run_r8(
     seeds: Sequence[int] = R8_SEEDS,
     population: int = R8_POPULATION,
     workers: int = R8_WORKERS,
-    jobs: int = 2,
+    jobs: int = 4,
     resume: bool = True,
     progress: Callable[[int, str, str, bool], None] | None = None,
 ) -> dict[str, Any]:
@@ -640,12 +640,35 @@ def run_r8(
                 resume=resume,
                 progress=progress,
                 execution_schema_version=R8_SCHEMA_VERSION,
+                require_frozen_checkpoints=False,
             ): seed
             for seed in seeds
         }
         for future in as_completed(futures):
             seed_runs.append(future.result())
     seed_runs.sort(key=lambda item: int(item["seed"]))
+    checkpoint_identity = {
+        "crisis_current_matches": sum(
+            bool(value)
+            for item in seed_runs
+            for value in item["crisis_checkpoint_matches_r5"].values()
+        ),
+        "crisis_current_mismatches": sum(
+            not bool(value)
+            for item in seed_runs
+            for value in item["crisis_checkpoint_matches_r5"].values()
+        ),
+        "state_current_matches": sum(
+            bool(value)
+            for item in seed_runs
+            for value in item["state_checkpoint_matches_r5"].values()
+        ),
+        "state_current_mismatches": sum(
+            not bool(value)
+            for item in seed_runs
+            for value in item["state_checkpoint_matches_r5"].values()
+        ),
+    }
     reports, errors = analyze_p5(
         packages=manifest["packages"],
         seeds=seeds,
@@ -685,6 +708,9 @@ def run_r8(
             "concurrent_jobs": jobs,
             "legacy_python_simulator_used": False,
             "native_build": native_build,
+            "r5_checkpoint_policy": (
+                "record_expected_and_current_identity; branch_from_current_R8_source"
+            ),
         },
         "manifest": manifest,
         "seed_runs": seed_runs,
@@ -693,6 +719,7 @@ def run_r8(
             "executed_native_branches": sum(item["executed"] for item in seed_runs),
             "cache_hits": sum(item["cache_hits"] for item in seed_runs),
             "dispositions": dispositions,
+            "checkpoint_identity": checkpoint_identity,
         },
         "reports": reports,
         "errors": errors,
