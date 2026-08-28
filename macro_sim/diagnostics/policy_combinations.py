@@ -482,13 +482,14 @@ def _policy_matches(
 def _run_crisis_branch(
     session: NativeSimulationSession,
     *,
+    scenario_id: str = P5_CRISIS_ID,
     severity: str,
     actions: Sequence[Mapping[str, Any]],
     withdrawal_actions: Sequence[Mapping[str, Any]] | None,
     withdrawal_after_days: int | None,
     metric_ids: Sequence[str],
 ) -> dict[str, Any]:
-    manifest = CRISIS_MANIFESTS[P5_CRISIS_ID]
+    manifest = CRISIS_MANIFESTS[scenario_id]
     started = time.perf_counter()
     branch = session.clone()
     t0 = branch.tick
@@ -629,10 +630,13 @@ def _package_metric_ids(package: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(metrics))
 
 
-def _p3_crisis_report(payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    report = _p3_crises(payload).get(P5_CRISIS_ID)
+def _p3_crisis_report(
+    payload: Mapping[str, Any],
+    scenario_id: str = P5_CRISIS_ID,
+) -> Mapping[str, Any]:
+    report = _p3_crises(payload).get(scenario_id)
     if report is None or not report.get("accepted"):
-        raise ValueError(f"P3 did not accept {P5_CRISIS_ID}")
+        raise ValueError(f"P3 did not accept {scenario_id}")
     return report
 
 
@@ -669,41 +673,54 @@ def _run_seed(
     artifact_dir: Path,
     resume: bool,
     progress: Callable[[int, str, str, bool], None] | None,
+    execution_schema_version: str = P5_SCHEMA_VERSION,
 ) -> dict[str, Any]:
-    crisis_manifest = CRISIS_MANIFESTS[P5_CRISIS_ID]
-    crisis_report = _p3_crisis_report(p3_payload)
     started = time.perf_counter()
-    crisis_session = NativeSimulationSession.create_from_native_spec(
-        _crisis_native_spec(crisis_manifest, population=population, seed=seed),
-        worker_count=workers,
-        history_capacity_frames=(
-            crisis_manifest.burn_in_days + crisis_manifest.horizon_days + 8
-        ),
-    )
-    crisis_session.advance(crisis_manifest.burn_in_days)
-    crisis_checkpoint = hashlib.sha256(crisis_session.checkpoint()).hexdigest()
-    expected_crisis_checkpoint = _expected_hash_by_seed(
-        crisis_report, "frozen_common_checkpoint_hashes"
-    )[seed]
-    if crisis_checkpoint != expected_crisis_checkpoint:
-        raise RuntimeError(
-            f"seed {seed}: P5 crisis checkpoint {crisis_checkpoint} != "
-            f"frozen P3 {expected_crisis_checkpoint}"
-        )
-    expected_tapes = {
-        severity: str(tuple(crisis_report["frozen_tape_hashes"][severity])[0])
-        for severity in P5_SEVERITIES
-    }
-    if any(len(tuple(crisis_report["frozen_tape_hashes"][severity])) != 1 for severity in P5_SEVERITIES):
-        raise RuntimeError("P3 did not freeze exactly one tape per P5 severity")
-
     cache_hits = 0
     executed = 0
     paths: list[str] = []
+    crisis_checkpoints: dict[str, str] = {}
     state_checkpoints: dict[str, str] = {}
+    peak_memory_bytes = 0
     package_runs: dict[str, list[str]] = {}
     for package in runnable_packages:
         package_id = str(package["package_id"])
+        scenario_id = str(package["scenario_id"])
+        crisis_manifest = CRISIS_MANIFESTS[scenario_id]
+        crisis_report = _p3_crisis_report(p3_payload, scenario_id)
+        crisis_session = NativeSimulationSession.create_from_native_spec(
+            _crisis_native_spec(crisis_manifest, population=population, seed=seed),
+            worker_count=workers,
+            history_capacity_frames=(
+                crisis_manifest.burn_in_days + crisis_manifest.horizon_days + 8
+            ),
+        )
+        crisis_session.advance(crisis_manifest.burn_in_days)
+        crisis_checkpoint = hashlib.sha256(crisis_session.checkpoint()).hexdigest()
+        expected_crisis_checkpoint = _expected_hash_by_seed(
+            crisis_report, "frozen_common_checkpoint_hashes"
+        )[seed]
+        if crisis_checkpoint != expected_crisis_checkpoint:
+            raise RuntimeError(
+                f"seed {seed}/{package_id}: crisis checkpoint "
+                f"{crisis_checkpoint} != frozen R5 {expected_crisis_checkpoint}"
+            )
+        crisis_checkpoints[scenario_id] = crisis_checkpoint
+        expected_tapes = {
+            severity: str(tuple(crisis_report["frozen_tape_hashes"][severity])[0])
+            for severity in P5_SEVERITIES
+        }
+        if any(
+            len(tuple(crisis_report["frozen_tape_hashes"][severity])) != 1
+            for severity in P5_SEVERITIES
+        ):
+            raise RuntimeError(
+                f"{scenario_id}: R5 did not freeze exactly one tape per severity"
+            )
+        peak_memory_bytes = max(
+            peak_memory_bytes,
+            int(crisis_session.memory_usage().get("estimated_bytes", 0)),
+        )
         metric_ids = _package_metric_ids(package)
         factors = package["factors"]
         design = fractional_package_design(factors)
@@ -711,7 +728,7 @@ def _run_seed(
         full_actions = full_arm["actions"]
         baseline_actions = _merge_factor_actions(factors, (-1,) * len(factors))
         signature_base = {
-            "schema_version": P5_SCHEMA_VERSION,
+            "schema_version": execution_schema_version,
             "source_revision": source_revision,
             "manifest_hash": _canonical_hash(manifest_payload),
             "p3_crisis_checkpoint_sha256": expected_crisis_checkpoint,
@@ -747,6 +764,7 @@ def _run_seed(
                 resume=resume,
                 compute=lambda: _run_crisis_branch(
                     crisis_session,
+                    scenario_id=scenario_id,
                     severity=severity,
                     actions=actions,
                     withdrawal_actions=withdrawal_actions,
@@ -845,6 +863,10 @@ def _run_seed(
             history_capacity_frames=state_manifest.horizon_days + 4,
         )
         state_session.advance(state_manifest.horizon_days)
+        peak_memory_bytes = max(
+            peak_memory_bytes,
+            int(state_session.memory_usage().get("estimated_bytes", 0)),
+        )
         state_checkpoint = hashlib.sha256(state_session.checkpoint()).hexdigest()
         expected_state_checkpoint = _expected_hash_by_seed(
             state_report, "frozen_checkpoint_hashes"
@@ -894,14 +916,14 @@ def _run_seed(
 
     return {
         "seed": seed,
-        "crisis_checkpoint_sha256": crisis_checkpoint,
+        "crisis_checkpoint_sha256": crisis_checkpoints,
         "state_checkpoint_sha256": state_checkpoints,
         "package_run_paths": package_runs,
         "all_run_paths": paths,
         "cache_hits": cache_hits,
         "executed": executed,
         "elapsed_seconds": time.perf_counter() - started,
-        "memory_bytes": crisis_session.memory_usage(),
+        "estimated_peak_memory_bytes": peak_memory_bytes,
     }
 
 
